@@ -70,11 +70,18 @@ namespace PeachPDF.Html.Core.Dom
             _gridBox = gridBox;
         }
 
-        public static async ValueTask PerformLayout(RGraphics g, CssBox gridBox)
+        /// <param name="g">the graphics context layout is running against</param>
+        /// <param name="gridBox">the grid container to lay out</param>
+        /// <param name="resume">
+        /// a <see cref="GridBreakToken"/> naming which row this container's commit pass stopped in and
+        /// which of that row's items did not finish their own content on an earlier fragmentainer pass,
+        /// or null to lay the container out from the start.
+        /// </param>
+        public static async ValueTask PerformLayout(RGraphics g, CssBox gridBox, BreakToken? resume = null)
         {
             try
             {
-                await new CssLayoutEngineGrid(gridBox).Layout(g);
+                await new CssLayoutEngineGrid(gridBox).Layout(g, resume);
             }
             catch (Exception ex)
             {
@@ -91,8 +98,18 @@ namespace PeachPDF.Html.Core.Dom
             public double Position { get; set; }
         }
 
-        private async ValueTask Layout(RGraphics g)
+        private async ValueTask Layout(RGraphics g, BreakToken? resume)
         {
+            // A resumed pass re-enters only the row its commit pass stopped in, and only that row's
+            // unfinished items - every earlier phase (placement, track sizing, row relocation) already
+            // ran on the fresh pass and its results are still sitting on the live box tree, untouched.
+            // Mirrors CssLayoutEngineFlex.Layout's identical short-circuit.
+            if (resume is GridBreakToken gridResume)
+            {
+                await ResumeCommitPass(g, gridResume);
+                return;
+            }
+
             // Container inline size — resolved exactly like any other block box's width (this also carries
             // the per-page reflow seam via GetBoxWidth).
             var containerWidth = await CssLayoutEngine.GetBoxWidth(g, _gridBox);
@@ -326,6 +343,17 @@ namespace PeachPDF.Html.Core.Dom
             // so would overwrite the displacement this adds.
             RelocateRowsAcrossFragmentainers(placements);
 
+            // ── Item content commit pass: once every item sits at its truly final position (after
+            // relocation, not merely after cell placement), lay each row's items' content out for real,
+            // attached to a live fragmentainer, so it can genuinely continue into a later page/column
+            // instead of being lost or duplicated at a straddling boundary - see CommitItemContent's own
+            // remarks. Grid rows are already in block-axis order (RowStart ascending), so - unlike
+            // flex's line ordering - no wrap-reverse-style reordering is needed here.
+            var rowGroups = BuildRowGroups(placements);
+            var subgridContexts = BuildSubgridContextMap(placements, columns, rows);
+            await CommitItemContent(g, rowGroups, startRowIndex: 0, seedUnfinished: null, seedFinished: null,
+                subgridContexts, placementOrigin: _gridBox.Location);
+
             // Inline-grid shrinks to the content extent in the inline axis (like inline-block).
             if (_gridBox.Display == CssConstants.InlineGrid && !CssValueParser.IsValidLength(_gridBox.Width) && columns.Length > 0)
             {
@@ -392,6 +420,180 @@ namespace PeachPDF.Html.Core.Dom
             {
                 _gridBox.ActualBottom += shift;
             }
+        }
+
+        // ─── Item content commit pass ──────────────────────────────────────────────
+
+        /// <summary>The grid's rows, in block-axis order, as the item-box lists a commit pass walks.</summary>
+        /// <remarks>
+        /// Unlike flex lines under <c>wrap-reverse</c>, grid rows need no reordering trick: <c>RowStart</c>
+        /// ascending <b>is</b> block-axis order regardless of <c>grid-auto-flow</c> — even under
+        /// <c>grid-auto-flow: column</c> the rows are still the block-axis unit (the same fact
+        /// <see cref="RelocateRowsAcrossFragmentainers"/> already relies on). A row-spanning item is
+        /// grouped at the row it <i>starts</i>, matching that method's own "an item spanning several rows
+        /// travels with the first of them" choice, so the two mechanisms agree on which row an item
+        /// belongs to.
+        /// </remarks>
+        private static IReadOnlyList<IReadOnlyList<CssBox>> BuildRowGroups(List<Placement> placements) =>
+            placements
+                .GroupBy(p => p.RowStart)
+                .OrderBy(group => group.Key)
+                .Select(group => (IReadOnlyList<CssBox>)group.Select(p => p.Box).ToList())
+                .ToList();
+
+        /// <summary>
+        /// Captures each subgrid item's <see cref="GridSubgridContext"/> once, up front, while the live
+        /// <paramref name="columns"/>/<paramref name="rows"/> track geometry this pass just built is still
+        /// available. A resumed pass has no <c>placements</c>/track arrays to recompute this from (the
+        /// short-circuit at the top of <see cref="Layout"/> returns before track sizing runs again), so
+        /// the map travels on the <see cref="GridBreakToken"/> instead — the same reason that token also
+        /// carries the row grouping rather than letting a resumed pass regroup it.
+        /// </summary>
+        private static IReadOnlyDictionary<CssBox, GridSubgridContext> BuildSubgridContextMap(
+            List<Placement> placements, Track[] columns, Track[] rows)
+        {
+            var map = new Dictionary<CssBox, GridSubgridContext>();
+            foreach (var p in placements)
+            {
+                if (BuildChildSubgridContext(p, columns, rows, adoptRows: true) is { } context)
+                    map[p.Box] = context;
+            }
+            return map;
+        }
+
+        /// <summary>
+        /// Lays each row's items' content out for real, at the position it now finally holds, with
+        /// breaking genuinely live — rather than translating an already-measured subtree the way every
+        /// earlier phase does. Walks <paramref name="rowGroups"/> forward from <paramref name="startRowIndex"/>,
+        /// committing as many whole rows as fit the current fragmentainer before publishing this
+        /// container's own <see cref="GridBreakToken"/> naming the row (and that row's items) which
+        /// stopped it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why one pass can commit several rows.</b> A pass fills as much of the current fragmentainer
+        /// as fits, not just one row — a row that fully finishes falls through to the next iteration of
+        /// this same loop, exactly like <c>TableRowCursor</c>'s per-row loop and unlike
+        /// <c>CssLayoutEngineFlex.CommitItemContent</c>'s flat single-line body (flex never has more than
+        /// one line to commit in the first place, so it never needed this loop shape).
+        /// </para>
+        /// <para>
+        /// <b>Why every item of a row commits regardless of an earlier item's own outcome.</b> A row's
+        /// items sit side by side (different columns) sharing one block-axis range — the same
+        /// <see href="https://www.w3.org/TR/css-break-3/#parallel-flows">§2.1 parallel flows</see> shape
+        /// a flex row's items are — so each commits independently; one item stopping does not stop its
+        /// row-mates from continuing (or finishing) on their own.
+        /// </para>
+        /// </remarks>
+        private async ValueTask CommitItemContent(
+            RGraphics g,
+            IReadOnlyList<IReadOnlyList<CssBox>> rowGroups,
+            int startRowIndex,
+            IReadOnlyList<UnfinishedGridItem>? seedUnfinished,
+            IReadOnlyList<CssBox>? seedFinished,
+            IReadOnlyDictionary<CssBox, GridSubgridContext> subgridContexts,
+            RPoint placementOrigin)
+        {
+            var container = _gridBox.HtmlContainer;
+
+            // The same liveness gate RelocateRowsAcrossFragmentainers uses, for the same reason: outside
+            // it this container's own coordinates are provisional, belonging to whatever is measuring it.
+            if (container is null || !container.HasRealPageGrid || !container.IsFragmenting
+                || _gridBox.Display == CssConstants.InlineGrid)
+            {
+                return;
+            }
+
+            for (var rowIndex = startRowIndex; rowIndex < rowGroups.Count; rowIndex++)
+            {
+                var isResumedRow = rowIndex == startRowIndex && seedUnfinished is not null;
+
+                var pending = isResumedRow
+                    ? seedUnfinished!.Select(u => (Box: u.Item, Resume: (BreakToken?)u.Token)).ToList()
+                    : rowGroups[rowIndex].Select(box => (Box: box, Resume: (BreakToken?)null)).ToList();
+
+                var finished = isResumedRow && seedFinished is not null
+                    ? new List<CssBox>(seedFinished)
+                    : new List<CssBox>();
+                var unfinished = new List<UnfinishedGridItem>();
+
+                foreach (var (box, itemResume) in pending)
+                {
+                    var hasContext = subgridContexts.TryGetValue(box, out var context);
+                    if (hasContext) box.SubgridContext = context;
+                    try
+                    {
+                        await ItemContentCommit.CommitLayout(g, box, itemResume);
+                    }
+                    finally
+                    {
+                        if (hasContext) box.SubgridContext = null;
+                    }
+
+                    if (box.PendingBreakToken is { } token)
+                        unfinished.Add(new UnfinishedGridItem(box, token));
+                    else
+                        finished.Add(box);
+                }
+
+                if (unfinished.Count > 0)
+                {
+                    var resumeSlot = unfinished.Max(u => u.Token.ResumeSlotIndex);
+                    _gridBox.SetPendingBreakToken(new GridBreakToken(
+                        _gridBox, resumeSlot, rowIndex, rowGroups, unfinished, finished, subgridContexts,
+                        placementOrigin));
+                    return;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Re-enters exactly the row an earlier pass's <see cref="GridBreakToken"/> named as unfinished,
+        /// at the position it already holds, and continues from where its items stopped — then, if that
+        /// row now finishes on this pass, keeps walking forward through however many further rows fit the
+        /// same fragmentainer, exactly like a fresh pass's own loop.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="CssBox.ResumeInTheNextFragmentainer"/> moves the grid container itself when a
+        /// resumed pass lands in a new fragmentainer (a multicolumn column boundary, most concretely),
+        /// but — by its own doc comment — moves <i>only</i> that box, not its subtree: correct for
+        /// already-placed descendants, which belong to the fragmentainer being left, but every
+        /// not-yet-committed item here is not one of those. Nothing else re-derives their position the
+        /// way an ordinary block child's <c>PlaceBlockChild</c> would, so this reads how far the
+        /// container itself moved since <see cref="GridBreakToken.PlacementOrigin"/> was recorded and
+        /// applies that same correction — the same reasoning <c>ResumeInTheNextFragmentainer</c> gives
+        /// for translating rather than re-measuring a column: every fragmentainer here is the same
+        /// width, so the delta that repositions the container also repositions its items correctly.
+        /// A direct <see cref="CssBox.Location"/> reassignment is used rather than
+        /// <see cref="CssBox.OffsetLeft(double)"/>/<see cref="CssBox.OffsetTop(double)"/> deliberately: those translate a
+        /// box's already-placed content along with it, which is right for a subtree that has not been
+        /// frozen anywhere yet (the earlier placement/relocation phases) but wrong here, where an item
+        /// resuming mid-content may already have fragments frozen in the fragmentainer being left —
+        /// those must stay exactly where they are, and only the origin new content flows from should move
+        /// (mirroring <c>ResumeInTheNextFragmentainer</c>'s own choice for the same reason).
+        /// </remarks>
+        private async ValueTask ResumeCommitPass(RGraphics g, GridBreakToken resume)
+        {
+            var delta = new RPoint(
+                _gridBox.Location.X - resume.PlacementOrigin.X,
+                _gridBox.Location.Y - resume.PlacementOrigin.Y);
+
+            if (delta.X != 0 || delta.Y != 0)
+            {
+                RepositionForResume(resume.UnfinishedItems.Select(u => u.Item), delta);
+                for (var rowIndex = resume.ResumeRowIndex + 1; rowIndex < resume.Rows.Count; rowIndex++)
+                    RepositionForResume(resume.Rows[rowIndex], delta);
+            }
+
+            await CommitItemContent(
+                g, resume.Rows, resume.ResumeRowIndex, resume.UnfinishedItems, resume.FinishedItems,
+                resume.SubgridContexts, _gridBox.Location);
+        }
+
+        private static void RepositionForResume(IEnumerable<CssBox> boxes, RPoint delta)
+        {
+            foreach (var box in boxes)
+                box.Location = new RPoint(box.Location.X + delta.X, box.Location.Y + delta.Y);
         }
 
         /// <summary>

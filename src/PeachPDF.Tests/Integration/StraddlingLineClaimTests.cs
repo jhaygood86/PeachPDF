@@ -20,10 +20,20 @@ namespace PeachPDF.Tests.Integration
     /// <para>
     /// Two production mechanisms leave a line straddling by more than
     /// <see cref="HtmlContainerInt.PageBoundaryEpsilon"/>, and both are exercised here rather than
-    /// simulated: a flex or grid item's content is laid out with
-    /// <c>HtmlContainerInt.SuppressWordPageBreaks</c> set and is never revisited when the engine translates
-    /// the item into place, and <c>MonolithicContent.FitsNoFragmentainer</c> leaves anything taller than the
-    /// band exactly where it is.
+    /// simulated: a flex item's content whose commit pass does not apply — today, any
+    /// <c>flex-wrap</c> container with more than one line, or a <c>flex-direction: column</c>/
+    /// <c>column-reverse</c> container — is laid out with <c>HtmlContainerInt.SuppressWordPageBreaks</c>
+    /// set and is never revisited when the engine translates the item into place, and
+    /// <c>MonolithicContent.FitsNoFragmentainer</c> leaves anything taller than the band exactly where
+    /// it is.
+    /// </para>
+    /// <para>
+    /// A grid item's content no longer exhibits the first mechanism: <c>CssLayoutEngineGrid</c>'s own
+    /// commit pass (issues #517/#526) revisits every row's content live once it sits at its final
+    /// position, the same way flex's single-line commit pass already did — so a grid line that would
+    /// have straddled a page boundary under the old translate-only path now genuinely continues onto
+    /// the next page instead of drawing twice. Only the flex shapes above (and monolithic content,
+    /// which is unrelated to either engine) still straddle.
     /// </para>
     /// <para>
     /// The fixtures assert the overhang they produce is real — comfortably past the tolerance — before
@@ -37,12 +47,10 @@ namespace PeachPDF.Tests.Integration
         /// The invariant, stated where it differs from the single-claim one: a line that overhangs its band
         /// by more than the tolerance is held by the page it starts on <b>and</b> the page it runs into.
         /// </summary>
-        [Theory]
-        [InlineData("flex")]
-        [InlineData("grid")]
-        public async Task ALineTheEngineCouldNotMove_IsClaimedByBothPagesItSpans(string display)
+        [Fact]
+        public async Task ALineTheEngineCouldNotMove_IsClaimedByBothPagesItSpans()
         {
-            var (root, container) = await LayoutAsync(display);
+            var (root, container) = await LayoutAsync();
 
             var straddling = StraddlingWords(container, root).ToList();
 
@@ -67,12 +75,10 @@ namespace PeachPDF.Tests.Integration
         /// the words of the straddling line, which is where its readable remainder is. Dropping the second
         /// claim left only the clipped sliver on the page above and lost the line.
         /// </summary>
-        [Theory]
-        [InlineData("flex")]
-        [InlineData("grid")]
-        public async Task ThePageBelowTheBoundary_DrawsTheStraddlingLinesWords(string display)
+        [Fact]
+        public async Task ThePageBelowTheBoundary_DrawsTheStraddlingLinesWords()
         {
-            var (root, container) = await LayoutAsync(display);
+            var (root, container) = await LayoutAsync();
 
             var straddling = StraddlingWords(container, root).ToList();
             Assert.NotEmpty(straddling);
@@ -123,17 +129,50 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(covered, SlotsClaiming(container, word));
         }
 
-        private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string display)
+        /// <summary>
+        /// The grid counterpart of <see cref="ALineTheEngineCouldNotMove_IsClaimedByBothPagesItSpans"/>:
+        /// the exact same fixture shape that straddles for flex (each row its own line, one row landing
+        /// across a page boundary) does <b>not</b> straddle for grid, because
+        /// <c>CssLayoutEngineGrid</c>'s commit pass revisits every row's content live and lets a row that
+        /// would have straddled genuinely continue on the next page instead. Every word is claimed by
+        /// exactly one page, and the one row whose content the boundary falls through is split across
+        /// both pages rather than drawn twice or lost.
+        /// </summary>
+        [Fact]
+        public async Task AGridRowTheEngineCouldNotFit_ContinuesOnTheNextPageInstead()
+        {
+            var items = string.Join("", Enumerable.Range(0, 120).Select(i =>
+                $"<div style='font-size:10pt;line-height:13pt'>w{i * 3} w{i * 3 + 1} w{i * 3 + 2}</div>"));
+            var markup = $"<div style='display:grid;grid-template-columns:1fr'>{items}</div>";
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(markup), pageHeight: 842, margin: 10);
+
+            var words = LayoutHarness.Descendants(root).SelectMany(b => b.Words).ToList();
+            Assert.NotEmpty(words);
+
+            // The fixture is only meaningful if content genuinely reached a page boundary - otherwise
+            // "nothing straddles" would pass vacuously without exercising the commit pass's live break.
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1,
+                "the fixture must span more than one page to exercise a boundary at all");
+
+            Assert.All(words, word =>
+                Assert.True(word.Bottom <= container.PageBottomOf(container.SlotStartingAt(word.Top)) + HtmlContainerInt.PageBoundaryEpsilon,
+                    $"'{word.Text}' still straddles its band by {word.Bottom - container.PageBottomOf(container.SlotStartingAt(word.Top))}"));
+
+            Assert.All(words, word => Assert.Single(SlotsClaiming(container, word)));
+        }
+
+        private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync()
         {
             // width:100% on a flex item makes each item its own line, so the items stack down the page and
             // one of them lands across the boundary. line-height is pinned so the stack's pitch does not
-            // depend on the platform's font metrics.
+            // depend on the platform's font metrics. flex-wrap:wrap gives the container more than one
+            // line, which is outside CssLayoutEngineFlex.CommitItemContent's single-line scope.
             var items = string.Join("", Enumerable.Range(0, 120).Select(i =>
                 $"<div style='width:100%;font-size:10pt;line-height:13pt'>w{i * 3} w{i * 3 + 1} w{i * 3 + 2}</div>"));
 
-            var markup = display == "flex"
-                ? $"<div style='display:flex;flex-wrap:wrap'>{items}</div>"
-                : $"<div style='display:grid;grid-template-columns:1fr'>{items}</div>";
+            var markup = $"<div style='display:flex;flex-wrap:wrap'>{items}</div>";
 
             return LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup), pageHeight: 842, margin: 10);
         }
