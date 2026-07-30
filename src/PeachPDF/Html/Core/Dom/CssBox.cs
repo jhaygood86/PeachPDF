@@ -1361,9 +1361,9 @@ namespace PeachPDF.Html.Core.Dom
         /// The forced-break arm of <c>PlaceBlockChild</c> runs on the pass that <i>declines</i> to place
         /// the box; the pass that places it takes the resumed-target branch instead, which is not the
         /// branch that asserts either of these. And between the two, a nested engine re-opens this box's
-        /// prologue (<c>CssLayoutEngineColumns.ResetChildrenForRefill</c>), which retracts both so a
-        /// re-decided break can re-assert them — right for a break being decided again, wrong for one
-        /// already decided and travelling in a record.
+        /// prologue (<see cref="PassRewind.RollBackTo"/>, called from <c>CssLayoutEngineColumns</c>'s own
+        /// fill retry), which retracts both so a re-decided break can re-assert them — right for a break
+        /// being decided again, wrong for one already decided and travelling in a record.
         /// </para>
         /// <para>
         /// Deliberately <b>not</b> cleared by the prologue, for that reason; cleared per layout in
@@ -2936,10 +2936,16 @@ namespace PeachPDF.Html.Core.Dom
         /// on the same page" test the translation used, which asked the same question of coordinates.
         /// </para>
         /// <para>
-        /// Only the head is told where to go; every other member re-derives its position from the
-        /// sibling above it, which has just been re-placed. Their break latches are cleared so a member
-        /// can still take a decision of its own at its new position — except the box that raised this
-        /// one, which keeps its latch and so follows the run rather than deciding again.
+        /// Only the head is told where to go — via <see cref="ResumeAt"/>'s target, the same channel an
+        /// ordinary fragmentainer resumption hands a continuing child. Every member from the head on is
+        /// simply <b>re-appended</b>: the rewound loop calls <see cref="PerformLayout"/> on each of them
+        /// again, in order, exactly as it would for a child it had never reached yet, and each one
+        /// re-derives its position from the sibling above it — which, for the head, is
+        /// <see cref="PlaceBlockChild"/> reading the resumed target rather than deriving one, and for
+        /// every member after it, the ordinary derivation now reads a sibling already re-placed. Nothing
+        /// here has to clear a break latch of its own first: <see cref="BeginLayoutPass"/> resets
+        /// <c>_earlyBreakTaken</c> for every box on every entry to <see cref="PerformLayoutImp"/>, which a
+        /// re-appended child gets from the same call the ordinary walk already makes.
         /// </para>
         /// </remarks>
         private bool TryRestartAt(EarlyBreak restart, int start, int raisedAt, ref HashSet<int>? restartedHeads, out int resumeFrom)
@@ -2962,11 +2968,6 @@ namespace PeachPDF.Html.Core.Dom
             restartedHeads ??= [];
 
             if (!restartedHeads.Add(resumeFrom)) return false;
-
-            for (var j = resumeFrom; j < raisedAt; j++)
-            {
-                Boxes[j]._earlyBreakTaken = false;
-            }
 
             Boxes[resumeFrom].ResumeAt(null, restart.Top);
             return true;
@@ -3180,12 +3181,12 @@ namespace PeachPDF.Html.Core.Dom
                         // An escaping forced break is placed *here*, one pass after the arm below settled
                         // it, and that arm is not re-entered - so what it settled has to be re-asserted
                         // rather than re-derived. Two things, both retracted in between by a prologue the
-                        // engine re-opened (ResetChildrenForRefill): that this box is placed by a forced
-                        // break, which its *next* sibling reads through §5.2 and the margin walk-back, and
-                        // the blank slot a directional break reserved to land on the side it names. Losing
-                        // the first put the following sibling ahead of the break; losing the second landed
-                        // the content on a page of the wrong side, which is precisely what the value asked
-                        // about.
+                        // engine re-opened (PassRewind.RollBackTo, called from CssLayoutEngineColumns's own
+                        // fill retry): that this box is placed by a forced break, which its *next* sibling
+                        // reads through §5.2 and the margin walk-back, and the blank slot a directional
+                        // break reserved to land on the side it names. Losing the first put the following
+                        // sibling ahead of the break; losing the second landed the content on a page of the
+                        // wrong side, which is precisely what the value asked about.
                         if (child._escapedForcedBreakPending)
                         {
                             child._escapedForcedBreakPending = false;

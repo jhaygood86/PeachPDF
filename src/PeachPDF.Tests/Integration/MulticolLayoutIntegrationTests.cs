@@ -1259,7 +1259,7 @@ namespace PeachPDF.Tests.Integration
         /// box that is not the container's own child is lost entirely — no page break and no column break —
         /// so there is nothing here for an escaping record to carry. Its cause is one level down from
         /// anything about columns: <c>_forcedBreakTop</c> is a one-shot, and the measurement pass that sizes
-        /// the fill spends it, because <c>ResetChildrenForRefill</c> re-opens the prologue for the
+        /// the fill spends it, because <c>PassRewind.RollBackTo</c> re-opens the prologue for the
         /// container's own children only.
         /// </summary>
         /// <remarks>
