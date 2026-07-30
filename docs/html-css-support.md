@@ -234,23 +234,23 @@ Form elements are rendered as static boxes. There is no interactive behavior —
 
 #### Logical box-model properties
 
-The [CSS logical box-model properties](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_logical_properties_and_values) are supported and resolve to their physical equivalents. PeachPDF lays out as `writing-mode: horizontal-tb` / `direction: ltr`, so the mapping is fixed: **block-start → top, block-end → bottom, inline-start → left, inline-end → right**.
+The [CSS logical box-model properties](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_logical_properties_and_values) are supported and resolve to their physical equivalents, per each box's own resolved `direction` and `writing-mode` — following the [CSS Writing Modes Level 4 §7.1](https://www.w3.org/TR/css-writing-modes-4/#logical-to-physical) abstract-to-physical mapping table. Under the default `writing-mode: horizontal-tb` / `direction: ltr`, block-start/-end are top/bottom and inline-start/-end are left/right; a vertical `writing-mode` rotates block-start/-end onto the left or right edge instead, and `direction: rtl` flips which physical edge is inline-start/-end within whichever axis is inline for that writing mode (`sideways-lr` reverses the inline mapping relative to `vertical-rl`/`vertical-lr`/`sideways-rl`).
 
 | Logical property | Resolves to | Notes |
 |------------------|-------------|-------|
-| `margin-block` / `margin-inline` | `margin-top`+`margin-bottom` / `margin-left`+`margin-right` | 1–2 values (1 applies to both edges) |
-| `margin-block-start` / `-end`, `margin-inline-start` / `-end` | `margin-top`/`-bottom`/`-left`/`-right` | single edge |
+| `margin-block` / `margin-inline` | the two physical block-edge / inline-edge margins | 1–2 values (1 applies to both edges) |
+| `margin-block-start` / `-end`, `margin-inline-start` / `-end` | one physical margin edge | single edge |
 | `padding-block` / `padding-inline` (+ `-start`/`-end` longhands) | the physical `padding-*` edges | same 1–2-value / single-edge model as margin |
-| `inset` | `top`+`right`+`bottom`+`left` | 1–4 values (the standard box-edge shorthand) |
+| `inset` | `top`+`right`+`bottom`+`left` | 1–4 values (the standard box-edge shorthand — always physical, not writing-mode-dependent, per spec) |
 | `inset-block` / `inset-inline` (+ `-start`/`-end` longhands) | the physical `top`/`right`/`bottom`/`left` edges | 1–2-value / single-edge |
-| `border-block-start` / `-end`, `border-inline-start` / `-end` | the physical `border-top`/`-right`/`-bottom`/`-left` edge shorthands | `<width> <style> <color>` |
+| `border-block-start` / `-end`, `border-inline-start` / `-end` | one physical border edge shorthand | `<width> <style> <color>` |
 | `border-block` / `border-inline` | both block / both inline edges | one `<width> <style> <color>` applied to both edges |
 | `border-block-width` / `-style` / `-color` (and `border-inline-*`) | the two physical edge width/style/color longhands | 1–2 values |
 | `border-block-start-width` / `-style` / `-color` (all four edges) | the physical per-edge `border-*-width`/`-style`/`-color` longhands | single edge |
 
-Because these map to the physical longhands, a logical and a physical declaration for the same edge cascade together (last-declared wins). When a declaration block is serialized back to CSS, the physical longhands are used — a logical shorthand is never reconstructed from them.
+Each logical longhand keeps its own identity through the cascade and is resolved to a physical edge once the box's own `direction`/`writing-mode` are known, rather than being aliased directly onto a physical longhand at parse time. When a declaration block is serialized back to CSS, the logical longhands are used as declared — a logical shorthand (e.g. `margin-block`) is never reconstructed from them.
 
-> **Limitation:** the logical→physical mapping is fixed to LTR / horizontal-tb; it does not vary with `direction` or `writing-mode`. Under `direction: rtl` (or a vertical writing mode) the inline/block edges are therefore *not* remapped as the spec requires — `margin-inline-start` always resolves to `margin-left`, never `margin-right`. This is inherent to PeachPDF's fixed layout orientation (see [`direction`](#positioning) support, which is itself partial).
+> **Limitation:** when a logical and a physical declaration target the same edge on the same box (e.g. both `margin-left` and `margin-inline-start` set, under `direction: ltr`), the logical value always wins regardless of which was actually declared later, rather than true last-declared-wins cascade order. See [`.claude/accepted-gaps/logical-and-physical-property-conflicts-favor-logical.md`](../.claude/accepted-gaps/logical-and-physical-property-conflicts-favor-logical.md) for why this narrow case is out of scope.
 
 ### Borders
 
@@ -355,6 +355,7 @@ Remaining boundaries: fallback walks the declared `font-family` stack (plus the 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `direction` | [direction](https://developer.mozilla.org/en-US/docs/Web/CSS/direction) | `ltr` and `rtl`. `rtl` mirrors the visual order of whole word boxes on a line; there is no Unicode Bidi Algorithm (no per-character reordering or mixed-direction resolution), and `unicode-bidi` is parsed but has no layout effect. See [Text shaping](#text-shaping) |
+| `writing-mode` | [writing-mode](https://developer.mozilla.org/en-US/docs/Web/CSS/writing-mode) | All five values (`horizontal-tb`, `vertical-rl`, `vertical-lr`, `sideways-rl`, `sideways-lr`) parse, cascade, and inherit correctly, and correctly drive [logical box-model property](#logical-box-model-properties) resolution — e.g. `margin-block-start` under `vertical-rl` resolves to the physical right edge. **Layout and painting are not affected**: line-box flow, glyph rotation/orientation, and table/flex axis interpretation all stay horizontal-tb-oriented regardless of the value. See [`.claude/accepted-gaps/no-vertical-writing-mode-layout.md`](../.claude/accepted-gaps/no-vertical-writing-mode-layout.md) |
 | `hyphens` | [hyphens](https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens) | `none`, `manual`, `auto` are parsed, cascaded, and inherited. `manual` and `auto` both honor an explicit soft hyphen (`&shy;`/U+00AD) as a line-break opportunity, rendering a literal `-` glyph only when that break is actually used. `auto` additionally performs real pattern-based automatic hyphenation (Liang's algorithm) for ~73 languages — see the note below the table for language coverage and exclusions |
 | `letter-spacing` | [letter-spacing](https://developer.mozilla.org/en-US/docs/Web/CSS/letter-spacing) | Full support, including negative values; spacing is added after every character including the last (realized via the PDF `Tc` character-spacing operator, which applies to every glyph shown), and one letter-spacing unit is folded into the following inter-word gap so adjacent words never collapse together. Per CSS Text Level 3 §7.2, spacing is not suppressed at the start/end of a *word* — only at the start/end of a *line*, which this engine does not special-case, leaving each line's own leading/trailing edge with a sub-pixel, visually negligible extra inset |
 | `text-align` | [text-align](https://developer.mozilla.org/en-US/docs/Web/CSS/text-align) | `left`, `right`, `center`, `justify`. Under `justify`, the block's **last line** is not justified, per [CSS Text §7.3](https://www.w3.org/TR/css-text-3/#text-align-property) — a line that merely ends at a page or column boundary is not that line, so it is justified like any other and the block resumes justified on the next page |
