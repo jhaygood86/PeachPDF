@@ -1211,5 +1211,120 @@ namespace PeachPDF.Tests.Integration
             Assert.True(a.ActualBottom <= container.PageBottomOf(1) + 0.5,
                 $"expected the item whole in slot 1, it runs to {a.ActualBottom}");
         }
+
+        // ─── Flex item content fragmentation, column-direction (issues #517/#526) ─
+
+        // A non-wrapping column container's single line is a sequential flow: each item is walked and
+        // committed in turn, so a later item's own content continues onto the next page when an earlier
+        // item already filled it - the same content-fragmentation guarantee row-direction and grid have,
+        // for the one remaining shape (#526's "largest new design surface").
+        [Fact]
+        public async Task ALaterItemsContent_ContinuesOnTheNextPageWhenItDoesNotFit()
+        {
+            var items = string.Concat(Enumerable.Range(1, 3)
+                .Select(i => $"<div id='r{i}'>row {i} one two</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-direction:column; line-height:20pt'>"
+                    + items + "</div>"),
+                pageHeight: PageHeight);
+
+            var r1 = LayoutHarness.FindById(root, "r1");
+            var r3 = LayoutHarness.FindById(root, "r3");
+            Assert.NotNull(r1);
+            Assert.NotNull(r3);
+
+            // 120pt filler + 2 items of 20pt leaves exactly 0pt for item 3 in slot 0's 160pt band.
+            Assert.Equal(0, SlotOf(container, r1!));
+            Assert.Equal(1, SlotOf(container, r3!));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
+        // A wrapping column container's lines run in parallel, side by side, sharing no block-axis range
+        // - so one line's item content fragmenting must not disturb the other line's content, which
+        // finishes on page 1 untouched.
+        [Fact]
+        public async Task AWrappingColumnLinesContent_FragmentsIndependentlyOfTheOtherLine()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-direction:column; flex-wrap:wrap;"
+                    + " height:60pt; width:300pt; line-height:20pt'>"
+                    + "<div id='a1' style='width:100pt'>a1 one two</div>"
+                    + "<div id='a2' style='width:100pt'>a2 three four</div>"
+                    + "<div id='a3' style='width:100pt'>a3 five six</div>"
+                    + "<div id='b1' style='width:100pt'>b1 short</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a1 = LayoutHarness.FindById(root, "a1")!;
+            var a3 = LayoutHarness.FindById(root, "a3")!;
+            var b1 = LayoutHarness.FindById(root, "b1")!;
+
+            // The fixture is only meaningful if a1-a3 really do wrap onto a second line beside b1 (the
+            // container's own 60pt height holds 3 of the 20pt items, so a fourth starts a new line).
+            Assert.True(b1.Location.X > a1.Location.X,
+                $"expected B on a second line beside A; both are at x {a1.Location.X:F1}");
+
+            // 120pt filler + 2 items of 20pt leaves exactly 0pt for a3 in slot 0's 160pt band; b1's own
+            // line is short enough to finish on slot 0 regardless.
+            Assert.Equal(0, SlotOf(container, a1));
+            Assert.Equal(1, SlotOf(container, a3));
+            Assert.Equal(0, SlotOf(container, b1));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
+        // The sequential walk must proceed in block-axis (top-to-bottom) order, not source order - under
+        // column-reverse those differ (FlexItem collection never reorders FlexLine.Items itself), and
+        // reading the wrong one would commit/resume the wrong item first.
+        [Fact]
+        public async Task ColumnReverse_CommitsItemsInBlockAxisOrderNotSourceOrder()
+        {
+            var items = string.Concat(Enumerable.Range(1, 3)
+                .Select(i => $"<div id='r{i}'>row {i} one two</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-direction:column-reverse; line-height:20pt'>"
+                    + items + "</div>"),
+                pageHeight: PageHeight);
+
+            var r1 = LayoutHarness.FindById(root, "r1");
+            var r3 = LayoutHarness.FindById(root, "r3");
+            Assert.NotNull(r1);
+            Assert.NotNull(r3);
+
+            // column-reverse places source-last r3 at the block-start (top) and source-first r1 at the
+            // block-end (bottom), so r3 is the one already sitting in slot 0's remaining room and r1 is
+            // the one pushed into slot 1 - the reverse of the plain column case above.
+            Assert.Equal(1, SlotOf(container, r1!));
+            Assert.Equal(0, SlotOf(container, r3!));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
     }
 }
