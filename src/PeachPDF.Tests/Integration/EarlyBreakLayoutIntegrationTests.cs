@@ -555,31 +555,48 @@ namespace PeachPDF.Tests.Integration
         /// latched and was silently skipped on replay - landing directly on <c>section2lead</c>'s own page
         /// with room to spare, rather than opening a fresh one.
         /// </summary>
-        [Theory]
-        [InlineData(35, 180.0)]
-        [InlineData(50, 200.0)]
-        [InlineData(115, 180.0)]
-        [InlineData(190, 180.0)]
-        public async Task PulledRun_ReEnteringAPassThatResumedIntoAParagraph_RetakesAForcedBreakOnAGrandchild(
-            int leadWords, double pageHeight)
+        /// <remarks>
+        /// Swept, not a fixed row per combination, for the same reason
+        /// <see cref="PulledRun_FromAPassThatResumedIntoAParagraph_ReEntersThatPass"/> is: which combination
+        /// actually reaches the pass re-entry is a function of the platform's font metrics (word wrapping
+        /// differs enough between <c>windows-latest</c> and this repo's other CI runners that a single
+        /// hard-coded row is not portable), while that the family does is stable. The fix's own assertion is
+        /// therefore checked for every combination that reaches the rewind, and the sweep as a whole is
+        /// asked, once, whether at least one did.
+        /// </remarks>
+        [Fact]
+        public async Task PulledRun_ReEnteringAPassThatResumedIntoAParagraph_RetakesAForcedBreakOnAGrandchild()
         {
-            var (root, container) = await LayoutHarness.LayoutAsync(
-                ResumedParagraphWithNestedForcedBreakDocument(leadWords, 30),
-                pageWidth: 300, pageHeight: pageHeight, margin: 10);
+            var rewound = 0;
 
-            Assert.True(container.PassRewinds > 0,
-                "fixture must actually send the driver back to a finished pass");
+            foreach (var (leadWords, pageHeight) in new[]
+                     {
+                         (25, 160.0), (35, 180.0), (50, 200.0), (55, 220.0), (70, 240.0), (75, 140.0),
+                         (90, 280.0), (100, 160.0), (115, 180.0), (135, 200.0), (150, 220.0), (160, 160.0),
+                         (170, 240.0), (190, 140.0), (190, 180.0), (190, 260.0)
+                     })
+            {
+                var (root, container) = await LayoutHarness.LayoutAsync(
+                    ResumedParagraphWithNestedForcedBreakDocument(leadWords, 30),
+                    pageWidth: 300, pageHeight: pageHeight, margin: 10);
 
-            var section2lead = LayoutHarness.FindById(root, "section2lead")!;
-            var h2 = LayoutHarness.FindById(root, "h2")!;
+                if (container.PassRewinds == 0) continue;
+                rewound += container.PassRewinds;
 
-            var section2leadPage =
-                container.PageIndexOf(section2lead.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
-            var h2Page = container.PageIndexOf(h2.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+                var section2lead = LayoutHarness.FindById(root, "section2lead")!;
+                var h2 = LayoutHarness.FindById(root, "h2")!;
 
-            Assert.True(h2Page > section2leadPage,
-                "break-before:page must push h2 onto a fresh page rather than leaving it on section2lead's page");
-            Assert.Equal(container.PageTopOf(h2Page), h2.Location.Y, 0.1);
+                var section2leadPage =
+                    container.PageIndexOf(section2lead.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
+                var h2Page = container.PageIndexOf(h2.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+
+                Assert.True(h2Page > section2leadPage,
+                    $"break-before:page must push h2 onto a fresh page rather than leaving it on " +
+                    $"section2lead's page (lead={leadWords}, pageHeight={pageHeight})");
+                Assert.Equal(container.PageTopOf(h2Page), h2.Location.Y, 0.1);
+            }
+
+            Assert.True(rewound > 0, "no member of the fixture family sent the driver back to a finished pass");
         }
 
         private static List<CssRect> WordsIn(CssBox box) =>
