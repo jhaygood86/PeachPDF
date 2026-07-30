@@ -4010,6 +4010,114 @@ await SaveShowcaseAsync("multicol", "Layout", "Multi-column Layout",
     "CSS multi-column layout: column counts, widths, gaps, and column rules.",
     multicolHtml, pdfConfig);
 
+// ── item content fragmentation for grid, flex rows, and flex columns (issues #517/#526) ────
+// Before this, a flex or grid item's own content was translated into place as one already-measured
+// piece: fine as long as it fit the fragmentainer it landed in, but a page boundary falling through an
+// item's text either lost the remainder or drew the same line on both pages. Each engine's items now
+// commit their content for real, live against the fragmentainer they finally sit in - so a row, line or
+// item that runs out of room continues its remaining text on the next page, the same way an ordinary
+// paragraph already did.
+static string FragmentationCard(string label, string body) =>
+    $"<div class=\"card\"><h3>{label}</h3><div class=\"body\">{body}</div></div>";
+
+static string LoremRows(int count, string startAt) =>
+    string.Concat(Enumerable.Range(1, count).Select(i =>
+        $"<p>{startAt} entry {i}. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod " +
+        "tempor incididunt ut labore et dolore magna aliqua.</p>"));
+
+var gridFragmentationHtml = $$"""
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 10mm }
+    body { font: 8.5pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 0.8em }
+    .grid { display: grid; grid-template-columns: 1fr; row-gap: 6pt }
+    .card { border: 0.75pt solid #94a3b8; border-radius: 3pt; padding: 5pt 6pt }
+    .card h3 { font-size: 8.5pt; margin: 0 0 3pt; color: #1d4ed8 }
+    .card .body p { margin: 0 0 4pt; line-height: 1.35 }
+    </style></head><body>
+    <h1>Grid row content across a page break</h1>
+    <p class="intro">Each row here is one grid item with several paragraphs of text - more than fits one
+    page. Earlier rows finish where they finish; the row the boundary falls through continues its
+    remaining paragraphs on the next page instead of losing them or drawing the same line twice.</p>
+    <div class="grid">
+    {{FragmentationCard("Row 1", LoremRows(1, "Row 1"))}}
+    {{FragmentationCard("Row 2 &mdash; long enough to cross the page boundary", LoremRows(5, "Row 2"))}}
+    {{FragmentationCard("Row 3", LoremRows(1, "Row 3"))}}
+    </div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("css_grid_fragmentation", "Layout", "Grid Item Content Across Pages",
+    "A grid row's own content now fragments across a page break instead of being lost or duplicated: "
+    + "CssLayoutEngineGrid's commit pass lays each row's items out for real once they sit at their final "
+    + "position, live against the fragmentainer they land in - the same content-fragmentation guarantee "
+    + "flex and ordinary block flow already had (issues #517/#526).",
+    gridFragmentationHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
+var flexMultilineFragmentationHtml = $$"""
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 10mm }
+    body { font: 8.5pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 0.8em }
+    .flex { display: flex; flex-wrap: wrap; row-gap: 6pt }
+    .card { flex: 0 0 100%; border: 0.75pt solid #94a3b8; border-radius: 3pt; padding: 5pt 6pt }
+    .card h3 { font-size: 8.5pt; margin: 0 0 3pt; color: #1d4ed8 }
+    .card .body p { margin: 0 0 4pt; line-height: 1.35 }
+    </style></head><body>
+    <h1>Flex line content across a page break, wrapped</h1>
+    <p class="intro">width:100% keeps this <code>flex-wrap: wrap</code> row to one item per line, so each
+    card below is its own line. The commit pass walks every line, not only the first, so a later line's
+    own text still continues on the next page rather than only ever the single-line case working.</p>
+    <div class="flex">
+    {{FragmentationCard("Line 1", LoremRows(1, "Line 1"))}}
+    {{FragmentationCard("Line 2 &mdash; long enough to cross the page boundary", LoremRows(5, "Line 2"))}}
+    {{FragmentationCard("Line 3", LoremRows(1, "Line 3"))}}
+    </div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("flex_multiline_fragmentation", "Layout", "Flex Line Content Across Pages",
+    "A wrapped flex row container's own item content now fragments across a page break for every line, "
+    + "not only a single-line container: CssLayoutEngineFlex's commit pass walks every line in one pass, "
+    + "committing as many as fit before a later line's content continues on the next page (issues "
+    + "#517/#526).",
+    flexMultilineFragmentationHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
+var flexColumnFragmentationHtml = $$"""
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 10mm }
+    body { font: 8.5pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 0.8em }
+    .col { display: flex; flex-direction: column; row-gap: 6pt }
+    .card { border: 0.75pt solid #94a3b8; border-radius: 3pt; padding: 5pt 6pt }
+    .card h3 { font-size: 8.5pt; margin: 0 0 3pt; color: #1d4ed8 }
+    .card .body p { margin: 0 0 4pt; line-height: 1.35 }
+    </style></head><body>
+    <h1>Flex column item content across a page break</h1>
+    <p class="intro">A <code>flex-direction: column</code> container's items are a sequential flow, unlike
+    a row's parallel lines - each item is walked and committed in turn, so a later item's own content
+    still continues on the next page when an earlier item already filled it.</p>
+    <div class="col">
+    {{FragmentationCard("Item 1", LoremRows(1, "Item 1"))}}
+    {{FragmentationCard("Item 2 &mdash; long enough to cross the page boundary", LoremRows(5, "Item 2"))}}
+    {{FragmentationCard("Item 3", LoremRows(1, "Item 3"))}}
+    </div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("flex_column_fragmentation", "Layout", "Flex Column Item Content Across Pages",
+    "A flex-direction:column container's items are a sequential flow, and each one's own content now "
+    + "fragments across a page break the same way a row-direction line's items already did: "
+    + "CssLayoutEngineFlex walks a column-direction line's items in turn, committing each one's content "
+    + "live and continuing a later item's remaining content on the next page (issues #517/#526).",
+    flexColumnFragmentationHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
 // --- hyphens: auto multi-language showcase ---
 // Document language is a whole-container setting (<html lang>, see CssBox/HtmlContainerInt), so
 // each language gets its own small document rather than one page per language like the other

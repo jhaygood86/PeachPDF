@@ -18,76 +18,23 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Two production mechanisms leave a line straddling by more than
-    /// <see cref="HtmlContainerInt.PageBoundaryEpsilon"/>, and both are exercised here rather than
-    /// simulated: a flex or grid item's content is laid out with
-    /// <c>HtmlContainerInt.SuppressWordPageBreaks</c> set and is never revisited when the engine translates
-    /// the item into place, and <c>MonolithicContent.FitsNoFragmentainer</c> leaves anything taller than the
-    /// band exactly where it is.
+    /// <c>MonolithicContent.FitsNoFragmentainer</c> is the one production mechanism left that leaves a
+    /// line straddling by more than <see cref="HtmlContainerInt.PageBoundaryEpsilon"/>: content taller
+    /// than the whole band has nowhere to go, so layout leaves it exactly where it is. It is unrelated to
+    /// any specific engine — plain block flow, flex and grid all reach it the same way.
     /// </para>
     /// <para>
-    /// The fixtures assert the overhang they produce is real — comfortably past the tolerance — before
-    /// asserting anything about claims, so they cannot quietly decay into the ordinary single-claim case if
-    /// the geometry shifts.
+    /// A flex or grid item's own content used to be a second mechanism — laid out with
+    /// <c>HtmlContainerInt.SuppressWordPageBreaks</c> set and never revisited once the engine translated
+    /// the item into place — but every shape now has a live commit pass (issues #430/#517/#526):
+    /// <c>CssLayoutEngineGrid</c> for every row, <c>CssLayoutEngineFlex</c> for every row/row-reverse line
+    /// (single or wrapped into several) and for every column/column-reverse line's items in sequence. A
+    /// line that would have straddled a page boundary under the old translate-only path now genuinely
+    /// continues onto the next page instead of drawing twice.
     /// </para>
     /// </remarks>
     public class StraddlingLineClaimTests
     {
-        /// <summary>
-        /// The invariant, stated where it differs from the single-claim one: a line that overhangs its band
-        /// by more than the tolerance is held by the page it starts on <b>and</b> the page it runs into.
-        /// </summary>
-        [Theory]
-        [InlineData("flex")]
-        [InlineData("grid")]
-        public async Task ALineTheEngineCouldNotMove_IsClaimedByBothPagesItSpans(string display)
-        {
-            var (root, container) = await LayoutAsync(display);
-
-            var straddling = StraddlingWords(container, root).ToList();
-
-            Assert.NotEmpty(straddling);
-
-            foreach (var word in straddling)
-            {
-                var band = container.SlotStartingAt(word.Top);
-                var overhang = word.Bottom - container.PageBottomOf(band);
-
-                // The fixture is only meaningful if layout really did leave the line across the boundary,
-                // rather than within the window where it decided the line fits.
-                Assert.True(overhang > HtmlContainerInt.PageBoundaryEpsilon,
-                    $"'{word.Text}' overhangs by only {overhang}, which layout would have tolerated");
-
-                Assert.Equal([band, band + 1], SlotsClaiming(container, word));
-            }
-        }
-
-        /// <summary>
-        /// The same thing said about rendering rather than about the tree: the page below the boundary draws
-        /// the words of the straddling line, which is where its readable remainder is. Dropping the second
-        /// claim left only the clipped sliver on the page above and lost the line.
-        /// </summary>
-        [Theory]
-        [InlineData("flex")]
-        [InlineData("grid")]
-        public async Task ThePageBelowTheBoundary_DrawsTheStraddlingLinesWords(string display)
-        {
-            var (root, container) = await LayoutAsync(display);
-
-            var straddling = StraddlingWords(container, root).ToList();
-            Assert.NotEmpty(straddling);
-
-            var word = straddling[0];
-            var below = container.SlotStartingAt(word.Top) + 1;
-
-            var drawnBelow = container.FragmentTree!.Fragmentainers
-                .Single(f => f.SlotIndex == below);
-
-            var texts = Flatten(drawnBelow.Root).SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
-
-            Assert.Contains(word.Text, texts);
-        }
-
         /// <summary>
         /// A word taller than the whole band — <c>MonolithicContent.FitsNoFragmentainer</c>'s case. No
         /// fragmentainer can hold it, so breaking to a fresh one would only repeat the problem forever;
@@ -123,26 +70,46 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(covered, SlotsClaiming(container, word));
         }
 
-        private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string display)
+        /// <summary>
+        /// Every shape whose commit pass applies — grid rows, row/row-reverse flex lines (single or
+        /// wrapped), and column/column-reverse flex lines' sequential items — no longer straddles a page
+        /// boundary: each engine's commit pass revisits the relevant content live and lets what would have
+        /// straddled genuinely continue on the next page instead. Every word is claimed by exactly one
+        /// page, and the one row/line whose content the boundary falls through is split across both pages
+        /// rather than drawn twice or lost.
+        /// </summary>
+        [Theory]
+        [InlineData("display:grid;grid-template-columns:1fr", true)]
+        [InlineData("display:flex;flex-wrap:wrap", true)]
+        [InlineData("display:flex;flex-direction:column", false)]
+        public async Task ARowOrLineTheEngineCouldNotFit_ContinuesOnTheNextPageInstead(
+            string containerStyle, bool itemsAreFullWidth)
         {
-            // width:100% on a flex item makes each item its own line, so the items stack down the page and
-            // one of them lands across the boundary. line-height is pinned so the stack's pitch does not
-            // depend on the platform's font metrics.
+            // width:100% keeps a wrapped flex line to one item each, matching one row's worth of content
+            // per grid line - harmless for grid, which lays each row out in its own single column anyway.
+            // A column-direction container already stacks its items sequentially without it.
+            var itemStyle = itemsAreFullWidth ? "width:100%;font-size:10pt;line-height:13pt" : "font-size:10pt;line-height:13pt";
             var items = string.Join("", Enumerable.Range(0, 120).Select(i =>
-                $"<div style='width:100%;font-size:10pt;line-height:13pt'>w{i * 3} w{i * 3 + 1} w{i * 3 + 2}</div>"));
+                $"<div style='{itemStyle}'>w{i * 3} w{i * 3 + 1} w{i * 3 + 2}</div>"));
+            var markup = $"<div style='{containerStyle}'>{items}</div>";
 
-            var markup = display == "flex"
-                ? $"<div style='display:flex;flex-wrap:wrap'>{items}</div>"
-                : $"<div style='display:grid;grid-template-columns:1fr'>{items}</div>";
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(markup), pageHeight: 842, margin: 10);
 
-            return LayoutHarness.LayoutAsync(LayoutHarness.Wrap(markup), pageHeight: 842, margin: 10);
+            var words = LayoutHarness.Descendants(root).SelectMany(b => b.Words).ToList();
+            Assert.NotEmpty(words);
+
+            // The fixture is only meaningful if content genuinely reached a page boundary - otherwise
+            // "nothing straddles" would pass vacuously without exercising the commit pass's live break.
+            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1,
+                "the fixture must span more than one page to exercise a boundary at all");
+
+            Assert.All(words, word =>
+                Assert.True(word.Bottom <= container.PageBottomOf(container.SlotStartingAt(word.Top)) + HtmlContainerInt.PageBoundaryEpsilon,
+                    $"'{word.Text}' still straddles its band by {word.Bottom - container.PageBottomOf(container.SlotStartingAt(word.Top))}"));
+
+            Assert.All(words, word => Assert.Single(SlotsClaiming(container, word)));
         }
-
-        /// <summary>Every word left crossing the bottom of the band its own top starts in.</summary>
-        private static IEnumerable<CssRect> StraddlingWords(HtmlContainerInt container, CssBox root) =>
-            LayoutHarness.Descendants(root)
-                .SelectMany(b => b.Words)
-                .Where(w => w.Bottom > container.PageBottomOf(container.SlotStartingAt(w.Top)));
 
         private static List<int> SlotsClaiming(HtmlContainerInt container, CssRect word) =>
             container.FragmentTree!.Fragmentainers

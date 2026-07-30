@@ -243,6 +243,78 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, SlotOf(container, a!));
         }
 
+        // ─── Flex item content fragmentation, multi-line (issues #517/#526) ───────
+
+        // A wrapped row-direction container's commit pass walks every line in one pass, committing as
+        // many as fit before it stops - so line 1 finishes in slot 0 and only line 3's own content needs
+        // to continue.
+        [Fact]
+        public async Task ALaterLinesContent_ContinuesOnTheNextPageWhenItDoesNotFit()
+        {
+            var lines = string.Concat(Enumerable.Range(1, 3)
+                .Select(i => $"<div id='l{i}' style='width:100%'>line {i} one two</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap; line-height:20pt'>"
+                    + lines + "</div>"),
+                pageHeight: PageHeight);
+
+            var l1 = LayoutHarness.FindById(root, "l1");
+            var l3 = LayoutHarness.FindById(root, "l3");
+            Assert.NotNull(l1);
+            Assert.NotNull(l3);
+
+            // 120pt filler + 2 lines of 20pt leaves exactly 0pt for line 3 in slot 0's 160pt band.
+            Assert.Equal(0, SlotOf(container, l1!));
+            Assert.Equal(1, SlotOf(container, l3!));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
+        // The commit loop must walk lines in block-axis (down-the-page) order, not source order - under
+        // wrap-reverse those differ, and reading the wrong one would commit the wrong line first (or
+        // resume the wrong one), exactly the bug issues #448/#458/#459 already fixed for line relocation.
+        [Fact]
+        public async Task WrapReverse_CommitsLinesInBlockAxisOrderNotSourceOrder()
+        {
+            var lines = string.Concat(Enumerable.Range(1, 3)
+                .Select(i => $"<div id='l{i}' style='width:100%'>line {i} one two</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-wrap:wrap-reverse; line-height:20pt'>"
+                    + lines + "</div>"),
+                pageHeight: PageHeight);
+
+            var l1 = LayoutHarness.FindById(root, "l1");
+            var l3 = LayoutHarness.FindById(root, "l3");
+            Assert.NotNull(l1);
+            Assert.NotNull(l3);
+
+            // wrap-reverse stacks source-first line 1 at the bottom and source-last line 3 at the top, so
+            // line 3 (block-axis first) is the one already sitting in slot 0's remaining room, and line 1
+            // (block-axis last) is the one pushed into slot 1.
+            Assert.Equal(1, SlotOf(container, l1!));
+            Assert.Equal(0, SlotOf(container, l3!));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
         // ─── Grid ─────────────────────────────────────────────────────────────────
 
         [Theory]
@@ -301,6 +373,138 @@ namespace PeachPDF.Tests.Integration
             var a = LayoutHarness.FindById(root, "a");
             Assert.NotNull(a);
             Assert.Equal(0, SlotOf(container, a!));
+        }
+
+        // An inline-grid container is an atomic inline, so the commit pass declines the same way it does
+        // for inline-flex - where it sits is the line it is on to decide, not a fragmentainer question
+        // of its own.
+        [Fact]
+        public async Task AnInlineGridContainer_IsLeftToItsLine()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Document("display:inline-grid; grid-template-columns:1fr", ""), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            Assert.NotNull(a);
+            Assert.Equal(0, SlotOf(container, a!));
+        }
+
+        // ─── Grid item content fragmentation (issues #517/#526) ───────────────────
+
+        // A row's own content, once it sits at its final position, is laid out for real against a live
+        // fragmentainer - so a later row whose content does not fit the current page continues onto the
+        // next one instead of translating a subtree measured with breaking suppressed. The commit pass
+        // walks every row in one pass, committing as many as fit before it stops, so rows 1-3 finish in
+        // slot 0 and only row 4's own content needs to continue.
+        [Fact]
+        public async Task ALaterRowsContent_ContinuesOnTheNextPageWhenItDoesNotFit()
+        {
+            var rows = string.Concat(Enumerable.Range(1, 4)
+                .Select(i => $"<div id='r{i}'>row {i} one two</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:grid; grid-template-columns:1fr; line-height:20pt'>"
+                    + rows + "</div>"),
+                pageHeight: PageHeight);
+
+            var r1 = LayoutHarness.FindById(root, "r1");
+            var r4 = LayoutHarness.FindById(root, "r4");
+            Assert.NotNull(r1);
+            Assert.NotNull(r4);
+
+            // The fixture is only meaningful if row 4 genuinely reaches the boundary rather than fitting
+            // comfortably: 120pt filler + 3 rows of 20pt leaves exactly 0pt for row 4 in slot 0's 160pt band.
+            Assert.Equal(0, SlotOf(container, r1!));
+            Assert.Equal(1, SlotOf(container, r4!));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            // Every authored word survives somewhere in the fragment tree - row 4's content is neither
+            // lost (the resumed pass never re-entering it) nor duplicated (claimed by two pages at once).
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
+        // An item spanning several rows is grouped at the row it starts, matching
+        // RelocateRowsAcrossFragmentainers's own choice - so its own content commits there too, and can
+        // itself continue onto the next page independently of the ordinary single-row items beside it.
+        [Fact]
+        public async Task ARowSpanningItemsOwnContent_ContinuesOnTheNextPageWhenItDoesNotFit()
+        {
+            var spanningChildren = string.Concat(Enumerable.Range(1, 4)
+                .Select(i => $"<div id='a{i}' style='height:20pt'>a{i}</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:100pt'>filler</div>"
+                    + "<div id='c' style='display:grid; grid-template-columns:1fr 1fr'>"
+                    + $"<div id='a' style='grid-row:1/3'>{spanningChildren}</div>"
+                    + "<div id='b' style='grid-column:2;height:40pt'>B</div>"
+                    + "<div id='d' style='grid-column:2;height:40pt'>D</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a1 = LayoutHarness.FindById(root, "a1");
+            var a4 = LayoutHarness.FindById(root, "a4");
+            Assert.NotNull(a1);
+            Assert.NotNull(a4);
+
+            // 100pt filler leaves 60pt of slot 0's 160pt band - room for a1-a3 (60pt) but not a4.
+            Assert.Equal(0, SlotOf(container, a1!));
+            Assert.Equal(1, SlotOf(container, a4!));
+        }
+
+        // A subgrid item's adopted track geometry (GridSubgridContext) is captured once, on the fresh
+        // pass, and must be re-threaded on every resumed commit too - it is not recomputed, since a
+        // resumed pass has no local Track[] arrays to derive it from. If the context were lost on resume,
+        // the subgrid's columns would fall back to an ordinary implicit track instead of adopting the
+        // parent's, and the item would size itself far narrower than the parent's spanned columns.
+        [Fact]
+        public async Task ASubgridItemsOwnContent_KeepsItsAdoptedColumnsAcrossAResume()
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 4).Select(i => $"word{i}"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:grid; grid-template-columns:100pt 100pt 100pt; line-height:20pt'>"
+                    + "<div id='sub' style='grid-column:1/4; display:grid; grid-template-columns:subgrid'>"
+                    // inner spans all 3 adopted columns explicitly - ordinary auto-placement would only
+                    // give it the first one, which would pass even with a lost SubgridContext.
+                    + $"<div id='inner' style='grid-column:1/4'>{words}</div>"
+                    + "</div></div>"),
+                pageHeight: PageHeight);
+
+            var sub = LayoutHarness.FindById(root, "sub");
+            var inner = LayoutHarness.FindById(root, "inner");
+            Assert.NotNull(sub);
+            Assert.NotNull(inner);
+
+            // The subgrid adopted all three 100pt parent columns (300pt), not an ordinary implicit
+            // single-item track - the value a lost SubgridContext on resume would fall back to.
+            Assert.Equal(300, sub!.ActualBoxSizingWidth, 1);
+            Assert.Equal(300, inner!.ActualBoxSizingWidth, 1);
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
+        private static IEnumerable<PeachPDF.Html.Core.Fragments.BoxFragment> FlattenFragments(
+            PeachPDF.Html.Core.Fragments.BoxFragment fragment)
+        {
+            yield return fragment;
+            foreach (var child in fragment.Children)
+                foreach (var descendant in FlattenFragments(child))
+                    yield return descendant;
         }
 
         // ─── The boundary this pass must not cross ────────────────────────────────
@@ -1020,6 +1224,135 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(1, SlotOf(container, a));
             Assert.True(a.ActualBottom <= container.PageBottomOf(1) + 0.5,
                 $"expected the item whole in slot 1, it runs to {a.ActualBottom}");
+        }
+
+        // An inline-flex column container is an atomic inline (like its row-direction counterpart), so
+        // the column commit pass declines the same way CommitLineContent does for inline-flex - where it
+        // sits is the line it is on to decide, not a fragmentainer question of its own.
+        [Fact]
+        public async Task AnInlineFlexColumnContainer_IsLeftToItsLine()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Document("display:inline-flex; flex-direction:column", ""), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            Assert.NotNull(a);
+            Assert.Equal(0, SlotOf(container, a!));
+        }
+
+        // ─── Flex item content fragmentation, column-direction (issues #517/#526) ─
+
+        // A non-wrapping column container's single line is a sequential flow: each item is walked and
+        // committed in turn, so a later item's own content continues onto the next page when an earlier
+        // item already filled it - the same content-fragmentation guarantee row-direction and grid have,
+        // for the one remaining shape (#526's "largest new design surface").
+        [Fact]
+        public async Task ALaterItemsContent_ContinuesOnTheNextPageWhenItDoesNotFit()
+        {
+            var items = string.Concat(Enumerable.Range(1, 3)
+                .Select(i => $"<div id='r{i}'>row {i} one two</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-direction:column; line-height:20pt'>"
+                    + items + "</div>"),
+                pageHeight: PageHeight);
+
+            var r1 = LayoutHarness.FindById(root, "r1");
+            var r3 = LayoutHarness.FindById(root, "r3");
+            Assert.NotNull(r1);
+            Assert.NotNull(r3);
+
+            // 120pt filler + 2 items of 20pt leaves exactly 0pt for item 3 in slot 0's 160pt band.
+            Assert.Equal(0, SlotOf(container, r1!));
+            Assert.Equal(1, SlotOf(container, r3!));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
+        // A wrapping column container's lines run in parallel, side by side, sharing no block-axis range
+        // - so one line's item content fragmenting must not disturb the other line's content, which
+        // finishes on page 1 untouched.
+        [Fact]
+        public async Task AWrappingColumnLinesContent_FragmentsIndependentlyOfTheOtherLine()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-direction:column; flex-wrap:wrap;"
+                    + " height:60pt; width:300pt; line-height:20pt'>"
+                    + "<div id='a1' style='width:100pt'>a1 one two</div>"
+                    + "<div id='a2' style='width:100pt'>a2 three four</div>"
+                    + "<div id='a3' style='width:100pt'>a3 five six</div>"
+                    + "<div id='b1' style='width:100pt'>b1 short</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a1 = LayoutHarness.FindById(root, "a1")!;
+            var a3 = LayoutHarness.FindById(root, "a3")!;
+            var b1 = LayoutHarness.FindById(root, "b1")!;
+
+            // The fixture is only meaningful if a1-a3 really do wrap onto a second line beside b1 (the
+            // container's own 60pt height holds 3 of the 20pt items, so a fourth starts a new line).
+            Assert.True(b1.Location.X > a1.Location.X,
+                $"expected B on a second line beside A; both are at x {a1.Location.X:F1}");
+
+            // 120pt filler + 2 items of 20pt leaves exactly 0pt for a3 in slot 0's 160pt band; b1's own
+            // line is short enough to finish on slot 0 regardless.
+            Assert.Equal(0, SlotOf(container, a1));
+            Assert.Equal(1, SlotOf(container, a3));
+            Assert.Equal(0, SlotOf(container, b1));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
+        }
+
+        // The sequential walk must proceed in block-axis (top-to-bottom) order, not source order - under
+        // column-reverse those differ (FlexItem collection never reorders FlexLine.Items itself), and
+        // reading the wrong one would commit/resume the wrong item first.
+        [Fact]
+        public async Task ColumnReverse_CommitsItemsInBlockAxisOrderNotSourceOrder()
+        {
+            var items = string.Concat(Enumerable.Range(1, 3)
+                .Select(i => $"<div id='r{i}'>row {i} one two</div>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:120pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-direction:column-reverse; line-height:20pt'>"
+                    + items + "</div>"),
+                pageHeight: PageHeight);
+
+            var r1 = LayoutHarness.FindById(root, "r1");
+            var r3 = LayoutHarness.FindById(root, "r3");
+            Assert.NotNull(r1);
+            Assert.NotNull(r3);
+
+            // column-reverse places source-last r3 at the block-start (top) and source-first r1 at the
+            // block-end (bottom), so r3 is the one already sitting in slot 0's remaining room and r1 is
+            // the one pushed into slot 1 - the reverse of the plain column case above.
+            Assert.Equal(1, SlotOf(container, r1!));
+            Assert.Equal(0, SlotOf(container, r3!));
+
+            var authored = LayoutHarness.Descendants(root)
+                .SelectMany(b => b.Words).Where(w => !w.IsSpaces).Select(w => w.Text).ToList();
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words).Select(w => w.Word.Text).ToList();
+
+            Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
         }
     }
 }

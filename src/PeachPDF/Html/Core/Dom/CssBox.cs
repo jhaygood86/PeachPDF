@@ -2092,8 +2092,13 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (Display is CssConstants.Grid or CssConstants.InlineGrid)
                 {
-                    await LayoutEngineContent(
-                        g, static (graphics, box, _) => CssLayoutEngineGrid.PerformLayout(graphics, box), resume: null);
+                    // The record travels into the engine so a resumed pass can re-enter exactly the row
+                    // (and that row's items) that did not finish their own content last time
+                    // (CssLayoutEngineGrid's commit pass), rather than re-measuring and re-placing the
+                    // whole container from scratch.
+                    await LayoutEngineContent(g, CssLayoutEngineGrid.PerformLayout, resume);
+
+                    if (PendingBreakToken is not null) return;
                 }
                 else if (Display is CssConstants.Table or CssConstants.InlineTable)
                 {
@@ -2280,7 +2285,10 @@ namespace PeachPDF.Html.Core.Dom
         /// how this engine resumes on the current fragmentainer pass, or null when it is laying the box out
         /// from the start. The record is what lets it tell a <i>continuation</i> — earlier fragments already
         /// emitted — from a fresh layout of the same box, which is a distinction only the engine can act on.
-        /// Only the table engine reads one today; flex and grid pass null.
+        /// The table engine always reads one; grid reads one for the row its own commit pass stopped in;
+        /// flex reads one for the line (row/row-reverse, any count) or the lines (column/column-reverse)
+        /// its own commit pass stopped in. All three otherwise still pass null for a container/pass their
+        /// own commit pass declined to run for (see each engine's remarks).
         /// </param>
         private async ValueTask LayoutEngineContent(
             RGraphics g, Func<RGraphics, CssBox, BreakToken?, ValueTask> engine, BreakToken? resume)
