@@ -229,6 +229,55 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(container.PageTopOf(2), c!.Location.Y, 0.1);
         }
 
+        [Fact]
+        public async Task EmptyBoxAloneBetweenTwoForcedBreaks_SlotIsMaterializedAsABlankPage()
+        {
+            // css-break-3 §4.4 / the classic "insert a blank page" idiom: A|B and B|C are distinct
+            // break points, and B - landed alone on slot 1 by A's break-after, with nothing of its
+            // own to paint - must still surface as a real (blank) page in the output, not merely as
+            // a layout coordinate. The two siblings' *positions* already land correctly (see
+            // ForcedBreakAfterCollapseThroughSiblingAtBoundary_TargetsSlotAfterIt above); this
+            // asserts the separate, later concern the issue raised: CSS Paged Media 3 §3.2's
+            // content-empty-page skip must not also swallow a slot a forced break deliberately left
+            // empty. Slot 1 has no printable content of its own (b has no border/background/text),
+            // so without an explicit reservation FragmentEmitter.Finish would drop it.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                body { margin: 0; }
+                div, p { margin: 0; }
+                </style></head><body>
+                <div style='page-break-after: always'>a</div>
+                <div id='b' style='page-break-after: always'></div>
+                <p id='c'>c</p>
+                </body></html>
+                """);
+
+            Assert.Equal([0, 1, 2], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+        }
+
+        [Fact]
+        public async Task NonEmptyBoxBetweenTwoForcedBreaks_SlotIsMaterialized()
+        {
+            // Companion to the test above: when the box taking the break carries its own printable
+            // content, its slot is already materialized on its own merit (hasPrintableContent).
+            // Reserving it too (the fix applies unconditionally) must be a harmless no-op rather than
+            // double-counting or otherwise disturbing the fragment span.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                body { margin: 0; }
+                div, p { margin: 0; }
+                </style></head><body>
+                <div style='page-break-after: always'>a</div>
+                <div id='b' style='page-break-after: always'>b</div>
+                <p id='c'>c</p>
+                </body></html>
+                """);
+
+            Assert.Equal([0, 1, 2], container.FragmentTree!.Fragmentainers.Select(f => f.SlotIndex));
+        }
+
         [Theory]
         [InlineData(1.0)]
         [InlineData(1.5)]
