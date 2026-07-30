@@ -206,7 +206,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             finally
             {
                 Environment.SetEnvironmentVariable("HOME", originalHome);
-                Directory.Delete(homeDir, recursive: true);
+                TempDirectory.DeleteWithRetry(homeDir);
             }
         }
 

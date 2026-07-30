@@ -82,7 +82,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(dir);
             }
         }
 
@@ -109,7 +109,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(dir);
             }
         }
 
@@ -151,7 +151,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(dir);
             }
         }
 
@@ -162,25 +162,29 @@ namespace PeachPDF.Tests.Integration
         {
             // With no loader configured a relative reference resolves against the process's working
             // directory - the implicit "load relative paths from disk" behaviour. Denying file access is
-            // what stops that, and it stops it at the base-URI stage rather than at the read.
-            var dir = CreateTempDir();
-            var originalWorkingDirectory = Directory.GetCurrentDirectory();
+            // what stops that, and it stops it at the base-URI stage rather than at the read. The asset
+            // lives in a subdirectory under the real working directory rather than via
+            // Directory.SetCurrentDirectory: that call is process-global, and mutating it here raced any
+            // other test reading the working directory while this one's await points had yielded the
+            // thread - see FileUriLoaderIntegrationTests.RelativeImage_WithNoLoader_LoadsFromCurrentWorkingDirectory,
+            // which established this pattern for the same reason.
+            var relDir = "peachpdf-localfile-" + Guid.NewGuid().ToString("N");
+            var absDir = Path.Combine(Directory.GetCurrentDirectory(), relDir);
+            Directory.CreateDirectory(absDir);
 
             try
             {
-                File.WriteAllBytes(Path.Combine(dir, "pic.png"), Convert.FromBase64String(PngBase64));
-                Directory.SetCurrentDirectory(dir);
+                File.WriteAllBytes(Path.Combine(absDir, "pic.png"), Convert.FromBase64String(PngBase64));
 
                 var doc = await new PdfGenerator().GeneratePdf(
-                    "<!DOCTYPE html><html><body><img src=\"pic.png\"></body></html>",
+                    $"<!DOCTYPE html><html><body><img src=\"{relDir}/pic.png\"></body></html>",
                     new PdfGenerateConfig { PageSize = PageSize.A4, AllowLocalFileAccess = allowLocalFileAccess });
 
                 Assert.Equal(allowLocalFileAccess, GetPdfText(doc).Contains("/Subtype /Image"));
             }
             finally
             {
-                Directory.SetCurrentDirectory(originalWorkingDirectory);
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(absDir);
             }
         }
 
@@ -214,7 +218,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(dir);
             }
         }
 
@@ -256,7 +260,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(dir);
             }
         }
 
@@ -305,7 +309,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(dir);
             }
         }
 

@@ -48,7 +48,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(dir);
             }
         }
 
@@ -85,7 +85,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(dir);
             }
         }
 
@@ -114,7 +114,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(dir, recursive: true);
+                TempDirectory.DeleteWithRetry(dir);
             }
         }
 
@@ -144,7 +144,7 @@ namespace PeachPDF.Tests.Integration
             }
             finally
             {
-                Directory.Delete(absDir, recursive: true);
+                TempDirectory.DeleteWithRetry(absDir);
             }
         }
 
