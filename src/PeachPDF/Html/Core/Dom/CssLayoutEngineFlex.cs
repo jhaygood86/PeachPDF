@@ -980,7 +980,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var item in line.Items)
             {
-                await PerformCommitLayout(g, item.Box, resume: null);
+                await ItemContentCommit.CommitLayout(g, item.Box, resume: null);
 
                 if (item.Box.PendingBreakToken is { } token)
                     unfinished.Add(new UnfinishedFlexItem(item.Box, token));
@@ -1002,9 +1002,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// Nothing else about the container is touched: every phase that decides sizing, line membership
         /// and position already ran on an earlier pass and its results are sitting on the live box tree
-        /// untouched (nothing between passes resets an item's <see cref="CssBoxProperties.Location"/> or
-        /// its pinned content-box <c>Width</c>/<c>Height</c> — see <see cref="PerformCommitLayout"/>), which
-        /// is what a resumed pass is allowed to rely on and a fresh one is not.
+        /// untouched (nothing between passes resets an item's <see cref="CssBox.Location"/> or
+        /// its pinned content-box <c>Width</c>/<c>Height</c> — see <see cref="ItemContentCommit.CommitLayout"/>),
+        /// which is what a resumed pass is allowed to rely on and a fresh one is not.
         /// </remarks>
         private async ValueTask ResumeCommitPass(RGraphics g, FlexBreakToken resume)
         {
@@ -1012,7 +1012,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var unfinishedItem in resume.UnfinishedItems)
             {
-                await PerformCommitLayout(g, unfinishedItem.Item, unfinishedItem.Token);
+                await ItemContentCommit.CommitLayout(g, unfinishedItem.Item, unfinishedItem.Token);
 
                 if (unfinishedItem.Item.PendingBreakToken is { } token)
                     stillUnfinished.Add(new UnfinishedFlexItem(unfinishedItem.Item, token));
@@ -1029,94 +1029,6 @@ namespace PeachPDF.Html.Core.Dom
                 var resumeSlot = stillUnfinished.Max(u => u.Token.ResumeSlotIndex);
                 _flexBox.SetPendingBreakToken(new FlexBreakToken(_flexBox, resumeSlot, stillUnfinished, nowFinished));
             }
-        }
-
-        /// <summary>
-        /// Lays <paramref name="box"/>'s own content out, attached to a real fragmentainer rather than a
-        /// detached one — the one place in this engine breaking is genuinely live for an item's content.
-        /// </summary>
-        /// <param name="g">the graphics context layout is running against</param>
-        /// <param name="box">the item to lay out</param>
-        /// <param name="resume">
-        /// the item's own break token from an earlier pass, or null to lay it out from the start.
-        /// </param>
-        /// <remarks>
-        /// <para>
-        /// A <b>fresh</b> commit (<paramref name="resume"/> null) pins <paramref name="box"/>'s content-box
-        /// <c>Width</c>/<c>Height</c> to its already-resolved outer size
-        /// (<see cref="CssBoxProperties.ActualBoxSizingWidth"/>/<see cref="CssBoxProperties.ActualBoxSizingHeight"/>)
-        /// before laying out — every earlier phase already decided this item's size, and re-deriving it from
-        /// an "auto" property here (the value every earlier phase temporarily sets and then reverts, since
-        /// none of them are the item's <i>final</i> layout) would let this, genuinely final, layout disagree
-        /// with the size the rest of the flex algorithm already committed to. Unlike those earlier phases,
-        /// this pin is <b>not</b> reverted afterward: a later fragmentainer pass resuming this same item
-        /// (<paramref name="resume"/> non-null) must see the same <c>Width</c>/<c>Height</c> the first pass
-        /// used, or a nested engine that re-derives its own content box from them
-        /// (<c>CssLayoutEngineColumns.Layout</c>'s <c>containerWidth</c>) would size itself differently
-        /// pass to pass. <see cref="CssBox.RectanglesReset"/> only runs on the fresh path too, for the same
-        /// reason a resumed table cell's continuation must not call it — see
-        /// <c>CssBox.PerformLayoutPrologue</c>'s own remarks: it would discard geometry an earlier
-        /// fragmentainer has already frozen a fragment around.
-        /// </para>
-        /// <para>
-        /// A <b>resumed</b> commit (<paramref name="resume"/> non-null) instead calls
-        /// <see cref="CssBox.ResumeAt"/> — the same primitive a table row loop uses to re-enter a cell mid
-        /// content — and touches nothing else.
-        /// </para>
-        /// </remarks>
-        private static async ValueTask PerformCommitLayout(RGraphics g, CssBox box, BreakToken? resume)
-        {
-            if (resume is null)
-            {
-                var horizontalPB = box.ActualPaddingLeft + box.ActualPaddingRight
-                    + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
-                var verticalPB = box.ActualPaddingTop + box.ActualPaddingBottom
-                    + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
-
-                box.Width = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingWidth - horizontalPB));
-                box.Height = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingHeight - verticalPB));
-
-                box.RectanglesReset();
-            }
-            else
-            {
-                box.ResumeAt(resume, resumeTopOverride: null);
-            }
-
-            // Every earlier item layout in this engine is a measurement, translated into place afterward -
-            // PlaceBlockChild running during one of those is harmless, since AssignLocations overwrites its
-            // result unconditionally. This is the item's real, final content layout, with nothing after it
-            // to correct a wrong position back, so LayoutContents must not let PlaceBlockChild touch it.
-            box.PositionAssignedByEngine = true;
-            try
-            {
-                await PerformLayoutBlockifiedAtFinalPosition(g, box);
-            }
-            finally
-            {
-                box.PositionAssignedByEngine = false;
-            }
-        }
-
-        /// <summary>
-        /// The commit pass's own version of <see cref="PerformLayoutBlockified"/>: the same blockify
-        /// dance (CSS Display 3 §2.3's flex-item requirement), but without detaching the fragmentainer or
-        /// suppressing word-level breaking — this is the one item layout in this engine that runs at the
-        /// item's real, final position, so breaking questions asked during it are meaningful.
-        /// </summary>
-        private static async ValueTask PerformLayoutBlockifiedAtFinalPosition(RGraphics g, CssBox box)
-        {
-            string? savedDisplay = null;
-            if (box.IsInline)
-            {
-                savedDisplay = box.Display;
-                box.Display = CssConstants.Block;
-            }
-
-            await box.PerformLayout(g);
-
-            if (savedDisplay != null)
-                box.Display = savedDisplay;
         }
 
         /// <summary>
