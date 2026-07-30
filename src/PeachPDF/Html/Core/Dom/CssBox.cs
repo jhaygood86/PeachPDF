@@ -2631,6 +2631,24 @@ namespace PeachPDF.Html.Core.Dom
                             this, childBox.RequestedBreakBeforeSlot, i, null, IsBreakBefore: true, childTop);
                         return true;
                     }
+
+                    // On the page grid, unlike a column (above), css-break-3 §2 monolithic content (a
+                    // replaced element, a scroll container) that overflows the fragmentainer it started
+                    // in simply overflows - it has no fragmentable inner structure to ask a break of, and
+                    // there is nowhere better for it to be. But the siblings the loop places after it now
+                    // flow into whatever band follows, with no break ever recording that crossing - #435's
+                    // shape one level up from a word's own unbreakable overflow. Scoped to §2's own set,
+                    // not every block child that happens to overflow: an ordinary container (a plain div,
+                    // html/body themselves) can land deep in the document through no decision of its own -
+                    // a margin collapsed through it from a descendant, say - and stepping the cursor there
+                    // regressed a margin-truncation fixture from one fragmentainer to six.
+                    if (MonolithicContent.IsMonolithic(childBox)
+                        && !childBox.IsOutOfFlow
+                        && childBox.Display != CssConstants.None
+                        && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: false })
+                    {
+                        HtmlContainer.CurrentFragmentainer.StepOverTo(HtmlContainer.SlotEndingAt(childBox.ActualBottom));
+                    }
                 }
             }
             finally
