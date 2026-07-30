@@ -64,6 +64,20 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public async Task DirAuto_WithTextNestedInsidePlainChildElement_StillFindsIt()
+        {
+            // The first-strong-character scan recurses through a nested plain element with no dir
+            // attribute of its own (not just the target element's own direct text children).
+            var html = LayoutHarness.Wrap("""<p id="el" dir="auto"><span>שלום עולם</span></p>""");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal(DirectionMode.Rtl, el!.Direction.Value);
+        }
+
+        [Fact]
         public async Task Bdi_WithNoDirAttribute_DefaultsToAutoAndIsolates()
         {
             var html = LayoutHarness.Wrap("""<bdi id="el">שלום עולם</bdi>""");
