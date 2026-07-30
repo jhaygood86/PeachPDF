@@ -129,5 +129,60 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
                 new InlineBreakToken(box, 1, new List<int> { 0 }, word, completed, kept),
                 new InlineBreakToken(box, 1, new List<int> { 0 }, otherWord, otherCompleted, otherKept));
         }
+
+        /// <summary>
+        /// A flex container's own no-progress backstop is the same equality test
+        /// <see cref="TableBreakToken"/>'s own tests exist for: every pass builds fresh
+        /// <see cref="UnfinishedFlexItem"/>/<see cref="CssBox"/> lists, so contents-based equality is what
+        /// lets the driver notice two passes landed on the same record instead of spinning to the pass cap.
+        /// </summary>
+        [Fact]
+        public void FlexToken_WithTheSameContentsBuiltTwice_ComparesEqual()
+        {
+            var container = new CssBox(null, null);
+            var item = new CssBox(null, null);
+            var finished = new CssBox(null, null);
+
+            var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
+
+            var first = new FlexBreakToken(container, 1,
+                new List<UnfinishedFlexItem> { new(item, itemToken) },
+                new List<CssBox> { finished });
+            var second = new FlexBreakToken(container, 1,
+                new List<UnfinishedFlexItem> { new(item, itemToken) },
+                new List<CssBox> { finished });
+
+            Assert.Equal(first, second);
+            Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        }
+
+        [Fact]
+        public void FlexToken_WithADifferentUnfinishedItem_ComparesUnequal()
+        {
+            var container = new CssBox(null, null);
+            var itemA = new CssBox(null, null);
+            var itemB = new CssBox(null, null);
+            var itemToken = new InlineBreakToken(itemA, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
+
+            var first = new FlexBreakToken(container, 1,
+                new List<UnfinishedFlexItem> { new(itemA, itemToken) }, []);
+            var second = new FlexBreakToken(container, 1,
+                new List<UnfinishedFlexItem> { new(itemB, itemToken) }, []);
+
+            Assert.NotEqual(first, second);
+        }
+
+        [Fact]
+        public void FlexToken_WithADifferentFinishedList_ComparesUnequal()
+        {
+            var container = new CssBox(null, null);
+            var finishedA = new CssBox(null, null);
+            var finishedB = new CssBox(null, null);
+
+            var first = new FlexBreakToken(container, 1, [], new List<CssBox> { finishedA });
+            var second = new FlexBreakToken(container, 1, [], new List<CssBox> { finishedB });
+
+            Assert.NotEqual(first, second);
+        }
     }
 }

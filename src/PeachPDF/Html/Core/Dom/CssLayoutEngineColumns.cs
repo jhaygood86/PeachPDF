@@ -195,8 +195,8 @@ namespace PeachPDF.Html.Core.Dom
 
             // The measurement pass ran every child's prologue, which is once-per-box and owns
             // RectanglesReset. The real fill lays the same boxes out again from scratch, so it has to be
-            // let back in - the same thing the keep-with-next retry does before re-entering a box.
-            ResetChildrenForRefill(children, resume);
+            // let back in - the shared rollback the driver's own pass re-entry uses (#355, #371).
+            PassRewind.RollBackTo(resume, children);
 
             BreakToken? carry;
             double contentBottom;
@@ -268,7 +268,7 @@ namespace PeachPDF.Html.Core.Dom
                     break;
                 }
 
-                ResetChildrenForRefill(children, resume);
+                PassRewind.RollBackTo(resume, children);
 
                 // The attempt being discarded recorded columns of its own.
                 htmlContainer.ClearNestedFragmentainers(columnsBox, startSlot);
@@ -446,17 +446,6 @@ namespace PeachPDF.Html.Core.Dom
                 yield return children[i];
             }
         }
-
-        /// <summary>
-        /// Undoes the fill attempt just made, so the same children can be filled again at a new target.
-        /// </summary>
-        /// <remarks>
-        /// Goes through the shared rollback (<see cref="PassRewind.RollBackTo"/>), which the driver's own
-        /// pass re-entry needs in exactly the same terms — including its no-record branch, which is what
-        /// the pass that starts this container takes.
-        /// </remarks>
-        private static void ResetChildrenForRefill(List<CssBox> children, BreakToken? resume) =>
-            PassRewind.RollBackTo(resume, children);
 
         /// <summary>
         /// Narrows the container's own inline extent to one column, so children lay out at that column's

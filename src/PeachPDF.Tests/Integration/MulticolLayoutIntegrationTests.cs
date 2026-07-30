@@ -945,6 +945,142 @@ namespace PeachPDF.Tests.Integration
             Assert.All(placed, b => Assert.True(b.ActualBottom > b.Location.Y, "every item keeps a height"));
         }
 
+        // Issue #430's own fixture: a column-count container taller than one page, nested inside
+        // another engine's container, used to lose most of its content - measured at 176/640 words
+        // for display:flex before the fix chain landed (issue's own numbers, a different page band);
+        // the <td> half was already fixed by PR #488. Re-measures both halves together, per that PR's
+        // own lesson about a two-part issue's `Fixes` keyword being claimed on the strength of one.
+        [Theory]
+        [InlineData(null)]      // top-level control
+        [InlineData("display:table")]
+        [InlineData("display:flex")]
+        public async Task AColumnContainer_InsideAnotherEngine_EmitsEveryWordExactlyOnce(string? outerStyle)
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 16).Select(i => $"word{i}"));
+            var paragraphs = string.Concat(Enumerable.Range(1, 40)
+                .Select(i => $"<p class='item' id='p{i}'>{words}</p>"));
+            var mcHtml = $"<div id='mc' style='columns:2; width:300px'>{paragraphs}</div>";
+            var html = outerStyle switch
+            {
+                null => Wrap(mcHtml),
+                "display:table" => Wrap($"<table><tr><td>{mcHtml}</td></tr></table>"),
+                _ => Wrap($"<div style='{outerStyle}'>{mcHtml}</div>"),
+            };
+
+            var (root, container) = await BuildAndLayout(html, pageHeight: 260);
+
+            const int authoredWords = 40 * 16;
+            var mc = FindById(root, "mc")!;
+            Assert.Equal(authoredWords, LayoutHarness.Descendants(mc).SelectMany(b => b.Words).Count());
+
+            // Every word claimed by exactly one fragmentainer in the emitted tree - not merely laid
+            // out somewhere, which the assertion above already covers, but actually painted, since a
+            // word can be positioned and still fall outside every emitted fragment's band.
+            var claims = new Dictionary<PeachPDF.Html.Core.Dom.CssRect, int>();
+            void CountClaims(PeachPDF.Html.Core.Fragments.BoxFragment f)
+            {
+                foreach (var w in f.Words)
+                    claims[w.Word] = claims.GetValueOrDefault(w.Word) + 1;
+                foreach (var c in f.Children) CountClaims(c);
+            }
+            var tree = container.FragmentTree;
+            Assert.NotNull(tree);
+            foreach (var frag in tree!.Fragmentainers)
+                CountClaims(frag.Root);
+
+            Assert.Equal(authoredWords, claims.Count);
+            Assert.All(claims.Values, count => Assert.Equal(1, count));
+        }
+
+        // Two items sharing one row-direction line - a parallel-flows shape (css-break-3 §2.1's own
+        // example is "the contents of each flex item in a flex layout row"), each with its own
+        // multicol descendant. Both must fragment for real and independently: this is the multi-item
+        // generalization of the fixture above, not just "does it avoid crashing."
+        [Fact]
+        public async Task TwoColumnContainers_InSeparateFlexItemsOnOneLine_BothEmitEveryWordExactlyOnce()
+        {
+            string Words(string prefix) => string.Join(" ", Enumerable.Range(1, 12).Select(i => $"{prefix}{i}"));
+            string Paragraphs(string prefix) => string.Concat(Enumerable.Range(1, 20)
+                .Select(i => $"<p>{Words(prefix)}</p>"));
+
+            var html = Wrap($"""
+                <div style='display:flex'>
+                  <div id='mc1' style='columns:2; width:200px'>{Paragraphs("a")}</div>
+                  <div id='mc2' style='columns:2; width:200px'>{Paragraphs("b")}</div>
+                </div>
+                """);
+
+            var (root, container) = await BuildAndLayout(html, pageHeight: 260);
+
+            const int authoredWordsPerContainer = 20 * 12;
+            var mc1 = FindById(root, "mc1")!;
+            var mc2 = FindById(root, "mc2")!;
+            Assert.Equal(authoredWordsPerContainer, LayoutHarness.Descendants(mc1).SelectMany(b => b.Words).Count());
+            Assert.Equal(authoredWordsPerContainer, LayoutHarness.Descendants(mc2).SelectMany(b => b.Words).Count());
+
+            var claims = new Dictionary<PeachPDF.Html.Core.Dom.CssRect, int>();
+            void CountClaims(PeachPDF.Html.Core.Fragments.BoxFragment f)
+            {
+                foreach (var w in f.Words)
+                    claims[w.Word] = claims.GetValueOrDefault(w.Word) + 1;
+                foreach (var c in f.Children) CountClaims(c);
+            }
+            var tree = container.FragmentTree;
+            Assert.NotNull(tree);
+            foreach (var frag in tree!.Fragmentainers)
+                CountClaims(frag.Root);
+
+            Assert.Equal(authoredWordsPerContainer * 2, claims.Count);
+            Assert.All(claims.Values, count => Assert.Equal(1, count));
+        }
+
+        // Scope boundaries the commit pass deliberately does not cover yet (a wrapped container's
+        // second line, and flex-direction:column, whose items are sequential rather than parallel
+        // flows) - content must still not be *lost*, matching the pre-existing, still-accepted
+        // "no content dropped" behaviour these shapes already had, even though it does not fully
+        // fragment across pages the way the row/single-line case above now does.
+        [Theory]
+        [InlineData("display:flex; flex-wrap:wrap; width:150px")]  // forces a second line
+        [InlineData("display:flex; flex-direction:column")]
+        public async Task ColumnContainer_OutsideTheCommitPassScope_StillLosesNoContent(string outerStyle)
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 16).Select(i => $"word{i}"));
+            var paragraphs = string.Concat(Enumerable.Range(1, 40)
+                .Select(i => $"<p class='item' id='p{i}'>{words}</p>"));
+            var html = Wrap($"""
+                <div style='{outerStyle}'>
+                  <div style='height:20px'>Filler</div>
+                  <div id='mc' style='columns:2; width:150px'>{paragraphs}</div>
+                </div>
+                """);
+
+            var (root, _) = await BuildAndLayout(html, pageHeight: 260);
+
+            var mc = FindById(root, "mc")!;
+            Assert.Equal(40 * 16, LayoutHarness.Descendants(mc).SelectMany(b => b.Words).Count());
+        }
+
+        // No-progress backstop: a much larger document than the fixtures above, verifying the driver's
+        // pass-count/no-progress guards (FlexBreakToken's contents-based equality among them) keep this
+        // bounded rather than spinning - the exact defect class a table cell's own resumability hit
+        // before FlexBreakToken/TableBreakToken's equality override existed (100,000 passes, 1m52s).
+        [Fact]
+        public async Task LargeMulticolInFlexItem_CompletesQuicklyWithoutSpinning()
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 20).Select(i => $"word{i}"));
+            var paragraphs = string.Concat(Enumerable.Range(1, 400)
+                .Select(i => $"<p>{words}</p>"));
+            var html = Wrap($"<div style='display:flex'><div id='mc' style='columns:3; width:400px'>{paragraphs}</div></div>");
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var (root, _) = await BuildAndLayout(html, pageHeight: 300);
+            sw.Stop();
+
+            var mc = FindById(root, "mc")!;
+            Assert.Equal(400 * 20, LayoutHarness.Descendants(mc).SelectMany(b => b.Words).Count());
+            Assert.True(sw.ElapsedMilliseconds < 15000, $"expected well under 15s, took {sw.ElapsedMilliseconds}ms");
+        }
+
         // The container is laid out once per page fragment, so a rule list that is *assigned* rather than
         // accumulated keeps only the last fragment's - and the first page draws no rule at all.
         [Fact]
@@ -1123,7 +1259,7 @@ namespace PeachPDF.Tests.Integration
         /// box that is not the container's own child is lost entirely — no page break and no column break —
         /// so there is nothing here for an escaping record to carry. Its cause is one level down from
         /// anything about columns: <c>_forcedBreakTop</c> is a one-shot, and the measurement pass that sizes
-        /// the fill spends it, because <c>ResetChildrenForRefill</c> re-opens the prologue for the
+        /// the fill spends it, because <c>PassRewind.RollBackTo</c> re-opens the prologue for the
         /// container's own children only.
         /// </summary>
         /// <remarks>
