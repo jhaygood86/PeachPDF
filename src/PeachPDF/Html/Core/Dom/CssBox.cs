@@ -1004,9 +1004,24 @@ namespace PeachPDF.Html.Core.Dom
         /// Shared by measurement and by <see cref="FragmentPainter"/>, so the two can never disagree
         /// about which face a word is drawn in.
         /// </summary>
+        /// <remarks>
+        /// Reads the representative codepoint from <see cref="CssRect.OriginalText"/>, not
+        /// <see cref="CssRect.Text"/>: an RTL run's words are reordered/mirrored in place after
+        /// measurement (<c>CssLayoutEngine.PlaceBidiRunWord</c> calls <see cref="CssRectWord.ReplaceText"/>,
+        /// which only ever changes <c>Text</c>), and <see cref="DerivedStyle.ActualFontForCodepoint"/>'s
+        /// cache is keyed by the literal codepoint value, not the resolved face - reading a *different*
+        /// character's codepoint post-mirror than was read at measurement time returns a different cache
+        /// entry, whose <see cref="RFont.Ascent"/>/<see cref="RFont.Height"/> were never populated (still
+        /// their uninitialized sentinel), corrupting the baseline alignment <c>FragmentPainter.Text.cs</c>
+        /// derives from them - even though every codepoint in one per-codepoint fragment resolves to the
+        /// same face by construction (<see cref="EmitPerCodepointFragments"/>), so which one is read does
+        /// not change *which font* is selected. <c>OriginalText</c> is never touched by mirroring, only by
+        /// <see cref="TextTransform"/> (itself always length-and-position-preserving), so it names the same
+        /// representative character at measurement and at paint alike.
+        /// </remarks>
         internal static RFont ResolveWordFont(CssRect word, CssBox styleSource)
         {
-            if (word.UsesPerCodepointFont && word.Text is { Length: > 0 } text)
+            if (word.UsesPerCodepointFont && (word.OriginalText ?? word.Text) is { Length: > 0 } text)
             {
                 Rune.DecodeFromUtf16(text, out var rune, out _);
                 return styleSource.ActualFontForCodepoint(rune, word.FontSizeScale);

@@ -41,6 +41,13 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Emoji => Path.Combine(AppContext.BaseDirectory, "NotoEmoji-Regular.ttf");
 
         /// <summary>
+        /// A subset of "Noto Sans Hebrew" (see NotoSansHebrewSubset.LICENSE.txt): the Hebrew alphabet
+        /// plus common punctuation/digits - a real font covering a script <see cref="Ttf"/> (Source
+        /// Sans 3, Latin-only) does not, forcing per-codepoint font-fallback resolution for Hebrew text.
+        /// </summary>
+        internal static string Hebrew => Path.Combine(AppContext.BaseDirectory, "NotoSansHebrewSubset.ttf");
+
+        /// <summary>
         /// A hand-authored COLR <b>version 0</b> test font (public domain, see
         /// ColorTestFonts.LICENSE.txt): layered outline color glyphs backed by a CPAL palette.
         /// 'A' is a red box under a green triangle, 'B' a blue circle; 'X'/'Y'/'Z' are the plain

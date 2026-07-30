@@ -213,5 +213,48 @@ p {{ width: 400px; }}
             Assert.False(words[0].SuppressWrapBefore);
             Assert.True(words[1].SuppressWrapBefore);
         }
+
+        [Fact]
+        public async Task PerCodepointFragment_ResolvesSameFontInstance_BeforeAndAfterBidiMirroring()
+        {
+            // CssLayoutEngine.PlaceBidiRunWord (an RTL bidi run's L4 mirroring step) rewrites a word's
+            // Text in place via CssRectWord.ReplaceText once the word has already been measured - for a
+            // per-codepoint-fallback word (needed here since Source Sans 3 has no Hebrew glyphs),
+            // ResolveWordFont must keep resolving the SAME cached font instance both before and after
+            // that rewrite, or DerivedStyle.ActualFontForCodepoint's (family, size, ..., codepoint)-keyed
+            // cache hands back a DIFFERENT instance whose Height/Ascent were never populated by a
+            // MeasureString call - corrupting FragmentPainter.Text.cs's baseline alignment for exactly
+            // this word. Reversing the text (a coarse stand-in for what mirroring does to word order)
+            // changes which character is "first" without changing the face every character in this
+            // fragment resolves to (it is homogeneous by construction, see EmitPerCodepointFragments) -
+            // resolving to a different object here is the regression, not resolving to a different font.
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'Mixed'; src: url('data:font/truetype;base64,{B64(BundledFonts.Ttf)}') format('truetype'); unicode-range: U+0000-058F; }}
+@font-face {{ font-family: 'Mixed'; src: url('data:font/truetype;base64,{B64(BundledFonts.Hebrew)}') format('truetype'); unicode-range: U+0590-05FF; }}
+body {{ font-family: 'Mixed'; font-size: 14pt; }}
+p {{ width: 400px; }}
+</style></head>
+<body><p>שלום</p></body>
+</html>";
+
+            var p = await LayoutParagraph(html);
+            var word = WordsOf(p).Single();
+
+            // Pure Hebrew (strong-R) content forms its own odd-level run even under this paragraph's
+            // default LTR base direction, so CssLayoutEngine.ApplyBidiReordering has already reversed
+            // and mirrored it once during layout - this word's Text is already "םולש", not "שלום".
+            Assert.True(word.UsesPerCodepointFont);
+            Assert.Equal(4, word.Text!.Length);
+
+            var fontBeforeMirror = CssBox.ResolveWordFont(word, word.OwnerBox);
+
+            // Coarse stand-in for L4/L2's reversal - what matters here is that Text now starts with a
+            // different character than OriginalText does, not reproducing bidi's own algorithm.
+            word.ReplaceText(new string(word.Text!.Reverse().ToArray()));
+            var fontAfterMirror = CssBox.ResolveWordFont(word, word.OwnerBox);
+
+            Assert.Same(fontBeforeMirror, fontAfterMirror);
+        }
     }
 }

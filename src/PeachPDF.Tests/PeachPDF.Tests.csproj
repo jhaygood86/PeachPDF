@@ -48,6 +48,9 @@
     <None Include="..\..\assets\fonts\NotoColorEmoji-Subset.ttf" Link="NotoColorEmoji-Subset.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\NotoSansHebrewSubset.ttf" Link="NotoSansHebrewSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!--
