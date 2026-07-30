@@ -10,12 +10,14 @@ namespace PeachPDF.Text.Bidi
     /// values are implemented as synthetic pushes onto this same stack via <see cref="BidiIsolateOverride"/>),
     /// X9/§5.2 (retaining BN/explicit-formatting characters rather than physically removing them, so string
     /// indices into the original text stay stable throughout), X10/BD13 (isolating run sequences), W1-W7
-    /// (weak types), N0-N2 (neutral/bracket-pair types), I1-I2 (implicit levels), and L1 (embedding-level
-    /// resets for separators and trailing whitespace/isolate-formatting runs). L2 (visual reordering) is
-    /// exposed separately as <see cref="ReorderLine"/> and L1's clause 4 as
-    /// <see cref="ApplyLineTrailingWhitespaceReset"/>, since both are inherently line-scoped operations that
-    /// can only run once a layout engine has decided where lines break - <see cref="Resolve"/> itself
-    /// produces paragraph-wide levels only.
+    /// (weak types), N0-N2 (neutral/bracket-pair types), I1-I2 (implicit levels), and L1 clauses 1-3
+    /// (embedding-level resets for separators and the whitespace/isolate-formatting runs preceding them).
+    /// L2 (visual reordering) is exposed separately as <see cref="ReorderLine"/>, since it is an inherently
+    /// line-scoped operation that can only run once a layout engine has decided where lines break -
+    /// <see cref="Resolve"/> itself produces paragraph-wide levels only. L1 clause 4 (the *trailing*
+    /// whitespace/isolate-formatting run on each line) is likewise line-scoped, but is applied by each
+    /// caller at its own granularity instead of from here - see
+    /// <c>CssLayoutEngine.ApplyBidiReordering</c>'s own word-granularity clause-4 reset.
     /// <para>
     /// Validated end to end against Unicode's own <c>BidiCharacterTest.txt</c> conformance suite (Unicode
     /// 17.0.0, ~91.7k cases covering P2-P3/X1-X9/X10/W1-W7/N0-N2/I1-I2/L1/L2) - see
@@ -90,26 +92,7 @@ namespace PeachPDF.Text.Bidi
 
             ApplyL1(originalTypes, levels, n, paragraphLevel);
 
-            return new BidiResolverResult(levels, paragraphLevel) { OriginalTypesForLineBreaking = originalTypes };
-        }
-
-        /// <summary>
-        /// L1 clause 4: resets the embedding level of any trailing run of whitespace/isolate-formatting
-        /// characters at the end of one line to the paragraph level. Must be applied per line, once a
-        /// layout engine has decided where that line ends - <see cref="Resolve"/> already applies clauses
-        /// 1-3 (segment/paragraph separators and the whitespace/isolate-formatting runs preceding them),
-        /// which don't depend on line boundaries.
-        /// </summary>
-        public static void ApplyLineTrailingWhitespaceReset(
-            byte[] levels, BidiClass[] originalTypes, int lineStart, int lineLength, byte paragraphLevel)
-        {
-            var end = lineStart + lineLength;
-            var j = end - 1;
-            while (j >= lineStart && IsWhitespaceOrIsolateFormatting(originalTypes[j]))
-            {
-                levels[j] = paragraphLevel;
-                j--;
-            }
+            return new BidiResolverResult(levels, paragraphLevel);
         }
 
         /// <summary>
@@ -861,7 +844,7 @@ namespace PeachPDF.Text.Bidi
             };
         }
 
-        // ----- L1 (clauses 1-3; clause 4 is ApplyLineTrailingWhitespaceReset above) -----
+        // ----- L1 (clauses 1-3; clause 4 is line-scoped, applied by each caller separately) -----
 
         private static void ApplyL1(BidiClass[] originalTypes, byte[] levels, int n, byte paragraphLevel)
         {

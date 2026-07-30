@@ -11,13 +11,5 @@ namespace PeachPDF.Text.Bidi
         public byte[] Levels { get; } = levels;
         public byte ParagraphLevel { get; } = paragraphLevel;
         public bool IsParagraphRtl => (ParagraphLevel & 1) == 1;
-
-        /// <summary>
-        /// The per-character ORIGINAL (pre-resolution) <see cref="BidiClass"/> array
-        /// <see cref="BidiResolver.Resolve"/> computed internally - exposed so a caller can later run
-        /// <see cref="BidiResolver.ApplyLineTrailingWhitespaceReset"/> (UAX #9 L1 clause 4) once line
-        /// boundaries are known, without re-deriving codepoint classes for the whole paragraph again.
-        /// </summary>
-        public required BidiClass[] OriginalTypesForLineBreaking { get; init; }
     }
 }
