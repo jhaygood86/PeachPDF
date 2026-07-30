@@ -223,6 +223,14 @@ namespace PeachPDF
             var minPixelsPerPoint = config.MinContentWidth > 0 ? config.MinContentWidth / container.PageSize.Width : basePixelsPerPoint;
             var pixelsPerPoint = minPixelsPerPoint;
 
+            // Tracks whether the final layout pass below still needs to run: it always does for a
+            // plain (non-shrink) render, since it's the only layout pass in that case. For
+            // ShrinkToFit/ScaleToPageSize it's set to false when the measurement pass already
+            // determined no rescale is needed, so the font-cache clear, the full HTML/CSS re-parse,
+            // and this pass aren't repeated against output that would come out byte-for-byte
+            // identical to what the measurement pass already produced (see NeedsRescale below).
+            var needsRescale = true;
+
             if (config.ScaleToPageSize || config.ShrinkToFit)
             {
                 container.MaxSize = new XSize(container.PageSize.Width, 0);
@@ -230,28 +238,38 @@ namespace PeachPDF
 
                 var actualWidth = container.ActualSize.Width;
 
-                _pdfSharpAdapter.ClearFontCache();
-                pixelsPerPoint *= (actualWidth / container.PageSize.Width);
+                var candidatePixelsPerPoint = pixelsPerPoint * (actualWidth / container.PageSize.Width);
 
-                if (pixelsPerPoint < minPixelsPerPoint)
+                if (candidatePixelsPerPoint < minPixelsPerPoint)
                 {
-                    pixelsPerPoint = minPixelsPerPoint;
+                    candidatePixelsPerPoint = minPixelsPerPoint;
                 }
 
-                _pdfSharpAdapter.PixelsPerPoint = (config.ShrinkToFit && pixelsPerPoint > 1) || config.ScaleToPageSize
-                    ? pixelsPerPoint
+                var effectivePixelsPerPoint = (config.ShrinkToFit && candidatePixelsPerPoint > 1) || config.ScaleToPageSize
+                    ? candidatePixelsPerPoint
                     : _pdfSharpAdapter.PixelsPerPoint;
 
-                await SetContent(container, config, html, cssData, orgPageSize);
+                needsRescale = NeedsRescale(_pdfSharpAdapter.PixelsPerPoint, effectivePixelsPerPoint);
 
-                measure?.Dispose();
-                measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+                if (needsRescale)
+                {
+                    _pdfSharpAdapter.ClearFontCache();
+                    _pdfSharpAdapter.PixelsPerPoint = effectivePixelsPerPoint;
+
+                    await SetContent(container, config, html, cssData, orgPageSize);
+
+                    measure?.Dispose();
+                    measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+                }
             }
 
-            container.MaxSize = new XSize(container.PageSize.Width, 0);
+            if (needsRescale)
+            {
+                container.MaxSize = new XSize(container.PageSize.Width, 0);
 
-            // layout the HTML with the page width restriction to know how many pages are required
-            await container.PerformLayout(measure);
+                // layout the HTML with the page width restriction to know how many pages are required
+                await container.PerformLayout(measure);
+            }
 
             ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata, config.Metadata);
 
@@ -431,6 +449,18 @@ namespace PeachPDF
 
             if (metadata?.Date.HasValue == true)                 info.CreationDate = metadata.Date.Value;
         }
+
+        /// <summary>
+        /// Whether a <c>ScaleToPageSize</c>/<c>ShrinkToFit</c> render needs its font-cache clear,
+        /// full HTML/CSS re-parse, and second layout pass, or whether the measurement pass already
+        /// used the correct <see cref="PdfSharpAdapter.PixelsPerPoint"/> (the common case: ordinary
+        /// non-overflowing content already fits the page, so no rescale is needed). The comparison
+        /// is exact rather than epsilon-based - <paramref name="effectivePixelsPerPoint"/> is either
+        /// <paramref name="currentPixelsPerPoint"/> read back unchanged (no rescale needed) or a
+        /// freshly computed, genuinely different value, never a value that merely rounds close to it.
+        /// </summary>
+        internal static bool NeedsRescale(double currentPixelsPerPoint, double effectivePixelsPerPoint) =>
+            effectivePixelsPerPoint != currentPixelsPerPoint;
 
         internal static async Task SetContent(HtmlContainer container, PdfGenerateConfig config, string html, PeachPdfCssContent? cssData, XSize orgPageSize)
         {

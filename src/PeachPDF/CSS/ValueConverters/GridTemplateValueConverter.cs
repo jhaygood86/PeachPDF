@@ -53,6 +53,18 @@ namespace PeachPDF.CSS
                 return CssProperty<GridTemplate>.Global(keyword);
             if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
                 return CssProperty<GridTemplate>.Unresolved(value);
+            // `none` is the property's initial value (CssDefaults seeds every non-grid box with it, and
+            // it's one of the two properties the cascade-defaulting skip in DomParser.CascadeApplyStyles
+            // can't bypass) - short-circuiting the keyword here, exactly like Convert()'s tokenized
+            // isNone check already does, avoids constructing a Lexer/TextSource/StringBuilder just to
+            // tokenize a three-letter keyword for what is otherwise every box in every document. A
+            // `dotnet-trace` allocation profile of the full showcase corpus found this the single largest
+            // allocation source in the whole pipeline (2.4 of 2.6 million Pool.NewStringBuilder() calls,
+            // ahead of layout, cascade, and PDF writing combined) - GridTrackListGrammar.TryParse would
+            // have returned null for a bare `none` token anyway (not a valid track-size keyword), so this
+            // produces the identical CssProperty the tokenized path did, just without tokenizing at all.
+            if (value.AsSpan().Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase))
+                return CssProperty<GridTemplate>.FromValue(value, null);
             var template = GridTrackListGrammar.TryParse(Tokenize(value));
             return CssProperty<GridTemplate>.FromValue(value, template);
         }

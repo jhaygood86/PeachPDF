@@ -83,5 +83,90 @@ namespace PeachPDF.Tests.TestSupport
 
             return (container.HtmlContainerInt.Root!, container.HtmlContainerInt);
         }
+
+        /// <summary>
+        /// Lays <paramref name="html"/> out exactly like <see cref="LayoutAsync"/>, but also models the
+        /// <c>ScaleToPageSize</c>/<c>ShrinkToFit</c> arm <see cref="LayoutAsync"/>'s own doc comment says
+        /// it deliberately skips: the measuring layout pass, and the second <c>SetContent</c>/layout pass
+        /// that <c>PdfGenerator.AddPdfPages</c> only runs when <see cref="PdfGenerator.NeedsRescale"/>
+        /// says the measured content actually needs a different <c>PixelsPerPoint</c> than the one the
+        /// measuring pass already used. Returns whether that second pass ran, so a test can assert
+        /// directly that ordinary non-overflowing content skips it (the common case a caller pays for on
+        /// every <c>ShrinkToFit</c> render otherwise) without duplicating <c>AddPdfPages</c>' own
+        /// decision inside the assertion itself.
+        /// </summary>
+        internal static async Task<(CssBox Root, HtmlContainerInt Container, bool Rescaled, double PixelsPerPoint)> LayoutWithRescaleAsync(
+            string html, PdfGenerateConfig config)
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = config.PixelsPerInch / 72d };
+
+            var orgPageSize = config.PageSize != PageSize.Undefined
+                ? PageSizeConverter.ToSize(config.PageSize)
+                : new XSize(config.ManualPageWidth, config.ManualPageHeight);
+
+            if (config.PageOrientation == PageOrientation.Landscape)
+            {
+                orgPageSize = new XSize(orgPageSize.Height, orgPageSize.Width);
+            }
+
+            var container = new HtmlContainer(adapter);
+
+            await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
+
+            if (container.CssPageSize.HasValue && container.CssPageSize.Value != orgPageSize)
+            {
+                await PdfGenerator.SetContent(container, config, html, null, container.CssPageSize.Value);
+            }
+
+            var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+
+            var basePixelsPerPoint = config.PixelsPerInch / 72d;
+            var minPixelsPerPoint = config.MinContentWidth > 0
+                ? config.MinContentWidth / container.PageSize.Width
+                : basePixelsPerPoint;
+            var pixelsPerPoint = minPixelsPerPoint;
+            var needsRescale = true;
+
+            if (config.ScaleToPageSize || config.ShrinkToFit)
+            {
+                container.MaxSize = new XSize(container.PageSize.Width, 0);
+                await container.PerformLayout(measure);
+
+                var actualWidth = container.ActualSize.Width;
+                var candidatePixelsPerPoint = pixelsPerPoint * (actualWidth / container.PageSize.Width);
+
+                if (candidatePixelsPerPoint < minPixelsPerPoint)
+                {
+                    candidatePixelsPerPoint = minPixelsPerPoint;
+                }
+
+                var effectivePixelsPerPoint = (config.ShrinkToFit && candidatePixelsPerPoint > 1) || config.ScaleToPageSize
+                    ? candidatePixelsPerPoint
+                    : adapter.PixelsPerPoint;
+
+                needsRescale = PdfGenerator.NeedsRescale(adapter.PixelsPerPoint, effectivePixelsPerPoint);
+
+                if (needsRescale)
+                {
+                    adapter.ClearFontCache();
+                    adapter.PixelsPerPoint = effectivePixelsPerPoint;
+
+                    await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
+
+                    measure.Dispose();
+                    measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+                }
+            }
+
+            if (needsRescale)
+            {
+                container.MaxSize = new XSize(container.PageSize.Width, 0);
+                await container.PerformLayout(measure);
+            }
+
+            measure.Dispose();
+
+            return (container.HtmlContainerInt.Root!, container.HtmlContainerInt, needsRescale, adapter.PixelsPerPoint);
+        }
     }
 }
