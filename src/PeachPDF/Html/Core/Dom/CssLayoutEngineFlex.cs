@@ -177,11 +177,14 @@ namespace PeachPDF.Html.Core.Dom
                         await ShrinkColumnItemToContentWidth(g, item, containerCrossSize, mainSize);
             }
 
-            // Phase 5: line cross sizes; for single-line, respect container cross size if set
+            // Phase 5: line cross sizes; a container with exactly one line stretches it to the
+            // container's own cross size regardless of why it has only one (an explicit `nowrap`, or a
+            // `wrap`/`wrap-reverse` container whose content just happens to fit on one line) — CSS
+            // Flexbox 1 §9.4 step 8.
             foreach (var line in lines)
             {
                 double natural = ComputeLineCrossSize(line);
-                line.CrossSize = (!_isWrap && containerCrossSize > 0)
+                line.CrossSize = (lines.Count == 1 && containerCrossSize > 0)
                     ? Math.Max(natural, containerCrossSize)
                     : natural;
             }
@@ -615,6 +618,7 @@ namespace PeachPDF.Html.Core.Dom
                     break;
                 }
                 case CssConstants.Stretch:
+                case "normal":
                 {
                     double extra = lines.Count > 0 ? remaining / lines.Count : 0;
                     foreach (var l in lines)
@@ -625,7 +629,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     break;
                 }
-                default: // flex-start / normal
+                default: // flex-start
                     foreach (var l in lines) { l.CrossOffset = offset; offset += l.CrossSize + crossGap; }
                     break;
             }
@@ -906,15 +910,26 @@ namespace PeachPDF.Html.Core.Dom
         /// here can the question "does this fit in the fragmentainer?" be asked of the right coordinates.
         /// </para>
         /// <para>
-        /// A <b>flex line</b> is what moves, not an item. The line is the row of items laid out together;
-        /// moving one of them alone would break the alignment the cross-axis phases just established, and
-        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s break points in a
-        /// flex container are between lines rather than between the items sharing one. In a single-line
-        /// container that is every item at once, which is the right answer there too: they are aligned
-        /// against each other.
+        /// For <b>row/row-reverse</b>, a <b>flex line</b> is what moves, not an item. The line is the row
+        /// of items laid out together; moving one of them alone would break the alignment the cross-axis
+        /// phases just established, and <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s
+        /// break points there are between lines rather than between the items sharing one. In a
+        /// single-line container that is every item at once, which is the right answer there too: they
+        /// are aligned against each other.
         /// </para>
         /// <para>
-        /// The line is <i>translated</i> rather than laid out again, which is the choice
+        /// For <b>column/column-reverse</b>, the items <i>within</i> one line are the ones stacked in the
+        /// block axis — real class-A break points genuinely exist between them (css-flexbox-1 §11) — while
+        /// two side-by-side lines share no block-axis relationship at all. So each line is relocated by
+        /// its own independent call to <see cref="LineRelocation.Relocate"/>, via
+        /// <see cref="BuildColumnItemGroups"/>, rather than one call spanning the whole container: moving
+        /// an item in one line must not displace another line beside it (issue #455). The container's own
+        /// height grows by whichever line ended up displaced furthest, the same "max across lines" shape
+        /// <see cref="DistributeCrossSpace"/>'s cross-axis sizing already uses, since the lines run in
+        /// parallel rather than accumulating onto one another the way row-direction lines do.
+        /// </para>
+        /// <para>
+        /// The line (or item) is <i>translated</i> rather than laid out again, which is the choice
         /// <see href="https://github.com/jhaygood86/PeachPDF/issues/332">#332</see> made the other way for
         /// block flow. It has to be: an item's position is not derived from its own layout but assigned by
         /// the engine, so re-flowing it at a new position would change the measurement the container's own
@@ -951,7 +966,24 @@ namespace PeachPDF.Html.Core.Dom
 
             if (flowLines.Count == 0) return;
 
-            var shift = LineRelocation.Relocate(container, BuildLineGroups(flowLines));
+            double shift;
+
+            if (_isRow)
+            {
+                shift = LineRelocation.Relocate(container, BuildLineGroups(flowLines));
+            }
+            else
+            {
+                shift = 0;
+
+                for (var lineIndex = 0; lineIndex < flowLines.Count; lineIndex++)
+                {
+                    var lineShift = LineRelocation.Relocate(
+                        container, BuildColumnItemGroups(flowLines[lineIndex], isFirstLine: lineIndex == 0));
+
+                    shift = Math.Max(shift, lineShift);
+                }
+            }
 
             if (shift > 0)
             {
@@ -1259,8 +1291,9 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The container's lines as <see cref="LineGroup"/>s in <b>block-axis</b> order, each carrying the
-        /// two sides of the break point immediately above it in <b>flow</b> order.
+        /// A <c>row</c>/<c>row-reverse</c> container's lines as <see cref="LineGroup"/>s in
+        /// <b>block-axis</b> order, each carrying the two sides of the break point immediately above it in
+        /// <b>flow</b> order.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -1280,34 +1313,15 @@ namespace PeachPDF.Html.Core.Dom
         /// that begins the new fragmentainer.
         /// </para>
         /// <para>
-        /// <b>A column direction</b> stacks the lines along the <i>inline</i> axis instead: they sit side
-        /// by side sharing one block-axis range, so no fragmentainer boundary falls between two of them
-        /// and a break value there names nothing this pass can act on. All of them are one group, which
-        /// keeps the geometric half — a line holding something that may not be cut still moves, and the
-        /// lines beside it move with it rather than sliding out of alignment. Their block-axis break
-        /// points are the ones <i>between items within</i> a line, which this pass does not have.
+        /// A column direction is not handled here at all — its lines sit side by side sharing one
+        /// block-axis range, so there is no line-to-line break point for this shape to build; see
+        /// <see cref="BuildColumnItemGroups"/> for the break points a column-direction container actually
+        /// has, between the items <i>within</i> one line.
         /// </para>
         /// </remarks>
         /// <param name="flowLines">the container's non-empty lines, in flow order</param>
         private List<LineGroup> BuildLineGroups(List<IReadOnlyList<CssBox>> flowLines)
         {
-            if (!_isRow)
-            {
-                // The break point before the container's first in-flow child is the one before the
-                // container itself (§3.1), and that boundary *is* above this group - so that one child
-                // speaks for it. Only that one: the rest of its line is stacked *below* it in the block
-                // axis, so a break-before there names a boundary inside the container, which is the
-                // break point this arm does not take. Reading the whole line would move content that
-                // sits before the break point along with it.
-                //
-                // A column container that did not wrap has one line, and with a single item comes out
-                // of this identical to the walk below, which is why the arm needs no line count.
-                return
-                [
-                    new LineGroup(flowLines.SelectMany(line => line).ToList(), null, [flowLines[0][0]])
-                ];
-            }
-
             var groups = new List<LineGroup>(flowLines.Count);
 
             // `index` is the position down the page; `flowIndex` is the position in the source. They are
@@ -1344,6 +1358,76 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 groups.Add(new LineGroup(boxes, earlier, later));
+            }
+
+            return groups;
+        }
+
+        /// <summary>
+        /// One column-direction line's items as single-item <see cref="LineGroup"/>s in <b>block-axis</b>
+        /// order, each carrying the two sides of the break point immediately above it in <b>flow</b>
+        /// order — the item-to-item break points a column-direction line actually has (issue #455).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A column-direction line's items are stacked along the block axis exactly the way
+        /// <see cref="BuildLineGroups"/>'s lines are, so this is that method's shape one level down: each
+        /// item is its own group, so a break value or <c>break-inside: avoid</c>/monolithic content on one
+        /// item is scoped to that item (and whatever follows it in the same line's block-axis order)
+        /// rather than the line's other items or any other line. <c>column-reverse</c> gets the exact
+        /// <c>_isReverse</c> flow-vs-block-axis transform <see cref="BuildColumnLines"/> already
+        /// established for the same reason <see cref="BuildLineGroups"/> reads <c>_isWrapReverse</c> for
+        /// rows: block-axis order and flow order disagree, and only the latter identifies a break point.
+        /// </para>
+        /// <para>
+        /// <b>Only <paramref name="isFirstLine"/>'s own first item speaks for the point above the whole
+        /// container.</b> That boundary is §3.1's break point before the container's first in-flow child,
+        /// and every other line starts at that same block-axis position with nothing genuinely before it
+        /// in flow order — the same reasoning that already makes the break point *between* two side-by-side
+        /// lines inert. So every other line's own leading item gets <c>Earlier = null, Later = null</c>:
+        /// no break point at all, not "no forced value here".
+        /// </para>
+        /// <para>
+        /// Each line is relocated by its own call to <see cref="LineRelocation.Relocate"/> rather than one
+        /// call spanning the whole container — two side-by-side lines share no block-axis relationship, so
+        /// moving an item in one must not displace the other. See
+        /// <see cref="RelocateLinesAcrossFragmentainers"/>'s column branch.
+        /// </para>
+        /// </remarks>
+        /// <param name="flowItems">the line's items, in flow (source) order</param>
+        /// <param name="isFirstLine">
+        /// whether this is the container's flow-first line — the one holding the item whose break-before
+        /// governs the boundary above the container itself
+        /// </param>
+        private List<LineGroup> BuildColumnItemGroups(IReadOnlyList<CssBox> flowItems, bool isFirstLine)
+        {
+            var groups = new List<LineGroup>(flowItems.Count);
+
+            for (var index = 0; index < flowItems.Count; index++)
+            {
+                var flowIndex = _isReverse ? flowItems.Count - 1 - index : index;
+                var box = flowItems[flowIndex];
+
+                IReadOnlyList<CssBox>? earlier;
+                IReadOnlyList<CssBox>? later;
+
+                if (index == 0)
+                {
+                    earlier = null;
+                    later = isFirstLine ? [flowItems[0]] : null;
+                }
+                else if (_isReverse)
+                {
+                    earlier = [box];
+                    later = [flowItems[flowIndex + 1]];
+                }
+                else
+                {
+                    earlier = [flowItems[flowIndex - 1]];
+                    later = [box];
+                }
+
+                groups.Add(new LineGroup([box], earlier, later));
             }
 
             return groups;

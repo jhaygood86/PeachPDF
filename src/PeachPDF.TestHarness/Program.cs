@@ -2367,7 +2367,15 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
         FContainer("wrap-reverse + align-items:flex-end", "flex-wrap:wrap-reverse;align-items:flex-end;width:200px;gap:4px;",
             FItem("A 12px", "#e74c3c", "width:80px;height:12px;") +
             FItem("B 40px", "#3498db", "width:80px;height:40px;") +
-            FItem("C 24px", "#27ae60", "width:80px;height:24px;"))
+            FItem("C 24px", "#27ae60", "width:80px;height:24px;")) +
+        // align-content's initial value is `normal`, which behaves as `stretch`: with a definite
+        // container height and free cross space, the two lines grow to fill it rather than packing at
+        // the top and leaving the space below empty, which explicit align-content:flex-start still does
+        // (issue #461).
+        FContainer("wrap, height:120px, align-content unset (stretches)", "flex-wrap:wrap;width:200px;height:120px;gap:4px;",
+            FItems3("width:90px;height:24px;")) +
+        FContainer("wrap, height:120px, align-content:flex-start", "flex-wrap:wrap;align-content:flex-start;width:200px;height:120px;gap:4px;",
+            FItems3("width:90px;height:24px;"))
     ) +
 
     FSection("7 — align-self (overrides align-items)",
@@ -4117,6 +4125,39 @@ await SaveShowcaseAsync("flex_column_fragmentation", "Layout", "Flex Column Item
     + "CssLayoutEngineFlex walks a column-direction line's items in turn, committing each one's content "
     + "live and continuing a later item's remaining content on the next page (issues #517/#526).",
     flexColumnFragmentationHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
+var flexColumnBreakPointsHtml = $$"""
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 10mm }
+    body { font: 8.5pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 0.8em }
+    .col { display: flex; flex-direction: column; row-gap: 6pt }
+    .card { border: 0.75pt solid #94a3b8; border-radius: 3pt; padding: 5pt 6pt }
+    .card h3 { font-size: 8.5pt; margin: 0 0 3pt; color: #1d4ed8 }
+    .card .body p { margin: 0 0 4pt; line-height: 1.35 }
+    .forced { break-before: page }
+    </style></head><body>
+    <h1>Break points between items of a column-direction flex line</h1>
+    <p class="intro">The second card below declares <code>break-before: page</code>. A column-direction
+    line's items are stacked in the block axis, so this is a real break point between two items of the
+    same line - it now moves that item (and anything after it in the line) onto the next page instead of
+    being read only from the container's very first child.</p>
+    <div class="col">
+    {{FragmentationCard("Item 1 &mdash; stays on this page", LoremRows(1, "Item 1"))}}
+    <div class="card forced"><h3>Item 2 &mdash; break-before: page</h3><div class="body">{{LoremRows(1, "Item 2")}}</div></div>
+    {{FragmentationCard("Item 3 &mdash; follows item 2", LoremRows(1, "Item 3"))}}
+    </div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("flex_column_break_points", "Layout", "Break Points Between Column Flex Items",
+    "A break-before/break-after/break-inside:avoid value between two items of the same "
+    + "flex-direction:column line is now honored, moving just that item (and whatever follows it in the "
+    + "line) rather than being read only from the container's own first child - each line of a wrapping "
+    + "column container relocates independently of the others (issue #455).",
+    flexColumnBreakPointsHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
 // --- hyphens: auto multi-language showcase ---
 // Document language is a whole-container setting (<html lang>, see CssBox/HtmlContainerInt), so

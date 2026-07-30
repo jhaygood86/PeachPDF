@@ -1182,12 +1182,14 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, SlotOf(container, b));
         }
 
-        // The geometric half survives: a line holding something that may not be cut still moves, and
-        // the line beside it moves with it rather than being left behind out of alignment.
+        // Two side-by-side lines are independent chains (issue #455): a line holding something that may
+        // not be cut moves on its own, and the line beside it — which asked for nothing — is left alone
+        // rather than being dragged along with it.
         [Fact]
-        public async Task InAWrappingColumnContainer_ALineThatMayNotBeCut_MovesEveryLineWithIt()
+        public async Task InAWrappingColumnContainer_ALineThatMayNotBeCut_MovesOnlyThatLine()
         {
-            // Container at 170; both lines span 170–210 and cross slot 0's bottom at 180.
+            // Container at 170; both lines span 170–210 and cross slot 0's bottom at 180. A has no break
+            // value of its own and is simply cut by the boundary; B's break-inside: avoid moves B alone.
             var (root, container) = await LayoutHarness.LayoutAsync(
                 WrappingColumn(150, string.Empty, "break-inside:avoid"), pageHeight: PageHeight);
 
@@ -1197,17 +1199,18 @@ namespace PeachPDF.Tests.Integration
             Assert.True(b.Location.X > a.Location.X,
                 $"expected B on a second line beside A; both are at x {a.Location.X:F1}");
 
+            Assert.Equal(170, a.Location.Y, 1);
             Assert.Equal(container.PageTopOf(1), b.Location.Y, 1);
-            Assert.Equal(b.Location.Y, a.Location.Y, 1);
+            Assert.Equal(0, SlotOf(container, a));
+            Assert.Equal(1, SlotOf(container, b));
         }
 
-        // The one value a column container *does* read at the boundary above it is the break point
-        // before its first in-flow child, which §3.1 makes the break point before the container. A
-        // break-before on any *later* item names a boundary inside the container — between items in
-        // the block axis — which this pass does not take. Reading the whole first line instead moves
-        // content that sits before the break point along with it.
+        // A column container's items within one line are stacked along the block axis exactly like a
+        // row container's lines are, so a break-before on a non-first item is a real class-A break point
+        // (issue #455): it moves that item (and whatever follows it in the same line) without disturbing
+        // A, which is *before* the break point, or D, which is on an entirely independent second line.
         [Fact]
-        public async Task InAColumnContainer_AForcedBreakBeforeANonFirstItem_MovesNothing()
+        public async Task InAColumnContainer_AForcedBreakBeforeANonFirstItem_MovesItWithoutDisturbingTheOtherLine()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(
@@ -1230,11 +1233,139 @@ namespace PeachPDF.Tests.Integration
                 $"expected D on a second line beside the first; it is at x {d.Location.X:F1}");
 
             Assert.Equal(80, a.Location.Y, 1);
-            Assert.Equal(110, b.Location.Y, 1);
+            Assert.Equal(container.PageTopOf(1), b.Location.Y, 1);
             Assert.Equal(80, d.Location.Y, 1);
             Assert.Equal(0, SlotOf(container, a));
-            Assert.Equal(0, SlotOf(container, b));
+            Assert.Equal(1, SlotOf(container, b));
             Assert.Equal(0, SlotOf(container, d));
+        }
+
+        // §3.1 takes a forced break from either side of the break point: break-after on the earlier item
+        // works exactly like break-before on the later one (issue #455).
+        [Fact]
+        public async Task InAColumnContainer_AForcedBreakAfterANonLastItem_MovesTheNextItem()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:60pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-direction:column; flex-wrap:wrap;"
+                    + " height:60pt; width:300pt'>"
+                    + "<div id='a' style='width:100pt;height:30pt;break-after:page'>A</div>"
+                    + "<div id='b' style='width:100pt;height:30pt'>B</div>"
+                    + "<div id='d' style='width:100pt;height:30pt'>D</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+            var d = LayoutHarness.FindById(root, "d")!;
+
+            Assert.Equal(80, a.Location.Y, 1);
+            Assert.Equal(container.PageTopOf(1), b.Location.Y, 1);
+            Assert.Equal(80, d.Location.Y, 1);
+            Assert.Equal(0, SlotOf(container, a));
+            Assert.Equal(1, SlotOf(container, b));
+            Assert.Equal(0, SlotOf(container, d));
+        }
+
+        // break-inside: avoid on a non-first item of a multi-item line moves only that item and whatever
+        // follows it in the same line's block-axis order - not the items before it, which already sit on
+        // the earlier-in-flow side of the break point the avoid value never touches (issue #455).
+        [Fact]
+        public async Task InAColumnLine_AvoidOnANonFirstItem_MovesOnlyItAndWhatFollowsIt()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:110pt'>filler</div>"
+                    + "<div id='c' style='display:flex; flex-direction:column; width:300pt'>"
+                    + "<div id='a' style='height:30pt'>A</div>"
+                    + "<div id='b' style='height:30pt;break-inside:avoid'>B</div>"
+                    + "<div id='d' style='height:30pt'>D</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var b = LayoutHarness.FindById(root, "b")!;
+            var d = LayoutHarness.FindById(root, "d")!;
+
+            // A stays before the break point; B moves because it straddles slot 0's bottom while avoiding
+            // being cut; D, stacked after B in the same line, accumulates B's own displacement so it does
+            // not land on top of it - the same accumulation row-direction lines already give each other.
+            Assert.Equal(130, a.Location.Y, 1);
+            Assert.Equal(container.PageTopOf(1), b.Location.Y, 1);
+            Assert.Equal(210, d.Location.Y, 1);
+            Assert.Equal(0, SlotOf(container, a));
+            Assert.Equal(1, SlotOf(container, b));
+            Assert.Equal(1, SlotOf(container, d));
+        }
+
+        // The interleaving guarantee itself: two side-by-side lines, each forced to a *different* number
+        // of fragmentainers ahead by their own, independently-declared break values in the same layout.
+        // A bug coupling the two lines' relocation together (a shared running displacement, or one line's
+        // blank-page reservation leaking into the other's) would show up here as both landing on the same
+        // slot instead of the slot each one's own break value actually asks for (issue #455).
+        [Fact]
+        public async Task TwoIndependentColumnLines_EachRelocateByTheirOwnBreakValue()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div id='c' style='display:flex; flex-direction:column; flex-wrap:wrap;"
+                    + " height:50pt; width:300pt'>"
+                    + "<div id='i1' style='width:100pt;height:20pt'>I1</div>"
+                    + "<div id='i2' style='width:100pt;height:20pt;break-before:page'>I2</div>"
+                    + "<div id='j1' style='width:100pt;height:20pt'>J1</div>"
+                    + "<div id='j2' style='width:100pt;height:20pt;break-before:right'>J2</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var i1 = LayoutHarness.FindById(root, "i1")!;
+            var i2 = LayoutHarness.FindById(root, "i2")!;
+            var j1 = LayoutHarness.FindById(root, "j1")!;
+            var j2 = LayoutHarness.FindById(root, "j2")!;
+
+            // The fixture asserts nothing unless I1/I2 and J1/J2 really are two side-by-side lines.
+            Assert.True(j1.Location.X > i1.Location.X,
+                $"expected J on a second line beside I; both are at x {i1.Location.X:F1}");
+
+            Assert.Equal(20, i1.Location.Y, 1);
+            Assert.Equal(container.PageTopOf(1), i2.Location.Y, 1);
+            Assert.Equal(20, j1.Location.Y, 1);
+            Assert.Equal(container.PageTopOf(2), j2.Location.Y, 1);
+            Assert.Equal(0, SlotOf(container, i1));
+            Assert.Equal(1, SlotOf(container, i2));
+            Assert.Equal(0, SlotOf(container, j1));
+            Assert.Equal(2, SlotOf(container, j2));
+        }
+
+        // column-reverse's items are walked block-axis-first (the later-in-flow item is physically at the
+        // block-start), so the break-value read has to follow the same _isReverse flow-vs-block-axis
+        // transform BuildColumnLines already uses for content commit (issue #455). Moving the flow-earlier
+        // item to honor a forced break at the point above it, rather than the physically-earlier one, is
+        // the same shape flex-wrap: wrap-reverse already establishes for lines (see the invariant on a
+        // break point being identified in flow order but acted on in block-axis order).
+        [Fact]
+        public async Task ColumnReverse_AForcedBreakBetweenTwoItems_MovesTheFlowEarlierOne()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div id='c' style='display:flex; flex-direction:column-reverse; width:300pt'>"
+                    + "<div id='p' style='height:40pt'>P</div>"
+                    + "<div id='q' style='height:30pt;break-before:page'>Q</div>"
+                    + "</div>"),
+                pageHeight: PageHeight);
+
+            var p = LayoutHarness.FindById(root, "p")!;
+            var q = LayoutHarness.FindById(root, "q")!;
+
+            // The fixture asserts nothing unless column-reverse really did put Q (later in flow) physically
+            // above P (earlier in flow).
+            Assert.True(q.Location.Y < p.Location.Y,
+                $"expected Q (later in flow) physically above P; Q is at y {q.Location.Y:F1}, P at {p.Location.Y:F1}");
+
+            Assert.Equal(20, q.Location.Y, 1);
+            Assert.Equal(container.PageTopOf(1), p.Location.Y, 1);
+            Assert.Equal(0, SlotOf(container, q));
+            Assert.Equal(1, SlotOf(container, p));
         }
 
         // A column container that did not wrap has one line, which is all of its content — that line is
