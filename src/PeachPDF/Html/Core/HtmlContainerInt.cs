@@ -407,6 +407,20 @@ namespace PeachPDF.Html.Core
         internal int PassRewinds { get; private set; }
 
         /// <summary>
+        /// How many times the last <see cref="LayoutDocument"/> asked a fragmentation question about
+        /// content whose own band (per <see cref="BandStartingAt"/>) disagreed with
+        /// <see cref="CurrentFragmentainer"/>'s — i.e. how often a pass placed content past the
+        /// fragmentainer it says it is filling without ever recording that as a break. Zero is the
+        /// property <see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see>
+        /// establishes: every mechanism that can move flow into a later band (an inline tolerance
+        /// spill, unbreakable overflow, a table row-loop jump, a flex/grid line relocation) must also
+        /// advance <see cref="Fragmentation.FragmentainerContext.StepOverTo"/>, so the cursor never goes
+        /// stale relative to where content actually landed. A non-zero value names the mechanism that
+        /// does not yet do so — see <see cref="BandBeingFilled"/>.
+        /// </summary>
+        internal int CursorSpills { get; private set; }
+
+        /// <summary>
         /// Defensive backstop on the driver loop, mirroring the cap the fragment-tree slot walk uses.
         /// </summary>
         private const int MaxFragmentainers = 100_000;
@@ -919,6 +933,7 @@ namespace PeachPDF.Html.Core
             FragmentainerPasses = 0;
             LastResortRelayouts = 0;
             PassRewinds = 0;
+            CursorSpills = 0;
 
             // Registrations append (they aren't idempotent), so without this each re-layout accumulated
             // duplicates and began with a stale ActivePageName from the PREVIOUS invocation's last
@@ -1666,6 +1681,33 @@ namespace PeachPDF.Html.Core
         /// The band of the fragmentainer a <b>top</b> edge at <paramref name="y"/> starts in.
         /// </summary>
         internal PageBand BandStartingAt(double y) => BandOfSlot(SlotStartingAt(y));
+
+        /// <summary>
+        /// The band a bottom-edge straddle question about content beginning at <paramref name="top"/>
+        /// is answered against — <paramref name="gridBand"/> where no fragmentainer is named (a
+        /// measurement pass, per <see cref="DetachFragmentainer"/>), inside a column (which has a band
+        /// of its own), or for the driver's suppressed last-resort pass (which may place content
+        /// anywhere and must not break again).
+        /// </summary>
+        /// <remarks>
+        /// Also the sole instrumentation point for <see cref="CursorSpills"/>: whenever a fragmenting
+        /// page pass is asked this question about content whose own slot disagrees with
+        /// <see cref="CurrentFragmentainer"/>'s, that is a pass placing content past the band it says
+        /// it is filling without a break recorded for the crossing — see
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see>. Returns
+        /// <paramref name="gridBand"/> unconditionally today; once every such crossing is closed (so
+        /// <see cref="CursorSpills"/> is provably always zero), this returns <c>filling.Band</c>
+        /// instead, which is what makes <c>CssRect.WouldStraddleFragmentainer</c>'s two arms one
+        /// expression.
+        /// </remarks>
+        internal PageBand BandBeingFilled(double top, PageBand gridBand)
+        {
+            if (CurrentFragmentainer is not { IsFragmenting: true, HasOwnBand: false } filling) return gridBand;
+
+            if (filling.SlotIndex != SlotStartingAt(top)) CursorSpills++;
+
+            return gridBand;
+        }
 
         /// <summary>
         /// Whether a bottom edge at <paramref name="bottom"/> falls past <paramref name="band"/> — the

@@ -294,5 +294,51 @@ namespace PeachPDF.Tests.Integration
             Assert.True(rows[1].Location.Y >= rows[0].ActualBottom - 1.01);
             Assert.True(rows[2].Location.Y >= rows[1].ActualBottom - 1.01);
         }
+
+        /// <summary>
+        /// Content after a table whose row loop band-jumped (a row taller than a band, or a many-rowed
+        /// table breaking between several bands) asks its own fragmentation questions of the band the
+        /// table's row loop actually reached, not the band the document-level pass cursor was still
+        /// naming when the table started. <see cref="HtmlContainerInt.CursorSpills"/> would count every
+        /// such divergence — see #435, and <c>TableRowCursor.MoveToSlot</c>/<c>BandReached</c>'s own
+        /// callers, which step <c>FragmentainerContext.SlotIndex</c> to match precisely so this stays
+        /// zero.
+        /// </summary>
+        [Theory]
+        [InlineData(700)]
+        [InlineData(1400)]
+        public async Task ContentAfterABandJumpingTable_SeesATruthfulCursor(double tall)
+        {
+            var html = LayoutHarness.Wrap($@"
+                <table style='width:100%'>
+                  <tr><td><div style='height:{tall}pt'>tall</div></td></tr>
+                  <tr><td>second row</td></tr>
+                </table>
+                <p>content after the table, on whatever band the table's row loop actually left it at</p>");
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            Assert.Equal(0, container.CursorSpills);
+        }
+
+        /// <summary>
+        /// The many-rowed, many-band-break table from <see cref="AManyRowedTableRecordsOneBreakPerBandItFills"/>,
+        /// with content after it: every band the row loop's own <c>MoveToSlot</c> stepped through via
+        /// <c>TakeBreakBeforeRow</c> has to leave the document-level cursor agreeing with it.
+        /// </summary>
+        [Fact]
+        public async Task ContentAfterAManyRowedTable_SeesATruthfulCursor()
+        {
+            var rows = string.Concat(Enumerable.Range(1, 40).Select(i =>
+                $"<tr><td><div style='height:30pt'>row {i}</div></td></tr>"));
+
+            var html = LayoutHarness.Wrap(
+                $"<table style='width:100%;border-collapse:collapse'>{rows}</table>"
+                + "<p>content after the table</p>");
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 842, margin: 0);
+
+            Assert.Equal(0, container.CursorSpills);
+        }
     }
 }

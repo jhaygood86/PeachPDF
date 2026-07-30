@@ -255,7 +255,15 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             var delta = container.PageTopOf(target) - top;
 
-            return delta > 0 ? delta : 0;
+            if (delta <= 0) return 0;
+
+            // The line is moving to a fragmentainer several bands ahead of the one this pass opened
+            // with, by relocation rather than by a break record - the same shape as a forced break's own
+            // step-over (CssBox.PlaceBlockChild), and for the same reason: any further line this pass
+            // places (or fragmentation question it asks) has to see a truthful "band being filled" - #435.
+            container.CurrentFragmentainer?.StepOverTo(target);
+
+            return delta;
         }
 
         /// <summary>

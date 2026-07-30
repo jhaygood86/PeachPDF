@@ -1739,7 +1739,7 @@ namespace PeachPDF.Html.Core.Dom
             // after the band the content already placed ends in. Named rather than derived from an offset
             // against CurrentY, which is what could come out negative.
             var target = slot + 1;
-            cursor.MoveToSlot(target, container.PageTopOf(target));
+            cursor.MoveToSlot(target, container.PageTopOf(target), container);
 
             // Create new header proxy for new page. It takes no ResumeContentInset, and does not need one:
             // only a cell whose flow continues from an earlier fragmentainer owes the header its room, only
@@ -1814,7 +1814,7 @@ namespace PeachPDF.Html.Core.Dom
             _tableBox.PageBreakBottoms[slot] = cursor.MaxBottom;
 
             var target = slot + 1;
-            cursor.MoveToSlot(target, container.PageTopOf(target));
+            cursor.MoveToSlot(target, container.PageTopOf(target), container);
 
             // §6.2 repeats the header on every page the table spans, and the page this break opens is one
             // of them - so the band the footer lands in gets a header too, exactly as one opened by a

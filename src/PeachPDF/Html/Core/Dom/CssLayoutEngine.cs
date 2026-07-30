@@ -1498,6 +1498,17 @@ namespace PeachPDF.Html.Core.Dom
                                         [], coordinates.LineStartOrdinal, CompletedLineCount: 0);
                                     return;
                                 }
+
+                                // A word too tall for any fragmentainer overflows the one it is in
+                                // rather than breaking (css-break-3 §2) - so the words after it, on this
+                                // same line or a later one, flow into whatever band follows without a
+                                // break ever recording the crossing. Step the cursor there so any further
+                                // fragmentation question this pass asks answers about the band flow has
+                                // actually reached, not the one this overflowing word started in - #435.
+                                if (word.OverflowsEveryFragmentainer())
+                                {
+                                    coordinates.Fragmentainer.StepOverTo(box.HtmlContainer!.SlotEndingAt(word.Bottom));
+                                }
                             }
                             else
                             {

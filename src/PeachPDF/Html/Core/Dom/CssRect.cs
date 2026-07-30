@@ -303,21 +303,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             var container = OwnerBox.HtmlContainer!;
 
-            var (clonedTop, clonedBottom) = MonolithicContent.ClonedBlockInsets(OwnerBox, container);
-
-            // css-tables-3 §6.2's "leave room", from the other end of the band. A table repeating a
-            // <tfoot> has claimed the foot of every fragmentainer it covers, and a line flowing inside one
-            // of its cells has to clear that as well as its own cloned close - otherwise the footer is
-            // drawn over a continuation that already flowed into the space it occupies, which is #439's
-            // defect mirrored and which the fragment tree cannot show (every word is still claimed by
-            // exactly one fragmentainer).
-            //
-            // Asked with the same slot the band below comes from - BandStartingAt(y) is
-            // BandOfSlot(SlotStartingAt(y)) - so the reservation and the band it is taken out of cannot
-            // name different fragmentainers, which they could if this read the context's own SlotIndex, a
-            // cursor StepOverTo moves.
-            var reservedEnd = clonedBottom
-                              + (container.CurrentFragmentainer?.BandEndInsetOf(container.SlotStartingAt(Top)) ?? 0);
+            var (clonedTop, reservedEnd) = ClonedInsets(container);
 
             // The reserved insets count towards "too tall to fit anywhere": a resumed pass re-opens with the top
             // set and still has to clear the bottom one, so if the word cannot fit between them it never will,
@@ -347,8 +333,53 @@ namespace PeachPDF.Html.Core.Dom
             // the next line starts in the following band, and from there everything after it resolves
             // against that band instead. Naming the pass's own band would call every one of those a
             // straddle, which is a different layout and a worse one - measured at 63 of 69 showcases changed,
-            // with visibly overlapping content. Tracked as #435.
-            return HtmlContainerInt.FallsPast(Bottom + reservedEnd, container.BandStartingAt(Top));
+            // with visibly overlapping content. Tracked as #435 - BandBeingFilled both names this arm's
+            // band (still the grid's, for now) and counts every place the two disagree, so #435's own
+            // remaining work is provable rather than argued.
+            return HtmlContainerInt.FallsPast(Bottom + reservedEnd, container.BandBeingFilled(Top, container.BandStartingAt(Top)));
+        }
+
+        /// <summary>
+        /// The two insets <see cref="WouldStraddleFragmentainer"/> and <see cref="OverflowsEveryFragmentainer"/>
+        /// both measure against: how much of this word's own top is already claimed by a
+        /// <c>box-decoration-break: clone</c> ancestor's opening edge, and how much of its bottom a
+        /// repeating <c>&lt;tfoot&gt;</c> (or a clone ancestor's own closing edge) has claimed at the far
+        /// end of the band. Shared so the two questions can never drift onto different reservations.
+        /// </summary>
+        private (double ClonedTop, double ReservedEnd) ClonedInsets(HtmlContainerInt container)
+        {
+            var (clonedTop, clonedBottom) = MonolithicContent.ClonedBlockInsets(OwnerBox, container);
+
+            // Asked with the same slot the band below comes from - BandStartingAt(y) is
+            // BandOfSlot(SlotStartingAt(y)) - so the reservation and the band it is taken out of cannot
+            // name different fragmentainers, which they could if this read the context's own SlotIndex, a
+            // cursor StepOverTo moves.
+            var reservedEnd = clonedBottom
+                              + (container.CurrentFragmentainer?.BandEndInsetOf(container.SlotStartingAt(Top)) ?? 0);
+
+            return (clonedTop, reservedEnd);
+        }
+
+        /// <summary>
+        /// Whether this word is too tall to fit in any fragmentainer at all - the <c>css-break-3 §2</c>
+        /// monolithic-overflow case <see cref="WouldStraddleFragmentainer"/> exempts from being called a
+        /// straddle, since moving it would only repeat the question on the next fragmentainer forever.
+        /// </summary>
+        /// <remarks>
+        /// A word answering this <c>true</c> overflows the fragmentainer it is in rather than breaking,
+        /// so the content <i>after</i> it flows into the following band without a break ever having been
+        /// recorded for the crossing - one of the handful of mechanisms
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see> names as putting flow
+        /// past the fragmentainer a pass says it is filling. The caller is expected to step the pass's
+        /// cursor over to match once this word's own bottom is known, mirroring how a forced break already
+        /// does the same thing by placement.
+        /// </remarks>
+        internal bool OverflowsEveryFragmentainer()
+        {
+            var container = OwnerBox.HtmlContainer!;
+            var (clonedTop, reservedEnd) = ClonedInsets(container);
+
+            return MonolithicContent.FitsNoFragmentainer(Height, clonedTop, reservedEnd, container);
         }
 
         public bool BreakPage()
