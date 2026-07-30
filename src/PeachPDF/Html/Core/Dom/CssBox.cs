@@ -2248,15 +2248,14 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Whether this box, with the decorations §6.2 makes each fragment re-open and close with, fits
-        /// inside pagination slot <paramref name="slotIndex"/>'s content band.
+        /// inside <paramref name="destination"/>'s band.
         /// </summary>
-        private bool FitsInFragmentainer(int slotIndex)
+        private bool FitsInFragmentainer(BlockConstraint destination)
         {
-            var container = HtmlContainer!;
-            var (clonedStart, clonedEnd) = MonolithicContent.ClonedBlockInsets(this, container);
+            var (clonedStart, clonedEnd) = MonolithicContent.ClonedBlockInsets(this, HtmlContainer!);
 
             return MonolithicContent.FitsInBand(
-                ActualBottom - Location.Y, clonedStart, clonedEnd, container.PageBandHeightOf(slotIndex));
+                ActualBottom - Location.Y, clonedStart, clonedEnd, destination.NextBandHeight);
         }
 
         /// <summary>
@@ -3664,14 +3663,12 @@ namespace PeachPDF.Html.Core.Dom
             // same question again with none of that context and can disagree.
             if ((avoidsBreak || monolithic) && !_earlyBreakTaken && !PositionAssignedByEngine)
             {
-                // Shifted-grid convention (see HtmlContainer.PageIndexOf) - topRelativeToCurrentPage is
-                // this box's distance from the start of its own page's real content band, not a raw
-                // modulo of PageSize.Height (which ignored MarginTop and, for the last MarginTop-wide
-                // sliver of every page, mis-detected which page a box's top actually belonged to).
-                var currentPageIndex = HtmlContainer!.PageIndexOf(Location.Y);
-                var topRelativeToCurrentPage = Location.Y - HtmlContainer.PageTopOf(currentPageIndex);
-
-                var bottomRelativeToCurrentPage = topRelativeToCurrentPage + ActualBottom - Location.Y;
+                // The space this box's own top already sits in - BlockConstraint.For reproduces the same
+                // shifted-grid convention (see HtmlContainer.PageIndexOf) the pre-BlockConstraint version
+                // of this mover spelt out inline: distance from the start of the box's own page's real
+                // content band, not a raw modulo of PageSize.Height (which ignored MarginTop and, for the
+                // last MarginTop-wide sliver of every page, mis-detected which page a box's top belonged to).
+                var constraint = BlockConstraint.For(this);
 
                 // The two arms part company on a box that fits in no fragmentainer. An unsatisfiable
                 // `avoid` is relaxed and the box still moves, maximizing what lands on one page (§4.3);
@@ -3679,11 +3676,11 @@ namespace PeachPDF.Html.Core.Dom
                 // overflowing discards every fragmentainer past the first - so PeachPDF keeps fragmenting
                 // it instead (#350). The question is asked of the *destination* band, which per-page
                 // @page margins can size differently from the current one and from PageSize.Height.
-                if (bottomRelativeToCurrentPage > HtmlContainer.PageBandHeightOf(currentPageIndex)
-                    && (avoidsBreak || FitsInFragmentainer(currentPageIndex + 1))
+                if (constraint.Straddles(ActualBottom - Location.Y)
+                    && (avoidsBreak || FitsInFragmentainer(constraint.AtNextSlot()))
                     && TakeEarlyBreak(EarlyBreak.Discover(
                         this,
-                        HtmlContainer.PageTopOf(currentPageIndex + 1),
+                        constraint.AbsoluteBandBottom,
                         // The two reasons share a mover but not a rationale, and §4.3 relaxation will
                         // need to tell "may not be broken" from "asks not to be broken" apart.
                         monolithic ? EarlyBreakReason.Monolithic : EarlyBreakReason.AvoidBreakInside)))
@@ -3712,10 +3709,10 @@ namespace PeachPDF.Html.Core.Dom
                 if (owPageHeight > 0)
                 {
                     // Same shifted-grid convention as the BreakInside:Avoid block above.
-                    var ownPageIndex = HtmlContainer.PageIndexOf(Location.Y);
+                    var constraint = BlockConstraint.For(this);
 
                     // Absolute Y of the first shifted-page boundary at or after this box's own top.
-                    var boundaryY = HtmlContainer.PageTopOf(ownPageIndex + 1);
+                    var boundaryY = constraint.AbsoluteBandBottom;
 
                     if (boundaryY > Location.Y && boundaryY < ActualBottom)
                     {
@@ -3734,9 +3731,12 @@ namespace PeachPDF.Html.Core.Dom
                         // The whole-box push moves the box to the next page without re-wrapping it, so it
                         // is subject to the same measure question the per-line correction is: a box that
                         // arrives on a page of a different measure is wrapped for the page it left, which
-                        // is worse than the line minimum it was serving.
+                        // is worse than the line minimum it was serving. Asked against the destination's
+                        // whole band, not the room remaining below this box's *current* offset - the push
+                        // lands the box fresh at that band's own content top.
+                        var ownPageIndex = constraint.Fragmentainer!.SlotIndex;
                         if (linesBefore > 0 && linesAfter > 0 && (linesBefore < orphans || linesAfter < widows)
-                            && ActualBottom - Location.Y <= HtmlContainer.PageBandHeightOf(ownPageIndex)
+                            && ActualBottom - Location.Y <= constraint.NextBandHeight
                             && HtmlContainer.MeasureIsSharedBetween(ownPageIndex, ownPageIndex + 1)
                             && TakeEarlyBreak(EarlyBreak.Discover(this, boundaryY, EarlyBreakReason.OrphansWidows)))
                         {
@@ -5039,8 +5039,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private bool CanBeLaidOutAgain(EarlyBreak decision) =>
             PlacesItselfAsBlockBox
-            && HtmlContainer is { IsFragmenting: true }
-            && FitsInFragmentainer(decision.Slot);
+            && HtmlContainer is { IsFragmenting: true } container
+            && FitsInFragmentainer(BlockConstraint.AtSlot(container, this, decision.Slot));
 
         /// <summary>
         /// Deeply offsets the left of the box and its contents
