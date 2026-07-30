@@ -2022,7 +2022,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (mirror && word is CssRectWord { IsSpaces: false, IsLineBreak: false } rectWord)
             {
-                rectWord.ReplaceText(BidiMirrorResolver.ApplyMirroring(rectWord.Text, level));
+                // Mirrors from the word's own stable pre-mirror text, not its current (possibly already
+                // mirrored) Text - mirroring is an involution, so a box tree laid out more than once
+                // against the same word objects (HtmlContainerInt's variable-page-width reflow re-runs
+                // LayoutDocument, re-deriving line boxes and re-applying this on every pass) would
+                // otherwise toggle back to unmirrored on every second application.
+                rectWord.ReplaceText(BidiMirrorResolver.ApplyMirroring(rectWord.PreMirrorText, level));
             }
 
             word.Left = slotLeft;

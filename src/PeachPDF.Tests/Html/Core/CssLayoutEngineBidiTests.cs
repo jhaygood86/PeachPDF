@@ -155,6 +155,27 @@ namespace PeachPDF.Tests.Html.Core
             Assert.All(gaps, gap => Assert.Equal(gaps[0], gap, 1));
         }
 
+        [Fact]
+        public async Task Bdo_LaidOutMoreThanOnce_StaysMirrored()
+        {
+            // Mirroring is an involution, so it must never be derived from a word's own current (possibly
+            // already-mirrored) Text - HtmlContainerInt.PerformLayout can lay the same box tree out more
+            // than once (its variable-page-width reflow re-runs LayoutDocument up to several times per
+            // call, re-deriving line boxes and re-applying bidi reordering each time), and mirroring an
+            // already-mirrored word right back would silently restore the pre-mirror text on every second
+            // pass. LayoutRepeatedlyAsync models exactly that: the same CssRectWord objects laid out
+            // repeatedly, not a fresh parse each time.
+            var html = LayoutHarness.Wrap("""<p><bdo id="b" dir="rtl">hello</bdo></p>""");
+
+            var results = await LayoutHarness.LayoutRepeatedlyAsync(html, 3, (root, _) =>
+            {
+                var bdo = LayoutHarness.FindById(root, "b")!;
+                return LayoutHarness.Descendants(bdo).SelectMany(b => b.Words).First().Text;
+            });
+
+            Assert.All(results, text => Assert.Equal("olleh", text));
+        }
+
         private static List<CssRectWord> WordsOf(CssBox box) =>
             LayoutHarness.Descendants(box)
                 .SelectMany(b => b.Words.OfType<CssRectWord>())

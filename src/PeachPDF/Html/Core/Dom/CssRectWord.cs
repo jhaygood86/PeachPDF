@@ -20,6 +20,17 @@ namespace PeachPDF.Html.Core.Dom
         private string _text;
 
         /// <summary>
+        /// This word's text as constructed - after <see cref="CssBox.TextTransform"/> but before any bidi
+        /// L4 mirroring - kept stable so <see cref="ReplaceText"/> always has an unmirrored value to
+        /// mirror from. A box tree can be laid out more than once against the same word objects (e.g.
+        /// <c>HtmlContainerInt</c>'s variable-page-width reflow re-runs <c>LayoutDocument</c>, and each
+        /// pass re-derives line boxes and re-applies bidi reordering) - mirroring is an involution, so
+        /// applying it to its own (already-mirrored) previous output on a second pass would silently
+        /// restore the pre-mirror text instead of leaving it mirrored.
+        /// </summary>
+        private readonly string _preMirrorText;
+
+        /// <summary>
         /// Init.
         /// </summary>
         /// <param name="owner">the CSS box owner of the word</param>
@@ -31,6 +42,7 @@ namespace PeachPDF.Html.Core.Dom
             : base(owner)
         {
             _text = text;
+            _preMirrorText = text;
             HasSpaceBefore = hasSpaceBefore;
             HasSpaceAfter = hasSpaceAfter;
             OriginalText = originalText ?? text;
@@ -72,6 +84,13 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the text of the word
         /// </summary>
         public override string Text => _text;
+
+        /// <summary>
+        /// This word's stable, unmirrored text - what <c>PeachPDF.Text.Bidi.BidiMirrorResolver.ApplyMirroring</c>
+        /// should always mirror <i>from</i>, regardless of how many times layout has already mirrored
+        /// this word via <see cref="ReplaceText"/> (see <see cref="_preMirrorText"/>).
+        /// </summary>
+        internal string PreMirrorText => _preMirrorText;
 
         /// <summary>
         /// Rewrites this word's text in place - used by <c>CssLayoutEngine</c>'s per-line bidi reordering
