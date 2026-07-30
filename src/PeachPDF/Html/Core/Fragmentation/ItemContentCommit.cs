@@ -82,7 +82,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // harmless, since the engine's own placement phase overwrites its result unconditionally.
             // This is the item's real, final content layout, with nothing after it to correct a wrong
             // position back, so it is laid out through the entry point that asks the frame for no
-            // position at all (see CssBox.LayOutContentAtItsAssignedPosition). The flag says the same
+            // position at all (see CssBox.LayoutContentAtItsAssignedPosition). The flag says the same
             // thing to the epilogue's own movers, which run after this box is complete.
             box.PositionAssignedByEngine = true;
             try
@@ -111,7 +111,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 box.Display = CssConstants.Block;
             }
 
-            await box.LayOutContentAtItsAssignedPosition(g);
+            await box.LayoutContentAtItsAssignedPosition(g);
 
             if (savedDisplay != null)
                 box.Display = savedDisplay;

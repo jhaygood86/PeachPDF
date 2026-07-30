@@ -634,10 +634,10 @@ namespace PeachPDF.Html.Core.Dom
         /// The adapter for a caller that is <i>not</i> one of this box's frame's child loops — a layout
         /// engine measuring an item, the out-of-flow walk, the document root. It names the frame on the
         /// box's behalf, because where a block-level box goes is the frame's question and not the box's
-        /// (<see cref="LayOutBlockChild"/>); a child its frame's own loop reaches is entered there instead.
+        /// (<see cref="LayoutBlockChild"/>); a child its frame's own loop reaches is entered there instead.
         /// The root has no frame above it, so it stands in for its own.
         /// </remarks>
-        public ValueTask PerformLayout(RGraphics g) => (ParentBox ?? this).LayOutBlockChild(g, this);
+        public ValueTask PerformLayout(RGraphics g) => (ParentBox ?? this).LayoutBlockChild(g, this);
 
         /// <summary>
         /// Set this box in 
@@ -1495,7 +1495,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (childBox.IsOutOfFlow && childBox.Display != CssConstants.None)
                 {
-                    await LayOutBlockChild(g, childBox);
+                    await LayoutBlockChild(g, childBox);
                 }
             }
         }
@@ -1509,7 +1509,7 @@ namespace PeachPDF.Html.Core.Dom
         /// the frame driving this pass, which is this box's parent (or the box itself, for the root, which
         /// has no frame above it to stand in for it). Handed <i>down</i> rather than looked up, because the
         /// caller is what decides whether this box is a block-flow child at all — see
-        /// <see cref="LayOutBlockChild"/>.
+        /// <see cref="LayoutBlockChild"/>.
         /// </param>
         /// <param name="framePlacesChild">whether <paramref name="frame"/> assigns this box a position</param>
         /// <remarks>
@@ -1549,7 +1549,7 @@ namespace PeachPDF.Html.Core.Dom
         /// is <see cref="PerformLayout"/>'s, so a loop that drives its children through here reports a
         /// layout failure exactly as one calling <see cref="PerformLayout"/> on each of them did.
         /// </remarks>
-        internal async ValueTask LayOutBlockChild(RGraphics g, CssBox child, bool framePlacesChild = true)
+        internal async ValueTask LayoutBlockChild(RGraphics g, CssBox child, bool framePlacesChild = true)
         {
             try
             {
@@ -1608,7 +1608,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
                 }
 
-                if (await child.LayOutPassContents(g, resume, placed) is not { } retryTop) return;
+                if (await child.LayoutPassContents(g, resume, placed) is not { } retryTop) return;
 
                 // The same one-shot channel a break-before uses, for the same reason: the target has
                 // already been worked out and must not be re-derived here.
@@ -1633,8 +1633,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ResolveBlockChildOffset"/>/<see cref="CommitBlockChildOffset"/> for — rather than one
         /// that is placed and then has to notice, from inside its own layout, that it should not have been.
         /// </remarks>
-        internal ValueTask LayOutContentAtItsAssignedPosition(RGraphics g) =>
-            (ParentBox ?? this).LayOutBlockChild(g, this, framePlacesChild: false);
+        internal ValueTask LayoutContentAtItsAssignedPosition(RGraphics g) =>
+            (ParentBox ?? this).LayoutBlockChild(g, this, framePlacesChild: false);
 
         /// <summary>
         /// Opens this box's layout pass: picks up the resumption record left for it, and runs its
@@ -1670,7 +1670,7 @@ namespace PeachPDF.Html.Core.Dom
         /// where this box has to be laid out again, when its epilogue concluded it must start somewhere
         /// else; null when the pass is done with it.
         /// </returns>
-        private async ValueTask<double?> LayOutPassContents(RGraphics g, BreakToken? resume, bool placed)
+        private async ValueTask<double?> LayoutPassContents(RGraphics g, BreakToken? resume, bool placed)
         {
             if (placed)
             {
@@ -1981,7 +1981,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </para>
         /// <para>
         /// <b>It no longer decides whether the box is placed.</b> That is now the frame's own question,
-        /// asked once where the pass is driven from (<see cref="LayOutBlockChild"/>'s
+        /// asked once where the pass is driven from (<see cref="LayoutBlockChild"/>'s
         /// <c>framePlacesChild</c>): a child an engine positions is simply a child the frame's loop does not
         /// call <see cref="ResolveBlockChildOffset"/>/<see cref="CommitBlockChildOffset"/> for. What is left
         /// here is the other half — the <see cref="PerformLayoutEpilogue"/> movers (the keep-with-next
@@ -2531,8 +2531,8 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     // This frame places the child and then hands it its own content — the offset is
-                    // appended by the loop rather than assigned by the child (see LayOutBlockChild).
-                    await LayOutBlockChild(g, childBox);
+                    // appended by the loop rather than assigned by the child (see LayoutBlockChild).
+                    await LayoutBlockChild(g, childBox);
 
                     if (_requestedChildRestart is { } restart)
                     {
