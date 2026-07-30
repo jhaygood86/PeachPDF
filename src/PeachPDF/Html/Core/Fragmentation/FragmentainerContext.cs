@@ -74,8 +74,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal int SlotIndex { get; private set; }
 
         /// <summary>
-        /// Moves the cursor onto <paramref name="slot"/>, which a forced break has just stepped this pass
-        /// over to without ending it.
+        /// Moves the cursor onto <paramref name="slot"/>, which a forced break — or one of the several
+        /// other things that can put content past the fragmentainer being filled — has just stepped this
+        /// pass over to without ending it.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -86,6 +87,19 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// (<c>FragmentEmitter.EmitPass</c> takes a <c>throughSlot</c> for exactly this reason); without
         /// this the context did not, and every question about "the fragmentainer being filled" — its band,
         /// whether anything precedes a box inside it — answered about a fragmentainer the pass had left.
+        /// </para>
+        /// <para>
+        /// <b>Not only a forced break.</b> An unforced §5.2 flush placement, a word or block child too tall
+        /// for any fragmentainer, a table row-loop band jump, and a flex/grid line relocation can each put
+        /// flow past the band being filled with no break recorded for the crossing either — every one of
+        /// them calls this too, for the same reason: whatever this pass places next has to see a truthful
+        /// answer to "which fragmentainer am I filling", not a stale one
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see>). Whichever call
+        /// stepped it, this is the one thing every one of the two §6.2 reservations below
+        /// (<see cref="ResumeContentInset"/>, <see cref="BandEndInsetOf"/>) needs to stay true: a
+        /// reservation is keyed to the band it was made in, and a step means this pass has moved on from
+        /// that band by placement rather than by a break record, so nothing drawn into or reserved for the
+        /// bands it left still applies here.
         /// </para>
         /// <para>
         /// Monotonic, because a pass fills fragmentainers in document order and never goes back to an
