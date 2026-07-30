@@ -36,11 +36,17 @@ drops them — leave them behind and a legitimate rewind is indistinguishable fr
 document silently degrades to §4.3's last resort.
 
 The symptom to recognize: a fixture that passes but takes tens of seconds, with
-`HtmlContainerInt.FragmentainerPasses` in the thousands and `LastResortRelayouts` at **zero**. And it
-is not only slow — the run leaves the loop at `MaxFragmentainers` having emitted nothing after the
-point it got stuck at, so the document is *truncated* and reported as a successful render. Measured on
-a two-pass cycle: two of the three words after the stall were missing. Those
-two counters are the honest statement of "the backstop fired", and are what to assert on — never
-elapsed time, which says only "slow" and rots into a flaky bound (see
+`HtmlContainerInt.FragmentainerPasses` in the thousands. Before
+[#422](https://github.com/jhaygood86/PeachPDF/issues/422), it was also not only slow but silently
+*wrong*: the run left the loop at `MaxFragmentainers` having emitted nothing after the point it got
+stuck at, reported as a successful render, with `LastResortRelayouts` at **zero** — the honest statement
+that the backstop never fired at all. Measured on a two-pass cycle: two of the three words after the
+stall were missing. `LayoutDocument`'s loop now treats running out of the budget as a no-progress
+condition in its own right, routing it through the same monolithic recovery a detected cycle already
+uses, so a broken equality test degrades to *slow-but-complete* rather than *silently truncated* —
+`LastResortRelayouts` reads 1, not 0, once the budget is spent. Still worth fixing the equality rather
+than relying on the fallback: the recovery pays for the whole 100,000-pass budget before it fires, and
+`LastResortRelayouts` is still what to assert on — never elapsed time, which says only "slow" and rots
+into a flaky bound (see
 [the reflow fixtures' platform sensitivity](testing-the-reflow-fixtures-are-platform-sensitive-by-design.md)
 for the neighbouring lesson).
