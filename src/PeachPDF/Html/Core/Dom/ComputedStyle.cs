@@ -1,7 +1,3 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Utils;
-using System;
 using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Dom
@@ -14,281 +10,70 @@ namespace PeachPDF.Html.Core.Dom
     /// (<c>Location</c>/<c>Size</c>/etc.) and non-cascaded box state (<c>UsedPageName</c>,
     /// <c>SubgridContext</c>) stay directly on <see cref="CssBox"/>.
     /// <para>
-    /// Every property is <c>{ get; init; }</c> - there is no public way to mutate an existing instance.
-    /// <see cref="Default"/> is therefore safe to share across every <see cref="CssBox"/> that hasn't had
-    /// a property set yet; "changing" a value always means producing a new instance through
-    /// <see cref="SetPropertyValue{T}"/>, the only place in the codebase allowed to use this record's
-    /// <c>with</c> expression.
+    /// A thin container over 16 "area" records (<see cref="BorderArea"/>, <see cref="FontArea"/>, etc.,
+    /// declared in <c>ComputedStyleAreas.cs</c>), each grouping the properties of roughly one CSS module.
+    /// Splitting storage this way means: (1) changing one property only clones the small area it belongs
+    /// to, not all ~130 properties; and (2) <see cref="CssBox.InheritStyle"/> can adopt a whole area
+    /// instance directly by reference from the parent when every property in it is unchanged anywhere in
+    /// the ancestor chain - no clone at all, since the copy-on-write discipline guarantees a parent's area
+    /// instance is never mutated after being handed down. A subtree that never touches, say, any font
+    /// property ends up with every box's <see cref="Font"/> literally <c>ReferenceEquals</c> the same
+    /// object.
+    /// </para>
+    /// <para>
+    /// Every property on <see cref="ComputedStyle"/> itself and on every area is <c>{ get; init; }</c> -
+    /// there is no public way to mutate an existing instance. <see cref="Default"/> (and each area's own
+    /// <c>Default</c>) is therefore safe to share across every <see cref="CssBox"/> that hasn't diverged
+    /// from it yet; "changing" a value always means producing a new instance through
+    /// <see cref="ComputedStyleCow.SetPropertyValue{TSelf,TValue}"/>, the only place in the codebase
+    /// allowed to use a <c>with</c> expression on these records.
+    /// </para>
+    /// <para>
+    /// Every area's per-property defaults are sourced from <c>CssDefaults.GetInitialValue</c> - the
+    /// same store <c>DomParser.CascadeApplyStyles</c> uses to seed a real, cascaded element's initial
+    /// values - rather than redeclaring literals, so there is exactly one place initial values can
+    /// drift. Before this, a handful of properties' pre-cascade defaults differed between the two
+    /// stores (e.g. border colors defaulted to the literal <c>black</c> here vs the spec's
+    /// <c>currentcolor</c> in <c>CssDefaults</c>; similarly for <c>background-size</c>,
+    /// <c>text-align</c>, the <c>text-decoration-*</c> longhands, and <c>page</c>). For any box that
+    /// goes through the normal cascade this was already invisible - <c>CascadeApplyStyles</c> seeds
+    /// every property from <c>CssDefaults</c> before any rule is applied - but a box that skips the
+    /// cascade (an anonymous text/table box, <see cref="CssBoxMarker"/>, <see cref="CssProxyBox"/>, an
+    /// inline/block split half) now starts from the spec-correct value instead. Confirmed safe: every
+    /// consumer of the affected properties already handles both spellings.
     /// </para>
     /// </summary>
     internal sealed record ComputedStyle
     {
-        /// <summary>The CSS spec initial value for every property below - what a fresh, unstyled <see cref="CssBox"/> starts with.</summary>
+        /// <summary>What a fresh, unstyled <see cref="CssBox"/> starts with - every area at its own <c>Default</c>.</summary>
         internal static readonly ComputedStyle Default = new();
 
         /// <summary>
-        /// Produces the <see cref="ComputedStyle"/> that results from changing one property to
-        /// <paramref name="newValue"/> - or, if it already holds that value, returns this same instance
-        /// unchanged. This is the only sanctioned way to change a property: it is always safe to call
-        /// regardless of whether this instance is the shared <see cref="Default"/> or already customized,
-        /// and a no-op write allocates nothing.
-        /// </summary>
-        /// <param name="currentValue">The property's current value on this instance.</param>
-        /// <param name="newValue">The value being assigned.</param>
-        /// <param name="apply">Produces the updated record via a <c>with</c> expression, e.g. <c>static (s, v) =&gt; s with { Color = v }</c>.</param>
-        /// <remarks>
-        /// The no-op skip relies on <see cref="EqualityComparer{T}"/>.Default, which for
-        /// <see cref="ListStyleImage"/>/<see cref="BackgroundImages"/> means <see cref="CssImage"/>'s
-        /// record equality - and <c>CssImage</c> carries a mutable load-state field that participates in
-        /// it, so two references to what's conceptually "the same" image compare unequal once one has
-        /// started loading. The skip just doesn't fire for these two properties in that case (matching
-        /// the pre-split code, which always overwrote unconditionally) - not a correctness issue, just a
-        /// missed optimization for this pair.
-        /// </remarks>
-        internal ComputedStyle SetPropertyValue<T>(T currentValue, T newValue, Func<ComputedStyle, T, ComputedStyle> apply) =>
-            EqualityComparer<T>.Default.Equals(currentValue, newValue) ? this : apply(this, newValue);
-
-        #region Custom properties
-
-        /// <summary>
         /// Specified (not var()-resolved) values of this box's CSS custom properties (--foo), keyed by
-        /// their case-sensitive name. Null when no custom property has been declared or inherited.
+        /// their case-sensitive name. Null when no custom property has been declared or inherited. Not an
+        /// area - it's a mutable dictionary, not a CSS module, and its existing @property-inherits:false-
+        /// aware filtered-clone logic in <see cref="CssBox.InheritStyle"/> already handles it correctly;
+        /// the whole-instance-reuse-on-inherit optimization the areas get is deliberately NOT extended to
+        /// it, since a shared dictionary reference plus <c>DomParser</c>'s existing in-place
+        /// <c>box.CustomProperties[k] = v</c> mutation would let a child's write corrupt its parent's copy.
         /// </summary>
         public Dictionary<string, string>? CustomProperties { get; init; }
 
-        #endregion
-
-        #region Border widths, styles, colors, radii
-
-        public string BorderTopWidth { get; init; } = "medium";
-        public string BorderRightWidth { get; init; } = "medium";
-        public string BorderBottomWidth { get; init; } = "medium";
-        public string BorderLeftWidth { get; init; } = "medium";
-
-        public string BorderTopStyle { get; init; } = "none";
-        public string BorderRightStyle { get; init; } = "none";
-        public string BorderBottomStyle { get; init; } = "none";
-        public string BorderLeftStyle { get; init; } = "none";
-
-        public string BorderTopColor { get; init; } = "black";
-        public string BorderRightColor { get; init; } = "black";
-        public string BorderBottomColor { get; init; } = "black";
-        public string BorderLeftColor { get; init; } = "black";
-
-        public string BorderTopLeftRadius { get; init; } = "0";
-        public string BorderTopRightRadius { get; init; } = "0";
-        public string BorderBottomRightRadius { get; init; } = "0";
-        public string BorderBottomLeftRadius { get; init; } = "0";
-
-        public string BorderSpacing { get; init; } = "0";
-        public string BorderCollapse { get; init; } = "separate";
-
-        #endregion
-
-        #region Transform, opacity, clip-path, aspect-ratio, box-shadow
-
-        public string Transform { get; init; } = CssConstants.None;
-        public string TransformOrigin { get; init; } = "50% 50% 0";
-        public string Opacity { get; init; } = "1";
-        public string ClipPath { get; init; } = CssConstants.None;
-        public string AspectRatio { get; init; } = CssConstants.Auto;
-        public string BoxShadow { get; init; } = CssConstants.None;
-        public string BoxSizing { get; init; } = CssConstants.ContentBox;
-
-        #endregion
-
-        #region Counters, page, pdf-tag-type
-
-        public string CounterIncrement { get; init; } = CssConstants.None;
-        public string CounterReset { get; init; } = CssConstants.None;
-        public string CounterSet { get; init; } = CssConstants.None;
-        public string StringSet { get; init; } = CssConstants.None;
-        public string PageName { get; init; } = string.Empty;
-        public string PdfTagType { get; init; } = CssConstants.Auto;
-
-        #endregion
-
-        #region Margin, padding
-
-        public string MarginTop { get; init; } = "0";
-        public string MarginRight { get; init; } = "0";
-        public string MarginBottom { get; init; } = "0";
-        public string MarginLeft { get; init; } = "0";
-
-        public string PaddingTop { get; init; } = "0";
-        public string PaddingRight { get; init; } = "0";
-        public string PaddingBottom { get; init; } = "0";
-        public string PaddingLeft { get; init; } = "0";
-
-        #endregion
-
-        #region Break, box-decoration-break, orphans/widows
-
-        public string BreakBefore { get; init; } = CssConstants.Auto;
-        public string BreakInside { get; init; } = CssConstants.Auto;
-        public string BreakAfter { get; init; } = CssConstants.Auto;
-        public string BoxDecorationBreak { get; init; } = CssConstants.Slice;
-        public string Orphans { get; init; } = "2";
-        public string Widows { get; init; } = "2";
-
-        #endregion
-
-        #region Box position and size
-
-        public string Left { get; init; } = CssConstants.Auto;
-        public string Top { get; init; } = CssConstants.Auto;
-        public string Bottom { get; init; } = CssConstants.Auto;
-        public string Right { get; init; } = CssConstants.Auto;
-
-        public string Width { get; init; } = "auto";
-        public string MaxWidth { get; init; } = "none";
-        public string MinWidth { get; init; } = "0";
-
-        public string Height { get; init; } = "auto";
-        public string MaxHeight { get; init; } = "none";
-        public string MinHeight { get; init; } = "auto";
-
-        #endregion
-
-        #region Background
-
-        public string BackgroundColor { get; init; } = "transparent";
-        public IReadOnlyList<CssImage>? BackgroundImages { get; init; }
-        public string BackgroundPosition { get; init; } = "0% 0%";
-        public string BackgroundRepeat { get; init; } = "repeat";
-        public string BackgroundSize { get; init; } = CssConstants.Auto;
-        public string BackgroundOrigin { get; init; } = CssConstants.PaddingBox;
-        public string BackgroundClip { get; init; } = CssConstants.BorderBox;
-        public string BackgroundAttachment { get; init; } = CssConstants.Scroll;
-        public string ObjectFit { get; init; } = CssConstants.Fill;
-        public string ObjectPosition { get; init; } = "50% 50%";
-
-        #endregion
-
-        #region Color, content, display, direction, float, clear, position
-
-        public string Color { get; init; } = "black";
-        public string Content { get; init; } = CssConstants.Normal;
-        public string Display { get; init; } = "inline";
-        public string Direction { get; init; } = "ltr";
-        public string EmptyCells { get; init; } = "show";
-        public string Float { get; init; } = CssConstants.None;
-        public string Clear { get; init; } = CssConstants.None;
-        public string Position { get; init; } = "static";
-
-        #endregion
-
-        #region Line-height, vertical-align, text-*
-
-        public string LineHeight { get; init; } = "normal";
-        public string VerticalAlign { get; init; } = "baseline";
-        public string TextIndent { get; init; } = "0";
-        public string TextAlign { get; init; } = string.Empty;
-        public string TextDecorationLine { get; init; } = string.Empty;
-        public string TextDecorationStyle { get; init; } = string.Empty;
-        public string TextDecorationColor { get; init; } = string.Empty;
-        public string TextTransform { get; init; } = CssConstants.None;
-        public string WhiteSpace { get; init; } = "normal";
-        public string Visibility { get; init; } = "visible";
-        public string WordSpacing { get; init; } = "normal";
-        public string LetterSpacing { get; init; } = "normal";
-        public string WordBreak { get; init; } = "normal";
-
-        /// <summary>
-        /// <c>none</c>/<c>manual</c>/<c>auto</c>. <c>manual</c> and <c>auto</c> both honor an explicit
-        /// soft hyphen (U+00AD) as a line-break opportunity; only <c>auto</c> additionally implies
-        /// dictionary-based automatic hyphenation, which PeachPDF does not implement (see
-        /// docs/html-css-support.md) - so in practice <c>auto</c> behaves like <c>manual</c> here.
-        /// </summary>
-        public string Hyphens { get; init; } = "manual";
-
-        #endregion
-
-        #region Font
-
-        public string? FontFamily { get; init; }
-
-        /// <summary>
-        /// The full, unresolved <c>font-family</c> list as authored (e.g. <c>"Latin", "Symbols", serif</c>),
-        /// as opposed to <see cref="FontFamily"/> which the cascade already collapses to the first family
-        /// that exists. Retained so per-codepoint font matching can walk the whole stack. Inherited alongside <see cref="FontFamily"/>.
-        /// </summary>
-        public string? FontFamilyList { get; init; }
-
-        public string FontSize { get; init; } = "medium";
-        public string FontStyle { get; init; } = "normal";
-        public string FontVariant { get; init; } = "normal";
-        public string FontWeight { get; init; } = "normal";
-        public string FontStretch { get; init; } = "normal";
-        public string FontPalette { get; init; } = "normal";
-
-        #endregion
-
-        #region Overflow, list-style
-
-        public string Overflow { get; init; } = "visible";
-        public string ListStylePosition { get; init; } = "outside";
-        public CssImage? ListStyleImage { get; init; }
-        public string ListStyleType { get; init; } = "disc";
-
-        #endregion
-
-        #region Z-index
-
-        public string ZIndex { get; init; } = CssConstants.Auto;
-
-        #endregion
-
-        #region Flex container/item
-
-        public string FlexDirection { get; init; } = "row";
-        public string FlexWrap { get; init; } = "nowrap";
-        public string JustifyContent { get; init; } = "normal";
-        public string AlignItems { get; init; } = "normal";
-        public string AlignContent { get; init; } = "normal";
-
-        public string FlexGrow { get; init; } = "0";
-        public string FlexShrink { get; init; } = "1";
-        public string FlexBasis { get; init; } = "auto";
-        public string AlignSelf { get; init; } = "auto";
-        public string Order { get; init; } = "0";
-
-        /// <summary>Gap between flex items - main-axis gap for row direction.</summary>
-        public string FlexRowGap { get; init; } = "0";
-        public string FlexColumnGap { get; init; } = "0";
-
-        #endregion
-
-        #region Grid container/item
-
-        // grid-template-columns/rows carry the parsed GridTemplate through the cascade (CssProperty<T>) so
-        // the layout engine reads the already-parsed value; the initial value is `none` (a null GridTemplate).
-        public CssProperty<GridTemplate> GridTemplateColumns { get; init; } = CssProperty<GridTemplate>.FromValue(CssConstants.None, null);
-        public CssProperty<GridTemplate> GridTemplateRows { get; init; } = CssProperty<GridTemplate>.FromValue(CssConstants.None, null);
-        public string GridTemplateAreas { get; init; } = CssConstants.None;
-        public string GridAutoColumns { get; init; } = CssConstants.Auto;
-        public string GridAutoRows { get; init; } = CssConstants.Auto;
-        public string GridAutoFlow { get; init; } = CssConstants.Row;
-        public string JustifyItems { get; init; } = CssConstants.Normal;
-        public string JustifySelf { get; init; } = CssConstants.Auto;
-
-        public string GridColumnStart { get; init; } = CssConstants.Auto;
-        public string GridColumnEnd { get; init; } = CssConstants.Auto;
-        public string GridRowStart { get; init; } = CssConstants.Auto;
-        public string GridRowEnd { get; init; } = CssConstants.Auto;
-
-        #endregion
-
-        #region Multi-column
-
-        public string ColumnCount { get; init; } = CssConstants.Auto;
-        public string ColumnWidth { get; init; } = CssConstants.Auto;
-        public string ColumnFill { get; init; } = "balance";
-        public string ColumnSpan { get; init; } = CssConstants.None;
-        public string ColumnRuleWidth { get; init; } = CssConstants.Medium;
-        public string ColumnRuleStyle { get; init; } = CssConstants.None;
-        public string ColumnRuleColor { get; init; } = CssConstants.CurrentColor;
-
-        #endregion
+        public BorderArea Border { get; init; } = BorderArea.Default;
+        public VisualEffectsArea VisualEffects { get; init; } = VisualEffectsArea.Default;
+        public GeneratedContentArea GeneratedContent { get; init; } = GeneratedContentArea.Default;
+        public BoxModelArea BoxModel { get; init; } = BoxModelArea.Default;
+        public BreakArea Break { get; init; } = BreakArea.Default;
+        public PaginationArea Pagination { get; init; } = PaginationArea.Default;
+        public BackgroundArea Background { get; init; } = BackgroundArea.Default;
+        public DisplayPositioningArea DisplayPositioning { get; init; } = DisplayPositioningArea.Default;
+        public TableArea Table { get; init; } = TableArea.Default;
+        public TextArea Text { get; init; } = TextArea.Default;
+        public TextDecorationArea TextDecoration { get; init; } = TextDecorationArea.Default;
+        public FontArea Font { get; init; } = FontArea.Default;
+        public ListArea List { get; init; } = ListArea.Default;
+        public FlexArea Flex { get; init; } = FlexArea.Default;
+        public GridArea Grid { get; init; } = GridArea.Default;
+        public MultiColumnArea MultiColumn { get; init; } = MultiColumnArea.Default;
     }
 }

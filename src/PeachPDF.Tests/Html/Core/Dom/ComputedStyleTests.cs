@@ -1,4 +1,9 @@
+using PeachPDF.Adapters;
+using PeachPDF.CSS;
+using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Tests.Html.Core.Dom
 {
@@ -6,7 +11,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
     /// Coverage for the copy-on-write sharing guarantee <see cref="ComputedStyle"/> is built around: a
     /// fresh <see cref="CssBox"/> starts out referencing the shared, immutable <see cref="ComputedStyle.Default"/>
     /// instance, and only gets its own private instance the first time one of its properties is set (via
-    /// <see cref="ComputedStyle.SetPropertyValue{T}"/>). Nothing in the existing integration suite exercises
+    /// <see cref="ComputedStyleCow.SetPropertyValue{TSelf,TValue}"/>). Nothing in the existing integration suite exercises
     /// this sharing/isolation behavior directly - those tests only ever observe the *values* a box ends up
     /// with, not whether two untouched boxes are safely sharing the same underlying instance.
     /// </summary>
@@ -124,6 +129,60 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public void InheritStyle_UntouchedInheritedArea_ChildReusesParentsAreaInstance_ByReference()
+        {
+            // The whole point of splitting ComputedStyle into per-area records: when a parent customizes
+            // an inheritable area (Font here) and a child never overrides anything in it, InheritStyle
+            // should adopt the parent's actual FontArea object by reference rather than cloning a new one
+            // - the copy-on-write discipline guarantees the parent's instance is never mutated afterwards,
+            // so sharing it is safe and free.
+            var parent = new CssBox(null, null) { FontFamily = "Georgia" };
+            var child = new CssBox(parent, null);
+
+            child.InheritStyle();
+
+            Assert.Same(parent.ComputedStyle.Font, child.ComputedStyle.Font);
+            Assert.Equal("Georgia", child.FontFamily);
+        }
+
+        [Fact]
+        public void InheritStyle_ChildOverridesOneProperty_OnlyThatAreaDiverges_OthersStayShared()
+        {
+            var parent = new CssBox(null, null) { FontFamily = "Georgia", Color = "rgb(1, 2, 3)" };
+            var child = new CssBox(parent, null);
+
+            child.InheritStyle();
+            child.FontFamily = "Verdana";
+
+            // The overridden area gets its own instance...
+            Assert.NotSame(parent.ComputedStyle.Font, child.ComputedStyle.Font);
+            Assert.Equal("Verdana", child.FontFamily);
+            Assert.Equal("Georgia", parent.FontFamily);
+
+            // ...but every other inherited area (untouched by the override) is still literally the same
+            // shared object as the parent's, not merely equal.
+            Assert.Same(parent.ComputedStyle.Text, child.ComputedStyle.Text);
+            Assert.Same(parent.ComputedStyle.Table, child.ComputedStyle.Table);
+            Assert.Same(parent.ComputedStyle.List, child.ComputedStyle.List);
+            Assert.Same(parent.ComputedStyle.Pagination, child.ComputedStyle.Pagination);
+        }
+
+        [Fact]
+        public void InheritStyle_BoxSizing_NoLongerAdoptsParentsBoxModelArea()
+        {
+            // box-sizing was deliberately made non-inherited (CSS Box Sizing 3 §3) - BoxModel (which now
+            // holds BoxSizing) must therefore never be among the areas InheritStyle adopts by reference.
+            var parent = new CssBox(null, null) { BoxSizing = "border-box", Width = "100px" };
+            var child = new CssBox(parent, null);
+
+            child.InheritStyle();
+
+            Assert.NotSame(parent.ComputedStyle.BoxModel, child.ComputedStyle.BoxModel);
+            Assert.Equal("content-box", child.BoxSizing);
+            Assert.Equal("auto", child.Width);
+        }
+
+        [Fact]
         public void InheritStyle_Everything_CopiesBottomAndRight()
         {
             // Pre-refactor, CssBoxProperties.InheritStyle's "everything" branch (used only for structural
@@ -141,6 +200,68 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             Assert.Equal("13px", clone.Bottom);
             Assert.Equal("17px", clone.Right);
+        }
+
+        [Fact]
+        public void InheritStyle_Everything_CopiesBoxSizing()
+        {
+            // box-sizing stopped inheriting through the normal ancestor->descendant mechanism (moved out
+            // of InheritStyle's "always" section into the non-inherited BoxModel area), but a structural
+            // duplicate of the SAME source box - CssProxyBox's repeated header/footer, an inline/block
+            // split - still needs to carry the source element's own resolved box-sizing, exactly like
+            // BoxDecorationBreak/the break properties/PdfTagType. Without this, a border-box element split
+            // across an inline/block boundary would have its continuation fragment silently revert to the
+            // CSS initial content-box.
+            var source = new CssBox(null, null) { BoxSizing = "border-box" };
+            var clone = new CssBox(null, null);
+
+            clone.InheritStyle(source, everything: true);
+
+            Assert.Equal("border-box", clone.BoxSizing);
+        }
+
+        // ── regression: DomParser.CascadeApplyStyles's fast-path skip of the defaulting loop ──
+
+        /// <summary>
+        /// <c>DomParser.CascadeApplyStyles</c>'s "defaulting" loop (re-asserting every property's
+        /// <c>CssDefaults</c> initial value) is skipped entirely for a box whose <see cref="ComputedStyle"/>
+        /// is still the shared <see cref="Dom.ComputedStyle.Default"/> - safe only because every area's own
+        /// <c>Default</c> is itself sourced from the same <c>CssDefaults</c> store, making the loop a
+        /// guaranteed no-op on such a box for every property except a small, explicitly-handled set. This
+        /// test exhaustively re-derives that set by actually running the loop's own logic
+        /// (<see cref="CssUtils.SetPropertyValue"/>) against every <c>CssDefaults</c> entry on a fresh box
+        /// and asserting nothing outside the known set changes anything - so it fails loudly (rather than
+        /// silently reintroducing a correctness bug) if a future area/property addition breaks the
+        /// no-op assumption the fast path depends on.
+        /// </summary>
+        [Fact]
+        public void CascadeDefaultingLoop_OnAFreshBox_OnlyFontFamilyAndGridTemplatesAreNotNoOps()
+        {
+            var knownExceptions = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                PropertyNames.FontFamily,
+                PropertyNames.GridTemplateColumns,
+                PropertyNames.GridTemplateRows,
+            };
+            var parser = new CssValueParser(new PdfSharpAdapter());
+            var unexpectedlyNotNoOp = new List<string>();
+
+            foreach (var (name, initial) in CssDefaults.InitialValues)
+            {
+                if (initial is null || name == PropertyNames.Display) continue;
+
+                var box = new CssBox(null, null);
+                Assert.Same(ComputedStyle.Default, box.ComputedStyle);
+
+                CssUtils.SetPropertyValue(parser, box, name, initial);
+
+                if (!ReferenceEquals(ComputedStyle.Default, box.ComputedStyle) && !knownExceptions.Contains(name))
+                {
+                    unexpectedlyNotNoOp.Add(name);
+                }
+            }
+
+            Assert.Empty(unexpectedlyNotNoOp);
         }
     }
 }

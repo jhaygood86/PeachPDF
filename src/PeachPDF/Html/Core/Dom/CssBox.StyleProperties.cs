@@ -17,6 +17,12 @@ namespace PeachPDF.Html.Core.Dom
     /// what's cascaded vs. calculated, and why <see cref="SmallCapsFontScale"/>/<c>UsedPageName</c>/
     /// <c>SubgridContext</c> below are neither (a plain constant and two non-cascaded, layout-only fields
     /// respectively).
+    /// <para>
+    /// Every setter below follows the same two-level copy-on-write pattern: clone the small "area" record
+    /// (<c>ComputedStyleAreas.cs</c>) the property lives in only if the property's own value actually
+    /// changed, then swap that area onto <see cref="ComputedStyle"/> only if the area instance actually
+    /// changed. A true no-op write (setting the value it already has) allocates nothing at either level.
+    /// </para>
     /// </summary>
     internal partial class CssBox
     {
@@ -57,170 +63,224 @@ namespace PeachPDF.Html.Core.Dom
 
         public string BorderTopWidth
         {
-            get => _computedStyle.BorderTopWidth;
+            get => _computedStyle.Border.BorderTopWidth;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderTopWidth, value, static (s, v) => s with { BorderTopWidth = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderTopWidth();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderTopWidth, value, static (a, v) => a with { BorderTopWidth = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopWidth();
             }
         }
 
         public string BorderRightWidth
         {
-            get => _computedStyle.BorderRightWidth;
+            get => _computedStyle.Border.BorderRightWidth;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderRightWidth, value, static (s, v) => s with { BorderRightWidth = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderRightWidth();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderRightWidth, value, static (a, v) => a with { BorderRightWidth = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderRightWidth();
             }
         }
 
         public string BorderBottomWidth
         {
-            get => _computedStyle.BorderBottomWidth;
+            get => _computedStyle.Border.BorderBottomWidth;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderBottomWidth, value, static (s, v) => s with { BorderBottomWidth = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderBottomWidth();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderBottomWidth, value, static (a, v) => a with { BorderBottomWidth = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderBottomWidth();
             }
         }
 
         public string BorderLeftWidth
         {
-            get => _computedStyle.BorderLeftWidth;
+            get => _computedStyle.Border.BorderLeftWidth;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderLeftWidth, value, static (s, v) => s with { BorderLeftWidth = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderLeftWidth();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderLeftWidth, value, static (a, v) => a with { BorderLeftWidth = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderLeftWidth();
             }
         }
 
         public string BorderTopStyle
         {
-            get => _computedStyle.BorderTopStyle;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderTopStyle, value, static (s, v) => s with { BorderTopStyle = v });
+            get => _computedStyle.Border.BorderTopStyle;
+            set
+            {
+                var area = _computedStyle.Border;
+                var newArea = area.SetPropertyValue(area.BorderTopStyle, value, static (a, v) => a with { BorderTopStyle = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
+            }
         }
 
         public string BorderRightStyle
         {
-            get => _computedStyle.BorderRightStyle;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderRightStyle, value, static (s, v) => s with { BorderRightStyle = v });
+            get => _computedStyle.Border.BorderRightStyle;
+            set
+            {
+                var area = _computedStyle.Border;
+                var newArea = area.SetPropertyValue(area.BorderRightStyle, value, static (a, v) => a with { BorderRightStyle = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
+            }
         }
 
         public string BorderBottomStyle
         {
-            get => _computedStyle.BorderBottomStyle;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderBottomStyle, value, static (s, v) => s with { BorderBottomStyle = v });
+            get => _computedStyle.Border.BorderBottomStyle;
+            set
+            {
+                var area = _computedStyle.Border;
+                var newArea = area.SetPropertyValue(area.BorderBottomStyle, value, static (a, v) => a with { BorderBottomStyle = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
+            }
         }
 
         public string BorderLeftStyle
         {
-            get => _computedStyle.BorderLeftStyle;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderLeftStyle, value, static (s, v) => s with { BorderLeftStyle = v });
+            get => _computedStyle.Border.BorderLeftStyle;
+            set
+            {
+                var area = _computedStyle.Border;
+                var newArea = area.SetPropertyValue(area.BorderLeftStyle, value, static (a, v) => a with { BorderLeftStyle = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
+            }
         }
 
         public string BorderTopColor
         {
-            get => _computedStyle.BorderTopColor;
+            get => _computedStyle.Border.BorderTopColor;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderTopColor, value, static (s, v) => s with { BorderTopColor = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderTopColor();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderTopColor, value, static (a, v) => a with { BorderTopColor = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopColor();
             }
         }
 
         public string BorderRightColor
         {
-            get => _computedStyle.BorderRightColor;
+            get => _computedStyle.Border.BorderRightColor;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderRightColor, value, static (s, v) => s with { BorderRightColor = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderRightColor();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderRightColor, value, static (a, v) => a with { BorderRightColor = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderRightColor();
             }
         }
 
         public string BorderBottomColor
         {
-            get => _computedStyle.BorderBottomColor;
+            get => _computedStyle.Border.BorderBottomColor;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderBottomColor, value, static (s, v) => s with { BorderBottomColor = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderBottomColor();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderBottomColor, value, static (a, v) => a with { BorderBottomColor = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderBottomColor();
             }
         }
 
         public string BorderLeftColor
         {
-            get => _computedStyle.BorderLeftColor;
+            get => _computedStyle.Border.BorderLeftColor;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderLeftColor, value, static (s, v) => s with { BorderLeftColor = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderLeftColor();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderLeftColor, value, static (a, v) => a with { BorderLeftColor = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderLeftColor();
             }
         }
 
         public string BorderTopLeftRadius
         {
-            get => _computedStyle.BorderTopLeftRadius;
+            get => _computedStyle.Border.BorderTopLeftRadius;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderTopLeftRadius, value, static (s, v) => s with { BorderTopLeftRadius = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderTopLeftRadius();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderTopLeftRadius, value, static (a, v) => a with { BorderTopLeftRadius = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopLeftRadius();
             }
         }
 
         public string BorderTopRightRadius
         {
-            get => _computedStyle.BorderTopRightRadius;
+            get => _computedStyle.Border.BorderTopRightRadius;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderTopRightRadius, value, static (s, v) => s with { BorderTopRightRadius = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderTopRightRadius();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderTopRightRadius, value, static (a, v) => a with { BorderTopRightRadius = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopRightRadius();
             }
         }
 
         public string BorderBottomRightRadius
         {
-            get => _computedStyle.BorderBottomRightRadius;
+            get => _computedStyle.Border.BorderBottomRightRadius;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderBottomRightRadius, value, static (s, v) => s with { BorderBottomRightRadius = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderBottomRightRadius();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderBottomRightRadius, value, static (a, v) => a with { BorderBottomRightRadius = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderBottomRightRadius();
             }
         }
 
         public string BorderBottomLeftRadius
         {
-            get => _computedStyle.BorderBottomLeftRadius;
+            get => _computedStyle.Border.BorderBottomLeftRadius;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.BorderBottomLeftRadius, value, static (s, v) => s with { BorderBottomLeftRadius = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateBorderBottomLeftRadius();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Border;
+                var newArea = previousArea.SetPropertyValue(previousArea.BorderBottomLeftRadius, value, static (a, v) => a with { BorderBottomLeftRadius = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Border = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderBottomLeftRadius();
             }
         }
 
         public string BorderSpacing
         {
-            get => _computedStyle.BorderSpacing;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderSpacing, value, static (s, v) => s with { BorderSpacing = v });
+            get => _computedStyle.Table.BorderSpacing;
+            set
+            {
+                var area = _computedStyle.Table;
+                var newArea = area.SetPropertyValue(area.BorderSpacing, value, static (a, v) => a with { BorderSpacing = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Table = a });
+            }
         }
 
         public string BorderCollapse
         {
-            get => _computedStyle.BorderCollapse;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderCollapse, value, static (s, v) => s with { BorderCollapse = v });
+            get => _computedStyle.Table.BorderCollapse;
+            set
+            {
+                var area = _computedStyle.Table;
+                var newArea = area.SetPropertyValue(area.BorderCollapse, value, static (a, v) => a with { BorderCollapse = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Table = a });
+            }
         }
 
         #endregion
@@ -229,59 +289,85 @@ namespace PeachPDF.Html.Core.Dom
 
         public string Transform
         {
-            get => _computedStyle.Transform;
+            get => _computedStyle.VisualEffects.Transform;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.Transform, value, static (s, v) => s with { Transform = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateTransform();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.VisualEffects;
+                var newArea = previousArea.SetPropertyValue(previousArea.Transform, value, static (a, v) => a with { Transform = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { VisualEffects = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateTransform();
             }
         }
 
         public string TransformOrigin
         {
-            get => _computedStyle.TransformOrigin;
+            get => _computedStyle.VisualEffects.TransformOrigin;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.TransformOrigin, value, static (s, v) => s with { TransformOrigin = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateTransform();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.VisualEffects;
+                var newArea = previousArea.SetPropertyValue(previousArea.TransformOrigin, value, static (a, v) => a with { TransformOrigin = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { VisualEffects = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateTransform();
             }
         }
 
         public string Opacity
         {
-            get => _computedStyle.Opacity;
+            get => _computedStyle.VisualEffects.Opacity;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.Opacity, value, static (s, v) => s with { Opacity = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateOpacity();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.VisualEffects;
+                var newArea = previousArea.SetPropertyValue(previousArea.Opacity, value, static (a, v) => a with { Opacity = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { VisualEffects = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateOpacity();
             }
         }
 
         public string ClipPath
         {
-            get => _computedStyle.ClipPath;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ClipPath, value, static (s, v) => s with { ClipPath = v });
+            get => _computedStyle.VisualEffects.ClipPath;
+            set
+            {
+                var area = _computedStyle.VisualEffects;
+                var newArea = area.SetPropertyValue(area.ClipPath, value, static (a, v) => a with { ClipPath = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { VisualEffects = a });
+            }
         }
 
         public string AspectRatio
         {
-            get => _computedStyle.AspectRatio;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.AspectRatio, value, static (s, v) => s with { AspectRatio = v });
+            get => _computedStyle.VisualEffects.AspectRatio;
+            set
+            {
+                var area = _computedStyle.VisualEffects;
+                var newArea = area.SetPropertyValue(area.AspectRatio, value, static (a, v) => a with { AspectRatio = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { VisualEffects = a });
+            }
         }
 
         public string BoxShadow
         {
-            get => _computedStyle.BoxShadow;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BoxShadow, value, static (s, v) => s with { BoxShadow = v });
+            get => _computedStyle.Border.BoxShadow;
+            set
+            {
+                var area = _computedStyle.Border;
+                var newArea = area.SetPropertyValue(area.BoxShadow, value, static (a, v) => a with { BoxShadow = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Border = a });
+            }
         }
 
         public string BoxSizing
         {
-            get => _computedStyle.BoxSizing;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BoxSizing, value, static (s, v) => s with { BoxSizing = v });
+            get => _computedStyle.BoxModel.BoxSizing;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.BoxSizing, value, static (a, v) => a with { BoxSizing = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         #endregion
@@ -290,38 +376,68 @@ namespace PeachPDF.Html.Core.Dom
 
         public string CounterIncrement
         {
-            get => _computedStyle.CounterIncrement;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.CounterIncrement, value, static (s, v) => s with { CounterIncrement = v });
+            get => _computedStyle.GeneratedContent.CounterIncrement;
+            set
+            {
+                var area = _computedStyle.GeneratedContent;
+                var newArea = area.SetPropertyValue(area.CounterIncrement, value, static (a, v) => a with { CounterIncrement = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
+            }
         }
 
         public string CounterReset
         {
-            get => _computedStyle.CounterReset;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.CounterReset, value, static (s, v) => s with { CounterReset = v });
+            get => _computedStyle.GeneratedContent.CounterReset;
+            set
+            {
+                var area = _computedStyle.GeneratedContent;
+                var newArea = area.SetPropertyValue(area.CounterReset, value, static (a, v) => a with { CounterReset = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
+            }
         }
 
         public string CounterSet
         {
-            get => _computedStyle.CounterSet;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.CounterSet, value, static (s, v) => s with { CounterSet = v });
+            get => _computedStyle.GeneratedContent.CounterSet;
+            set
+            {
+                var area = _computedStyle.GeneratedContent;
+                var newArea = area.SetPropertyValue(area.CounterSet, value, static (a, v) => a with { CounterSet = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
+            }
         }
 
         public string StringSet
         {
-            get => _computedStyle.StringSet;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.StringSet, value, static (s, v) => s with { StringSet = v });
+            get => _computedStyle.GeneratedContent.StringSet;
+            set
+            {
+                var area = _computedStyle.GeneratedContent;
+                var newArea = area.SetPropertyValue(area.StringSet, value, static (a, v) => a with { StringSet = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
+            }
         }
 
         public string PageName
         {
-            get => _computedStyle.PageName;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.PageName, value, static (s, v) => s with { PageName = v });
+            get => _computedStyle.GeneratedContent.PageName;
+            set
+            {
+                var area = _computedStyle.GeneratedContent;
+                var newArea = area.SetPropertyValue(area.PageName, value, static (a, v) => a with { PageName = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
+            }
         }
 
         public string PdfTagType
         {
-            get => _computedStyle.PdfTagType;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.PdfTagType, value, static (s, v) => s with { PdfTagType = v });
+            get => _computedStyle.GeneratedContent.PdfTagType;
+            set
+            {
+                var area = _computedStyle.GeneratedContent;
+                var newArea = area.SetPropertyValue(area.PdfTagType, value, static (a, v) => a with { PdfTagType = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
+            }
         }
 
         /// <summary>
@@ -342,69 +458,97 @@ namespace PeachPDF.Html.Core.Dom
 
         public string MarginTop
         {
-            get => _computedStyle.MarginTop;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MarginTop, value, static (s, v) => s with { MarginTop = v });
+            get => _computedStyle.BoxModel.MarginTop;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.MarginTop, value, static (a, v) => a with { MarginTop = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string MarginRight
         {
-            get => _computedStyle.MarginRight;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MarginRight, value, static (s, v) => s with { MarginRight = v });
+            get => _computedStyle.BoxModel.MarginRight;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.MarginRight, value, static (a, v) => a with { MarginRight = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string MarginBottom
         {
-            get => _computedStyle.MarginBottom;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MarginBottom, value, static (s, v) => s with { MarginBottom = v });
+            get => _computedStyle.BoxModel.MarginBottom;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.MarginBottom, value, static (a, v) => a with { MarginBottom = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string MarginLeft
         {
-            get => _computedStyle.MarginLeft;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MarginLeft, value, static (s, v) => s with { MarginLeft = v });
+            get => _computedStyle.BoxModel.MarginLeft;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.MarginLeft, value, static (a, v) => a with { MarginLeft = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string PaddingTop
         {
-            get => _computedStyle.PaddingTop;
+            get => _computedStyle.BoxModel.PaddingTop;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.PaddingTop, value, static (s, v) => s with { PaddingTop = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidatePaddingTop();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.BoxModel;
+                var newArea = previousArea.SetPropertyValue(previousArea.PaddingTop, value, static (a, v) => a with { PaddingTop = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { BoxModel = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidatePaddingTop();
             }
         }
 
         public string PaddingRight
         {
-            get => _computedStyle.PaddingRight;
+            get => _computedStyle.BoxModel.PaddingRight;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.PaddingRight, value, static (s, v) => s with { PaddingRight = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidatePaddingRight();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.BoxModel;
+                var newArea = previousArea.SetPropertyValue(previousArea.PaddingRight, value, static (a, v) => a with { PaddingRight = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { BoxModel = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidatePaddingRight();
             }
         }
 
         public string PaddingBottom
         {
-            get => _computedStyle.PaddingBottom;
+            get => _computedStyle.BoxModel.PaddingBottom;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.PaddingBottom, value, static (s, v) => s with { PaddingBottom = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidatePaddingBottom();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.BoxModel;
+                var newArea = previousArea.SetPropertyValue(previousArea.PaddingBottom, value, static (a, v) => a with { PaddingBottom = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { BoxModel = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidatePaddingBottom();
             }
         }
 
         public string PaddingLeft
         {
-            get => _computedStyle.PaddingLeft;
+            get => _computedStyle.BoxModel.PaddingLeft;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.PaddingLeft, value, static (s, v) => s with { PaddingLeft = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidatePaddingLeft();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.BoxModel;
+                var newArea = previousArea.SetPropertyValue(previousArea.PaddingLeft, value, static (a, v) => a with { PaddingLeft = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { BoxModel = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidatePaddingLeft();
             }
         }
 
@@ -414,20 +558,35 @@ namespace PeachPDF.Html.Core.Dom
 
         public string BreakBefore
         {
-            get => _computedStyle.BreakBefore;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BreakBefore, value, static (s, v) => s with { BreakBefore = v });
+            get => _computedStyle.Break.BreakBefore;
+            set
+            {
+                var area = _computedStyle.Break;
+                var newArea = area.SetPropertyValue(area.BreakBefore, value, static (a, v) => a with { BreakBefore = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Break = a });
+            }
         }
 
         public string BreakInside
         {
-            get => _computedStyle.BreakInside;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BreakInside, value, static (s, v) => s with { BreakInside = v });
+            get => _computedStyle.Break.BreakInside;
+            set
+            {
+                var area = _computedStyle.Break;
+                var newArea = area.SetPropertyValue(area.BreakInside, value, static (a, v) => a with { BreakInside = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Break = a });
+            }
         }
 
         public string BreakAfter
         {
-            get => _computedStyle.BreakAfter;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BreakAfter, value, static (s, v) => s with { BreakAfter = v });
+            get => _computedStyle.Break.BreakAfter;
+            set
+            {
+                var area = _computedStyle.Break;
+                var newArea = area.SetPropertyValue(area.BreakAfter, value, static (a, v) => a with { BreakAfter = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Break = a });
+            }
         }
 
         // css-break-3 §6.2, honored at both the page breaks of a block box and the line-box breaks of an
@@ -438,8 +597,13 @@ namespace PeachPDF.Html.Core.Dom
         // cloned decorations, so a cloned border at a break pushes content rather than overlapping it.
         public string BoxDecorationBreak
         {
-            get => _computedStyle.BoxDecorationBreak;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BoxDecorationBreak, value, static (s, v) => s with { BoxDecorationBreak = v });
+            get => _computedStyle.Break.BoxDecorationBreak;
+            set
+            {
+                var area = _computedStyle.Break;
+                var newArea = area.SetPropertyValue(area.BoxDecorationBreak, value, static (a, v) => a with { BoxDecorationBreak = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Break = a });
+            }
         }
 
         // Enforced in CssBox.PerformLayoutImp, for plain (non-multi-column) block flow only: a box whose
@@ -450,14 +614,24 @@ namespace PeachPDF.Html.Core.Dom
         // first place, so it cannot strand a line.
         public string Orphans
         {
-            get => _computedStyle.Orphans;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Orphans, value, static (s, v) => s with { Orphans = v });
+            get => _computedStyle.Pagination.Orphans;
+            set
+            {
+                var area = _computedStyle.Pagination;
+                var newArea = area.SetPropertyValue(area.Orphans, value, static (a, v) => a with { Orphans = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Pagination = a });
+            }
         }
 
         public string Widows
         {
-            get => _computedStyle.Widows;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Widows, value, static (s, v) => s with { Widows = v });
+            get => _computedStyle.Pagination.Widows;
+            set
+            {
+                var area = _computedStyle.Pagination;
+                var newArea = area.SetPropertyValue(area.Widows, value, static (a, v) => a with { Widows = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Pagination = a });
+            }
         }
 
         #endregion
@@ -466,62 +640,112 @@ namespace PeachPDF.Html.Core.Dom
 
         public string Left
         {
-            get => _computedStyle.Left;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Left, value, static (s, v) => s with { Left = v });
+            get => _computedStyle.BoxModel.Left;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.Left, value, static (a, v) => a with { Left = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string Top
         {
-            get => _computedStyle.Top;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Top, value, static (s, v) => s with { Top = v });
+            get => _computedStyle.BoxModel.Top;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.Top, value, static (a, v) => a with { Top = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string Bottom
         {
-            get => _computedStyle.Bottom;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Bottom, value, static (s, v) => s with { Bottom = v });
+            get => _computedStyle.BoxModel.Bottom;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.Bottom, value, static (a, v) => a with { Bottom = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string Right
         {
-            get => _computedStyle.Right;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Right, value, static (s, v) => s with { Right = v });
+            get => _computedStyle.BoxModel.Right;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.Right, value, static (a, v) => a with { Right = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string Width
         {
-            get => _computedStyle.Width;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Width, value, static (s, v) => s with { Width = v });
+            get => _computedStyle.BoxModel.Width;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.Width, value, static (a, v) => a with { Width = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string MaxWidth
         {
-            get => _computedStyle.MaxWidth;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MaxWidth, value, static (s, v) => s with { MaxWidth = v });
+            get => _computedStyle.BoxModel.MaxWidth;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.MaxWidth, value, static (a, v) => a with { MaxWidth = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string MinWidth
         {
-            get => _computedStyle.MinWidth;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MinWidth, value, static (s, v) => s with { MinWidth = v });
+            get => _computedStyle.BoxModel.MinWidth;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.MinWidth, value, static (a, v) => a with { MinWidth = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string Height
         {
-            get => _computedStyle.Height;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Height, value, static (s, v) => s with { Height = v });
+            get => _computedStyle.BoxModel.Height;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.Height, value, static (a, v) => a with { Height = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string MaxHeight
         {
-            get => _computedStyle.MaxHeight;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MaxHeight, value, static (s, v) => s with { MaxHeight = v });
+            get => _computedStyle.BoxModel.MaxHeight;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.MaxHeight, value, static (a, v) => a with { MaxHeight = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         public string MinHeight
         {
-            get => _computedStyle.MinHeight;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MinHeight, value, static (s, v) => s with { MinHeight = v });
+            get => _computedStyle.BoxModel.MinHeight;
+            set
+            {
+                var area = _computedStyle.BoxModel;
+                var newArea = area.SetPropertyValue(area.MinHeight, value, static (a, v) => a with { MinHeight = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { BoxModel = a });
+            }
         }
 
         #endregion
@@ -530,62 +754,112 @@ namespace PeachPDF.Html.Core.Dom
 
         public string BackgroundColor
         {
-            get => _computedStyle.BackgroundColor;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundColor, value, static (s, v) => s with { BackgroundColor = v });
+            get => _computedStyle.Background.BackgroundColor;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.BackgroundColor, value, static (a, v) => a with { BackgroundColor = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         public IReadOnlyList<CssImage>? BackgroundImages
         {
-            get => _computedStyle.BackgroundImages;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundImages, value, static (s, v) => s with { BackgroundImages = v });
+            get => _computedStyle.Background.BackgroundImages;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.BackgroundImages, value, static (a, v) => a with { BackgroundImages = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         public string BackgroundPosition
         {
-            get => _computedStyle.BackgroundPosition;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundPosition, value, static (s, v) => s with { BackgroundPosition = v });
+            get => _computedStyle.Background.BackgroundPosition;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.BackgroundPosition, value, static (a, v) => a with { BackgroundPosition = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         public string BackgroundRepeat
         {
-            get => _computedStyle.BackgroundRepeat;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundRepeat, value, static (s, v) => s with { BackgroundRepeat = v });
+            get => _computedStyle.Background.BackgroundRepeat;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.BackgroundRepeat, value, static (a, v) => a with { BackgroundRepeat = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         public string BackgroundSize
         {
-            get => _computedStyle.BackgroundSize;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundSize, value, static (s, v) => s with { BackgroundSize = v });
+            get => _computedStyle.Background.BackgroundSize;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.BackgroundSize, value, static (a, v) => a with { BackgroundSize = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         public string BackgroundOrigin
         {
-            get => _computedStyle.BackgroundOrigin;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundOrigin, value, static (s, v) => s with { BackgroundOrigin = v });
+            get => _computedStyle.Background.BackgroundOrigin;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.BackgroundOrigin, value, static (a, v) => a with { BackgroundOrigin = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         public string BackgroundClip
         {
-            get => _computedStyle.BackgroundClip;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundClip, value, static (s, v) => s with { BackgroundClip = v });
+            get => _computedStyle.Background.BackgroundClip;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.BackgroundClip, value, static (a, v) => a with { BackgroundClip = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         public string BackgroundAttachment
         {
-            get => _computedStyle.BackgroundAttachment;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundAttachment, value, static (s, v) => s with { BackgroundAttachment = v });
+            get => _computedStyle.Background.BackgroundAttachment;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.BackgroundAttachment, value, static (a, v) => a with { BackgroundAttachment = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         public string ObjectFit
         {
-            get => _computedStyle.ObjectFit;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ObjectFit, value, static (s, v) => s with { ObjectFit = v });
+            get => _computedStyle.Background.ObjectFit;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.ObjectFit, value, static (a, v) => a with { ObjectFit = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         public string ObjectPosition
         {
-            get => _computedStyle.ObjectPosition;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ObjectPosition, value, static (s, v) => s with { ObjectPosition = v });
+            get => _computedStyle.Background.ObjectPosition;
+            set
+            {
+                var area = _computedStyle.Background;
+                var newArea = area.SetPropertyValue(area.ObjectPosition, value, static (a, v) => a with { ObjectPosition = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Background = a });
+            }
         }
 
         #endregion
@@ -594,28 +868,36 @@ namespace PeachPDF.Html.Core.Dom
 
         public string Color
         {
-            get => _computedStyle.Color;
+            get => _computedStyle.Text.Color;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.Color, value, static (s, v) => s with { Color = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateColor();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Text;
+                var newArea = previousArea.SetPropertyValue(previousArea.Color, value, static (a, v) => a with { Color = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Text = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateColor();
             }
         }
 
         public string Content
         {
-            get => _computedStyle.Content;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Content, value, static (s, v) => s with { Content = v });
+            get => _computedStyle.GeneratedContent.Content;
+            set
+            {
+                var area = _computedStyle.GeneratedContent;
+                var newArea = area.SetPropertyValue(area.Content, value, static (a, v) => a with { Content = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { GeneratedContent = a });
+            }
         }
 
         public string Display
         {
             get
             {
-                if (_computedStyle.Float is not CssConstants.None)
+                var area = _computedStyle.DisplayPositioning;
+                if (area.Float is not CssConstants.None)
                 {
-                    return _computedStyle.Display switch
+                    return area.Display switch
                     {
                         "inline" => "block",
                         "inline-block" => "block",
@@ -630,43 +912,73 @@ namespace PeachPDF.Html.Core.Dom
                         "table-footer-group" => "block",
                         "inline-flex" => "flex",
                         "inline-grid" => "grid",
-                        _ => _computedStyle.Display
+                        _ => area.Display
                     };
                 }
 
-                return _computedStyle.Display;
+                return area.Display;
             }
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Display, value, static (s, v) => s with { Display = v });
+            set
+            {
+                var area = _computedStyle.DisplayPositioning;
+                var newArea = area.SetPropertyValue(area.Display, value, static (a, v) => a with { Display = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+            }
         }
 
         public string Direction
         {
-            get => _computedStyle.Direction;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Direction, value, static (s, v) => s with { Direction = v });
+            get => _computedStyle.Text.Direction;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.Direction, value, static (a, v) => a with { Direction = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         public string EmptyCells
         {
-            get => _computedStyle.EmptyCells;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.EmptyCells, value, static (s, v) => s with { EmptyCells = v });
+            get => _computedStyle.Table.EmptyCells;
+            set
+            {
+                var area = _computedStyle.Table;
+                var newArea = area.SetPropertyValue(area.EmptyCells, value, static (a, v) => a with { EmptyCells = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Table = a });
+            }
         }
 
         public string Float
         {
-            get => _computedStyle.Float;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Float, value, static (s, v) => s with { Float = v });
+            get => _computedStyle.DisplayPositioning.Float;
+            set
+            {
+                var area = _computedStyle.DisplayPositioning;
+                var newArea = area.SetPropertyValue(area.Float, value, static (a, v) => a with { Float = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+            }
         }
 
         public string Clear
         {
-            get => _computedStyle.Clear;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Clear, value, static (s, v) => s with { Clear = v });
+            get => _computedStyle.DisplayPositioning.Clear;
+            set
+            {
+                var area = _computedStyle.DisplayPositioning;
+                var newArea = area.SetPropertyValue(area.Clear, value, static (a, v) => a with { Clear = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+            }
         }
 
         public string Position
         {
-            get => _computedStyle.Position;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Position, value, static (s, v) => s with { Position = v });
+            get => _computedStyle.DisplayPositioning.Position;
+            set
+            {
+                var area = _computedStyle.DisplayPositioning;
+                var newArea = area.SetPropertyValue(area.Position, value, static (a, v) => a with { Position = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+            }
         }
 
         /// <summary>True for a positioned element: <c>position</c> of relative, absolute, fixed, or sticky.</summary>
@@ -678,8 +990,13 @@ namespace PeachPDF.Html.Core.Dom
 
         public string LineHeight
         {
-            get => _computedStyle.LineHeight;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.LineHeight, value, static (s, v) => s with { LineHeight = v });
+            get => _computedStyle.Text.LineHeight;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.LineHeight, value, static (a, v) => a with { LineHeight = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
@@ -687,14 +1004,24 @@ namespace PeachPDF.Html.Core.Dom
 
         public string VerticalAlign
         {
-            get => _computedStyle.VerticalAlign;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.VerticalAlign, value, static (s, v) => s with { VerticalAlign = v });
+            get => _computedStyle.Text.VerticalAlign;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.VerticalAlign, value, static (a, v) => a with { VerticalAlign = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         public string TextIndent
         {
-            get => _computedStyle.TextIndent;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextIndent, NoEms(value), static (s, v) => s with { TextIndent = v });
+            get => _computedStyle.Text.TextIndent;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.TextIndent, NoEms(value), static (a, v) => a with { TextIndent = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         /// <summary>Gets the text indentation (on first line only).</summary>
@@ -702,50 +1029,90 @@ namespace PeachPDF.Html.Core.Dom
 
         public string TextAlign
         {
-            get => _computedStyle.TextAlign;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextAlign, value, static (s, v) => s with { TextAlign = v });
+            get => _computedStyle.Text.TextAlign;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.TextAlign, value, static (a, v) => a with { TextAlign = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         public string TextDecorationLine
         {
-            get => _computedStyle.TextDecorationLine;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextDecorationLine, value, static (s, v) => s with { TextDecorationLine = v });
+            get => _computedStyle.TextDecoration.TextDecorationLine;
+            set
+            {
+                var area = _computedStyle.TextDecoration;
+                var newArea = area.SetPropertyValue(area.TextDecorationLine, value, static (a, v) => a with { TextDecorationLine = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { TextDecoration = a });
+            }
         }
 
         public string TextDecorationStyle
         {
-            get => _computedStyle.TextDecorationStyle;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextDecorationStyle, value, static (s, v) => s with { TextDecorationStyle = v });
+            get => _computedStyle.TextDecoration.TextDecorationStyle;
+            set
+            {
+                var area = _computedStyle.TextDecoration;
+                var newArea = area.SetPropertyValue(area.TextDecorationStyle, value, static (a, v) => a with { TextDecorationStyle = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { TextDecoration = a });
+            }
         }
 
         public string TextDecorationColor
         {
-            get => _computedStyle.TextDecorationColor;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextDecorationColor, value, static (s, v) => s with { TextDecorationColor = v });
+            get => _computedStyle.TextDecoration.TextDecorationColor;
+            set
+            {
+                var area = _computedStyle.TextDecoration;
+                var newArea = area.SetPropertyValue(area.TextDecorationColor, value, static (a, v) => a with { TextDecorationColor = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { TextDecoration = a });
+            }
         }
 
         public string TextTransform
         {
-            get => _computedStyle.TextTransform;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextTransform, value, static (s, v) => s with { TextTransform = v });
+            get => _computedStyle.Text.TextTransform;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.TextTransform, value, static (a, v) => a with { TextTransform = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         public string WhiteSpace
         {
-            get => _computedStyle.WhiteSpace;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.WhiteSpace, value, static (s, v) => s with { WhiteSpace = v });
+            get => _computedStyle.Text.WhiteSpace;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.WhiteSpace, value, static (a, v) => a with { WhiteSpace = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         public string Visibility
         {
-            get => _computedStyle.Visibility;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Visibility, value, static (s, v) => s with { Visibility = v });
+            get => _computedStyle.Text.Visibility;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.Visibility, value, static (a, v) => a with { Visibility = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         public string WordSpacing
         {
-            get => _computedStyle.WordSpacing;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.WordSpacing, NoEms(value), static (s, v) => s with { WordSpacing = v });
+            get => _computedStyle.Text.WordSpacing;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.WordSpacing, NoEms(value), static (a, v) => a with { WordSpacing = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         /// <summary>Gets the actual width of whitespace between words.</summary>
@@ -753,8 +1120,13 @@ namespace PeachPDF.Html.Core.Dom
 
         public string LetterSpacing
         {
-            get => _computedStyle.LetterSpacing;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.LetterSpacing, NoEms(value), static (s, v) => s with { LetterSpacing = v });
+            get => _computedStyle.Text.LetterSpacing;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.LetterSpacing, NoEms(value), static (a, v) => a with { LetterSpacing = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         /// <summary>Gets the actual extra space added between each pair of adjacent characters.</summary>
@@ -768,8 +1140,13 @@ namespace PeachPDF.Html.Core.Dom
 
         public string WordBreak
         {
-            get => _computedStyle.WordBreak;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.WordBreak, value, static (s, v) => s with { WordBreak = v });
+            get => _computedStyle.Text.WordBreak;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.WordBreak, value, static (a, v) => a with { WordBreak = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         /// <summary>
@@ -781,8 +1158,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public string Hyphens
         {
-            get => _computedStyle.Hyphens;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Hyphens, value, static (s, v) => s with { Hyphens = v });
+            get => _computedStyle.Text.Hyphens;
+            set
+            {
+                var area = _computedStyle.Text;
+                var newArea = area.SetPropertyValue(area.Hyphens, value, static (a, v) => a with { Hyphens = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
+            }
         }
 
         #endregion
@@ -791,8 +1173,13 @@ namespace PeachPDF.Html.Core.Dom
 
         public string? FontFamily
         {
-            get => _computedStyle.FontFamily;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontFamily, value, static (s, v) => s with { FontFamily = v });
+            get => _computedStyle.Font.FontFamily;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontFamily, value, static (a, v) => a with { FontFamily = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
         }
 
         /// <summary>
@@ -802,13 +1189,18 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public string? FontFamilyList
         {
-            get => _computedStyle.FontFamilyList;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontFamilyList, value, static (s, v) => s with { FontFamilyList = v });
+            get => _computedStyle.Font.FontFamilyList;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontFamilyList, value, static (a, v) => a with { FontFamilyList = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
         }
 
         public string FontSize
         {
-            get => _computedStyle.FontSize;
+            get => _computedStyle.Font.FontSize;
             set
             {
                 // calc()-family text is resolved directly by ActualFont's own ParseLength call later
@@ -830,42 +1222,66 @@ namespace PeachPDF.Html.Core.Dom
                     resolved = value;
                 }
 
-                _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontSize, resolved, static (s, v) => s with { FontSize = v });
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontSize, resolved, static (a, v) => a with { FontSize = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
 
         public string FontStyle
         {
-            get => _computedStyle.FontStyle;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontStyle, value, static (s, v) => s with { FontStyle = v });
+            get => _computedStyle.Font.FontStyle;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontStyle, value, static (a, v) => a with { FontStyle = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
         }
 
         public string FontVariant
         {
-            get => _computedStyle.FontVariant;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontVariant, value, static (s, v) => s with { FontVariant = v });
+            get => _computedStyle.Font.FontVariant;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontVariant, value, static (a, v) => a with { FontVariant = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
         }
 
         public string FontWeight
         {
-            get => _computedStyle.FontWeight;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontWeight, value, static (s, v) => s with { FontWeight = v });
+            get => _computedStyle.Font.FontWeight;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontWeight, value, static (a, v) => a with { FontWeight = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
         }
 
         public string FontStretch
         {
-            get => _computedStyle.FontStretch;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontStretch, value, static (s, v) => s with { FontStretch = v });
+            get => _computedStyle.Font.FontStretch;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontStretch, value, static (a, v) => a with { FontStretch = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
         }
 
         public string FontPalette
         {
-            get => _computedStyle.FontPalette;
+            get => _computedStyle.Font.FontPalette;
             set
             {
-                var previous = _computedStyle;
-                _computedStyle = previous.SetPropertyValue(previous.FontPalette, value, static (s, v) => s with { FontPalette = v });
-                if (!ReferenceEquals(_computedStyle, previous)) DerivedStyle.InvalidateFontPalette();
+                var previousStyle = _computedStyle;
+                var previousArea = previousStyle.Font;
+                var newArea = previousArea.SetPropertyValue(previousArea.FontPalette, value, static (a, v) => a with { FontPalette = v });
+                _computedStyle = previousStyle.AdoptArea(previousArea, newArea, static (s, a) => s with { Font = a });
+                if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateFontPalette();
             }
         }
 
@@ -875,26 +1291,46 @@ namespace PeachPDF.Html.Core.Dom
 
         public string Overflow
         {
-            get => _computedStyle.Overflow;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Overflow, value, static (s, v) => s with { Overflow = v });
+            get => _computedStyle.DisplayPositioning.Overflow;
+            set
+            {
+                var area = _computedStyle.DisplayPositioning;
+                var newArea = area.SetPropertyValue(area.Overflow, value, static (a, v) => a with { Overflow = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+            }
         }
 
         public string ListStylePosition
         {
-            get => _computedStyle.ListStylePosition;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ListStylePosition, value, static (s, v) => s with { ListStylePosition = v });
+            get => _computedStyle.List.ListStylePosition;
+            set
+            {
+                var area = _computedStyle.List;
+                var newArea = area.SetPropertyValue(area.ListStylePosition, value, static (a, v) => a with { ListStylePosition = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { List = a });
+            }
         }
 
         public CssImage? ListStyleImage
         {
-            get => _computedStyle.ListStyleImage;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ListStyleImage, value, static (s, v) => s with { ListStyleImage = v });
+            get => _computedStyle.List.ListStyleImage;
+            set
+            {
+                var area = _computedStyle.List;
+                var newArea = area.SetPropertyValue(area.ListStyleImage, value, static (a, v) => a with { ListStyleImage = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { List = a });
+            }
         }
 
         public string ListStyleType
         {
-            get => _computedStyle.ListStyleType;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ListStyleType, value, static (s, v) => s with { ListStyleType = v });
+            get => _computedStyle.List.ListStyleType;
+            set
+            {
+                var area = _computedStyle.List;
+                var newArea = area.SetPropertyValue(area.ListStyleType, value, static (a, v) => a with { ListStyleType = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { List = a });
+            }
         }
 
         #endregion
@@ -903,8 +1339,13 @@ namespace PeachPDF.Html.Core.Dom
 
         public string ZIndex
         {
-            get => _computedStyle.ZIndex;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ZIndex, value, static (s, v) => s with { ZIndex = v });
+            get => _computedStyle.DisplayPositioning.ZIndex;
+            set
+            {
+                var area = _computedStyle.DisplayPositioning;
+                var newArea = area.SetPropertyValue(area.ZIndex, value, static (a, v) => a with { ZIndex = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+            }
         }
 
         #endregion
@@ -913,75 +1354,135 @@ namespace PeachPDF.Html.Core.Dom
 
         public string FlexDirection
         {
-            get => _computedStyle.FlexDirection;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FlexDirection, value, static (s, v) => s with { FlexDirection = v });
+            get => _computedStyle.Flex.FlexDirection;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.FlexDirection, value, static (a, v) => a with { FlexDirection = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string FlexWrap
         {
-            get => _computedStyle.FlexWrap;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FlexWrap, value, static (s, v) => s with { FlexWrap = v });
+            get => _computedStyle.Flex.FlexWrap;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.FlexWrap, value, static (a, v) => a with { FlexWrap = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string JustifyContent
         {
-            get => _computedStyle.JustifyContent;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.JustifyContent, value, static (s, v) => s with { JustifyContent = v });
+            get => _computedStyle.Flex.JustifyContent;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.JustifyContent, value, static (a, v) => a with { JustifyContent = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string AlignItems
         {
-            get => _computedStyle.AlignItems;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.AlignItems, value, static (s, v) => s with { AlignItems = v });
+            get => _computedStyle.Flex.AlignItems;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.AlignItems, value, static (a, v) => a with { AlignItems = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string AlignContent
         {
-            get => _computedStyle.AlignContent;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.AlignContent, value, static (s, v) => s with { AlignContent = v });
+            get => _computedStyle.Flex.AlignContent;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.AlignContent, value, static (a, v) => a with { AlignContent = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string FlexGrow
         {
-            get => _computedStyle.FlexGrow;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FlexGrow, value, static (s, v) => s with { FlexGrow = v });
+            get => _computedStyle.Flex.FlexGrow;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.FlexGrow, value, static (a, v) => a with { FlexGrow = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string FlexShrink
         {
-            get => _computedStyle.FlexShrink;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FlexShrink, value, static (s, v) => s with { FlexShrink = v });
+            get => _computedStyle.Flex.FlexShrink;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.FlexShrink, value, static (a, v) => a with { FlexShrink = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string FlexBasis
         {
-            get => _computedStyle.FlexBasis;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FlexBasis, value, static (s, v) => s with { FlexBasis = v });
+            get => _computedStyle.Flex.FlexBasis;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.FlexBasis, value, static (a, v) => a with { FlexBasis = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string AlignSelf
         {
-            get => _computedStyle.AlignSelf;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.AlignSelf, value, static (s, v) => s with { AlignSelf = v });
+            get => _computedStyle.Flex.AlignSelf;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.AlignSelf, value, static (a, v) => a with { AlignSelf = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string Order
         {
-            get => _computedStyle.Order;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Order, value, static (s, v) => s with { Order = v });
+            get => _computedStyle.Flex.Order;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.Order, value, static (a, v) => a with { Order = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         /// <summary>Gap between flex items (column-gap = main-axis gap for row direction).</summary>
         public string FlexRowGap
         {
-            get => _computedStyle.FlexRowGap;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FlexRowGap, value, static (s, v) => s with { FlexRowGap = v });
+            get => _computedStyle.Flex.FlexRowGap;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.FlexRowGap, value, static (a, v) => a with { FlexRowGap = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         public string FlexColumnGap
         {
-            get => _computedStyle.FlexColumnGap;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FlexColumnGap, value, static (s, v) => s with { FlexColumnGap = v });
+            get => _computedStyle.Flex.FlexColumnGap;
+            set
+            {
+                var area = _computedStyle.Flex;
+                var newArea = area.SetPropertyValue(area.FlexColumnGap, value, static (a, v) => a with { FlexColumnGap = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Flex = a });
+            }
         }
 
         #endregion
@@ -990,74 +1491,134 @@ namespace PeachPDF.Html.Core.Dom
 
         public CssProperty<GridTemplate> GridTemplateColumns
         {
-            get => _computedStyle.GridTemplateColumns;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridTemplateColumns, value, static (s, v) => s with { GridTemplateColumns = v });
+            get => _computedStyle.Grid.GridTemplateColumns;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridTemplateColumns, value, static (a, v) => a with { GridTemplateColumns = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public CssProperty<GridTemplate> GridTemplateRows
         {
-            get => _computedStyle.GridTemplateRows;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridTemplateRows, value, static (s, v) => s with { GridTemplateRows = v });
+            get => _computedStyle.Grid.GridTemplateRows;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridTemplateRows, value, static (a, v) => a with { GridTemplateRows = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string GridTemplateAreas
         {
-            get => _computedStyle.GridTemplateAreas;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridTemplateAreas, value, static (s, v) => s with { GridTemplateAreas = v });
+            get => _computedStyle.Grid.GridTemplateAreas;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridTemplateAreas, value, static (a, v) => a with { GridTemplateAreas = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string GridAutoColumns
         {
-            get => _computedStyle.GridAutoColumns;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridAutoColumns, value, static (s, v) => s with { GridAutoColumns = v });
+            get => _computedStyle.Grid.GridAutoColumns;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridAutoColumns, value, static (a, v) => a with { GridAutoColumns = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string GridAutoRows
         {
-            get => _computedStyle.GridAutoRows;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridAutoRows, value, static (s, v) => s with { GridAutoRows = v });
+            get => _computedStyle.Grid.GridAutoRows;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridAutoRows, value, static (a, v) => a with { GridAutoRows = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string GridAutoFlow
         {
-            get => _computedStyle.GridAutoFlow;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridAutoFlow, value, static (s, v) => s with { GridAutoFlow = v });
+            get => _computedStyle.Grid.GridAutoFlow;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridAutoFlow, value, static (a, v) => a with { GridAutoFlow = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string JustifyItems
         {
-            get => _computedStyle.JustifyItems;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.JustifyItems, value, static (s, v) => s with { JustifyItems = v });
+            get => _computedStyle.Grid.JustifyItems;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.JustifyItems, value, static (a, v) => a with { JustifyItems = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string JustifySelf
         {
-            get => _computedStyle.JustifySelf;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.JustifySelf, value, static (s, v) => s with { JustifySelf = v });
+            get => _computedStyle.Grid.JustifySelf;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.JustifySelf, value, static (a, v) => a with { JustifySelf = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string GridColumnStart
         {
-            get => _computedStyle.GridColumnStart;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridColumnStart, value, static (s, v) => s with { GridColumnStart = v });
+            get => _computedStyle.Grid.GridColumnStart;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridColumnStart, value, static (a, v) => a with { GridColumnStart = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string GridColumnEnd
         {
-            get => _computedStyle.GridColumnEnd;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridColumnEnd, value, static (s, v) => s with { GridColumnEnd = v });
+            get => _computedStyle.Grid.GridColumnEnd;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridColumnEnd, value, static (a, v) => a with { GridColumnEnd = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string GridRowStart
         {
-            get => _computedStyle.GridRowStart;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridRowStart, value, static (s, v) => s with { GridRowStart = v });
+            get => _computedStyle.Grid.GridRowStart;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridRowStart, value, static (a, v) => a with { GridRowStart = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         public string GridRowEnd
         {
-            get => _computedStyle.GridRowEnd;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.GridRowEnd, value, static (s, v) => s with { GridRowEnd = v });
+            get => _computedStyle.Grid.GridRowEnd;
+            set
+            {
+                var area = _computedStyle.Grid;
+                var newArea = area.SetPropertyValue(area.GridRowEnd, value, static (a, v) => a with { GridRowEnd = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Grid = a });
+            }
         }
 
         /// <summary>Transient parent→child conduit set by <see cref="CssLayoutEngineGrid"/> immediately before
@@ -1071,44 +1632,79 @@ namespace PeachPDF.Html.Core.Dom
 
         public string ColumnCount
         {
-            get => _computedStyle.ColumnCount;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ColumnCount, value, static (s, v) => s with { ColumnCount = v });
+            get => _computedStyle.MultiColumn.ColumnCount;
+            set
+            {
+                var area = _computedStyle.MultiColumn;
+                var newArea = area.SetPropertyValue(area.ColumnCount, value, static (a, v) => a with { ColumnCount = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
+            }
         }
 
         public string ColumnWidth
         {
-            get => _computedStyle.ColumnWidth;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ColumnWidth, value, static (s, v) => s with { ColumnWidth = v });
+            get => _computedStyle.MultiColumn.ColumnWidth;
+            set
+            {
+                var area = _computedStyle.MultiColumn;
+                var newArea = area.SetPropertyValue(area.ColumnWidth, value, static (a, v) => a with { ColumnWidth = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
+            }
         }
 
         public string ColumnFill
         {
-            get => _computedStyle.ColumnFill;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ColumnFill, value, static (s, v) => s with { ColumnFill = v });
+            get => _computedStyle.MultiColumn.ColumnFill;
+            set
+            {
+                var area = _computedStyle.MultiColumn;
+                var newArea = area.SetPropertyValue(area.ColumnFill, value, static (a, v) => a with { ColumnFill = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
+            }
         }
 
         public string ColumnSpan
         {
-            get => _computedStyle.ColumnSpan;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ColumnSpan, value, static (s, v) => s with { ColumnSpan = v });
+            get => _computedStyle.MultiColumn.ColumnSpan;
+            set
+            {
+                var area = _computedStyle.MultiColumn;
+                var newArea = area.SetPropertyValue(area.ColumnSpan, value, static (a, v) => a with { ColumnSpan = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
+            }
         }
 
         public string ColumnRuleWidth
         {
-            get => _computedStyle.ColumnRuleWidth;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ColumnRuleWidth, value, static (s, v) => s with { ColumnRuleWidth = v });
+            get => _computedStyle.MultiColumn.ColumnRuleWidth;
+            set
+            {
+                var area = _computedStyle.MultiColumn;
+                var newArea = area.SetPropertyValue(area.ColumnRuleWidth, value, static (a, v) => a with { ColumnRuleWidth = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
+            }
         }
 
         public string ColumnRuleStyle
         {
-            get => _computedStyle.ColumnRuleStyle;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ColumnRuleStyle, value, static (s, v) => s with { ColumnRuleStyle = v });
+            get => _computedStyle.MultiColumn.ColumnRuleStyle;
+            set
+            {
+                var area = _computedStyle.MultiColumn;
+                var newArea = area.SetPropertyValue(area.ColumnRuleStyle, value, static (a, v) => a with { ColumnRuleStyle = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
+            }
         }
 
         public string ColumnRuleColor
         {
-            get => _computedStyle.ColumnRuleColor;
-            set => _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ColumnRuleColor, value, static (s, v) => s with { ColumnRuleColor = v });
+            get => _computedStyle.MultiColumn.ColumnRuleColor;
+            set
+            {
+                var area = _computedStyle.MultiColumn;
+                var newArea = area.SetPropertyValue(area.ColumnRuleColor, value, static (a, v) => a with { ColumnRuleColor = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { MultiColumn = a });
+            }
         }
 
         /// <summary>
@@ -1444,37 +2040,20 @@ namespace PeachPDF.Html.Core.Dom
                 customProperties = null;
             }
 
+            // Every area below (Font/Text/Table/List/Pagination) is 100% inheritable - every property it
+            // holds is one CssBox.InheritStyle used to copy individually here. Adopting the parent's area
+            // instance directly by reference (instead of cloning this box's own area one property at a
+            // time) is safe precisely because every area is copy-on-write: the parent's instance is never
+            // mutated after being handed down, so sharing it costs nothing and a whole subtree that never
+            // overrides anything in an area ends up with every box's copy of it ReferenceEquals the same
+            // object. When this box's own area already equals the parent's (the common case), this is a
+            // total no-op at both levels - no clone, no new reference even assigned.
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.CustomProperties, customProperties, static (s, v) => s with { CustomProperties = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderSpacing, parentStyle.BorderSpacing, static (s, v) => s with { BorderSpacing = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderCollapse, parentStyle.BorderCollapse, static (s, v) => s with { BorderCollapse = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Color, parentStyle.Color, static (s, v) => s with { Color = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.EmptyCells, parentStyle.EmptyCells, static (s, v) => s with { EmptyCells = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.WhiteSpace, parentStyle.WhiteSpace, static (s, v) => s with { WhiteSpace = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Visibility, parentStyle.Visibility, static (s, v) => s with { Visibility = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextIndent, parentStyle.TextIndent, static (s, v) => s with { TextIndent = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextAlign, parentStyle.TextAlign, static (s, v) => s with { TextAlign = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextTransform, parentStyle.TextTransform, static (s, v) => s with { TextTransform = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.VerticalAlign, parentStyle.VerticalAlign, static (s, v) => s with { VerticalAlign = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontFamily, parentStyle.FontFamily, static (s, v) => s with { FontFamily = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontFamilyList, parentStyle.FontFamilyList, static (s, v) => s with { FontFamilyList = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontSize, parentStyle.FontSize, static (s, v) => s with { FontSize = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontStyle, parentStyle.FontStyle, static (s, v) => s with { FontStyle = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontVariant, parentStyle.FontVariant, static (s, v) => s with { FontVariant = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontWeight, parentStyle.FontWeight, static (s, v) => s with { FontWeight = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontStretch, parentStyle.FontStretch, static (s, v) => s with { FontStretch = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.FontPalette, parentStyle.FontPalette, static (s, v) => s with { FontPalette = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ListStyleImage, parentStyle.ListStyleImage, static (s, v) => s with { ListStyleImage = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ListStylePosition, parentStyle.ListStylePosition, static (s, v) => s with { ListStylePosition = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ListStyleType, parentStyle.ListStyleType, static (s, v) => s with { ListStyleType = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.LineHeight, parentStyle.LineHeight, static (s, v) => s with { LineHeight = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.WordSpacing, parentStyle.WordSpacing, static (s, v) => s with { WordSpacing = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.LetterSpacing, parentStyle.LetterSpacing, static (s, v) => s with { LetterSpacing = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.WordBreak, parentStyle.WordBreak, static (s, v) => s with { WordBreak = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Direction, parentStyle.Direction, static (s, v) => s with { Direction = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BoxSizing, parentStyle.BoxSizing, static (s, v) => s with { BoxSizing = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Orphans, parentStyle.Orphans, static (s, v) => s with { Orphans = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Widows, parentStyle.Widows, static (s, v) => s with { Widows = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Hyphens, parentStyle.Hyphens, static (s, v) => s with { Hyphens = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Font, parentStyle.Font, static (s, a) => s with { Font = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Text, parentStyle.Text, static (s, a) => s with { Text = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Table, parentStyle.Table, static (s, a) => s with { Table = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.List, parentStyle.List, static (s, a) => s with { List = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Pagination, parentStyle.Pagination, static (s, a) => s with { Pagination = a });
 
             // The invalidations these bypass (border/padding/opacity/transform/color/font-palette caches)
             // are intentionally skipped here - every value copied above either has no such cache, or (for
@@ -1482,84 +2061,129 @@ namespace PeachPDF.Html.Core.Dom
             // empty and this method only ever runs before anything else has read from it.
             if (!everything) return;
 
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundColor, parentStyle.BackgroundColor, static (s, v) => s with { BackgroundColor = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundImages, parentStyle.BackgroundImages, static (s, v) => s with { BackgroundImages = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundPosition, parentStyle.BackgroundPosition, static (s, v) => s with { BackgroundPosition = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundRepeat, parentStyle.BackgroundRepeat, static (s, v) => s with { BackgroundRepeat = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundOrigin, parentStyle.BackgroundOrigin, static (s, v) => s with { BackgroundOrigin = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundClip, parentStyle.BackgroundClip, static (s, v) => s with { BackgroundClip = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BackgroundAttachment, parentStyle.BackgroundAttachment, static (s, v) => s with { BackgroundAttachment = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ObjectFit, parentStyle.ObjectFit, static (s, v) => s with { ObjectFit = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.ObjectPosition, parentStyle.ObjectPosition, static (s, v) => s with { ObjectPosition = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderTopWidth, parentStyle.BorderTopWidth, static (s, v) => s with { BorderTopWidth = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderRightWidth, parentStyle.BorderRightWidth, static (s, v) => s with { BorderRightWidth = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderBottomWidth, parentStyle.BorderBottomWidth, static (s, v) => s with { BorderBottomWidth = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderLeftWidth, parentStyle.BorderLeftWidth, static (s, v) => s with { BorderLeftWidth = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderTopColor, parentStyle.BorderTopColor, static (s, v) => s with { BorderTopColor = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderRightColor, parentStyle.BorderRightColor, static (s, v) => s with { BorderRightColor = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderBottomColor, parentStyle.BorderBottomColor, static (s, v) => s with { BorderBottomColor = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderLeftColor, parentStyle.BorderLeftColor, static (s, v) => s with { BorderLeftColor = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderTopStyle, parentStyle.BorderTopStyle, static (s, v) => s with { BorderTopStyle = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderRightStyle, parentStyle.BorderRightStyle, static (s, v) => s with { BorderRightStyle = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderBottomStyle, parentStyle.BorderBottomStyle, static (s, v) => s with { BorderBottomStyle = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderLeftStyle, parentStyle.BorderLeftStyle, static (s, v) => s with { BorderLeftStyle = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderTopLeftRadius, parentStyle.BorderTopLeftRadius, static (s, v) => s with { BorderTopLeftRadius = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderTopRightRadius, parentStyle.BorderTopRightRadius, static (s, v) => s with { BorderTopRightRadius = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderBottomRightRadius, parentStyle.BorderBottomRightRadius, static (s, v) => s with { BorderBottomRightRadius = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BorderBottomLeftRadius, parentStyle.BorderBottomLeftRadius, static (s, v) => s with { BorderBottomLeftRadius = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Transform, parentStyle.Transform, static (s, v) => s with { Transform = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TransformOrigin, parentStyle.TransformOrigin, static (s, v) => s with { TransformOrigin = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Opacity, parentStyle.Opacity, static (s, v) => s with { Opacity = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Display, parentStyle.Display, static (s, v) => s with { Display = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Float, parentStyle.Float, static (s, v) => s with { Float = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Height, parentStyle.Height, static (s, v) => s with { Height = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MaxHeight, parentStyle.MaxHeight, static (s, v) => s with { MaxHeight = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MarginBottom, parentStyle.MarginBottom, static (s, v) => s with { MarginBottom = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MarginLeft, parentStyle.MarginLeft, static (s, v) => s with { MarginLeft = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MarginRight, parentStyle.MarginRight, static (s, v) => s with { MarginRight = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MarginTop, parentStyle.MarginTop, static (s, v) => s with { MarginTop = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Left, parentStyle.Left, static (s, v) => s with { Left = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Overflow, parentStyle.Overflow, static (s, v) => s with { Overflow = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.PaddingLeft, parentStyle.PaddingLeft, static (s, v) => s with { PaddingLeft = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.PaddingBottom, parentStyle.PaddingBottom, static (s, v) => s with { PaddingBottom = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.PaddingRight, parentStyle.PaddingRight, static (s, v) => s with { PaddingRight = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.PaddingTop, parentStyle.PaddingTop, static (s, v) => s with { PaddingTop = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextDecorationLine, parentStyle.TextDecorationLine, static (s, v) => s with { TextDecorationLine = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextDecorationStyle, parentStyle.TextDecorationStyle, static (s, v) => s with { TextDecorationStyle = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.TextDecorationColor, parentStyle.TextDecorationColor, static (s, v) => s with { TextDecorationColor = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Top, parentStyle.Top, static (s, v) => s with { Top = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Position, parentStyle.Position, static (s, v) => s with { Position = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Width, parentStyle.Width, static (s, v) => s with { Width = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MaxWidth, parentStyle.MaxWidth, static (s, v) => s with { MaxWidth = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.MinWidth, parentStyle.MinWidth, static (s, v) => s with { MinWidth = v });
+            // Unlike the "always" section above, none of these areas are adopted whole-by-reference: each
+            // is a mix of properties this list covers and properties it doesn't (e.g. Background is
+            // missing BackgroundSize, Border is missing BoxShadow - pre-existing, deliberately preserved
+            // gaps in this exact list, confirmed by the previous refactor's review), so adopting a whole
+            // area here would silently copy properties "everything" has never covered. Each property is
+            // still routed through its owning area's own two-level copy-on-write, just individually.
+            var background = _computedStyle.Background;
+            background = background
+                .SetPropertyValue(background.BackgroundColor, parentStyle.Background.BackgroundColor, static (a, v) => a with { BackgroundColor = v })
+                .SetPropertyValue(background.BackgroundImages, parentStyle.Background.BackgroundImages, static (a, v) => a with { BackgroundImages = v })
+                .SetPropertyValue(background.BackgroundPosition, parentStyle.Background.BackgroundPosition, static (a, v) => a with { BackgroundPosition = v })
+                .SetPropertyValue(background.BackgroundRepeat, parentStyle.Background.BackgroundRepeat, static (a, v) => a with { BackgroundRepeat = v })
+                .SetPropertyValue(background.BackgroundOrigin, parentStyle.Background.BackgroundOrigin, static (a, v) => a with { BackgroundOrigin = v })
+                .SetPropertyValue(background.BackgroundClip, parentStyle.Background.BackgroundClip, static (a, v) => a with { BackgroundClip = v })
+                .SetPropertyValue(background.BackgroundAttachment, parentStyle.Background.BackgroundAttachment, static (a, v) => a with { BackgroundAttachment = v })
+                .SetPropertyValue(background.ObjectFit, parentStyle.Background.ObjectFit, static (a, v) => a with { ObjectFit = v })
+                .SetPropertyValue(background.ObjectPosition, parentStyle.Background.ObjectPosition, static (a, v) => a with { ObjectPosition = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Background, background, static (s, a) => s with { Background = a });
+
+            var border = _computedStyle.Border;
+            border = border
+                .SetPropertyValue(border.BorderTopWidth, parentStyle.Border.BorderTopWidth, static (a, v) => a with { BorderTopWidth = v })
+                .SetPropertyValue(border.BorderRightWidth, parentStyle.Border.BorderRightWidth, static (a, v) => a with { BorderRightWidth = v })
+                .SetPropertyValue(border.BorderBottomWidth, parentStyle.Border.BorderBottomWidth, static (a, v) => a with { BorderBottomWidth = v })
+                .SetPropertyValue(border.BorderLeftWidth, parentStyle.Border.BorderLeftWidth, static (a, v) => a with { BorderLeftWidth = v })
+                .SetPropertyValue(border.BorderTopColor, parentStyle.Border.BorderTopColor, static (a, v) => a with { BorderTopColor = v })
+                .SetPropertyValue(border.BorderRightColor, parentStyle.Border.BorderRightColor, static (a, v) => a with { BorderRightColor = v })
+                .SetPropertyValue(border.BorderBottomColor, parentStyle.Border.BorderBottomColor, static (a, v) => a with { BorderBottomColor = v })
+                .SetPropertyValue(border.BorderLeftColor, parentStyle.Border.BorderLeftColor, static (a, v) => a with { BorderLeftColor = v })
+                .SetPropertyValue(border.BorderTopStyle, parentStyle.Border.BorderTopStyle, static (a, v) => a with { BorderTopStyle = v })
+                .SetPropertyValue(border.BorderRightStyle, parentStyle.Border.BorderRightStyle, static (a, v) => a with { BorderRightStyle = v })
+                .SetPropertyValue(border.BorderBottomStyle, parentStyle.Border.BorderBottomStyle, static (a, v) => a with { BorderBottomStyle = v })
+                .SetPropertyValue(border.BorderLeftStyle, parentStyle.Border.BorderLeftStyle, static (a, v) => a with { BorderLeftStyle = v })
+                .SetPropertyValue(border.BorderTopLeftRadius, parentStyle.Border.BorderTopLeftRadius, static (a, v) => a with { BorderTopLeftRadius = v })
+                .SetPropertyValue(border.BorderTopRightRadius, parentStyle.Border.BorderTopRightRadius, static (a, v) => a with { BorderTopRightRadius = v })
+                .SetPropertyValue(border.BorderBottomRightRadius, parentStyle.Border.BorderBottomRightRadius, static (a, v) => a with { BorderBottomRightRadius = v })
+                .SetPropertyValue(border.BorderBottomLeftRadius, parentStyle.Border.BorderBottomLeftRadius, static (a, v) => a with { BorderBottomLeftRadius = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Border, border, static (s, a) => s with { Border = a });
+
+            var visualEffects = _computedStyle.VisualEffects;
+            visualEffects = visualEffects
+                .SetPropertyValue(visualEffects.Transform, parentStyle.VisualEffects.Transform, static (a, v) => a with { Transform = v })
+                .SetPropertyValue(visualEffects.TransformOrigin, parentStyle.VisualEffects.TransformOrigin, static (a, v) => a with { TransformOrigin = v })
+                .SetPropertyValue(visualEffects.Opacity, parentStyle.VisualEffects.Opacity, static (a, v) => a with { Opacity = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.VisualEffects, visualEffects, static (s, a) => s with { VisualEffects = a });
+
+            var displayPositioning = _computedStyle.DisplayPositioning;
+            displayPositioning = displayPositioning
+                .SetPropertyValue(displayPositioning.Display, parentStyle.DisplayPositioning.Display, static (a, v) => a with { Display = v })
+                .SetPropertyValue(displayPositioning.Float, parentStyle.DisplayPositioning.Float, static (a, v) => a with { Float = v })
+                .SetPropertyValue(displayPositioning.Overflow, parentStyle.DisplayPositioning.Overflow, static (a, v) => a with { Overflow = v })
+                .SetPropertyValue(displayPositioning.Position, parentStyle.DisplayPositioning.Position, static (a, v) => a with { Position = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.DisplayPositioning, displayPositioning, static (s, a) => s with { DisplayPositioning = a });
+
+            var boxModel = _computedStyle.BoxModel;
+            boxModel = boxModel
+                .SetPropertyValue(boxModel.Height, parentStyle.BoxModel.Height, static (a, v) => a with { Height = v })
+                .SetPropertyValue(boxModel.MaxHeight, parentStyle.BoxModel.MaxHeight, static (a, v) => a with { MaxHeight = v })
+                .SetPropertyValue(boxModel.MarginBottom, parentStyle.BoxModel.MarginBottom, static (a, v) => a with { MarginBottom = v })
+                .SetPropertyValue(boxModel.MarginLeft, parentStyle.BoxModel.MarginLeft, static (a, v) => a with { MarginLeft = v })
+                .SetPropertyValue(boxModel.MarginRight, parentStyle.BoxModel.MarginRight, static (a, v) => a with { MarginRight = v })
+                .SetPropertyValue(boxModel.MarginTop, parentStyle.BoxModel.MarginTop, static (a, v) => a with { MarginTop = v })
+                .SetPropertyValue(boxModel.Left, parentStyle.BoxModel.Left, static (a, v) => a with { Left = v })
+                .SetPropertyValue(boxModel.PaddingLeft, parentStyle.BoxModel.PaddingLeft, static (a, v) => a with { PaddingLeft = v })
+                .SetPropertyValue(boxModel.PaddingBottom, parentStyle.BoxModel.PaddingBottom, static (a, v) => a with { PaddingBottom = v })
+                .SetPropertyValue(boxModel.PaddingRight, parentStyle.BoxModel.PaddingRight, static (a, v) => a with { PaddingRight = v })
+                .SetPropertyValue(boxModel.PaddingTop, parentStyle.BoxModel.PaddingTop, static (a, v) => a with { PaddingTop = v })
+                .SetPropertyValue(boxModel.Top, parentStyle.BoxModel.Top, static (a, v) => a with { Top = v })
+                .SetPropertyValue(boxModel.Width, parentStyle.BoxModel.Width, static (a, v) => a with { Width = v })
+                .SetPropertyValue(boxModel.MaxWidth, parentStyle.BoxModel.MaxWidth, static (a, v) => a with { MaxWidth = v })
+                .SetPropertyValue(boxModel.MinWidth, parentStyle.BoxModel.MinWidth, static (a, v) => a with { MinWidth = v })
+                // box-sizing moved out of the "always" section (it no longer inherits, per the
+                // spec-compliance fix above) - but same reasoning as BoxDecorationBreak/the break
+                // properties/PdfTagType below: a structural duplicate is a fragment of the SAME
+                // element, so its own resolved box-sizing must still carry over, or CssProxyBox's
+                // repeated header/footer and DomParser's inline/block split would silently revert to
+                // content-box regardless of what the source element actually declared.
+                .SetPropertyValue(boxModel.BoxSizing, parentStyle.BoxModel.BoxSizing, static (a, v) => a with { BoxSizing = v });
             // Bottom/Right: the pre-split CssBoxProperties had a private _bottom/_right field pair that
             // this branch copied, but Bottom/Right's real getters/setters never read or wrote those fields
             // (they were independent auto-properties) - so a structural duplicate's Bottom/Right silently
             // never inherited the source box's value, always keeping the CSS initial "auto", even though
             // CSS 2.1 §9.4.3 says a relatively/absolutely positioned box's offsets should apply here too
             // (a structural duplicate is a fragment of the same source box, same as BoxDecorationBreak/
-            // PdfTagType/the break properties below). Unifying storage onto ComputedStyle.Bottom/.Right
+            // PdfTagType/the break properties below). Unifying storage onto ComputedStyle.BoxModel.Bottom/.Right
             // fixes this for real - see ComputedStyleTests.InheritStyle_Everything_CopiesBottomAndRight.
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Bottom, parentStyle.Bottom, static (s, v) => s with { Bottom = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.Right, parentStyle.Right, static (s, v) => s with { Right = v });
+            boxModel = boxModel
+                .SetPropertyValue(boxModel.Bottom, parentStyle.BoxModel.Bottom, static (a, v) => a with { Bottom = v })
+                .SetPropertyValue(boxModel.Right, parentStyle.BoxModel.Right, static (a, v) => a with { Right = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.BoxModel, boxModel, static (s, a) => s with { BoxModel = a });
+
+            var textDecoration = _computedStyle.TextDecoration;
+            textDecoration = textDecoration
+                .SetPropertyValue(textDecoration.TextDecorationLine, parentStyle.TextDecoration.TextDecorationLine, static (a, v) => a with { TextDecorationLine = v })
+                .SetPropertyValue(textDecoration.TextDecorationStyle, parentStyle.TextDecoration.TextDecorationStyle, static (a, v) => a with { TextDecorationStyle = v })
+                .SetPropertyValue(textDecoration.TextDecorationColor, parentStyle.TextDecoration.TextDecorationColor, static (a, v) => a with { TextDecorationColor = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.TextDecoration, textDecoration, static (s, a) => s with { TextDecoration = a });
+
             // Same reasoning as PdfTagType below: not inherited, but a structural duplicate of the same
             // element's box has to carry the element's own resolved value.
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BoxDecorationBreak, parentStyle.BoxDecorationBreak, static (s, v) => s with { BoxDecorationBreak = v });
-            // The break properties are not inherited either (css-break-3 §3.1/§3.2), so they are rightly
-            // absent from the "always" section above - but a structural duplicate is a fragment of the
-            // same element, and §3 attaches these values to the element, not to one of its boxes. Without
-            // this a split block loses its own break-inside: avoid and a repeated <thead> loses its
-            // break-after: avoid, silently, since the initial value is the permissive "auto".
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BreakBefore, parentStyle.BreakBefore, static (s, v) => s with { BreakBefore = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BreakAfter, parentStyle.BreakAfter, static (s, v) => s with { BreakAfter = v });
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.BreakInside, parentStyle.BreakInside, static (s, v) => s with { BreakInside = v });
+            var breakArea = _computedStyle.Break;
+            breakArea = breakArea
+                .SetPropertyValue(breakArea.BoxDecorationBreak, parentStyle.Break.BoxDecorationBreak, static (a, v) => a with { BoxDecorationBreak = v })
+                // The break properties are not inherited either (css-break-3 §3.1/§3.2), so they are
+                // rightly absent from the "always" section above - but a structural duplicate is a
+                // fragment of the same element, and §3 attaches these values to the element, not to one of
+                // its boxes. Without this a split block loses its own break-inside: avoid and a repeated
+                // <thead> loses its break-after: avoid, silently, since the initial value is the
+                // permissive "auto".
+                .SetPropertyValue(breakArea.BreakBefore, parentStyle.Break.BreakBefore, static (a, v) => a with { BreakBefore = v })
+                .SetPropertyValue(breakArea.BreakAfter, parentStyle.Break.BreakAfter, static (a, v) => a with { BreakAfter = v })
+                .SetPropertyValue(breakArea.BreakInside, parentStyle.Break.BreakInside, static (a, v) => a with { BreakInside = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Break, breakArea, static (s, a) => s with { Break = a });
+
             // Not a real inherited property (never copied in the "always" section above, so
             // ordinary parent->child cascade seeding never touches it) - but every "everything"
             // call site here (CssProxyBox's repeated-header/footer clone, DomParser's inline/block
             // box-splitting) represents a structural duplicate of the SAME source box's own
             // resolved content, not real ancestor->descendant inheritance, so its own resolved
             // tag type must carry over too.
-            _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.PdfTagType, parentStyle.PdfTagType, static (s, v) => s with { PdfTagType = v });
+            var generatedContent = _computedStyle.GeneratedContent;
+            var newGeneratedContent = generatedContent.SetPropertyValue(generatedContent.PdfTagType, parentStyle.GeneratedContent.PdfTagType, static (a, v) => a with { PdfTagType = v });
+            _computedStyle = _computedStyle.AdoptArea(generatedContent, newGeneratedContent, static (s, a) => s with { GeneratedContent = a });
         }
     }
 }
