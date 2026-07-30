@@ -53,11 +53,23 @@ namespace PeachPDF.CSS
         /// reported positions, never token content). Used by <see cref="StylesheetComposer"/> to rewind a
         /// CSS-Nesting classification look-ahead so a declaration re-lexes cleanly in value mode.
         /// </summary>
+        /// <remarks>
+        /// Clears <see cref="_columns"/> rather than leaving it as the abandoned scan left it: those
+        /// entries belong to line crossings between <paramref name="sourceIndex"/> and wherever the
+        /// look-ahead gave up, none of which are reachable again since we're back before them - keeping
+        /// them around would both let a discarded look-ahead's entries sit on the stack forever (a
+        /// document with many declarations calls this once per declaration/nested-rule candidate, so
+        /// this stack grew without bound over a whole parse - a `dotnet-trace` GC-allocation profile of
+        /// the full showcase corpus found it responsible for a quarter of all tracked allocation bytes,
+        /// second only to <see cref="StringBuilder"/> growth) and let a later <see cref="Back()"/> pop a
+        /// stale value left over from that unrelated scan instead of correctly falling back to <c>1</c>.
+        /// </remarks>
         public void RewindTo(int sourceIndex)
         {
             Source.Index = sourceIndex;
             // Non-EOF so the next Advance() actually reads Source[sourceIndex] rather than short-circuiting.
             Current = Symbols.Null;
+            _columns.Clear();
         }
 
         protected char SkipSpaces()

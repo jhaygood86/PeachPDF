@@ -140,8 +140,26 @@ namespace PeachPDF.Html.Core.Parse
         /// grammar/type validation already happened in Layer A's CalcValueConverter for any value that
         /// didn't arrive via the var() substitution bypass; this is a syntactic recognizer only.
         /// </summary>
+        /// <remarks>
+        /// Skips tokenizing entirely when <paramref name="length"/> has no <c>(</c> at all: a CSS function
+        /// token is only ever produced from an ident immediately followed by <c>(</c> (CSS Syntax 3 §4.3.4),
+        /// so <c>tokens is [FunctionToken fn]</c> below can never hold without one - this is a necessary,
+        /// not merely typical, precondition, so the short-circuit changes no outcome. This runs on every
+        /// length this layer resolves (an ordinary "10px"/"50%"/"auto" value has no calc-family function at
+        /// all, so it's the overwhelming majority), and a `dotnet-trace` allocation profile of the full
+        /// showcase corpus found this the single largest contributor to <see cref="PeachPDF.CSS.Pool"/>'s
+        /// 2.4-million-call, 99%-miss-rate `NewStringBuilder()` volume - the full CSS-OM tokenizer this
+        /// called into (`Lexer`/`TextSource`/its `StringBuilder`) was being constructed fresh just to
+        /// discover almost every time that the value wasn't a function at all.
+        /// </remarks>
         private static bool TryGetCalcFunction(string length, out FunctionToken? function)
         {
+            if (!length.Contains('('))
+            {
+                function = null;
+                return false;
+            }
+
             var tokens = GetCssTokens(length);
 
             if (tokens is [FunctionToken fn] && CalcParser.IsCalcFamily(fn.Data))
