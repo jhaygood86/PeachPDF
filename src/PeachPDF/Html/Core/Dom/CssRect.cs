@@ -280,8 +280,10 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether this word, at its current <see cref="Top"/>, crosses a fragmentainer boundary — the
-        /// one predicate both the resumable inline flow and the legacy relocation below decide on.
+        /// Whether this word, at its current <see cref="Top"/>, crosses the fragmentainer the pass
+        /// <i>is filling</i> — the break decision the resumable inline flow makes: a straddle here ends
+        /// the pass with an <see cref="Fragmentation.InlineBreakToken"/> rather than moving the word and
+        /// carrying on.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -298,8 +300,34 @@ namespace PeachPDF.Html.Core.Dom
         /// repeating a <c>&lt;tfoot&gt;</c> claims the foot of the band the same way
         /// (<see cref="Fragmentation.FragmentainerContext.BandEndInsetOf"/>), and the two compose.
         /// </para>
+        /// <para>
+        /// Asks <see cref="HtmlContainerInt.BandBeingFilled"/> — the fragmentainer the pass is actually
+        /// filling, not merely the band this word's own top happens to fall in. Safe now that
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see>'s stage 1 makes every
+        /// mechanism that can spill flow past that fragmentainer step the pass cursor to match; before
+        /// that landed, this could only ask the page grid (see <see cref="WouldStraddleItsOwnBand"/>,
+        /// which still does, for the relocation this predicate must never be confused with).
+        /// </para>
         /// </remarks>
-        public bool WouldStraddleFragmentainer()
+        public bool WouldStraddleFragmentainer() => WouldStraddle(BandSource.Filling);
+
+        /// <summary>
+        /// Whether this word, at its current <see cref="Top"/>, has left the band its own top falls in -
+        /// the legacy relocation's question, asked of the page grid rather than the fragmentainer the
+        /// pass is filling.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="BreakPage"/> moves a word to the content top of the band <i>after</i> the one its
+        /// top is in - a coordinate fact about the grid, not a break decision the pass records - so it
+        /// must keep asking this rather than <see cref="WouldStraddleFragmentainer"/>: a word an atomic
+        /// inline's vertical inset has just shifted into a later band, while the pass cursor still names
+        /// an earlier one, is relocated one band on either way, never two.
+        /// </remarks>
+        internal bool WouldStraddleItsOwnBand() => WouldStraddle(BandSource.Grid);
+
+        private enum BandSource { Filling, Grid }
+
+        private bool WouldStraddle(BandSource source)
         {
             var container = OwnerBox.HtmlContainer!;
 
@@ -325,18 +353,10 @@ namespace PeachPDF.Html.Core.Dom
             // as "does the bottom edge fall past that band" rather than as "are the top and bottom in
             // different slots" is what makes the two arms one question with two bands, instead of two
             // questions - a slot index is a fact about the page grid, and a column has no slot of its own.
-            //
-            // Still the *grid's* band rather than the one the pass is filling
-            // (CurrentFragmentainer.Band), even though the cursor now tracks a forced break's step-overs.
-            // Block and inline flow may still put content in a later fragmentainer without recording a
-            // break: a line whose bottom lands within PageBoundaryEpsilon of the band bottom is tolerated,
-            // the next line starts in the following band, and from there everything after it resolves
-            // against that band instead. Naming the pass's own band would call every one of those a
-            // straddle, which is a different layout and a worse one - measured at 63 of 69 showcases changed,
-            // with visibly overlapping content. Tracked as #435 - BandBeingFilled both names this arm's
-            // band (still the grid's, for now) and counts every place the two disagree, so #435's own
-            // remaining work is provable rather than argued.
-            return HtmlContainerInt.FallsPast(Bottom + reservedEnd, container.BandBeingFilled(Top, container.BandStartingAt(Top)));
+            var gridBand = container.BandStartingAt(Top);
+            var band = source is BandSource.Filling ? container.BandBeingFilled(Top, gridBand) : gridBand;
+
+            return HtmlContainerInt.FallsPast(Bottom + reservedEnd, band);
         }
 
         /// <summary>
@@ -384,11 +404,14 @@ namespace PeachPDF.Html.Core.Dom
 
         public bool BreakPage()
         {
-            // Non-null for the same reason WouldStraddleFragmentainer's own read of it is: a word is only
+            // Non-null for the same reason WouldStraddleItsOwnBand's own read of it is: a word is only
             // ever asked this during layout, which a box without a container never reaches.
             var container = OwnerBox.HtmlContainer!;
 
-            if (!WouldStraddleFragmentainer())
+            // A relocation, not a break decision: this word moves to the content top of the next band
+            // whatever the pass cursor is doing, so it must ask the page grid rather than
+            // WouldStraddleFragmentainer's "is the pass filling this" question.
+            if (!WouldStraddleItsOwnBand())
                 return false;
 
             // The fragmentainer's own content edge, per css-break-3 §2. This used to land one unit
