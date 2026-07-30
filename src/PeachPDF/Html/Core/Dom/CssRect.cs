@@ -381,6 +381,36 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The fragmentainer a break taken before this word resumes in: the band its own top begins, and
+        /// the one after that only where it cannot fit there either.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Not <c>cursor.SlotIndex + 1</c>: a resume target must come from where the break actually fell,
+        /// never assumed to be "the pass after this one" (see the invariant of that name) - a box can be
+        /// placed far down the document, and after <see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see>'s
+        /// stage 1 the two happen to coincide (proven, not assumed, by <c>CursorSpills == 0</c> in the
+        /// fixtures that exercise this), but the moment a future mechanism moves flow without stepping the
+        /// cursor, "the pass after this one" is silently wrong again while this expression is not.
+        /// </para>
+        /// <para>
+        /// In the ordinary straddle - this word's own band is the one the pass is filling - this is
+        /// byte-identical to the retired <c>SlotStartingAt(word.Top) + 1</c> expression. It only differs
+        /// in the spill case the conversion above exists to close: a word whose top already begins a
+        /// later band than the one the pass opened with resumes in <i>that</i> band, not the one after
+        /// it - the band the line was trying to sit in, per #435's own words, not a further one.
+        /// </para>
+        /// </remarks>
+        internal int ResumeSlotForBreakBefore()
+        {
+            var container = OwnerBox.HtmlContainer!;
+            var slot = container.SlotStartingAt(Top);
+            var (_, reservedEnd) = ClonedInsets(container);
+
+            return HtmlContainerInt.FallsPast(Bottom + reservedEnd, container.BandOfSlot(slot)) ? slot + 1 : slot;
+        }
+
+        /// <summary>
         /// Whether this word is too tall to fit in any fragmentainer at all - the <c>css-break-3 §2</c>
         /// monolithic-overflow case <see cref="WouldStraddleFragmentainer"/> exempts from being called a
         /// straddle, since moving it would only repeat the question on the next fragmentainer forever.

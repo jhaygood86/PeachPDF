@@ -1492,9 +1492,10 @@ namespace PeachPDF.Html.Core.Dom
                                     // many lines this fragmentainer actually kept.
                                     coordinates.Break = new InlineBreakToken(
                                         blockBox,
-                                        // The fragmentainer after the one this line was trying to sit
-                                        // in, which is not in general the one after the pass's own.
-                                        box.HtmlContainer!.SlotStartingAt(word.Top) + 1,
+                                        // Derived from where the break actually fell (the band this line
+                                        // was trying to sit in), never assumed to be "the pass after this
+                                        // one" - see ResumeSlotForBreakBefore's own remarks.
+                                        word.ResumeSlotForBreakBefore(),
                                         [], coordinates.LineStartOrdinal, CompletedLineCount: 0);
                                     return;
                                 }
