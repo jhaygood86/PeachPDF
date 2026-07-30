@@ -532,11 +532,34 @@ namespace PeachPDF.Html.Core.Parse
             //    CSS2 §9.2.1.1 anonymous block boxes; §17.2.1 anonymous table objects; CSS Flexbox §4 anonymous
             //    flex items), NOT by cascading display's initial value. So don't overwrite an element-less
             //    box's structural display with the 'inline' initial.
-            foreach (var (name, initial) in CssDefaults.InitialValues)
+            //
+            //    Fast path: a box whose ComputedStyle is still the shared Default singleton hasn't had
+            //    ANY property touched yet - and every area's own Default is itself sourced from this same
+            //    CssDefaults store (see ComputedStyleAreas.cs), so re-asserting a property's initial value
+            //    on such a box is a guaranteed no-op for every property except the three audited below,
+            //    where an area's Default deliberately differs from the literal CssDefaults value:
+            //    FontFamily (kept null as a "not yet resolved" sentinel - see FontArea) and
+            //    GridTemplateColumns/Rows (the parsed GridTemplate half of "none" isn't the literal null
+            //    ComputedStyle.Default's own initializer uses - see GridArea). This also correctly still
+            //    runs the full loop (with its Display-for-anonymous-box exception above) for any box that
+            //    HAS already diverged from Default - e.g. an anonymous box whose Display was assigned
+            //    structurally before this runs, which is exactly what keeps that exception meaningful.
+            //    Verified exhaustively against every CssDefaults entry - see
+            //    ComputedStyleTests.CascadeDefaultingLoop_OnAFreshBox_OnlyFontFamilyAndGridTemplatesAreNotNoOps.
+            if (!ReferenceEquals(box.ComputedStyle, ComputedStyle.Default))
             {
-                if (initial is null) continue;
-                if (name == PropertyNames.Display && box.HtmlTag is null) continue;
-                CssUtils.SetPropertyValue(valueParser, box, name, initial);
+                foreach (var (name, initial) in CssDefaults.InitialValues)
+                {
+                    if (initial is null) continue;
+                    if (name == PropertyNames.Display && box.HtmlTag is null) continue;
+                    CssUtils.SetPropertyValue(valueParser, box, name, initial);
+                }
+            }
+            else
+            {
+                CssUtils.SetPropertyValue(valueParser, box, PropertyNames.FontFamily, CssDefaults.GetInitialValue(PropertyNames.FontFamily)!);
+                CssUtils.SetPropertyValue(valueParser, box, PropertyNames.GridTemplateColumns, CssDefaults.GetInitialValue(PropertyNames.GridTemplateColumns)!);
+                CssUtils.SetPropertyValue(valueParser, box, PropertyNames.GridTemplateRows, CssDefaults.GetInitialValue(PropertyNames.GridTemplateRows)!);
             }
 
             // 2. Inherit inheritable properties from parent
@@ -560,12 +583,23 @@ namespace PeachPDF.Html.Core.Parse
             // effects, so hoisting it here (ahead of TranslateAttributes, which still runs at its
             // original point below) doesn't change behavior, and lets RulesUseRevertKeyword below
             // see it too.
+            //
+            // A style="..." attribute's text is always a flat declaration list - never a full rule (no
+            // selector, no braces) - so this parses it directly into a bare StyleRule's StyleDeclaration
+            // (StylesheetParser.AppendDeclarations, the same primitive AssignCustomPropertyDeclaration's
+            // var()-reparse already uses via StylesheetParser.Default below) rather than wrapping it as
+            // "* { ... }" and running the full stylesheet pipeline - tokenizing an unused "*" selector,
+            // rule/brace handling, a whole Stylesheet/StylesheetText wrapper - just to reach the same
+            // declarations. AssignCssBlock only ever reads stylesheetRule.Style; nothing downstream reads
+            // this rule's Selector/SelectorText, so the constructor's default "match everything" selector
+            // is simply unused, not incorrect.
             IStyleRule? inlineRule = null;
             if (box.HtmlTag != null && box.HtmlTag.HasAttribute("style"))
             {
-                var styleAttributeText = box.HtmlTag.TryGetAttribute("style");
-                var block = CssParser.ParseStyleSheet("* { " + styleAttributeText + " }");
-                inlineRule = block.StyleRules.Single();
+                var styleAttributeText = box.HtmlTag.TryGetAttribute("style")!;
+                var rule = new StyleRule(StylesheetParser.Default);
+                StylesheetParser.Default.AppendDeclarations(rule.Style, styleAttributeText);
+                inlineRule = rule;
             }
 
             // The relatively expensive property/custom-property snapshots below are only ever read
@@ -755,7 +789,9 @@ namespace PeachPDF.Html.Core.Parse
                 var markerBox = new CssBoxMarker(box);
                 box.Boxes.Remove(markerBox);
                 box.Boxes.Insert(0, markerBox);
-                markerBox.InheritStyle(box);
+                // No InheritStyle() call here: CascadeApplyStyles below unconditionally re-defaults
+                // (its own step 1) and re-inherits (step 2, box.InheritStyle()) as soon as it starts, so
+                // a pre-emptive inherit here would just be immediately discarded and redone.
                 CascadeApplyStyles(valueParser, markerBox, cssData, media);
             }
 
@@ -895,7 +931,9 @@ namespace PeachPDF.Html.Core.Parse
 
             textBox.Text = remainder;
 
-            firstLetterBox.InheritStyle(parentBox);
+            // No InheritStyle() call here: CascadeApplyStyles below unconditionally re-defaults (its
+            // own step 1) and re-inherits (step 2, box.InheritStyle()) as soon as it starts, so a
+            // pre-emptive inherit here would just be immediately discarded and redone.
             CascadeApplyStyles(valueParser, firstLetterBox, cssData, media);
         }
 

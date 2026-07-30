@@ -42,8 +42,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!double.IsNaN(_actualBorderTopWidth)) return _actualBorderTopWidth;
 
-                _actualBorderTopWidth = CssValueParser.GetActualBorderWidth(Style.BorderTopWidth, Owner);
-                if (string.IsNullOrEmpty(Style.BorderTopStyle) || Style.BorderTopStyle == CssConstants.None)
+                _actualBorderTopWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderTopWidth, Owner);
+                if (string.IsNullOrEmpty(Style.Border.BorderTopStyle) || Style.Border.BorderTopStyle == CssConstants.None)
                     _actualBorderTopWidth = 0f;
 
                 return _actualBorderTopWidth;
@@ -56,8 +56,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!double.IsNaN(_actualBorderRightWidth)) return _actualBorderRightWidth;
 
-                _actualBorderRightWidth = CssValueParser.GetActualBorderWidth(Style.BorderRightWidth, Owner);
-                if (string.IsNullOrEmpty(Style.BorderRightStyle) || Style.BorderRightStyle == CssConstants.None)
+                _actualBorderRightWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderRightWidth, Owner);
+                if (string.IsNullOrEmpty(Style.Border.BorderRightStyle) || Style.Border.BorderRightStyle == CssConstants.None)
                     _actualBorderRightWidth = 0f;
 
                 return _actualBorderRightWidth;
@@ -70,8 +70,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!double.IsNaN(_actualBorderBottomWidth)) return _actualBorderBottomWidth;
 
-                _actualBorderBottomWidth = CssValueParser.GetActualBorderWidth(Style.BorderBottomWidth, Owner);
-                if (string.IsNullOrEmpty(Style.BorderBottomStyle) || Style.BorderBottomStyle == CssConstants.None)
+                _actualBorderBottomWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderBottomWidth, Owner);
+                if (string.IsNullOrEmpty(Style.Border.BorderBottomStyle) || Style.Border.BorderBottomStyle == CssConstants.None)
                     _actualBorderBottomWidth = 0f;
 
                 return _actualBorderBottomWidth;
@@ -84,8 +84,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!double.IsNaN(_actualBorderLeftWidth)) return _actualBorderLeftWidth;
 
-                _actualBorderLeftWidth = CssValueParser.GetActualBorderWidth(Style.BorderLeftWidth, Owner);
-                if (string.IsNullOrEmpty(Style.BorderLeftStyle) || Style.BorderLeftStyle == CssConstants.None)
+                _actualBorderLeftWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderLeftWidth, Owner);
+                if (string.IsNullOrEmpty(Style.Border.BorderLeftStyle) || Style.Border.BorderLeftStyle == CssConstants.None)
                     _actualBorderLeftWidth = 0f;
 
                 return _actualBorderLeftWidth;
@@ -99,8 +99,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!double.IsNaN(_actualColumnRuleWidth)) return _actualColumnRuleWidth;
 
-                _actualColumnRuleWidth = CssValueParser.GetActualBorderWidth(Style.ColumnRuleWidth, Owner);
-                if (string.IsNullOrEmpty(Style.ColumnRuleStyle) || Style.ColumnRuleStyle == CssConstants.None)
+                _actualColumnRuleWidth = CssValueParser.GetActualBorderWidth(Style.MultiColumn.ColumnRuleWidth, Owner);
+                if (string.IsNullOrEmpty(Style.MultiColumn.ColumnRuleStyle) || Style.MultiColumn.ColumnRuleStyle == CssConstants.None)
                     _actualColumnRuleWidth = 0f;
 
                 return _actualColumnRuleWidth;
@@ -126,7 +126,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderTopColor.IsEmpty) _actualBorderTopColor = Owner.GetActualColor(Style.BorderTopColor);
+                if (_actualBorderTopColor.IsEmpty) _actualBorderTopColor = Owner.GetActualColor(Style.Border.BorderTopColor);
                 return _actualBorderTopColor;
             }
         }
@@ -135,7 +135,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderRightColor.IsEmpty) _actualBorderRightColor = Owner.GetActualColor(Style.BorderRightColor);
+                if (_actualBorderRightColor.IsEmpty) _actualBorderRightColor = Owner.GetActualColor(Style.Border.BorderRightColor);
                 return _actualBorderRightColor;
             }
         }
@@ -144,7 +144,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderBottomColor.IsEmpty) _actualBorderBottomColor = Owner.GetActualColor(Style.BorderBottomColor);
+                if (_actualBorderBottomColor.IsEmpty) _actualBorderBottomColor = Owner.GetActualColor(Style.Border.BorderBottomColor);
                 return _actualBorderBottomColor;
             }
         }
@@ -153,7 +153,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBorderLeftColor.IsEmpty) _actualBorderLeftColor = Owner.GetActualColor(Style.BorderLeftColor);
+                if (_actualBorderLeftColor.IsEmpty) _actualBorderLeftColor = Owner.GetActualColor(Style.Border.BorderLeftColor);
                 return _actualBorderLeftColor;
             }
         }
@@ -163,7 +163,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualColumnRuleColor.IsEmpty) _actualColumnRuleColor = Owner.GetActualColor(Style.ColumnRuleColor);
+                if (_actualColumnRuleColor.IsEmpty) _actualColumnRuleColor = Owner.GetActualColor(Style.MultiColumn.ColumnRuleColor);
                 return _actualColumnRuleColor;
             }
         }
@@ -191,7 +191,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualBorderTopLeftRadiusX))
-                    _actualBorderTopLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.BorderTopLeftRadius), Owner.ActualBoxSizingWidth, Owner);
+                    _actualBorderTopLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderTopLeftRadius), Owner.ActualBoxSizingWidth, Owner);
                 return _actualBorderTopLeftRadiusX;
             }
         }
@@ -201,7 +201,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualBorderTopLeftRadiusY))
-                    _actualBorderTopLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.BorderTopLeftRadius), Owner.ActualBoxSizingHeight, Owner);
+                    _actualBorderTopLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderTopLeftRadius), Owner.ActualBoxSizingHeight, Owner);
                 return _actualBorderTopLeftRadiusY;
             }
         }
@@ -211,7 +211,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualBorderTopRightRadiusX))
-                    _actualBorderTopRightRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.BorderTopRightRadius), Owner.ActualBoxSizingWidth, Owner);
+                    _actualBorderTopRightRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderTopRightRadius), Owner.ActualBoxSizingWidth, Owner);
                 return _actualBorderTopRightRadiusX;
             }
         }
@@ -221,7 +221,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualBorderTopRightRadiusY))
-                    _actualBorderTopRightRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.BorderTopRightRadius), Owner.ActualBoxSizingHeight, Owner);
+                    _actualBorderTopRightRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderTopRightRadius), Owner.ActualBoxSizingHeight, Owner);
                 return _actualBorderTopRightRadiusY;
             }
         }
@@ -231,7 +231,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualBorderBottomRightRadiusX))
-                    _actualBorderBottomRightRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.BorderBottomRightRadius), Owner.ActualBoxSizingWidth, Owner);
+                    _actualBorderBottomRightRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderBottomRightRadius), Owner.ActualBoxSizingWidth, Owner);
                 return _actualBorderBottomRightRadiusX;
             }
         }
@@ -241,7 +241,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualBorderBottomRightRadiusY))
-                    _actualBorderBottomRightRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.BorderBottomRightRadius), Owner.ActualBoxSizingHeight, Owner);
+                    _actualBorderBottomRightRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderBottomRightRadius), Owner.ActualBoxSizingHeight, Owner);
                 return _actualBorderBottomRightRadiusY;
             }
         }
@@ -251,7 +251,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualBorderBottomLeftRadiusX))
-                    _actualBorderBottomLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.BorderBottomLeftRadius), Owner.ActualBoxSizingWidth, Owner);
+                    _actualBorderBottomLeftRadiusX = CssValueParser.ParseLength(FirstCssValue(Style.Border.BorderBottomLeftRadius), Owner.ActualBoxSizingWidth, Owner);
                 return _actualBorderBottomLeftRadiusX;
             }
         }
@@ -261,7 +261,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualBorderBottomLeftRadiusY))
-                    _actualBorderBottomLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.BorderBottomLeftRadius), Owner.ActualBoxSizingHeight, Owner);
+                    _actualBorderBottomLeftRadiusY = CssValueParser.ParseLength(SecondCssValue(Style.Border.BorderBottomLeftRadius), Owner.ActualBoxSizingHeight, Owner);
                 return _actualBorderBottomLeftRadiusY;
             }
         }
@@ -354,7 +354,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualPaddingTop))
-                    _actualPaddingTop = CssValueParser.ParseLength(Style.PaddingTop, Owner.Size.Width, Owner);
+                    _actualPaddingTop = CssValueParser.ParseLength(Style.BoxModel.PaddingTop, Owner.Size.Width, Owner);
                 return _actualPaddingTop;
             }
         }
@@ -364,7 +364,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualPaddingRight))
-                    _actualPaddingRight = CssValueParser.ParseLength(Style.PaddingRight, Owner.Size.Width, Owner);
+                    _actualPaddingRight = CssValueParser.ParseLength(Style.BoxModel.PaddingRight, Owner.Size.Width, Owner);
                 return _actualPaddingRight;
             }
         }
@@ -374,7 +374,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualPaddingBottom))
-                    _actualPaddingBottom = CssValueParser.ParseLength(Style.PaddingBottom, Owner.Size.Width, Owner);
+                    _actualPaddingBottom = CssValueParser.ParseLength(Style.BoxModel.PaddingBottom, Owner.Size.Width, Owner);
                 return _actualPaddingBottom;
             }
         }
@@ -384,7 +384,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualPaddingLeft))
-                    _actualPaddingLeft = CssValueParser.ParseLength(Style.PaddingLeft, Owner.Size.Width, Owner);
+                    _actualPaddingLeft = CssValueParser.ParseLength(Style.BoxModel.PaddingLeft, Owner.Size.Width, Owner);
                 return _actualPaddingLeft;
             }
         }
@@ -398,7 +398,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 // Paren-depth-aware split (not a naive regex length-search) so a calc()/min()/max()/clamp()
                 // value's internal spaces aren't mistaken for the horizontal/vertical delimiter.
-                var parts = new List<string>(CssValueParser.SplitTopLevelWhitespace(Style.BorderSpacing));
+                var parts = new List<string>(CssValueParser.SplitTopLevelWhitespace(Style.Table.BorderSpacing));
 
                 _actualBorderSpacingHorizontal = parts.Count > 0
                     ? CssValueParser.ParseLength(parts[0], 1, Owner)
@@ -415,7 +415,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!double.IsNaN(_actualBorderSpacingVertical)) return _actualBorderSpacingVertical;
 
-                var parts = new List<string>(CssValueParser.SplitTopLevelWhitespace(Style.BorderSpacing));
+                var parts = new List<string>(CssValueParser.SplitTopLevelWhitespace(Style.Table.BorderSpacing));
 
                 _actualBorderSpacingVertical = parts.Count switch
                 {
@@ -451,7 +451,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!_actualTransformComputed)
                 {
-                    _actualTransformMatrix = CssValueParser.ParseTransform(Style.Transform, Style.TransformOrigin, Owner);
+                    _actualTransformMatrix = CssValueParser.ParseTransform(Style.VisualEffects.Transform, Style.VisualEffects.TransformOrigin, Owner);
                     _actualTransformComputed = true;
                 }
                 return _actualTransformMatrix;
@@ -476,9 +476,9 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!_actualOpacityComputed)
                 {
-                    _actualOpacity = string.IsNullOrEmpty(Style.Opacity)
+                    _actualOpacity = string.IsNullOrEmpty(Style.VisualEffects.Opacity)
                         ? 1.0
-                        : Math.Clamp(CssValueParser.ParseNumber(Style.Opacity, 1.0), 0.0, 1.0);
+                        : Math.Clamp(CssValueParser.ParseNumber(Style.VisualEffects.Opacity, 1.0), 0.0, 1.0);
                     _actualOpacityComputed = true;
                 }
                 return _actualOpacity;
@@ -526,9 +526,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (!double.IsNaN(ActualLetterSpacing)) return;
 
-            _actualLetterSpacing = Style.LetterSpacing == CssConstants.Normal
+            _actualLetterSpacing = Style.Text.LetterSpacing == CssConstants.Normal
                 ? 0
-                : CssValueParser.ParseLength(Style.LetterSpacing, 1, Owner);
+                : CssValueParser.ParseLength(Style.Text.LetterSpacing, 1, Owner);
         }
 
         public double ActualTextIndent
@@ -536,7 +536,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 if (double.IsNaN(_actualTextIndent))
-                    _actualTextIndent = CssValueParser.ParseLength(Style.TextIndent, Owner.Size.Width, Owner);
+                    _actualTextIndent = CssValueParser.ParseLength(Style.Text.TextIndent, Owner.Size.Width, Owner);
                 return _actualTextIndent;
             }
         }
@@ -552,7 +552,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualColor.IsEmpty) _actualColor = Owner.GetActualColor(Style.Color);
+                if (_actualColor.IsEmpty) _actualColor = Owner.GetActualColor(Style.Text.Color);
                 return _actualColor;
             }
         }
@@ -561,7 +561,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (_actualBackgroundColor.IsEmpty) _actualBackgroundColor = Owner.GetActualColor(Style.BackgroundColor);
+                if (_actualBackgroundColor.IsEmpty) _actualBackgroundColor = Owner.GetActualColor(Style.Background.BackgroundColor);
                 return _actualBackgroundColor;
             }
         }
@@ -585,7 +585,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (!_actualFontPaletteResolved)
                 {
-                    _actualFontPalette = FontPaletteResolver.Resolve(Style.FontPalette, ActualFont, Style.FontFamily, Owner.FontPaletteValuesRegistry);
+                    _actualFontPalette = FontPaletteResolver.Resolve(Style.Font.FontPalette, ActualFont, Style.Font.FontFamily, Owner.FontPaletteValuesRegistry);
                     _actualFontPaletteResolved = true;
                 }
 
@@ -612,12 +612,12 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (_actualFont != null) return _actualFont;
 
-                if (string.IsNullOrEmpty(Style.FontFamily))
+                if (string.IsNullOrEmpty(Style.Font.FontFamily))
                 {
                     Owner.FontFamily = CssConstants.DefaultFont;
                 }
 
-                if (string.IsNullOrEmpty(Style.FontSize))
+                if (string.IsNullOrEmpty(Style.Font.FontSize))
                 {
                     Owner.FontSize = CssConstants.FontSize.ToString(CultureInfo.InvariantCulture) + "pt";
                 }
@@ -639,14 +639,14 @@ namespace PeachPDF.Html.Core.Dom
                     remSize = CssConstants.FontSize;
                 }
 
-                var fsize = FontSizeResolver.Resolve(Style.FontSize, parentSize, remSize);
+                var fsize = FontSizeResolver.Resolve(Style.Font.FontSize, parentSize, remSize);
 
-                _actualFont = Owner.GetCachedFont(Style.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+                _actualFont = Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
                               ?? Owner.GetCachedFont(CssConstants.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus);
 
                 if (_actualFont is null)
                 {
-                    throw new HtmlRenderException($"Cannot find font: {Style.FontFamily} and Default Font {CssConstants.DefaultFont} is not installed", HtmlRenderErrorType.General);
+                    throw new HtmlRenderException($"Cannot find font: {Style.Font.FontFamily} and Default Font {CssConstants.DefaultFont} is not installed", HtmlRenderErrorType.General);
                 }
 
                 return _actualFont!;
@@ -656,12 +656,12 @@ namespace PeachPDF.Html.Core.Dom
         private int? _actualNumericWeight;
 
         /// <summary>
-        /// This box's own <see cref="ComputedStyle.FontWeight"/>, resolved to a concrete CSS Fonts numeric
+        /// This box's own <see cref="FontArea.FontWeight"/>, resolved to a concrete CSS Fonts numeric
         /// weight (1-1000) via <see cref="FontWeightResolver"/> - <c>bolder</c>/<c>lighter</c> are stepped
         /// relative to the parent's own resolved weight, not treated as a fixed "always bold"/"always
         /// normal". Cached like <see cref="ActualFont"/> - both are only ever read after the cascade has
         /// finished assigning every box's own properties, so there's no need to invalidate this when
-        /// <see cref="ComputedStyle.FontWeight"/> is set.
+        /// <see cref="FontArea.FontWeight"/> is set.
         /// </summary>
         public int ActualNumericWeight
         {
@@ -670,7 +670,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (_actualNumericWeight is { } cached) return cached;
 
                 var parentWeight = Owner.ParentBox is { } parent ? parent.ActualNumericWeight : 400;
-                var resolved = FontWeightResolver.Resolve(Style.FontWeight, parentWeight);
+                var resolved = FontWeightResolver.Resolve(Style.Font.FontWeight, parentWeight);
                 _actualNumericWeight = resolved;
                 return resolved;
             }
@@ -679,7 +679,7 @@ namespace PeachPDF.Html.Core.Dom
         private int? _actualStretch;
 
         /// <summary>
-        /// This box's own <see cref="ComputedStyle.FontStretch"/> keyword, resolved to a concrete CSS
+        /// This box's own <see cref="FontArea.FontStretch"/> keyword, resolved to a concrete CSS
         /// Fonts numeric stretch (1-9, matching OS/2 <c>usWidthClass</c>) via <see cref="FontStretchResolver"/>.
         /// Unlike <see cref="ActualNumericWeight"/>, <c>font-stretch</c> has no parent-relative keywords, so
         /// this doesn't need to walk up the box tree.
@@ -690,19 +690,19 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (_actualStretch is { } cached) return cached;
 
-                var resolved = FontStretchResolver.Resolve(Style.FontStretch);
+                var resolved = FontStretchResolver.Resolve(Style.Font.FontStretch);
                 _actualStretch = resolved;
                 return resolved;
             }
         }
 
         /// <summary>
-        /// This box's own <see cref="ComputedStyle.FontStyle"/>, resolved to a faux-italic skew factor (the
+        /// This box's own <see cref="FontArea.FontStyle"/>, resolved to a faux-italic skew factor (the
         /// sine of the declared angle) when it's the CSS Fonts Level 4 <c>oblique &lt;angle&gt;</c> form -
         /// null for <c>italic</c>, bare <c>oblique</c>, or <c>normal</c>, in which case the renderer falls
         /// back to its own fixed default skew. See <see cref="FontObliqueAngleResolver"/>.
         /// </summary>
-        public double? ActualObliqueSkewSinus => FontObliqueAngleResolver.ResolveSkewSinus(Style.FontStyle);
+        public double? ActualObliqueSkewSinus => FontObliqueAngleResolver.ResolveSkewSinus(Style.Font.FontStyle);
 
         /// <summary>
         /// Computes the <see cref="RFontStyle"/> flags (italic/bold) for this box's own font-style/numeric
@@ -716,7 +716,7 @@ namespace PeachPDF.Html.Core.Dom
             // FontStyle may be the bare "oblique" keyword or CSS Fonts Level 4's "oblique <angle>" form
             // (e.g. "oblique 10deg") - both are italic-equivalent for RFontStyle purposes, so match by
             // prefix rather than exact equality.
-            if (Style.FontStyle is CssConstants.Italic || Style.FontStyle.StartsWith(CssConstants.Oblique, StringComparison.Ordinal))
+            if (Style.Font.FontStyle is CssConstants.Italic || Style.Font.FontStyle.StartsWith(CssConstants.Oblique, StringComparison.Ordinal))
             {
                 st |= RFontStyle.Italic;
             }
@@ -744,7 +744,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (_smallCapsFont != null) return _smallCapsFont;
 
                 var font = ActualFont;
-                _smallCapsFont = Owner.GetCachedFont(Style.FontFamily!, font.Size * CssBox.SmallCapsFontScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+                _smallCapsFont = Owner.GetCachedFont(Style.Font.FontFamily!, font.Size * CssBox.SmallCapsFontScale, GetActualFontStyleFlags(), ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
                                  ?? font;
                 return _smallCapsFont;
             }
@@ -769,7 +769,7 @@ namespace PeachPDF.Html.Core.Dom
             var size = ActualFont.Size * sizeScale;
             // Resolve against the full authored font-family stack (not the cascade-collapsed single family)
             // so a codepoint the first family can't supply falls back to a later one.
-            var font = Owner.GetCachedFontForCodepoint(Style.FontFamilyList ?? Style.FontFamily!, size, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+            var font = Owner.GetCachedFontForCodepoint(Style.Font.FontFamilyList ?? Style.Font.FontFamily!, size, GetActualFontStyleFlags(), codepoint, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
                        ?? (sizeScale == 1.0 ? ActualFont : ActualSmallCapsFont);
 
             (_codepointFontCache ??= [])[cacheKey] = font;
@@ -799,24 +799,24 @@ namespace PeachPDF.Html.Core.Dom
         #region Line-height
 
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
-        public double ActualLineHeight => Style.LineHeight is CssConstants.Normal
+        public double ActualLineHeight => Style.Text.LineHeight is CssConstants.Normal
             ? 1.2 * GetEmHeight()
-            : CssValueParser.ParseLength(Style.LineHeight, Owner.Size.Height, Owner);
+            : CssValueParser.ParseLength(Style.Text.LineHeight, Owner.Size.Height, Owner);
 
         #endregion
 
         #region Position, multi-column
 
         /// <summary>True for a positioned element: <c>position</c> of relative, absolute, fixed, or sticky.</summary>
-        public bool IsPositioned => Style.Position is CssConstants.Relative or CssConstants.Absolute or CssConstants.Fixed or CssConstants.Sticky;
+        public bool IsPositioned => Style.DisplayPositioning.Position is CssConstants.Relative or CssConstants.Absolute or CssConstants.Fixed or CssConstants.Sticky;
 
         /// <summary>
         /// Whether this box establishes a CSS multi-column formatting context, per spec: <c>column-width</c>
         /// is not <c>auto</c>, or <c>column-count</c> is not <c>auto</c>.
         /// </summary>
         public bool EstablishesMultiColumnContext =>
-            (!string.IsNullOrEmpty(Style.ColumnCount) && Style.ColumnCount != CssConstants.Auto) ||
-            (!string.IsNullOrEmpty(Style.ColumnWidth) && Style.ColumnWidth != CssConstants.Auto);
+            (!string.IsNullOrEmpty(Style.MultiColumn.ColumnCount) && Style.MultiColumn.ColumnCount != CssConstants.Auto) ||
+            (!string.IsNullOrEmpty(Style.MultiColumn.ColumnWidth) && Style.MultiColumn.ColumnWidth != CssConstants.Auto);
 
         #endregion
     }
