@@ -253,6 +253,18 @@ namespace PeachPDF.Text.Bidi
                 el.Add(o);
             }
 
+            // Two overrides sharing an End index (e.g. CSS unicode-bidi: isolate-override maps to an
+            // outer LRI and an inner, nested LRO both spanning the same box's whole text range) must
+            // close in the opposite order they opened - proper LIFO stack discipline. They were just
+            // appended to each endsAt list in the same (push) order as startsAt, so reverse each list
+            // once here rather than getting every future multi-override-per-span caller to pre-sort its
+            // input; a single override per span (the overwhelming common case) is a one-element list a
+            // reverse is a no-op on.
+            if (endsAt != null)
+            {
+                foreach (var list in endsAt.Values) list.Reverse();
+            }
+
             byte PrevLevel(int i) => i > 0 ? levels[i - 1] : paragraphLevel;
 
             for (var i = 0; i < n; i++)

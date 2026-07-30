@@ -510,6 +510,17 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// One resolved UAX#9 embedding level per character of <see cref="Text"/> - null for a box outside
+        /// any paragraph <see cref="CssBidiParagraphResolver.AssignBidiLevels"/> reached (only ever the
+        /// case for text set after that pass already ran, e.g. <c>DomParser.CorrectLineBreaksBlocks</c>'s
+        /// synthetic <c>"\n"</c> for a standalone <c>&lt;br&gt;</c>), in which case <see cref="ParseToWords"/>
+        /// falls back to one level for the whole box, from its own resolved <see cref="Direction"/>. Set once,
+        /// before <see cref="ParseToWords"/> runs on this box, so it can additionally split words at a level
+        /// boundary the way it already splits at whitespace/hyphen/CJK boundaries.
+        /// </summary>
+        internal byte[]? BidiLevels { get; set; }
+
+        /// <summary>
         /// Gets the line-boxes of this box (if block box)
         /// </summary>
         internal List<CssLineBox> LineBoxes { get; } = [];
@@ -682,6 +693,12 @@ namespace PeachPDF.Html.Core.Dom
             var preserveSpaces = WhiteSpace is CssConstants.Pre or CssConstants.PreWrap;
             var respectNewLines = preserveSpaces || WhiteSpace == CssConstants.PreLine || IsBrElement;
 
+            // Only ever null for text set after CssBidiParagraphResolver.AssignBidiLevels already ran
+            // (e.g. DomParser.CorrectLineBreaksBlocks' synthetic "\n" for a standalone <br>) - one level
+            // for the whole box, from its own resolved Direction, is the correct behavior for that text
+            // anyway (a lone line-break/space has nothing to bidi-split).
+            var fallbackLevel = Direction.Value == DirectionMode.Rtl ? (byte)1 : (byte)0;
+
             while (startIdx < text.Length)
             {
                 while (startIdx < text.Length && text[startIdx] == '\r')
@@ -696,7 +713,12 @@ namespace PeachPDF.Html.Core.Dom
                     if (endIdx > startIdx)
                     {
                         if (preserveSpaces)
-                            Words.Add(new CssRectWord(this, text.Substring(startIdx, endIdx - startIdx), false, false));
+                        {
+                            Words.Add(new CssRectWord(this, text.Substring(startIdx, endIdx - startIdx), false, false)
+                            {
+                                BidiLevel = BidiLevels is { } wsLevels ? wsLevels[startIdx] : fallbackLevel
+                            });
+                        }
                     }
                     else
                     {
@@ -733,8 +755,24 @@ namespace PeachPDF.Html.Core.Dom
                                 endIdx += runeLength;
                         }
 
+                        // An extra break opportunity at a UAX#9 embedding-level boundary - on top of the
+                        // whitespace/hyphen/CJK ones above - so e.g. a digit run embedded directly in RTL
+                        // text with no adjacent whitespace (a level change with nothing else marking a
+                        // boundary) still ends up as its own word, which CssLayoutEngine's per-line bidi
+                        // reorder step needs (it treats each word as one homogeneous-level UAX#9 unit).
+                        // Only ever shrinks endIdx (never extends past what the rules above decided).
+                        if (BidiLevels is { } levels && endIdx > startIdx)
+                        {
+                            var boundaryLevel = levels[startIdx];
+                            var boundary = startIdx + 1;
+                            while (boundary < endIdx && levels[boundary] == boundaryLevel)
+                                boundary++;
+                            endIdx = boundary;
+                        }
+
                         if (endIdx > startIdx)
                         {
+                            var wordBidiLevel = BidiLevels is { } wordLevels ? wordLevels[startIdx] : fallbackLevel;
                             var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && HtmlUtils.IsCollapsibleWhitespace(text[startIdx - 1]));
                             var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && HtmlUtils.IsCollapsibleWhitespace(text[endIdx]));
                             var rawWord = text.Substring(startIdx, endIdx - startIdx);
@@ -772,16 +810,26 @@ namespace PeachPDF.Html.Core.Dom
                                 }
                             }
 
+                            // AddWord may itself split cleanWord further (small-caps case-runs,
+                            // per-codepoint font fragments) - every fragment it produces from this one
+                            // call stays within this already level-homogeneous span, so they all share
+                            // the same bidi level.
+                            var wordsBefore = Words.Count;
                             AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates, cleanOriginalWord);
+                            for (var wi = wordsBefore; wi < Words.Count; wi++)
+                                Words[wi].BidiLevel = wordBidiLevel;
                         }
                     }
 
                     // create new-line word so it will effect the layout
                     if (endIdx < text.Length && text[endIdx] == '\n')
                     {
+                        var newlineBidiLevel = BidiLevels is { } newlineLevels && endIdx < newlineLevels.Length
+                            ? newlineLevels[endIdx]
+                            : fallbackLevel;
                         endIdx++;
                         if (respectNewLines)
-                            Words.Add(new CssRectWord(this, "\n", false, false));
+                            Words.Add(new CssRectWord(this, "\n", false, false) { BidiLevel = newlineBidiLevel });
                     }
 
                     startIdx = endIdx;

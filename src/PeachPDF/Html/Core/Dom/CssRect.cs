@@ -212,6 +212,14 @@ namespace PeachPDF.Html.Core.Dom
         public virtual string? Text => null;
 
         /// <summary>
+        /// This word's own resolved UAX#9 embedding level - uniform across the whole word by construction
+        /// (<see cref="CssBox.ParseToWords"/> additionally splits at a level-boundary, so a single word
+        /// never straddles two levels). Consumed by <see cref="CssLayoutEngine"/>'s per-line L2
+        /// reorder/L4 mirroring step, which treats each word as one homogeneous-level UAX#9 unit.
+        /// </summary>
+        public byte BidiLevel { get; set; }
+
+        /// <summary>
         /// The pre-<see cref="TextArea.TextTransform"/> source text this word was produced from
         /// (still HTML-decoded/soft-hyphen-stripped, just not case-transformed) - null for words that
         /// never carry real text (e.g. line breaks). All 3 CSS1 <c>text-transform</c> values are

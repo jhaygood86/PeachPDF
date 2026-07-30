@@ -32,7 +32,6 @@ namespace PeachPDF.Html.Core.Dom
         public CssLineBox(CssBox ownerBox)
         {
             Rectangles = [];
-            RelatedBoxes = [];
             Words = [];
             OwnerBox = ownerBox;
             OwnerBox.LineBoxes.Add(this);
@@ -50,12 +49,6 @@ namespace PeachPDF.Html.Core.Dom
         /// produced it.
         /// </remarks>
         public int StartOrdinal { get; internal set; }
-
-        /// <summary>
-        /// Gets a list of boxes related with the linebox.
-        /// To know the words of the box inside this linebox, use the <see cref="WordsOf"/> method.
-        /// </summary>
-        public List<CssBox> RelatedBoxes { get; }
 
         /// <summary>
         /// Gets the words inside the linebox
@@ -130,11 +123,6 @@ namespace PeachPDF.Html.Core.Dom
             if (!Words.Contains(word))
             {
                 Words.Add(word);
-            }
-
-            if (!RelatedBoxes.Contains(word.OwnerBox))
-            {
-                RelatedBoxes.Add(word.OwnerBox);
             }
         }
 

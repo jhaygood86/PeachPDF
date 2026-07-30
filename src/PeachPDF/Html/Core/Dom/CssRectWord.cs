@@ -17,6 +17,8 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal sealed class CssRectWord : CssRect
     {
+        private string _text;
+
         /// <summary>
         /// Init.
         /// </summary>
@@ -28,7 +30,7 @@ namespace PeachPDF.Html.Core.Dom
         public CssRectWord(CssBox owner, string text, bool hasSpaceBefore, bool hasSpaceAfter, string? originalText = null)
             : base(owner)
         {
-            Text = text;
+            _text = text;
             HasSpaceBefore = hasSpaceBefore;
             HasSpaceAfter = hasSpaceAfter;
             OriginalText = originalText ?? text;
@@ -69,7 +71,17 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the text of the word
         /// </summary>
-        public override string Text { get; }
+        public override string Text => _text;
+
+        /// <summary>
+        /// Rewrites this word's text in place - used by <c>CssLayoutEngine</c>'s per-line bidi reordering
+        /// step to apply L2 character reversal + L4 mirroring (<c>BidiMirrorResolver.ApplyMirroring</c>)
+        /// to an RTL word once its final visual position is known. A plain method rather than a settable
+        /// <see cref="Text"/> property, since every other <see cref="CssRect"/> subclass's <c>Text</c> is
+        /// never meant to be writable at all (the base declares it nullable and get-only for exactly
+        /// that reason - most subclasses, e.g. an image, never carry text).
+        /// </summary>
+        internal void ReplaceText(string text) => _text = text;
 
         /// <summary>
         /// Represents this word for debugging purposes

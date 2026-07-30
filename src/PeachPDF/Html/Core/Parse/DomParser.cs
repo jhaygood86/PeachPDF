@@ -125,6 +125,11 @@ namespace PeachPDF.Html.Core.Parse
 
             ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media);
 
+            // Must run after the cascade (it reads each box's resolved Direction/UnicodeBidi) and
+            // before CorrectTextBoxes (the first place that calls CssBox.ParseToWords, which consults
+            // the per-box level arrays this assigns).
+            CssBidiParagraphResolver.AssignBidiLevels(root);
+
             CorrectTextBoxes(root);
 
             CorrectReplacedElementBoxes(root);

@@ -19,6 +19,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -417,7 +418,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var lineBox = blockBox.LineBoxes[i];
                 ApplyHorizontalAlignment(lineBox, blockFinished);
-                ApplyRightToLeft(blockBox, lineBox);
+                ApplyBidiReordering(lineBox);
                 BubbleRectangles(blockBox, lineBox);
                 ApplyVerticalAlignment(lineBox);
                 lineBox.AssignRectanglesToBoxes();
@@ -1900,77 +1901,87 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Applies right to left direction to words
+        /// UAX#9 L2 (visual reordering) + L4 (mirroring), applied at word granularity - each word is one
+        /// homogeneous-level unit by construction (<see cref="CssBox.ParseToWords"/> splits at a bidi
+        /// level boundary the same way it already splits at whitespace/hyphen/CJK boundaries, see
+        /// <see cref="CssBox.BidiLevels"/>). Replaces the old whole-word-only mirroring
+        /// (<c>ApplyRightToLeft</c>/<c>ApplyRightToLeftOnLine</c>/<c>ApplyRightToLeftOnSingleBox</c>),
+        /// which only ever repositioned whole words and never reordered or mirrored their own characters.
         /// </summary>
-        /// <param name="blockBox"></param>
-        /// <param name="lineBox"></param>
-        private static void ApplyRightToLeft(CssBox blockBox, CssLineBox lineBox)
+        /// <remarks>
+        /// Reuses the exact set of <c>Left</c> "slots" <see cref="ApplyHorizontalAlignment"/> already
+        /// assigned in logical order (plain left-packed, centered, right-aligned, or justified with its
+        /// own per-word extra spacing) rather than recomputing positions from a fresh cumulative
+        /// <see cref="CssRect.FullWidth"/> sum - only which word occupies which slot changes, not the
+        /// slot geometry itself. Recomputing from scratch would silently undo justify's per-line spacing
+        /// (its extra gap is baked into each slot's <c>Left</c>, not derivable from word width alone), and
+        /// this way a line with no actual reordering to do (by far the common case - a plain LTR line, one
+        /// run spanning the whole line) is a true no-op: every word's slot index equals its own original
+        /// position.
+        /// </remarks>
+        /// <param name="lineBox">the line to reorder</param>
+        private static void ApplyBidiReordering(CssLineBox lineBox)
         {
-            if (blockBox.Direction.Value == DirectionMode.Rtl)
+            if (lineBox.Words.Count == 0) return;
+
+            var levels = new byte[lineBox.Words.Count];
+            var slots = new double[lineBox.Words.Count];
+            for (var i = 0; i < levels.Length; i++)
             {
-                ApplyRightToLeftOnLine(lineBox);
+                levels[i] = lineBox.Words[i].BidiLevel;
+                slots[i] = lineBox.Words[i].Left;
             }
-            else
+
+            // L1 clause 4: a trailing run of whitespace/line-break words at the very end of the line
+            // resets to the paragraph's base level, so trailing space never visually detaches from the
+            // line's dominant direction - CssBidiParagraphResolver.ResolveParagraph already applies
+            // clauses 1-3 (which don't depend on where a line actually breaks), leaving this one for
+            // here, where the line's own end is finally known.
+            var baseLevel = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl ? (byte)1 : (byte)0;
+            var j = levels.Length - 1;
+            while (j >= 0 && lineBox.Words[j].IsSpaces)
             {
-                foreach (var box in lineBox.RelatedBoxes)
+                levels[j] = baseLevel;
+                j--;
+            }
+
+            var runs = BidiResolver.ReorderLine(levels, 0, levels.Length);
+
+            var slotIndex = 0;
+
+            foreach (var run in runs)
+            {
+                // BidiRun.Start/Length here index into `levels`/lineBox.Words (word ordinals, one
+                // homogeneous-level unit each) rather than characters - ReorderLine only ever compares
+                // and copies the levels array, so it works unchanged at this granularity. Within an RTL
+                // run both the word order and each word's own text reverse (mirroring characters where
+                // they have a mirror image), matching how BidiResolver's own conformance reconstruction
+                // walks a character-granularity RTL run backwards.
+                if (run.IsRtl)
                 {
-                    if (box.Direction.Value == DirectionMode.Rtl)
+                    for (var k = run.Length - 1; k >= 0; k--)
                     {
-                        ApplyRightToLeftOnSingleBox(lineBox, box);
+                        PlaceBidiRunWord(lineBox.Words[run.Start + k], slots[slotIndex++], run.Level, mirror: true);
+                    }
+                }
+                else
+                {
+                    for (var k = 0; k < run.Length; k++)
+                    {
+                        PlaceBidiRunWord(lineBox.Words[run.Start + k], slots[slotIndex++], run.Level, mirror: false);
                     }
                 }
             }
         }
 
-        /// <summary>
-        /// Applies RTL direction to all the words on the line.
-        /// </summary>
-        /// <param name="line">the line to apply RTL to</param>
-        private static void ApplyRightToLeftOnLine(CssLineBox line)
+        private static void PlaceBidiRunWord(CssRect word, double slotLeft, byte level, bool mirror)
         {
-            if (line.Words.Count <= 0) return;
-
-            var left = line.Words[0].Left;
-            var right = line.Words[^1].Right;
-
-            foreach (var word in line.Words)
+            if (mirror && word is CssRectWord { IsSpaces: false, IsLineBreak: false } rectWord)
             {
-                var diff = word.Left - left;
-                var wright = right - diff;
-                word.Left = wright - word.Width;
-            }
-        }
-
-        /// <summary>
-        /// Applies RTL direction to specific box words on the line.
-        /// </summary>
-        /// <param name="lineBox"></param>
-        /// <param name="box"></param>
-        private static void ApplyRightToLeftOnSingleBox(CssLineBox lineBox, CssBox box)
-        {
-            var leftWordIdx = -1;
-            var rightWordIdx = -1;
-
-            for (var i = 0; i < lineBox.Words.Count; i++)
-            {
-                if (lineBox.Words[i].OwnerBox != box) continue;
-
-                if (leftWordIdx < 0)
-                    leftWordIdx = i;
-                rightWordIdx = i;
+                rectWord.ReplaceText(BidiMirrorResolver.ApplyMirroring(rectWord.Text, level));
             }
 
-            if (leftWordIdx <= -1 || rightWordIdx <= leftWordIdx) return;
-
-            var left = lineBox.Words[leftWordIdx].Left;
-            var right = lineBox.Words[rightWordIdx].Right;
-
-            for (var i = leftWordIdx; i <= rightWordIdx; i++)
-            {
-                var diff = lineBox.Words[i].Left - left;
-                var wright = right - diff;
-                lineBox.Words[i].Left = wright - lineBox.Words[i].Width;
-            }
+            word.Left = slotLeft;
         }
 
         /// <summary>
