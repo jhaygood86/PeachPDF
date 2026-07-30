@@ -310,6 +310,7 @@ namespace PeachPDF.Tests.TestSupport
         public override void EndMarkedContent() { }
         public override void BeginArtifact() { }
         public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => new((str?.Length ?? 0) * font.Size * 0.6, font.Height);
+        public override int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => str?.Length ?? 0;
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
         {
             charFit = str?.Length ?? 0;

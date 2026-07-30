@@ -158,6 +158,12 @@ namespace PeachPDF.Adapters
             return Utils.Convert(size, PixelsPerPoint);
         }
 
+        public override int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        {
+            var descriptor = ((FontAdapter)font).Font.Descriptor;
+            return descriptor.Shape(str, ligatureFeatures).Count;
+        }
+
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
         {
             // there is no need for it - used for text selection

@@ -61,8 +61,31 @@ real `PdfGenerator` pipeline (`@font-face` data URI, matching `Format12CmapAstra
 pattern) and asserts the saved PDF's ToUnicode stream contains `00660066` - the ligature glyph's bfrange
 destination carrying both source characters, not one or neither.
 
-Full `dotnet test --framework net8.0` suite: 7019 passed / 0 failed / 9 skipped (up from 7004 pre-change).
-Zero-warning `dotnet build PeachPDF.slnx -t:Rebuild`.
+Full `dotnet test --framework net8.0` suite: 7033 passed / 0 failed / 9 skipped (up from 7004 pre-change).
+Zero-warning `dotnet build PeachPDF.slnx -t:Rebuild`. Diff coverage (`diff-cover` against `origin/main`): 99%.
+
+A post-change review pass (per CLAUDE.md) against the actual CSS Fonts spec text and the OpenType
+GSUB/chapter2 spec found three real defects the first version of this change shipped with, all fixed and
+covered by new tests before landing:
+
+- **`font-variant-ligatures: none`/`no-common-ligatures` was disabling `rlig` too.** The spec is explicit
+  that required ligatures "are not affected by the settings above, including `none`" - `DerivedStyle
+  .ActualFontVariantLigatures` now resolves the disabled case to `LigatureFeatures.Required`, not
+  `LigatureFeatures.None`, so a font whose required ligatures don't overlap with its `liga`/`clig` set
+  keeps shaping them even under `none`.
+- **The `font` shorthand never reset `font-variant-ligatures`.** CSS Fonts 4 §7.7 lists it (along with the
+  other `font-variant-*` longhands) under "Reset Implicitly" - set whenever `font` is set, even though none
+  of them can be spelled out in `font`'s own grammar. Fixed by adding it to `PropertyFactory`'s `font`
+  shorthand longhand list; `ShorthandProperty.Export` already resets any listed longhand the shorthand's
+  grammar didn't extract a value for, so no grammar change was needed. (`font-size-adjust`/`font-palette`
+  are on the same spec list but aren't wired up either - pre-existing, not introduced by this change, and
+  left alone.)
+- **`letter-spacing` reserved one Tc gap per source character, not per shaped glyph.** The PDF `Tc`
+  operator fires once per glyph actually shown, and GSUB can merge several characters into one glyph, so a
+  ligating run with `letter-spacing` set was reserving more width than it painted. Added
+  `RGraphics.CountShapedGlyphs` (implemented via the same `descriptor.Shape` call `MeasureString`/
+  `DrawString` already use) and switched `CssBox`'s three letter-spacing width calculations from
+  `Text.Length` to it.
 
 ## Deliberately not done
 

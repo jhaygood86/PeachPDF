@@ -321,6 +321,7 @@ namespace PeachPDF.Tests.Integration
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
             public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
             public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => new(str?.Length * 6 ?? 0, 12);
+            public override int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => str?.Length ?? 0;
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;

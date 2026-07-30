@@ -290,6 +290,16 @@ namespace PeachPDF.Html.Adapters
         public abstract RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default);
 
         /// <summary>
+        /// The number of glyphs <paramref name="str"/> shapes into once GSUB ligature substitution is
+        /// applied - always &lt;= <paramref name="str"/>'s character count, less whenever a ligature
+        /// merges more than one character into a single glyph. Used to size the per-glyph <c>letter-
+        /// spacing</c> gap count a word's box must reserve (the PDF <c>Tc</c> operator adds one gap per
+        /// glyph actually shown, not per source character), so it stays in sync with what <see
+        /// cref="DrawString"/> paints for the same text/font/<paramref name="ligatureFeatures"/>.
+        /// </summary>
+        public abstract int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default);
+
+        /// <summary>
         /// Measure the width of string under max width restriction calculating the number of characters that can fit and the width those characters take.<br/>
         /// Not relevant for platforms that don't render HTML on UI element.
         /// </summary>

@@ -38,7 +38,10 @@ namespace PeachPDF.Tests.Integration
             var boxNone = FindWordsBox(container.Root!, "a");
             var boxDefault = FindWordsBox(container.Root!, "b");
 
-            Assert.Equal(LigatureFeatures.None, boxNone.ActualFontVariantLigatures);
+            // font-variant-ligatures: none disables the common-ligatures axis, but per the CSS Fonts
+            // spec required ligatures (rlig) are never affected by this property - not even by none -
+            // so this resolves to LigatureFeatures.Required, not LigatureFeatures.None.
+            Assert.Equal(LigatureFeatures.Required, boxNone.ActualFontVariantLigatures);
             Assert.Equal(LigatureFeatures.Default, boxDefault.ActualFontVariantLigatures);
         }
 
@@ -60,6 +63,24 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task LetterSpacing_ReservesGapsPerShapedGlyph_NotPerCharacter()
+        {
+            // "ff" ligates to a single glyph (see GetTextOutlineTests), so a Tc-driven letter-spacing
+            // gap must be reserved once, not twice - reserving one per source character (the pre-fix
+            // behavior) left one letter-spacing unit of unpainted blank space trailing the word.
+            var container = await LayoutHtml("<span id=\"a\" style=\"letter-spacing:10pt\">ff</span>");
+            var box = FindWordsBox(container.Root!, "a");
+
+            using var g = MeasureGraphics();
+            var font = box.ActualFont;
+            var baseWidth = g.MeasureString("ff", font, LigatureFeatures.Default).Width;
+            var glyphCount = g.CountShapedGlyphs("ff", font, LigatureFeatures.Default);
+
+            Assert.Equal(1, glyphCount);
+            Assert.Equal(baseWidth + glyphCount * box.ActualLetterSpacing, box.Words[0].Width, 3);
+        }
+
+        [Fact]
         public async Task FontVariantLigatures_PaintsWithTheResolvedFeatures_ForBothBoxes()
         {
             var container = await LayoutHtml(
@@ -72,8 +93,23 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, boxB, recorder);
 
             Assert.Equal(2, recorder.DrawStringCalls.Count);
-            Assert.Equal(LigatureFeatures.None, recorder.DrawStringCalls[0].LigatureFeatures);
+            Assert.Equal(LigatureFeatures.Required, recorder.DrawStringCalls[0].LigatureFeatures);
             Assert.Equal(LigatureFeatures.Default, recorder.DrawStringCalls[1].LigatureFeatures);
+        }
+
+        [Fact]
+        public async Task FontShorthand_ResetsFontVariantLigaturesToInitial()
+        {
+            // font-variant-ligatures is on the CSS Fonts spec's "Reset Implicitly" list for the `font`
+            // shorthand - even though `font` has no syntax of its own for ligature keywords, setting
+            // it must still reset font-variant-ligatures back to `normal`, the same way it resets
+            // font-variant back to normal for any keyword it doesn't restate.
+            var container = await LayoutHtml(
+                "<span id=\"a\" style=\"font-variant-ligatures:none; font:16pt 'SS3'\">ff</span>");
+            var box = FindWordsBox(container.Root!, "a");
+
+            Assert.Equal("normal", box.FontVariantLigatures);
+            Assert.Equal(LigatureFeatures.Default, box.ActualFontVariantLigatures);
         }
 
         [Fact]
@@ -132,6 +168,14 @@ body {{ font-family: 'SS3'; width: 400px; }}
             return container;
         }
 
+        private static GraphicsAdapter MeasureGraphics()
+        {
+            var adapter = new PdfSharpAdapter();
+            var size = new XSize(595, 842);
+            var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
+            return new GraphicsAdapter(adapter, measure, 1.0);
+        }
+
         private static CssBox? FindById(CssBox box, string id)
         {
             var val = box.HtmlTag?.TryGetAttribute("id", "");
@@ -183,6 +227,7 @@ body {{ font-family: 'SS3'; width: 400px; }}
             public override void EndMarkedContent() { }
             public override void BeginArtifact() { }
             public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => new(0, 12);
+            public override int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => str?.Length ?? 0;
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;

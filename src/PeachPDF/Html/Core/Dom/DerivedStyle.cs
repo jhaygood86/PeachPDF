@@ -610,6 +610,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>historical-ligatures</c>/<c>contextual</c> parse but don't yet affect it (no
         /// <c>dlig</c>/<c>hlig</c>/<c>calt</c> lookup application), so any value other than <c>none</c>
         /// or one containing <c>no-common-ligatures</c> resolves to the default (ligatures on).
+        /// Per the CSS Fonts spec, required ligatures (<c>rlig</c>) are never affected by this
+        /// property - not even by <c>none</c> - so the common-ligatures-off case still resolves to
+        /// <see cref="LigatureFeatures.Required"/> rather than <see cref="LigatureFeatures.None"/>.
         /// </summary>
         public LigatureFeatures ActualFontVariantLigatures
         {
@@ -621,7 +624,7 @@ namespace PeachPDF.Html.Core.Dom
                 bool disabled = value == CssConstants.None
                     || value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(CssConstants.NoCommonLigatures);
 
-                var resolved = disabled ? LigatureFeatures.None : LigatureFeatures.Default;
+                var resolved = disabled ? LigatureFeatures.Required : LigatureFeatures.Default;
                 _actualFontVariantLigatures = resolved;
                 return resolved;
             }

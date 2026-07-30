@@ -1164,7 +1164,11 @@ namespace PeachPDF.Fonts.OpenType
             Read();
         }
 
-        /// <summary>The parsed GSUB data, or null if the table's bytes couldn't be read as GSUB.</summary>
+        /// <summary>
+        /// The parsed GSUB data. Null only before <see cref="Read"/> has run; if the table's bytes
+        /// can't be read as GSUB, <see cref="Read"/> throws (matching every other required-table
+        /// reader in this file) rather than leaving this null.
+        /// </summary>
         public GsubTable? Table { get; private set; }
 
         public void Read()

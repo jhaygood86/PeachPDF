@@ -3847,15 +3847,18 @@ namespace PeachPDF.Html.Core.Dom
                     if (boxWord.IsImage) continue;
                     var font = ResolveWordFont(boxWord, this);
                     boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualFontVariantLigatures).Width : 0;
-                    // Letter-spacing adds space after every character including the last (N gaps for an
-                    // N-character word) - matching both the PDF Tc operator's actual per-glyph behavior
+                    // Letter-spacing adds space after every glyph shown including the last (N gaps for
+                    // an N-glyph word) - matching both the PDF Tc operator's actual per-glyph behavior
                     // (PaintWords/RealizeFont) and CSS Text 3 §7.2, which only exempts the start/end of a
                     // *line*, not the end of a word. Reserving only N-1 gaps here (an old CSS1/2.1-era
                     // assumption) undersized the word's own box, so its Tc-driven paint spilled one
                     // letter-spacing unit into the next word's gap - collapsing adjacent words together
-                    // once letter-spacing reached the gap's width.
+                    // once letter-spacing reached the gap's width. The gap count is the *shaped glyph*
+                    // count, not the character count - a GSUB ligature merges several characters into
+                    // one glyph, so Tc (applied once per glyph shown) fires fewer times than Text.Length
+                    // would suggest.
                     if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
-                        boxWord.Width += boxWord.Text!.Length * ActualLetterSpacing;
+                        boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ActualFontVariantLigatures) * ActualLetterSpacing;
                     boxWord.Height = ActualFont.Height;
                 }
             }
@@ -3895,9 +3898,10 @@ namespace PeachPDF.Html.Core.Dom
 
                 var font = ResolveWordFont(boxWord, firstLineStyle);
                 boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font, firstLineStyle.ActualFontVariantLigatures).Width : 0;
-                // See MeasureWordsSize's identical fix/comment - N gaps for an N-character word, not N-1.
+                // See MeasureWordsSize's identical fix/comment - N gaps for an N-glyph word, not N-1,
+                // and the shaped glyph count rather than the character count.
                 if (effectiveText != "\n" && firstLineStyle.ActualLetterSpacing != 0)
-                    boxWord.Width += effectiveText!.Length * firstLineStyle.ActualLetterSpacing;
+                    boxWord.Width += g.CountShapedGlyphs(effectiveText!, font, firstLineStyle.ActualFontVariantLigatures) * firstLineStyle.ActualLetterSpacing;
                 boxWord.Height = font.Height;
             }
         }
@@ -3928,9 +3932,10 @@ namespace PeachPDF.Html.Core.Dom
 
                 var font = ResolveWordFont(boxWord, this);
                 boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualFontVariantLigatures).Width : 0;
-                // See MeasureWordsSize's identical fix/comment - N gaps for an N-character word, not N-1.
+                // See MeasureWordsSize's identical fix/comment - N gaps for an N-glyph word, not N-1,
+                // and the shaped glyph count rather than the character count.
                 if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
-                    boxWord.Width += boxWord.Text!.Length * ActualLetterSpacing;
+                    boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ActualFontVariantLigatures) * ActualLetterSpacing;
                 boxWord.Height = font.Height;
             }
         }
