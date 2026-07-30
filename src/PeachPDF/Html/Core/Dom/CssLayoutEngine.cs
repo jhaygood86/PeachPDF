@@ -1968,8 +1968,9 @@ namespace PeachPDF.Html.Core.Dom
 
             // The original Left of the word right after `index` in document order - or, for the line's
             // very last word, its own spacing-inclusive right edge, since there is no following slot to
-            // read a boundary from. Runs partition `lineBox.Words` into contiguous document-order
-            // ranges (BD7/UAX#9), so this is exactly the boundary a run ending at `index` needs.
+            // read a boundary from. This is the boundary between whatever run `index` belongs to and
+            // whatever comes next - never reflected, since it's spacing between two runs, not content
+            // that moves when one of them does.
             double SlotBoundaryAfter(int index) =>
                 index + 1 < lineBox.Words.Count
                     ? slots[index + 1]
@@ -1985,7 +1986,17 @@ namespace PeachPDF.Html.Core.Dom
                 // already in final visual (left-to-right) order, so each run's new span simply follows
                 // the previous one's.
                 var runOldStart = slots[run.Start];
-                var runWidth = SlotBoundaryAfter(run.Start + run.Length - 1) - runOldStart;
+                var lastIndexInRun = run.Start + run.Length - 1;
+
+                // The run's own content span - first word's Left to last word's own Right, i.e. every
+                // word's width and every *internal* gap between this run's own words, but NOT the
+                // trailing gap to whatever comes after the run. That gap is spacing *between* runs, not
+                // part of either one's content, so it must never take part in the reflection below - an
+                // earlier version folded it into the run's own width, which reflected it onto the run's
+                // *leading* edge instead of leaving it trailing, doubling up the gap on one side of an
+                // RTL run and erasing it on the other.
+                var runContentWidth = slots[lastIndexInRun] + lineBox.Words[lastIndexInRun].Width - runOldStart;
+                var trailingGap = SlotBoundaryAfter(lastIndexInRun) - (runOldStart + runContentWidth);
 
                 // Within an RTL run both the word order and each word's own text reverse (mirroring
                 // characters where they have a mirror image), matching how BidiResolver's own
@@ -1997,13 +2008,13 @@ namespace PeachPDF.Html.Core.Dom
                     var offsetFromRunStart = slots[idx] - runOldStart;
 
                     var newLeft = run.IsRtl
-                        ? runNewStart + runWidth - (offsetFromRunStart + word.Width)
+                        ? runNewStart + runContentWidth - (offsetFromRunStart + word.Width)
                         : runNewStart + offsetFromRunStart;
 
                     PlaceBidiRunWord(word, newLeft, run.Level, mirror: run.IsRtl);
                 }
 
-                runNewStart += runWidth;
+                runNewStart += runContentWidth + trailingGap;
             }
         }
 

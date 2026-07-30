@@ -127,6 +127,34 @@ namespace PeachPDF.Tests.Html.Core
             }
         }
 
+        [Fact]
+        public async Task MultipleRunBoundaries_KeepUniformInterWordSpacing()
+        {
+            // A run's own trailing gap to whatever comes after it must never take part in that run's own
+            // reflection: an earlier version folded a run's trailing gap into its own width, so reflecting
+            // an RTL run moved that gap onto the run's *leading* edge instead of leaving it trailing -
+            // doubling the gap on one side of each RTL run and erasing it on the other. Five runs (LTR,
+            // RTL, LTR, RTL, LTR) with a plain space between every pair of words is enough to expose that:
+            // every one of the four gaps below should come out equal, not alternate large/zero.
+            var html = LayoutHarness.Wrap(
+                """<p id="p" dir="ltr" style="width:400pt; font-family: Arial">AB שלום CD עולם EF</p>""");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var p = LayoutHarness.FindById(root, "p");
+
+            Assert.NotNull(p);
+            var words = WordsOf(p!).Where(w => !w.IsSpaces).OrderBy(w => w.Left).ToList();
+            Assert.Equal(5, words.Count);
+
+            var gaps = new List<double>();
+            for (var i = 0; i < words.Count - 1; i++)
+            {
+                gaps.Add(words[i + 1].Left - words[i].Right);
+            }
+
+            Assert.All(gaps, gap => Assert.Equal(gaps[0], gap, 1));
+        }
+
         private static List<CssRectWord> WordsOf(CssBox box) =>
             LayoutHarness.Descendants(box)
                 .SelectMany(b => b.Words.OfType<CssRectWord>())
