@@ -52,6 +52,29 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal double AbsoluteBandBottom => Fragmentainer?.BandBottom ?? double.MaxValue;
 
         /// <summary>
+        /// Where <see cref="Fragmentainer"/>'s band begins, in document space — the coordinate content
+        /// flush at its content edge is placed at. Zero during a measurement pass, where there is no band
+        /// and nothing may be placed against one.
+        /// </summary>
+        internal double AbsoluteBandTop => Fragmentainer?.BandTop ?? 0;
+
+        /// <summary>
+        /// Whether a bottom edge at <paramref name="blockEnd"/> has crossed out of this band, under
+        /// <see cref="HtmlContainerInt.SlotEndingAt"/>'s bottom-edge convention: an edge landing flush on
+        /// the boundary has <i>not</i> crossed it, because it is the first thing in the next band.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately not <see cref="Straddles"/>. That one asks whether content of a given extent
+        /// starting at <see cref="BlockOffset"/> reaches past the band, and compares with a bare
+        /// <c>&gt;</c>; this one asks the same question of an absolute coordinate and carries
+        /// <see cref="HtmlContainerInt.PageBoundaryEpsilon"/>, which is what keeps a box landing exactly on
+        /// a boundary out of the band it merely touches. One membership question, one tolerance — the two
+        /// are not interchangeable, and substituting either for the other moves boxes a page.
+        /// </remarks>
+        internal bool FallsPast(double blockEnd) =>
+            Fragmentainer is not null && HtmlContainerInt.FallsPast(blockEnd, Fragmentainer.Band);
+
+        /// <summary>
         /// The constraint a box already placed at its own <c>Location.Y</c> asks its straddle questions
         /// against — the page-grid slot its own top falls in, at that slot's own offset.
         /// </summary>
@@ -72,6 +95,26 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         internal static BlockConstraint AtSlot(HtmlContainerInt container, CssBox contextRoot, int slot, double blockOffset = 0) =>
             new(new FragmentainerContext(container, contextRoot, slot), blockOffset);
+
+        /// <summary>
+        /// The constraint over the fragmentainer a <i>bottom edge</i> at <paramref name="blockEnd"/> ends
+        /// in — <see cref="HtmlContainerInt.SlotEndingAt"/>'s convention, so an edge flush on a boundary
+        /// belongs to the band above it rather than to the one it merely touches.
+        /// </summary>
+        /// <remarks>
+        /// The counterpart of <see cref="For"/>, which asks about a box's own <i>top</i> and so uses the
+        /// top-edge convention (<see cref="HtmlContainerInt.PageIndexOf"/>). §5.2's margin-crossing test is
+        /// asked about a predecessor's bottom edge and pairs with <see cref="FallsPast"/>, which carries the
+        /// same tolerance; the two conventions are not interchangeable.
+        /// </remarks>
+        internal static BlockConstraint EndingAt(HtmlContainerInt container, CssBox contextRoot, double blockEnd)
+        {
+            if (!container.HasRealPageGrid) return Measurement;
+
+            var fragmentainer = new FragmentainerContext(container, contextRoot, container.SlotEndingAt(blockEnd));
+
+            return new BlockConstraint(fragmentainer, blockEnd - fragmentainer.BandTop);
+        }
 
         /// <summary>The same box's constraint one fragmentainer later, at that band's own content top.</summary>
         internal BlockConstraint AtNextSlot() =>

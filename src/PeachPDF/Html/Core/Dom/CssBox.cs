@@ -1106,37 +1106,37 @@ namespace PeachPDF.Html.Core.Dom
         private bool _shouldRegisterPage;
 
         /// <summary>
-        /// Where a forced break (css-break-3 §3.1) puts this box: the content top of the slot it lands
-        /// in, already stepped past a slot on the wrong side for a directional value. Resolved by
-        /// <see cref="PerformLayoutPrologue"/> and consumed on arrival by <c>PlaceBlockBox</c>.
-        /// </summary>
-        /// <remarks>
-        /// The break used to be expressed by inflating the <i>previous sibling's</i> <c>ActualBottom</c>
-        /// to the target instead. That setter alters <c>Size.Height</c>, so a predecessor with a
-        /// background or border painted down to the page bottom — and for a directional break it would
-        /// have painted straight across the blank page, which would also have made that slot look
-        /// printable and so defeated the reservation. Naming the target on the box that actually takes
-        /// the break keeps the predecessor's geometry its own.
-        /// </remarks>
-        private double? _forcedBreakTop;
-
-        /// <summary>
         /// The side css-break-3 §3.1 requires the page after this box's forced break to fall on, or
         /// <see cref="PageSide.Any"/>. Resolved by <see cref="PerformLayoutPrologue"/> and acted on when
         /// the box is placed, once its preserved top margin is known.
         /// </summary>
+        /// <remarks>
+        /// Style, not geometry: the side is settled by the two break values at this box's own break point
+        /// and by nothing that can move underneath it, which is why it stays latched in the prologue while
+        /// the break's <i>target</i> does not (<see cref="ForcedBreakTopFor"/>).
+        /// </remarks>
         private PageSide _forcedBreakSide;
 
         /// <summary>
-        /// Whether this box's position was set by a forced break (css-break-3 §3.1).
+        /// Whether this box's position was set by a forced break (css-break-3 §3.1) — and so, equally,
+        /// whether the break before it has already been taken in this layout.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// A forced break is a hard positional constraint, not a margin, so such a box anchors what
         /// follows it even when it is otherwise self-collapsing: <see cref="FoldMarginsPrecedingChild"/>'s
         /// walk-back must stop here rather than resolving the next box against an earlier sibling and
         /// undoing the break. The canonical case is an empty <c>&lt;div class="page-break"&gt;</c>
         /// marker, which has nothing in it to collapse but everything to say about where the next
         /// section starts.
+        /// </para>
+        /// <para>
+        /// <b>It is also the latch that stops the break being taken twice.</b> The target is re-derived at
+        /// every placement rather than latched once (<see cref="ForcedBreakTopFor"/>), so this is what
+        /// tells a second placement of the same box that its break is already spent — and, because
+        /// <see cref="PerformLayoutPrologue"/> retracts it, what tells a re-decided break that it is not.
+        /// Those two facts are the same fact, which is why there is one field for them rather than two.
+        /// </para>
         /// </remarks>
         internal bool PlacedByForcedBreak { get; private set; }
 
@@ -1368,6 +1368,19 @@ namespace PeachPDF.Html.Core.Dom
         /// <para>
         /// Deliberately <b>not</b> cleared by the prologue, for that reason; cleared per layout in
         /// <see cref="BeginLayoutPass"/> like the other one-shot latches, and consumed on arrival.
+        /// </para>
+        /// <para>
+        /// <b>Not replaceable by re-deriving the escape the way <see cref="ForcedBreakTopFor"/> re-derives
+        /// its target</b>, and the per-<i>layout</i> clearing above is why. The record that carries the
+        /// escaping break outlives the layout generation it was raised in — the driver re-feeds it to the
+        /// box on the reflow layout that follows — but these do not, so a resume in the <i>second</i>
+        /// generation deliberately asserts nothing at all. Anything derived afresh from the record or the
+        /// box would assert on both, which reserves a page the first generation's own prologue had already
+        /// retracted: measured turning
+        /// <c>DirectionalBreakInsideMulticol_DegradesToAColumnBreak_KnownBoundary</c> from two pages into
+        /// three with the middle one blank. Whether that asymmetry is right is
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/545">#545</see>'s question, not this
+        /// field's.
         /// </para>
         /// </remarks>
         private bool _escapedForcedBreakPending;
@@ -1753,10 +1766,10 @@ namespace PeachPDF.Html.Core.Dom
                 _prologueDone = false;
                 _incomingToken = null;
                 _resumeTopOverride = null;
-                _orphansBreakTaken = false;
-                _widowsRewindTaken = false;
                 _escapedForcedBreakPending = false;
                 _escapedForcedBreakBlankSlot = null;
+                _orphansBreakTaken = false;
+                _widowsRewindTaken = false;
             }
 
             var resume = _incomingToken;
@@ -1929,105 +1942,35 @@ namespace PeachPDF.Html.Core.Dom
             // choice as a side effect: a box carrying a break that cannot be taken at all - because nothing
             // precedes the container in the flow - kept its margin before propagation and lost it after.
             _adjoinsForcedBreakPoint = _isForcedBreak || (propagatesOutward && ownForcedBefore is not null);
+
             // Every run of this prologue re-decides from scratch: the keep-with-next retry at the end of
             // PerformLayoutEpilogue clears _prologueDone and re-enters layout for this box at a new
-            // position, where the break can legitimately land somewhere else. So both the target and
-            // this box's blank-slot reservation are retracted here and only re-asserted below.
-            _forcedBreakTop = null;
+            // position, where the break can legitimately land somewhere else. So this box's forced-break
+            // state is retracted here and only re-asserted below (the side) or by the frame that places it
+            // (that the break was taken, and the blank slot a directional value stepped over).
             _forcedBreakSide = PageSide.Any;
             PlacedByForcedBreak = false;
             HtmlContainer?.SetBlankSlotReservation(this, null);
 
             if (_isForcedBreak)
             {
-                // The break falls between this box and whatever precedes it in the flow. For a
-                // container's *first* in-flow child that is not a sibling of its own: §3.1's break point
-                // before it is the same break point as the one before its container, so the predecessor
-                // to resolve the target against is found by climbing the chain of containers this box
-                // begins. A climb that reaches the root means nothing precedes this box in the flow at
-                // all — there is nothing to break from, and taking a break anyway would manufacture a
-                // blank page in front of the first content in the document.
-                var breakAnchor = previousSiblingForBreak ?? PredecessorOfEnclosingFirstChildChain();
-
-                if (breakAnchor is not null)
-                {
-                    // HtmlContainer.PageSize.Height is already margin-free (PdfGenerator.SetContent
-                    // subtracts both page margins up front) - a page's real content band is the
-                    // "shifted grid" [k·PageSize.Height + MarginTop, (k+1)·PageSize.Height + MarginTop),
-                    // not raw multiples of PageSize.Height from document Y=0. PageIndexOf/PageTopOf are
-                    // the single, unambiguous definition of that grid (matching what the painter's own
-                    // per-page clip and the fragment builder's slot walk already use) - computing this via raw modulo
-                    // arithmetic against PageSize.Height alone (as this used to) silently lands a
-                    // marginTop-wide band, right at the end of every raw page, one whole page short.
-                    //
-                    // The epsilon implements css-break-3 §4.4's "no empty fragmentainer for a single
-                    // forced break at a boundary": a sibling whose content ENDS flush on a slot
-                    // boundary (e.g. a full-bleed cover sized exactly to its page's band) already
-                    // satisfies the break - the target is that boundary itself, not the slot after
-                    // it (which manufactured a blank page). A zero-height sibling sitting AT the
-                    // boundary (the consecutive-forced-breaks case - it was itself relocated there
-                    // by its own preceding break) occupies the LATER slot, so the break between it
-                    // and this box still pushes past it, preserving the intentional blank page.
-                    // StaticBottom, and the previous sibling's static top, throughout: a relative offset
-                    // moves a box visually without affecting the layout of anything around it
-                    // (CSS 2.1 §9.4.3), so it must not decide which slot the break lands in either.
-                    var container = HtmlContainer!;
-                    var prevBottom = breakAnchor.StaticBottom;
-                    var prevTop = breakAnchor.Location.Y - breakAnchor.RelativeOffsetY;
-                    var slot = container.SlotEndingAt(prevBottom) + 1;
-                    if (prevTop >= container.PageTopOf(slot) - HtmlContainerInt.PageBoundaryEpsilon)
-                    {
-                        slot = container.SlotStartingAt(prevTop) + 1;
-                    }
-
-                    _forcedBreakTop = container.PageTopOf(slot);
-
-                    // Which side the content after the break has to begin on (css-break-3 §3.1's
-                    // left/right/recto/verso, which force one *or two* page breaks). Resolved here but
-                    // acted on in PlaceBlockBox: only that knows this box's preserved top margin, which
-                    // can itself carry the box past the slot the break landed in, and only boxes that
-                    // reach it take the break at all - a display:none or out-of-flow box runs this
-                    // prologue but is never placed, so reserving a blank page here would manufacture
-                    // one for a break that is never taken.
-                    // The side comes from the two values resolved at *this* break point above - this box's
-                    // own break-before read through the chain it begins, and its immediate predecessor's
-                    // break-after read through the chain that one ends. Never the climbed anchor's: a
-                    // break-after states something about the break point after that box, and for a first
-                    // child the anchor's break point is several levels out. RequiredSide already accepts a
-                    // null second value, and resolves a conflict the way §3.1 does - to the value on the
-                    // latest element in flow.
-                    _forcedBreakSide = BreakValues.RequiredSide(forcedBefore, forcedAfter);
-                }
+                // Which side the content after the break has to begin on (css-break-3 §3.1's
+                // left/right/recto/verso, which force one *or two* page breaks). Resolved here because it
+                // is settled by the two break values at this break point and by nothing else, and acted on
+                // in PlaceBlockChild: only that knows this box's preserved top margin, which can itself
+                // carry the box past the slot the break landed in, and only boxes that reach it take the
+                // break at all - a display:none or out-of-flow box runs this prologue but is never placed,
+                // so reserving a blank page here would manufacture one for a break that is never taken.
+                // The side comes from the two values resolved at *this* break point above - this box's
+                // own break-before read through the chain it begins, and its immediate predecessor's
+                // break-after read through the chain that one ends. Never the break anchor's: a
+                // break-after states something about the break point after that box, and for a first
+                // child the anchor's break point is several levels out. RequiredSide already accepts a
+                // null second value, and resolves a conflict the way §3.1 does - to the value on the
+                // latest element in flow.
+                _forcedBreakSide = BreakValues.RequiredSide(forcedBefore, forcedAfter);
             }
         }
-
-        /// <summary>
-        /// The nearest preceding in-flow box a forced break before this box falls after, looking out
-        /// through any containers this box begins. Null when nothing precedes it in the flow.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s break point before a
-        /// container's first in-flow child is the <i>same</i> break point as the one before the container
-        /// — the requirement propagates outward through every box this one begins — so the predecessor to
-        /// resolve the target against is found by climbing that chain rather than invented.
-        /// </para>
-        /// <para>
-        /// Reaching the root without finding one means this box begins the flow, where a forced break has
-        /// nothing to break from. Returning null there is what stops a <c>break-before</c> on the first
-        /// element of a document — or on a heading whose <c>page</c> name merely starts the first named
-        /// page — from manufacturing a blank page in front of it, which
-        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§4.4</see> asks user agents not
-        /// to do.
-        /// </para>
-        /// <para>
-        /// Only the target is resolved this way. The break is still taken by <i>this</i> box, so the
-        /// containers it begins keep their own position and span the boundary; moving them too is
-        /// §3.1 propagation proper, which is a separate question.
-        /// </para>
-        /// </remarks>
-        private CssBox? PredecessorOfEnclosingFirstChildChain() =>
-            DomUtils.PrecedingBoxAcrossFirstChildChain(this);
 
         /// <summary>
         /// Places this box and lays out its content — the part of layout a resumed pass re-enters,
@@ -2572,8 +2515,11 @@ namespace PeachPDF.Html.Core.Dom
                             // that kept a line or two is still inside the fragmentainer being left, so the
                             // resumed pass reaches the same conclusion and the driver's no-progress backstop
                             // is what ends it. Flush at the destination's content top, per §5.2: the margin
-                            // adjoining an unforced break is truncated.
-                            var orphanTarget = HtmlContainer!.PageTopOf(childToken.ResumeSlotIndex);
+                            // adjoining an unforced break is truncated - which is what the band the record
+                            // names begins at.
+                            var orphanTarget = BlockConstraint
+                                .AtSlot(HtmlContainer!, this, childToken.ResumeSlotIndex)
+                                .AbsoluteBandTop;
 
                             // And a run chained to it by `avoid` travels too, exactly as it does when the
                             // epilogue's own orphans/widows mover relocates the box: the reason the break
@@ -3138,6 +3084,146 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Where a forced break (css-break-3 §3.1) before <paramref name="child"/> puts it: the content top
+        /// of the slot the break lands in. Null when no forced break falls before it, or when nothing
+        /// precedes it in the flow for a break to fall after.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Re-derived at every placement, not latched once.</b> This is the frame's question, not the
+        /// child's: it is resolved against the predecessor <i>this frame</i> placed, whose bottom edge is
+        /// exactly the thing that moves between one placement and the next. Settling it in
+        /// <see cref="PerformLayoutPrologue"/> instead — which runs once per box per layout — meant the
+        /// answer had to survive every mechanism that retracts a pass's work, and it did not: the pass that
+        /// <i>declines</i> to place an escaping break is not the pass that places it, and a prologue an
+        /// enclosing engine re-opened in between retracted what the first had settled. Asking again costs
+        /// one sibling walk and cannot go stale.
+        /// </para>
+        /// <para>
+        /// The break is expressed by placing this box at the target rather than by inflating the
+        /// <i>predecessor's</i> <c>ActualBottom</c> to reach it: that setter alters <c>Size.Height</c>, so a
+        /// predecessor with a background or border would paint down to the page bottom — and, for a
+        /// directional break, straight across the blank page, which would also make that slot look printable
+        /// and so defeat its reservation. The predecessor's geometry is not the break's to change.
+        /// </para>
+        /// <para>
+        /// Reaching the root without finding a predecessor means the child begins the flow, where a forced
+        /// break has nothing to break from. Returning null there is what stops a <c>break-before</c> on the
+        /// first element of a document — or on a heading whose <c>page</c> name merely starts the first
+        /// named page — from manufacturing a blank page in front of it, which
+        /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§4.4</see> asks user agents not to
+        /// do. Only the <i>target</i> is resolved by climbing: the break is still taken by the child, so the
+        /// containers it begins keep their own position and span the boundary; moving them too is §3.1
+        /// propagation proper, which is a separate question.
+        /// </para>
+        /// <para>
+        /// Whether the break has already been taken is <see cref="PlacedByForcedBreak"/>'s to say, not this
+        /// method's — it answers where the break lands, every time it is asked.
+        /// </para>
+        /// </remarks>
+        internal double? ForcedBreakTopFor(CssBox child)
+        {
+            if (!child._isForcedBreak || child.HtmlContainer is not { } container) return null;
+
+            // The break falls between this box and whatever precedes it in the flow. For a container's
+            // *first* in-flow child that is not a sibling of its own: §3.1's break point before it is the
+            // same break point as the one before its container, so the predecessor to resolve the target
+            // against is found by climbing the chain of containers this box begins. A climb that reaches
+            // the root means nothing precedes this box in the flow at all — there is nothing to break from,
+            // and taking a break anyway would manufacture a blank page in front of the first content in the
+            // document.
+            if (DomUtils.PrecedingBoxAcrossFirstChildChain(child) is not { } breakAnchor) return null;
+
+            // HtmlContainer.PageSize.Height is already margin-free (PdfGenerator.SetContent subtracts both
+            // page margins up front) - a page's real content band is the "shifted grid"
+            // [k·PageSize.Height + MarginTop, (k+1)·PageSize.Height + MarginTop), not raw multiples of
+            // PageSize.Height from document Y=0. PageIndexOf/PageTopOf are the single, unambiguous
+            // definition of that grid (matching what the painter's own per-page clip and the fragment
+            // builder's slot walk already use) - computing this via raw modulo arithmetic against
+            // PageSize.Height alone (as this used to) silently lands a marginTop-wide band, right at the end
+            // of every raw page, one whole page short.
+            //
+            // The epsilon implements css-break-3 §4.4's "no empty fragmentainer for a single forced break at
+            // a boundary": a sibling whose content ENDS flush on a slot boundary (e.g. a full-bleed cover
+            // sized exactly to its page's band) already satisfies the break - the target is that boundary
+            // itself, not the slot after it (which manufactured a blank page). A zero-height sibling sitting
+            // AT the boundary (the consecutive-forced-breaks case - it was itself relocated there by its own
+            // preceding break) occupies the LATER slot, so the break between it and this box still pushes
+            // past it, preserving the intentional blank page.
+            // StaticBottom, and the previous sibling's static top, throughout: a relative offset moves a box
+            // visually without affecting the layout of anything around it (CSS 2.1 §9.4.3), so it must not
+            // decide which slot the break lands in either.
+            var prevBottom = breakAnchor.StaticBottom;
+            var prevTop = breakAnchor.Location.Y - breakAnchor.RelativeOffsetY;
+            var slot = container.SlotEndingAt(prevBottom) + 1;
+
+            if (prevTop >= container.PageTopOf(slot) - HtmlContainerInt.PageBoundaryEpsilon)
+            {
+                slot = container.SlotStartingAt(prevTop) + 1;
+            }
+
+            return container.PageTopOf(slot);
+        }
+
+        /// <summary>
+        /// Steps <paramref name="child"/> past any slot on the wrong side for its directional forced break
+        /// (css-break-3 §3.1's <c>left</c>/<c>right</c>/<c>recto</c>/<c>verso</c>, which force one <i>or
+        /// two</i> page breaks), reserving each slot stepped over as a deliberately-blank page.
+        /// </summary>
+        /// <param name="child">the box taking the break</param>
+        /// <param name="top">where the break has put it so far, its preserved top margin included</param>
+        /// <param name="margin">
+        /// that same preserved top margin, re-applied at every slot the box is stepped over to
+        /// </param>
+        /// <returns>where it lands, and the last slot reserved on the way — null if none was</returns>
+        /// <remarks>
+        /// <para>
+        /// The content after the break has to <i>begin</i> on a page of the requested side, so the side is
+        /// checked against where the box actually lands — which the preserved margin can carry past the slot
+        /// the break itself reached. <paramref name="margin"/> travels with the box across every step, so it
+        /// is preserved on whichever page the box ends up opening. Bounded rather than a plain <c>if</c>
+        /// because a margin taller than a band can carry the box past the slot the step just chose; two
+        /// rounds settle every case a single alternation can produce, and the small cap keeps a degenerate
+        /// band from spinning.
+        /// </para>
+        /// <para>
+        /// Gated on <see cref="HtmlContainerInt.IsFragmenting"/> because inside monolithic content
+        /// (multicol's virtual single-column first pass, and the flex/grid/table engines) and during a
+        /// measurement pass at a provisional position, the child's coordinates are not where it ends up — a
+        /// reservation made from them would materialize a blank page nowhere near the real content. A
+        /// directional break degrades to a plain page break there, the same engine-independence boundary the
+        /// other break machinery already has. Asked while filling a column too, now that the break genuinely
+        /// reaches the page it names: the coordinates it steps through are the page grid's either way, so a
+        /// directional break inside a multi-column container reserves its blank page exactly as it does
+        /// outside one. It used to be excluded, because reserving a page while the box merely moved to the
+        /// next column honoured half of a decision.
+        /// </para>
+        /// </remarks>
+        private static (double Top, int? ReservedBlankSlot) StepPastSlotsOnTheWrongSide(
+            CssBox child, double top, double margin)
+        {
+            int? reservedBlankSlot = null;
+
+            for (var guard = 0;
+                 child._forcedBreakSide is not PageSide.Any
+                 && child.HtmlContainer!.IsFragmenting
+                 && guard < 4;
+                 guard++)
+            {
+                var landing = child.HtmlContainer.SlotStartingAt(top);
+
+                if (BreakValues.SlotIsOn(landing, child._forcedBreakSide))
+                    break;
+
+                child.HtmlContainer.SetBlankSlotReservation(child, landing);
+                reservedBlankSlot = landing;
+                top = child.HtmlContainer.PageTopOf(landing + 1) + margin;
+            }
+
+            return (top, reservedBlankSlot);
+        }
+
+        /// <summary>
         /// Assigns <paramref name="child"/>'s position in this frame, and registers the used page name it
         /// lands on.
         /// </summary>
@@ -3212,19 +3298,25 @@ namespace PeachPDF.Html.Core.Dom
                         child._resumeTopOverride = null;
                         top = resumedTop;
 
-                        // An escaping forced break is placed *here*, one pass after the arm below settled
-                        // it, and that arm is not re-entered - so what it settled has to be re-asserted
-                        // rather than re-derived. Two things, both retracted in between by a prologue the
-                        // engine re-opened (PassRewind.RollBackTo, called from CssLayoutEngineColumns's own
-                        // fill retry): that this box is placed by a forced break, which its *next* sibling
-                        // reads through §5.2 and the margin walk-back, and the blank slot a directional
-                        // break reserved to land on the side it names. Losing the first put the following
-                        // sibling ahead of the break; losing the second landed the content on a page of the
-                        // wrong side, which is precisely what the value asked about.
+                        // An escaping forced break is placed *here*, one pass after the arm below decided
+                        // it, and that arm is not re-entered - so the two things it settles beyond the
+                        // target are settled here instead, by asking the same questions again: that this
+                        // box is placed by a forced break, which its *next* sibling reads through §5.2 and
+                        // the margin walk-back, and the blank slot a directional break steps over to land
+                        // on the side it names. Both were retracted in between by a prologue the engine
+                        // re-opened (PassRewind.RollBackTo, from CssLayoutEngineColumns's own fill retry);
+                        // losing the first put the following sibling ahead of the break, and losing the
+                        // second landed the content on a page of the wrong side, which is precisely what
+                        // the value asked about.
+                        //
+                        // Re-asserted rather than re-derived, unlike the target itself: see
+                        // _escapedForcedBreakPending for the measurement that says the two are not the same
+                        // thing here. `top` stays the record's either way - the break decision already
+                        // worked that out and it must be used as-is (re-deriving it would reach the same
+                        // "does not fit" conclusion and break again, forever).
                         if (child._escapedForcedBreakPending)
                         {
                             child._escapedForcedBreakPending = false;
-                            child._forcedBreakTop = null;
                             child.PlacedByForcedBreak = true;
 
                             if (child._escapedForcedBreakBlankSlot is { } blankSlot)
@@ -3233,11 +3325,12 @@ namespace PeachPDF.Html.Core.Dom
                             }
                         }
                     }
-                    else if (child._forcedBreakTop is { } forcedTop)
+                    else if (!child.PlacedByForcedBreak && ForcedBreakTopFor(child) is { } forcedTop)
                     {
-                        // The prologue worked out which slot the forced break lands in. Applied here,
-                        // to the child, rather than by inflating the previous sibling's height to reach
-                        // it: that predecessor's own geometry is not the break's to change.
+                        // Which slot the forced break lands in, asked of this frame now rather than read
+                        // off what the child's prologue latched a pass or more ago. Applied here, to the
+                        // child, rather than by inflating the previous sibling's height to reach it: that
+                        // predecessor's own geometry is not the break's to change.
                         //
                         // §5.2 truncates margins adjoining an *unforced* break only, so the margin on
                         // the new page's side of a forced break survives and opens that page. That is
@@ -3246,53 +3339,13 @@ namespace PeachPDF.Html.Core.Dom
                         // the break makes the child exactly that. The group computed against the real
                         // previous sibling is the wrong quantity: it also holds that sibling's
                         // margin-bottom, which belongs to the page being left.
-                        child._forcedBreakTop = null;
                         child.PlacedByForcedBreak = true;
 
                         var forcedBreakMargin = CollapsedMarginBefore(child, null);
-                        top = forcedTop + forcedBreakMargin;
+                        int? reservedBlankSlot;
 
-                        // §3.1's "one or two page breaks": the content after the break has to *begin*
-                        // on a page of the requested side, so the side is checked against where this
-                        // box actually lands - which the preserved margin above can carry past the slot
-                        // the break itself reached. The slot stepped over becomes a deliberately-blank
-                        // page.
-                        //
-                        // Gated on IsFragmenting because inside monolithic content (multicol's virtual
-                        // single-column first pass, and the flex/grid/table engines) and during a
-                        // measurement pass at a provisional position, the child's coordinates are not
-                        // where it ends up - a reservation made from them would materialize a blank
-                        // page nowhere near the real content. A directional break degrades to a plain
-                        // page break there, the same engine-independence boundary the other break
-                        // machinery already has.
-                        // The margin travels with the box across the step, so it is preserved on
-                        // whichever page the box ends up opening. Bounded rather than a plain "if"
-                        // because a margin taller than a band can carry the box past the slot the step
-                        // just chose; two rounds settle every case a single alternation can produce,
-                        // and the small cap keeps a degenerate band from spinning.
-                        // Asked while filling a column too, now that the break genuinely reaches the page
-                        // it names (below): the coordinates it steps through are the page grid's either
-                        // way, so a directional break inside a multi-column container reserves its blank
-                        // page exactly as it does outside one. It used to be excluded here, because
-                        // reserving a page while the box merely moved to the next column honoured half of
-                        // a decision.
-                        int? reservedBlankSlot = null;
-
-                        for (var guard = 0;
-                             child._forcedBreakSide is not PageSide.Any
-                             && child.HtmlContainer!.IsFragmenting
-                             && guard < 4;
-                             guard++)
-                        {
-                            var landing = child.HtmlContainer.SlotStartingAt(top);
-
-                            if (BreakValues.SlotIsOn(landing, child._forcedBreakSide))
-                                break;
-
-                            child.HtmlContainer.SetBlankSlotReservation(child, landing);
-                            reservedBlankSlot = landing;
-                            top = child.HtmlContainer.PageTopOf(landing + 1) + forcedBreakMargin;
-                        }
+                        (top, reservedBlankSlot) =
+                            StepPastSlotsOnTheWrongSide(child, forcedTop + forcedBreakMargin, forcedBreakMargin);
 
                         // §3.1: a forced *page* break is not a nested fragmentainer's to satisfy. The page
                         // vehicle is realized by placement, and placing the child at `top` inside a column
@@ -3344,93 +3397,88 @@ namespace PeachPDF.Html.Core.Dom
                     else if (!child._adjoinsForcedBreakPoint && child.ParentBox is not null
                              && !(prevSibling is { PlacedByForcedBreak: true } marker && marker.IsMarginCollapseThrough()))
                     {
-                        var pageHeight = child.HtmlContainer!.PageSize.Height;
-                        if (pageHeight > 0)
+                        // Same shifted grid the fragment builder/the forced-break logic above use (see
+                        // HtmlContainer.PageIndexOf's own doc comment) - matching
+                        // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established convention, and
+                        // mirroring the forced-break flush-fit rule above. The constraint is over the band
+                        // baseTop *ends* in - baseTop is the predecessor's bottom edge - and the question
+                        // asked of it is FallsPast, which carries the same bottom-edge convention. That is
+                        // deliberate rather than a slip: a child landing flush ON the band's bottom has not
+                        // crossed it, because it is the first thing in the next band and there is nothing
+                        // for the margin to be truncated against. The top-edge convention (BlockConstraint.
+                        // For, Straddles) would call that a crossing and truncate a margin that never
+                        // spanned anything - which is why the two are separate members rather than one.
+                        // An unpaginated pass has no band at all and so nothing to cross out of, which
+                        // EndingAt answers by naming no fragmentainer.
+                        var boundary = BlockConstraint.EndingAt(child.HtmlContainer!, child, baseTop);
+
+                        if (boundary.FallsPast(top))
                         {
-                            // Same shifted grid the fragment builder/the forced-break logic above use
-                            // (see HtmlContainer.PageIndexOf's own doc comment) - matching
-                            // BreakInside_Avoid_PositionsAtTopOfNextPage's already-established
-                            // convention, and mirroring the forced-break flush-fit rule above.
-                            // The band is the one baseTop *ends* in - baseTop is the predecessor's
-                            // bottom edge - and the question asked of it is FallsPast, which carries the
-                            // same bottom-edge convention. That is deliberate rather than a slip: a child
-                            // landing flush ON the band's bottom has not crossed it, because it is the
-                            // first thing in the next band and there is nothing for the margin to be
-                            // truncated against. The top-edge convention here would call that a crossing
-                            // and truncate a margin that never spanned anything.
-                            var prevSlot = child.HtmlContainer.SlotEndingAt(baseTop);
-                            var band = child.HtmlContainer.BandOfSlot(prevSlot);
-                            if (HtmlContainerInt.FallsPast(top, band))
+                            // The band's own bottom, which is the next one's top: bands are contiguous,
+                            // so "start at the next slot" and "start where this band ends" are the same
+                            // coordinate, and the second is the one the question above was asked in.
+                            var newTop = boundary.AbsoluteBandBottom;
+
+                            // css-break §3.1 keep-with-next: the child is about to relocate to the next
+                            // page's content top, which would otherwise strand a preceding
+                            // break-after/break-before: avoid run (e.g. the UA default
+                            // `h1-h6 { break-after: avoid }`) alone at the bottom of the page it's
+                            // leaving - see CssLayoutEngineTable's identical whole-table pre-check
+                            // (LayoutCells) and OffsetTopWithKeepWithNextRun, which this mirrors. Pull
+                            // the run along when it starts on this same page and its own height still
+                            // fits the destination page's band; an unsatisfiable avoid is relaxed per
+                            // spec and the child moves alone, exactly as before. Unlike those two
+                            // siblings' guards, this one doesn't also require the child's own
+                            // (not-yet-laid-out) content to fit alongside the run: a
+                            // break-inside:avoid/orphans-widows box must land whole or the move is
+                            // pointless, but the child is free to fragment across further pages on its
+                            // own afterward (a table re-applies its per-row break logic, an ordinary
+                            // block just keeps flowing) - only the run needs a page to itself.
+                            var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(child, FragmentationContext.Page);
+                            if (keepWithNextRun.Count > 0)
                             {
-                                // The band's own bottom, which is the next one's top: bands are
-                                // contiguous, so "start at the next slot" and "start where this band
-                                // ends" are the same coordinate, and the second is the one the question
-                                // above was asked in.
-                                var newTop = band.Bottom;
+                                var runTop = keepWithNextRun[0].Location.Y;
+                                var extraAbove = top - runTop;
+                                // Asked the same way as the boundary above, so the two are comparable -
+                                // a run head flush on the boundary belongs to the band the constraint
+                                // names, not the one after it.
+                                var runStartsOnSamePage =
+                                    child.HtmlContainer!.SlotEndingAt(runTop) == boundary.Fragmentainer!.SlotIndex;
 
-                                // css-break §3.1 keep-with-next: the child is about to relocate to
-                                // the next page's content top, which would otherwise strand a
-                                // preceding break-after/break-before: avoid run (e.g. the UA default
-                                // `h1-h6 { break-after: avoid }`) alone at the bottom of the
-                                // page it's leaving - see CssLayoutEngineTable's identical whole-table
-                                // pre-check (LayoutCells) and OffsetTopWithKeepWithNextRun, which this
-                                // mirrors. Pull the run along when it starts on this same page and its
-                                // own height still fits the destination page's band; an unsatisfiable
-                                // avoid is relaxed per spec and the child moves alone, exactly as
-                                // before. Unlike those two siblings' guards, this one doesn't also
-                                // require the child's own (not-yet-laid-out) content to fit alongside
-                                // the run: a break-inside:avoid/orphans-widows box must land whole or
-                                // the move is pointless, but the child is free to fragment across
-                                // further pages on its own afterward (a table re-applies its per-row
-                                // break logic, an ordinary block just keeps flowing) - only the run
-                                // needs a page to itself.
-                                var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(child, FragmentationContext.Page);
-                                if (keepWithNextRun.Count > 0)
+                                if (extraAbove > 0 && runStartsOnSamePage
+                                    && extraAbove <= boundary.AtNextSlot().NextBandHeight)
                                 {
-                                    var runTop = keepWithNextRun[0].Location.Y;
-                                    var extraAbove = top - runTop;
-                                    // Asked the same way as prevSlot above, so the two are comparable
-                                    // - a run head flush on the boundary belongs to the band prevSlot
-                                    // names, not the one after it.
-                                    var runStartsOnSamePage =
-                                        child.HtmlContainer.SlotEndingAt(runTop) == prevSlot;
+                                    var groupOffset = newTop - runTop;
 
-                                    if (extraAbove > 0 && runStartsOnSamePage
-                                        && extraAbove <= child.HtmlContainer.BandOfSlot(prevSlot + 1).Height)
+                                    foreach (var member in keepWithNextRun)
                                     {
-                                        var groupOffset = newTop - runTop;
-
-                                        foreach (var member in keepWithNextRun)
-                                        {
-                                            member.OffsetTop(groupOffset);
-                                        }
-
-                                        newTop += extraAbove;
+                                        member.OffsetTop(groupOffset);
                                     }
-                                }
 
-                                // The margin pushed the child out of the fragmentainer being filled, so
-                                // the break falls *before* it: it produces no fragment here at all, and
-                                // resumes at newTop in the next one (css-break-3 §4.4). Where breaking
-                                // is not live - a measurement pass, or monolithic content - the box is
-                                // simply placed at that target, exactly as it was before this became a
-                                // break decision.
-                                if (child.HtmlContainer.IsFragmenting)
-                                {
-                                    child.RequestBreakBefore(newTop);
-                                    return;
+                                    newTop += extraAbove;
                                 }
-
-                                // Breaking is not live here (a measurement pass, or monolithic content),
-                                // so the child is simply placed at the target a break would have named -
-                                // flush at the next band's top, without a pass boundary to carry the
-                                // cursor there on its own. Any further content this same (possibly
-                                // suppressed-but-real, see LayoutTheRemainderMonolithically) pass places
-                                // has to see a truthful "band being filled" - see #435.
-                                child.HtmlContainer.CurrentFragmentainer?.StepOverTo(
-                                    child.HtmlContainer.SlotStartingAt(newTop));
-                                top = newTop;
                             }
+
+                            // The margin pushed the child out of the fragmentainer being filled, so the
+                            // break falls *before* it: it produces no fragment here at all, and resumes
+                            // at newTop in the next one (css-break-3 §4.4). Where breaking is not live -
+                            // a measurement pass, or monolithic content - the box is simply placed at
+                            // that target, exactly as it was before this became a break decision.
+                            if (child.HtmlContainer!.IsFragmenting)
+                            {
+                                child.RequestBreakBefore(newTop);
+                                return;
+                            }
+
+                            // Breaking is not live here (a measurement pass, or monolithic content), so
+                            // the child is simply placed at the target a break would have named - flush
+                            // at the next band's top, without a pass boundary to carry the cursor there
+                            // on its own. Any further content this same (possibly suppressed-but-real,
+                            // see LayoutTheRemainderMonolithically) pass places has to see a truthful
+                            // "band being filled" - see #435.
+                            child.HtmlContainer.CurrentFragmentainer?.StepOverTo(
+                                child.HtmlContainer.SlotStartingAt(newTop));
+                            top = newTop;
                         }
                     }
 
@@ -3585,6 +3633,19 @@ namespace PeachPDF.Html.Core.Dom
             // its position re-derives from the moved run's new bottom and its lines re-flow without a
             // boundary in the middle (PerformLayoutImp double-execution is already an established
             // pattern - see HtmlContainerInt.PerformLayout's own double layout). Guarded to one retry.
+            //
+            // The run pull below has never fired, and the reason is structural rather than a missing
+            // fixture. Measured twice - once by #538, once by #539, which went looking for a fixture that
+            // would reach it: across the whole suite `firstLinePage > ownPage` is true 244 times and
+            // `keepWithNextRun.Count > 0` on none of them, and every attempt to build a document that
+            // reaches it with a run in hand was intercepted first. Whenever a run does precede a box whose
+            // first line would land on the next page, an earlier mechanism has already pulled it - the
+            // break-decision movers in LayoutBlockChildren (EarlyBreak.Discover + TryRestartAt, on the
+            // §3.1-propagation and orphans arms) and PlaceBlockChild's own §5.2 pull, all of which run on
+            // the pass that *declines* to place the box and therefore before this epilogue is reached at
+            // all. What is left here is the case where none of them applied, which is the case where the
+            // box has no run. Deliberately left as-is rather than converted or deleted: proving it dead is
+            // not the same as proving it unnecessary, and #545 is where that is decided.
             if (!_keepWithNextRetried
                 && Position is CssConstants.Static or CssConstants.Relative && !IsFloated
                 && LineBoxes.Count > 0 && LineBoxes[0].Words.Count > 0
@@ -3598,6 +3659,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (firstLinePage > ownPage)
                 {
                     var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this, FragmentationContext.Page);
+
                     if (keepWithNextRun.Count > 0)
                     {
                         var runTop = keepWithNextRun[0].Location.Y;

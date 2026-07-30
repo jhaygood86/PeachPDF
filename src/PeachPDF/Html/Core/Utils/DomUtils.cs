@@ -197,9 +197,9 @@ namespace PeachPDF.Html.Core.Utils
         /// containers <paramref name="box"/> begins. Null when nothing precedes it at all.
         /// </summary>
         /// <remarks>
-        /// The same rule <c>CssBox.PerformLayoutPrologue</c> resolves a forced break's target with, and
-        /// for the same reason: a first in-flow child has no predecessor of its own, but the break point
-        /// before it is its container's, which does.
+        /// The same rule <c>CssBox.ForcedBreakTopFor</c> resolves a forced break's target with, and for the
+        /// same reason: a first in-flow child has no predecessor of its own, but the break point before it
+        /// is its container's, which does.
         /// </remarks>
         public static CssBox? PrecedingBoxAcrossFirstChildChain(CssBox box)
         {
