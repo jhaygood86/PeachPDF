@@ -211,5 +211,103 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
 
             Assert.Equal(first, second);
         }
+
+        /// <summary>
+        /// The grid engine's own no-progress backstop is the same equality test
+        /// <see cref="FlexBreakToken"/>'s exists for - see its own remarks.
+        /// </summary>
+        [Fact]
+        public void GridToken_WithTheSameContentsBuiltTwice_ComparesEqual()
+        {
+            var container = new CssBox(null, null);
+            var item = new CssBox(null, null);
+            var finished = new CssBox(null, null);
+            var rows = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item } };
+            var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
+            var subgridContexts = new Dictionary<CssBox, PeachPDF.Html.Core.Dom.GridSubgridContext>();
+
+            var first = new GridBreakToken(container, 1, 0, rows,
+                new List<UnfinishedGridItem> { new(item, itemToken) },
+                new List<CssBox> { finished }, subgridContexts, default);
+            var second = new GridBreakToken(container, 1, 0, rows,
+                new List<UnfinishedGridItem> { new(item, itemToken) },
+                new List<CssBox> { finished }, subgridContexts, default);
+
+            Assert.Equal(first, second);
+            Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        }
+
+        [Fact]
+        public void GridToken_WithADifferentResumeRowIndex_ComparesUnequal()
+        {
+            var container = new CssBox(null, null);
+            var item = new CssBox(null, null);
+            var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
+            var rows = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item }, new List<CssBox> { item } };
+            var subgridContexts = new Dictionary<CssBox, PeachPDF.Html.Core.Dom.GridSubgridContext>();
+
+            var first = new GridBreakToken(container, 1, 0, rows,
+                new List<UnfinishedGridItem> { new(item, itemToken) }, [], subgridContexts, default);
+            var second = new GridBreakToken(container, 1, 1, rows,
+                new List<UnfinishedGridItem> { new(item, itemToken) }, [], subgridContexts, default);
+
+            Assert.NotEqual(first, second);
+        }
+
+        [Fact]
+        public void GridToken_WithADifferentPlacementOrigin_StillComparesEqual()
+        {
+            var container = new CssBox(null, null);
+            var item = new CssBox(null, null);
+            var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
+            var rows = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item } };
+            var subgridContexts = new Dictionary<CssBox, PeachPDF.Html.Core.Dom.GridSubgridContext>();
+
+            var first = new GridBreakToken(container, 1, 0, rows,
+                new List<UnfinishedGridItem> { new(item, itemToken) }, [], subgridContexts,
+                new PeachPDF.Html.Adapters.Entities.RPoint(0, 0));
+            var second = new GridBreakToken(container, 1, 0, rows,
+                new List<UnfinishedGridItem> { new(item, itemToken) }, [], subgridContexts,
+                new PeachPDF.Html.Adapters.Entities.RPoint(999, 999));
+
+            Assert.Equal(first, second);
+        }
+
+        /// <summary>
+        /// The column-direction flex engine's own no-progress backstop, over its two-level
+        /// unfinished-lines/finished-lines shape rather than a flat item list.
+        /// </summary>
+        [Fact]
+        public void FlexColumnToken_WithTheSameContentsBuiltTwice_ComparesEqual()
+        {
+            var container = new CssBox(null, null);
+            var item = new CssBox(null, null);
+            var lines = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item } };
+            var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
+
+            var first = new FlexColumnBreakToken(container, 1, lines,
+                new List<ColumnLineCursor> { new(0, 0, itemToken) }, [1], default);
+            var second = new FlexColumnBreakToken(container, 1, lines,
+                new List<ColumnLineCursor> { new(0, 0, itemToken) }, [1], default);
+
+            Assert.Equal(first, second);
+            Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        }
+
+        [Fact]
+        public void FlexColumnToken_WithADifferentFinishedLineSet_ComparesUnequal()
+        {
+            var container = new CssBox(null, null);
+            var item = new CssBox(null, null);
+            var lines = new List<IReadOnlyList<CssBox>> { new List<CssBox> { item }, new List<CssBox> { item } };
+            var itemToken = new InlineBreakToken(item, 1, new List<int> { 0 }, ResumeWordIndex: 3, CompletedLineCount: 2);
+
+            var first = new FlexColumnBreakToken(container, 1, lines,
+                new List<ColumnLineCursor> { new(0, 0, itemToken) }, [1], default);
+            var second = new FlexColumnBreakToken(container, 1, lines,
+                new List<ColumnLineCursor> { new(0, 0, itemToken) }, [2], default);
+
+            Assert.NotEqual(first, second);
+        }
     }
 }

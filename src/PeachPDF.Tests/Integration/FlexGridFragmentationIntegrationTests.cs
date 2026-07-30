@@ -1212,6 +1212,20 @@ namespace PeachPDF.Tests.Integration
                 $"expected the item whole in slot 1, it runs to {a.ActualBottom}");
         }
 
+        // An inline-flex column container is an atomic inline (like its row-direction counterpart), so
+        // the column commit pass declines the same way CommitLineContent does for inline-flex - where it
+        // sits is the line it is on to decide, not a fragmentainer question of its own.
+        [Fact]
+        public async Task AnInlineFlexColumnContainer_IsLeftToItsLine()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                Document("display:inline-flex; flex-direction:column", ""), pageHeight: PageHeight);
+
+            var a = LayoutHarness.FindById(root, "a");
+            Assert.NotNull(a);
+            Assert.Equal(0, SlotOf(container, a!));
+        }
+
         // ─── Flex item content fragmentation, column-direction (issues #517/#526) ─
 
         // A non-wrapping column container's single line is a sequential flow: each item is walked and
