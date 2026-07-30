@@ -52,7 +52,7 @@ namespace PeachPDF.Tests.Integration
         // ── Uniform seed → initial values on a bare element ───────────────────────
 
         [Theory]
-        [InlineData("text-align", "left")]
+        [InlineData("text-align", "start")]
         [InlineData("vertical-align", "baseline")]
         [InlineData("overflow", "visible")]
         [InlineData("letter-spacing", "normal")]

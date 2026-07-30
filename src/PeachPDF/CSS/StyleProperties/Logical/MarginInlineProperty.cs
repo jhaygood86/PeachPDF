@@ -3,7 +3,7 @@ namespace PeachPDF.CSS
     internal sealed class MarginInlineProperty : ShorthandProperty
     {
         private static readonly IValueConverter StyleConverter = Converters.AutoLengthOrPercentConverter.Periodic(
-                PropertyNames.MarginLeft, PropertyNames.MarginRight)
+                PropertyNames.MarginInlineStart, PropertyNames.MarginInlineEnd)
             .OrDefault(Length.Zero);
 
         internal MarginInlineProperty()

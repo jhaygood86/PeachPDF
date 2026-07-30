@@ -1,0 +1,19 @@
+BidiBrackets.txt, BidiMirroring.txt, DerivedBidiClass.txt, and BidiCharacterTest.txt are
+unmodified files from the Unicode Character Database (UCD), version 17.0.0,
+© 2025 Unicode, Inc. They are licensed under the Unicode License v3 ("Unicode®
+License Agreement — Data Files and Software").
+
+These files are bundled solely as source data / test fixtures: BidiBrackets.txt,
+BidiMirroring.txt, and DerivedBidiClass.txt are parsed at build time into the
+compact lookup tables PeachPDF.Text.Bidi ships (see assets/unicode/generate_bidi_tables.py),
+and BidiCharacterTest.txt is the Unicode Consortium's own bidi conformance suite, used
+by the test suite to verify the Unicode Bidirectional Algorithm (UAX #9) implementation
+against real, official test vectors. None of the four files themselves is shipped in the
+PeachPDF library or its NuGet package.
+
+Unicode and the Unicode Logo are registered trademarks of Unicode, Inc. in the United
+States and other countries.
+
+Full license text: https://www.unicode.org/license.txt
+Terms of use: https://www.unicode.org/terms_of_use.html
+Source: https://www.unicode.org/Public/17.0.0/ucd/

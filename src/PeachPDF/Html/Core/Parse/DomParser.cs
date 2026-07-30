@@ -19,6 +19,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -103,6 +104,14 @@ namespace PeachPDF.Html.Core.Parse
             // Collect @font-palette-values registrations (consulted when resolving font-palette:<dashed-ident>).
             htmlContainer.FontPaletteValues = RegisteredFontPalette.BuildRegistry(cssData, cssValueParser);
 
+            // Must run before CascadeApplyStyles: it resolves dir="auto" (and <bdi>'s implicit auto
+            // default) to a literal ltr/rtl value written back onto the element's own attribute set, so
+            // the result rides the existing, correctly-ordered UA-stylesheet [dir] attribute-selector
+            // rules (see CssDefaults.DefaultStyleSheet) at normal UA priority instead of needing its own
+            // imperative override. It needs each text box's still-raw string (before CorrectTextBoxes/
+            // ParseToWords splits it into words), so it must run before those too.
+            ResolveAutoDirectionality(root);
+
             // The cascade (CascadeApplyStyles) still recurses into an inline <svg>'s descendants on
             // purpose - inline SVG participates in the document cascade, and its shape boxes need their
             // custom properties (--x) populated for var() to resolve. Likewise CorrectTextBoxes only
@@ -115,6 +124,11 @@ namespace PeachPDF.Html.Core.Parse
             EnsureListItemMarkers(cssValueParser, root, cssData, media);
 
             ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media);
+
+            // Must run after the cascade (it reads each box's resolved Direction/UnicodeBidi) and
+            // before CorrectTextBoxes (the first place that calls CssBox.ParseToWords, which consults
+            // the per-box level arrays this assigns).
+            CssBidiParagraphResolver.AssignBidiLevels(root);
 
             CorrectTextBoxes(root);
 
@@ -536,16 +550,17 @@ namespace PeachPDF.Html.Core.Parse
             //    Fast path: a box whose ComputedStyle is still the shared Default singleton hasn't had
             //    ANY property touched yet - and every area's own Default is itself sourced from this same
             //    CssDefaults store (see ComputedStyleAreas.cs), so re-asserting a property's initial value
-            //    on such a box is a guaranteed no-op for every property except the three audited below,
-            //    where an area's Default deliberately differs from the literal CssDefaults value:
-            //    FontFamily (kept null as a "not yet resolved" sentinel - see FontArea) and
-            //    GridTemplateColumns/Rows (the parsed GridTemplate half of "none" isn't the literal null
-            //    ComputedStyle.Default's own initializer uses - see GridArea). This also correctly still
-            //    runs the full loop (with its Display-for-anonymous-box exception above) for any box that
-            //    HAS already diverged from Default - e.g. an anonymous box whose Display was assigned
-            //    structurally before this runs, which is exactly what keeps that exception meaningful.
-            //    Verified exhaustively against every CssDefaults entry - see
-            //    ComputedStyleTests.CascadeDefaultingLoop_OnAFreshBox_OnlyFontFamilyAndGridTemplatesAreNotNoOps.
+            //    on such a box is a guaranteed no-op for every property except the ones audited below:
+            //    FontFamily (kept null as a "not yet resolved" sentinel - see FontArea); GridTemplateColumns/
+            //    Rows (the parsed GridTemplate half of "none" isn't the literal null ComputedStyle.Default's
+            //    own initializer uses - see GridArea); and Direction/UnicodeBidi/WritingMode (each a
+            //    CssProperty<T>-typed reference value with no equality override, so re-parsing the same
+            //    initial-value string always produces a new, reference-distinct instance - see TextArea).
+            //    This also correctly still runs the full loop (with its Display-for-anonymous-box exception
+            //    above) for any box that HAS already diverged from Default - e.g. an anonymous box whose
+            //    Display was assigned structurally before this runs, which is exactly what keeps that
+            //    exception meaningful. Verified exhaustively against every CssDefaults entry - see
+            //    ComputedStyleTests.CascadeDefaultingLoop_OnAFreshBox_OnlyKnownExceptionsAreNotNoOps.
             if (!ReferenceEquals(box.ComputedStyle, ComputedStyle.Default))
             {
                 foreach (var (name, initial) in CssDefaults.InitialValues)
@@ -695,6 +710,11 @@ namespace PeachPDF.Html.Core.Parse
 
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
+
+            // CSS Logical Properties: resolve any of the 24 logical margin/padding/inset/border
+            // longhands cascaded onto this box (CssBox.LogicalProperties.cs) to their physical edge, now
+            // that this box's own Direction/WritingMode are fully resolved.
+            box.ResolveLogicalProperties();
 
             if (!box.FirstLineProcessed)
             {
@@ -1395,9 +1415,6 @@ namespace PeachPDF.Html.Core.Parse
                     case HtmlConstants.Color:
                         box.Color = value.ToLower();
                         break;
-                    case HtmlConstants.Dir:
-                        box.Direction = value.ToLower();
-                        break;
                     case HtmlConstants.Face:
                         //box.FontFamily = _cssParser.ParseFontFamily(value);
                         throw new NotImplementedException();
@@ -1427,6 +1444,97 @@ namespace PeachPDF.Html.Core.Parse
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Resolves the HTML Standard's "auto" directionality state - both an explicit <c>dir="auto"</c>
+        /// and a &lt;bdi&gt; element's implicit default when it carries no <c>dir</c> attribute of its own
+        /// - to a literal <c>ltr</c>/<c>rtl</c> value written back onto the element (<see cref="HtmlTag.SetAttribute"/>),
+        /// so it rides the same UA-stylesheet <c>[dir]</c> attribute-selector rules every other
+        /// <c>dir</c> value does (<see cref="CssDefaults.DefaultStyleSheet"/>).
+        /// </summary>
+        private static void ResolveAutoDirectionality(CssBox box)
+        {
+            if (box.HtmlTag is { } tag && NeedsAutoDirectionalityResolution(tag))
+            {
+                tag.SetAttribute(HtmlConstants.Dir, FindFirstStrongDirection(box) ?? CssConstants.Ltr);
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                ResolveAutoDirectionality(child);
+            }
+        }
+
+        /// <summary>
+        /// True for an element in the HTML Standard's "auto" directionality state: an explicit
+        /// <c>dir="auto"</c>; a &lt;bdi&gt; element with no <c>dir</c> attribute at all (its default); or
+        /// a &lt;bdi&gt; element whose <c>dir</c> attribute is present but invalid (unlike every other
+        /// element, whose invalid-value default state is <c>ltr</c>, &lt;bdi&gt;'s is <c>auto</c>).
+        /// </summary>
+        private static bool NeedsAutoDirectionalityResolution(HtmlTag tag)
+        {
+            var dirAttr = tag.TryGetAttribute(HtmlConstants.Dir);
+            var isBdi = tag.Name.Equals(HtmlConstants.Bdi, StringComparison.OrdinalIgnoreCase);
+
+            if (dirAttr is null) return isBdi;
+            if (dirAttr.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)) return true;
+
+            return isBdi
+                && !dirAttr.Equals(CssConstants.Ltr, StringComparison.OrdinalIgnoreCase)
+                && !dirAttr.Equals(CssConstants.Rtl, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// The HTML Standard's first-strong-character algorithm: walks <paramref name="element"/>'s
+        /// descendant text in tree order looking for the first character with a strong <see cref="BidiClass"/>
+        /// (<c>L</c>, or <c>R</c>/<c>AL</c>), returning <see cref="CssConstants.Ltr"/>/<see cref="CssConstants.Rtl"/>
+        /// respectively, or null if none is found (the element's directionality then defaults to ltr).
+        /// Does not descend into a nested element that carries its own <c>dir</c> attribute (that element
+        /// is its own directionality scope) or a nested &lt;bdi&gt; (always its own isolated scope, dir
+        /// attribute or not), matching the spec's tree-scan boundary exactly.
+        /// </summary>
+        private static string? FindFirstStrongDirection(CssBox element)
+        {
+            foreach (var child in element.Boxes)
+            {
+                var found = ScanForStrongDirection(child);
+                if (found is not null) return found;
+            }
+
+            return null;
+        }
+
+        private static readonly FrozenSet<string> AutoDirectionalityOpaqueTags = new[]
+        {
+            HtmlConstants.Bdi, "script", HtmlConstants.Style, "textarea", "input", HtmlConstants.Iframe, HtmlConstants.NoScript
+        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+        private static string? ScanForStrongDirection(CssBox box)
+        {
+            if (box.HtmlTag is { } tag)
+            {
+                if (tag.HasAttribute(HtmlConstants.Dir) || AutoDirectionalityOpaqueTags.Contains(tag.Name))
+                    return null;
+            }
+
+            if (box.Text is { Length: > 0 } text)
+            {
+                foreach (var rune in text.EnumerateRunes())
+                {
+                    var bidiClass = BidiClassTable.Of(rune);
+                    if (bidiClass == BidiClass.L) return CssConstants.Ltr;
+                    if (bidiClass is BidiClass.R or BidiClass.AL) return CssConstants.Rtl;
+                }
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                var found = ScanForStrongDirection(child);
+                if (found is not null) return found;
+            }
+
+            return null;
         }
 
         /// <summary>

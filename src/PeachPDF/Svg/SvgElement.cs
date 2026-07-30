@@ -166,6 +166,13 @@ namespace PeachPDF.Svg
 
         public SvgTextAnchor TextAnchor { get; set; } = SvgTextAnchor.Start;
 
+        /// <summary>The resolved (inherited) <c>direction</c> - <c>"ltr"</c> or <c>"rtl"</c>.</summary>
+        public string Direction { get; set; } = "ltr";
+
+        /// <summary>The resolved <c>unicode-bidi</c> - not inherited (CSS Writing Modes 3 §5.2), so
+        /// resolved fresh per run rather than threaded down like <see cref="Direction"/>.</summary>
+        public string UnicodeBidi { get; set; } = "normal";
+
         /// <summary>The <c>&lt;textPath&gt;</c> <c>side</c> (default <see cref="SvgTextPathSide.Left"/>).</summary>
         public SvgTextPathSide Side { get; set; } = SvgTextPathSide.Left;
 

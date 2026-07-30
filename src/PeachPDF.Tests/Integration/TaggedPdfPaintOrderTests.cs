@@ -161,7 +161,7 @@ namespace PeachPDF.Tests.Integration
             public override void BeginMarkedContent(string structureType, int mcid) => Log.Add(("BeginMarkedContent", structureType));
             public override void EndMarkedContent() => Log.Add(("EndMarkedContent", null));
             public override void BeginArtifact() => Log.Add(("BeginArtifact", null));
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => Log.Add(("DrawString", str));
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => Log.Add(("DrawString", str));
 
             public override void PushTransform(RMatrix matrix) { }
             public override void PopTransform() { }

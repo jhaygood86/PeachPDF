@@ -220,6 +220,36 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal("border-box", clone.BoxSizing);
         }
 
+        [Fact]
+        public void InheritStyle_UnicodeBidi_DoesNotAdoptParentsValue()
+        {
+            // unicode-bidi is CSS-spec Inherited: no, unlike every other property in the otherwise-100%-
+            // inherited Text area - InheritStyle must explicitly restore it after the area's whole-by-
+            // reference adoption, or a child would silently pick up the parent's isolate/embed/etc.
+            var parent = new CssBox(null, null) { UnicodeBidi = CssProperty<UnicodeMode>.FromCssText("isolate", Map.UnicodeModes, UnicodeMode.Normal) };
+            var child = new CssBox(parent, null);
+
+            child.InheritStyle();
+
+            Assert.Equal(UnicodeMode.Normal, child.UnicodeBidi.Value);
+        }
+
+        [Fact]
+        public void InheritStyle_Everything_CopiesUnicodeBidi()
+        {
+            // Unlike the normal ancestor->descendant case just above, a structural duplicate of the SAME
+            // source box (CssProxyBox's repeated header/footer, an inline/block split) needs the source
+            // element's own resolved unicode-bidi, exactly like box-sizing/BoxDecorationBreak/PdfTagType -
+            // this is the `everything: true` path deliberately skipping the restore-to-pre-inherit-value
+            // correction the normal path applies.
+            var source = new CssBox(null, null) { UnicodeBidi = CssProperty<UnicodeMode>.FromCssText("isolate", Map.UnicodeModes, UnicodeMode.Normal) };
+            var clone = new CssBox(null, null);
+
+            clone.InheritStyle(source, everything: true);
+
+            Assert.Equal(UnicodeMode.Isolate, clone.UnicodeBidi.Value);
+        }
+
         // ── regression: DomParser.CascadeApplyStyles's fast-path skip of the defaulting loop ──
 
         /// <summary>
@@ -233,15 +263,26 @@ namespace PeachPDF.Tests.Html.Core.Dom
         /// and asserting nothing outside the known set changes anything - so it fails loudly (rather than
         /// silently reintroducing a correctness bug) if a future area/property addition breaks the
         /// no-op assumption the fast path depends on.
+        /// <para>
+        /// <c>direction</c>/<c>unicode-bidi</c>/<c>writing-mode</c> joined the exception set for the same
+        /// reason <c>grid-template-columns</c>/<c>-rows</c> are already here: all five are
+        /// <see cref="CSS.CssProperty{T}"/>-typed (a <see langword="sealed class"/> with no value equality),
+        /// so <c>CssProperty{T}.FromCssText</c> re-parsing the same initial-value string always produces a
+        /// new, reference-distinct instance even when the parsed value is identical - the cascade's
+        /// copy-on-write comparison has no way to see through that and always clones the area.
+        /// </para>
         /// </summary>
         [Fact]
-        public void CascadeDefaultingLoop_OnAFreshBox_OnlyFontFamilyAndGridTemplatesAreNotNoOps()
+        public void CascadeDefaultingLoop_OnAFreshBox_OnlyKnownExceptionsAreNotNoOps()
         {
             var knownExceptions = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
             {
                 PropertyNames.FontFamily,
                 PropertyNames.GridTemplateColumns,
                 PropertyNames.GridTemplateRows,
+                PropertyNames.Direction,
+                PropertyNames.UnicodeBidirectional,
+                PropertyNames.WritingMode,
             };
             var parser = new CssValueParser(new PdfSharpAdapter());
             var unexpectedlyNotNoOp = new List<string>();

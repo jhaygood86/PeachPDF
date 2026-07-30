@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -1501,7 +1502,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             var total = 0d;
             foreach (var (_, rect) in ordered) total += rect.Width;
 
-            var rtl = ordered[0].Key.OwnerBox.Direction == CssConstants.Rtl;
+            var rtl = ordered[0].Key.OwnerBox.Direction.Value == DirectionMode.Rtl;
 
             var preceding = 0d;
 

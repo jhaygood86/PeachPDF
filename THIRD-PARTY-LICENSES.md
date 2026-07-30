@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-PeachPDF is MIT-licensed (see [LICENSE](LICENSE)), but it embeds and adapts a small number of third-party components directly in its source tree, each carrying its own license terms. This document collects those licenses, alongside where each component lives in the repo, so they aren't just scattered `LICENSE`/`license.txt` files a reader has to go hunting for.
+PeachPDF is BSD 3-Clause-licensed (see [LICENSE](LICENSE)), but it embeds and adapts a small number of third-party components directly in its source tree, each carrying its own license terms. This document collects those licenses, alongside where each component lives in the repo, so they aren't just scattered `LICENSE`/`license.txt` files a reader has to go hunting for.
 
 ## PdfSharpCore (embedded fork)
 
@@ -12,7 +12,7 @@ PeachPDF is MIT-licensed (see [LICENSE](LICENSE)), but it embeds and adapts a sm
 ## MIT License
 
 Copyright (c) 2001-2024 empira Software GmbH, Troisdorf (Cologne Area), Germany
-Copyright (c) 2017-2025 Justin Haygood
+Copyright (c) 2017-2026 Justin Haygood
 
 http://docs.pdfsharp.net
 
@@ -67,13 +67,25 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Unicode Character Database (bidi data tables)
+
+- **Location:** [`src/PeachPDF/Text/Resources/Bidi/`](src/PeachPDF/Text/Resources/Bidi/) — `DerivedBidiClass.txt.br`, `BidiBrackets.txt.br`, `BidiMirroring.txt.br` (Brotli-compressed, consumed by `PeachPDF.Text.Bidi.BidiClassTable`/`BidiBrackets`/`BidiMirroring`)
+- **Upstream source:** the Unicode Character Database (UCD), version 17.0.0, mirrored unmodified at [`assets/unicode/DerivedBidiClass.txt`](assets/unicode/DerivedBidiClass.txt), [`assets/unicode/BidiBrackets.txt`](assets/unicode/BidiBrackets.txt), [`assets/unicode/BidiMirroring.txt`](assets/unicode/BidiMirroring.txt) — see [`assets/unicode/UnicodeCharacterDatabase.LICENSE.txt`](assets/unicode/UnicodeCharacterDatabase.LICENSE.txt)
+- **Generation script:** [`assets/unicode/generate_bidi_tables.py`](assets/unicode/generate_bidi_tables.py), which reparses the three UCD source files above into the compact per-codepoint-range records the embedded resources actually ship
+- **Also present, not shipped:** `assets/unicode/BidiCharacterTest.txt`, the Unicode Consortium's own bidi conformance test suite, used only by `PeachPDF.Tests` to verify the Unicode Bidirectional Algorithm (UAX #9) implementation against real test vectors — never embedded in the library or its NuGet package
+- **License:** [Unicode License v3](https://www.unicode.org/license.txt) ("Unicode® License Agreement — Data Files and Software")
+
+Each UCD source file carries this notice in its own header, reproduced here rather than the full license text (see the license file linked above for that):
+
+> © 2025 Unicode®, Inc. Unicode and the Unicode Logo are registered trademarks of Unicode, Inc. in the U.S. and other countries. For terms of use and license, see https://www.unicode.org/terms_of_use.html
+
 ## Hyphenation patterns (hyph-utf8 / CTAN)
 
 - **Location:** [`src/PeachPDF/Text/Resources/Patterns/`](src/PeachPDF/Text/Resources/Patterns/) — one Brotli-compressed `hyph-<tag>.txt.br` file per language (73 files)
 - **Upstream source:** the `hyph-utf8` package from CTAN, mirrored at [github.com/hyphenation/tex-hyphen](https://github.com/hyphenation/tex-hyphen)
 - **Regeneration/provenance script:** [`tools/Update-HyphenationPatterns.ps1`](tools/Update-HyphenationPatterns.ps1), pinned to a specific upstream commit for reproducibility
 
-Each language's original `hyph-<tag>.tex` source carries its own copyright and license notice (these patterns are contributed independently, by different authors, over several decades). `tools/Update-HyphenationPatterns.ps1` bundles **only permissively-licensed pattern sets** (MIT/LPPL/BSD-style/public-domain) and skips any whose resolved license is GPL/LGPL-family or unstated (see the script's `Test-PermissiveLicense` function) — consistent with PeachPDF's own MIT license. Each compressed pattern file also carries this same notice inline in its decompressed text header, alongside its title, copyright holder, and a source/retrieval-date/commit stamp.
+Each language's original `hyph-<tag>.tex` source carries its own copyright and license notice (these patterns are contributed independently, by different authors, over several decades). `tools/Update-HyphenationPatterns.ps1` bundles **only permissively-licensed pattern sets** (MIT/LPPL/BSD-style/public-domain) and skips any whose resolved license is GPL/LGPL-family or unstated (see the script's `Test-PermissiveLicense` function) — consistent with PeachPDF's own BSD 3-Clause license. Each compressed pattern file also carries this same notice inline in its decompressed text header, alongside its title, copyright holder, and a source/retrieval-date/commit stamp.
 
 The table below groups the 73 bundled languages by their exact license text, so each distinct notice is reproduced once rather than 73 times. Language tags correspond to `hyph-<tag>.txt.br` in the Patterns directory above.
 

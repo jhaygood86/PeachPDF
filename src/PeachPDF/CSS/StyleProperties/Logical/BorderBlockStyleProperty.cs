@@ -3,7 +3,7 @@ namespace PeachPDF.CSS
     internal sealed class BorderBlockStyleProperty : ShorthandProperty
     {
         private static readonly IValueConverter StyleConverter = Converters.LineStyleConverter.Periodic(
-            PropertyNames.BorderTopStyle, PropertyNames.BorderBottomStyle).OrDefault();
+            PropertyNames.BorderBlockStartStyle, PropertyNames.BorderBlockEndStyle).OrDefault();
 
         internal BorderBlockStyleProperty()
             : base(PropertyNames.BorderBlockStyle)

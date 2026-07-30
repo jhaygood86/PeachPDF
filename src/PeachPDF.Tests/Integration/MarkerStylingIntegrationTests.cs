@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -146,18 +147,15 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task MarkerDirection_OverridesRtlPainting()
+        public async Task MarkerDirection_OverridesListItemsOwnDirection()
         {
-            var (root, container) = await BuildAndLayout(Wrap(
+            var (root, _) = await BuildAndLayout(Wrap(
                 "<style>li::marker { direction: rtl }</style><ol><li id='li' style='direction: ltr'>text</li></ol>"));
             var li = FindById(root, "li")!;
             var marker = li.Boxes.Single(b => b.IsMarkerPseudoElement);
 
-            var g = new TestRecordingGraphics();
-            FragmentPaintHarness.PaintBox(container, marker, g);
-
-            var call = Assert.Single(g.DrawStringCalls);
-            Assert.True(call.Rtl);
+            Assert.Equal(DirectionMode.Ltr, li.Direction.Value);
+            Assert.Equal(DirectionMode.Rtl, marker.Direction.Value);
         }
 
         [Fact]

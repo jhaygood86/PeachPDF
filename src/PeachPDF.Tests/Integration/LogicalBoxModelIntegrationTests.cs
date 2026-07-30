@@ -118,6 +118,24 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task BorderBlockEnd_EdgeShorthand_ExpandsToBottomEdge()
+        {
+            var box = await CascadedDiv("border-block-end: 4pt double green");
+            Assert.Equal("4pt", CssUtils.GetPropertyValue(box, "border-bottom-width"));
+            Assert.Equal("double", CssUtils.GetPropertyValue(box, "border-bottom-style"));
+            Assert.Equal("rgb(0, 128, 0)", CssUtils.GetPropertyValue(box, "border-bottom-color"));
+        }
+
+        [Fact]
+        public async Task BorderInlineStart_EdgeShorthand_ExpandsToLeftEdge()
+        {
+            var box = await CascadedDiv("border-inline-start: 1pt dashed black");
+            Assert.Equal("1pt", CssUtils.GetPropertyValue(box, "border-left-width"));
+            Assert.Equal("dashed", CssUtils.GetPropertyValue(box, "border-left-style"));
+            Assert.Equal("rgb(0, 0, 0)", CssUtils.GetPropertyValue(box, "border-left-color"));
+        }
+
+        [Fact]
         public async Task BorderBlock_TwoEdgeShorthand_AppliesToBothBlockEdges()
         {
             var box = await CascadedDiv("border-block: 2pt solid red");

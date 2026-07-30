@@ -6415,6 +6415,73 @@ await SaveShowcaseAsync("gsub_ligatures", "Text &amp; Fonts", "GSUB Ligatures",
     "actually turns a font's ligatures on and off, for both ordinary text and gradient-filled SVG text.",
     ligatureHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Bidirectional text: the `dir` global attribute (including `auto`), `<bdo>`/`<bdi>`, CSS
+// direction/unicode-bidi, and a real UAX#9 Unicode Bidi Algorithm - not the old whole-word-mirror
+// approximation. Real Hebrew (strong-R) content, not placeholder boxes, so per-character
+// reordering, digit/Latin run embedding, and L4 bracket mirroring are all visibly correct.
+var notoHebrewB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansHebrewSubset.ttf")));
+var bidiHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Hebrew'; src: url('data:font/truetype;base64,{notoHebrewB64}') format('truetype'); }}" +
+    // Latin font listed first, Hebrew second: PeachPDF's per-codepoint font fallback (see Text &
+    // Fonts -> Per-character font matching) sends each character to the first family that covers
+    // it, so one font-family list renders both scripts correctly with no manual span-wrapping.
+    "body { font-family: 'SS3', 'Hebrew', sans-serif; margin: 0; color: #222; font-size: 11pt }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.2em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.8em; color: #555; font-family: 'SS3', sans-serif }" +
+    "p.sample { margin: 0.4em 0; padding: 0.5em 0.7em; background: #f5f6f8; border-left: 3px solid #4a90d9 }" +
+    "ul.scores { list-style: none; margin: 0.3em 0; padding: 0 }" +
+    "ul.scores li { padding: 0.2em 0.7em }" +
+    "</style></head><body>" +
+    "<h1>Bidirectional Text</h1>" +
+    "<p class=\"intro\">The <code>dir</code> global attribute (including <code>auto</code>), " +
+    "<code>&lt;bdo&gt;</code>/<code>&lt;bdi&gt;</code>, and the CSS <code>direction</code>/" +
+    "<code>unicode-bidi</code> properties are all driven by a real Unicode Bidirectional Algorithm " +
+    "(UAX #9) implementation - per-character reordering of mixed-direction text, not just mirroring " +
+    "whole words.</p>" +
+
+    "<h2>Plain right-to-left paragraph (<code>dir=\"rtl\"</code>)</h2>" +
+    "<p class=\"sample\" dir=\"rtl\">שלום עולם! זהו טקסט בעברית, והוא זורם מימין לשמאל.</p>" +
+
+    "<h2>Mixed-direction text and bracket mirroring</h2>" +
+    "<p class=\"intro\">The embedded Latin word and version number stay left-to-right within the " +
+    "surrounding Hebrew paragraph, and the parentheses mirror to match the paragraph's own " +
+    "direction - both resolved per character, not per word.</p>" +
+    "<p class=\"sample\" dir=\"rtl\">מספר הגרסה של הספרייה (PeachPDF) הוא 0.9.6.</p>" +
+
+    "<h2><code>&lt;bdo&gt;</code>: forcing a direction override</h2>" +
+    "<p>Normal: <span>Hello, World!</span> &nbsp;&nbsp; Overridden: " +
+    "<bdo dir=\"rtl\">Hello, World!</bdo></p>" +
+
+    "<h2><code>&lt;bdi&gt;</code>: isolating unknown-direction content</h2>" +
+    "<p class=\"intro\">A right-to-left username embedded directly in a left-to-right sentence can " +
+    "drag the following punctuation/score into the wrong visual position:</p>" +
+    "<ul class=\"scores\">" +
+    "<li><span>אבי</span>: 9 points</li>" +
+    "<li><span>Bob</span>: 15 points</li>" +
+    "</ul>" +
+    "<p class=\"intro\"><code>&lt;bdi&gt;</code> isolates it, so the score always reads correctly " +
+    "regardless of the username's own direction:</p>" +
+    "<ul class=\"scores\">" +
+    "<li><bdi>אבי</bdi>: 9 points</li>" +
+    "<li><bdi>Bob</bdi>: 15 points</li>" +
+    "</ul>" +
+
+    "<h2><code>dir=\"auto\"</code>: detecting direction from content</h2>" +
+    "<p class=\"sample\" dir=\"auto\">שלום, זהו טקסט עם dir=\"auto\" שמתחיל בעברית - מזוהה אוטומטית " +
+    "כטקסט מימין לשמאל.</p>" +
+    "<p class=\"sample\" dir=\"auto\">Hello, this is text with dir=\"auto\" that starts in English - " +
+    "auto-detected as left-to-right.</p>" +
+    "</body></html>";
+await SaveShowcaseAsync("bidi_text", "Text &amp; Fonts", "Bidirectional Text (dir, bdo, bdi)",
+    "A real Unicode Bidi Algorithm (UAX #9): the dir global attribute (incl. auto-detection), " +
+    "bdo/bdi, and CSS direction/unicode-bidi, with per-character reordering, digit/Latin run " +
+    "embedding, and bracket mirroring in real Hebrew text.",
+    bidiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

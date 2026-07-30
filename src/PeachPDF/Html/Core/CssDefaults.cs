@@ -115,6 +115,12 @@ namespace PeachPDF.Html.Core
             *[DIR="ltr"]    { direction: ltr; unicode-bidi: embed }
             *[DIR="rtl"]    { direction: rtl; unicode-bidi: embed }
 
+            /* A plain type selector (0,0,1) would lose the unicode-bidi: embed set by the *[DIR=...]
+               rule just above (0,1,0) once the dir="auto"/no-dir-attribute pre-pass has written a
+               literal ltr/rtl dir attribute onto every <bdi> - matching its attribute-selector
+               specificity (0,1,1) is what lets isolate win instead. */
+            bdi[DIR="ltr"], bdi[DIR="rtl"] { unicode-bidi: isolate }
+
             /* Spelt with css-break-3's break-* properties rather than the legacy page-break-*
                aliases. The two share their storage and their initial value (see InitialValues
                below), so this is the same cascade either way - but the sheet is where a reader
@@ -217,6 +223,7 @@ namespace PeachPDF.Html.Core
             "white-space",
             "word-break",
             "word-spacing",
+            "writing-mode",
         }.ToFrozenSet(System.StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
@@ -320,7 +327,7 @@ namespace PeachPDF.Html.Core
             { "position", "static" },
             { "right", CssConstants.Auto },
             { "string-set", CssConstants.None },
-            { "text-align", "left" },
+            { "text-align", CssConstants.Start },
             { "text-decoration-color", CssConstants.CurrentColor },
             { "text-decoration-line", CssConstants.None },
             { "text-decoration-style", CssConstants.Solid },
@@ -333,6 +340,7 @@ namespace PeachPDF.Html.Core
             { "box-shadow", CssConstants.None },
             { "transform-origin", "50% 50% 0" },
             { "opacity", "1" },
+            { "unicode-bidi", CssConstants.Normal },
             { "vertical-align", "baseline" },
             { "visibility", "visible" },
             { "white-space", CssConstants.Normal },
@@ -340,6 +348,7 @@ namespace PeachPDF.Html.Core
             { "word-break", CssConstants.Normal },
             { "word-spacing", CssConstants.Normal },
             { "letter-spacing", CssConstants.Normal },
+            { "writing-mode", Keywords.HorizontalTb },
             { "z-index", CssConstants.Auto },
 
             // Flex container/item, Grid container/item, object-fit/position, font-palette, and page were

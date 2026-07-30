@@ -229,6 +229,11 @@
         public static readonly string Contain = "contain";
         public static readonly string Ltr = "ltr";
         public static readonly string Rtl = "rtl";
+        public static readonly string HorizontalTb = "horizontal-tb";
+        public static readonly string VerticalRl = "vertical-rl";
+        public static readonly string VerticalLr = "vertical-lr";
+        public static readonly string SidewaysRl = "sideways-rl";
+        public static readonly string SidewaysLr = "sideways-lr";
         public static readonly string All = "all";
         public static readonly string Balance = "balance";
         public static readonly string Separate = "separate";

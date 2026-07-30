@@ -3,7 +3,7 @@ namespace PeachPDF.CSS
     internal sealed class BorderInlineWidthProperty : ShorthandProperty
     {
         private static readonly IValueConverter StyleConverter = Converters.LineWidthConverter.Periodic(
-            PropertyNames.BorderLeftWidth, PropertyNames.BorderRightWidth).OrDefault();
+            PropertyNames.BorderInlineStartWidth, PropertyNames.BorderInlineEndWidth).OrDefault();
 
         internal BorderInlineWidthProperty()
             : base(PropertyNames.BorderInlineWidth, PropertyFlags.Animatable)

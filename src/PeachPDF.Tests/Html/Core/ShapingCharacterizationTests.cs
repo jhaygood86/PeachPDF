@@ -16,13 +16,14 @@ namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
     /// PeachPDF applies GSUB ligature substitution (<c>liga</c>/<c>clig</c>/<c>rlig</c>, see
-    /// <see cref="GsubShaper"/>) but still has no full OpenType Layout engine: no <c>GPOS</c>
-    /// (kerning/mark positioning), no contextual substitution (GSUB lookup types 5-8), no Unicode
-    /// Bidi Algorithm, no Arabic/Indic complex-script joining. These tests characterize what
-    /// remains a <b>known limitation</b> (contextual-forms independence, RTL word-box-only
-    /// mirroring) so it can't silently regress, alongside the ligature behavior that GSUB support
-    /// added. See docs/html-css-support.md "Text shaping" for the reader-facing note and
-    /// .claude/accepted-gaps/no-text-shaping.md for what's still out of scope.
+    /// <see cref="GsubShaper"/>) and a real UAX#9 Unicode Bidi Algorithm (see
+    /// <see cref="PeachPDF.Text.Bidi.BidiResolver"/>), but still has no full OpenType Layout
+    /// engine: no <c>GPOS</c> (kerning/mark positioning), no contextual substitution (GSUB lookup
+    /// types 5-8), no Arabic/Indic complex-script joining. These tests characterize what remains a
+    /// <b>known limitation</b> (contextual-forms independence) alongside the ligature and bidi
+    /// reordering/mirroring behavior real UAX#9 support added. See docs/html-css-support.md "Text
+    /// shaping" for the reader-facing note and .claude/accepted-gaps/no-text-shaping.md for what's
+    /// still out of scope.
     /// </summary>
     public class ShapingCharacterizationTests
     {
@@ -110,18 +111,42 @@ namespace PeachPDF.Tests.Html.Core
         }
 
         [Fact]
-        public async Task DirectionRtl_MirrorsWordOrder_ButKeepsEachWordLogical()
+        public async Task DirectionRtl_PlainLatinContent_StaysInLogicalOrder()
         {
-            // direction: rtl only mirrors the visual x-order of whole word boxes (CssLayoutEngine
-            // .ApplyRightToLeft); there is no Unicode Bidi Algorithm and no per-character reordering, so
-            // each word's own text is untouched.
+            // UAX#9 I2: strong-L characters inside an RTL (odd) embedding level are bumped to the next
+            // even level, so plain Latin content in an RTL paragraph resolves to its own LTR run and is
+            // NOT reordered - unlike the old whole-word-mirroring approximation, which repositioned every
+            // word regardless of its actual script and got this case wrong.
             var p = await LayoutParagraph(
                 "<!DOCTYPE html><html><body><p style=\"direction:rtl; width:400px; font-size:14pt\">AB CD</p></body></html>");
             var words = WordsOf(p);
 
-            Assert.Equal(new[] { "AB", "CD" }, words.Select(w => w.Text));   // text stays logical, not reversed
-            Assert.True(words[0].Left > words[1].Left,                        // "AB" (logical first) sits to the right
-                $"expected RTL to place the first logical word to the right; AB.Left={words[0].Left}, CD.Left={words[1].Left}");
+            Assert.Equal(new[] { "AB", "CD" }, words.Select(w => w.Text));
+            Assert.True(words[0].Left < words[1].Left,
+                $"expected plain Latin content to stay left-to-right even in an RTL paragraph; AB.Left={words[0].Left}, CD.Left={words[1].Left}");
+        }
+
+        [Fact]
+        public async Task DirectionRtl_RealRtlScriptText_ReordersWordsAndMirrorsBrackets()
+        {
+            // Real Hebrew content (strong R), unlike plain Latin above, resolves to one RTL level run
+            // spanning the whole line - L2 reverses the word order (the first logical word ends up
+            // rightmost) and L4 mirrors the parenthesis pair's glyphs (BidiMirrorResolver.ApplyMirroring).
+            var p = await LayoutParagraph(
+                "<!DOCTYPE html><html><body><p style=\"direction:rtl; width:400px; font-size:14pt\">שלום (עולם)</p></body></html>");
+            var words = WordsOf(p);
+
+            Assert.Equal(2, words.Count);
+            Assert.True(words[0].Left > words[1].Left,
+                $"expected the first logical word (שלום) to end up rightmost; [0].Left={words[0].Left}, [1].Left={words[1].Left}");
+
+            // The parenthesis pair still visually wraps the word after L2+L4 (reversing the run and then
+            // mirroring each of its characters puts an ordinary '(' back at the run's start and ')' back
+            // at its end - only the word's own internal character order is reversed in between).
+            var parenthesized = words.Single(w => w.Text.Contains('ם') && w.Text.Length > 4);
+            Assert.StartsWith("(", parenthesized.Text);
+            Assert.EndsWith(")", parenthesized.Text);
+            Assert.Equal("(םלוע)", parenthesized.Text);
         }
 
         [Fact]

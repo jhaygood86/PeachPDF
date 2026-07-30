@@ -21,8 +21,6 @@ namespace PeachPDF.Html.Core.Paint
         {
             if (box.Width is null or { Length: <= 0 }) return;
 
-            var isRtl = box.Direction == CssConstants.Rtl;
-
             foreach (var wordFragment in fragment.Words)
             {
                 var word = wordFragment.Word;
@@ -56,7 +54,7 @@ namespace PeachPDF.Html.Core.Paint
                 var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
                 var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
                 var text = word.FirstLineText ?? word.Text!;
-                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), isRtl, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualFontVariantLigatures);
+                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualFontVariantLigatures);
             }
         }
     }

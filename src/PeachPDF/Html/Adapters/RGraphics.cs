@@ -318,7 +318,6 @@ namespace PeachPDF.Html.Adapters
         /// <param name="color">the text color to set</param>
         /// <param name="point">the location to start string draw (top-left)</param>
         /// <param name="size">used to know the size of the rendered text for transparent text support</param>
-        /// <param name="rtl">is to render the string right-to-left (true - RTL, false - LTR)</param>
         /// <param name="letterSpacing">
         /// extra space to add between each pair of adjacent characters (CSS <c>letter-spacing</c>),
         /// in the same units as <paramref name="point"/>. 0 (the default/common case) must draw
@@ -335,7 +334,7 @@ namespace PeachPDF.Html.Adapters
         /// which GSUB ligature features (see <see cref="LigatureFeatures"/>) to apply when shaping
         /// <paramref name="str"/> - the resolved CSS <c>font-variant-ligatures</c> value.
         /// </param>
-        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default);
+        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default);
 
         /// <summary>
         /// Builds the vector outline of a glyph run as a fillable/strokeable <see cref="RGraphicsPath"/>,

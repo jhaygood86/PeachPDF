@@ -2,6 +2,9 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Core.Entities;
 using System;
 using System.Collections.Generic;
+// The Text area below declares a property literally named WritingMode, which shadows the CSS-OM enum
+// type of the same name within this file - alias it so the enum stays referenceable.
+using WritingModeEnum = PeachPDF.CSS.WritingMode;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -261,11 +264,20 @@ namespace PeachPDF.Html.Core.Dom
     /// CSS Color + Text + Writing Modes properties that inherit. <c>text-decoration-*</c> is
     /// deliberately excluded - see <see cref="TextDecorationArea"/>.
     /// <para>
-    /// One exception to "all inherit": <see cref="VerticalAlign"/> is CSS-spec <c>Inherited: no</c>, but
+    /// Two exceptions to "all inherit": <see cref="VerticalAlign"/> is CSS-spec <c>Inherited: no</c>, but
     /// this codebase has always (pre-existing this area split) treated it as inherited - a known,
     /// tracked deviation, see <c>.claude/accepted-gaps/vertical-align-is-treated-as-inherited.md</c>. It
     /// stays grouped here (rather than in its own non-inherited area) because fixing it requires
     /// auditing <c>CssLayoutEngine.ApplyVerticalAlignment</c>'s dependence on today's behavior first.
+    /// <see cref="UnicodeBidi"/> is CSS-spec <c>Inherited: no</c> too (correctly - <c>CssDefaults
+    /// .InheritedProperties</c> does not list it) - unlike <see cref="VerticalAlign"/>'s accepted gap, this
+    /// one IS actually corrected: since the whole-area adoption below unconditionally copies every
+    /// property in this area from the parent, <c>CssBox.InheritStyle</c> explicitly restores
+    /// <see cref="UnicodeBidi"/> to this box's own pre-inherit value immediately after adopting the area
+    /// (skipped for the `everything: true` structural-duplicate path, which keeps the adopted value on
+    /// purpose - see the comment there). It lives in this area, rather than its own non-inherited one,
+    /// purely because <c>direction</c>/<c>unicode-bidi</c>/<c>writing-mode</c> are the same CSS Writing
+    /// Modes module and it's convenient to keep them textually adjacent.
     /// </para>
     /// </summary>
     internal sealed record TextArea
@@ -283,7 +295,17 @@ namespace PeachPDF.Html.Core.Dom
         public string WordSpacing { get; init; } = CssDefaults.GetInitialValue(PropertyNames.WordSpacing)!;
         public string LetterSpacing { get; init; } = CssDefaults.GetInitialValue(PropertyNames.LetterSpacing)!;
         public string WordBreak { get; init; } = CssDefaults.GetInitialValue(PropertyNames.WordBreak)!;
-        public string Direction { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Direction)!;
+
+        // Direction/UnicodeBidi/WritingMode carry their parsed enum through the cascade (CssProperty<T>),
+        // the same mechanism GridTemplateColumns/GridTemplateRows already use, rather than the raw string
+        // every other property in this area uses - see CssProperty<T>.FromCssText.
+        public CssProperty<DirectionMode> Direction { get; init; } =
+            CssProperty<DirectionMode>.FromCssText(CssDefaults.GetInitialValue(PropertyNames.Direction)!, Map.DirectionModes, DirectionMode.Ltr);
+        public CssProperty<UnicodeMode> UnicodeBidi { get; init; } =
+            CssProperty<UnicodeMode>.FromCssText(CssDefaults.GetInitialValue(PropertyNames.UnicodeBidirectional)!, Map.UnicodeModes, UnicodeMode.Normal);
+        public CssProperty<WritingModeEnum> WritingMode { get; init; } =
+            CssProperty<WritingModeEnum>.FromCssText(CssDefaults.GetInitialValue(PropertyNames.WritingMode)!, Map.WritingModes, WritingModeEnum.HorizontalTb);
+
         public string Hyphens { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Hyphens)!;
     }
 

@@ -43,7 +43,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets collection of attributes and their value the html tag has
         /// </summary>
-        public Dictionary<string, string>? Attributes { get; }
+        public Dictionary<string, string>? Attributes { get; private set; }
 
         /// <summary>
         /// Gets if the tag is single placed; in other words it doesn't have a separate closing tag; <br/>
@@ -84,6 +84,17 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return defaultValue;
+        }
+
+        /// <summary>
+        /// Sets an attribute's resolved value, creating the attribute dictionary if this tag had none. Used
+        /// by the <c>dir="auto"</c>/<c>&lt;bdi&gt;</c> directionality pre-pass to write back the resolved
+        /// <c>ltr</c>/<c>rtl</c> result so it rides the normal UA-stylesheet attribute-selector rules.
+        /// </summary>
+        internal void SetAttribute(string name, string value)
+        {
+            Attributes ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            Attributes[name] = value;
         }
 
         public override string ToString()

@@ -6,11 +6,11 @@ namespace PeachPDF.CSS
     {
         private static readonly IValueConverter StyleConverter = WithAny(
             LineWidthConverter.Option()
-                .For(PropertyNames.BorderLeftWidth, PropertyNames.BorderRightWidth),
+                .For(PropertyNames.BorderInlineStartWidth, PropertyNames.BorderInlineEndWidth),
             LineStyleConverter.Option()
-                .For(PropertyNames.BorderLeftStyle, PropertyNames.BorderRightStyle),
+                .For(PropertyNames.BorderInlineStartStyle, PropertyNames.BorderInlineEndStyle),
             CurrentColorConverter.Option()
-                .For(PropertyNames.BorderLeftColor, PropertyNames.BorderRightColor)
+                .For(PropertyNames.BorderInlineStartColor, PropertyNames.BorderInlineEndColor)
         ).OrDefault();
 
         internal BorderInlineProperty()

@@ -115,7 +115,8 @@ namespace PeachPDF.Svg
             double StrokeDashOffset,
             string? MarkerStartRef,
             string? MarkerMidRef,
-            string? MarkerEndRef)
+            string? MarkerEndRef,
+            string Direction)
         {
             public static readonly InheritedPaint Initial = new(
                 Fill: SvgPaint.Solid(RColor.Black),
@@ -131,7 +132,8 @@ namespace PeachPDF.Svg
                 StrokeDashOffset: 0,
                 MarkerStartRef: null,
                 MarkerMidRef: null,
-                MarkerEndRef: null);
+                MarkerEndRef: null,
+                Direction: "ltr");
         }
 
         /// <summary>
@@ -917,6 +919,15 @@ namespace PeachPDF.Svg
             element.MarkerMidRef = ResolveMarkerProperty("marker-mid", inherited.MarkerMidRef);
             element.MarkerEndRef = ResolveMarkerProperty("marker-end", inherited.MarkerEndRef);
 
+            // direction is a real inherited CSS property (unlike unicode-bidi, which BuildTextRun
+            // resolves separately, per-node, with no inheritance) - threaded through InheritedPaint the
+            // same way font-family/font-size are threaded through FontContext, so a <text>/<tspan>
+            // inherits it from ANY ancestor, not just its own text-run ancestors.
+            var directionAttr = Attr("direction");
+            var direction = directionAttr is null || directionAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.Direction
+                : directionAttr.Trim().Equals("rtl", StringComparison.OrdinalIgnoreCase) ? "rtl" : "ltr";
+
             return new InheritedPaint(
                 element.Fill,
                 element.Stroke,
@@ -931,7 +942,8 @@ namespace PeachPDF.Svg
                 element.StrokeDashOffset,
                 element.MarkerStartRef,
                 element.MarkerMidRef,
-                element.MarkerEndRef);
+                element.MarkerEndRef,
+                direction);
         }
 
         /// <summary>
@@ -1076,6 +1088,19 @@ namespace PeachPDF.Svg
                 "middle" => SvgTextAnchor.Middle,
                 "end" => SvgTextAnchor.End,
                 _ => SvgTextAnchor.Start,
+            };
+
+            run.Direction = resolved.Direction;
+
+            var unicodeBidiAttr = ResolveStyledAttr(node, "unicode-bidi")?.Trim().ToLowerInvariant();
+            run.UnicodeBidi = unicodeBidiAttr switch
+            {
+                "embed" => "embed",
+                "isolate" => "isolate",
+                "bidi-override" => "bidi-override",
+                "isolate-override" => "isolate-override",
+                "plaintext" => "plaintext",
+                _ => "normal",
             };
 
             var runFont = ComputeFontContext(node, fontContext);

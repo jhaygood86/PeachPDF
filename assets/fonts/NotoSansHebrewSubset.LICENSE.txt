@@ -1,0 +1,14 @@
+NotoSansHebrewSubset.ttf is a subset (the Hebrew alphabet including final
+forms, plus common punctuation, digits, and space) of the "Noto Sans Hebrew"
+font, Copyright 2022 The Noto Project Authors, licensed under the SIL Open
+Font License, Version 1.1 (OFL-1.1).
+
+The font is bundled solely as a showcase/test asset so the bidirectional-text
+(dir/bdo/bdi, direction/unicode-bidi, Unicode Bidi Algorithm) showcase and
+tests render real Hebrew glyphs instead of .notdef boxes, without depending on
+whatever fonts happen to be installed on the machine running them. Only the
+glyphs the showcase HTML actually uses are retained; the outlines are
+unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Sans+Hebrew

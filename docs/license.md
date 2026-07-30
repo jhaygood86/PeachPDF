@@ -11,7 +11,7 @@ Usage of PeachPDF is **free and open source** under the terms of the **BSD 3-Cla
 ```
 Copyright (c) 2009, José Manuel Menéndez Poo
 Copyright (c) 2013, Arthur Teplitzki
-Copyright (c) 2017-2025 Justin Haygood
+Copyright (c) 2017-2026 Justin Haygood
 
 All rights reserved.
 
@@ -51,6 +51,7 @@ Portions of PeachPDF are sourced from third parties and are licensed under alter
 | PDF engine (document model, PDF writing) | Fork of [PDFsharp](https://github.com/empira/PDFsharp) (empira Software GmbH) | [MIT](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/PdfSharpCore/LICENSE.md) |
 | Core HTML rendering engine lineage | Derived from [HtmlRenderer](https://github.com/ArthurHub/HTML-Renderer) (José Manuel Menéndez Poo, Arthur Teplitzki) | BSD 3-Clause (the license above) |
 | Hyphenation pattern data (`hyphens: auto`) | CTAN's [hyph-utf8](https://ctan.org/pkg/hyph-utf8) package | A mix of permissive licenses including MIT and LPPL, plus BSD-style and public-domain patterns. Pattern files under copyleft (GPL/LGPL) or missing license terms are deliberately **not** shipped — see [`hyphens: auto` language coverage](html-css-support.md#hyphens-auto-language-coverage) |
+| Bidi data tables (Bidi_Class, bracket pairs, mirroring — the Unicode Bidi Algorithm, UAX #9) | The [Unicode Character Database](https://www.unicode.org/ucd/), version 17.0.0 | [Unicode License v3](https://www.unicode.org/license.txt) |
 
 ### Font assets
 
@@ -64,6 +65,7 @@ Every font the repository bundles lives in one place — the `assets/fonts/` dir
 | Noto Emoji (subset; © 2013 Google LLC) — see `assets/fonts/NotoEmoji-Regular.LICENSE.txt` | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Noto Color Emoji (COLR v1 subset; © 2013 Google LLC) — the real color-emoji font in the [Color Fonts showcase](showcase.html); see `assets/fonts/NotoColorEmoji-Subset.LICENSE.txt` | Tests, showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Nabla (COLR v1 subset; © 2022 The Nabla Project Authors) — the 7-palette color font behind `font-palette` support and the [font-palette showcase](showcase.html); see `assets/fonts/NablaSubset.LICENSE.txt` | Tests, showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
+| Noto Sans Hebrew (subset; © The Noto Project Authors) — real Hebrew glyphs for the [bidirectional text showcase](showcase.html); see `assets/fonts/NotoSansHebrewSubset.LICENSE.txt` | Tests, showcase | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Inter | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Code Pro | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Sans 3 | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |

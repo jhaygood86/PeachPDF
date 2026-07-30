@@ -10,8 +10,10 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -281,7 +283,9 @@ namespace PeachPDF.Svg
         /// </summary>
         private sealed class GlyphInfo
         {
-            public required string Glyph { get; init; }
+            /// <summary>Settable (not <c>init</c>) so bidi L4 mirroring can rewrite an RTL glyph's
+            /// character to its mirror-image codepoint in place (see <c>ApplyBidiReordering</c>).</summary>
+            public required string Glyph { get; set; }
             public required SvgTextElement Run { get; init; }
             public required RFont Font { get; init; }
             public double Opacity { get; init; }
@@ -306,11 +310,13 @@ namespace PeachPDF.Svg
         {
             var glyphs = new List<GlyphInfo>();
             var textPaths = new List<(SvgTextElement Run, double ParentOpacity)>();
-            FlattenRun(text, 1.0, glyphs, textPaths);
+            var overrides = new List<BidiIsolateOverride>();
+            FlattenRun(text, 1.0, glyphs, textPaths, overrides);
 
             if (glyphs.Count > 0)
             {
                 LayoutGlyphs(g, glyphs);
+                ApplyBidiReordering(text, glyphs, overrides);
                 PaintGlyphs(g, document, glyphs, opacity);
             }
 
@@ -321,14 +327,108 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// Real UAX#9 resolution (<see cref="BidiResolver"/>) for one <c>&lt;text&gt;</c> element's
+        /// flattened character stream, matching how CSS text integrates bidi (CSS Writing Modes Level 3
+        /// §5.2) - SVG text is defined to follow the same <c>direction</c>/<c>unicode-bidi</c> properties
+        /// and the same algorithm (SVG 2 §11.3.1). Must run <b>after</b> <see cref="LayoutGlyphs"/>, not
+        /// before: <see cref="LayoutGlyphs"/> starts a new text chunk wherever it sees an explicit
+        /// <c>x</c>/<c>y</c> - always true of a chunk's own first (logical-order) glyph, from the
+        /// element's own <c>x</c>/<c>y</c> attribute - so reordering the list first would carry that
+        /// marker to a different list position and fool it into starting a spurious new chunk. Each run's
+        /// glyphs are repositioned by reflecting the run about its own content span - each glyph's own
+        /// <see cref="GlyphInfo.Advance"/> and its own offset from the run's start (the same fix
+        /// <c>CssLayoutEngine.ApplyBidiReordering</c> needed for HTML) - rather than reusing the
+        /// logical-order <c>Px</c> <see cref="LayoutGlyphs"/> assigned to whichever glyph used to occupy
+        /// that list index: that only produced correct output when every glyph in a run happened to
+        /// share the same advance, and overlapped or gapped otherwise. <see cref="GlyphInfo.Py"/> is
+        /// never reassigned by reordering - it already belongs to its own glyph, not to a list position.
+        /// </summary>
+        private static void ApplyBidiReordering(SvgTextElement text, List<GlyphInfo> glyphs, List<BidiIsolateOverride> overrides)
+        {
+            var paragraphText = string.Concat(glyphs.Select(gi => gi.Glyph));
+            var direction = Map.DirectionModes.GetValueOrDefault(text.Direction, DirectionMode.Ltr) == DirectionMode.Rtl
+                ? BidiParagraphDirection.Rtl
+                : BidiParagraphDirection.Ltr;
+
+            var result = BidiResolver.Resolve(paragraphText, direction, overrides);
+            var runs = BidiResolver.ReorderLine(result.Levels, 0, glyphs.Count);
+
+            if (runs.Count == 1 && !runs[0].IsRtl) return;
+
+            var originalPx = glyphs.Select(gi => gi.Px).ToList();
+            var runNewStart = originalPx[0];
+
+            var reordered = new List<GlyphInfo>(glyphs.Count);
+            foreach (var run in runs)
+            {
+                var runOldStart = originalPx[run.Start];
+                var lastIndexInRun = run.Start + run.Length - 1;
+                var runContentWidth = originalPx[lastIndexInRun] + glyphs[lastIndexInRun].Advance - runOldStart;
+
+                if (run.IsRtl)
+                {
+                    for (var k = run.Length - 1; k >= 0; k--)
+                    {
+                        var idx = run.Start + k;
+                        var gi = glyphs[idx];
+                        if (System.Text.Rune.DecodeFromUtf16(gi.Glyph, out var rune, out _) == System.Buffers.OperationStatus.Done
+                            && BidiMirroring.TryGetMirror(rune.Value, out var mirrored))
+                        {
+                            gi.Glyph = char.ConvertFromUtf32(mirrored);
+                        }
+
+                        var offsetFromRunStart = originalPx[idx] - runOldStart;
+                        gi.Px = runNewStart + runContentWidth - (offsetFromRunStart + gi.Advance);
+                        reordered.Add(gi);
+                    }
+                }
+                else
+                {
+                    for (var k = 0; k < run.Length; k++)
+                    {
+                        var idx = run.Start + k;
+                        var gi = glyphs[idx];
+                        gi.Px = runNewStart + (originalPx[idx] - runOldStart);
+                        reordered.Add(gi);
+                    }
+                }
+
+                runNewStart += runContentWidth;
+            }
+
+            foreach (var gi in reordered)
+            {
+                // X/Y/Dx/Dy already did their one job - marking a logical-order chunk start for
+                // LayoutGlyphs's pen-advance algorithm, now fully resolved into Px above. Left in place,
+                // they would misdirect PaintGlyphs's own merge-adjacency check (which treats any
+                // "explicitly positioned" glyph as its own paint call) into breaking a visually
+                // contiguous run apart at whichever glyph originally carried the element's own explicit
+                // x/y - typically the chunk's first LOGICAL character, which after an RTL reorder is no
+                // longer first in the visual sequence PaintGlyphs actually walks.
+                gi.X = null;
+                gi.Y = null;
+                gi.Dx = null;
+                gi.Dy = null;
+            }
+
+            glyphs.Clear();
+            glyphs.AddRange(reordered);
+        }
+
+        /// <summary>
         /// Flattens a run's subtree into <paramref name="glyphs"/> in document order (a <c>&lt;textPath&gt;</c>
         /// descendant is collected into <paramref name="textPaths"/> instead), then assigns this run's own
         /// per-character position lists to the characters it contributed - innermost-wins, since a nested
-        /// run's own <see cref="FlattenRun"/> runs (and assigns) before this outer assignment.
+        /// run's own <see cref="FlattenRun"/> runs (and assigns) before this outer assignment. A run whose
+        /// own <c>unicode-bidi</c> isn't <c>normal</c> contributes a synthetic explicit push
+        /// (<see cref="CssUnicodeBidiMapping"/>) over the glyph range it (including its own descendants)
+        /// contributed, appended to <paramref name="overrides"/> after recursing into its children so a
+        /// shared start index nests outer-before-inner (see <c>BidiResolver.Resolve</c>'s own handling of
+        /// multiple overrides sharing an end index).
         /// <paramref name="opacityFactor"/> is the product of the run-chain's <c>opacity</c> below the root
         /// <c>&lt;text&gt;</c> (whose own opacity is already folded into the caller's base opacity).
         /// </summary>
-        private static void FlattenRun(SvgTextElement run, double opacityFactor, List<GlyphInfo> glyphs, List<(SvgTextElement, double)> textPaths)
+        private static void FlattenRun(SvgTextElement run, double opacityFactor, List<GlyphInfo> glyphs, List<(SvgTextElement, double)> textPaths, List<BidiIsolateOverride> overrides)
         {
             var startIndex = glyphs.Count;
 
@@ -346,9 +446,18 @@ namespace PeachPDF.Svg
                         break;
 
                     case SvgTextSpan span:
-                        FlattenRun(span.Run, opacityFactor * span.Run.Opacity, glyphs, textPaths);
+                        FlattenRun(span.Run, opacityFactor * span.Run.Opacity, glyphs, textPaths, overrides);
                         break;
                 }
+            }
+
+            var contributedLength = glyphs.Count - startIndex;
+            if (contributedLength > 0 && run.UnicodeBidi != "normal")
+            {
+                var unicodeBidi = Map.UnicodeModes.GetValueOrDefault(run.UnicodeBidi, UnicodeMode.Normal);
+                var runDirection = Map.DirectionModes.GetValueOrDefault(run.Direction, DirectionMode.Ltr);
+                foreach (var push in CssUnicodeBidiMapping.MapToPushes(unicodeBidi, runDirection))
+                    overrides.Add(new BidiIsolateOverride(startIndex, contributedLength, push));
             }
 
             AssignPositionLists(run, glyphs, startIndex);
@@ -487,7 +596,7 @@ namespace PeachPDF.Svg
                     return;
 
                 var solid = ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity);
-                g.DrawString(text, font, solid, new RPoint(drawX, drawY), size, rtl: false);
+                g.DrawString(text, font, solid, new RPoint(drawX, drawY), size);
                 return;
             }
 
@@ -503,7 +612,7 @@ namespace PeachPDF.Svg
                 // CFF/bitmap font: no glyf outlines. Best-effort solid fill; a gradient/pattern/stroke
                 // simply can't be honored here (documented gap).
                 if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size, rtl: false);
+                    g.DrawString(text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size);
                 return;
             }
 
@@ -558,9 +667,12 @@ namespace PeachPDF.Svg
             // dropped). Each glyph carries its owning run (font/paint) and its assigned dx/dy/rotate.
             var glyphs = new List<GlyphInfo>();
             var ignoredTextPaths = new List<(SvgTextElement, double)>();
-            FlattenRun(run, 1.0, glyphs, ignoredTextPaths);
+            var overrides = new List<BidiIsolateOverride>();
+            FlattenRun(run, 1.0, glyphs, ignoredTextPaths, overrides);
             if (glyphs.Count == 0)
                 return;
+
+            ApplyBidiReordering(run, glyphs, overrides);
 
             double runWidth = 0;
             foreach (var gi in glyphs)
@@ -632,7 +744,7 @@ namespace PeachPDF.Svg
                 if (run.Fill.Kind != SvgPaintKind.Solid)
                     return;
 
-                g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, rtl: false);
+                g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize);
                 return;
             }
 
@@ -640,7 +752,7 @@ namespace PeachPDF.Svg
             if (outline is null)
             {
                 if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, rtl: false);
+                    g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize);
                 return;
             }
 
@@ -877,11 +989,13 @@ namespace PeachPDF.Svg
 
             var glyphs = new List<GlyphInfo>();
             var textPaths = new List<(SvgTextElement Run, double ParentOpacity)>();
-            FlattenRun(text, 1.0, glyphs, textPaths);
+            var overrides = new List<BidiIsolateOverride>();
+            FlattenRun(text, 1.0, glyphs, textPaths, overrides);
 
             if (glyphs.Count > 0)
             {
                 LayoutGlyphs(g, glyphs);
+                ApplyBidiReordering(text, glyphs, overrides);
                 foreach (var gi in glyphs)
                 {
                     var size = g.MeasureString(gi.Glyph, gi.Font);
