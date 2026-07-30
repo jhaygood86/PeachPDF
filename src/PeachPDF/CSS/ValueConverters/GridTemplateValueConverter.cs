@@ -63,7 +63,7 @@ namespace PeachPDF.CSS
             // ahead of layout, cascade, and PDF writing combined) - GridTrackListGrammar.TryParse would
             // have returned null for a bare `none` token anyway (not a valid track-size keyword), so this
             // produces the identical CssProperty the tokenized path did, just without tokenizing at all.
-            if (value.Trim().Isi(Keywords.None))
+            if (value.AsSpan().Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase))
                 return CssProperty<GridTemplate>.FromValue(value, null);
             var template = GridTrackListGrammar.TryParse(Tokenize(value));
             return CssProperty<GridTemplate>.FromValue(value, template);
