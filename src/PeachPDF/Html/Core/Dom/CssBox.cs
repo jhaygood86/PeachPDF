@@ -3846,7 +3846,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (boxWord.IsImage) continue;
                     var font = ResolveWordFont(boxWord, this);
-                    boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
+                    boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualFontVariantLigatures).Width : 0;
                     // Letter-spacing adds space after every character including the last (N gaps for an
                     // N-character word) - matching both the PDF Tc operator's actual per-glyph behavior
                     // (PaintWords/RealizeFont) and CSS Text 3 §7.2, which only exempts the start/end of a
@@ -3894,7 +3894,7 @@ namespace PeachPDF.Html.Core.Dom
                 var effectiveText = boxWord.FirstLineText ?? boxWord.Text;
 
                 var font = ResolveWordFont(boxWord, firstLineStyle);
-                boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font).Width : 0;
+                boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font, firstLineStyle.ActualFontVariantLigatures).Width : 0;
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-character word, not N-1.
                 if (effectiveText != "\n" && firstLineStyle.ActualLetterSpacing != 0)
                     boxWord.Width += effectiveText!.Length * firstLineStyle.ActualLetterSpacing;
@@ -3927,7 +3927,7 @@ namespace PeachPDF.Html.Core.Dom
                 boxWord.FirstLineText = null;
 
                 var font = ResolveWordFont(boxWord, this);
-                boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font).Width : 0;
+                boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualFontVariantLigatures).Width : 0;
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-character word, not N-1.
                 if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
                     boxWord.Width += boxWord.Text!.Length * ActualLetterSpacing;

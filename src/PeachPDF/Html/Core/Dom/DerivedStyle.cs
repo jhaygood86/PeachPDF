@@ -2,9 +2,11 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 namespace PeachPDF.Html.Core.Dom
@@ -597,6 +599,32 @@ namespace PeachPDF.Html.Core.Dom
         {
             _actualFontPaletteResolved = false;
             _actualFontPalette = null;
+        }
+
+        private LigatureFeatures? _actualFontVariantLigatures;
+
+        /// <summary>
+        /// The resolved GSUB ligature features (see <see cref="LigatureFeatures"/>) for this box's
+        /// text, from the CSS <c>font-variant-ligatures</c> value. Only the common-ligatures axis
+        /// (and <c>none</c>) changes shaping here - <c>discretionary-ligatures</c>/
+        /// <c>historical-ligatures</c>/<c>contextual</c> parse but don't yet affect it (no
+        /// <c>dlig</c>/<c>hlig</c>/<c>calt</c> lookup application), so any value other than <c>none</c>
+        /// or one containing <c>no-common-ligatures</c> resolves to the default (ligatures on).
+        /// </summary>
+        public LigatureFeatures ActualFontVariantLigatures
+        {
+            get
+            {
+                if (_actualFontVariantLigatures is { } cached) return cached;
+
+                var value = Style.Font.FontVariantLigatures;
+                bool disabled = value == CssConstants.None
+                    || value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(CssConstants.NoCommonLigatures);
+
+                var resolved = disabled ? LigatureFeatures.None : LigatureFeatures.Default;
+                _actualFontVariantLigatures = resolved;
+                return resolved;
+            }
         }
 
         #endregion

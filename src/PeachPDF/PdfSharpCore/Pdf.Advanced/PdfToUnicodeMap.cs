@@ -77,15 +77,25 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
               "/CMapName /Adobe-Identity-UCS def /CMapType 2 def\n";
             string suffix = "endcmap CMapName currentdict /CMap defineresource pop end end";
 
-            Dictionary<int, int> glyphIndexToCharacter = new Dictionary<int, int>();
+            // Glyph index -> its source text. Most entries are a single character (from
+            // CharacterToGlyphIndex, keyed by Unicode scalar value); a GSUB ligature glyph (from
+            // LigatureGlyphToText, populated by CMapInfo.AddShapedText) has no single scalar value
+            // to key on, so its multi-character source text is carried directly instead.
+            Dictionary<int, string> glyphIndexToText = new Dictionary<int, string>();
             int lowIndex = 65536, hiIndex = -1;
             foreach (KeyValuePair<int, int> entry in _cmapInfo.CharacterToGlyphIndex)
             {
                 int index = entry.Value;         // glyph index
                 lowIndex = Math.Min(lowIndex, index);
                 hiIndex = Math.Max(hiIndex, index);
-                //glyphIndexToCharacter.Add(index, entry.Key);
-                glyphIndexToCharacter[index] = entry.Key;   // Unicode scalar value (codepoint)
+                glyphIndexToText[index] = char.ConvertFromUtf32(entry.Key);
+            }
+            foreach (KeyValuePair<int, string> entry in _cmapInfo.LigatureGlyphToText)
+            {
+                int index = entry.Key;
+                lowIndex = Math.Min(lowIndex, index);
+                hiIndex = Math.Max(hiIndex, index);
+                glyphIndexToText[index] = entry.Value;
             }
 
             MemoryStream ms = new MemoryStream();
@@ -97,8 +107,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             wrt.WriteLine("endcodespacerange");
 
             // Sorting seems not necessary. The limit is 100 entries, we will see.
-            wrt.WriteLine(String.Format("{0} beginbfrange", glyphIndexToCharacter.Count));
-            foreach (KeyValuePair<int, int> entry in glyphIndexToCharacter)
+            wrt.WriteLine(String.Format("{0} beginbfrange", glyphIndexToText.Count));
+            foreach (KeyValuePair<int, string> entry in glyphIndexToText)
                 wrt.WriteLine(String.Format("<{0:X4}><{0:X4}><{1}>", entry.Key, Utf16BigEndianHex(entry.Value)));
             wrt.WriteLine("endbfrange");
 
@@ -129,15 +139,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>
-        /// Formats a Unicode scalar value as the UTF-16 (big-endian) hex string a ToUnicode
-        /// <c>bfrange</c> destination expects: a BMP codepoint yields 4 hex digits, an astral codepoint
-        /// yields its 8-hex surrogate pair.
+        /// Formats <paramref name="text"/> as the UTF-16 (big-endian) hex string a ToUnicode
+        /// <c>bfrange</c> destination expects: a single BMP character yields 4 hex digits, an
+        /// astral character its 8-hex surrogate pair, and a multi-character string (a GSUB
+        /// ligature's source text) the concatenation of all of them - PDF's bfrange destination
+        /// syntax accepts a multi-code-unit string for exactly this "one glyph, several characters"
+        /// case.
         /// </summary>
-        private static string Utf16BigEndianHex(int codepoint)
+        private static string Utf16BigEndianHex(string text)
         {
-            string utf16 = char.ConvertFromUtf32(codepoint);
-            StringBuilder sb = new StringBuilder(utf16.Length * 4);
-            foreach (char c in utf16)
+            StringBuilder sb = new StringBuilder(text.Length * 4);
+            foreach (char c in text)
                 sb.Append(((int)c).ToString("X4"));
             return sb.ToString();
         }

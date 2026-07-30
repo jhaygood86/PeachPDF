@@ -6253,6 +6253,60 @@ await SaveShowcaseAsync("font_palette", "Text &amp; Fonts", "CSS font-palette",
     "Rendered against a subset of Nabla, a real 7-palette COLR v1 font.",
     fontPaletteHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// GSUB ligature substitution: font-variant-ligatures actually turns real GSUB liga/clig ligatures
+// on/off (not just a synthesized effect), and the same shaping applies to SVG <text> outlined for a
+// gradient fill. Source Sans 3's GSUB `liga` feature ligates "ff"/"ft"/"fft" (confirmed via
+// fontTools) - not "fi"/"fl", so this deliberately shows those instead of the more familiar fi/fl
+// example most fonts use.
+var sourceSans3B64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf")));
+string LigatureRow(string word) =>
+    "<tr>" +
+    $"<td class=\"word\">{word}</td>" +
+    $"<td class=\"lig on\">{word}</td>" +
+    $"<td class=\"lig off\">{word}</td>" +
+    "</tr>";
+var ligatureHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
+    "body { font-family: 'SS3', serif; margin: 0; color: #222 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.2em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.8em; color: #555; font-family: Arial, sans-serif }" +
+    "table.lig { border-collapse: collapse; width: 100%; font-size: 22pt }" +
+    "table.lig th { font-size: 8pt; font-family: Arial, sans-serif; color: #666; text-align: left; padding: 4px 8px }" +
+    "table.lig td { padding: 6px 8px; border-top: 1px solid #ddd }" +
+    "table.lig td.word { font-size: 8pt; font-family: Arial, sans-serif; color: #666; vertical-align: middle }" +
+    "table.lig td.lig.off { font-variant-ligatures: none }" +
+    "svg text { font-family: 'SS3'; }" +
+    "</style></head><body>" +
+    "<h1>GSUB Ligatures</h1>" +
+    "<p class=\"intro\">PeachPDF applies a font's real GSUB <code>liga</code>/<code>clig</code> ligature " +
+    "substitution (not a synthesized effect) - <code>font-variant-ligatures: none</code> turns it back " +
+    "off. Source Sans 3's <code>liga</code> feature merges \"ff\"/\"ft\"/\"fft\" into single connected " +
+    "glyphs.</p>" +
+    "<table class=\"lig\">" +
+    "<tr><th>word</th><th>default (ligated)</th><th>font-variant-ligatures: none</th></tr>" +
+    LigatureRow("office") +
+    LigatureRow("soft") +
+    LigatureRow("offset") +
+    "</table>" +
+    "<h2>SVG gradient-filled text</h2>" +
+    "<p class=\"intro\">A gradient/pattern fill outlines each glyph to a vector path instead of showing " +
+    "text (see Text &amp; Fonts → SVG support) - ligature shaping applies to that outlined path the " +
+    "same way it applies to ordinary text.</p>" +
+    "<svg width=\"500\" height=\"70\" viewBox=\"0 0 500 70\">" +
+    "<defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">" +
+    "<stop offset=\"0\" stop-color=\"#4a90d9\"/><stop offset=\"1\" stop-color=\"#d94a90\"/>" +
+    "</linearGradient></defs>" +
+    "<text x=\"0\" y=\"50\" font-size=\"48\" fill=\"url(#g)\">office staff</text>" +
+    "</svg>" +
+    "</body></html>";
+await SaveShowcaseAsync("gsub_ligatures", "Text &amp; Fonts", "GSUB Ligatures",
+    "Real GSUB liga/clig ligature substitution (not a synthesized effect): font-variant-ligatures " +
+    "actually turns a font's ligatures on and off, for both ordinary text and gradient-filled SVG text.",
+    ligatureHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

@@ -1,3 +1,4 @@
+using PeachPDF.Text;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Network;
@@ -206,7 +207,7 @@ namespace PeachPDF.Tests.TestSupport
 
         public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
             var call = new DrawStringCall(str, font, color, point, size, rtl, letterSpacing);
             DrawStringCalls.Add(call);
@@ -271,7 +272,7 @@ namespace PeachPDF.Tests.TestSupport
         /// paths can be driven and their <see cref="DrawPath(RBrush, RGraphicsPath)"/>/
         /// <see cref="DrawPath(RPen, RGraphicsPath)"/> calls recorded.
         /// </summary>
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0)
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
             var path = new TestGraphicsPath();
             var penX = baselineOrigin.X;
@@ -308,7 +309,7 @@ namespace PeachPDF.Tests.TestSupport
         public override void BeginMarkedContent(string structureType, int mcid) { }
         public override void EndMarkedContent() { }
         public override void BeginArtifact() { }
-        public override RSize MeasureString(string str, RFont font) => new((str?.Length ?? 0) * font.Size * 0.6, font.Height);
+        public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => new((str?.Length ?? 0) * font.Size * 0.6, font.Height);
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
         {
             charFit = str?.Length ?? 0;

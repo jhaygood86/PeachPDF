@@ -194,6 +194,115 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void CssFontVariantLigaturesNormalLegal()
+        {
+            var snippet = "font-variant-ligatures : normal";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-ligatures", property.Name);
+            Assert.IsType<FontVariantLigaturesProperty>(property);
+            var concrete = (FontVariantLigaturesProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("normal", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantLigaturesNoneLegal()
+        {
+            var snippet = "font-variant-ligatures : none";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-ligatures", property.Name);
+            Assert.IsType<FontVariantLigaturesProperty>(property);
+            var concrete = (FontVariantLigaturesProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("none", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantLigaturesCommonLigaturesLegal()
+        {
+            var snippet = "font-variant-ligatures : common-ligatures";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-ligatures", property.Name);
+            Assert.IsType<FontVariantLigaturesProperty>(property);
+            var concrete = (FontVariantLigaturesProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("common-ligatures", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantLigaturesMultiValueCombinationLegal()
+        {
+            // The `||` combinator: each axis at most once, in any order - contextual isn't yet
+            // applied at render time, but must still parse and round-trip through the CSS-OM.
+            var snippet = "font-variant-ligatures : no-common-ligatures contextual";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-ligatures", property.Name);
+            Assert.IsType<FontVariantLigaturesProperty>(property);
+            var concrete = (FontVariantLigaturesProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("no-common-ligatures contextual", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantLigaturesDiscretionaryLigaturesLegal()
+        {
+            // Parses (and round-trips) even though it's not yet applied at render time - see
+            // DerivedStyle.ActualFontVariantLigatures and .claude/accepted-gaps/no-text-shaping.md.
+            var snippet = "font-variant-ligatures : discretionary-ligatures";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-ligatures", property.Name);
+            Assert.IsType<FontVariantLigaturesProperty>(property);
+            var concrete = (FontVariantLigaturesProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("discretionary-ligatures", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantLigaturesSameAxisConflictIllegal()
+        {
+            // common-ligatures and no-common-ligatures are the same axis's two keywords - CSS Values'
+            // `||` combinator allows each axis at most once, so this is invalid and falls back to
+            // the (inherited) initial value, not silently taking either keyword.
+            var snippet = "font-variant-ligatures : common-ligatures no-common-ligatures";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-ligatures", property.Name);
+            Assert.IsType<FontVariantLigaturesProperty>(property);
+            var concrete = (FontVariantLigaturesProperty)property;
+            Assert.True(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void CssFontVariantLigaturesUnknownTokenIllegal()
+        {
+            var snippet = "font-variant-ligatures : sparkly";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-ligatures", property.Name);
+            Assert.IsType<FontVariantLigaturesProperty>(property);
+            var concrete = (FontVariantLigaturesProperty)property;
+            Assert.True(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void CssFontVariantLigaturesValueConverter_Construct_DelegatesToTokenListConverter()
+        {
+            // Construct(Property[]) is the shorthand-reconstruction half of IValueConverter - unlike
+            // font-variant, font-variant-ligatures isn't part of the `font` shorthand's longhand list,
+            // so nothing in the real cascade calls this; exercised directly instead.
+            var converter = new FontVariantLigaturesValueConverter();
+            var value = converter.Construct([]);
+
+            Assert.NotNull(value);
+            Assert.Equal("", value.CssText);
+        }
+
+        [Fact]
         public void CssFontStyleItalicLegal()
         {
             var snippet = "font-style : italic";

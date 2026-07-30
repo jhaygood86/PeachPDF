@@ -205,6 +205,18 @@ namespace PeachPDF.CSS
                 {Keywords.Normal, FontVariant.Normal},
                 {Keywords.SmallCaps, FontVariant.SmallCaps}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontVariantLigatureToken> FontVariantLigatureTokens =
+            new Dictionary<string, FontVariantLigatureToken>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.CommonLigatures, FontVariantLigatureToken.CommonLigatures},
+                {Keywords.NoCommonLigatures, FontVariantLigatureToken.NoCommonLigatures},
+                {Keywords.DiscretionaryLigatures, FontVariantLigatureToken.DiscretionaryLigatures},
+                {Keywords.NoDiscretionaryLigatures, FontVariantLigatureToken.NoDiscretionaryLigatures},
+                {Keywords.HistoricalLigatures, FontVariantLigatureToken.HistoricalLigatures},
+                {Keywords.NoHistoricalLigatures, FontVariantLigatureToken.NoHistoricalLigatures},
+                {Keywords.Contextual, FontVariantLigatureToken.Contextual},
+                {Keywords.NoContextual, FontVariantLigatureToken.NoContextual}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, DirectionMode> DirectionModes =
             new Dictionary<string, DirectionMode>(StringComparer.OrdinalIgnoreCase)
             {

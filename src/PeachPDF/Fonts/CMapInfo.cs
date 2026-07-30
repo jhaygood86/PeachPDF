@@ -30,6 +30,7 @@
 #nullable disable warnings
 
 using PeachPDF.Fonts.OpenType;
+using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -78,6 +79,26 @@ namespace PeachPDF.Fonts
         }
 
         /// <summary>
+        /// Shapes <paramref name="text"/> (GSUB ligature substitution, when the font and
+        /// <paramref name="features"/> call for it) and registers every resulting glyph for
+        /// embedding/subsetting. Unlike <see cref="AddChars"/>, a ligature glyph has no single
+        /// Unicode scalar to key on, so its source text is recorded in <see cref="LigatureGlyphToText"/>
+        /// instead of <see cref="CharacterToGlyphIndex"/> - <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfToUnicodeMap"/>
+        /// merges both when building the PDF ToUnicode map.
+        /// </summary>
+        public void AddShapedText(string text, LigatureFeatures features)
+        {
+            if (text == null)
+                return;
+
+            foreach (ShapedGlyph glyph in _descriptor.Shape(text, features))
+            {
+                GlyphIndices[glyph.GlyphIndex] = null;
+                LigatureGlyphToText[glyph.GlyphIndex] = text.Substring(glyph.ClusterStart, glyph.ClusterLength);
+            }
+        }
+
+        /// <summary>
         /// Adds the glyphIndices to the hashtable.
         /// </summary>
         public void AddGlyphIndices(string glyphIndices)
@@ -103,5 +124,9 @@ namespace PeachPDF.Fonts
 
         public Dictionary<int, int> CharacterToGlyphIndex = new Dictionary<int, int>();
         public Dictionary<int, object> GlyphIndices = new Dictionary<int, object>();
+
+        /// <summary>Glyph index to source text, for glyphs <see cref="AddShapedText"/> produced that
+        /// represent more than one character (GSUB ligatures) or an astral codepoint.</summary>
+        public Dictionary<int, string> LigatureGlyphToText = new Dictionary<int, string>();
     }
 }

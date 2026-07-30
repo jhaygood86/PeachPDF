@@ -280,6 +280,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontSizeAdjust, () => new FontSizeAdjustProperty(), true);
             AddLonghand(PropertyNames.FontStyle, () => new FontStyleProperty(), false, true);
             AddLonghand(PropertyNames.FontVariant, () => new FontVariantProperty(), false, true);
+            AddLonghand(PropertyNames.FontVariantLigatures, () => new FontVariantLigaturesProperty());
             AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true, true);
             AddLonghand(PropertyNames.FontStretch, () => new FontStretchProperty(), true, true);
             AddLonghand(PropertyNames.FontPalette, () => new FontPaletteProperty());

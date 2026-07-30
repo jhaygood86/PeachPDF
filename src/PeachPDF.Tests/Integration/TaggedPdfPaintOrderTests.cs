@@ -1,3 +1,4 @@
+using PeachPDF.Text;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -160,7 +161,7 @@ namespace PeachPDF.Tests.Integration
             public override void BeginMarkedContent(string structureType, int mcid) => Log.Add(("BeginMarkedContent", structureType));
             public override void EndMarkedContent() => Log.Add(("EndMarkedContent", null));
             public override void BeginArtifact() => Log.Add(("BeginArtifact", null));
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null) => Log.Add(("DrawString", str));
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => Log.Add(("DrawString", str));
 
             public override void PushTransform(RMatrix matrix) { }
             public override void PopTransform() { }
@@ -172,11 +173,11 @@ namespace PeachPDF.Tests.Integration
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override RGraphicsPath GetGraphicsPath() => new NoOpGraphicsPath();
 
-            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0) => null;
+            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => null;
             public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
             public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
-            public override RSize MeasureString(string str, RFont font) => new(10, 12);
+            public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => new(10, 12);
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;

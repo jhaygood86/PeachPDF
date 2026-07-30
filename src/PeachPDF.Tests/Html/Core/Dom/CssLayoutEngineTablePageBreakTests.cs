@@ -800,9 +800,9 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override void PopTransform() { }
             public override object SetAntiAliasSmoothingMode() => new object();
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
-            public override PeachPDF.Html.Adapters.Entities.RSize MeasureString(string str, PeachPDF.Html.Adapters.RFont font) => new(0, 12);
+            public override PeachPDF.Html.Adapters.Entities.RSize MeasureString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Text.LigatureFeatures ligatureFeatures = PeachPDF.Text.LigatureFeatures.Default) => new(0, 12);
             public override void MeasureString(string str, PeachPDF.Html.Adapters.RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
-            public override void DrawString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RColor color, PeachPDF.Html.Adapters.Entities.RPoint point, PeachPDF.Html.Adapters.Entities.RSize size, bool rtl, double letterSpacing = 0, PeachPDF.Html.Adapters.Entities.RFontPalette? fontPalette = null) => DrawnStrings.Add((str, point.Y));
+            public override void DrawString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RColor color, PeachPDF.Html.Adapters.Entities.RPoint point, PeachPDF.Html.Adapters.Entities.RSize size, bool rtl, double letterSpacing = 0, PeachPDF.Html.Adapters.Entities.RFontPalette? fontPalette = null, PeachPDF.Text.LigatureFeatures ligatureFeatures = PeachPDF.Text.LigatureFeatures.Default) => DrawnStrings.Add((str, point.Y));
             public override void DrawRectangle(PeachPDF.Html.Adapters.RPen pen, double x, double y, double width, double height) { }
             public override void DrawRectangle(PeachPDF.Html.Adapters.RBrush brush, double x, double y, double width, double height) { }
             public override void DrawImage(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect, PeachPDF.Html.Adapters.Entities.RRect srcRect) { }
@@ -811,7 +811,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             public override void DrawPath(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.RGraphicsPath path) { }
             public override PeachPDF.Html.Adapters.RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
 
-            public override PeachPDF.Html.Adapters.RGraphicsPath? GetTextOutline(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RPoint baselineOrigin, double letterSpacing = 0) => null;
+            public override PeachPDF.Html.Adapters.RGraphicsPath? GetTextOutline(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RPoint baselineOrigin, double letterSpacing = 0, PeachPDF.Text.LigatureFeatures ligatureFeatures = PeachPDF.Text.LigatureFeatures.Default) => null;
             public override (PeachPDF.Html.Adapters.RGraphics Graphics, PeachPDF.Html.Adapters.RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.RImage maskImage, PeachPDF.Html.Adapters.Entities.RRect destRect) { }
             public override void DrawImageWithOpacity(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect, double opacity) { }

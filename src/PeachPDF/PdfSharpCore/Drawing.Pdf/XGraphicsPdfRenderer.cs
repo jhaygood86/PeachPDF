@@ -37,6 +37,7 @@ using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
+using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -400,7 +401,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawString ---------------------------------------------------------------------------
 
-        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null)
+        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
             double x = rect.X;
             double y = rect.Y;
@@ -408,7 +409,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double lineSpace = font.GetHeight();
             double cyAscent = lineSpace * font.CellAscent / font.CellSpace;
             double cyDescent = lineSpace * font.CellDescent / font.CellSpace;
-            double width = _gfx.MeasureString(s, font).Width;
+            double width = _gfx.MeasureString(s, font, ligatureFeatures).Width;
 
             //bool bold = (font.Style & XFontStyle.Bold) != 0;
             //bool italic = (font.Style & XFontStyle.Italic) != 0;
@@ -494,30 +495,20 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 int paletteIndex = fontPalette?.BasePaletteIndex ?? 0;
                 var colorPainter = new ColorGlyphPainter(this, descriptor, font, brush, x, y,
                     letterSpacing, Gfx.PageDirection, paletteIndex, fontPalette?.Overrides);
-                colorPainter.Paint(s);
+                colorPainter.Paint(s, ligatureFeatures);
             }
             else
             {
                 PdfFont realizedFont = _gfxState._realizedFont;
                 Debug.Assert(realizedFont != null);
-                realizedFont.AddChars(s);
+                realizedFont.AddShapedText(s, ligatureFeatures);
 
                 string text = null;
                 if (font.Unicode)
                 {
                     StringBuilder sb = new StringBuilder();
-                    bool isSymbolFont = descriptor.FontFace.cmap.symbol;
-                    foreach (Rune rune in s.EnumerateRunes())
-                    {
-                        Rune lookup = rune;
-                        if (isSymbolFont && rune.Value <= 0xFFFF)
-                        {
-                            // Remap for symbol fonts (BMP-only).
-                            lookup = new Rune(rune.Value | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
-                        }
-                        int glyphID = descriptor.CharCodeToGlyphIndex(lookup);
-                        sb.Append((char)glyphID);
-                    }
+                    foreach (ShapedGlyph glyph in descriptor.Shape(s, ligatureFeatures))
+                        sb.Append((char)glyph.GlyphIndex);
                     s = sb.ToString();
 
                     byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(s);

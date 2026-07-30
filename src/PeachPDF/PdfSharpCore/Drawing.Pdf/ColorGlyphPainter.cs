@@ -17,9 +17,9 @@
 #endregion
 
 using System.Collections.Generic;
-using System.Text;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Text;
 
 namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 {
@@ -57,15 +57,14 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _baselineY = baselineY;
         }
 
-        /// <summary>Paints every rune of the run, advancing the pen by each glyph's advance width.</summary>
-        public void Paint(string text)
+        /// <summary>Paints every shaped glyph of the run, advancing the pen by each glyph's advance width.</summary>
+        public void Paint(string text, LigatureFeatures ligatureFeatures)
         {
             double penX = 0;
-            foreach (Rune rune in text.EnumerateRunes())
+            foreach (ShapedGlyph glyph in _descriptor.Shape(text, ligatureFeatures))
             {
-                int glyphId = _descriptor.CharCodeToGlyphIndex(rune);
-                PaintGlyph(glyphId, _baselineX + penX);
-                penX += _descriptor.GlyphIndexToWidth(glyphId) * _scale + _letterSpacing;
+                PaintGlyph(glyph.GlyphIndex, _baselineX + penX);
+                penX += _descriptor.GlyphIndexToWidth(glyph.GlyphIndex) * _scale + _letterSpacing;
             }
         }
 

@@ -4,6 +4,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Text;
 using System.Collections.Generic;
 using PeachPDF;
 
@@ -1250,6 +1251,17 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        public string FontVariantLigatures
+        {
+            get => _computedStyle.Font.FontVariantLigatures;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontVariantLigatures, value, static (a, v) => a with { FontVariantLigatures = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
+        }
+
         public string FontWeight
         {
             get => _computedStyle.Font.FontWeight;
@@ -1791,6 +1803,9 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>Gets the font that should be actually used to paint the text of the box.</summary>
         public RFont ActualFont => DerivedStyle.ActualFont;
+
+        /// <summary>Gets the resolved GSUB ligature features (CSS <c>font-variant-ligatures</c>) for this box's text.</summary>
+        public LigatureFeatures ActualFontVariantLigatures => DerivedStyle.ActualFontVariantLigatures;
 
         /// <summary>
         /// This box's own <see cref="FontWeight"/>, resolved to a concrete CSS Fonts numeric weight (1-1000).

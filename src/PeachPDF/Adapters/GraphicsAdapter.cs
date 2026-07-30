@@ -14,6 +14,7 @@ using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Text;
 using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;
@@ -131,11 +132,11 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public override RSize MeasureString(string str, RFont font)
+        public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
             var fontAdapter = (FontAdapter)font;
             var realFont = fontAdapter.Font;
-            var size = _g.MeasureString(str, realFont, _stringFormat);
+            var size = _g.MeasureString(str, realFont, _stringFormat, ligatureFeatures);
 
             if (!(font.Height < 0)) return Utils.Convert(size, PixelsPerPoint);
 
@@ -163,7 +164,7 @@ namespace PeachPDF.Adapters
             throw new NotSupportedException();
         }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, bool rtl, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
             var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
             var xPoint = Utils.Convert(point, PixelsPerPoint);
@@ -174,7 +175,7 @@ namespace PeachPDF.Adapters
             // extra draw calls and the string stays a single, contiguous, copy/paste- and
             // tagged-PDF-friendly text run regardless of its value.
             var xLetterSpacing = letterSpacing / PixelsPerPoint;
-            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette));
+            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), ligatureFeatures);
         }
 
         /// <summary>
@@ -193,7 +194,7 @@ namespace PeachPDF.Adapters
             return new XGlyphPalette(palette.BasePaletteIndex, overrides);
         }
 
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0)
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
         {
             var realFont = ((FontAdapter)font).Font;
             var descriptor = realFont.Descriptor;
@@ -213,9 +214,9 @@ namespace PeachPDF.Adapters
             double baseY = baselineOrigin.Y;
             bool anyGeometry = false;
 
-            foreach (var rune in str.EnumerateRunes())
+            foreach (ShapedGlyph glyph in descriptor.Shape(str, ligatureFeatures))
             {
-                int glyphId = descriptor.CharCodeToGlyphIndex(rune);
+                int glyphId = glyph.GlyphIndex;
 
                 // TryGetGlyphOutline returns false for an empty glyph (e.g. space) or a CFF/bitmap font
                 // with no `glyf` table - either way there's nothing to add for this glyph.

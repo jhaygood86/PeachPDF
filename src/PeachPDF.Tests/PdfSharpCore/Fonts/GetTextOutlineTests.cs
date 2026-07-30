@@ -7,6 +7,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
+using PeachPDF.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
@@ -114,6 +115,45 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var (g, font) = await Setup(BundledFonts.Otf, 100);
 
             Assert.Null(g.GetTextOutline("lo", font, new RPoint(0, 100)));
+        }
+
+        [Fact]
+        public async Task Ligature_MergesTwoGlyphsIntoOneSubpath()
+        {
+            // Source Sans 3's "f_f" ligature glyph (confirmed via fontTools) has exactly 1 contour -
+            // same as a single "f" - so shaping "ff" into one glyph halves the subpath count from
+            // what drawing two separate 'f' outlines would produce.
+            var (g, font) = await Setup(BundledFonts.Ttf, 100);
+
+            var unligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, LigatureFeatures.None)!;
+            var ligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, LigatureFeatures.Default)!;
+
+            Assert.Equal(2, SubpathCount(unligated));
+            Assert.Equal(1, SubpathCount(ligated));
+            unligated.Dispose();
+            ligated.Dispose();
+        }
+
+        [Fact]
+        public async Task Ligature_AdvancesPenByLigatureGlyphWidth_NotSumOfComponents()
+        {
+            // The f_f ligature glyph's own hmtx advance (577 design units) is narrower than two
+            // separate 'f' advances (2 x 292 = 584) - a real, measurable width difference that only
+            // appears if the glyph run was actually merged rather than measured/drawn per codepoint.
+            var (g, font) = await Setup(BundledFonts.Ttf, 100);
+
+            double RightEdge(LigatureFeatures features)
+            {
+                var outline = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, features)!;
+                var maxX = Points(outline).Max(p => p.X);
+                outline.Dispose();
+                return maxX;
+            }
+
+            var unligated = RightEdge(LigatureFeatures.None);
+            var ligated = RightEdge(LigatureFeatures.Default);
+
+            Assert.True(ligated < unligated, $"expected the merged ligature glyph to advance less than two separate 'f's; ligated={ligated}, unligated={unligated}");
         }
     }
 }

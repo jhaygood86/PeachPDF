@@ -1146,8 +1146,11 @@ namespace PeachPDF.Fonts.OpenType
     }
 
     /// <summary>
-    /// This table contains information that describes the glyphs in the font in the TrueType outline format.
-    /// Information regarding the rasterizer (scaler) refers to the TrueType rasterizer. 
+    /// The `GSUB` (Glyph Substitution) table. Parsing itself lives in <see cref="GsubTable"/>
+    /// (a PeachPDF-authored reader, since GSUB is an offset graph rather than the flat sequential
+    /// layout most tables in this file use); this class only locates the table and owns the
+    /// resulting <see cref="Table"/>, matching how the other required tables are wired into
+    /// <see cref="OpenTypeFontface"/>.
     /// </summary>
     internal class GlyphSubstitutionTable : OpenTypeFontTable
     {
@@ -1161,10 +1164,14 @@ namespace PeachPDF.Fonts.OpenType
             Read();
         }
 
+        /// <summary>The parsed GSUB data, or null if the table's bytes couldn't be read as GSUB.</summary>
+        public GsubTable? Table { get; private set; }
+
         public void Read()
         {
             try
             {
+                Table = new GsubTable(_fontData, DirectoryEntry.Offset);
             }
             catch (Exception ex)
             {
