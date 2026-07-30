@@ -696,7 +696,18 @@ namespace PeachPDF.Html.Core.Dom
             return inset;
         }
 
-        public static async ValueTask<double> GetBoxWidth(RGraphics g, CssBox box)
+        /// <summary>
+        /// The used inline size of <paramref name="box"/>.
+        /// </summary>
+        /// <param name="g">the device context</param>
+        /// <param name="box">the box to measure</param>
+        /// <param name="blockTop">
+        /// the border-box top to resolve the per-page measure against — the position the box is <i>about</i>
+        /// to be placed at, which only the frame placing it knows (<c>CssBox.PlaceBlockBox</c>). Omitted by
+        /// the engines, which call this for a container whose <see cref="CssBox.Location"/> the frame above
+        /// has already written, so the box's own coordinate is the truthful answer there.
+        /// </param>
+        public static async ValueTask<double> GetBoxWidth(RGraphics g, CssBox box, double? blockTop = null)
         {
             // Per-page horizontal reflow (issue #143). When a per-page @page rule overrides left/right
             // margins, content laid out on a page whose margins differ from the base uses THAT page's own
@@ -709,14 +720,17 @@ namespace PeachPDF.Html.Core.Dom
             // column (containing block chain is auto-width root/html/body): a box nested inside some other
             // (or constrained) block resolves against that block instead - deferred as an accepted gap
             // (#199-#201), since only the auto-width main column is guaranteed to span the page area.
-            // Keyed off the box's own Location.Y (the previous layout pass's final position - see
-            // HtmlContainerInt.PerformLayout's reflow loop), since a box's width is resolved before its
-            // Location is assigned in this pass.
+            // Keyed off `blockTop` - the border-box top the frame placing this box has just decided on, not
+            // the box's own Location.Y, which on the pass that places it still holds whatever position an
+            // earlier layout generation left there (page 0's measure, on the first). The frame's offset is
+            // settled before this runs precisely so the measure can come from the page the box lands on;
+            // where no frame is placing the box (an engine measuring its own container), the box's
+            // Location.Y has already been written and is the same answer.
             var availableRight = box.ContainingBlock.ClientRight;
             if (box.HtmlContainer is { } htmlContainer && htmlContainer.UseVariablePageWidth
                 && IsUnconstrainedMainColumn(box.ContainingBlock))
             {
-                availableRight = htmlContainer.PageContentRightOf(box.Location.Y)
+                availableRight = htmlContainer.PageContentRightOf(blockTop ?? box.Location.Y)
                                  - MainColumnRightInset(box.ContainingBlock);
             }
 
