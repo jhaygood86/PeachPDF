@@ -1814,7 +1814,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether an engine has already decided this box's final <see cref="CssBoxProperties.Location"/>
+        /// Whether an engine has already decided this box's final <see cref="CssBox.Location"/>
         /// for the pass about to run, so <see cref="LayoutContents"/>'s ordinary self-placement
         /// (<see cref="PlaceBlockBox"/>/<see cref="PlaceAsBlockChild"/>) must not touch it.
         /// </summary>

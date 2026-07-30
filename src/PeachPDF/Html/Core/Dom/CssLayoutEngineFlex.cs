@@ -1002,7 +1002,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// Nothing else about the container is touched: every phase that decides sizing, line membership
         /// and position already ran on an earlier pass and its results are sitting on the live box tree
-        /// untouched (nothing between passes resets an item's <see cref="CssBoxProperties.Location"/> or
+        /// untouched (nothing between passes resets an item's <see cref="CssBox.Location"/> or
         /// its pinned content-box <c>Width</c>/<c>Height</c> — see <see cref="PerformCommitLayout"/>), which
         /// is what a resumed pass is allowed to rely on and a fresh one is not.
         /// </remarks>
@@ -1044,7 +1044,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <para>
         /// A <b>fresh</b> commit (<paramref name="resume"/> null) pins <paramref name="box"/>'s content-box
         /// <c>Width</c>/<c>Height</c> to its already-resolved outer size
-        /// (<see cref="CssBoxProperties.ActualBoxSizingWidth"/>/<see cref="CssBoxProperties.ActualBoxSizingHeight"/>)
+        /// (<see cref="CssBox.ActualBoxSizingWidth"/>/<see cref="CssBox.ActualBoxSizingHeight"/>)
         /// before laying out — every earlier phase already decided this item's size, and re-deriving it from
         /// an "auto" property here (the value every earlier phase temporarily sets and then reverts, since
         /// none of them are the item's <i>final</i> layout) would let this, genuinely final, layout disagree
