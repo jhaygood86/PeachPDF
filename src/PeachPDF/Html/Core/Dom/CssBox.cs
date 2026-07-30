@@ -3395,6 +3395,14 @@ namespace PeachPDF.Html.Core.Dom
                                     return;
                                 }
 
+                                // Breaking is not live here (a measurement pass, or monolithic content),
+                                // so the child is simply placed at the target a break would have named -
+                                // flush at the next band's top, without a pass boundary to carry the
+                                // cursor there on its own. Any further content this same (possibly
+                                // suppressed-but-real, see LayoutTheRemainderMonolithically) pass places
+                                // has to see a truthful "band being filled" - see #435.
+                                child.HtmlContainer.CurrentFragmentainer?.StepOverTo(
+                                    child.HtmlContainer.SlotStartingAt(newTop));
                                 top = newTop;
                             }
                         }
@@ -3402,7 +3410,6 @@ namespace PeachPDF.Html.Core.Dom
 
                     child.Location = new RPoint(left + child.ActualMarginLeft, top);
                     child.ActualBottom = top;
-
 
                     CssLayoutEngine.FloatBox(child);
                 }
