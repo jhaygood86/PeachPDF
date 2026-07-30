@@ -15,16 +15,21 @@ sliver at the foot of the page above. [#477](https://github.com/jhaygood86/Peach
 restored it. Losing content is strictly worse than slicing it, so the second claim stays until the *cause* is
 fixed rather than the symptom.
 
-Two paths produce a straddling line, and neither is the emitter's to fix:
+One path produces a straddling line today, and it is not the emitter's to fix:
 
-- **flex/grid item content** — laid out under `HtmlContainerInt.SuppressWordPageBreaks`, which gates
-  `CssLayoutEngine.FlowBox`'s straddle check, and the engines' later `AssignLocations` translation never
-  re-runs it. The real fix is to ask the straddle question again once the item is at its final position, which
-  is #390 stage 4 / #400 territory: today an item's content is laid out at a provisional origin.
 - **`MonolithicContent.FitsNoFragmentainer`** — a line taller than the band stays put by design, because
   breaking to a fresh fragmentainer would repeat the problem forever. Here §4.1 agrees the line cannot break;
   only the "continue it in the next fragmentainer rather than clip it" part deviates, and that *is* a
   `FragmentEmitter` change.
+
+A second path — flex/grid item content laid out under `HtmlContainerInt.SuppressWordPageBreaks`, whose
+straddle check the engines' later `AssignLocations` translation never re-ran — used to produce this
+symptom too, for every shape (issues #517/#526). It no longer does: `CssLayoutEngineGrid` and
+`CssLayoutEngineFlex` each now commit their items'/lines' content live once it sits at its final
+position (a real fragmentainer, not a detached one), so the straddle check runs for real and a line that
+does not fit genuinely continues on the next page instead. Verified by
+`StraddlingLineClaimTests.ARowOrLineTheEngineCouldNotFit_ContinuesOnTheNextPageInstead` across grid rows,
+wrapped flex lines, and column-direction flex items.
 
 Do not "fix" this by narrowing `ClaimsWord` — that is exactly the change #477 had to undo. Note also that
 "every word claimed exactly once" **passes** while the content is being lost, and the showcase corpus contains
