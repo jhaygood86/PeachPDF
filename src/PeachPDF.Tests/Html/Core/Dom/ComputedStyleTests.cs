@@ -1,4 +1,9 @@
+using PeachPDF.Adapters;
+using PeachPDF.CSS;
+using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Parse;
+using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Tests.Html.Core.Dom
 {
@@ -213,6 +218,50 @@ namespace PeachPDF.Tests.Html.Core.Dom
             clone.InheritStyle(source, everything: true);
 
             Assert.Equal("border-box", clone.BoxSizing);
+        }
+
+        // ── regression: DomParser.CascadeApplyStyles's fast-path skip of the defaulting loop ──
+
+        /// <summary>
+        /// <c>DomParser.CascadeApplyStyles</c>'s "defaulting" loop (re-asserting every property's
+        /// <c>CssDefaults</c> initial value) is skipped entirely for a box whose <see cref="ComputedStyle"/>
+        /// is still the shared <see cref="Dom.ComputedStyle.Default"/> - safe only because every area's own
+        /// <c>Default</c> is itself sourced from the same <c>CssDefaults</c> store, making the loop a
+        /// guaranteed no-op on such a box for every property except a small, explicitly-handled set. This
+        /// test exhaustively re-derives that set by actually running the loop's own logic
+        /// (<see cref="CssUtils.SetPropertyValue"/>) against every <c>CssDefaults</c> entry on a fresh box
+        /// and asserting nothing outside the known set changes anything - so it fails loudly (rather than
+        /// silently reintroducing a correctness bug) if a future area/property addition breaks the
+        /// no-op assumption the fast path depends on.
+        /// </summary>
+        [Fact]
+        public void CascadeDefaultingLoop_OnAFreshBox_OnlyFontFamilyAndGridTemplatesAreNotNoOps()
+        {
+            var knownExceptions = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+            {
+                PropertyNames.FontFamily,
+                PropertyNames.GridTemplateColumns,
+                PropertyNames.GridTemplateRows,
+            };
+            var parser = new CssValueParser(new PdfSharpAdapter());
+            var unexpectedlyNotNoOp = new List<string>();
+
+            foreach (var (name, initial) in CssDefaults.InitialValues)
+            {
+                if (initial is null || name == PropertyNames.Display) continue;
+
+                var box = new CssBox(null, null);
+                Assert.Same(ComputedStyle.Default, box.ComputedStyle);
+
+                CssUtils.SetPropertyValue(parser, box, name, initial);
+
+                if (!ReferenceEquals(ComputedStyle.Default, box.ComputedStyle) && !knownExceptions.Contains(name))
+                {
+                    unexpectedlyNotNoOp.Add(name);
+                }
+            }
+
+            Assert.Empty(unexpectedlyNotNoOp);
         }
     }
 }
