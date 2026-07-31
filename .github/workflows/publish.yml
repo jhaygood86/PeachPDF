@@ -55,6 +55,11 @@ jobs:
           --generate-notes \
           $PRERELEASE_FLAG
 
+    - name: Trigger release binaries build
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh workflow run release-binaries.yml --ref main -f tag="v${{ steps.version.outputs.value }}"
+
     - name: Trigger docs deploy
       if: steps.version.outputs.prerelease != 'true'
       env:

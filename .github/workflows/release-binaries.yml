@@ -1,8 +1,11 @@
 name: Release Binaries
 
 # Builds the NativeAOT `peachpdf` CLI for each platform and attaches the archives to the GitHub
-# Release. Runs automatically when a release is published (the "Publish NuGet Package" workflow creates
-# it), or manually via workflow_dispatch against an existing tag.
+# Release. The "Publish NuGet Package" workflow triggers this explicitly (via workflow_dispatch) right
+# after it creates the release — a release created with the default GITHUB_TOKEN does not cascade-fire
+# other workflows' `release` triggers, so the `release: published` trigger below only covers a release
+# published by hand through the GitHub UI. It can also be run manually via workflow_dispatch against an
+# existing tag.
 on:
   release:
     types: [published]
