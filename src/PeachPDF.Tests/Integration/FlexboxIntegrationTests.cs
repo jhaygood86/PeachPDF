@@ -229,6 +229,23 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(item.ActualBoxSizingHeight, 98, 102);
         }
 
+        [Fact]
+        public async Task Wrap_SingleLineFitsWithoutWrapping_StretchesToContainerCrossSize()
+        {
+            // CSS Flexbox 1 §9.4 step 8: a container with exactly one line sizes that line to the
+            // container's own definite cross size, regardless of *why* it has only one line - an
+            // explicit `nowrap`, or (this fixture) a `wrap` container whose one item just happens to
+            // fit without wrapping. Previously only `nowrap` got this (issue #461), leaving the line -
+            // and so the item's own stretched height - sized to content instead of the container's 100pt.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-wrap:wrap; height:100pt;'>
+                    <div id='item' style='width:50pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.ActualBoxSizingHeight, 98, 102);
+        }
+
         // ─── align-self ──────────────────────────────────────────────────────────
 
         [Fact]
@@ -746,6 +763,35 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task WrapReverse_Column_UnequalLineCrossSizes_UnsetAlignContentStretchesLikeNormal()
+        {
+            // Same fixture as WrapReverse_Column_UnequalLineCrossSizes_StackRightToLeftWithoutOverlapping,
+            // but align-content is left at its initial value instead of being stated as flex-start.
+            // `normal` behaves as `stretch` on a flex container (issue #461): the 100pt of free cross
+            // space (200pt container width - 100pt of lines) splits three ways, 33.33pt each, growing
+            // every line instead of packing them at cross-start. Each line's sole item has a definite
+            // width, so it cannot itself stretch and falls back to the line's own (now larger) far edge -
+            // which for the outermost line (A) coincides with the container's actual edge either way, so
+            // only B and C's positions actually move versus the explicit-flex-start fixture.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-direction:column; flex-wrap:wrap-reverse; width:200pt; height:100pt;'>
+                    <div id='a' style='width:20pt; height:60pt; flex-shrink:0;'></div>
+                    <div id='b' style='width:50pt; height:60pt; flex-shrink:0;'></div>
+                    <div id='c' style='width:30pt; height:60pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+            double left = container.ClientLeft;
+
+            Assert.Equal(left + 180, a.Location.X, 0.1);
+            Assert.Equal(left + 96.67, b.Location.X, 0.1);
+            Assert.Equal(left + 33.33, c.Location.X, 0.1);
+        }
+
+        [Fact]
         public async Task WrapReverse_RowGap_UnequalLines_KeepsEachGapInTheReversedStack()
         {
             // Three lines of 10 / 40 / 20 with an 8pt row-gap: 70pt of lines and 16pt of gaps, so the
@@ -813,11 +859,12 @@ namespace PeachPDF.Tests.Integration
             double left = container.ClientLeft;
 
             Assert.Equal(200, container.ActualBoxSizingWidth, 0.5);
-            // Both items sit in the one line, whose cross size is B's 50pt. A cannot stretch to it (it has
-            // a definite width), so it is flush with the line's cross-start edge — which wrap-reverse puts
-            // on the right, 30pt along.
-            Assert.Equal(left + 30, a.Location.X, 0.5);
-            Assert.Equal(left, b.Location.X, 0.5);
+            // A single line stretches to the container's own definite cross size regardless of `wrap`
+            // (issue #461, CSS Flexbox 1 §9.4 step 8) - so the one line here is 200pt wide, not B's 50pt.
+            // Neither item can stretch to it (both have a definite width), so each is flush with the
+            // line's cross-start edge, which wrap-reverse puts on the right: 200 - itemWidth.
+            Assert.Equal(left + 180, a.Location.X, 0.5);
+            Assert.Equal(left + 150, b.Location.X, 0.5);
         }
 
         // ─── wrap-reverse: the swap inside a line ────────────────────────────────
@@ -889,6 +936,11 @@ namespace PeachPDF.Tests.Integration
             // An item that really can stretch fills the line and is on both edges at once, so the swap
             // must leave it alone. The arithmetic that places it has to read the size it ended up with
             // rather than the one it was measured at, or the stretched item lands short of the line.
+            //
+            // A and B fit on one line (their widths sum to exactly the container's own), which now
+            // stretches to the container's full 100pt height regardless of `wrap-reverse` (issue #461,
+            // CSS Flexbox 1 §9.4 step 8) rather than just B's 40pt - so A, which can stretch, now fills
+            // the whole 100pt instead of just 40pt of it.
             var html = Wrap(@"
                 <div id='container' style='display:flex; flex-wrap:wrap-reverse; align-content:flex-start;
                                            width:200pt; height:100pt;'>
@@ -900,9 +952,9 @@ namespace PeachPDF.Tests.Integration
             var a = FindById(root, "a")!;
             double top = container.ClientTop;
 
-            Assert.Equal(top + 60, a.Location.Y, 0.5);
+            Assert.Equal(top, a.Location.Y, 0.5);
             Assert.Equal(top + 100, a.ActualBottom, 0.5);
-            Assert.Equal(40, a.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(100, a.ActualBoxSizingHeight, 0.5);
         }
 
         [Fact]
