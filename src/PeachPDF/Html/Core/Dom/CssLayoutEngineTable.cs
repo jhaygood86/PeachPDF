@@ -1282,7 +1282,11 @@ namespace PeachPDF.Html.Core.Dom
 
                     _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
                     startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
-                    cursor.RestartAt(startY, container.PageIndexOf(startY), container);
+                    // startY is a fresh restart point at the table's own content-top edge on the new
+                    // page, not an arbitrary interior coordinate - the same "top edge flush on a
+                    // boundary" case HtmlContainerInt.SlotStartingAt exists for (see the identical fix in
+                    // CssLayoutEngineColumns.Layout, #573's investigation).
+                    cursor.RestartAt(startY, container.SlotStartingAt(startY), container);
                 }
             }
 
@@ -1320,7 +1324,11 @@ namespace PeachPDF.Html.Core.Dom
                     _headerBox.OffsetTop(pageBreakOffset);
 
                     startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
-                    cursor.RestartAt(startY, container.PageIndexOf(startY), container);
+                    // startY is a fresh restart point at the table's own content-top edge on the new
+                    // page, not an arbitrary interior coordinate - the same "top edge flush on a
+                    // boundary" case HtmlContainerInt.SlotStartingAt exists for (see the identical fix in
+                    // CssLayoutEngineColumns.Layout, #573's investigation).
+                    cursor.RestartAt(startY, container.SlotStartingAt(startY), container);
                 }
             }
 
