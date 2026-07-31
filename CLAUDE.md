@@ -24,9 +24,12 @@ Read these before making non-trivial changes in their area — they are the sour
 Not documentation, but read alongside it — the internal dev notes, one file per entry:
 [.claude/accepted-gaps/](.claude/accepted-gaps/) (limitations already argued through; don't relitigate
 one without new information), [.claude/recent-fixes/](.claude/recent-fixes/) (the reasoning and
-traps behind each recent change) and [.claude/invariants/](.claude/invariants/) (what a future change
-must not break or re-derive). See [Out of scope / accepted gaps](#out-of-scope--accepted-gaps-dont-relitigate-without-new-information),
-[Recent fixes](#recent-fixes) and [Invariants and traps](#invariants-and-traps) below.
+traps behind each recent change), [.claude/migration-notes/](.claude/migration-notes/) (user-visible
+behavior changes since the last release, awaiting a release notes pass) and
+[.claude/invariants/](.claude/invariants/) (what a future change must not break or re-derive). See
+[Out of scope / accepted gaps](#out-of-scope--accepted-gaps-dont-relitigate-without-new-information),
+[Recent fixes](#recent-fixes), [Migration notes](#migration-notes) and
+[Invariants and traps](#invariants-and-traps) below.
 
 When you add or change user-facing features, update the relevant doc page (and its `README.md`/`docs/getting-started.md` cross-links) in the same change, rather than as a follow-up — this repo's convention (established by the SVG 1.0 coverage work) is docs land with the feature.
 
@@ -181,6 +184,34 @@ reader still needs should already live somewhere durable: user-facing behaviour 
 a follow-up — the deletion is the last moment that knowledge is guaranteed to be written down
 anywhere. A stale entry is worse than no entry: it describes code that has since moved on, and
 every future change pays to read past it.
+
+## Migration notes
+
+Each note lives in its own file under [.claude/migration-notes/](.claude/migration-notes/), named
+`YYYY-MM-DD-<slug>.md` for the date it landed on `main` — the directory listing is the index, so `ls`
+gives a chronological table of contents. A note records a **user-visible behavior change**: what a
+document author would have seen before, what they see now, and why — the same content that used to be
+written inline in `docs/**` as a "Migration note" callout. It no longer goes there: `docs/**` documents
+*current* behavior only (see [Forward compatibility](docs/html-css-support.md#forward-compatibility)),
+and a page that also carries its own history accumulates callouts a reader has to read past forever.
+This folder is that history instead, kept only until it is folded into a release.
+
+When a change deliberately alters behavior in a way a document author could notice — a bug fix that
+changes rendered output, a gap closing, a previously-inert value or property starting to do something —
+add one file rather than a docs callout. State what used to happen, what happens now, and (for a
+change landing after a tag already exists) confirm with `git show <previous-tag>:<path>` that the doc
+or behavior actually differed at that tag, so the note is a genuine change relative to the last
+release and not something that shipped earlier and only reads as new.
+
+**When cutting release notes for a new version**, collect every migration-notes file dated after the
+previous release's tag and fold its content into that release's notes (its breaking-change/migration
+section) before publishing. Once a note has been incorporated into published release notes, delete its
+file — same convention as [recent fixes](#recent-fixes): the published release notes are the durable
+home for that information, and a stale copy here would only describe a change the next reader has
+already been told about elsewhere.
+
+**Recording a migration note adds exactly one new file and edits nothing else** — no index to append
+to, so two branches recording notes independently never conflict over one.
 
 ## Invariants and traps
 
