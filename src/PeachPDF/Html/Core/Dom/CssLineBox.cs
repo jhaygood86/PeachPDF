@@ -199,6 +199,13 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var b in Rectangles.Keys)
             {
                 b.Rectangles.Add(this, Rectangles[b]);
+
+                // An inline box's decoration area is exactly these per-line rectangles - its own
+                // Location stays at a line-local value layout never updates - so this is the one write
+                // that can make it non-empty in a fragmentainer the emitter had already observed it to
+                // hold nothing in. UpdateRectangle has already walked the inline ancestor chain, so
+                // every inline on the line is a key here and is told.
+                b.DiscardEmittedNothing();
             }
         }
 

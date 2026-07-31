@@ -81,6 +81,13 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // Being positioned is what makes a word this fragmentainer's again.
                 AwaitsTheNextFragmentainer = false;
+
+                // And it is what can make the owning box's subtree non-empty in a fragmentainer the
+                // emitter had already observed it to hold nothing in. A word is the one piece of
+                // content whose position lives nowhere on the box itself, so no box-level write would
+                // report this (see CssBox.DiscardEmittedNothing).
+                if (_rect.Y != value) OwnerBox.DiscardEmittedNothing();
+
                 _rect.Y = value;
             }
         }
