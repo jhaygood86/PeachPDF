@@ -17,6 +17,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -97,6 +98,22 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// Memoizes <see cref="IsValidLength"/> by its input string - a pure function of that string
+        /// alone (<see cref="GetCssTokens(string, bool)"/> always runs with <c>inValueContext: false</c>
+        /// here, and neither it nor <see cref="ValueExtensions.ToDistance"/> reads anything else). A
+        /// document's boxes overwhelmingly repeat the same handful of literal length strings (e.g.
+        /// "0px", "auto"), and every caller in the layout engines (<c>ApplyHeight</c>/<c>GetBoxHeight</c>/
+        /// <c>ApplyParentHeight</c>, the flex/grid/table engines) re-asks this on every layout pass of
+        /// every box - by the time a value reaches here it was already validated once, identically, by
+        /// the cascade-time property setters in <see cref="Utils.CssUtils"/> that gate whether it's
+        /// assigned to the box at all, so re-tokenizing the same string over and over is pure waste.
+        /// Unbounded like <see cref="Text.HyphenationEngine"/>'s language-pattern cache and
+        /// <see cref="Network.MimeTypeResolver"/>'s cache: the key space is a small, effectively-fixed
+        /// set of distinct CSS value strings, not user-controlled arbitrary data.
+        /// </summary>
+        private static readonly ConcurrentDictionary<string, bool> IsValidLengthCache = new();
+
+        /// <summary>
         /// Check if the given string is a valid length value.
         /// </summary>
         /// <param name="value">the string value to check</param>
@@ -105,6 +122,15 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (string.IsNullOrEmpty(value)) return false;
 
+            if (IsValidLengthCache.TryGetValue(value, out var cached)) return cached;
+
+            var result = IsValidLengthCore(value);
+            IsValidLengthCache[value] = result;
+            return result;
+        }
+
+        private static bool IsValidLengthCore(string value)
+        {
             if (IsCalcFunction(value)) return true;
 
             // Defer to the same CSS-OM length/percentage grammar already used at cascade time
