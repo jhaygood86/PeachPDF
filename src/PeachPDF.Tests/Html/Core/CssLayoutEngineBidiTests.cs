@@ -49,7 +49,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public async Task Bdo_DirRtl_ReversesPlainLatinTextInLayout()
         {
-            // unicode-bidi: bidi-override (the UA stylesheet rule for <bdo>) forces every character's
+            // unicode-bidi: isolate-override (the UA stylesheet rule for <bdo>) forces every character's
             // resolved type to match `direction`, regardless of its own real Bidi_Class - so even plain
             // Latin text (ordinarily strong-L, untouched by a plain direction:rtl) gets reordered and
             // mirrored inside a <bdo dir="rtl">, unlike a plain dir="rtl" element around the same text.
@@ -93,6 +93,33 @@ namespace PeachPDF.Tests.Html.Core
             Assert.Equal(2, bdiWords.Count);
             Assert.True(bdiWords[0].Left > bdiWords[1].Left,
                 $"expected the isolated <bdi>'s own first logical word to end up rightmost; [0].Left={bdiWords[0].Left}, [1].Left={bdiWords[1].Left}");
+        }
+
+        [Fact]
+        public async Task DirRtlSpan_InLtrParagraph_IsolatesFromSurroundingDigitsAndNeutrals()
+        {
+            // The UA stylesheet's [dir=rtl] rule is unicode-bidi: isolate (not the legacy embed) per the
+            // current HTML Standard - the RTL span must be opaque to the surrounding LTR paragraph's own
+            // resolution, so "1" and "2" keep the paragraph's own left-to-right document order around it
+            // instead of the span's internal RTL levels leaking into how the neighboring digits/neutrals
+            // resolve (see CascadeAutoDirectionalityTests.DirRtl_Explicit_SetsIsolateNotOverride for the
+            // cascade-level assertion that the property itself is isolate, not embed).
+            var html = LayoutHarness.Wrap("""<p id="p">1 <span dir="rtl">עברית</span> 2</p>""");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var p = LayoutHarness.FindById(root, "p");
+
+            Assert.NotNull(p);
+            var words = WordsOf(p!);
+            var one = Assert.Single(words, w => w.Text == "1");
+            var two = Assert.Single(words, w => w.Text == "2");
+            // Same UAX#9 L2/L4 visual mirroring as the <bdo> tests above (see Bdo_DirRtl_ReversesPlainLatinTextInLayout)
+            // reverses the isolated run's own character order within its own scope - "עברית" becomes "תירבע".
+            var hebrew = Assert.Single(words, w => w.Text == "תירבע");
+
+            Assert.True(one.Left < hebrew.Left && hebrew.Left < two.Left,
+                $"expected the paragraph's own document order (1, span, 2) preserved around the isolated " +
+                $"RTL span; one.Left={one.Left}, hebrew.Left={hebrew.Left}, two.Left={two.Left}");
         }
 
         [Fact]

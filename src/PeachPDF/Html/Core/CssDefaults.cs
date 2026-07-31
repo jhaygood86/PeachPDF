@@ -109,16 +109,16 @@ namespace PeachPDF.Html.Core
             :focus          { outline: thin dotted invert }
             
             /* Begin bidirectionality settings (do not change) */
-            BDO[DIR="ltr"]  { direction: ltr; unicode-bidi: bidi-override }
-            BDO[DIR="rtl"]  { direction: rtl; unicode-bidi: bidi-override }
+            BDO[DIR="ltr"]  { direction: ltr; unicode-bidi: isolate-override }
+            BDO[DIR="rtl"]  { direction: rtl; unicode-bidi: isolate-override }
 
-            *[DIR="ltr"]    { direction: ltr; unicode-bidi: embed }
-            *[DIR="rtl"]    { direction: rtl; unicode-bidi: embed }
+            *[DIR="ltr"]    { direction: ltr; unicode-bidi: isolate }
+            *[DIR="rtl"]    { direction: rtl; unicode-bidi: isolate }
 
-            /* A plain type selector (0,0,1) would lose the unicode-bidi: embed set by the *[DIR=...]
-               rule just above (0,1,0) once the dir="auto"/no-dir-attribute pre-pass has written a
-               literal ltr/rtl dir attribute onto every <bdi> - matching its attribute-selector
-               specificity (0,1,1) is what lets isolate win instead. */
+            /* Redundant with the *[DIR=...] rule above now that both resolve to isolate - kept
+               explicit (and at matching attribute-selector specificity, 0,1,1) so <bdi> keeps
+               isolate on its own terms per the HTML Standard, independent of whatever value a
+               future edit gives the general rule for other dir-bearing elements. */
             bdi[DIR="ltr"], bdi[DIR="rtl"] { unicode-bidi: isolate }
 
             /* Spelt with css-break-3's break-* properties rather than the legacy page-break-*
