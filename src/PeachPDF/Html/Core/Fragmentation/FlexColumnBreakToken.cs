@@ -31,11 +31,13 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// line's sequence from continuing or finishing on its own.
     /// </para>
     /// <para>
-    /// Scoped, for now, to item <b>content</b> fragmentation only: a forced <c>break-before</c>/
-    /// <c>break-after</c>/<c>break-inside: avoid</c> between two items in a line is not yet honored (see
-    /// <c>.claude/accepted-gaps/flex-column-container-has-no-break-points-between-items.md</c>, issue
-    /// #455) — every line's items are walked and committed unconditionally, stopping only where an
-    /// item's own content genuinely does not fit.
+    /// This token covers item <b>content</b> fragmentation only. A forced <c>break-before</c>/
+    /// <c>break-after</c>/<c>break-inside: avoid</c> between two items in a line (issue #455) is decided
+    /// separately and earlier, by <c>CssLayoutEngineFlex.RelocateLinesAcrossFragmentainers</c>'s column
+    /// branch — one <see cref="LineRelocation.Relocate"/> call per line — before this token's own commit
+    /// pass ever runs, so by the time <see cref="ColumnLineCursor"/> walks a line's items each one already
+    /// sits on the page its own break value put it on; this walk only ever stops where an item's own
+    /// content genuinely does not fit.
     /// </para>
     /// </remarks>
     /// <param name="Box">the flex container to resume</param>

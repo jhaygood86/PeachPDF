@@ -618,7 +618,7 @@ namespace PeachPDF.Html.Core.Dom
                     break;
                 }
                 case CssConstants.Stretch:
-                case "normal":
+                case CssConstants.Normal:
                 {
                     double extra = lines.Count > 0 ? remaining / lines.Count : 0;
                     foreach (var l in lines)
@@ -1197,10 +1197,12 @@ namespace PeachPDF.Html.Core.Dom
         /// row-direction item stalling does not stop a line-mate beside it.
         /// </para>
         /// <para>
-        /// <b>Content fragmentation only, for now.</b> This does not yet honor a forced
-        /// <c>break-before</c>/<c>break-after</c>/<c>break-inside: avoid</c> between two items in a line —
-        /// see <see cref="FlexColumnBreakToken"/>'s own remarks and issue #455. Every item is attempted
-        /// unconditionally; a line stops only where an item's own content genuinely does not fit.
+        /// <b>Content fragmentation only.</b> A forced <c>break-before</c>/<c>break-after</c>/
+        /// <c>break-inside: avoid</c> between two items in a line (issue #455) is decided earlier, by
+        /// <see cref="RelocateLinesAcrossFragmentainers"/>'s column branch — one item is attempted
+        /// unconditionally here only because it already sits on the page its own break value put it on by
+        /// the time this runs; a line's walk stops only where an item's own content genuinely does not
+        /// fit. See <see cref="FlexColumnBreakToken"/>'s own remarks.
         /// </para>
         /// </remarks>
         private async ValueTask CommitColumnContent(
