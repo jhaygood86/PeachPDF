@@ -746,6 +746,55 @@ namespace PeachPDF.Tests.Integration
             return Wrap($"<div id='mc' style='columns:{columnCount}; column-gap:0; width:200px'>{items}</div>");
         }
 
+        // ─── A whole remaining tail reset across many pages (#573) ─────────────────
+
+        // PassRewind.RollBackTo resets every one of a container's *remaining* children on every page it
+        // resumes into, not just the handful that page's fill reaches - so a container with far more
+        // children than fit on one page redundantly re-resets the same distant, untouched children again
+        // on every earlier page before the fill finally reaches them (CssBox.ResetForRefill now skips a
+        // child already sitting in that reset-and-untouched state - see its remarks). This is the
+        // large-container shape that makes the redundancy actually add up: many more children than any
+        // single page holds, spanning many resumed pages, so most children get reset - and, before the
+        // fix, re-reset - several times over before the fill ever reaches them.
+        [Fact]
+        public async Task ManyChildrenAcrossManyResumedPages_KeepsEveryWordExactlyOnceAndOverlapsNone()
+        {
+            const int itemCount = 60;
+            var items = string.Concat(Enumerable.Range(1, itemCount)
+                .Select(i => $"<div class='item' id='i{i}'>Entry {i} with a little text of its own.</div>"));
+            var html = Wrap($"<div id='mc' style='columns:2; column-gap:0; width:200px'>{items}</div>");
+
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+
+            // Confirms the fixture actually exercises the shape the fix targets: many more resumed pages
+            // than the earlier 12-item fixtures reach, so most children are reset several times over
+            // before the fill reaches them.
+            Assert.True(container.FragmentainerPasses > 4,
+                $"expected many resumed pages, got {container.FragmentainerPasses}");
+
+            var placed = FindAllByClass(root, "item");
+            Assert.Equal(itemCount, placed.Count);
+            AssertNoOverlaps(placed);
+
+            // The same double-claim/dropped-word guard as BalanceRetryOnAResumedFragment_KeepsEveryWordExactlyOnce,
+            // at a scale where a child can be redundantly reset many times before the fill actually reaches it.
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+
+            var authored = placed
+                .SelectMany(LayoutHarness.Descendants)
+                .SelectMany(b => b.Words)
+                .Where(w => !w.IsSpaces)
+                .ToList();
+
+            Assert.All(authored, word => Assert.Contains(word, claimed));
+        }
+
         private static IEnumerable<BoxFragment> FlattenFragments(BoxFragment fragment)
         {
             yield return fragment;

@@ -86,6 +86,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         protected override async ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
         {
+            // This box's own pass never routes through CssBox.BeginBlockPass (a proxy translates a source
+            // box's already-laid-out geometry rather than running a prologue/placement/content pass of its
+            // own), so nothing else clears CssBox._awaitingRefill for it - without this, a container
+            // resetting this proxy once and then genuinely laying it out again here would leave a later
+            // reset skipped as a stale no-op.
+            _awaitingRefill = false;
+
 #if DEBUG
             System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: START - Location={Location}, Display={Display}");
             System.Console.WriteLine($"  Source already laid out: Location={_sourceBox.Location}, ActualBottom={_sourceBox.ActualBottom}, ActualRight={_sourceBox.ActualRight}");

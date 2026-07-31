@@ -80,6 +80,12 @@ namespace PeachPDF.Html.Core.Dom
             // progress — which is the driver's own backstop, and how the omission announced itself.
             BeginLayoutPass();
 
+            // This box's own pass never routes through CssBox.BeginBlockPass (there is no prologue/
+            // placement/content split for a rule), so nothing else clears CssBox._awaitingRefill for it -
+            // without this, a container resetting this rule once and then genuinely laying it out again
+            // here would leave a later reset skipped as a stale no-op.
+            _awaitingRefill = false;
+
             RectanglesReset();
 
             //width at 100% (or auto)
