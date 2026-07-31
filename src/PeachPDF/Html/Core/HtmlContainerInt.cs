@@ -1340,19 +1340,22 @@ namespace PeachPDF.Html.Core
         /// the box does move, and that is exactly what re-running this pass onwards lays out again.
         /// </para>
         /// <para>
-        /// Three things have to be undone, which is #374's lesson in a different shape. The box's own line
-        /// boxes past the budget go (<see cref="CssBox.DiscardLineBoxesFrom"/>, which also un-places their
-        /// words, since the retry need not reach every one of them again). The fragment the earlier pass
-        /// froze goes, because it is about to describe fewer lines than it did. And the resumption record
-        /// the pass was entered with is rebuilt to name the budget, since that record is the only thing that
-        /// says where the flow picks up.
+        /// Undone the same way the other two pass re-entries do it (<see cref="PassRewind.RollBackTo"/>):
+        /// the box's own line boxes past the budget go, and everything the pass placed after it — laid out
+        /// from the start, exactly as on a starting pass — is reset outright and laid out again by the
+        /// re-entered pass. The fragment the earlier pass froze goes too, because it is about to describe
+        /// different content. And the resumption record the pass was entered with is rebuilt to name the
+        /// budget, since that record is the only thing that says where the flow picks up.
         /// </para>
         /// <para>
-        /// Deliberately <b>narrower</b> than <see cref="PassRewind.RollBackTo"/>, which the other two pass
-        /// re-entries use: what the pass placed after the box is left exactly where it is, rather than
-        /// being reset and laid out again. Widening it to the shared rollback was tried and <i>lost
-        /// content</i> — 16 words of <c>paged_media_horizontal_reflow</c> — so what it would take is a
-        /// question of its own (issue #440).
+        /// Widening this from a narrower rewind of only the box's own lines was tried once and measurably
+        /// <i>lost content</i> — 16 words of <c>paged_media_horizontal_reflow</c> — and filed as issue #440.
+        /// The actual cause was a pre-existing, unrelated defect: a word a stopped flow never reached still
+        /// carried document Y 0, which lies inside the <i>first</i> page's own band, so an earlier
+        /// fragment wrongly claimed it (issue #433, fixed by the block's own inline flow now saying
+        /// <see cref="CssBox.AwaitPlacement"/> of itself before it starts). Once that was fixed, the shared
+        /// rollback stopped losing anything — confirmed with real Georgia metrics on Windows (the platform
+        /// the loss was originally measured on) via <c>git bisect</c> against the full showcase corpus.
         /// </para>
         /// <para>
         /// Declined where the record does not name the box — the box is only rewindable when it is the one
@@ -1367,7 +1370,7 @@ namespace PeachPDF.Html.Core
                 return false;
 
             InvalidateEmittedFragmentsFor(rewind.Box, rewind.Box.LineBoxes[0].LineTop);
-            rewind.Box.DiscardLineBoxesFrom(rewind.Budget);
+            PassRewind.RollBackTo(rebuilt, Root!.Boxes);
 
             token = rebuilt;
             return true;

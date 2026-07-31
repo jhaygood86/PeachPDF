@@ -10,10 +10,11 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Two callers re-run a pass and so need the same rollback: the multi-column engine, which abandons a
-    /// fill attempt when <c>column-fill: balance</c> has to try another target, and the driver, which
-    /// re-enters the pass that placed a keep-with-next run's head. Both hand back a box tree that must
-    /// look the way it did when that pass began, and "the way it looked" is stated entirely by the
+    /// Three callers re-run a pass and so need the same rollback: the multi-column engine, which abandons a
+    /// fill attempt when <c>column-fill: balance</c> has to try another target; the driver, which re-enters
+    /// the pass that placed a keep-with-next run's head; and the driver again, which re-enters the pass
+    /// that has just ended to give <c>widows</c> the lines it asks for. All three hand back a box tree that
+    /// must look the way it did when that pass began, and "the way it looked" is stated entirely by the
     /// resumption record itself — one link per ancestor, down to the box that stopped.
     /// </para>
     /// <para>
