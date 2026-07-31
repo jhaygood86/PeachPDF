@@ -437,9 +437,26 @@ namespace PeachPDF.Html.Core.Fragmentation
             owner is null
             && nested is null
             && displacement is null
-            && !isFixed
-            && !box.IsOutOfFlow
             && !box.IsRoot
+            && ContentStaysInOneRun(box, isFixed);
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s own content occupies one contiguous run of fragmentainers,
+        /// which is what makes "there is none of it here" say anything about the fragmentainers after
+        /// this one.
+        /// </summary>
+        /// <remarks>
+        /// Unlike the per-visit conditions in <see cref="MayBeObservedEmpty"/>, this is a fact about the
+        /// box itself, so it — and only it — is what propagates to ancestors. The distinction matters:
+        /// the children of a multi-column container are each visited once per column and so can never
+        /// be observed individually, but that says nothing about whether the <i>container</i>'s own
+        /// content is contiguous, and the container is exactly the box worth skipping. Letting the
+        /// per-visit exclusion propagate made every multi-column container unprunable — which on a
+        /// document that is mostly multi-column is the entire optimization.
+        /// </remarks>
+        private static bool ContentStaysInOneRun(CssBox box, bool isFixed) =>
+            !isFixed
+            && !box.IsOutOfFlow
             && box is not CssProxyBox and not CssSpacingBox and not CssBoxMarker;
 
         /// <summary>
@@ -770,15 +787,19 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal void InvalidateFrom(int fromSlot)
         {
+            // Deliberately after the early return, not before it: this method is reached on every
+            // block-axis reposition of a box that holds fragments, which during a pass is constant, and
+            // only the calls that actually re-open a frozen fragmentainer mean anything has been
+            // superseded. Bumping on the rest retired every observation as fast as they were made.
+            if (fromSlot > _lastEmittedSlot) return;
+
             // Every "emitted nothing here" observation is void from here on. Re-opening a frozen
             // fragmentainer means the driver is about to lay content out again over ground it has
             // already covered - §4.3's movers and the keep-with-next run pull both re-enter a pass that
             // has already ended - so an observation drawn from the superseded arrangement describes a
             // layout that no longer exists. Bumping one counter retires them all, which is the right
-            // trade: re-opening is rare, and anything cheaper would have to enumerate the boxes.
+            // trade: genuine re-opening is rare, and anything cheaper would have to enumerate boxes.
             _observationEpoch++;
-
-            if (fromSlot > _lastEmittedSlot) return;
 
             for (var slot = fromSlot; slot <= _lastEmittedSlot; slot++)
             {
@@ -1427,7 +1448,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             // Whether an "emitted nothing here" observation about this box could be relied on later at
             // all. Asked before the observation is read as well as before one is made, so a box that
             // could never be marked is never skipped on the strength of a stale mark either.
+            //
+            // Two separate facts, and only the second travels: whether THIS visit could observe the box
+            // (per-visit - which proxy, which column), and whether the box's content is contiguous at
+            // all (a property of the box, and therefore of every ancestor that contains it).
             var ownPrunable = MayBeObservedEmpty(box, owner, nested, isFixed, displacement);
+            var contiguous = ContentStaysInOneRun(box, isFixed);
 
             // Skip the whole subtree: the emitter has already walked it once this layout, found it
             // empty at a slot at or before this one, and nothing has written to it since (every write
@@ -1496,7 +1522,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     childBox, childOwner, childSnapshot, slot, childNested, childInstance,
                     ref hasPrintableContent, ref childPrunable, displacement);
 
-                ownPrunable &= childPrunable;
+                contiguous &= childPrunable;
 
                 if (childDraft is not null)
                     children.Add(childDraft);
@@ -1532,13 +1558,13 @@ namespace PeachPDF.Html.Core.Fragmentation
                     //
                     // The offer is provisional: RecordEmptyObservations makes the final call once the
                     // slot is fully walked, because one box can be visited several times in one slot.
-                    if (ownPrunable && !_pruningSuspended
+                    if (ownPrunable && contiguous && !_pruningSuspended
                         && (_frozen.Contains(box) || box.NeverTouchedThisLayout))
                     {
                         _emptyHereThisSlot.Add(box);
                     }
 
-                    subtreePrunable &= ownPrunable;
+                    subtreePrunable &= contiguous;
                     return null;
                 }
 
@@ -1578,7 +1604,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // about the slot as a whole. RecordEmptyObservations subtracts this set from the empty one.
             if (!_pruningSuspended) _producedSomethingThisSlot.Add(box);
 
-            subtreePrunable &= ownPrunable;
+            subtreePrunable &= contiguous;
 
             var draft = new Draft(new FragmentKey(box, owner, instance), box, slot, region, snapshot, originY);
 
