@@ -132,6 +132,12 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         protected override async ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
         {
+            // This box's own pass never routes through CssBox.BeginBlockPass (there is no prologue/
+            // placement/content split for a marker), so nothing else clears CssBox._awaitingRefill for it -
+            // without this, a container resetting this marker once and then genuinely laying it out again
+            // here would leave a later reset skipped as a stale no-op.
+            _awaitingRefill = false;
+
             await MeasureWordsSize(g);
 
             if (ListStylePosition != CssConstants.Outside) return;

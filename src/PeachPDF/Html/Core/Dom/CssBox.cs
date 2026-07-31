@@ -1240,6 +1240,15 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         internal void ResetForRefill()
         {
+            // A caller that resets a whole remaining child range on every page/retry (PassRewind.RollBackTo)
+            // re-asks this for children the page in hand will never reach, over and over, across every later
+            // page too - and a box already sitting in exactly the state this method produces, untouched since,
+            // has nothing left to redo. Skipping needs no extra bookkeeping to stay correct: _awaitingRefill
+            // clears the moment this box's own pass genuinely starts again (BeginBlockPass), which is the
+            // only event that could make a repeat of this method do something different (see #573).
+            if (_awaitingRefill) return;
+            _awaitingRefill = true;
+
             // The columns engine calls this before the real fill lays the same boxes out again from scratch,
             // which on a resumed pass includes boxes a frozen fragmentainer already holds.
             NotifyGeometryChanged(OwnGeometryTop(), 0);
@@ -1503,6 +1512,23 @@ namespace PeachPDF.Html.Core.Dom
         private bool _prologueDone;
 
         /// <summary>
+        /// Whether <see cref="ResetForRefill"/> has already brought this box into the state a pass
+        /// re-entry needs, with nothing having touched it since - so a second call before the box is
+        /// genuinely laid out again would repeat exactly the same work for no new effect.
+        /// </summary>
+        /// <remarks>
+        /// Set by <see cref="ResetForRefill"/> itself and cleared the moment this box's own pass
+        /// genuinely starts again (<see cref="BeginBlockPass"/>, guarded the same way
+        /// <see cref="_prologueDone"/> is - both flip together because a box's prologue re-running and a
+        /// box being "used since its last reset" are the same event). A caller that resets a box already
+        /// in this state (e.g. <see cref="Fragmentation.PassRewind.RollBackTo"/> re-resetting a
+        /// container's whole remaining child list on every page/retry, most of which the page in hand
+        /// never reaches) can skip the whole subtree walk rather than repeat it - see
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/573">#573</see>.
+        /// </remarks>
+        private protected bool _awaitingRefill;
+
+        /// <summary>
         /// Where <see cref="PerformLayoutImp"/> is to re-place this box, set when an
         /// <see cref="EarlyBreak"/> is taken by re-laying the box out rather than by moving it.
         /// </summary>
@@ -1745,6 +1771,11 @@ namespace PeachPDF.Html.Core.Dom
             if (!_prologueDone)
             {
                 _prologueDone = true;
+
+                // This box's pass is genuinely starting again - the one event that can make a later
+                // ResetForRefill() need to do real work rather than skip as already-reset (see its remarks).
+                _awaitingRefill = false;
+
                 await PerformLayoutPrologue(g);
             }
 
@@ -2007,6 +2038,13 @@ namespace PeachPDF.Html.Core.Dom
                 _escapedForcedBreakBlankSlot = null;
                 _orphansBreakTaken = false;
                 _widowsRewindTaken = false;
+
+                // A box can end one layout generation sitting in "reset, not yet re-entered" state (e.g.
+                // the last child a container's own RollBackTo touched, never revisited before the
+                // generation ended) - carrying that flag into a brand new generation would let the first
+                // ResetForRefill() call of the new one skip as a no-op, when nothing about this generation
+                // has touched this box yet.
+                _awaitingRefill = false;
             }
 
             var resume = _incomingToken;
