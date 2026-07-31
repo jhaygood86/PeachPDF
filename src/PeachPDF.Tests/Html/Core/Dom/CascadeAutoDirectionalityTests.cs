@@ -105,7 +105,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
-        public async Task Bdo_WithDirRtl_OverridesAndSetsBidiOverride()
+        public async Task Bdo_WithDirRtl_OverridesAndSetsIsolateOverride()
         {
             var html = LayoutHarness.Wrap("""<bdo id="el" dir="rtl">hello</bdo>""");
 
@@ -114,14 +114,14 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             Assert.NotNull(el);
             Assert.Equal(DirectionMode.Rtl, el!.Direction.Value);
-            Assert.Equal(UnicodeMode.BidirectionalOverride, el!.UnicodeBidi.Value);
+            Assert.Equal(UnicodeMode.IsolateOverride, el!.UnicodeBidi.Value);
         }
 
         [Fact]
-        public async Task DirRtl_Explicit_SetsEmbedNotOverride()
+        public async Task DirRtl_Explicit_SetsIsolateNotOverride()
         {
-            // A plain dir="rtl" (not <bdo>) maps to unicode-bidi: embed per the UA stylesheet, distinct
-            // from <bdo>'s bidi-override.
+            // A plain dir="rtl" (not <bdo>) maps to unicode-bidi: isolate per the current HTML Standard,
+            // distinct from <bdo>'s isolate-override.
             var html = LayoutHarness.Wrap("""<div id="el" dir="rtl">hello</div>""");
 
             var (root, _) = await LayoutHarness.LayoutAsync(html);
@@ -129,7 +129,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             Assert.NotNull(el);
             Assert.Equal(DirectionMode.Rtl, el!.Direction.Value);
-            Assert.Equal(UnicodeMode.Embed, el!.UnicodeBidi.Value);
+            Assert.Equal(UnicodeMode.Isolate, el!.UnicodeBidi.Value);
         }
     }
 }

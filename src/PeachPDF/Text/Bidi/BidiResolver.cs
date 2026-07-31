@@ -67,7 +67,7 @@ namespace PeachPDF.Text.Bidi
             ResolveExplicitLevels(originalTypes, resolvedTypes, levels, overrides, paragraphLevel);
 
             var matchingPdi = ComputeMatchingPdi(resolvedTypes, n);
-            var sequences = ComputeIsolatingRunSequences(resolvedTypes, levels, matchingPdi, n);
+            var sequences = ComputeIsolatingRunSequences(resolvedTypes, levels, matchingPdi, n, overrides);
 
             foreach (var sequence in sequences)
             {
@@ -486,7 +486,8 @@ namespace PeachPDF.Text.Bidi
         }
 
         private static List<int[]> ComputeIsolatingRunSequences(
-            BidiClass[] resolvedTypes, byte[] levels, Dictionary<int, int> matchingPdi, int n)
+            BidiClass[] resolvedTypes, byte[] levels, Dictionary<int, int> matchingPdi, int n,
+            IReadOnlyList<BidiIsolateOverride> overrides)
         {
             var sequences = new List<int[]>();
             if (n == 0) return sequences;
@@ -502,13 +503,51 @@ namespace PeachPDF.Text.Bidi
             }
 
             var runStartIndex = new Dictionary<int, int>();
-            for (var r = 0; r < runs.Count; r++) runStartIndex[runs[r].Start] = r;
+            var runEndIndex = new Dictionary<int, int>();
+            for (var r = 0; r < runs.Count; r++)
+            {
+                runStartIndex[runs[r].Start] = r;
+                runEndIndex[runs[r].End] = r;
+            }
+
+            // A CSS unicode-bidi: isolate/isolate-override box contributes a synthetic RLI/LRI/FSI-then-PDI
+            // pair (see BidiIsolateOverride) that never occupies an index of its own in the text - unlike a
+            // real isolate initiator/PDI, there is no character for resolvedTypes to carry an LRI/RLI/FSI
+            // type on, so the lastType-based chaining just below can never see it. Without this, the level
+            // run ending right before the box and the one starting right after it are never rejoined into
+            // one isolating run sequence, degrading isolate to the same (non-chained) behavior as embed for
+            // any neutral/EN-as-R resolution that spans the box - exactly the case the UA stylesheet's own
+            // [dir] rule (CssDefaults.DefaultStyleSheet) depends on isolate for. Map each isolate-initiating
+            // override's own Start (where the "before" run ends) to its End (where the "after" run starts)
+            // so the loop below can jump the same way real BD13 chaining does - but only when a run
+            // genuinely ends at Start: two adjacent same-direction isolate boxes with nothing between them
+            // (e.g. two sibling dir="rtl" spans) push to the identical level, so their content merges into
+            // one run with no boundary at the shared index, and the second box's own Start never sits at
+            // any run's End at all. Registering it anyway would still mark its End's run as a continuation
+            // that nothing ever actually chains into, silently dropping that run from every sequence.
+            Dictionary<int, int>? syntheticChain = null;
+            foreach (var o in overrides)
+            {
+                if (o.Push is not (BidiExplicitPush.Lri or BidiExplicitPush.Rli or BidiExplicitPush.Fsi)) continue;
+                if (!runEndIndex.ContainsKey(o.Start)) continue;
+                syntheticChain ??= new Dictionary<int, int>();
+                syntheticChain[o.Start] = o.End;
+            }
 
             var isContinuation = new bool[runs.Count];
             foreach (var kv in matchingPdi)
             {
                 if (runStartIndex.TryGetValue(kv.Value, out var runIdx))
                     isContinuation[runIdx] = true;
+            }
+
+            if (syntheticChain != null)
+            {
+                foreach (var kv in syntheticChain)
+                {
+                    if (runStartIndex.TryGetValue(kv.Value, out var runIdx))
+                        isContinuation[runIdx] = true;
+                }
             }
 
             var visited = new bool[runs.Count];
@@ -528,11 +567,29 @@ namespace PeachPDF.Text.Bidi
                     var lastType = resolvedTypes[lastPos];
                     if (lastType is BidiClass.LRI or BidiClass.RLI or BidiClass.FSI
                         && matchingPdi.TryGetValue(lastPos, out var pdiPos)
-                        && runStartIndex.TryGetValue(pdiPos, out var nextRun))
+                        && runStartIndex.TryGetValue(pdiPos, out var nextRun)
+                        && !visited[nextRun])
                     {
                         cur = nextRun;
                         continue;
                     }
+
+                    // Two isolate-initiating overrides can close at the very same real index (a nested
+                    // isolate box that is the last content of its own enclosing isolate box - their Ends
+                    // coincide because nothing occupies the gap a real, separately-indexed PDI pair would).
+                    // Without the !visited guard, both the outer box's own chain and this inner box's chain
+                    // would land on the same "after" run and add its positions twice - once each - so the
+                    // second ResolveSequence call would silently overwrite the first's level assignment for
+                    // those positions instead of resolving them once.
+                    if (syntheticChain != null
+                        && syntheticChain.TryGetValue(e, out var afterIndex)
+                        && runStartIndex.TryGetValue(afterIndex, out var nextSyntheticRun)
+                        && !visited[nextSyntheticRun])
+                    {
+                        cur = nextSyntheticRun;
+                        continue;
+                    }
+
                     break;
                 }
                 sequences.Add(positions.ToArray());
