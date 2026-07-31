@@ -739,6 +739,108 @@ namespace PeachPDF.Tests.Html.Core.Fragments
         }
 
         /// <summary>
+        /// The flex-item counterpart of the fixture above, for a box whose content lives entirely on child
+        /// boxes rather than directly on itself (no per-line rectangles of its own, so it takes the
+        /// <c>usesOwnBounds</c> path rather than the ordinary per-line one) - and, unlike an in-flow block,
+        /// whose own declared bounds do not reach every fragmentainer its content actually lands in.
+        /// <c>ItemContentCommit.CommitLayout</c> pins a flex/grid item's content-box
+        /// size once, on its first commit, and never revisits it on a later, resumed one; a box whose content
+        /// outgrows that pinned size (here, an explicit <c>height</c> smaller than its children's true height)
+        /// still fragments its overflow into later fragmentainers, but <c>BuildDraft</c> used to have no
+        /// fallback for a fragment that genuinely holds children here while the box's own bounds fall
+        /// entirely outside this fragmentainer - only for the "holds nothing at all" shell case - so every
+        /// fragment past the first lost its background. Closes issue #569.
+        /// </summary>
+        [Fact]
+        public async Task AFlexItemWithNoDirectText_KeepsItsDecorationPastItsOwnPinnedBounds()
+        {
+            var items = string.Concat(Enumerable.Range(1, 10)
+                .Select(i => $"<p style='margin:0;height:20pt'>row {i}</p>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:100pt'>filler</div>"
+                    + "<div style='display:flex; flex-direction:column'>"
+                    + $"<div id='footer' style='height:20pt;background:#cde'>{items}</div>"
+                    + "</div>"),
+                pageHeight: 200);
+
+            var footer = LayoutHarness.FindById(root, "footer")!;
+
+            // The fixture is only meaningful if the item's own committed bounds really do fall short of its
+            // content: ten 20pt paragraphs (200pt) well past the item's own pinned 20pt height.
+            var lastChildBottom = footer.Boxes[^1].ActualBottom;
+            Assert.True(lastChildBottom > footer.ActualBottom + 20,
+                $"expected content well past the item's own bottom ({footer.ActualBottom}), got {lastChildBottom}");
+
+            var fragments = FragmentsOf(container.FragmentTree!, "footer");
+            Assert.True(fragments.Count > 1, "fixture must paginate the item's own content");
+
+            AssertDecorationCoversItsOwnContent(fragments);
+        }
+
+        /// <summary>
+        /// The sharper case the fixture above cannot exercise: the item's own pinned bounds do not miss the
+        /// later fragmentainer entirely, they land a small <i>sliver</i> inside it (a few points past the
+        /// page boundary), while the bulk of what the item actually holds there runs on for many pages more.
+        /// The fallback above only fires when the box's own bounds miss a region outright, so a sliver still
+        /// left every fragment past the first with a decoration rectangle sized to that sliver alone -
+        /// visually a border cutting straight through the middle of the second paragraph, with every one
+        /// after it undecorated. The extension has to be unconditional, not gated on the box's own bounds
+        /// already missing the region.
+        /// </summary>
+        [Fact]
+        public async Task AFlexItemWithNoDirectText_KeepsFullDecorationWhenItsPinnedBoundsOnlySliverIntoALaterPage()
+        {
+            var items = string.Concat(Enumerable.Range(1, 10)
+                .Select(i => $"<p style='margin:0;height:20pt'>row {i}</p>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:190pt'>filler</div>"
+                    + "<div style='display:flex; flex-direction:column'>"
+                    + $"<div id='footer' style='height:20pt;background:#cde'>{items}</div>"
+                    + "</div>"),
+                pageHeight: 200, margin: 0);
+
+            var footer = LayoutHarness.FindById(root, "footer")!;
+
+            // The item's own pinned bounds ([190, 210)) genuinely straddle the page-1/page-2 boundary (200)
+            // by a sliver, rather than falling entirely on one side of it - the shape this test is for.
+            Assert.True(footer.Location.Y < 200 && footer.ActualBottom > 200,
+                $"expected the item's own bounds to straddle the page boundary, got [{footer.Location.Y}, {footer.ActualBottom})");
+
+            var lastChildBottom = footer.Boxes[^1].ActualBottom;
+            Assert.True(lastChildBottom > footer.ActualBottom + 20,
+                $"expected content well past the item's own bottom ({footer.ActualBottom}), got {lastChildBottom}");
+
+            var fragments = FragmentsOf(container.FragmentTree!, "footer");
+            Assert.True(fragments.Count > 1, "fixture must paginate the item's own content");
+
+            AssertDecorationCoversItsOwnContent(fragments);
+        }
+
+        /// <summary>
+        /// Asserts that each fragment's own decoration rectangle reaches at least as far down as the
+        /// content it holds - not merely that it has <i>some</i> decoration rectangle. A sliver-sized
+        /// decoration rectangle that stops short of the fragment's own children still passes a bare
+        /// <c>NotEmpty</c> check while visually cutting a border through the middle of the content it is
+        /// supposed to be behind.
+        /// </summary>
+        private static void AssertDecorationCoversItsOwnContent(IReadOnlyList<BoxFragment> fragments) =>
+            Assert.All(fragments, fragment =>
+            {
+                Assert.NotEmpty(fragment.Lines);
+                if (fragment.Children.Count == 0) return;
+
+                var decorationBottom = fragment.Lines[0].Rect.Bottom;
+                var contentBottom = fragment.Children.Max(child => child.Rect.Bottom);
+
+                Assert.True(decorationBottom >= contentBottom - 0.5,
+                    $"decoration only reaches {decorationBottom}, but this fragment's own content reaches {contentBottom}");
+            });
+
+        /// <summary>
         /// A box whose break moved because it would have left fewer lines than <c>orphans</c> behind must
         /// leave no fragment in the fragmentainer it broke from either — the pass that froze that slot had
         /// already placed the line, so the re-layout has to reach back and un-freeze it.

@@ -195,9 +195,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             internal bool IsMonolithic { get; set; }
 
             /// <summary>
-            /// Whether the box continues past this fragmentainer without having had its own height applied,
-            /// so its decoration area runs to the bottom of what it placed here rather than to the bottom it
-            /// currently reports. See <see cref="NestedFragmentainer.Continuing"/>.
+            /// Whether the box's decoration area runs to the bottom of what it actually placed here rather
+            /// than to the bottom it currently reports, for either of two reasons: it continues past a
+            /// nested fragmentainer without having had its own height applied yet (see
+            /// <see cref="NestedFragmentainer.Continuing"/>), or - on the page grid - its own declared bounds
+            /// were pinned by an item-content commit pass before the content that overflows past them was
+            /// known, so they simply do not reach the region its later content genuinely landed in (issue
+            /// <see href="https://github.com/jhaygood86/PeachPDF/issues/569">#569</see>).
             /// </summary>
             internal bool BoundsEndAtItsContent { get; set; }
 
@@ -1117,8 +1121,9 @@ namespace PeachPDF.Html.Core.Fragmentation
             // exact for every box whose height is settled by the pass that freezes this slot - and a box whose
             // height is not settled is one that continues into a later fragmentainer, which by construction has
             // content of its own in this one.
-            if (lines.Count == 0 && words.Count == 0 && children.Count == 0
-                && !(usesOwnBounds && region.Contains(Displaced(BoundsOf(box, snapshot), shift))))
+            var ownBoundsCoverRegion = usesOwnBounds && region.Contains(Displaced(BoundsOf(box, snapshot), shift));
+
+            if (lines.Count == 0 && words.Count == 0 && children.Count == 0 && !ownBoundsCoverRegion)
             {
                 // A shell continues a fragment; it never invents one. Requiring the box to already hold a
                 // frozen fragment somewhere is what keeps this from changing _frozen membership, and so
@@ -1134,6 +1139,22 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // per-line rectangles for it to be a set of.
                 usesOwnBounds = true;
             }
+
+            // A box that genuinely holds content here - real children, not the pure-shell case just above -
+            // whose own declared bounds may not reach far enough to cover it: not a nested fragmentainer
+            // (that case is handled below via BoundsEndAtItsContent's other arm), but a page-grid box whose
+            // Width/Height an item-content commit pass pinned before the content that overflows past them was
+            // known (ItemContentCommit.CommitLayout pins a flex/grid item's content-box size once, on its
+            // first, fresh commit, and never revisits it on a later, resumed one - see its own remarks). Its
+            // content still fragments and lands in later slots regardless, so this fragment's decoration is
+            // extended from what it actually holds here, the same way a nested fragmentainer's continuing box
+            // already is. Unconditional whenever there is real content to extend from, not only when the
+            // box's own bounds miss this region entirely - a pinned box's declared bounds can still land a
+            // sliver inside the right region while the bulk of what it actually holds here runs well past
+            // that sliver (ExtentOf only ever grows the bottom, so this is a no-op wherever the box's own
+            // bounds already reach far enough on their own). Closes issue #569.
+            var boundsEndAtContentOnThePageGrid = shellRect is null && usesOwnBounds
+                && nested is null && (children.Count > 0 || words.Count > 0);
 
             // A shell is backgrounds and borders and nothing else, which CSS Paged Media Level 3 §3.2
             // excludes from printable content by name - so it can never on its own make a slot into a page.
@@ -1154,7 +1175,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.ConfinedTo = displacement?.Band;
             draft.Shift = shift;
             draft.DisplacementRoot = displacement?.Root;
-            draft.BoundsEndAtItsContent = nested is { } fragmentainer && fragmentainer.Continuing.Contains(box);
+            draft.BoundsEndAtItsContent = boundsEndAtContentOnThePageGrid
+                || (nested is { } fragmentainer && fragmentainer.Continuing.Contains(box));
 
             // Which of the box's block-axis edges are its own, from the two records that state it: the pass's
             // own resumption chain for the page grid, and the nested fragmentainer's carry sets for a column.
@@ -1596,7 +1618,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// zero-height box at its own top. On the page grid that is harmless: the bounds are cut to the band,
         /// and the box's later fragments are separated by the band anyway. In a nested fragmentainer, whose
         /// neighbours share one band, the block extent is all there is, so it has to come from the content
-        /// this fragment actually holds.
+        /// this fragment actually holds. The page grid needs the same content-derived extent for one further
+        /// case despite normally not needing it at all: an item-content commit pass pins a flex/grid item's
+        /// own content-box size once, on its first commit, and never revisits it on a later, resumed one - so
+        /// a box whose content genuinely outgrows that pinned size has later fragments whose declared bounds
+        /// do not reach the band their content landed in, which is exactly the shape
+        /// <see cref="Draft.BoundsEndAtItsContent"/>'s page-grid arm exists for (issue
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/569">#569</see>).
         /// </para>
         /// <para>
         /// Measured over the <i>draft</i> tree rather than over materialized fragments, and memoized. Both

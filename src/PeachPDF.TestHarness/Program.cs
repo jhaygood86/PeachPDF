@@ -4159,6 +4159,48 @@ await SaveShowcaseAsync("flex_column_break_points", "Layout", "Break Points Betw
     + "column container relocates independently of the others (issue #455).",
     flexColumnBreakPointsHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
+// A footer flex item anchored via margin-top:auto (the same pattern the invoice showcase above
+// uses) whose own committed height - pinned once, up front, by the item-content commit pass - falls
+// short of the paragraphs it actually holds. The item's own box has no direct text of its own (its
+// content lives entirely on its <p> children), which used to mean its continuation on page 2 lost its
+// background and padding entirely, even though the paragraphs themselves kept flowing there correctly.
+var flexItemBackgroundHtml = $$"""
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 10mm }
+    body { font: 8.5pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 11pt; margin: 0 0 0.4em }
+    p.intro { color: #6b7280; font-size: 8pt; margin: 0 0 0.8em }
+    .col { display: flex; flex-direction: column; height: 100mm }
+    .filler { background: #eef2ff; border: 0.75pt solid #94a3b8; border-radius: 3pt; padding: 5pt 6pt }
+    footer { margin-top: auto; height: 12mm; background: #cde3d6; border: 0.75pt solid #1d6a52; border-radius: 3pt; padding: 5pt 6pt }
+    footer p { margin: 0 0 3pt; line-height: 1.35 }
+    </style></head><body>
+    <h1>A flex item's background across the page it overflows onto</h1>
+    <p class="intro">The green footer below is a flex-direction:column item anchored to the bottom of
+    its container via margin-top:auto - the same pattern the invoice showcase uses. Its own committed
+    height (12mm) is pinned once, up front, but its paragraphs need more room than that, so they spill
+    onto the next page. The footer's background and border now continue there instead of stopping after
+    page 1.</p>
+    <div class="col">
+    <div class="filler">Filler content above the footer.</div>
+    <footer>
+    {{LoremRows(8, "Footer note")}}
+    </footer>
+    </div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("flex_item_pinned_height_background", "Layout", "Flex Item Background Past Its Pinned Height",
+    "A flex-direction:column item whose own content is entirely block-level children (no direct text on "
+    + "the item itself) and whose committed content-box size falls short of what it actually holds now "
+    + "keeps its background and border on every page its content spills onto, not only the first - "
+    + "FragmentEmitter.BuildDraft previously had a decoration rectangle only for a box with no content at "
+    + "all in a fragmentainer (a pure continuation shell) or one whose own bounds already reached it, "
+    + "missing the case where a page-grid box's item-content-commit-pinned bounds fall short of the "
+    + "children it genuinely holds there (issue #569).",
+    flexItemBackgroundHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
 // --- hyphens: auto multi-language showcase ---
 // Document language is a whole-container setting (<html lang>, see CssBox/HtmlContainerInt), so
 // each language gets its own small document rather than one page per language like the other
