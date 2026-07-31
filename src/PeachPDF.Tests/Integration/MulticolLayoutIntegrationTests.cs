@@ -795,6 +795,67 @@ namespace PeachPDF.Tests.Integration
             Assert.All(authored, word => Assert.Contains(word, claimed));
         }
 
+        // ─── A resumption top landing exactly on a page boundary (#573) ────────────
+
+        // CssLayoutEngineColumns.Layout resolved which page slot a resumed column starts filling with
+        // the raw, boundary-ambiguous HtmlContainerInt.PageIndexOf (a coordinate exactly on a page
+        // boundary is "both the end of one band and the start of the next" per its own remarks) instead
+        // of the boundary-aware SlotStartingAt every other "fresh content-top edge" call site uses. A
+        // resumed column's own top is exactly that edge, and it lands precisely on a page boundary by
+        // construction (a genuinely new page always starts at its own designated top) - so with a page
+        // height whose arithmetic doesn't round back to a clean multiple of itself (e.g. a millimeter
+        // page size converted to points), PageIndexOf(boxTop) can resolve to the page being LEFT rather
+        // than the one being entered. That page's own remaining budget then computes to zero, and every
+        // later pass recomputes the exact same (wrong, un-advanced) boxTop forever: the container never
+        // reaches a fresh page and instead piles every remaining word onto the one it already filled, at
+        // the same frozen Y - visually, hundreds of entries stacked directly on top of each other with
+        // the rest of the page left blank. Reproduced directly against the real dictionary.mhtml-shaped
+        // page format (160mm x 200mm, which floating-point-converts to points messily, unlike Letter's
+        // already-integer 612x792pt) - page count stayed frozen at exactly 4 from 500 through 4000
+        // paragraphs, with per-page text length exploding from ~2000 to over 65000 characters, before the
+        // fix. A non-round pageHeight below reproduces the same boundary mismatch in miniature.
+        [Fact]
+        public async Task ManyChildrenAtANonRoundPageHeight_PageCountGrowsAndNoTwoItemsOverlap()
+        {
+            const int itemCount = 400;
+            var items = string.Concat(Enumerable.Range(1, itemCount)
+                .Select(i => $"<div class='item' id='i{i}'>Entry {i} with a little text of its own.</div>"));
+            var html = Wrap($"<div id='mc' style='columns:2; column-gap:0; width:200px'>{items}</div>");
+
+            // 150mm worth of points (150 / 25.4 * 72) - the same messy-binary-fraction shape as the real
+            // document's @page { size: 160mm 200mm }, deliberately not a round number of layout units.
+            // Verified (against the pre-fix code) to actually land a resumed column's top exactly on this
+            // specific page height's boundary: without the fix this fixture is stuck at 11 pages rather
+            // than scaling with content.
+            var (root, container) = await BuildAndLayout(html, pageHeight: 150.0 / 25.4 * 72);
+
+            var placed = FindAllByClass(root, "item");
+            Assert.Equal(itemCount, placed.Count);
+
+            // The frozen-page bug left the container on a small, fixed number of pages regardless of how
+            // much content remained; 400 items at this page height must span well beyond that.
+            var pageCount = placed.Select(b => container.PageIndexOf(b.Location.Y)).Distinct().Count();
+            Assert.True(pageCount > 20, $"expected the container to span many pages, landed on {pageCount}");
+
+            AssertNoOverlaps(placed);
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => FlattenFragments(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => w.Word)
+                .ToList();
+
+            Assert.Equal(claimed.Count, claimed.Distinct().Count());
+
+            var authored = placed
+                .SelectMany(LayoutHarness.Descendants)
+                .SelectMany(b => b.Words)
+                .Where(w => !w.IsSpaces)
+                .ToList();
+
+            Assert.All(authored, word => Assert.Contains(word, claimed));
+        }
+
         private static IEnumerable<BoxFragment> FlattenFragments(BoxFragment fragment)
         {
             yield return fragment;

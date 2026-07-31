@@ -164,7 +164,15 @@ namespace PeachPDF.Html.Core.Dom
             var columnLeft = columnsBox.ClientLeft;
             var pitch = columnWidth + gap;
 
-            var startSlot = htmlContainer.HasRealPageGrid ? htmlContainer.PageIndexOf(boxTop) : 0;
+            // boxTop is a fragmentainer's own content-top edge, not an arbitrary interior coordinate - a
+            // top edge flush on (or, from arithmetic noise, a hair below) a page boundary begins the
+            // later slot per HtmlContainerInt.SlotStartingAt's own convention. The raw PageIndexOf makes
+            // no such distinction and can resolve the exact boundary to the page being LEFT instead: this
+            // page's own budget then computes to zero, and every later pass recomputes the same boxTop
+            // from that same (wrong, un-advanced) slot forever, so the container never reaches a fresh
+            // page and instead re-fills the one it already exhausted - visibly, every remaining word lands
+            // at that one frozen Y (see #573's investigation, reproduced with a non-Letter page size).
+            var startSlot = htmlContainer.HasRealPageGrid ? htmlContainer.SlotStartingAt(boxTop) : 0;
 
             // What is left of this container's own page. A column can never be taller than that, so it
             // is the ceiling on every target below.
