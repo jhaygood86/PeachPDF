@@ -18,12 +18,24 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         private const double BandHeight = 800;
         private const double MarginTop = 70;
 
-        private static HtmlContainerInt CreateContainer(double bandHeight = BandHeight) =>
-            new(new PdfSharpAdapter())
+        private static HtmlContainerInt CreateContainer(double bandHeight = BandHeight)
+        {
+            var container = new HtmlContainerInt(new PdfSharpAdapter())
             {
                 PageSize = new RSize(500, bandHeight),
                 MarginTop = MarginTop,
             };
+
+            // BlockConstraint.For/EndingAt answer "no fragmentainer" whenever breaking isn't live
+            // (HtmlContainerInt.CurrentFragmentainer is null), the same detached state a flex/grid
+            // item's own measurement pass runs in - not just when there is no real page grid at all.
+            // These tests are about the "real, live pass" arithmetic, so they need a live fragmentainer
+            // in place, exactly as HtmlContainerInt.LayoutDocument's own per-slot loop sets one up.
+            var root = new CssBox(null, null) { HtmlContainer = container };
+            container.EnterNestedFragmentainer(new FragmentainerContext(container, root, 0));
+
+            return container;
+        }
 
         private static CssBox CreateBox(HtmlContainerInt container, double locationY)
         {
@@ -65,6 +77,30 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var box = CreateBox(container, 500);
 
             var constraint = BlockConstraint.For(box);
+
+            Assert.Null(constraint.Fragmentainer);
+            Assert.Equal(BlockConstraint.Measurement, constraint);
+        }
+
+        // A flex/grid item's own measurement pass (CssLayoutEngineFlex.MeasureItem's
+        // PerformLayoutBlockified) keeps a real page grid but detaches the fragmentainer
+        // (HtmlContainerInt.DetachFragmentainer) so content laid out at its provisional position cannot
+        // answer a fragmentation question. Before this guard, a nested box whose throwaway coordinate
+        // happened to straddle a page boundary during that measurement had the §4.3 widows/orphans or
+        // avoid/monolithic mover translate it to the next page anyway — corrupting the very size the
+        // engine was in the middle of computing (a nested flex-in-flex footer's own measured height
+        // could come out roughly double, observed in the "invoice" showcase). HasRealPageGrid alone
+        // does not tell the two states apart, since it stays true throughout a detached pass.
+        [Fact]
+        public void For_ReturnsMeasurement_WhenTheFragmentainerIsDetached()
+        {
+            var container = CreateContainer();
+            var box = CreateBox(container, MarginTop + 30);
+            var live = container.DetachFragmentainer();
+
+            var constraint = BlockConstraint.For(box);
+
+            container.RestoreFragmentainer(live);
 
             Assert.Null(constraint.Fragmentainer);
             Assert.Equal(BlockConstraint.Measurement, constraint);
@@ -189,6 +225,24 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             var box = new CssBox(null, null) { HtmlContainer = container };
 
             Assert.Equal(BlockConstraint.Measurement, BlockConstraint.EndingAt(container, box, 500));
+        }
+
+        // Same detached-pass guard as For's own test above - the §5.2 margin-truncation mover
+        // (CssBox.ResolveBlockChildOffset) that calls EndingAt must not truncate a margin, or move a
+        // child to a page boundary, against a position a flex/grid item's own measurement pass will
+        // discard anyway.
+        [Fact]
+        public void EndingAt_ReturnsMeasurement_WhenTheFragmentainerIsDetached()
+        {
+            var container = CreateContainer();
+            var box = new CssBox(null, null) { HtmlContainer = container };
+            var live = container.DetachFragmentainer();
+
+            var constraint = BlockConstraint.EndingAt(container, box, MarginTop + BandHeight + 1);
+
+            container.RestoreFragmentainer(live);
+
+            Assert.Equal(BlockConstraint.Measurement, constraint);
         }
 
         // FallsPast is the same bottom-edge convention asked of an absolute coordinate, tolerance included -

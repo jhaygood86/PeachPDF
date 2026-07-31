@@ -20,9 +20,14 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// "the pass's cursor" is not, in general, a safe substitution).
     /// </para>
     /// <para>
-    /// <see cref="Fragmentainer"/> is null exactly where there is no page grid to ask at all
-    /// (<see cref="HtmlContainerInt.HasRealPageGrid"/> false — a measurement/unpaginated pass): no
-    /// fragmentation question may be asked there, per css-break-3 §400(c)'s own requirement.
+    /// <see cref="Fragmentainer"/> is null wherever no fragmentation question may be asked at all, per
+    /// css-break-3 §400(c)'s own requirement — either there is no page grid to ask
+    /// (<see cref="HtmlContainerInt.HasRealPageGrid"/> false), or breaking is not live right now
+    /// (<see cref="HtmlContainerInt.CurrentFragmentainer"/> null: a flex/grid item's own measurement
+    /// pass, <see cref="HtmlContainerInt.DetachFragmentainer"/>). The second case is content laid out
+    /// at a throwaway, provisional position purely to be measured — asking either question against it
+    /// would translate that content to a real page-break target before the engine measuring it has
+    /// even decided where it will really go.
     /// </para>
     /// </remarks>
     /// <param name="Fragmentainer">the fragmentainer being asked about, or null where there is none</param>
@@ -81,7 +86,17 @@ namespace PeachPDF.Html.Core.Fragmentation
         internal static BlockConstraint For(CssBox box)
         {
             var container = box.HtmlContainer;
-            if (container is null || !container.HasRealPageGrid) return Measurement;
+
+            // HasRealPageGrid alone answers "is there a page grid at all", not "may this pass ask it
+            // a fragmentation question" - a flex/grid item's own measurement pass (MeasureItem's
+            // PerformLayoutBlockified) keeps a real page grid but detaches the fragmentainer
+            // (HtmlContainerInt.DetachFragmentainer) precisely so content laid out at its provisional
+            // position cannot answer one. Without this, a nested box whose throwaway coordinate
+            // happens to straddle a page boundary during that measurement gets translated by the
+            // avoid/monolithic or widows mover below to a position it is about to be measured away
+            // from anyway, corrupting the very size the engine is in the middle of computing.
+            if (container is null || !container.HasRealPageGrid || container.CurrentFragmentainer is null)
+                return Measurement;
 
             var slot = container.PageIndexOf(box.Location.Y);
             var fragmentainer = new FragmentainerContext(container, box, slot);
@@ -109,7 +124,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal static BlockConstraint EndingAt(HtmlContainerInt container, CssBox contextRoot, double blockEnd)
         {
-            if (!container.HasRealPageGrid) return Measurement;
+            // Same detached-pass guard as For's own remark above.
+            if (!container.HasRealPageGrid || container.CurrentFragmentainer is null) return Measurement;
 
             var fragmentainer = new FragmentainerContext(container, contextRoot, container.SlotEndingAt(blockEnd));
 
