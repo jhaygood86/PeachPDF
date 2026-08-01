@@ -7,8 +7,13 @@ _Landed 2026-08-01._
 (`src/PeachPDF/Html/Core/CssDefaults.cs`) and mirrored the existing `unicode-bidi` handling in
 `CssBox.InheritStyle` (`src/PeachPDF/Html/Core/Dom/CssBox.StyleProperties.cs`) — capture the box's own
 pre-inherit `VerticalAlign` before the whole-`TextArea` adopt, restore it right after in the
-`!everything` branch, and add an explicit copy in the `everything`-only (structural-duplicate)
-section, the same treatment `box-sizing` already got.
+`!everything` branch. Unlike `box-sizing` (which lives in the never-whole-adopted `BoxModel` area and
+so needs an explicit copy in the `everything`-only structural-duplicate section too), `VerticalAlign`
+needs no such extra copy: an initial attempt added one anyway on the assumption it paralleled
+`box-sizing`, but a review pass caught that it was dead code — `TextArea` is already whole-adopted by
+reference earlier in the method and never un-adopted when `everything: true` (only the `!everything`
+branch restores it), so `_computedStyle.Text` already equals `parentStyle.Text` by the time such a
+block would run, making any further copy a guaranteed no-op. Removed before landing.
 
 Two consumers depended on the old (non-compliant) unconditional inheritance and needed real fixes,
 not just the `InheritedProperties` removal — found by running the layout test suite, not by reading

@@ -270,11 +270,11 @@ namespace PeachPDF.Html.Core.Dom
     /// unconditionally copies every property in this area from the parent, <c>CssBox.InheritStyle</c>
     /// explicitly restores both to this box's own pre-inherit value immediately after adopting the area
     /// (skipped for the `everything: true` structural-duplicate path, which keeps the adopted values on
-    /// purpose - see the comment there - and instead copies each explicitly further down, the same way
-    /// <c>box-sizing</c> is). They live in this area, rather than their own non-inherited one, purely for
-    /// textual convenience: <see cref="VerticalAlign"/> alongside the other text properties, and
-    /// <see cref="UnicodeBidi"/> next to <c>direction</c>/<c>writing-mode</c> since they're the same CSS
-    /// Writing Modes module.
+    /// purpose - see the comment there; unlike <c>box-sizing</c>, no separate explicit copy is needed for
+    /// that path, since skipping the restore already leaves both properties equal to the parent's). They
+    /// live in this area, rather than their own non-inherited one, purely for textual convenience:
+    /// <see cref="VerticalAlign"/> alongside the other text properties, and <see cref="UnicodeBidi"/> next
+    /// to <c>direction</c>/<c>writing-mode</c> since they're the same CSS Writing Modes module.
     /// </para>
     /// </summary>
     internal sealed record TextArea
