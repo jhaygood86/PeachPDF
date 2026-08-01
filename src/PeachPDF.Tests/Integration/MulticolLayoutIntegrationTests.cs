@@ -1176,6 +1176,13 @@ namespace PeachPDF.Tests.Integration
         // pass-count/no-progress guards (FlexBreakToken's contents-based equality among them) keep this
         // bounded rather than spinning - the exact defect class a table cell's own resumability hit
         // before FlexBreakToken/TableBreakToken's equality override existed (100,000 passes, 1m52s).
+        //
+        // The bound is a hang guard, not a complexity guard (see
+        // .claude/invariants/testing-a-complexity-guard-asserts-a-count-not-the-clock.md): this
+        // normally completes in ~1s in isolation, so 60s is generous headroom for a CI job running both
+        // target frameworks' suites under coverage instrumentation with parallel xUnit collections -
+        // measured tripping a 15s bound at 15.2-25.3s on ubuntu-latest and windows-latest alike with no
+        // code change involved - while staying well under the 1m52s the guarded-against regression took.
         [Fact]
         public async Task LargeMulticolInFlexItem_CompletesQuicklyWithoutSpinning()
         {
@@ -1190,7 +1197,7 @@ namespace PeachPDF.Tests.Integration
 
             var mc = FindById(root, "mc")!;
             Assert.Equal(400 * 20, LayoutHarness.Descendants(mc).SelectMany(b => b.Words).Count());
-            Assert.True(sw.ElapsedMilliseconds < 15000, $"expected well under 15s, took {sw.ElapsedMilliseconds}ms");
+            Assert.True(sw.ElapsedMilliseconds < 60000, $"expected well under 60s, took {sw.ElapsedMilliseconds}ms");
         }
 
         // The container is laid out once per page fragment, so a rule list that is *assigned* rather than
