@@ -551,19 +551,24 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal void ClearNestedFragmentainers(CssBox contextRoot, int? slot = null)
         {
-            // Removing a fragmentainer changes the walk exactly as recording one does.
-            contextRoot.DiscardEmittedNothing();
-
             if (slot is { } only)
             {
-                _nested.Remove((contextRoot, only));
+                // Removing a fragmentainer changes the walk exactly as recording one does - but only
+                // when there was one to remove. A fresh slot that never recorded anything (the common
+                // case: this runs once per page for a resumed container, before that page has filled a
+                // single column) must not spend an observation it never invalidated.
+                if (_nested.Remove((contextRoot, only))) contextRoot.DiscardEmittedNothing();
                 return;
             }
 
+            var removedAny = false;
+
             foreach (var key in new List<(CssBox Root, int Slot)>(_nested.Keys))
             {
-                if (ReferenceEquals(key.Root, contextRoot)) _nested.Remove(key);
+                if (ReferenceEquals(key.Root, contextRoot) && _nested.Remove(key)) removedAny = true;
             }
+
+            if (removedAny) contextRoot.DiscardEmittedNothing();
         }
 
         /// <summary>
@@ -618,22 +623,24 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal void ClearContinuationShells(CssBox box, int? fromSlot = null)
         {
-            box.DiscardEmittedNothing();
-
             if (fromSlot is not { } from)
             {
-                _continuationShells.Remove(box);
+                if (_continuationShells.Remove(box)) box.DiscardEmittedNothing();
                 return;
             }
 
             if (!_continuationShells.TryGetValue(box, out var shells)) return;
 
+            var removedAny = false;
+
             foreach (var slot in new List<int>(shells.Keys))
             {
-                if (slot >= from) shells.Remove(slot);
+                if (slot >= from && shells.Remove(slot)) removedAny = true;
             }
 
             if (shells.Count == 0) _continuationShells.Remove(box);
+
+            if (removedAny) box.DiscardEmittedNothing();
         }
 
         /// <summary>
@@ -693,22 +700,24 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         internal void ClearFragmentDisplacements(CssBox box, int? fromSlot = null)
         {
-            box.DiscardEmittedNothingIncludingDescendants();
-
             if (fromSlot is not { } from)
             {
-                _displacements.Remove(box);
+                if (_displacements.Remove(box)) box.DiscardEmittedNothingIncludingDescendants();
                 return;
             }
 
             if (!_displacements.TryGetValue(box, out var bySlot)) return;
 
+            var removedAny = false;
+
             foreach (var slot in new List<int>(bySlot.Keys))
             {
-                if (slot >= from) bySlot.Remove(slot);
+                if (slot >= from && bySlot.Remove(slot)) removedAny = true;
             }
 
             if (bySlot.Count == 0) _displacements.Remove(box);
+
+            if (removedAny) box.DiscardEmittedNothingIncludingDescendants();
         }
 
         /// <summary>
