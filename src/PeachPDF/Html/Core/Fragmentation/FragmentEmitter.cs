@@ -377,9 +377,27 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         /// <summary>
         /// Set while the verification build above is running, and by the emission paths that may not
-        /// prune at all, to make <see cref="BuildDraft"/> take the full walk.
+        /// prune at all, to make <see cref="BuildDraft"/> withhold new "emitted nothing" observations for
+        /// the slot being built.
         /// </summary>
+        /// <remarks>
+        /// Withholding <i>new</i> observations is the only thing every one of those callers actually
+        /// needs. The reserved-blank-slot pass and <see cref="Finish"/>'s stale-slot replay both run out
+        /// of forward order, so a subtree found empty there might simply not have been reached yet by a
+        /// slot still to come in the same replay — but an <i>existing</i>, already-validated observation
+        /// (see <see cref="InvalidationHistory"/>) says something different: that the box's fragments are
+        /// entirely behind a slot no replay in this batch could still be filling, which is just as true
+        /// out of order as in it. Reading is gated separately, by <see cref="_forcingUnprunedReferenceWalk"/>.
+        /// </remarks>
         private bool _pruningSuspended;
+
+        /// <summary>
+        /// Set only while <see cref="VerifyAgainstTheFullWalk"/>'s own reference <see cref="BuildDraft"/>
+        /// call is running, to force it to walk every subtree regardless of any existing observation —
+        /// the comparison is worthless if the "full" build is allowed to reach the same conclusions the
+        /// pruned build already did.
+        /// </summary>
+        private bool _forcingUnprunedReferenceWalk;
 
         /// <summary>
         /// <see cref="_frozen"/> as it stood before the slot currently being emitted began, so the
@@ -398,10 +416,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         private readonly HashSet<CssBox> _producedSomethingThisSlot = new(ReferenceEqualityComparer.Instance);
 
         /// <summary>
-        /// Retires every outstanding "emitted nothing here" observation when bumped — see
-        /// <see cref="InvalidateFrom"/>.
+        /// Every reopening <see cref="InvalidateFrom"/> has recorded, so an observation can be checked
+        /// against only the reopenings that could actually have affected it.
         /// </summary>
-        private int _observationEpoch;
+        private readonly InvalidationHistory _invalidationHistory = new();
 
         /// <summary>
         /// Whether an "emitted nothing here" observation about <paramref name="box"/> could be relied on
@@ -485,7 +503,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 foreach (var box in _emptyHereThisSlot)
                 {
-                    if (!_producedSomethingThisSlot.Contains(box)) box.RecordEmittedNothingAt(slotIndex, _observationEpoch);
+                    if (!_producedSomethingThisSlot.Contains(box)) box.RecordEmittedNothingAt(slotIndex, _invalidationHistory.Count);
                 }
             }
 
@@ -810,13 +828,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             // superseded. Bumping on the rest retired every observation as fast as they were made.
             if (fromSlot > _lastEmittedSlot) return;
 
-            // Every "emitted nothing here" observation is void from here on. Re-opening a frozen
-            // fragmentainer means the driver is about to lay content out again over ground it has
-            // already covered - §4.3's movers and the keep-with-next run pull both re-enter a pass that
-            // has already ended - so an observation drawn from the superseded arrangement describes a
-            // layout that no longer exists. Bumping one counter retires them all, which is the right
-            // trade: genuine re-opening is rare, and anything cheaper would have to enumerate boxes.
-            _observationEpoch++;
+            // Every "emitted nothing here" observation naming a slot at or after fromSlot is void from
+            // here on: re-opening a frozen fragmentainer means the driver is about to lay content out
+            // again over ground at and after fromSlot, so only an observation about that ground - not
+            // the whole document - could describe a layout that no longer exists. See
+            // InvalidationHistory for why a suffix-minimum over every reopening's own fromSlot answers
+            // this without enumerating boxes.
+            _invalidationHistory.Record(fromSlot);
 
             for (var slot = fromSlot; slot <= _lastEmittedSlot; slot++)
             {
@@ -1060,6 +1078,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // from the pruned build's conclusions nor leaves conclusions of its own behind.
             var wasSuspended = _pruningSuspended;
             _pruningSuspended = true;
+            _forcingUnprunedReferenceWalk = true;
 
             try
             {
@@ -1069,6 +1088,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             finally
             {
                 _pruningSuspended = wasSuspended;
+                _forcingUnprunedReferenceWalk = false;
             }
 
             // Asked of BuildDraft's own answer, before EmitSlot's `?? EmptyRootDraft(...)` fallback -
@@ -1495,7 +1515,9 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             // Skip the whole subtree: the emitter has already walked it once this layout, found it
             // empty at a slot at or before this one, and nothing has written to it since (every write
-            // that could give it content discards the observation - see CssBox.DiscardEmittedNothing).
+            // that could give it content discards the observation - see CssBox.DiscardEmittedNothing) -
+            // and no reopening since has started at or before the slot the observation names (see
+            // InvalidationHistory).
             //
             // Sound only because the observation is made under the far stricter conditions in
             // RecordEmptyObservations: the box had ALREADY produced a fragment, so it sits behind the
@@ -1503,7 +1525,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             // reached yet is equally empty and must NOT be concluded about from the same evidence -
             // within one EmitPass range the emitter walks slots the pass has already flowed content
             // into, so "nothing here yet" and "nothing here ever" are indistinguishable at that point.
-            if (ownPrunable && !_pruningSuspended && box.EmittedNothingAtOrBefore(slot.Index, _observationEpoch))
+            //
+            // Gated on _forcingUnprunedReferenceWalk rather than _pruningSuspended: an out-of-order
+            // replay (reserved blank slots, Finish's stale-slot replay) may not draw new conclusions, but
+            // an existing, still-valid one describes ground behind every slot such a replay could still
+            // be filling, so reading it is exactly as sound out of order as in it.
+            if (ownPrunable && !_forcingUnprunedReferenceWalk && box.EmittedNothingAtOrBefore(slot.Index, _invalidationHistory))
             {
                 return null;
             }
