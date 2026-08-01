@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace PeachPDF.Html.Core.Fragmentation
 {
@@ -344,6 +345,154 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private int _lastEmittedSlot = -1;
 
+        /// <summary>
+        /// Differential self-check: build every slot's draft tree <i>twice</i> — once with pruning
+        /// allowed and once with it forced off — and throw unless the two are identical. Off unless
+        /// <c>PEACHPDF_VERIFY_FRAGMENT_PRUNING=1</c> is set in the environment.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A static read once from the environment rather than the per-instance "Test-only override"
+        /// idiom <see cref="HtmlContainerInt.MaxFragmentainersOverride"/> uses, and deliberately so:
+        /// the point is to run the <i>whole</i> existing suite under it, and every test builds its own
+        /// container, so a per-instance switch would have to be threaded through every construction
+        /// site to be useful.
+        /// </para>
+        /// <para>
+        /// Pruning is an optimization that must be invisible: it may only ever decline to walk a
+        /// subtree that would have produced nothing. That is a property no assertion about a
+        /// <i>particular</i> document can establish, but one this check establishes over every fixture
+        /// the suite already has.
+        /// </para>
+        /// </remarks>
+        internal static readonly bool VerifyPruningAgainstFullWalk =
+            Environment.GetEnvironmentVariable("PEACHPDF_VERIFY_FRAGMENT_PRUNING") == "1";
+
+        /// <summary>
+        /// Whether this render checks itself — the environment-wide switch, or one container's own
+        /// <see cref="HtmlContainerInt.VerifyFragmentPruningOverride"/>.
+        /// </summary>
+        private bool VerifiesPruning =>
+            container.VerifyFragmentPruningOverride ?? VerifyPruningAgainstFullWalk;
+
+        /// <summary>
+        /// Set while the verification build above is running, and by the emission paths that may not
+        /// prune at all, to make <see cref="BuildDraft"/> take the full walk.
+        /// </summary>
+        private bool _pruningSuspended;
+
+        /// <summary>
+        /// <see cref="_frozen"/> as it stood before the slot currently being emitted began, so the
+        /// verification build can be run against the same starting state the pruned one saw. Only
+        /// maintained when <see cref="VerifyPruningAgainstFullWalk"/> is on.
+        /// </summary>
+        private readonly HashSet<CssBox> _frozenBeforeSlot = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Boxes the slot being walked found nothing for, and boxes it found something for. Both are
+        /// per slot, and the observation kept is the difference — see <see cref="RecordEmptyObservations"/>.
+        /// </summary>
+        private readonly HashSet<CssBox> _emptyHereThisSlot = new(ReferenceEqualityComparer.Instance);
+
+        /// <inheritdoc cref="_emptyHereThisSlot"/>
+        private readonly HashSet<CssBox> _producedSomethingThisSlot = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Retires every outstanding "emitted nothing here" observation when bumped — see
+        /// <see cref="InvalidateFrom"/>.
+        /// </summary>
+        private int _observationEpoch;
+
+        /// <summary>
+        /// Whether an "emitted nothing here" observation about <paramref name="box"/> could be relied on
+        /// in a later slot at all.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The observation says "this subtree's fragments are all behind us". Four things break that,
+        /// and each is excluded here rather than hedged against later:
+        /// </para>
+        /// <list type="bullet">
+        /// <item>
+        /// <b>Out-of-flow and fixed content</b> does not sit in its DOM ancestor's run at all — an
+        /// absolutely-positioned descendant can be pages away from the box that contains it, and a fixed
+        /// one repeats on every page — so an ancestor's fragments are not a contiguous span.
+        /// </item>
+        /// <item>
+        /// <b>A box reached through a proxy</b> (<paramref name="owner"/> non-null) is one subtree
+        /// standing in for a repeated header on <i>every</i> page, at a different position each time.
+        /// Its runs are per proxy, not per box, and its geometry lives in a captured snapshot that moves
+        /// without any write to the box.
+        /// </item>
+        /// <item>
+        /// <b>A box inside a nested fragmentainer</b> (<paramref name="nested"/> non-null) is visited
+        /// once per column of the same slot, against a different snapshot and a different inline extent
+        /// each time.
+        /// </item>
+        /// <item>
+        /// <b>A displaced box</b> draws somewhere its own geometry does not say, decided per slot.
+        /// </item>
+        /// </list>
+        /// <para>
+        /// <see cref="CssBoxMarker"/> is excluded as well: it is laid out by one explicit call rather
+        /// than through the block-children loop, so it is the one ordinary box kind whose visits do not
+        /// line up with the walk that would observe it.
+        /// </para>
+        /// </remarks>
+        private static bool MayBeObservedEmpty(
+            CssBox box, CssProxyBox? owner, NestedFragmentainer? nested, bool isFixed,
+            (CssBox Root, double Shift, RRect Band)? displacement) =>
+            owner is null
+            && nested is null
+            && displacement is null
+            && !box.IsRoot
+            && ContentStaysInOneRun(box, isFixed);
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s own content occupies one contiguous run of fragmentainers,
+        /// which is what makes "there is none of it here" say anything about the fragmentainers after
+        /// this one.
+        /// </summary>
+        /// <remarks>
+        /// Unlike the per-visit conditions in <see cref="MayBeObservedEmpty"/>, this is a fact about the
+        /// box itself, so it — and only it — is what propagates to ancestors. The distinction matters:
+        /// the children of a multi-column container are each visited once per column and so can never
+        /// be observed individually, but that says nothing about whether the <i>container</i>'s own
+        /// content is contiguous, and the container is exactly the box worth skipping. Letting the
+        /// per-visit exclusion propagate made every multi-column container unprunable — which on a
+        /// document that is mostly multi-column is the entire optimization.
+        /// </remarks>
+        private static bool ContentStaysInOneRun(CssBox box, bool isFixed) =>
+            !isFixed
+            && !box.IsOutOfFlow
+            && box is not CssProxyBox and not CssSpacingBox and not CssBoxMarker;
+
+        /// <summary>
+        /// Keeps, as an observation on each box, the part of this slot's walk that found nothing —
+        /// everything the walk saw empty and never afterwards saw hold anything.
+        /// </summary>
+        /// <param name="slotIndex">the slot just walked</param>
+        /// <param name="frontier">
+        /// whether this slot is the furthest one layout has reached. Only there may an empty walk be
+        /// concluded from: <see cref="EmitPass"/> freezes a whole range of slots in one go, after the
+        /// pass that filled them has already flowed content into every one, so at any slot below the
+        /// frontier "found nothing" also describes content that is simply further down — and no write
+        /// will ever come along to correct it.
+        /// </param>
+        private void RecordEmptyObservations(int slotIndex, bool frontier)
+        {
+            if (frontier)
+            {
+                foreach (var box in _emptyHereThisSlot)
+                {
+                    if (!_producedSomethingThisSlot.Contains(box)) box.RecordEmittedNothingAt(slotIndex, _observationEpoch);
+                }
+            }
+
+            _emptyHereThisSlot.Clear();
+            _producedSomethingThisSlot.Clear();
+        }
+
         /// <summary>The empty box set the first nested fragmentainer of a slot resumes nothing from.</summary>
         private static readonly IReadOnlySet<CssBox> NoBoxes = new HashSet<CssBox>(ReferenceEqualityComparer.Instance);
 
@@ -378,6 +527,13 @@ namespace PeachPDF.Html.Core.Fragmentation
                 geometry,
                 continuing,
                 fragmentainers.Count > 0 ? fragmentainers[^1].Continuing : NoBoxes));
+
+            // Which children this container yields, how many times, and against which geometry, are all
+            // decided by the set of fragmentainers recorded for it - so an earlier "emitted nothing
+            // here" observation about the container no longer describes the same walk. Its descendants
+            // need no equivalent: they only ever gained content by being laid out, which discards
+            // theirs already.
+            contextRoot.DiscardEmittedNothing();
         }
 
         /// <summary>
@@ -395,6 +551,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal void ClearNestedFragmentainers(CssBox contextRoot, int? slot = null)
         {
+            // Removing a fragmentainer changes the walk exactly as recording one does.
+            contextRoot.DiscardEmittedNothing();
+
             if (slot is { } only)
             {
                 _nested.Remove((contextRoot, only));
@@ -438,6 +597,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             shells[slot] = rect;
+
+            // A shell is content this box has in a fragmentainer it holds nothing else in, and it is
+            // stated by the pass that fills that fragmentainer - which runs AFTER the slot before it was
+            // emitted. So an observation made earlier cannot have accounted for it. Ancestors go too:
+            // the walk only reaches this box by descending through them.
+            box.DiscardEmittedNothing();
         }
 
         /// <summary>
@@ -453,6 +618,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal void ClearContinuationShells(CssBox box, int? fromSlot = null)
         {
+            box.DiscardEmittedNothing();
+
             if (fromSlot is not { } from)
             {
                 _continuationShells.Remove(box);
@@ -513,6 +680,11 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             bySlot[slot] = (box, shift, band);
+
+            // A displacement moves where a whole subtree DRAWS without writing to any box in it, so it
+            // is the one change no per-box write hook can catch - every descendant's observation has to
+            // go with it.
+            box.DiscardEmittedNothingIncludingDescendants();
         }
 
         /// <summary>
@@ -521,6 +693,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         internal void ClearFragmentDisplacements(CssBox box, int? fromSlot = null)
         {
+            box.DiscardEmittedNothingIncludingDescendants();
+
             if (fromSlot is not { } from)
             {
                 _displacements.Remove(box);
@@ -568,7 +742,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                 RecordChain(incoming, slot, _continuedFrom);
                 RecordChain(outgoing, slot, _continuesInto);
 
-                EmitSlot(slot);
+                // The one path that may prune: these are the slots the pass that has just ended filled,
+                // frozen while the geometry it produced is still what the box tree says.
+                //
+                // Only the last slot of the range, and only if the range genuinely reaches past
+                // everything emitted so far, may an observation be drawn from - see
+                // RecordEmptyObservations. Every earlier slot of the range still USES observations
+                // already made; it just may not make new ones.
+                EmitSlot(slot, mayPrune: true, frontier: slot == throughSlot && slot >= _lastEmittedSlot);
             }
         }
 
@@ -583,7 +764,9 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             for (var slot = _lastEmittedSlot + 1; slot <= reserved && slot < MaxSlots; slot++)
             {
-                EmitSlot(slot);
+                // Runs once every pass is over, so a subtree observed empty here could never be
+                // un-observed by a later layout - nothing may be concluded from it.
+                EmitSlot(slot, mayPrune: false);
             }
         }
 
@@ -612,7 +795,19 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal void InvalidateFrom(int fromSlot)
         {
+            // Deliberately after the early return, not before it: this method is reached on every
+            // block-axis reposition of a box that holds fragments, which during a pass is constant, and
+            // only the calls that actually re-open a frozen fragmentainer mean anything has been
+            // superseded. Bumping on the rest retired every observation as fast as they were made.
             if (fromSlot > _lastEmittedSlot) return;
+
+            // Every "emitted nothing here" observation is void from here on. Re-opening a frozen
+            // fragmentainer means the driver is about to lay content out again over ground it has
+            // already covered - §4.3's movers and the keep-with-next run pull both re-enter a pass that
+            // has already ended - so an observation drawn from the superseded arrangement describes a
+            // layout that no longer exists. Bumping one counter retires them all, which is the right
+            // trade: genuine re-opening is rare, and anything cheaper would have to enumerate boxes.
+            _observationEpoch++;
 
             for (var slot = fromSlot; slot <= _lastEmittedSlot; slot++)
             {
@@ -629,9 +824,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                 return new FragmentTree([]);
 
             // Slots a later pass's mover disturbed, emitted again now that layout has settled.
+            //
+            // Never prunes, and the reason is the sharp one: `_stale` is a contiguous ASCENDING range
+            // (see InvalidateFrom), replayed here with layout already over, so no write could ever
+            // invalidate a conclusion drawn while replaying it. The lowest stale slot would otherwise
+            // observe every subtree that lives in a higher band as empty and skip the rest of the range.
             foreach (var slot in new List<int>(_stale))
             {
-                EmitSlot(slot);
+                EmitSlot(slot, mayPrune: false);
             }
 
             if (_emitted.Count == 0) return new FragmentTree([]);
@@ -743,7 +943,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         private static bool IsBefore((int Slot, int Instance) a, (int Slot, int Instance) b) =>
             a.Slot != b.Slot ? a.Slot < b.Slot : a.Instance < b.Instance;
 
-        private void EmitSlot(int index)
+        /// <param name="index">the pagination slot to freeze</param>
+        /// <param name="mayPrune">
+        /// whether <see cref="BuildDraft"/> may skip a subtree it has already observed to be empty.
+        /// False for the emission paths whose slot is not the one the geometry was just produced for —
+        /// see each call site.
+        /// </param>
+        /// <param name="frontier">
+        /// whether this is the furthest slot layout has reached — see <see cref="RecordEmptyObservations"/>.
+        /// </param>
+        private void EmitSlot(int index, bool mayPrune, bool frontier = false)
         {
             var bandTop = container.PageTopOf(index);
 
@@ -755,10 +964,40 @@ namespace PeachPDF.Html.Core.Fragmentation
                 bandTop - container.MarginTop);
 
             var root = container.Root!;
+
+            var wasSuspended = _pruningSuspended;
+            var verifying = VerifiesPruning && mayPrune && !wasSuspended;
+
+            if (verifying)
+            {
+                _frozenBeforeSlot.Clear();
+                _frozenBeforeSlot.UnionWith(_frozen);
+            }
+
+            _pruningSuspended = wasSuspended || !mayPrune;
+
             var hasPrintableContent = false;
-            var draft = BuildDraft(root, owner: null, snapshot: null, slot,
-                            nested: null, instance: 0, ref hasPrintableContent)
-                        ?? EmptyRootDraft(root, slot);
+            var prunable = true;
+            Draft? built;
+
+            try
+            {
+                built = BuildDraft(root, owner: null, snapshot: null, slot,
+                    nested: null, instance: 0, ref hasPrintableContent, ref prunable);
+            }
+            finally
+            {
+                _pruningSuspended = wasSuspended;
+            }
+
+            RecordEmptyObservations(index, frontier && mayPrune && !wasSuspended);
+
+            if (verifying)
+            {
+                VerifyAgainstTheFullWalk(root, slot, built, hasPrintableContent);
+            }
+
+            var draft = built ?? EmptyRootDraft(root, slot);
 
             // A slot can legitimately be emitted twice: the driver's no-progress backstop lays the
             // remainder out again monolithically, over the same slot the failed pass had already frozen,
@@ -768,6 +1007,170 @@ namespace PeachPDF.Html.Core.Fragmentation
             _stale.Remove(index);
             if (index > _lastEmittedSlot) _lastEmittedSlot = index;
         }
+
+        /// <summary>
+        /// Builds <paramref name="slot"/> again with pruning forced off and throws unless the result is
+        /// indistinguishable from <paramref name="pruned"/> — see
+        /// <see cref="VerifyPruningAgainstFullWalk"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>The <see cref="_frozen"/> delta is checked as carefully as the tree itself</b>, and that is
+        /// the point rather than a detail. Which boxes hold fragments is the <i>only</i> gate on whether
+        /// an already-frozen slot is emitted a second time (<c>HoldsFragmentsFor</c> guards
+        /// <c>HtmlContainerInt.InvalidateEmittedFragmentsFor</c>), so a pruning bug can leave every draft
+        /// identical and still change the whole document's emission order. That exact failure once got
+        /// past the entire suite and was caught only by a showcase pixel diff — see
+        /// <c>.claude/invariants/fragmentation-which-drafts-exist-decides-whether-a-frozen-slot-is-emitted-again.md</c>.
+        /// </para>
+        /// <para>
+        /// Rolling <see cref="_frozen"/> back between the two builds is safe: the only box that reads it
+        /// during a walk is one that produced nothing (the shell gate in <see cref="BuildDraft"/>), which
+        /// is by construction a box this walk never added.
+        /// </para>
+        /// </remarks>
+        // The self-check below never runs in production - it is gated on an environment variable and a
+        // test-only per-container override - and every branch of it that a coverage run could still miss
+        // is a divergence report, i.e. a path reachable only when the pruning it guards is already wrong.
+        // Excluded from the metric for the same reason the platform-gated lookups in MimeTypeResolver are:
+        // unreachable-by-construction code should not drag the diff-coverage gate down. That it works is
+        // evidenced by it having caught 22 real divergences while the pruning was being written.
+        [ExcludeFromCodeCoverage]
+        private void VerifyAgainstTheFullWalk(CssBox root, Slot slot, Draft? pruned, bool prunedHadPrintableContent)
+        {
+            var frozenAfterPruned = new HashSet<CssBox>(_frozen, ReferenceEqualityComparer.Instance);
+
+            _frozen.Clear();
+            _frozen.UnionWith(_frozenBeforeSlot);
+
+            var fullHadPrintableContent = false;
+            var fullPrunable = true;
+            Draft? full;
+
+            // Suspends reading observations AND making them, so the reference build neither benefits
+            // from the pruned build's conclusions nor leaves conclusions of its own behind.
+            var wasSuspended = _pruningSuspended;
+            _pruningSuspended = true;
+
+            try
+            {
+                full = BuildDraft(root, owner: null, snapshot: null, slot,
+                    nested: null, instance: 0, ref fullHadPrintableContent, ref fullPrunable);
+            }
+            finally
+            {
+                _pruningSuspended = wasSuspended;
+            }
+
+            // Asked of BuildDraft's own answer, before EmitSlot's `?? EmptyRootDraft(...)` fallback -
+            // that fallback would make "the root itself was pruned away" and "the document is empty"
+            // indistinguishable.
+            if ((pruned is null) != (full is null))
+                throw PruningDiverged(slot, "the root draft", pruned is null ? "null" : "a draft", full is null ? "null" : "a draft");
+
+            // The tree is compared first even though hasPrintableContent is the cheaper check: a
+            // difference in the flag is always a consequence of some box's fragment going missing, and
+            // the tree comparison names that box while the flag only says a page changed.
+            if (pruned is not null && full is not null)
+                AssertSameDraft(pruned, full, slot);
+
+            if (prunedHadPrintableContent != fullHadPrintableContent)
+                throw PruningDiverged(slot, "hasPrintableContent",
+                    prunedHadPrintableContent.ToString(), fullHadPrintableContent.ToString());
+
+            if (!frozenAfterPruned.SetEquals(_frozen))
+                throw PruningDiverged(slot, "the set of boxes holding fragments",
+                    $"{frozenAfterPruned.Count} boxes", $"{_frozen.Count} boxes");
+        }
+
+        /// <summary>
+        /// Every member of <paramref name="pruned"/> that materialization or paint can read, against the
+        /// same member of <paramref name="full"/>.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately exhaustive rather than "the rectangles look right": <see cref="Draft.UsesOwnBounds"/>,
+        /// <see cref="Draft.BoundsEndAtItsContent"/>, <see cref="Draft.ShellRect"/>, <see cref="Draft.Shift"/>,
+        /// <see cref="Draft.ConfinedTo"/> and <see cref="Draft.DisplacementRoot"/> are read only at
+        /// materialization, so a comparison of fragment rectangles alone would pass while the decoration,
+        /// the clip or the band a fragment is confined to had silently changed.
+        /// </remarks>
+        // The self-check below never runs in production - it is gated on an environment variable and a
+        // test-only per-container override - and every branch of it that a coverage run could still miss
+        // is a divergence report, i.e. a path reachable only when the pruning it guards is already wrong.
+        // Excluded from the metric for the same reason the platform-gated lookups in MimeTypeResolver are:
+        // unreachable-by-construction code should not drag the diff-coverage gate down. That it works is
+        // evidenced by it having caught 22 real divergences while the pruning was being written.
+        [ExcludeFromCodeCoverage]
+        private static void AssertSameDraft(Draft pruned, Draft full, Slot slot)
+        {
+            if (!ReferenceEquals(pruned.Box, full.Box))
+                throw PruningDiverged(slot, "the box a draft is for", pruned.Box.ToString(), full.Box.ToString());
+
+            var box = pruned.Box;
+
+            Same(pruned.Key, full.Key, "Key");
+            Same(pruned.Region, full.Region, "Region");
+            Same(pruned.OriginY, full.OriginY, "OriginY");
+            Same(pruned.IsFixed, full.IsFixed, "IsFixed");
+            Same(pruned.IsMonolithic, full.IsMonolithic, "IsMonolithic");
+            Same(pruned.BoundsEndAtItsContent, full.BoundsEndAtItsContent, "BoundsEndAtItsContent");
+            Same(pruned.ContinuesIntoTheNext, full.ContinuesIntoTheNext, "ContinuesIntoTheNext");
+            Same(pruned.ContinuedFromThePrevious, full.ContinuedFromThePrevious, "ContinuedFromThePrevious");
+            Same(pruned.UsesOwnBounds, full.UsesOwnBounds, "UsesOwnBounds");
+            Same(pruned.ShellRect, full.ShellRect, "ShellRect");
+            Same(pruned.ConfinedTo, full.ConfinedTo, "ConfinedTo");
+            Same(pruned.Shift, full.Shift, "Shift");
+
+            if (!ReferenceEquals(pruned.Snapshot, full.Snapshot))
+                throw PruningDiverged(slot, $"the captured geometry of {box}", "one snapshot", "another");
+
+            if (!ReferenceEquals(pruned.DisplacementRoot, full.DisplacementRoot))
+                throw PruningDiverged(slot, $"the displacement root of {box}",
+                    pruned.DisplacementRoot?.ToString() ?? "none", full.DisplacementRoot?.ToString() ?? "none");
+
+            Same(pruned.Lines.Count, full.Lines.Count, "the number of decoration rectangles");
+
+            for (var i = 0; i < pruned.Lines.Count; i++)
+            {
+                if (!ReferenceEquals(pruned.Lines[i].Line, full.Lines[i].Line) || pruned.Lines[i].Rect != full.Lines[i].Rect)
+                    throw PruningDiverged(slot, $"decoration rectangle {i} of {box}",
+                        pruned.Lines[i].Rect.ToString(), full.Lines[i].Rect.ToString());
+            }
+
+            Same(pruned.Words.Count, full.Words.Count, "the number of words");
+
+            for (var i = 0; i < pruned.Words.Count; i++)
+            {
+                if (pruned.Words[i] != full.Words[i])
+                    throw PruningDiverged(slot, $"word {i} of {box}",
+                        pruned.Words[i].ToString(), full.Words[i].ToString());
+            }
+
+            Same(pruned.Children.Count, full.Children.Count, "the number of child fragments");
+
+            for (var i = 0; i < pruned.Children.Count; i++)
+            {
+                AssertSameDraft(pruned.Children[i], full.Children[i], slot);
+            }
+
+            void Same<T>(T a, T b, string what)
+            {
+                if (!EqualityComparer<T>.Default.Equals(a, b))
+                    throw PruningDiverged(slot, $"{what} of {box}", a?.ToString() ?? "null", b?.ToString() ?? "null");
+            }
+        }
+
+        // The self-check below never runs in production - it is gated on an environment variable and a
+        // test-only per-container override - and every branch of it that a coverage run could still miss
+        // is a divergence report, i.e. a path reachable only when the pruning it guards is already wrong.
+        // Excluded from the metric for the same reason the platform-gated lookups in MimeTypeResolver are:
+        // unreachable-by-construction code should not drag the diff-coverage gate down. That it works is
+        // evidenced by it having caught 22 real divergences while the pruning was being written.
+        [ExcludeFromCodeCoverage]
+        private static InvalidOperationException PruningDiverged(Slot slot, string what, string pruned, string full) =>
+            new($"Fragment pruning changed the output of slot {slot.Index}: {what} is '{pruned}' with pruning " +
+                $"and '{full}' without it. Pruning must only ever decline to walk a subtree that would " +
+                $"have produced nothing.");
 
         private static void RecordChain(BreakToken? token, int slot, HashSet<(FragmentKey, int)> into)
         {
@@ -1023,6 +1426,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             return draft;
         }
 
+        /// <remarks>
+        /// <c>subtreePrunable</c> is set to false by the walk when anything at or below the box means an
+        /// "emitted nothing here" observation about it could not be relied on later — see
+        /// <see cref="MayBeObservedEmpty"/>. It is accumulated on the way back up, so a single
+        /// out-of-flow descendant makes every ancestor unprunable too.
+        /// </remarks>
         private Draft? BuildDraft(
             CssBox box,
             CssProxyBox? owner,
@@ -1031,6 +1440,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             NestedFragmentainer? nested,
             int instance,
             ref bool hasPrintableContent,
+            ref bool subtreePrunable,
             (CssBox Root, double Shift, RRect Band)? displacement = null)
         {
             // A display:none subtree paints nothing at all, so it produces no fragments either.
@@ -1063,6 +1473,31 @@ namespace PeachPDF.Html.Core.Fragmentation
             // emitted in every fragmentainer at identical coordinates, so a column's own extent says
             // nothing about where it lands.
             var region = isFixed || nested is null ? PageRegionOf(isFixed, slot) : nested.Value.Region;
+
+            // Whether an "emitted nothing here" observation about this box could be relied on later at
+            // all. Asked before the observation is read as well as before one is made, so a box that
+            // could never be marked is never skipped on the strength of a stale mark either.
+            //
+            // Two separate facts, and only the second travels: whether THIS visit could observe the box
+            // (per-visit - which proxy, which column), and whether the box's content is contiguous at
+            // all (a property of the box, and therefore of every ancestor that contains it).
+            var ownPrunable = MayBeObservedEmpty(box, owner, nested, isFixed, displacement);
+            var contiguous = ContentStaysInOneRun(box, isFixed);
+
+            // Skip the whole subtree: the emitter has already walked it once this layout, found it
+            // empty at a slot at or before this one, and nothing has written to it since (every write
+            // that could give it content discards the observation - see CssBox.DiscardEmittedNothing).
+            //
+            // Sound only because the observation is made under the far stricter conditions in
+            // RecordEmptyObservations: the box had ALREADY produced a fragment, so it sits behind the
+            // layout frontier and its remaining fragments are behind it too. A box layout has not
+            // reached yet is equally empty and must NOT be concluded about from the same evidence -
+            // within one EmitPass range the emitter walks slots the pass has already flowed content
+            // into, so "nothing here yet" and "nothing here ever" are indistinguishable at that point.
+            if (ownPrunable && !_pruningSuspended && box.EmittedNothingAtOrBefore(slot.Index, _observationEpoch))
+            {
+                return null;
+            }
 
             List<(CssLineBox Line, RRect Rect)> lines = [];
             List<TextFragment> words = [];
@@ -1108,9 +1543,15 @@ namespace PeachPDF.Html.Core.Fragmentation
             foreach (var (childBox, childOwner, childSnapshot, childNested, childInstance)
                      in ChildrenOf(box, owner, snapshot, slot, nested, instance))
             {
+                // A child that cannot be relied on makes this box unreliable too: the observation is
+                // about the whole subtree, so it is only as good as its weakest member.
+                var childPrunable = true;
+
                 var childDraft = BuildDraft(
                     childBox, childOwner, childSnapshot, slot, childNested, childInstance,
-                    ref hasPrintableContent, displacement);
+                    ref hasPrintableContent, ref childPrunable, displacement);
+
+                contiguous &= childPrunable;
 
                 if (childDraft is not null)
                     children.Add(childDraft);
@@ -1131,7 +1572,30 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // "which drafts exist decides whether a frozen slot is emitted again". The set is
                 // monotone and the fragmentainer a box began in is always frozen before the one it
                 // continues into is emitted, so this never rejects a shell that should stand.
-                if (!_frozen.Contains(box) || ShellIn(box, region) is not { } stated) return null;
+                if (!_frozen.Contains(box) || ShellIn(box, region) is not { } stated)
+                {
+                    // Nothing here. Two quite different things can make that a fact about the box
+                    // rather than about where the walk happens to be, and one of them has to hold:
+                    //
+                    //  - it is already frozen, so it is BEHIND the layout frontier: it has had its
+                    //    fragments, they were contiguous, and this slot is past them; or
+                    //  - layout has never written to it at all, so it is AHEAD of the frontier and holds
+                    //    no positioned content anywhere yet.
+                    //
+                    // What is excluded is the box in between - reached, laid out, and simply not here -
+                    // whose content may be in a slot this same EmitPass range is about to freeze.
+                    //
+                    // The offer is provisional: RecordEmptyObservations makes the final call once the
+                    // slot is fully walked, because one box can be visited several times in one slot.
+                    if (ownPrunable && contiguous && !_pruningSuspended
+                        && (_frozen.Contains(box) || box.NeverTouchedThisLayout))
+                    {
+                        _emptyHereThisSlot.Add(box);
+                    }
+
+                    subtreePrunable &= contiguous;
+                    return null;
+                }
 
                 shellRect = stated;
 
@@ -1162,6 +1626,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                 hasPrintableContent = true;
 
             _frozen.Add(box);
+
+            // This box does hold something here. Recorded because one box can be reached more than once
+            // in a single slot - once per multi-column column, once per repeating-header proxy, and a
+            // rowspan cell once per row it spans - so an earlier visit finding nothing says nothing
+            // about the slot as a whole. RecordEmptyObservations subtracts this set from the empty one.
+            if (!_pruningSuspended) _producedSomethingThisSlot.Add(box);
+
+            subtreePrunable &= contiguous;
 
             var draft = new Draft(new FragmentKey(box, owner, instance), box, slot, region, snapshot, originY);
 

@@ -1909,6 +1909,9 @@ namespace PeachPDF.Html.Core.Dom
 
         private RPoint _location;
 
+        /// <inheritdoc cref="Size"/>
+        private RSize _size;
+
         /// <summary>Gets or sets the location of the box.</summary>
         public RPoint Location
         {
@@ -1916,12 +1919,38 @@ namespace PeachPDF.Html.Core.Dom
             set
             {
                 if (value.Y != _location.Y) OnBlockAxisRelocated(_location.Y, value.Y);
+
+                // Unlike the block-axis notification above, this is not conditional on Y: a box moved
+                // only in the inline axis still lands somewhere else, and a multi-column fragmentainer
+                // decides membership on the inline axis too.
+                if (value != _location) DiscardEmittedNothing();
+
                 _location = value;
             }
         }
 
         /// <summary>Gets or sets the size of the box.</summary>
-        public RSize Size { get; set; }
+        /// <remarks>
+        /// A written property rather than an auto-property because <see cref="ActualRight"/> and
+        /// <see cref="ActualBottom"/> both write through it, and between them they are how nearly every
+        /// layout engine states a box's extent — including the corrections engines apply <i>after</i> a
+        /// box's own layout pass has finished (a flex/grid line relocation growing its container, the
+        /// height epilogue, a table's row/row-group/cell aggregates). None of those routes through
+        /// <see cref="Location"/> or <c>OffsetTop</c>, so without this a box could grow into a band the
+        /// emitter had already observed it to be absent from, and nothing would say so.
+        /// </remarks>
+        public RSize Size
+        {
+            get => _size;
+            set
+            {
+                // ActualBottom/ActualRight rewrite Size on every assignment, including the many that do
+                // not change it, so the cheap comparison comes first - this sits on layout's hot path.
+                if (value != _size) DiscardEmittedNothing();
+
+                _size = value;
+            }
+        }
 
         /// <summary>Gets the bounds of the box.</summary>
         public RRect Bounds

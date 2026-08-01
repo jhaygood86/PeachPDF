@@ -1593,6 +1593,132 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private int _layoutGeneration;
 
+        /// <summary>
+        /// The pagination slot <see cref="Fragmentation.FragmentEmitter"/> last observed this box's whole
+        /// subtree produce <i>nothing</i> in, or -1. Meaningless unless
+        /// <see cref="_emittedNothingGeneration"/> is the current layout generation.
+        /// </summary>
+        private int _emittedNothingAtSlot = -1;
+
+        /// <inheritdoc cref="_emittedNothingAtSlot"/>
+        private int _emittedNothingGeneration = -1;
+
+        /// <summary>
+        /// The emitter's observation epoch the record was made under. Bumped whenever already-frozen
+        /// fragmentainers are re-opened, which is when layout is about to redo work an observation may
+        /// have been drawn from — see <c>FragmentEmitter.InvalidateFrom</c>.
+        /// </summary>
+        private int _emittedNothingEpoch = -1;
+
+        /// <summary>
+        /// Records that this box's subtree contributed nothing to pagination slot
+        /// <paramref name="slotIndex"/> — so the emitter may skip descending into it while filling later
+        /// slots, until something clears the record again.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is an <i>observation</i>, never a prediction: it is written only after the emitter has
+        /// walked the whole subtree and found no rectangle, no word, no child fragment and no
+        /// continuation shell, and only for a box that has already produced a fragment somewhere (so it
+        /// is behind the layout frontier, not merely unreached). Both halves matter — see
+        /// <c>FragmentEmitter.BuildDraft</c> for why the unreached case cannot be concluded from the
+        /// same evidence.
+        /// </para>
+        /// <para>
+        /// Deliberately not derived from <see cref="Location"/>/<see cref="ActualBottom"/>: several
+        /// layout engines rewrite a box's extent well after its own layout pass has finished, and the
+        /// multi-column engine keeps each column's geometry in a separate snapshot, so a box's live
+        /// fields do not describe every fragment it has.
+        /// </para>
+        /// </remarks>
+        internal void RecordEmittedNothingAt(int slotIndex, int epoch)
+        {
+            _emittedNothingAtSlot = slotIndex;
+            _emittedNothingGeneration = HtmlContainer?.LayoutGeneration ?? 0;
+            _emittedNothingEpoch = epoch;
+        }
+
+        /// <summary>
+        /// Whether this box was observed to emit nothing at a slot at or before
+        /// <paramref name="slotIndex"/>, and nothing has invalidated that observation since.
+        /// </summary>
+        internal bool EmittedNothingAtOrBefore(int slotIndex, int epoch) =>
+            _emittedNothingGeneration == (HtmlContainer?.LayoutGeneration ?? 0)
+            && _emittedNothingEpoch == epoch
+            && _emittedNothingAtSlot >= 0
+            && slotIndex >= _emittedNothingAtSlot;
+
+        /// <summary>
+        /// Discards this box's <see cref="RecordEmittedNothingAt"/> observation and every ancestor's,
+        /// because something has just given it, or may have given it, content it did not have when the
+        /// observation was made.
+        /// </summary>
+        /// <remarks>
+        /// Walks up <see cref="ParentBox"/> and stops at the first ancestor that holds no observation:
+        /// an ancestor is only ever marked when its whole subtree was empty, so once one is clear
+        /// everything above it is clear too. That makes this O(1) amortized on the hot paths that call
+        /// it — during a layout pass almost every box is already clear.
+        /// </remarks>
+        internal void DiscardEmittedNothing()
+        {
+            var generation = HtmlContainer?.LayoutGeneration ?? 0;
+
+            for (var box = this; box is not null; box = box.ParentBox)
+            {
+                var wasClear = box._emittedNothingGeneration == -1 && box._touchedGeneration == generation;
+
+                box._emittedNothingGeneration = -1;
+                box._emittedNothingAtSlot = -1;
+
+                // Every caller of this is a write that gives a box content or moves it, so it is also
+                // the signal layout has REACHED this box at all - which is what separates a subtree
+                // that is finished from one that has not started. Recorded on the same walk because the
+                // two questions have exactly the same answer set.
+                box._touchedGeneration = generation;
+
+                // Nothing above an already-clear, already-touched box can need either update: both are
+                // only ever set walking up from below, so one clear ancestor means all of them are.
+                if (wasClear) break;
+            }
+        }
+
+        /// <summary>
+        /// The layout generation in which anything wrote to this box's geometry — see
+        /// <see cref="DiscardEmittedNothing"/>, which is every such write's common path.
+        /// </summary>
+        private int _touchedGeneration = -1;
+
+        /// <summary>
+        /// Whether layout has not yet reached this box at all in the current generation, so it holds no
+        /// positioned content and cannot appear in <i>any</i> fragmentainer yet.
+        /// </summary>
+        /// <remarks>
+        /// This is what lets the emitter skip the whole second half of a long document — the chapters
+        /// layout has not started — rather than only the finished half behind it. It is sound in the one
+        /// place the "observed empty" record is not: a box may be empty at a slot either because its
+        /// content is behind us or because it is still ahead, and within one <c>EmitPass</c> range the
+        /// emitter freezes slots the pass has <i>already</i> flowed content into, so emptiness alone
+        /// cannot tell those apart. Never having been written to can: the first write that positions
+        /// anything here discards the record, and that write necessarily happens before the pass which
+        /// places it ends, hence before the slot that needs it is frozen.
+        /// </remarks>
+        internal bool NeverTouchedThisLayout => _touchedGeneration != (HtmlContainer?.LayoutGeneration ?? 0);
+
+        /// <summary>
+        /// <see cref="DiscardEmittedNothing"/> for this box, every ancestor, and every descendant — for a
+        /// change that moves where a whole subtree <i>draws</i> without writing to any box in it (a
+        /// fragment displacement, or a captured-geometry translation).
+        /// </summary>
+        internal void DiscardEmittedNothingIncludingDescendants()
+        {
+            DiscardEmittedNothing();
+
+            foreach (var child in Boxes)
+            {
+                child.DiscardEmittedNothingIncludingDescendants();
+            }
+        }
+
         #region Private Methods
 
         /// <summary>
@@ -5607,7 +5733,17 @@ namespace PeachPDF.Html.Core.Dom
         /// The emitter ignores this for a box it has not frozen anywhere, which is what keeps ordinary
         /// forward layout - where every box is placed for the first time - from re-emitting anything.
         /// </remarks>
-        private void NotifyGeometryChanged(double fromY, double amount) =>
+        private void NotifyGeometryChanged(double fromY, double amount)
+        {
+            // Unconditional, unlike the emitted-fragment call below: that one may skip a box no frozen
+            // fragmentainer holds, but an "emitted nothing here" observation exists precisely for boxes
+            // that hold no fragment in the slot being filled.
+            DiscardEmittedNothing();
+
+            NotifyEmittedFragmentsChanged(fromY, amount);
+        }
+
+        private void NotifyEmittedFragmentsChanged(double fromY, double amount) =>
             HtmlContainer?.InvalidateEmittedFragmentsFor(this, Math.Min(fromY, fromY + amount));
 
         /// <summary>
