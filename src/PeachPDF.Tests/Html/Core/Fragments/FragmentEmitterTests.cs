@@ -1,6 +1,7 @@
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -895,13 +896,13 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             // The same observation FragmentEmitter.BuildDraft would have recorded for a box behind the
             // layout frontier that produced no fragment at or before slot 0.
             mc.RecordEmittedNothingAt(0, 0);
-            Assert.True(mc.EmittedNothingAtOrBefore(0, 0));
+            Assert.True(mc.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
 
             // Slot 5 was never recorded for this container - the shape of the very first
             // ClearNestedFragmentainers call CssLayoutEngineColumns.Layout makes on a fresh page.
             container.ClearNestedFragmentainers(mc, 5);
 
-            Assert.True(mc.EmittedNothingAtOrBefore(0, 0));
+            Assert.True(mc.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
         }
 
         /// <summary>
@@ -918,11 +919,11 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             // A real multi-column layout has already recorded nested fragmentainers for this container at
             // slot 0 via CssLayoutEngineColumns.Layout/RecordNestedFragmentainer.
             mc.RecordEmittedNothingAt(0, 0);
-            Assert.True(mc.EmittedNothingAtOrBefore(0, 0));
+            Assert.True(mc.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
 
             container.ClearNestedFragmentainers(mc, 0);
 
-            Assert.False(mc.EmittedNothingAtOrBefore(0, 0));
+            Assert.False(mc.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
         }
 
         /// <summary>
@@ -936,11 +937,11 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             var p = LayoutHarness.FindById(root, "p")!;
 
             p.RecordEmittedNothingAt(0, 0);
-            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
 
             container.ClearContinuationShells(p, fromSlot: 3);
 
-            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
         }
 
         /// <summary>
@@ -956,11 +957,11 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             container.RecordContinuationShell(p, 2, new RRect(0, 0, 100, 100));
 
             p.RecordEmittedNothingAt(0, 0);
-            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
 
             container.ClearContinuationShells(p, fromSlot: 2);
 
-            Assert.False(p.EmittedNothingAtOrBefore(0, 0));
+            Assert.False(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
         }
 
         /// <summary>
@@ -973,11 +974,11 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             var p = LayoutHarness.FindById(root, "p")!;
 
             p.RecordEmittedNothingAt(0, 0);
-            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
 
             container.ClearFragmentDisplacements(p, fromSlot: 3);
 
-            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
         }
 
         /// <summary>
@@ -993,11 +994,11 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             container.RecordFragmentDisplacement(p, 2, 10, new RRect(0, 0, 100, 100));
 
             p.RecordEmittedNothingAt(0, 0);
-            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
 
             container.ClearFragmentDisplacements(p, fromSlot: 2);
 
-            Assert.False(p.EmittedNothingAtOrBefore(0, 0));
+            Assert.False(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
         }
 
         // ─── A fragment's own geometry (§2, nested fragmentainers) ─────────────────

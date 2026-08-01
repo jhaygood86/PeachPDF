@@ -1604,11 +1604,12 @@ namespace PeachPDF.Html.Core.Dom
         private int _emittedNothingGeneration = -1;
 
         /// <summary>
-        /// The emitter's observation epoch the record was made under. Bumped whenever already-frozen
-        /// fragmentainers are re-opened, which is when layout is about to redo work an observation may
-        /// have been drawn from — see <c>FragmentEmitter.InvalidateFrom</c>.
+        /// How many reopening events (<c>FragmentEmitter.InvalidateFrom</c>) had been recorded when this
+        /// observation was made — checked against <see cref="Fragmentation.InvalidationHistory"/> at read
+        /// time so only a reopening that could actually have affected this box's own recorded slot
+        /// retires the observation, rather than every reopening retiring every box's.
         /// </summary>
-        private int _emittedNothingEpoch = -1;
+        private int _emittedNothingRecordedAt = -1;
 
         /// <summary>
         /// Records that this box's subtree contributed nothing to pagination slot
@@ -1631,22 +1632,22 @@ namespace PeachPDF.Html.Core.Dom
         /// fields do not describe every fragment it has.
         /// </para>
         /// </remarks>
-        internal void RecordEmittedNothingAt(int slotIndex, int epoch)
+        internal void RecordEmittedNothingAt(int slotIndex, int invalidationCountNow)
         {
             _emittedNothingAtSlot = slotIndex;
             _emittedNothingGeneration = HtmlContainer?.LayoutGeneration ?? 0;
-            _emittedNothingEpoch = epoch;
+            _emittedNothingRecordedAt = invalidationCountNow;
         }
 
         /// <summary>
         /// Whether this box was observed to emit nothing at a slot at or before
         /// <paramref name="slotIndex"/>, and nothing has invalidated that observation since.
         /// </summary>
-        internal bool EmittedNothingAtOrBefore(int slotIndex, int epoch) =>
+        internal bool EmittedNothingAtOrBefore(int slotIndex, Fragmentation.InvalidationHistory history) =>
             _emittedNothingGeneration == (HtmlContainer?.LayoutGeneration ?? 0)
-            && _emittedNothingEpoch == epoch
             && _emittedNothingAtSlot >= 0
-            && slotIndex >= _emittedNothingAtSlot;
+            && slotIndex >= _emittedNothingAtSlot
+            && history.StillSafe(_emittedNothingRecordedAt, _emittedNothingAtSlot);
 
         /// <summary>
         /// Discards this box's <see cref="RecordEmittedNothingAt"/> observation and every ancestor's,
