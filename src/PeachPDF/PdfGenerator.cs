@@ -210,11 +210,16 @@ namespace PeachPDF
 
             await SetContent(container, config, html, cssData, orgPageSize);
 
-            // If CSS @page { size: ... } overrides the configured page size, re-apply with the CSS size
-            if (container.CssPageSize.HasValue && container.CssPageSize.Value != orgPageSize)
+            // DomParser.CascadeApplyPageStyles (run inside SetContent's call to SetHtml, above) already
+            // corrects the container's own PageSize/margins in place when the document's @page { size }
+            // differs from orgPageSize (issue #582 - it runs before the expensive cascade/correction
+            // passes within the same parse, so nothing needs to be discarded and re-parsed). Keep this
+            // local variable in sync with that correction, since it - not container.PageSize - is what
+            // the measure/rescale pass below and each page's dimensions (page.Width/page.Height,
+            // MarginBoxRenderer, HandleLinks) use.
+            if (container.CssPageSize.HasValue)
             {
                 orgPageSize = container.CssPageSize.Value;
-                await SetContent(container, config, html, cssData, orgPageSize);
             }
 
             var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
@@ -491,8 +496,15 @@ namespace PeachPDF
                 container.HtmlContainerInt.DocumentLanguage = config.DefaultLanguage;
             }
 
-            // Just in case @page rules got applied
-            var pageSize = new XSize(orgPageSize.Width - container.MarginLeft - container.MarginRight, orgPageSize.Height - container.MarginTop - container.MarginBottom);
+            // Just in case @page rules got applied. SetContent is now only ever called once per render
+            // with the ORIGINAL orgPageSize parameter (DomParser.CascadeApplyPageStyles corrects
+            // PageSize/margins against the CSS @page size in place, inside SetHtml above, rather than a
+            // caller re-invoking SetContent a second time with the corrected size - issue #582) - so this
+            // must subtract margins from the CSS-resolved sheet size (falling back to orgPageSize when
+            // there is no @page { size } rule), or it would clobber that in-place correction with the
+            // stale, originally-configured size.
+            var sheetSize = container.CssPageSize ?? orgPageSize;
+            var pageSize = new XSize(sheetSize.Width - container.MarginLeft - container.MarginRight, sheetSize.Height - container.MarginTop - container.MarginBottom);
             container.PageSize = pageSize;
             container.Location = new XPoint(container.MarginLeft, container.MarginTop);
         }

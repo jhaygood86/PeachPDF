@@ -270,6 +270,43 @@ namespace PeachPDF.Html.Core.Parse
             // PixelsPerPoint reconciliation for the identical, already-established pattern/precedent).
             var pixelsPerPoint = (htmlContainer.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
 
+            ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint);
+
+            // Issue #582 / "Direction 1": this method runs before CascadeApplyStyles and every box-tree
+            // correction pass in GenerateCssTree - none of that expensive work has started yet - so if
+            // the document's own base @page { size } rule differs from the page size ApplyPageStylesOnce
+            // just resolved margins/PageLengthContext against, correct htmlContainer.PageSize and resolve
+            // once more IN PLACE, instead of the old behavior (PdfGenerator.AddPdfPages discarding this
+            // whole parse pass and calling SetHtml a second time - a full HTML re-parse + CSS re-cascade +
+            // every correction pass, just to fix up a page-width-dependent margin). This preserves
+            // css-page-3 §7.1: a percentage/em @page margin must resolve against the true page-box width,
+            // which is only known once CssPageSize itself has been resolved.
+            //
+            // At most one retry, and it is safe: ParsePageSizeToPdfPoints (below) resolves CssPageSize
+            // using only context.EmPt/RemPt (the root/page font basis), never context.HundredPercentPt
+            // (the width basis) - so CssPageSize's own value does NOT depend on htmlContainer.PageSize and
+            // resolves to the identical value on the second call. Only the margins - which DO read
+            // HundredPercentPt for `%` - actually change between the two calls, becoming correct.
+            //
+            // PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint) reconstructs the
+            // caller-configured page size (an XSize, true points) from PageSize (an RSize,
+            // PixelsPerPoint-scaled internal pixel space, per HtmlContainerInt.PageSize's own doc
+            // comment) - nothing between PdfGenerator.SetContent assigning it and this point mutates it,
+            // so this is the same comparison PdfGenerator.AddPdfPages used to make one layer up, just
+            // before the expensive work starts instead of after. Fully qualified: this namespace
+            // (PeachPDF.Html.Core.Parse) nests under PeachPDF.Html.Core, whose sibling PeachPDF.Html.Core.
+            // Utils namespace would otherwise shadow the unqualified "Utils" name ahead of the `using
+            // PeachPDF.Utilities;` import.
+            if (htmlContainer.CssPageSize is { } cssPageSize &&
+                cssPageSize != PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint))
+            {
+                htmlContainer.PageSize = PeachPDF.Utilities.Utils.Convert(cssPageSize, pixelsPerPoint);
+                ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint);
+            }
+        }
+
+        private static void ApplyPageStylesOnce(HtmlContainerInt htmlContainer, CssBox root, CssData cssData, double pixelsPerPoint)
+        {
             // ParseLength's absolute-unit branches (pt/mm/cm/in/pc, and px at the spec-correct
             // 1px = 0.75pt via Length.PointsPerPx) resolve straight to raw, unscaled points - for
             // those, multiplying by pixelsPerPoint once at the end (below) is exactly the scaling
