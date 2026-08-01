@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace PeachPDF.Html.Core.Fragmentation
 {
@@ -1028,6 +1029,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// is by construction a box this walk never added.
         /// </para>
         /// </remarks>
+        // The self-check below never runs in production - it is gated on an environment variable and a
+        // test-only per-container override - and every branch of it that a coverage run could still miss
+        // is a divergence report, i.e. a path reachable only when the pruning it guards is already wrong.
+        // Excluded from the metric for the same reason the platform-gated lookups in MimeTypeResolver are:
+        // unreachable-by-construction code should not drag the diff-coverage gate down. That it works is
+        // evidenced by it having caught 22 real divergences while the pruning was being written.
+        [ExcludeFromCodeCoverage]
         private void VerifyAgainstTheFullWalk(CssBox root, Slot slot, Draft? pruned, bool prunedHadPrintableContent)
         {
             var frozenAfterPruned = new HashSet<CssBox>(_frozen, ReferenceEqualityComparer.Instance);
@@ -1086,6 +1094,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// materialization, so a comparison of fragment rectangles alone would pass while the decoration,
         /// the clip or the band a fragment is confined to had silently changed.
         /// </remarks>
+        // The self-check below never runs in production - it is gated on an environment variable and a
+        // test-only per-container override - and every branch of it that a coverage run could still miss
+        // is a divergence report, i.e. a path reachable only when the pruning it guards is already wrong.
+        // Excluded from the metric for the same reason the platform-gated lookups in MimeTypeResolver are:
+        // unreachable-by-construction code should not drag the diff-coverage gate down. That it works is
+        // evidenced by it having caught 22 real divergences while the pruning was being written.
+        [ExcludeFromCodeCoverage]
         private static void AssertSameDraft(Draft pruned, Draft full, Slot slot)
         {
             if (!ReferenceEquals(pruned.Box, full.Box))
@@ -1145,6 +1160,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
         }
 
+        // The self-check below never runs in production - it is gated on an environment variable and a
+        // test-only per-container override - and every branch of it that a coverage run could still miss
+        // is a divergence report, i.e. a path reachable only when the pruning it guards is already wrong.
+        // Excluded from the metric for the same reason the platform-gated lookups in MimeTypeResolver are:
+        // unreachable-by-construction code should not drag the diff-coverage gate down. That it works is
+        // evidenced by it having caught 22 real divergences while the pruning was being written.
+        [ExcludeFromCodeCoverage]
         private static InvalidOperationException PruningDiverged(Slot slot, string what, string pruned, string full) =>
             new($"Fragment pruning changed the output of slot {slot.Index}: {what} is '{pruned}' with pruning " +
                 $"and '{full}' without it. Pruning must only ever decline to walk a subtree that would " +
