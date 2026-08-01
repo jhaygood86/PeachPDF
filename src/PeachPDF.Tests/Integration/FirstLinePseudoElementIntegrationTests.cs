@@ -277,10 +277,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task VerticalAlign_DoesNotOverrideOwnExplicitValueWhenRuleOmitsIt()
         {
-            // Regression guard: VerticalAlign is unconditionally copied by InheritStyle's "always"
-            // section, so the ::first-line shadow box always reports a non-null VerticalAlign matching
-            // the block's own - a rule that never declares vertical-align (only color, here) must not
-            // spuriously override an inline element's own explicit vertical-align.
+            // Regression guard: DomParser.ResolveFirstLineStyle re-seeds the ::first-line shadow box's
+            // VerticalAlign from the owner box's own resolved value ("p" here defaults to "baseline"),
+            // so the shadow box's VerticalAlign always starts out matching the block's own - a rule that
+            // never declares vertical-align (only color, here) must not spuriously override an inline
+            // element's own explicit vertical-align.
             var withRule = await BuildAndLayout(Wrap(
                 "<style>p::first-line { color: rgb(255,0,0) }</style>" +
                 "<p id='p' style='width:300px'>before <span id='s' style='vertical-align:sub'>MID</span> after</p>"));
@@ -294,6 +295,54 @@ namespace PeachPDF.Tests.Integration
             var wordTopWithout = AllDescendants(sWithout).Prepend(sWithout).SelectMany(x => x.Words).First().Top;
 
             Assert.Equal(wordTopWithout, wordTopWith);
+        }
+
+        [Fact]
+        public async Task VerticalAlign_OwnerBoxsOwnNonBaselineValue_DoesNotSpuriouslyTriggerFirstLineOverride()
+        {
+            // Regression guard for issue #530: now that vertical-align is spec-correctly non-inherited,
+            // InheritStyle no longer carries the owner box's own vertical-align onto the ::first-line
+            // shadow box, so DomParser.ResolveFirstLineStyle must explicitly re-seed it. Without that
+            // re-seed, the shadow box would default to "baseline" while the owner box (here, "p" itself)
+            // has an explicit non-baseline "middle" - CssLayoutEngine.ApplyVerticalAlignment's
+            // firstLineStyle.VerticalAlign != ownerBox.VerticalAlign heuristic would then wrongly treat a
+            // rule that only sets color as an implicit "::first-line { vertical-align: baseline }",
+            // force-realigning every box on line 1 - including "s"'s own explicit "sub" - to baseline.
+            var withRule = await BuildAndLayout(Wrap(
+                "<style>p::first-line { color: rgb(255,0,0) }</style>" +
+                "<p id='p' style='width:300px; vertical-align:middle'>before <span id='s' style='vertical-align:sub'>MID</span> after</p>"));
+            var without = await BuildAndLayout(Wrap(
+                "<p id='p' style='width:300px; vertical-align:middle'>before <span id='s' style='vertical-align:sub'>MID</span> after</p>"));
+
+            var sWith = FindById(withRule.root, "s")!;
+            var sWithout = FindById(without.root, "s")!;
+
+            var wordTopWith = AllDescendants(sWith).Prepend(sWith).SelectMany(x => x.Words).First().Top;
+            var wordTopWithout = AllDescendants(sWithout).Prepend(sWithout).SelectMany(x => x.Words).First().Top;
+
+            Assert.Equal(wordTopWithout, wordTopWith);
+        }
+
+        [Fact]
+        public async Task VerticalAlign_GenuineFirstLineOverride_StillAppliesWhenOwnerHasNonBaselineValue()
+        {
+            // Positive-case counterpart to the regression guard above: a ::first-line rule that DOES
+            // declare vertical-align must still override, even when the owner box's own vertical-align
+            // is already non-baseline (so the shadow-box re-seed doesn't accidentally make the heuristic
+            // permanently blind to genuine overrides).
+            var withRule = await BuildAndLayout(Wrap(
+                "<style>p::first-line { vertical-align: super }</style>" +
+                "<p id='p' style='width:300px; vertical-align:middle'>before <span id='s'>MID</span> after</p>"));
+            var without = await BuildAndLayout(Wrap(
+                "<p id='p' style='width:300px; vertical-align:middle'>before <span id='s'>MID</span> after</p>"));
+
+            var sWith = FindById(withRule.root, "s")!;
+            var sWithout = FindById(without.root, "s")!;
+
+            var wordTopWith = AllDescendants(sWith).Prepend(sWith).SelectMany(x => x.Words).First().Top;
+            var wordTopWithout = AllDescendants(sWithout).Prepend(sWithout).SelectMany(x => x.Words).First().Top;
+
+            Assert.NotEqual(wordTopWithout, wordTopWith);
         }
 
         [Fact]

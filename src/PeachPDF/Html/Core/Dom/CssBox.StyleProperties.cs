@@ -2125,23 +2125,28 @@ namespace PeachPDF.Html.Core.Dom
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.CustomProperties, customProperties, static (s, v) => s with { CustomProperties = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Font, parentStyle.Font, static (s, a) => s with { Font = a });
             var unicodeBidiBeforeInherit = _computedStyle.Text.UnicodeBidi;
+            var verticalAlignBeforeInherit = _computedStyle.Text.VerticalAlign;
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Text, parentStyle.Text, static (s, a) => s with { Text = a });
             if (!everything)
             {
-                // unicode-bidi is the one property in this otherwise-100%-inherited area that is CSS-spec
-                // Inherited: no - the whole-area adoption just above unconditionally copied it from the
-                // parent anyway (that's the whole point of adopting the area by reference), so put this
-                // box's own pre-inherit value (already defaulted to initial, or set by an earlier cascade
-                // phase) back. The `everything: true` path deliberately skips this and keeps the adopted
-                // value, since that path is a structural duplicate of the same source element (CssProxyBox's
-                // repeated header/footer, DomParser's inline/block split) which needs the source's own
-                // resolved value even though it isn't a real ancestor-descendant inheritance case - the
-                // same reasoning box-sizing's own everything-branch exception below already established.
+                // unicode-bidi and vertical-align are the two properties in this otherwise-100%-inherited
+                // area that are CSS-spec Inherited: no - the whole-area adoption just above unconditionally
+                // copied both from the parent anyway (that's the whole point of adopting the area by
+                // reference), so put this box's own pre-inherit values (already defaulted to initial, or set
+                // by an earlier cascade phase) back. The `everything: true` path deliberately skips this and
+                // keeps the adopted values, since that path is a structural duplicate of the same source
+                // element (CssProxyBox's repeated header/footer, DomParser's inline/block split) which needs
+                // the source's own resolved value even though it isn't a real ancestor-descendant inheritance
+                // case - unlike box-sizing's analogous everything-branch exception below, no separate explicit
+                // copy is needed here for `everything: true`, since skipping this restore already leaves both
+                // properties equal to the whole-adopted parentStyle.Text for the rest of the method.
                 // Routed through SetPropertyValue (not a bare `with`, which always allocates) so the common
                 // case - this box's own value already matches what the parent just handed down - stays a
                 // total no-op, preserving the "whole unchanged subtree shares one Text instance" guarantee.
                 var textArea = _computedStyle.Text;
-                var restoredTextArea = textArea.SetPropertyValue(textArea.UnicodeBidi, unicodeBidiBeforeInherit, static (a, v) => a with { UnicodeBidi = v });
+                var restoredTextArea = textArea
+                    .SetPropertyValue(textArea.UnicodeBidi, unicodeBidiBeforeInherit, static (a, v) => a with { UnicodeBidi = v })
+                    .SetPropertyValue(textArea.VerticalAlign, verticalAlignBeforeInherit, static (a, v) => a with { VerticalAlign = v });
                 _computedStyle = _computedStyle.AdoptArea(textArea, restoredTextArea, static (s, a) => s with { Text = a });
             }
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Table, parentStyle.Table, static (s, a) => s with { Table = a });

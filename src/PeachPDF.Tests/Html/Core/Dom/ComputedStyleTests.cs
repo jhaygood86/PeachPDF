@@ -250,6 +250,37 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal(UnicodeMode.Isolate, clone.UnicodeBidi.Value);
         }
 
+        [Fact]
+        public void InheritStyle_VerticalAlign_DoesNotAdoptParentsValue()
+        {
+            // vertical-align is CSS-spec Inherited: no (CSS 2.1 §10.8.1), unlike every other property in
+            // the otherwise-100%-inherited Text area - InheritStyle must explicitly restore it after the
+            // area's whole-by-reference adoption, or a child would silently pick up the parent's declared
+            // alignment instead of resolving to the initial "baseline" (issue #530).
+            var parent = new CssBox(null, null) { VerticalAlign = "middle" };
+            var child = new CssBox(parent, null);
+
+            child.InheritStyle();
+
+            Assert.Equal("baseline", child.VerticalAlign);
+        }
+
+        [Fact]
+        public void InheritStyle_Everything_CopiesVerticalAlign()
+        {
+            // Unlike the normal ancestor->descendant case just above, a structural duplicate of the SAME
+            // source box (CssProxyBox's repeated header/footer, an inline/block split) needs the source
+            // element's own resolved vertical-align, exactly like unicode-bidi/box-sizing - this is the
+            // `everything: true` path deliberately skipping the restore-to-pre-inherit-value correction
+            // the normal path applies.
+            var source = new CssBox(null, null) { VerticalAlign = "middle" };
+            var clone = new CssBox(null, null);
+
+            clone.InheritStyle(source, everything: true);
+
+            Assert.Equal("middle", clone.VerticalAlign);
+        }
+
         // ── regression: DomParser.CascadeApplyStyles's fast-path skip of the defaulting loop ──
 
         /// <summary>

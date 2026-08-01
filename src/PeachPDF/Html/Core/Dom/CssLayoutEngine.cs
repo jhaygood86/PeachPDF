@@ -2068,12 +2068,14 @@ namespace PeachPDF.Html.Core.Dom
             // application is a single line-wide override rather than per-word plumbing.
             //
             // ResolvedFirstLineStyle.VerticalAlign is NOT a reliable "did some ::first-line rule
-            // actually declare vertical-align" signal by itself: VerticalAlign is unconditionally
-            // copied by InheritStyle's "always" section, so the shadow box already has a non-null
-            // value (matching the block's own) even when no matched rule ever mentions vertical-align.
-            // Comparing against the block's own value is a cheap, good-enough proxy for "was this
-            // actually declared" (it only under-detects the harmless edge case of a rule re-declaring
-            // the same value the block already had).
+            // actually declare vertical-align" signal by itself: vertical-align is CSS-spec
+            // Inherited: no, so InheritStyle no longer carries it onto the shadow box - instead,
+            // DomParser.ResolveFirstLineStyle explicitly re-seeds shadowBox.VerticalAlign from the
+            // owner box's own resolved value right after InheritStyle runs, specifically so the shadow
+            // box starts out matching the block's own value even when no matched rule ever mentions
+            // vertical-align. Comparing against the block's own value is a cheap, good-enough proxy for
+            // "was this actually declared" (it only under-detects the harmless edge case of a rule
+            // re-declaring the same value the block already had).
             var ownerBox = lineBox.OwnerBox;
             var firstLineVerticalAlign = lineBox == ownerBox.LineBoxes.FirstOrDefault()
                                          && ownerBox.ResolvedFirstLineStyle is { } firstLineStyle
@@ -2099,7 +2101,19 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var box in boxes)
             {
                 var rect = lineBox.Rectangles[box];
-                var effectiveVerticalAlign = firstLineVerticalAlign ?? box.VerticalAlign;
+                // "box" here may be an anonymous text-node box rather than the real element
+                // vertical-align was declared on (e.g. for "<span style='vertical-align:top'>text
+                // </span>", the word's owner is an anonymous child of the span, which never goes
+                // through its own CSS cascade and so never gets its own vertical-align declaration -
+                // since vertical-align is CSS-spec Inherited: no (CSS 2.1 §10.8.1), an anonymous box's
+                // own VerticalAlign always stays at the initial "baseline" regardless of what its
+                // originating element declared. Walk up to the nearest ancestor that has an HtmlTag
+                // (the same walk TextTop/TextBottom below already needs, for the same reason) to read
+                // the value the author actually declared.
+                var styledBoxForVerticalAlign = box;
+                while (styledBoxForVerticalAlign.HtmlTag is null && styledBoxForVerticalAlign.ParentBox is not null)
+                    styledBoxForVerticalAlign = styledBoxForVerticalAlign.ParentBox;
+                var effectiveVerticalAlign = firstLineVerticalAlign ?? styledBoxForVerticalAlign.VerticalAlign;
 
                 //Important notes on http://www.w3.org/TR/CSS21/tables.html#height-layout
                 switch (effectiveVerticalAlign)
@@ -2124,17 +2138,9 @@ namespace PeachPDF.Html.Core.Dom
                     case CssConstants.TextBottom:
                         // Align with the top/bottom of the parent's font box, per CSS1 §5.6.11 - not
                         // the line's own extents (that's top/bottom above), so this references the
-                        // parent element's own ActualFont rather than lineTop/lineBottom.
-                        //
-                        // "box" here may be an anonymous text-node box rather than the real element
-                        // vertical-align was declared on (e.g. for "<span style='vertical-align:
-                        // text-top'>text</span>", the word's owner is an anonymous child of the span,
-                        // whose own ParentBox is the span itself, not the span's real CSS parent) - so
-                        // walk up to the nearest ancestor that has an HtmlTag before reading ParentBox,
-                        // otherwise this would reference the span's own font instead of its parent's.
-                        var styledBox = box;
-                        while (styledBox.HtmlTag is null && styledBox.ParentBox is not null)
-                            styledBox = styledBox.ParentBox;
+                        // parent element's own ActualFont rather than lineTop/lineBottom. Reuses the
+                        // same tagged-ancestor walk computed above for effectiveVerticalAlign.
+                        var styledBox = styledBoxForVerticalAlign;
                         var referenceFont = (styledBox.ParentBox ?? styledBox).ActualFont;
                         var fontTop = baseline - referenceFont.Ascent;
                         var target = effectiveVerticalAlign == CssConstants.TextTop

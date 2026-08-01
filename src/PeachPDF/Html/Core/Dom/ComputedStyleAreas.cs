@@ -264,20 +264,17 @@ namespace PeachPDF.Html.Core.Dom
     /// CSS Color + Text + Writing Modes properties that inherit. <c>text-decoration-*</c> is
     /// deliberately excluded - see <see cref="TextDecorationArea"/>.
     /// <para>
-    /// Two exceptions to "all inherit": <see cref="VerticalAlign"/> is CSS-spec <c>Inherited: no</c>, but
-    /// this codebase has always (pre-existing this area split) treated it as inherited - a known,
-    /// tracked deviation, see <c>.claude/accepted-gaps/vertical-align-is-treated-as-inherited.md</c>. It
-    /// stays grouped here (rather than in its own non-inherited area) because fixing it requires
-    /// auditing <c>CssLayoutEngine.ApplyVerticalAlignment</c>'s dependence on today's behavior first.
-    /// <see cref="UnicodeBidi"/> is CSS-spec <c>Inherited: no</c> too (correctly - <c>CssDefaults
-    /// .InheritedProperties</c> does not list it) - unlike <see cref="VerticalAlign"/>'s accepted gap, this
-    /// one IS actually corrected: since the whole-area adoption below unconditionally copies every
-    /// property in this area from the parent, <c>CssBox.InheritStyle</c> explicitly restores
-    /// <see cref="UnicodeBidi"/> to this box's own pre-inherit value immediately after adopting the area
-    /// (skipped for the `everything: true` structural-duplicate path, which keeps the adopted value on
-    /// purpose - see the comment there). It lives in this area, rather than its own non-inherited one,
-    /// purely because <c>direction</c>/<c>unicode-bidi</c>/<c>writing-mode</c> are the same CSS Writing
-    /// Modes module and it's convenient to keep them textually adjacent.
+    /// Two exceptions to "all inherit": <see cref="VerticalAlign"/> (CSS 2.1 §10.8.1) and
+    /// <see cref="UnicodeBidi"/> (CSS Writing Modes 4) are both CSS-spec <c>Inherited: no</c>, correctly -
+    /// neither is listed in <c>CssDefaults.InheritedProperties</c>. Since the whole-area adoption below
+    /// unconditionally copies every property in this area from the parent, <c>CssBox.InheritStyle</c>
+    /// explicitly restores both to this box's own pre-inherit value immediately after adopting the area
+    /// (skipped for the `everything: true` structural-duplicate path, which keeps the adopted values on
+    /// purpose - see the comment there; unlike <c>box-sizing</c>, no separate explicit copy is needed for
+    /// that path, since skipping the restore already leaves both properties equal to the parent's). They
+    /// live in this area, rather than their own non-inherited one, purely for textual convenience:
+    /// <see cref="VerticalAlign"/> alongside the other text properties, and <see cref="UnicodeBidi"/> next
+    /// to <c>direction</c>/<c>writing-mode</c> since they're the same CSS Writing Modes module.
     /// </para>
     /// </summary>
     internal sealed record TextArea

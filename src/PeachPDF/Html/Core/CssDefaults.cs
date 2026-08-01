@@ -203,6 +203,12 @@ namespace PeachPDF.Html.Core
         /// <c>InheritStyle</c>'s "always" section) as a PeachPDF-specific deviation; fixed as part of splitting
         /// <c>ComputedStyle</c> into per-area records, since <c>box-sizing</c> had to land in exactly one area
         /// either way and the non-inherited box-model area was the spec-correct home for it.
+        /// <c>vertical-align</c> is deliberately absent too: <a href="https://www.w3.org/TR/CSS21/visudet.html#propdef-vertical-align">CSS
+        /// 2.1 §10.8.1</a> defines it as <c>Inherited: no</c>. It used to be listed here (and copied
+        /// unconditionally in <c>InheritStyle</c>'s "always" section) as a PeachPDF-specific deviation; fixing it
+        /// required first auditing <c>CssLayoutEngine.ApplyVerticalAlignment</c>'s <c>::first-line</c> heuristic,
+        /// which (before the fix) relied on that unconditional inheritance to seed its shadow box - see
+        /// <c>Parse.DomParser.ResolveFirstLineStyle</c>'s explicit re-seed.
         /// </remarks>
         public static readonly FrozenSet<string> InheritedProperties = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
         {
@@ -218,7 +224,6 @@ namespace PeachPDF.Html.Core
             "orphans", "widows",
             "text-align", "text-indent",
             "text-transform",
-            "vertical-align",
             "visibility",
             "white-space",
             "word-break",

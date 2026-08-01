@@ -545,6 +545,70 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("border-box", child!.BoxSizing);
         }
 
+        // ── regression: vertical-align is spec-correctly not inherited (issue #530) ──
+
+        [Fact]
+        public async Task VerticalAlign_DoesNotInheritFromParent()
+        {
+            // CSS 2.1 §10.8.1 defines vertical-align as Inherited: no. It used to be listed in
+            // CssDefaults.InheritedProperties (a PeachPDF-specific deviation), so a child with no
+            // explicit vertical-align picked up its parent's "middle" instead of the real initial
+            // value "baseline".
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="vertical-align: middle">
+                  <div id="child">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("baseline", child!.VerticalAlign);
+        }
+
+        [Fact]
+        public async Task Inherit_VerticalAlign_StillWorksWhenExplicitlyRequested()
+        {
+            // Even though vertical-align no longer inherits by default, the explicit "inherit"
+            // keyword must still force the child to pick up the parent's computed value.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="vertical-align: middle">
+                  <div id="child" style="vertical-align: inherit">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("middle", child!.VerticalAlign);
+        }
+
+        [Fact]
+        public async Task Unset_VerticalAlign_BehavesLikeInitial()
+        {
+            // vertical-align is NOT inherited, so "unset" must act like "initial" ("baseline"),
+            // even though the parent has a non-default vertical-align.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="parent" style="vertical-align: middle">
+                  <div id="child" style="vertical-align: unset">text</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var child = FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal("baseline", child!.VerticalAlign);
+        }
+
         // ── regression: letter-spacing/word-spacing/font-palette are genuinely inherited, ──
         // ── so "unset" on them must resolve to the parent's value, not the initial value ──
 

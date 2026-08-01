@@ -814,6 +814,15 @@ namespace PeachPDF.Html.Core.Parse
             box.Boxes.Remove(shadowBox); // this is a detached resolution helper, never a real tree member
             shadowBox.InheritStyle(box);
 
+            // vertical-align is CSS-spec Inherited: no (CSS 2.1 §10.8.1), so InheritStyle just above left
+            // shadowBox.VerticalAlign at its own initial value (baseline) rather than box's own resolved
+            // value - unlike every genuinely-inherited property above, which InheritStyle did carry over.
+            // CssLayoutEngine.ApplyVerticalAlignment's ::first-line heuristic needs shadowBox seeded from
+            // box's own value here so its firstLineStyle.VerticalAlign != ownerBox.VerticalAlign check only
+            // fires when a ::first-line rule actually declares vertical-align, not merely because shadowBox
+            // defaulted to baseline while box didn't.
+            shadowBox.VerticalAlign = box.VerticalAlign;
+
             var pendingVarProperties = new Dictionary<string, string>();
             AssignCssBlocks(valueParser, shadowBox, firstLineUaRules, importantPass: false, null, null, null, null, pendingVarProperties);
             AssignCssBlocks(valueParser, shadowBox, firstLineAuthorRules, importantPass: false, null, null, null, null, pendingVarProperties);
