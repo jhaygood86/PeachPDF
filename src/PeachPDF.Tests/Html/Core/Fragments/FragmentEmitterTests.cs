@@ -872,6 +872,114 @@ namespace PeachPDF.Tests.Html.Core.Fragments
                 word => word.Word.Text?.StartsWith("Line") == true);
         }
 
+        // ─── Clearing recorded state is a no-op when nothing was recorded (#581) ───
+
+        /// <summary>
+        /// <c>CssLayoutEngineColumns.Layout</c> calls <c>ClearNestedFragmentainers(columnsBox,
+        /// startSlot)</c> once per <c>Layout()</c> invocation - i.e. once per page a resumed multi-column
+        /// container continues onto - even on the very first attempt, before that page has filled a
+        /// single column. On a fresh slot nothing has been recorded yet for that key, so the call used to
+        /// be a guaranteed no-op for the data it clears while still unconditionally discarding the
+        /// container's "emitted nothing" observation - and, by walking its ancestors, every ancestor's
+        /// too, up to the first already-clear one. Since that observation also gates
+        /// <c>CssBox.NeverTouchedThisLayout</c>, one spurious discard disables both of
+        /// <c>FragmentEmitter.BuildDraft</c>'s pruning conditions for a whole ancestor chain on every
+        /// single page a large container spans - the mechanism issue #581 traced.
+        /// </summary>
+        [Fact]
+        public async Task ClearNestedFragmentainers_WithNothingRecordedForTheGivenSlot_LeavesAnExistingObservationIntact()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<div id='mc' style='columns:2'>x</div>"));
+            var mc = LayoutHarness.FindById(root, "mc")!;
+
+            // The same observation FragmentEmitter.BuildDraft would have recorded for a box behind the
+            // layout frontier that produced no fragment at or before slot 0.
+            mc.RecordEmittedNothingAt(0, 0);
+            Assert.True(mc.EmittedNothingAtOrBefore(0, 0));
+
+            // Slot 5 was never recorded for this container - the shape of the very first
+            // ClearNestedFragmentainers call CssLayoutEngineColumns.Layout makes on a fresh page.
+            container.ClearNestedFragmentainers(mc, 5);
+
+            Assert.True(mc.EmittedNothingAtOrBefore(0, 0));
+        }
+
+        /// <summary>
+        /// The companion case: when a slot genuinely held recorded nested fragmentainers, clearing it must
+        /// still discard the observation exactly as before - the guard only skips the call when there was
+        /// truly nothing to invalidate.
+        /// </summary>
+        [Fact]
+        public async Task ClearNestedFragmentainers_WithSomethingRecordedForTheGivenSlot_StillDiscardsTheObservation()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(SplitAcrossColumns(), pageHeight: 200, margin: 0);
+            var mc = LayoutHarness.FindById(root, "mc")!;
+
+            // A real multi-column layout has already recorded nested fragmentainers for this container at
+            // slot 0 via CssLayoutEngineColumns.Layout/RecordNestedFragmentainer.
+            mc.RecordEmittedNothingAt(0, 0);
+            Assert.True(mc.EmittedNothingAtOrBefore(0, 0));
+
+            container.ClearNestedFragmentainers(mc, 0);
+
+            Assert.False(mc.EmittedNothingAtOrBefore(0, 0));
+        }
+
+        /// <summary>
+        /// The same shape as <see cref="ClearNestedFragmentainers_WithNothingRecordedForTheGivenSlot_LeavesAnExistingObservationIntact"/>
+        /// for the table-row continuation-shell bookkeeping.
+        /// </summary>
+        [Fact]
+        public async Task ClearContinuationShells_WithNothingRecorded_LeavesAnExistingObservationIntact()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p'>hello</p>"));
+            var p = LayoutHarness.FindById(root, "p")!;
+
+            p.RecordEmittedNothingAt(0, 0);
+            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+
+            container.ClearContinuationShells(p, fromSlot: 3);
+
+            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+        }
+
+        /// <summary>
+        /// The same shape for the css-break-3 §4.3 fragment-displacement bookkeeping.
+        /// </summary>
+        [Fact]
+        public async Task ClearFragmentDisplacements_WithNothingRecorded_LeavesAnExistingObservationIntact()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p'>hello</p>"));
+            var p = LayoutHarness.FindById(root, "p")!;
+
+            p.RecordEmittedNothingAt(0, 0);
+            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+
+            container.ClearFragmentDisplacements(p, fromSlot: 3);
+
+            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+        }
+
+        /// <summary>
+        /// The companion case for <see cref="ClearFragmentDisplacements_WithNothingRecorded_LeavesAnExistingObservationIntact"/>:
+        /// a slot that genuinely held a recorded displacement must still discard the observation.
+        /// </summary>
+        [Fact]
+        public async Task ClearFragmentDisplacements_WithSomethingRecordedFromTheGivenSlot_StillDiscardsTheObservation()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p'>hello</p>"));
+            var p = LayoutHarness.FindById(root, "p")!;
+
+            container.RecordFragmentDisplacement(p, 2, 10, new RRect(0, 0, 100, 100));
+
+            p.RecordEmittedNothingAt(0, 0);
+            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+
+            container.ClearFragmentDisplacements(p, fromSlot: 2);
+
+            Assert.False(p.EmittedNothingAtOrBefore(0, 0));
+        }
+
         // ─── A fragment's own geometry (§2, nested fragmentainers) ─────────────────
 
         /// <summary>
