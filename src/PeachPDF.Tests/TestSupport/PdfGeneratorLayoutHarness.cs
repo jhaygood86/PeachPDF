@@ -17,11 +17,12 @@ namespace PeachPDF.Tests.TestSupport
     /// <b>This exists because <see cref="LayoutHarness"/> is not the production path, and the difference
     /// has hidden a defect.</b> That harness calls <c>SetHtml</c> exactly once, never sees an
     /// <c>@page</c> rule, and hand-computes the content band. The generator resolves <c>@page</c> during
-    /// <c>SetHtml</c> and then, when the rule's page size differs from the configured one, throws the whole
-    /// box tree away and lays the document out again against the CSS size — so a document with an
-    /// <c>@page</c> rule is parsed twice and every once-per-layout decision is taken twice.
-    /// <see href="https://github.com/jhaygood86/PeachPDF/issues/439">#439</see> survived two green harness
-    /// tests and was visible only through this path.
+    /// that same <c>SetHtml</c> call: <c>DomParser.CascadeApplyPageStyles</c> corrects the container's
+    /// page size and margins in place, before the expensive cascade and box-tree correction passes run,
+    /// whenever the rule's page size differs from the configured one (issue #582) — so a document with
+    /// an <c>@page</c> rule still takes a materially different code path than <see cref="LayoutHarness"/>
+    /// models at all. <see href="https://github.com/jhaygood86/PeachPDF/issues/439">#439</see> survived
+    /// two green harness tests and was visible only through this path.
     /// </para>
     /// <para>
     /// Deliberately not the whole of <c>AddPdfPages</c>, and a fixture that needs any of the following
@@ -45,8 +46,8 @@ namespace PeachPDF.Tests.TestSupport
     {
         /// <summary>
         /// Lays <paramref name="html"/> out for <paramref name="config"/>, mirroring
-        /// <c>PdfGenerator.AddPdfPages</c>' page-size resolution, its <c>@page</c> re-layout, and its
-        /// <c>MaxSize</c>/<c>PerformLayout</c> pair.
+        /// <c>PdfGenerator.AddPdfPages</c>' page-size resolution (including its in-place <c>@page</c>
+        /// correction inside <c>SetContent</c>/<c>SetHtml</c>) and its <c>MaxSize</c>/<c>PerformLayout</c> pair.
         /// </summary>
         /// <param name="html">the document to lay out</param>
         /// <param name="config">the generator configuration whose page size and margins apply</param>
@@ -67,12 +68,6 @@ namespace PeachPDF.Tests.TestSupport
             var container = new HtmlContainer(adapter);
 
             await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
-
-            // The @page arm: the CSS size wins, and the document is parsed and laid out a second time.
-            if (container.CssPageSize.HasValue && container.CssPageSize.Value != orgPageSize)
-            {
-                await PdfGenerator.SetContent(container, config, html, null, container.CssPageSize.Value);
-            }
 
             using var measure = XGraphics.CreateMeasureContext(
                 container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
@@ -112,11 +107,6 @@ namespace PeachPDF.Tests.TestSupport
             var container = new HtmlContainer(adapter);
 
             await PdfGenerator.SetContent(container, config, html, null, orgPageSize);
-
-            if (container.CssPageSize.HasValue && container.CssPageSize.Value != orgPageSize)
-            {
-                await PdfGenerator.SetContent(container, config, html, null, container.CssPageSize.Value);
-            }
 
             var measure = XGraphics.CreateMeasureContext(container.PageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
 
