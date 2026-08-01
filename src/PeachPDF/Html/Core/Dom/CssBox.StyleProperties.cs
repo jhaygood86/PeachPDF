@@ -2125,23 +2125,27 @@ namespace PeachPDF.Html.Core.Dom
             _computedStyle = _computedStyle.SetPropertyValue(_computedStyle.CustomProperties, customProperties, static (s, v) => s with { CustomProperties = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Font, parentStyle.Font, static (s, a) => s with { Font = a });
             var unicodeBidiBeforeInherit = _computedStyle.Text.UnicodeBidi;
+            var verticalAlignBeforeInherit = _computedStyle.Text.VerticalAlign;
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Text, parentStyle.Text, static (s, a) => s with { Text = a });
             if (!everything)
             {
-                // unicode-bidi is the one property in this otherwise-100%-inherited area that is CSS-spec
-                // Inherited: no - the whole-area adoption just above unconditionally copied it from the
-                // parent anyway (that's the whole point of adopting the area by reference), so put this
-                // box's own pre-inherit value (already defaulted to initial, or set by an earlier cascade
-                // phase) back. The `everything: true` path deliberately skips this and keeps the adopted
-                // value, since that path is a structural duplicate of the same source element (CssProxyBox's
-                // repeated header/footer, DomParser's inline/block split) which needs the source's own
-                // resolved value even though it isn't a real ancestor-descendant inheritance case - the
-                // same reasoning box-sizing's own everything-branch exception below already established.
+                // unicode-bidi and vertical-align are the two properties in this otherwise-100%-inherited
+                // area that are CSS-spec Inherited: no - the whole-area adoption just above unconditionally
+                // copied both from the parent anyway (that's the whole point of adopting the area by
+                // reference), so put this box's own pre-inherit values (already defaulted to initial, or set
+                // by an earlier cascade phase) back. The `everything: true` path deliberately skips this and
+                // keeps the adopted values, since that path is a structural duplicate of the same source
+                // element (CssProxyBox's repeated header/footer, DomParser's inline/block split) which needs
+                // the source's own resolved value even though it isn't a real ancestor-descendant inheritance
+                // case - the same reasoning box-sizing's own everything-branch exception below already
+                // established (vertical-align gets an equivalent explicit copy there too).
                 // Routed through SetPropertyValue (not a bare `with`, which always allocates) so the common
                 // case - this box's own value already matches what the parent just handed down - stays a
                 // total no-op, preserving the "whole unchanged subtree shares one Text instance" guarantee.
                 var textArea = _computedStyle.Text;
-                var restoredTextArea = textArea.SetPropertyValue(textArea.UnicodeBidi, unicodeBidiBeforeInherit, static (a, v) => a with { UnicodeBidi = v });
+                var restoredTextArea = textArea
+                    .SetPropertyValue(textArea.UnicodeBidi, unicodeBidiBeforeInherit, static (a, v) => a with { UnicodeBidi = v })
+                    .SetPropertyValue(textArea.VerticalAlign, verticalAlignBeforeInherit, static (a, v) => a with { VerticalAlign = v });
                 _computedStyle = _computedStyle.AdoptArea(textArea, restoredTextArea, static (s, a) => s with { Text = a });
             }
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Table, parentStyle.Table, static (s, a) => s with { Table = a });
@@ -2244,6 +2248,14 @@ namespace PeachPDF.Html.Core.Dom
                 .SetPropertyValue(boxModel.Bottom, parentStyle.BoxModel.Bottom, static (a, v) => a with { Bottom = v })
                 .SetPropertyValue(boxModel.Right, parentStyle.BoxModel.Right, static (a, v) => a with { Right = v });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.BoxModel, boxModel, static (s, a) => s with { BoxModel = a });
+
+            // vertical-align is not inherited either (CSS 2.1 §10.8.1) and was restored to this box's own
+            // value in the "always" section above for the same reason unicode-bidi was - but a structural
+            // duplicate is a fragment of the SAME source box, so it still needs the source's own resolved
+            // value here, same as box-sizing above.
+            var textAreaForVerticalAlign = _computedStyle.Text;
+            var textAreaWithVerticalAlign = textAreaForVerticalAlign.SetPropertyValue(textAreaForVerticalAlign.VerticalAlign, parentStyle.Text.VerticalAlign, static (a, v) => a with { VerticalAlign = v });
+            _computedStyle = _computedStyle.AdoptArea(textAreaForVerticalAlign, textAreaWithVerticalAlign, static (s, a) => s with { Text = a });
 
             var textDecoration = _computedStyle.TextDecoration;
             textDecoration = textDecoration
