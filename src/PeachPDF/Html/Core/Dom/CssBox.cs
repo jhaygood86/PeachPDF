@@ -5703,18 +5703,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Offsets the rectangle of the specified linebox by the specified gap,
-        /// and goes deep for rectangles of children in that linebox.
-        /// </summary>
-        /// <param name="lineBox"></param>
-        /// <param name="gap"></param>
-        internal void OffsetRectangle(CssLineBox lineBox, double gap)
-        {
-            if (!Rectangles.TryGetValue(lineBox, out var r)) return;
-            Rectangles[lineBox] = new RRect(r.X, r.Y + gap, r.Width, r.Height);
-        }
-
-        /// <summary>
         /// Resets the <see cref="Rectangles"/> array
         /// </summary>
         internal void RectanglesReset()

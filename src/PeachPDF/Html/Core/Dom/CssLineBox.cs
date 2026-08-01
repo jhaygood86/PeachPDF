@@ -253,7 +253,6 @@ namespace PeachPDF.Html.Core.Dom
                 double recttop = newtop - gap;
                 RRect newr = new(r.X, recttop, r.Width, r.Height);
                 Rectangles[b] = newr;
-                b.OffsetRectangle(this, gap);
             }
             else
             {

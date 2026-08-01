@@ -377,17 +377,23 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         /// <summary>
         /// Set while the verification build above is running, and by the emission paths that may not
-        /// prune at all, to make <see cref="BuildDraft"/> withhold new "emitted nothing" observations for
-        /// the slot being built.
+        /// write at all (<see cref="EmitReservedBlankSlots"/>, <see cref="Finish"/>'s stale-slot
+        /// replay), to make <see cref="BuildDraft"/> withhold new "emitted nothing" observations for the
+        /// slot being built.
         /// </summary>
         /// <remarks>
         /// Withholding <i>new</i> observations is the only thing every one of those callers actually
-        /// needs. The reserved-blank-slot pass and <see cref="Finish"/>'s stale-slot replay both run out
-        /// of forward order, so a subtree found empty there might simply not have been reached yet by a
-        /// slot still to come in the same replay — but an <i>existing</i>, already-validated observation
-        /// (see <see cref="InvalidationHistory"/>) says something different: that the box's fragments are
-        /// entirely behind a slot no replay in this batch could still be filling, which is just as true
-        /// out of order as in it. Reading is gated separately, by <see cref="_forcingUnprunedReferenceWalk"/>.
+        /// needs. <see cref="CssBox.EmittedNothingAtOrBefore"/> only ever lets a mark recorded while
+        /// processing slot <c>S</c> suppress a later query at a slot <c>&gt;= S</c> — a direction that
+        /// makes writing safe within a single out-of-order sweep only in ascending order (an earlier,
+        /// low-slot mark can help a later, high-slot query in the same sweep), which is exactly the
+        /// order <see cref="Finish"/>'s replay was found unsafe to write in (see its own remarks; a
+        /// descending reordering removes that risk but was measured to help nothing in return, since a
+        /// mark made late in a descending sweep has nothing lower left to suppress). Reading an
+        /// <i>existing</i>, already-validated observation (see <see cref="InvalidationHistory"/>) is
+        /// gated separately, by <see cref="_forcingUnprunedReferenceWalk"/>: it describes ground behind
+        /// every slot any of these callers could still be touching, which is sound out of order as much
+        /// as in it.
         /// </remarks>
         private bool _pruningSuspended;
 
@@ -769,14 +775,15 @@ namespace PeachPDF.Html.Core.Fragmentation
                 RecordChain(incoming, slot, _continuedFrom);
                 RecordChain(outgoing, slot, _continuesInto);
 
-                // The one path that may prune: these are the slots the pass that has just ended filled,
-                // frozen while the geometry it produced is still what the box tree says.
+                // The one path that verifies against the full walk: these are the slots the pass that has
+                // just ended filled, frozen while the geometry it produced is still what the box tree says.
                 //
                 // Only the last slot of the range, and only if the range genuinely reaches past
                 // everything emitted so far, may an observation be drawn from - see
                 // RecordEmptyObservations. Every earlier slot of the range still USES observations
                 // already made; it just may not make new ones.
-                EmitSlot(slot, mayPrune: true, frontier: slot == throughSlot && slot >= _lastEmittedSlot);
+                EmitSlot(slot, mayWrite: true, mayVerify: true,
+                    frontier: slot == throughSlot && slot >= _lastEmittedSlot);
             }
         }
 
@@ -785,6 +792,14 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// slot the passes reached — the trailing <c>break-after</c> case, which is settled only once the
         /// final document height is known and so cannot be stated by a pass.
         /// </summary>
+        /// <remarks>
+        /// Stays conservative (<c>mayWrite: false</c>): these slots are categorically past everywhere any
+        /// real content was ever bounded to reach, which would make writing here safe by a different
+        /// argument than <see cref="Finish"/>'s (ordering-based, and found not to pay off there anyway —
+        /// see its own remarks) — but that boundary isn't backed by an invariant anywhere today, and this
+        /// pass only ever covers 0-1 slots per document (a directional break's own reserved page), so the
+        /// payoff doesn't justify the verification burden. Revisit only if that changes.
+        /// </remarks>
         internal void EmitReservedBlankSlots()
         {
             if (container.MaxReservedBlankSlot is not { } reserved) return;
@@ -793,7 +808,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 // Runs once every pass is over, so a subtree observed empty here could never be
                 // un-observed by a later layout - nothing may be concluded from it.
-                EmitSlot(slot, mayPrune: false);
+                EmitSlot(slot, mayWrite: false);
             }
         }
 
@@ -852,13 +867,23 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             // Slots a later pass's mover disturbed, emitted again now that layout has settled.
             //
-            // Never prunes, and the reason is the sharp one: `_stale` is a contiguous ASCENDING range
-            // (see InvalidateFrom), replayed here with layout already over, so no write could ever
-            // invalidate a conclusion drawn while replaying it. The lowest stale slot would otherwise
-            // observe every subtree that lives in a higher band as empty and skip the rest of the range.
+            // Never writes, and the reason is the sharp one: a mark recorded while processing slot S
+            // only ever suppresses a FUTURE query at a slot >= S (CssBox.EmittedNothingAtOrBefore), so
+            // within a single sweep over this batch, only a mark written EARLY (at a low slot) could
+            // help a query LATER in the same sweep (at a higher slot) - the natural direction is
+            // ascending, not descending. But ascending order is exactly what makes writing unsafe here:
+            // the lowest stale slot would run before the higher slots holding its own subtree's real
+            // content have been walked at all, so a box could be wrongly marked "empty from here on" when
+            // its actual content is still ahead, undiscovered, in the same batch. (Reordering to
+            // descending order removes that specific risk but was tried and measured to help nothing in
+            // return: marks written late in a descending sweep are only usable by slots lower than where
+            // they were made, and there is nothing left to visit below them by construction - see
+            // .claude/recent-fixes/ for the measurement.) Reading an existing, already-validated
+            // observation remains safe and unrestricted here regardless - see
+            // FragmentEmitter._forcingUnprunedReferenceWalk.
             foreach (var slot in new List<int>(_stale))
             {
-                EmitSlot(slot, mayPrune: false);
+                EmitSlot(slot, mayWrite: false);
             }
 
             if (_emitted.Count == 0) return new FragmentTree([]);
@@ -971,15 +996,21 @@ namespace PeachPDF.Html.Core.Fragmentation
             a.Slot != b.Slot ? a.Slot < b.Slot : a.Instance < b.Instance;
 
         /// <param name="index">the pagination slot to freeze</param>
-        /// <param name="mayPrune">
-        /// whether <see cref="BuildDraft"/> may skip a subtree it has already observed to be empty.
-        /// False for the emission paths whose slot is not the one the geometry was just produced for —
-        /// see each call site.
+        /// <param name="mayWrite">
+        /// whether <see cref="BuildDraft"/> may collect new "emitted nothing"/"produced something"
+        /// observations for this slot at all. False only for <see cref="EmitReservedBlankSlots"/>, which
+        /// deliberately stays as conservative as before — see its own remarks.
+        /// </param>
+        /// <param name="mayVerify">
+        /// whether the differential-verification oracle (<see cref="VerifyPruningAgainstFullWalk"/>) may
+        /// run for this slot. Kept independent of <paramref name="mayWrite"/>: only <see cref="EmitPass"/>
+        /// passes true here — <see cref="VerifyAgainstTheFullWalk"/>'s before/after frozen-state
+        /// comparison assumes an ordinary, in-order pass.
         /// </param>
         /// <param name="frontier">
         /// whether this is the furthest slot layout has reached — see <see cref="RecordEmptyObservations"/>.
         /// </param>
-        private void EmitSlot(int index, bool mayPrune, bool frontier = false)
+        private void EmitSlot(int index, bool mayWrite, bool mayVerify = false, bool frontier = false)
         {
             var bandTop = container.PageTopOf(index);
 
@@ -993,7 +1024,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             var root = container.Root!;
 
             var wasSuspended = _pruningSuspended;
-            var verifying = VerifiesPruning && mayPrune && !wasSuspended;
+            var verifying = VerifiesPruning && mayVerify && !wasSuspended;
 
             if (verifying)
             {
@@ -1001,7 +1032,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 _frozenBeforeSlot.UnionWith(_frozen);
             }
 
-            _pruningSuspended = wasSuspended || !mayPrune;
+            _pruningSuspended = wasSuspended || !mayWrite;
 
             var hasPrintableContent = false;
             var prunable = true;
@@ -1017,7 +1048,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 _pruningSuspended = wasSuspended;
             }
 
-            RecordEmptyObservations(index, frontier && mayPrune && !wasSuspended);
+            RecordEmptyObservations(index, frontier && mayWrite && !wasSuspended);
 
             if (verifying)
             {
