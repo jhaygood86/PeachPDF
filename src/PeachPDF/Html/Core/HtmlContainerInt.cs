@@ -432,6 +432,18 @@ namespace PeachPDF.Html.Core
         internal int? MaxFragmentainersOverride { get; set; }
 
         /// <summary>
+        /// Test-only override for <see cref="FragmentEmitter.VerifyPruningAgainstFullWalk"/>, so one
+        /// render can be checked against the unpruned walk without turning the check on process-wide.
+        /// Null in production, where the environment variable alone decides.
+        /// </summary>
+        /// <remarks>
+        /// Per instance rather than static because the test suite runs its collections in parallel:
+        /// a test that flipped a global would silently change what every concurrently-running test was
+        /// doing. The environment variable stays as the way to run the <i>whole</i> suite under it.
+        /// </remarks>
+        internal bool? VerifyFragmentPruningOverride { get; set; }
+
+        /// <summary>
         /// The top-left most location of the rendered html.<br/>
         /// This will offset the top-left corner of the rendered html.
         /// </summary>

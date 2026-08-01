@@ -368,6 +368,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             Environment.GetEnvironmentVariable("PEACHPDF_VERIFY_FRAGMENT_PRUNING") == "1";
 
         /// <summary>
+        /// Whether this render checks itself — the environment-wide switch, or one container's own
+        /// <see cref="HtmlContainerInt.VerifyFragmentPruningOverride"/>.
+        /// </summary>
+        private bool VerifiesPruning =>
+            container.VerifyFragmentPruningOverride ?? VerifyPruningAgainstFullWalk;
+
+        /// <summary>
         /// Set while the verification build above is running, and by the emission paths that may not
         /// prune at all, to make <see cref="BuildDraft"/> take the full walk.
         /// </summary>
@@ -958,7 +965,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             var root = container.Root!;
 
             var wasSuspended = _pruningSuspended;
-            var verifying = VerifyPruningAgainstFullWalk && mayPrune && !wasSuspended;
+            var verifying = VerifiesPruning && mayPrune && !wasSuspended;
 
             if (verifying)
             {
