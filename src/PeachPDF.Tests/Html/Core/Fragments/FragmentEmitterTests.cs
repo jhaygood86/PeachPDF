@@ -944,6 +944,26 @@ namespace PeachPDF.Tests.Html.Core.Fragments
         }
 
         /// <summary>
+        /// The companion case for <see cref="ClearContinuationShells_WithNothingRecorded_LeavesAnExistingObservationIntact"/>:
+        /// a slot that genuinely held a recorded continuation shell must still discard the observation.
+        /// </summary>
+        [Fact]
+        public async Task ClearContinuationShells_WithSomethingRecordedFromTheGivenSlot_StillDiscardsTheObservation()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p'>hello</p>"));
+            var p = LayoutHarness.FindById(root, "p")!;
+
+            container.RecordContinuationShell(p, 2, new RRect(0, 0, 100, 100));
+
+            p.RecordEmittedNothingAt(0, 0);
+            Assert.True(p.EmittedNothingAtOrBefore(0, 0));
+
+            container.ClearContinuationShells(p, fromSlot: 2);
+
+            Assert.False(p.EmittedNothingAtOrBefore(0, 0));
+        }
+
+        /// <summary>
         /// The same shape for the css-break-3 §4.3 fragment-displacement bookkeeping.
         /// </summary>
         [Fact]
