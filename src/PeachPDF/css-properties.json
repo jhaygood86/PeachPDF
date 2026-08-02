@@ -135,7 +135,7 @@
     },
     {
       "name": "fill",
-      "comment": "SVG <paint> (svg-shapes-1.1 §13.2): none | url(#id) | currentColor | <color>. Produces a structured SvgPaint, not a string, so it needs its own data type rather than HTML's plain 'color'. url()-to-pattern-vs-gradient resolution (SvgTreeBuilder.ResolveUrlPaintKind) is not yet wired into the generated setter — that lands with the SVG cutover batch, which also refactors SvgTreeBuilder.ApplyCommon to call this registry for real rendering.",
+      "comment": "SVG <paint> (svg-shapes-1.1 §13.2): none | url(#id) | currentColor | <color>. Produces a structured SvgPaint, not a string, so it needs its own data type rather than HTML's plain 'color'. No customSetter needed — the generated default svg-paint setter already reclassifies a url() reference from gradient to pattern against the current document's id registries via ctx.ResolveUrlPaintKind (SvgTreeBuilder.ResolveUrlPaintKind bound as a delegate); SvgValueParsers.TryParsePaint has no document context of its own and always classifies url(#id) as GradientRef.",
       "inherited": true,
       "initialValue": "black",
       "cssDataType": "svg-paint",
@@ -147,8 +147,119 @@
       }
     },
     {
+      "name": "stroke",
+      "comment": "Same SVG <paint> grammar and url()-reclassification need as fill (see its comment) — stroke just targets a different SvgElement field and a different initial value/inherited carrier.",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": "svg-paint",
+      "svg": {
+        "propertyPath": "Stroke",
+        "csharpDataType": "SvgPaint",
+        "inheritedFrom": "Stroke",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke-width",
+      "comment": "SVG <length> (svg-strokeprops-1.1 §11.4), percentages resolved against the viewport diagonal via ctx.ViewportDiagonal. Falls back to the inherited value on an invalid value, matching SvgTreeBuilder.ApplyCommon's existing '?? inherited.StrokeWidth' behavior.",
+      "inherited": true,
+      "initialValue": "1",
+      "cssDataType": "svg-length",
+      "svg": {
+        "propertyPath": "StrokeWidth",
+        "csharpDataType": "double",
+        "inheritedFrom": "StrokeWidth",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke-miterlimit",
+      "comment": "SVG <number> (svg-strokeprops-1.1 §11.4), parsed via the shared SvgValueParsers.ParseLength grammar with no reference length (a plain unitless number is what the spec actually allows here, and ParseLength already accepts a bare number). Falls back to the inherited value on an invalid value.",
+      "inherited": true,
+      "initialValue": "4",
+      "cssDataType": "svg-length",
+      "svg": {
+        "propertyPath": "StrokeMiterLimit",
+        "csharpDataType": "double",
+        "inheritedFrom": "StrokeMiterLimit",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke-dashoffset",
+      "comment": "SVG <length> (svg-strokeprops-1.1 §11.4), percentages resolved against the viewport diagonal. Falls back to the inherited value on an invalid value.",
+      "inherited": true,
+      "initialValue": "0",
+      "cssDataType": "svg-length",
+      "svg": {
+        "propertyPath": "StrokeDashOffset",
+        "csharpDataType": "double",
+        "inheritedFrom": "StrokeDashOffset",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke-dasharray",
+      "comment": "SVG <length># | none (svg-strokeprops-1.1 §11.4) — SvgValueParsers.ParseDashArray already returns null (invalid) vs. an array, so this is its own data type (svg-length-list) rather than a plain length. Falls back to the inherited value on an invalid value.",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": "svg-length-list",
+      "svg": {
+        "propertyPath": "StrokeDashArray",
+        "csharpDataType": "double[]",
+        "inheritedFrom": "StrokeDashArray",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "fill-rule",
+      "comment": "Preserves SvgValueParsers.TryParseFillRule's current silent fallback to 'nonzero' on an invalid value (invalidBehavior: leave-unset, since SvgElement's own FillRule constructor default is already Nonzero) rather than SVG 1.1 §11.4's specified fallback to the inherited value — an existing spec deviation, encoded as-is and tracked separately (see the stroke-linecap entry's identical note), not fixed by this migration. supportedValues/keywordComparison document the real grammar; customValidator/customSetter reuse the shared TryParseFillRule parser directly rather than re-deriving a keyword→enum mapping (customSetter code runs only after Validate_FillRule already passed, so the second TryParseFillRule call here can never itself fail).",
+      "inherited": true,
+      "initialValue": "nonzero",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "nonzero",
+        "evenodd"
+      ],
+      "keywordComparison": "ordinal-ignore-case",
+      "svg": {
+        "propertyPath": "FillRule",
+        "csharpDataType": "RFillMode",
+        "inheritedFrom": "FillRule",
+        "invalidBehavior": "leave-unset",
+        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseFillRule({value}, out _)",
+        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseFillRule({value}, out var parsed);\n{element}.FillRule = parsed;"
+      }
+    },
+    {
+      "name": "fill-opacity",
+      "comment": "Same shape as opacity (see its comment) — TryParseOpacity's own fallback (1.0) already equals both the initial value and SvgElement's FillOpacity constructor default, so 'leave field unwritten on failure' reproduces SvgTreeBuilder.ApplyCommon's existing present-but-invalid behavior exactly (distinct from stroke-width/etc., which fall back to inherited instead).",
+      "inherited": true,
+      "initialValue": "1",
+      "cssDataType": "svg-opacity",
+      "svg": {
+        "propertyPath": "FillOpacity",
+        "csharpDataType": "double",
+        "inheritedFrom": "FillOpacity",
+        "invalidBehavior": "leave-unset"
+      }
+    },
+    {
+      "name": "stroke-opacity",
+      "comment": "Same shape as fill-opacity (see its comment).",
+      "inherited": true,
+      "initialValue": "1",
+      "cssDataType": "svg-opacity",
+      "svg": {
+        "propertyPath": "StrokeOpacity",
+        "csharpDataType": "double",
+        "inheritedFrom": "StrokeOpacity",
+        "invalidBehavior": "leave-unset"
+      }
+    },
+    {
       "name": "stroke-linecap",
-      "comment": "Preserves SvgValueParsers.ParseLineCap's current silent fallback to 'butt' on an invalid value (invalidBehavior: initial) rather than SVG 1.1 §11.4's specified fallback to the inherited value — an existing spec deviation, encoded as-is and tracked separately, not fixed by this migration.",
+      "comment": "Preserves SvgValueParsers.TryParseLineCap's current silent fallback to 'butt' on an invalid value (invalidBehavior: leave-unset, since SvgElement's own StrokeLineCap constructor default is already Butt) rather than SVG 1.1 §11.4's specified fallback to the inherited value — an existing spec deviation, encoded as-is and tracked separately, not fixed by this migration. customValidator/customSetter reuse the shared TryParseLineCap parser directly (see the fill-rule entry's identical note) instead of the inline enum-mapping switch this entry used before the SVG cutover.",
       "inherited": true,
       "initialValue": "butt",
       "cssDataType": "keyword",
@@ -162,8 +273,30 @@
         "propertyPath": "StrokeLineCap",
         "csharpDataType": "RLineCap",
         "inheritedFrom": "StrokeLineCap",
-        "invalidBehavior": "initial",
-        "customSetter": "{element}.StrokeLineCap = {value}.Trim().ToLowerInvariant() switch { \"round\" => RLineCap.Round, \"square\" => RLineCap.Square, _ => RLineCap.Butt };"
+        "invalidBehavior": "leave-unset",
+        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineCap({value}, out _)",
+        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineCap({value}, out var parsed);\n{element}.StrokeLineCap = parsed;"
+      }
+    },
+    {
+      "name": "stroke-linejoin",
+      "comment": "Same shape as stroke-linecap (see its comment) — TryParseLineJoin's own fallback (Miter) already equals SvgElement's StrokeLineJoin constructor default.",
+      "inherited": true,
+      "initialValue": "miter",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "miter",
+        "round",
+        "bevel"
+      ],
+      "keywordComparison": "ordinal-ignore-case",
+      "svg": {
+        "propertyPath": "StrokeLineJoin",
+        "csharpDataType": "RLineJoin",
+        "inheritedFrom": "StrokeLineJoin",
+        "invalidBehavior": "leave-unset",
+        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineJoin({value}, out _)",
+        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineJoin({value}, out var parsed);\n{element}.StrokeLineJoin = parsed;"
       }
     },
     {
@@ -462,6 +595,7 @@
     },
     {
       "name": "opacity",
+      "comment": "Shared name, different grammar per side: HTML's CSS opacity is stored as a raw string with no validation (cssDataType 'any', matching the old unconditional-assign dispatch exactly), while SVG's <opacity-value> (css-color-4 §14, clamped [0,1]) is a real double the renderer composites down the subtree at paint time — not inherited, so there is no inheritedFrom carrier. The svg block's customValidator/customSetter override the shared 'any' cssDataType with the real TryParseOpacity grammar; its own out-param default (1.0) already equals both the initial value and SvgElement's Opacity constructor default, so 'leave field unwritten on failure' (invalidBehavior: leave-unset) reproduces SvgTreeBuilder.ApplyCommon's old present-but-invalid behavior exactly.",
       "inherited": false,
       "initialValue": "1",
       "cssDataType": "any",
@@ -469,6 +603,13 @@
         "propertyPath": "Opacity",
         "csharpDataType": "string",
         "area": "VisualEffectsArea"
+      },
+      "svg": {
+        "propertyPath": "Opacity",
+        "csharpDataType": "double",
+        "invalidBehavior": "leave-unset",
+        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity({value}, out _)",
+        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity({value}, out var parsed);\n{element}.Opacity = parsed;"
       }
     },
     {

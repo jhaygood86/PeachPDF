@@ -89,7 +89,7 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
 
             Assert.Contains("SvgValueParsers.TryParsePaint(value, ctx.Adapter, ctx.ContextColor, out var parsed)", generated);
-            Assert.Contains("element.Fill = parsed;", generated);
+            Assert.Contains("element.Fill = ctx.ResolveUrlPaintKind(parsed);", generated);
             Assert.Contains("[\"fill\"] = \"black\",", generated);
         }
 
@@ -111,6 +111,50 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
 
             Assert.DoesNotContain("\"direction\"", generated);
+        }
+
+        [Fact]
+        public void Emits_SvgPropertyRegistry_For_A_Length_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "stroke-width", "inherited": true, "initialValue": "1", "cssDataType": "svg-length",
+                      "svg": { "propertyPath": "StrokeWidth", "csharpDataType": "double", "inheritedFrom": "StrokeWidth", "invalidBehavior": "inherit" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains("SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal) is not null", generated);
+            Assert.Contains("var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal);", generated);
+            Assert.Contains("element.StrokeWidth = parsed.Value;", generated);
+        }
+
+        [Fact]
+        public void Emits_SvgPropertyRegistry_For_A_LengthList_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "stroke-dasharray", "inherited": true, "initialValue": "none", "cssDataType": "svg-length-list",
+                      "svg": { "propertyPath": "StrokeDashArray", "csharpDataType": "double[]", "inheritedFrom": "StrokeDashArray", "invalidBehavior": "inherit" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains("SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal) is not null", generated);
+            Assert.Contains("var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal);", generated);
+            Assert.Contains("element.StrokeDashArray = parsed;", generated);
         }
 
         [Fact]

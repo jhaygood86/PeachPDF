@@ -142,35 +142,6 @@ namespace PeachPDF.Svg
     internal static class SvgCssStyling
     {
         /// <summary>
-        /// SVG initial (default) values for the paint/geometry properties whose <c>&lt;style&gt;</c>
-        /// declarations flow through <see cref="GetMatchedDeclarations"/>, used to resolve the
-        /// <c>initial</c> CSS-wide keyword to a concrete value the SVG paint consumers can parse (per the
-        /// property's SVG 1.1/2 initial value). Every property here is inherited, so <c>unset</c> resolves as
-        /// <c>inherit</c> (the null-present signal) rather than needing an entry.
-        /// <para>
-        /// Maintenance: when adding a new inherited SVG property that is (a) registered with a
-        /// globals-accepting converter and (b) consumed via the <c>null → inherited</c> path in
-        /// <c>SvgTreeBuilder.ApplyCommon</c>, add its initial value here too — otherwise <c>initial</c> on it
-        /// would silently resolve to null (i.e. <em>inherited</em>) instead of its actual initial value.
-        /// </para>
-        /// </summary>
-        private static readonly Dictionary<string, string> SvgInitialValues = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["fill"] = "black",
-            ["stroke"] = "none",
-            ["stroke-width"] = "1",
-            ["stroke-dasharray"] = "none",
-            ["stroke-dashoffset"] = "0",
-            ["stroke-linecap"] = "butt",
-            ["stroke-linejoin"] = "miter",
-            ["stroke-miterlimit"] = "4",
-            ["fill-opacity"] = "1",
-            ["stroke-opacity"] = "1",
-            ["fill-rule"] = "nonzero",
-            ["clip-rule"] = "nonzero",
-        };
-
-        /// <summary>
         /// The author-stylesheet declarations that apply to <paramref name="node"/>, merged winner-last
         /// (<see cref="CssData.GetAuthorStyleRules"/> returns them specificity- then source-order-sorted),
         /// with each value's <c>var()</c> references resolved against the node's custom properties. Custom
@@ -184,7 +155,8 @@ namespace PeachPDF.Svg
         /// </para>
         /// <para>
         /// The CSS-wide keywords (CSS Cascade 4 §7.3) are resolved here: <c>initial</c> to the property's SVG
-        /// initial value (<see cref="SvgInitialValues"/>); <c>inherit</c> passes through literally (the SVG
+        /// initial value (<see cref="SvgPropertyRegistry.GetInitialValue"/>, generated from css-properties.json
+        /// — see CLAUDE.md's generator section); <c>inherit</c> passes through literally (the SVG
         /// paint consumers map "inherit" to the inherited value); and <c>unset</c>/<c>revert</c>/
         /// <c>revert-layer</c> to the <c>null</c>-present signal (§6.1). A property present with a <c>null</c>
         /// value is the winning declaration but the consumer must compute the property to its inherited/initial
@@ -238,7 +210,7 @@ namespace PeachPDF.Svg
                             || trimmed.Equals(CssConstants.Unset, StringComparison.OrdinalIgnoreCase))
                             resolved = null;
                         else if (trimmed.Equals(CssConstants.Initial, StringComparison.OrdinalIgnoreCase))
-                            resolved = SvgInitialValues.GetValueOrDefault(property.Name);
+                            resolved = SvgPropertyRegistry.GetInitialValue(property.Name);
                         else
                             resolved = CssVarResolver.Resolve(node, property.Value, varContext);
 

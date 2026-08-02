@@ -23,6 +23,8 @@ namespace PeachPDF.SourceGenerators.Tests
                 public class SvgElement
                 {
                     public string Fill { get; set; } = "";
+                    public double StrokeWidth { get; set; }
+                    public double[] StrokeDashArray { get; set; } = System.Array.Empty<double>();
                 }
             }
             """;

@@ -155,17 +155,26 @@ validates a JSON entry's `propertyPath`/`csharpDataType` against the *real* `Css
 build time (`PPG010`/`PPG011`), so a mismatch is a build error naming both files, not a silently wrong
 dictionary entry.
 
-**Current state:** all 166 HTML longhand + CSS logical properties are authored (10 original representative
-entries + 133 plain HTML properties + 23 logical properties), but SVG properties are not yet authored and
-neither `CssUtils` nor `SvgTreeBuilder.ApplyCommon`'s hand-written dispatch calls the generated registries
-yet — they're generated and tested *alongside* the existing code, proving every entry byte-for-byte
-equivalent before the hand-written HTML dispatch is cut over to it and the ~15 SVG properties are authored
-and cut over. `CssPropertyRegistryEquivalenceTests.cs` (`PeachPDF.Tests`) covers the properties whose
-semantics are subtle enough to warrant a hand-picked, targeted case (custom setters, enum-backed
-properties, SVG); `CssPropertyRegistrySweepEquivalenceTests.cs` complements it with a generic sweep — every
-plain-getter property crossed against a shared value corpus — to catch a transcription mistake (wrong area,
-wrong keyword comparison, wrong data type) a hand-picked case might not happen to probe. Both are the
-equivalence proof to extend, not skip, when adding entries ahead of a cutover.
+**Current state:** full cutover on both sides. `CssUtils.SetPropertyValue`/`GetPropertyValue`/
+`SnapshotProperties` forward to the generated `CssPropertyRegistry`, and `SvgTreeBuilder.ApplyCommon`
+calls the generated `SvgPropertyRegistry.TrySet` for every common presentation property (fill, stroke,
+stroke-width/-miterlimit/-dasharray/-dashoffset, opacity, fill-rule, fill-opacity, stroke-opacity,
+stroke-linecap, stroke-linejoin) while keeping its own per-property null/`inherit`/invalid-value fallback
+decision — which genuinely differs per property (see each entry's `svg.invalidBehavior` and comment) — since
+the generator has no notion of "the inherited value" to fall back to on its own. `clip-path`, `mask`,
+`marker`/`marker-start`/`marker-mid`/`marker-end`, and `direction` stay hand-written in `ApplyCommon`
+(URL extraction with a side effect, a three-way shorthand override, and a carrier-only property never
+stored on `SvgElement`, respectively — see the plan's reasoning, still accurate). `SvgPropertyContext`
+(generated) carries what a common-property setter needs beyond the raw value: `Adapter`/`ContextColor`,
+`ViewportDiagonal` (for percentage stroke-width/dashoffset/dasharray), and a `ResolveUrlPaintKind`
+delegate (fill/stroke's url()-to-pattern-vs-gradient reclassification, which needs the current document's
+id registries `SvgPropertyContext` itself doesn't carry). `SvgPropertyRegistryEquivalenceTests.cs`
+(`PeachPDF.Tests`) proves the generated SVG dispatch matches `SvgValueParsers` directly, and the SVG
+showcases were re-rasterized through both PDFium and MuPDF (byte-identical PDF content streams
+before/after the `ApplyCommon` refactor) per this repo's paint-verification convention. HTML's own
+equivalence proof (`CssPropertyRegistryEquivalenceTests.cs`/`CssPropertyRegistrySweepEquivalenceTests.cs`)
+no longer exists as a separate file — since `CssUtils` forwards directly to `CssPropertyRegistry`,
+`CssUtilsTests.cs` exercising `CssUtils`'s public API already covers it end-to-end.
 
 **Adding a property**: add one object to `css-properties.json`'s `properties` array. `cssDataType` names
 a grammar (`length`, `color`, `keyword` + `supportedValues`, `integer`, `{type:"enum-keyword", ...}` for a
@@ -175,9 +184,12 @@ never a second, independently-derived grammar check. Reach for `customSetter`/`c
 tokens `{value}`/`{box}`/`{element}`/`{parser}`/`{ctx}`) only when a property doesn't fit any grammar —
 a multi-field write (`font-family`), a value remap (`page-break-after`'s legacy `always`→`page`), or a
 structurally different storage type. Keep that escape hatch rare: 5 of the 164 hand-written HTML
-properties and 1 SVG property needed it when this generator's design was validated against the existing
-dispatch — a much higher rate usually means the data type vocabulary needs a new case, not another
-`customSetter`. The 12 `PPG001`–`PPG014` diagnostics (`src/PeachPDF.SourceGenerators/Diagnostics.cs`) are
+properties needed it, and on the SVG side only the four keyword-enum-backed properties
+(`fill-rule`/`stroke-linecap`/`stroke-linejoin`/`opacity`'s svg binding) — each just re-calls the shared
+`SvgValueParsers.TryParseX` a second time to get the typed `out` value, since the generic `Validate_X`
+guard already ran the same check and discarded it — a much higher rate usually means the data type
+vocabulary needs a new case, not another `customSetter`. The 12 `PPG001`–`PPG014` diagnostics
+(`src/PeachPDF.SourceGenerators/Diagnostics.cs`) are
 the first thing to read when a build breaks on a JSON change; `PPG010`/`PPG011` (symbol mismatches) and
 `PPG007` (alias/initial-value disagreement) are the ones most likely to catch a real authoring mistake
 rather than a shape typo.

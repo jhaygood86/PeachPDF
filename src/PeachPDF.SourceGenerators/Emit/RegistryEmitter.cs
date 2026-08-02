@@ -236,10 +236,18 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("        public RAdapter Adapter { get; }");
             sb.AppendLine("        public RColor ContextColor { get; }");
             sb.AppendLine();
-            sb.AppendLine("        public SvgPropertyContext(RAdapter adapter, RColor contextColor)");
+            sb.AppendLine("        /// <summary>The current viewport's diagonal (per the SVG percentage-length formula) — needed to resolve a percentage stroke-width/dashoffset/dasharray entry; null where no viewport is established yet.</summary>");
+            sb.AppendLine("        public double? ViewportDiagonal { get; }");
+            sb.AppendLine();
+            sb.AppendLine("        /// <summary>Reclassifies a url()-referencing SvgPaint as a gradient vs. pattern reference against the current document's id registries — see SvgTreeBuilder.ResolveUrlPaintKind. The nominal @supports context uses the identity function.</summary>");
+            sb.AppendLine("        public Func<SvgPaint, SvgPaint> ResolveUrlPaintKind { get; }");
+            sb.AppendLine();
+            sb.AppendLine("        public SvgPropertyContext(RAdapter adapter, RColor contextColor, double? viewportDiagonal, Func<SvgPaint, SvgPaint> resolveUrlPaintKind)");
             sb.AppendLine("        {");
             sb.AppendLine("            Adapter = adapter;");
             sb.AppendLine("            ContextColor = contextColor;");
+            sb.AppendLine("            ViewportDiagonal = viewportDiagonal;");
+            sb.AppendLine("            ResolveUrlPaintKind = resolveUrlPaintKind;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
             sb.AppendLine();
@@ -263,7 +271,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("        /// <summary>Validation only, with a nominal default context — the @supports render-layer oracle for SVG.</summary>");
             sb.AppendLine("        internal static bool SupportsDeclaration(string name, string value)");
             sb.AppendLine("        {");
-            sb.AppendLine("            var ctx = new SvgPropertyContext(new global::PeachPDF.Adapters.PdfSharpAdapter(), RColor.Black);");
+            sb.AppendLine("            var ctx = new SvgPropertyContext(new global::PeachPDF.Adapters.PdfSharpAdapter(), RColor.Black, null, static p => p);");
             sb.AppendLine("            return _validators.TryGetValue(name, out var validator) && validator(ctx, value);");
             sb.AppendLine("        }");
 
@@ -312,13 +320,16 @@ namespace PeachPDF.SourceGenerators.Emit
             {
                 DataTypeKind.SvgPaint =>
                     "if (!global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.Adapter, ctx.ContextColor, out var parsed)) return false;\n" +
-                    $"element.{svg.PropertyPath} = parsed;\nreturn true;",
+                    $"element.{svg.PropertyPath} = ctx.ResolveUrlPaintKind(parsed);\nreturn true;",
                 DataTypeKind.SvgOpacity =>
                     "if (!global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity(value, out var parsed)) return false;\n" +
                     $"element.{svg.PropertyPath} = parsed;\nreturn true;",
                 DataTypeKind.SvgLength =>
-                    "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, null);\n" +
+                    "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal);\n" +
                     $"if (parsed is null) return false;\nelement.{svg.PropertyPath} = parsed.Value;\nreturn true;",
+                DataTypeKind.SvgLengthList =>
+                    "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal);\n" +
+                    $"if (parsed is null) return false;\nelement.{svg.PropertyPath} = parsed;\nreturn true;",
                 DataTypeKind.Any => $"element.{svg.PropertyPath} = value;\nreturn true;",
                 _ => throw new NotSupportedException(
                     $"DataTypeKind.{kind} has no default SVG setter and \"{entry.Name}\" declares no customSetter."),

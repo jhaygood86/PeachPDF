@@ -32,7 +32,8 @@ namespace PeachPDF.SourceGenerators.Emit
             DataTypeKind.EnumKeyword => "true", // CssProperty<T>.FromCssText never rejects — falls back to the keyword instead. See css-properties.schema.json's remarks.
             DataTypeKind.SvgPaint => "global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.Adapter, ctx.ContextColor, out _)",
             DataTypeKind.SvgOpacity => "global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity(value, out _)",
-            DataTypeKind.SvgLength => "global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, null) is not null",
+            DataTypeKind.SvgLength => "global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal) is not null",
+            DataTypeKind.SvgLengthList => "global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal) is not null",
             _ => throw new NotSupportedException(
                 $"DataTypeKind.{dt.Kind} is not yet implemented by RegistryEmitter (property \"{entry.Name}\") — " +
                 "add its codegen to ValidatorExpressionBuilder before authoring an entry that uses it."),
