@@ -7,6 +7,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -132,6 +133,75 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(1.0, box.Words[0].FontSizeScale);
         }
 
+        [Fact]
+        public async Task AllSmallCaps_WordWithNoLowercaseLetters_IsStillShrunk()
+        {
+            // Unlike plain small-caps (which leaves an already-uppercase word untouched, see
+            // SmallCaps_WordWithNoLowercaseLetters_IsNotSplit above), all-small-caps approximates c2sc
+            // by shrinking already-uppercase runs too - so a word with zero lowercase letters must still
+            // enter the synthesis path and come out scaled down, not skipped.
+            var container = await LayoutHtml(
+                "<b id=\"w\" style=\"font-variant-caps:all-small-caps\">ABC</b>");
+            var box = FindWordsBox(container.Root!, "w");
+
+            Assert.Single(box.Words);
+            Assert.Equal("ABC", box.Words[0].Text);
+            Assert.Equal(CssBox.SmallCapsFontScale, box.Words[0].FontSizeScale);
+        }
+
+        [Fact]
+        public async Task AllSmallCaps_MixedCaseWord_ShrinksBothTheUppercaseAndLowercaseRuns()
+        {
+            // "AbC" -> uppercase run "A" (shrunk, approximating c2sc), lowercase run "b" (case-flipped to
+            // "B" and shrunk, real small-caps), uppercase run "C" (shrunk). All three runs end up at the
+            // same reduced scale, unlike plain small-caps where only the lowercase run would shrink.
+            var container = await LayoutHtml(
+                "<b id=\"w\" style=\"font-variant-caps:all-small-caps\">AbC</b>");
+            var box = FindWordsBox(container.Root!, "w");
+
+            Assert.Equal(3, box.Words.Count);
+            Assert.Equal("A", box.Words[0].Text);
+            Assert.Equal("B", box.Words[1].Text);
+            Assert.Equal("C", box.Words[2].Text);
+            Assert.All(box.Words, w => Assert.Equal(CssBox.SmallCapsFontScale, w.FontSizeScale));
+        }
+
+        [Fact]
+        public async Task AllSmallCaps_WordWithNoLetters_IsNotSplit()
+        {
+            // "123" has neither a lowercase nor an uppercase letter (digits are not upper - they land in
+            // the same "not lower" bucket as uppercase letters when run-splitting, but they aren't what
+            // all-small-caps' c2sc approximation is shrinking) - the word must be left whole, exercising
+            // ContainsUpperLetter's "no upper letter found" path at the top-level synthesis gate.
+            var container = await LayoutHtml(
+                "<b id=\"w\" style=\"font-variant-caps:all-small-caps\">123</b>");
+            var box = FindWordsBox(container.Root!, "w");
+
+            Assert.Single(box.Words);
+            Assert.Equal("123", box.Words[0].Text);
+            Assert.Equal(1.0, box.Words[0].FontSizeScale);
+        }
+
+        [Fact]
+        public async Task AllSmallCaps_DigitRunBetweenLowercaseRuns_DigitRunIsNotShrunk()
+        {
+            // "a1b" -> lowercase run "a" (shrunk), digit run "1" (not-lower like an uppercase run, but
+            // contains no uppercase letter so c2sc's approximation must leave it at full size), lowercase
+            // run "b" (shrunk) - exercises ContainsUpperLetter's "no upper letter found" path at the
+            // per-run scale calculation, distinct from the top-level gate covered above.
+            var container = await LayoutHtml(
+                "<b id=\"w\" style=\"font-variant-caps:all-small-caps\">a1b</b>");
+            var box = FindWordsBox(container.Root!, "w");
+
+            Assert.Equal(3, box.Words.Count);
+            Assert.Equal("A", box.Words[0].Text);
+            Assert.Equal(CssBox.SmallCapsFontScale, box.Words[0].FontSizeScale);
+            Assert.Equal("1", box.Words[1].Text);
+            Assert.Equal(1.0, box.Words[1].FontSizeScale);
+            Assert.Equal("B", box.Words[2].Text);
+            Assert.Equal(CssBox.SmallCapsFontScale, box.Words[2].FontSizeScale);
+        }
+
         // ── Painting: actual RGraphics.DrawString call sequence ─────────────────
 
         [Fact]
@@ -157,8 +227,20 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
+        // Every test here relies on the resolved font lacking real smcp/c2sc GSUB data, so the
+        // synthetic uppercase+shrink fallback is what actually exercises - explicitly loading the
+        // bundled Source Code Pro (confirmed via direct byte inspection to carry zero caps-family GSUB
+        // tags) rather than the platform default keeps this true regardless of which real fonts happen
+        // to be installed on the machine running the suite (some, e.g. certain Windows-bundled fonts,
+        // do carry real smcp data, which would otherwise make ActualFontVariantCaps resolve away from
+        // None and skip synthesis entirely - the new, correct behavior for a font that actually has it).
+        private static readonly string FontFaceBase64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.Otf));
+
         private static string Wrap(string body) =>
-            $"<!DOCTYPE html><html><head></head><body style=\"width:400px\">{body}</body></html>";
+            $@"<!DOCTYPE html><html><head><style>
+@font-face {{ font-family: 'SCP'; src: url('data:font/opentype;base64,{FontFaceBase64}') format('opentype'); }}
+body {{ font-family: 'SCP'; width: 400px; }}
+</style></head><body>{body}</body></html>";
 
         private static async Task<HtmlContainerInt> LayoutHtml(string body)
         {
@@ -222,7 +304,7 @@ namespace PeachPDF.Tests.Integration
             public RecordingGraphics(RAdapter adapter)
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
                 => DrawStringCalls.Add((str, font, point));
 
             public override void PushTransform(RMatrix matrix) { }
@@ -235,15 +317,15 @@ namespace PeachPDF.Tests.Integration
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override RGraphicsPath GetGraphicsPath() => null!;
 
-            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => null;
+            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
             public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
             public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
             public override void BeginMarkedContent(string structureType, int mcid) { }
             public override void EndMarkedContent() { }
             public override void BeginArtifact() { }
-            public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => new(0, 12);
-            public override int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => str?.Length ?? 0;
+            public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new(0, 12);
+            public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;

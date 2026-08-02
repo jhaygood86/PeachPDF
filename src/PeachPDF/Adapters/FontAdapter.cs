@@ -14,6 +14,7 @@ using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Text;
 
 namespace PeachPDF.Adapters
 {
@@ -81,6 +82,9 @@ namespace PeachPDF.Adapters
         }
 
         public override bool HasGlyph(System.Text.Rune rune) => Font.Descriptor?.HasGlyph(rune) ?? false;
+
+        public override bool SupportsFontVariantCaps(FontVariantCapsFeature feature) =>
+            Font.Descriptor?.SupportsFeatureTags(GsubShaper.GetFeatureTags(feature)) ?? false;
 
         public override string FaceKey => Font.GlyphTypeface.Key;
 

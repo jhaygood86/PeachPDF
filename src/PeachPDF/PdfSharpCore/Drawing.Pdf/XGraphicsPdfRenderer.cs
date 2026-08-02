@@ -401,7 +401,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawString ---------------------------------------------------------------------------
 
-        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, TextShapingFeatures features)
         {
             double x = rect.X;
             double y = rect.Y;
@@ -409,7 +409,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double lineSpace = font.GetHeight();
             double cyAscent = lineSpace * font.CellAscent / font.CellSpace;
             double cyDescent = lineSpace * font.CellDescent / font.CellSpace;
-            double width = _gfx.MeasureString(s, font, ligatureFeatures).Width;
+            double width = _gfx.MeasureString(s, font, features).Width;
 
             //bool bold = (font.Style & XFontStyle.Bold) != 0;
             //bool italic = (font.Style & XFontStyle.Italic) != 0;
@@ -495,19 +495,19 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 int paletteIndex = fontPalette?.BasePaletteIndex ?? 0;
                 var colorPainter = new ColorGlyphPainter(this, descriptor, font, brush, x, y,
                     letterSpacing, Gfx.PageDirection, paletteIndex, fontPalette?.Overrides);
-                colorPainter.Paint(s, ligatureFeatures);
+                colorPainter.Paint(s, features);
             }
             else
             {
                 PdfFont realizedFont = _gfxState._realizedFont;
                 Debug.Assert(realizedFont != null);
-                realizedFont.AddShapedText(s, ligatureFeatures);
+                realizedFont.AddShapedText(s, features);
 
                 string text = null;
                 if (font.Unicode)
                 {
                     StringBuilder sb = new StringBuilder();
-                    foreach (ShapedGlyph glyph in descriptor.Shape(s, ligatureFeatures))
+                    foreach (ShapedGlyph glyph in descriptor.Shape(s, features))
                         sb.Append((char)glyph.GlyphIndex);
                     s = sb.ToString();
 

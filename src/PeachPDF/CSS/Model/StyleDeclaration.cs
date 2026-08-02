@@ -1039,10 +1039,28 @@ namespace PeachPDF.CSS
             set => SetPropertyValue(PropertyNames.FontVariant, value);
         }
 
+        public string FontVariantCaps
+        {
+            get => GetPropertyValue(PropertyNames.FontVariantCaps);
+            set => SetPropertyValue(PropertyNames.FontVariantCaps, value);
+        }
+
         public string FontVariantLigatures
         {
             get => GetPropertyValue(PropertyNames.FontVariantLigatures);
             set => SetPropertyValue(PropertyNames.FontVariantLigatures, value);
+        }
+
+        public string FontVariantNumeric
+        {
+            get => GetPropertyValue(PropertyNames.FontVariantNumeric);
+            set => SetPropertyValue(PropertyNames.FontVariantNumeric, value);
+        }
+
+        public string FontVariantEastAsian
+        {
+            get => GetPropertyValue(PropertyNames.FontVariantEastAsian);
+            set => SetPropertyValue(PropertyNames.FontVariantEastAsian, value);
         }
 
         public string FontWeight

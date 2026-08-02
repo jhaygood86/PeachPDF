@@ -80,6 +80,21 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Nabla => Path.Combine(AppContext.BaseDirectory, "NablaSubset.ttf");
 
         /// <summary>
+        /// The web-platform-tests GSUB conformance font (see gsubtest-lookup3.LICENSE.txt): every
+        /// feature tag (smcp/c2sc/pcap/c2pc/etc.) is implemented as a real GSUB <b>Alternate
+        /// Substitution</b> (Lookup Type 3) feature - the only publicly available font found with real
+        /// petite-caps/all-petite-caps data, since <see cref="Ttf"/>/<see cref="Otf"/> only cover the
+        /// Lookup Type 1 (Single Substitution) path for caps. A feature's base codepoint (0xE000 +
+        /// 4*index into the font's own feature table, see gsubtest-features.js) maps a "default"
+        /// control glyph (glyph name <c>TAG.default</c>) plus one "altN" glyph per alternate-index
+        /// value (<c>TAG.alt1</c>, <c>TAG.alt2</c>, ...) - each alt glyph's alternate set spells the
+        /// literal word "PASS" only at the one alternate index it's designed to test, "FAIL" at every
+        /// other index, so correct alternate-index selection is provable by codepoint alone, without
+        /// needing to rasterize and read the glyph.
+        /// </summary>
+        internal static string GsubTestLookup3 => Path.Combine(AppContext.BaseDirectory, "gsubtest-lookup3.otf");
+
+        /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF
         /// if the host reports none.
         /// </summary>

@@ -7,7 +7,7 @@
         private static readonly IValueConverter StyleConverter = WithOrder(
             WithAny(
                 FontStyleConverter.Option().For(PropertyNames.FontStyle),
-                FontVariantConverter.Option().For(PropertyNames.FontVariant),
+                FontVariantCss2Converter.Option().For(PropertyNames.FontVariantCaps),
                 FontWeightConverter.Or(WeightIntegerConverter).Option().For(PropertyNames.FontWeight),
                 FontStretchConverter.Option().For(PropertyNames.FontStretch)),
             WithOrder(

@@ -1746,7 +1746,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (breakAt <= 0 || breakAt >= text.Length) continue;
 
                 var prefixText = text[..breakAt] + "-";
-                var prefixWidth = g.MeasureString(prefixText, b.ActualFont, b.ActualFontVariantLigatures).Width;
+                var prefixWidth = g.MeasureString(prefixText, b.ActualFont, b.ActualTextShapingFeatures).Width;
                 if (prefixWidth > availableWidth) continue;
 
                 var suffixText = text[breakAt..];
@@ -1757,7 +1757,7 @@ namespace PeachPDF.Html.Core.Dom
                 };
                 suffix = new CssRectWord(b, suffixText, false, word.HasSpaceAfter)
                 {
-                    Width = g.MeasureString(suffixText, b.ActualFont, b.ActualFontVariantLigatures).Width,
+                    Width = g.MeasureString(suffixText, b.ActualFont, b.ActualTextShapingFeatures).Width,
                     Height = b.ActualFont.Height
                 };
                 return true;

@@ -79,6 +79,13 @@ Each UCD source file carries this notice in its own header, reproduced here rath
 
 > © 2025 Unicode®, Inc. Unicode and the Unicode Logo are registered trademarks of Unicode, Inc. in the U.S. and other countries. For terms of use and license, see https://www.unicode.org/terms_of_use.html
 
+## Bundled font assets
+
+- **Location:** [`assets/fonts/`](assets/fonts/) — shared by the test suite, the showcase harness, and the browser demo; each font's own license notice sits beside it as a `.LICENSE.txt`
+- **License:** varies per font (SIL OFL 1.1 or 3-Clause BSD)
+
+None of these fonts ships in the PeachPDF library or its NuGet package. See [docs/license.md's "Font assets" table](docs/license.md#font-assets) for the full list, what each one is used for, and its specific license.
+
 ## Hyphenation patterns (hyph-utf8 / CTAN)
 
 - **Location:** [`src/PeachPDF/Text/Resources/Patterns/`](src/PeachPDF/Text/Resources/Patterns/) — one Brotli-compressed `hyph-<tag>.txt.br` file per language (73 files)

@@ -86,7 +86,7 @@ namespace PeachPDF.Fonts
         /// instead of <see cref="CharacterToGlyphIndex"/> - <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfToUnicodeMap"/>
         /// merges both when building the PDF ToUnicode map.
         /// </summary>
-        public void AddShapedText(string text, LigatureFeatures features)
+        public void AddShapedText(string text, TextShapingFeatures features)
         {
             if (text == null)
                 return;

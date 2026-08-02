@@ -18,6 +18,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Paint;
+using PeachPDF.Text;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -834,17 +835,20 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Adds one word to <see cref="Words"/> — or, when <see cref="FontVariant"/> is
-        /// <c>small-caps</c> and <paramref name="text"/> contains at least one lowercase letter, splits
-        /// it into consecutive lowercase/non-lowercase case-run fragments instead. PeachPDF has no
-        /// OpenType shaping engine to do real <c>smcp</c>/<c>c2sc</c> glyph substitution, so each
-        /// lowercase run is upper-cased and marked (<see cref="CssRect.FontSizeScale"/>) to be
-        /// measured/painted smaller than the rest of the word (see
-        /// <see cref="DerivedStyle.ActualSmallCapsFont"/>). Every fragment after the first is marked
-        /// <see cref="CssRect.SuppressWrapBefore"/> so this split never introduces a new line-break
-        /// opportunity in the middle of what was one word. <paramref name="hyphenationCandidates"/> (see
-        /// <see cref="CssRect.HyphenationCandidates"/>) is only attached when the word is kept whole —
-        /// small-caps splitting and hyphenation are a separate, non-composing pair of features.
+        /// Adds one word to <see cref="Words"/> — or, when <see cref="FontVariantCaps"/> is
+        /// <c>small-caps</c>/<c>all-small-caps</c> and the resolved font lacks real GSUB support for it
+        /// (see <see cref="DerivedStyle.ActualFontVariantCaps"/>), splits it into consecutive
+        /// lowercase/non-lowercase case-run fragments instead. Each lowercase run is upper-cased and
+        /// marked (<see cref="CssRect.FontSizeScale"/>) to be measured/painted smaller than the rest of
+        /// the word (see <see cref="DerivedStyle.ActualSmallCapsFont"/>) - under all-small-caps, an
+        /// already-uppercase run is shrunk too, without a case-flip. When the resolved font *does* have
+        /// real <c>smcp</c>/<c>c2sc</c>/etc. GSUB data, none of this synthesis happens at all - the word
+        /// is kept whole and the caps feature is instead threaded into shaping (see
+        /// <see cref="ActualTextShapingFeatures"/>). Every fragment after the first is marked
+        /// <see cref="CssRect.SuppressWrapBefore"/> so a synthetic split never introduces a new
+        /// line-break opportunity in the middle of what was one word. <paramref name="hyphenationCandidates"/>
+        /// (see <see cref="CssRect.HyphenationCandidates"/>) is only attached when the word is kept
+        /// whole — small-caps splitting and hyphenation are a separate, non-composing pair of features.
         /// </summary>
         private void AddWord(string text, bool hasSpaceBefore, bool hasSpaceAfter, List<int>? hyphenationCandidates = null, string? originalText = null)
         {
@@ -861,7 +865,18 @@ namespace PeachPDF.Html.Core.Dom
             // majority of words don't - they take the single-word fast path unchanged.
             var needsPerCodepoint = NeedsPerCodepointFont(text);
 
-            if (FontVariant != CssConstants.SmallCaps || !ContainsLowerLetter(text))
+            // Synthesis (uppercase lowercase runs + shrink) only ever applies to small-caps/
+            // all-small-caps, and only when real GSUB substitution isn't already handling it -
+            // DerivedStyle.ActualFontVariantCaps resolves to None whenever the resolved font actually
+            // supports the requested feature, in which case the word is left untouched here and real
+            // substitution happens transparently at measure/paint time. The other 4 caps keywords
+            // never synthesize at all (real substitution or a silent no-op, never an approximation).
+            var isSmallCapsFamily = FontVariantCaps is CssConstants.SmallCaps or CssConstants.AllSmallCaps;
+            var isAllSmallCaps = FontVariantCaps == CssConstants.AllSmallCaps;
+            var needsSynthesis = isSmallCapsFamily && ActualFontVariantCaps == FontVariantCapsFeature.None;
+            var synthesisApplies = needsSynthesis && (ContainsLowerLetter(text) || (isAllSmallCaps && ContainsUpperLetter(text)));
+
+            if (!synthesisApplies)
             {
                 if (!needsPerCodepoint)
                 {
@@ -896,7 +911,11 @@ namespace PeachPDF.Html.Core.Dom
                 var runText = text.Substring(start, length);
                 var runOriginalText = originalText.Substring(start, length);
                 var displayText = isLower ? runText.ToUpperInvariant() : runText;
-                var scale = isLower ? SmallCapsFontScale : 1.0;
+                // Under all-small-caps, a run that was already uppercase is shrunk too (approximating
+                // c2sc - no case-flip needed, since it's already upper) but only when it actually
+                // contains an uppercase letter, not a pure digit/punctuation run (c2sc never touches
+                // those either).
+                var scale = isLower || (isAllSmallCaps && ContainsUpperLetter(runText)) ? SmallCapsFontScale : 1.0;
                 var runSpaceBefore = i == 0 && hasSpaceBefore;
                 var runSpaceAfter = i == runs.Count - 1 && hasSpaceAfter;
 
@@ -1031,6 +1050,15 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var c in text)
             {
                 if (char.IsLower(c)) return true;
+            }
+            return false;
+        }
+
+        private static bool ContainsUpperLetter(string text)
+        {
+            foreach (var c in text)
+            {
+                if (char.IsUpper(c)) return true;
             }
             return false;
         }
@@ -4522,7 +4550,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (boxWord.IsImage) continue;
                     var font = ResolveWordFont(boxWord, this);
-                    boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualFontVariantLigatures).Width : 0;
+                    boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualTextShapingFeatures).Width : 0;
                     // Letter-spacing adds space after every glyph shown including the last (N gaps for
                     // an N-glyph word) - matching both the PDF Tc operator's actual per-glyph behavior
                     // (PaintWords/RealizeFont) and CSS Text 3 §7.2, which only exempts the start/end of a
@@ -4534,7 +4562,7 @@ namespace PeachPDF.Html.Core.Dom
                     // one glyph, so Tc (applied once per glyph shown) fires fewer times than Text.Length
                     // would suggest.
                     if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
-                        boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ActualFontVariantLigatures) * ActualLetterSpacing;
+                        boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ActualTextShapingFeatures) * ActualLetterSpacing;
                     boxWord.Height = ActualFont.Height;
                 }
             }
@@ -4573,11 +4601,11 @@ namespace PeachPDF.Html.Core.Dom
                 var effectiveText = boxWord.FirstLineText ?? boxWord.Text;
 
                 var font = ResolveWordFont(boxWord, firstLineStyle);
-                boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font, firstLineStyle.ActualFontVariantLigatures).Width : 0;
+                boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font, firstLineStyle.ActualTextShapingFeatures).Width : 0;
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-glyph word, not N-1,
                 // and the shaped glyph count rather than the character count.
                 if (effectiveText != "\n" && firstLineStyle.ActualLetterSpacing != 0)
-                    boxWord.Width += g.CountShapedGlyphs(effectiveText!, font, firstLineStyle.ActualFontVariantLigatures) * firstLineStyle.ActualLetterSpacing;
+                    boxWord.Width += g.CountShapedGlyphs(effectiveText!, font, firstLineStyle.ActualTextShapingFeatures) * firstLineStyle.ActualLetterSpacing;
                 boxWord.Height = font.Height;
             }
         }
@@ -4607,11 +4635,11 @@ namespace PeachPDF.Html.Core.Dom
                 boxWord.FirstLineText = null;
 
                 var font = ResolveWordFont(boxWord, this);
-                boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualFontVariantLigatures).Width : 0;
+                boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualTextShapingFeatures).Width : 0;
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-glyph word, not N-1,
                 // and the shaped glyph count rather than the character count.
                 if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
-                    boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ActualFontVariantLigatures) * ActualLetterSpacing;
+                    boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ActualTextShapingFeatures) * ActualLetterSpacing;
                 boxWord.Height = font.Height;
             }
         }

@@ -73,8 +73,8 @@ namespace PeachPDF.Tests.Integration
 
             using var g = MeasureGraphics();
             var font = box.ActualFont;
-            var baseWidth = g.MeasureString("ff", font, LigatureFeatures.Default).Width;
-            var glyphCount = g.CountShapedGlyphs("ff", font, LigatureFeatures.Default);
+            var baseWidth = g.MeasureString("ff", font, TextShapingFeatures.Default).Width;
+            var glyphCount = g.CountShapedGlyphs("ff", font, TextShapingFeatures.Default);
 
             Assert.Equal(1, glyphCount);
             Assert.Equal(baseWidth + glyphCount * box.ActualLetterSpacing, box.Words[0].Width, 3);
@@ -93,8 +93,42 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, boxB, recorder);
 
             Assert.Equal(2, recorder.DrawStringCalls.Count);
-            Assert.Equal(LigatureFeatures.Required, recorder.DrawStringCalls[0].LigatureFeatures);
-            Assert.Equal(LigatureFeatures.Default, recorder.DrawStringCalls[1].LigatureFeatures);
+            Assert.Equal(LigatureFeatures.Required, recorder.DrawStringCalls[0].Features.Ligatures);
+            Assert.Equal(LigatureFeatures.Default, recorder.DrawStringCalls[1].Features.Ligatures);
+        }
+
+        [Theory]
+        [InlineData("discretionary-ligatures", "Discretionary")]
+        [InlineData("historical-ligatures", "Historical")]
+        public async Task DiscretionaryAndHistoricalLigatures_NowResolveARealFlag(string keyword, string expectedExtraFlagName)
+        {
+            // Previously font-variant-ligatures: discretionary-ligatures/historical-ligatures parsed
+            // and cascaded but ActualFontVariantLigatures never set a flag for them - both are Lookup
+            // Type 4 like common ligatures (confirmed via direct byte inspection that Source Sans 3 has
+            // real dlig/hlig data), so the existing ligature reader already handles them once
+            // DerivedStyle actually requests the tag.
+            var container = await LayoutHtml($"<span id=\"a\" style=\"font-variant-ligatures:{keyword}\">ffi</span>");
+            var box = FindWordsBox(container.Root!, "a");
+            var resolved = box.ActualFontVariantLigatures;
+
+            // Common+Required stay on (the default, unaffected by this axis) and the requested extra
+            // flag is now set too - checked via HasFlag rather than exact ToString() text, since
+            // [Flags] enum formatting order isn't something a test should pin.
+            Assert.True(resolved.HasFlag(LigatureFeatures.Common));
+            Assert.True(resolved.HasFlag(LigatureFeatures.Required));
+            Assert.Equal(expectedExtraFlagName, (resolved & ~LigatureFeatures.Default).ToString());
+        }
+
+        [Fact]
+        public async Task Contextual_StillDoesNotApply_CaltNeedsChainingContextNotYetSupported()
+        {
+            // contextual/no-contextual still parse/cascade only - calt needs GSUB chaining-context
+            // lookup types (5-8), which this codebase's GSUB reader doesn't implement (see
+            // .claude/accepted-gaps/no-text-shaping.md). Unlike dlig/hlig, no flag is ever set for it.
+            var container = await LayoutHtml("<span id=\"a\" style=\"font-variant-ligatures:contextual\">ff</span>");
+            var box = FindWordsBox(container.Root!, "a");
+
+            Assert.Equal(LigatureFeatures.Default, box.ActualFontVariantLigatures);
         }
 
         [Fact]
@@ -201,13 +235,13 @@ body {{ font-family: 'SS3'; width: 400px; }}
 
         private sealed class RecordingGraphics : RGraphics
         {
-            public List<(string Text, LigatureFeatures LigatureFeatures)> DrawStringCalls { get; } = [];
+            public List<(string Text, TextShapingFeatures Features)> DrawStringCalls { get; } = [];
 
             public RecordingGraphics(RAdapter adapter)
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
-                => DrawStringCalls.Add((str, ligatureFeatures));
+            public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
+                => DrawStringCalls.Add((str, features ?? TextShapingFeatures.Default));
 
             public override void PushTransform(RMatrix matrix) { }
             public override void PopTransform() { }
@@ -219,15 +253,15 @@ body {{ font-family: 'SS3'; width: 400px; }}
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override RGraphicsPath GetGraphicsPath() => null!;
 
-            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => null;
+            public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
             public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
             public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
             public override void BeginMarkedContent(string structureType, int mcid) { }
             public override void EndMarkedContent() { }
             public override void BeginArtifact() { }
-            public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => new(0, 12);
-            public override int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => str?.Length ?? 0;
+            public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new(0, 12);
+            public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
             {
                 charFit = str?.Length ?? 0;

@@ -302,6 +302,245 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("", value.CssText);
         }
 
+        [Theory]
+        [InlineData("small-caps")]
+        [InlineData("all-small-caps")]
+        [InlineData("petite-caps")]
+        [InlineData("all-petite-caps")]
+        [InlineData("unicase")]
+        [InlineData("titling-caps")]
+        [InlineData("normal")]
+        public void CssFontVariantCapsAllSevenKeywordsLegal(string keyword)
+        {
+            var snippet = $"font-variant-caps : {keyword}";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-caps", property.Name);
+            Assert.IsType<FontVariantCapsProperty>(property);
+            var concrete = (FontVariantCapsProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal(keyword, concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantCapsUnknownKeywordIllegal()
+        {
+            var snippet = "font-variant-caps : smallcaps";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-caps", property.Name);
+            Assert.IsType<FontVariantCapsProperty>(property);
+            var concrete = (FontVariantCapsProperty)property;
+            Assert.True(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
+        }
+
+        [Theory]
+        [InlineData("all-small-caps")]
+        [InlineData("petite-caps")]
+        [InlineData("all-petite-caps")]
+        [InlineData("unicase")]
+        [InlineData("titling-caps")]
+        public void CssFontVariantShorthandAcceptsPreviouslyRejectedCapsKeywords(string keyword)
+        {
+            // Before font-variant became a real shorthand, only normal/small-caps parsed here (the
+            // css2 grammar, correct only for font's *embedded* variant slot) - standalone font-variant
+            // now accepts the full 7-keyword font-variant-caps grammar too.
+            var snippet = $"font-variant : {keyword}";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant", property.Name);
+            Assert.IsType<FontVariantProperty>(property);
+            var concrete = (FontVariantProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal(keyword, concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantNoneLegal()
+        {
+            var snippet = "font-variant : none";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant", property.Name);
+            Assert.IsType<FontVariantProperty>(property);
+            var concrete = (FontVariantProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("none", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantCombinesCapsAndLigaturesAxesLegal()
+        {
+            var snippet = "font-variant : small-caps common-ligatures";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant", property.Name);
+            Assert.IsType<FontVariantProperty>(property);
+            var concrete = (FontVariantProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+        }
+
+        [Theory]
+        [InlineData("lining-nums")]
+        [InlineData("oldstyle-nums")]
+        [InlineData("proportional-nums")]
+        [InlineData("tabular-nums")]
+        [InlineData("diagonal-fractions")]
+        [InlineData("stacked-fractions")]
+        [InlineData("ordinal")]
+        [InlineData("slashed-zero")]
+        [InlineData("normal")]
+        public void CssFontVariantNumericSingleAxisKeywordsLegal(string keyword)
+        {
+            var snippet = $"font-variant-numeric : {keyword}";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-numeric", property.Name);
+            Assert.IsType<FontVariantNumericProperty>(property);
+            var concrete = (FontVariantNumericProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal(keyword, concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantNumericMultiAxisCombinationLegal()
+        {
+            var snippet = "font-variant-numeric : oldstyle-nums tabular-nums slashed-zero";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-numeric", property.Name);
+            Assert.IsType<FontVariantNumericProperty>(property);
+            var concrete = (FontVariantNumericProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("oldstyle-nums tabular-nums slashed-zero", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantNumericSameAxisConflictIllegal()
+        {
+            var snippet = "font-variant-numeric : lining-nums oldstyle-nums";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-numeric", property.Name);
+            Assert.IsType<FontVariantNumericProperty>(property);
+            var concrete = (FontVariantNumericProperty)property;
+            Assert.True(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
+        }
+
+        [Theory]
+        [InlineData("jis78-forms")]
+        [InlineData("jis83-forms")]
+        [InlineData("jis90-forms")]
+        [InlineData("jis04-forms")]
+        [InlineData("simplified")]
+        [InlineData("traditional")]
+        [InlineData("full-width")]
+        [InlineData("proportional-width")]
+        [InlineData("ruby")]
+        [InlineData("normal")]
+        public void CssFontVariantEastAsianSingleAxisKeywordsLegal(string keyword)
+        {
+            var snippet = $"font-variant-east-asian : {keyword}";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-east-asian", property.Name);
+            Assert.IsType<FontVariantEastAsianProperty>(property);
+            var concrete = (FontVariantEastAsianProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal(keyword, concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantEastAsianMultiAxisCombinationLegal()
+        {
+            var snippet = "font-variant-east-asian : jis78-forms full-width ruby";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-east-asian", property.Name);
+            Assert.IsType<FontVariantEastAsianProperty>(property);
+            var concrete = (FontVariantEastAsianProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("jis78-forms full-width ruby", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontVariantEastAsianSameAxisConflictIllegal()
+        {
+            var snippet = "font-variant-east-asian : jis78-forms jis83-forms";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-variant-east-asian", property.Name);
+            Assert.IsType<FontVariantEastAsianProperty>(property);
+            var concrete = (FontVariantEastAsianProperty)property;
+            Assert.True(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void CssFontFeatureSettingsNormalLegal()
+        {
+            var snippet = "font-feature-settings : normal";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-feature-settings", property.Name);
+            Assert.IsType<FontFeatureSettingsProperty>(property);
+            var concrete = (FontFeatureSettingsProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("normal", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontFeatureSettingsSingleTagLegal()
+        {
+            var snippet = "font-feature-settings : \"smcp\"";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-feature-settings", property.Name);
+            Assert.IsType<FontFeatureSettingsProperty>(property);
+            var concrete = (FontFeatureSettingsProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("\"smcp\"", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontFeatureSettingsMultipleTagsWithValuesLegal()
+        {
+            var snippet = "font-feature-settings : \"smcp\" 1, \"onum\" on, \"ss01\" 2";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-feature-settings", property.Name);
+            Assert.IsType<FontFeatureSettingsProperty>(property);
+            var concrete = (FontFeatureSettingsProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("\"smcp\" 1, \"onum\" on, \"ss01\" 2", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontFeatureSettingsOffValueLegal()
+        {
+            var snippet = "font-feature-settings : \"liga\" off";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-feature-settings", property.Name);
+            Assert.IsType<FontFeatureSettingsProperty>(property);
+            var concrete = (FontFeatureSettingsProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("\"liga\" off", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontFeatureSettingsBareIdentTagIllegal()
+        {
+            // font-feature-settings tags are <string>s, not bare identifiers (that's the
+            // prince-opentype() grammar's job, at a different property entirely).
+            var snippet = "font-feature-settings : smcp";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-feature-settings", property.Name);
+            Assert.IsType<FontFeatureSettingsProperty>(property);
+            var concrete = (FontFeatureSettingsProperty)property;
+            Assert.True(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
+        }
+
         [Fact]
         public void CssFontStyleItalicLegal()
         {

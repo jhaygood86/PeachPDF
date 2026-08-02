@@ -201,11 +201,28 @@ namespace PeachPDF.CSS
                 {Keywords.Running, PlayState.Running},
                 {Keywords.Paused, PlayState.Paused}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
-        public static readonly FrozenDictionary<string, FontVariant> FontVariants =
-            new Dictionary<string, FontVariant>(StringComparer.OrdinalIgnoreCase)
+        // The full 7-keyword font-variant-caps grammar - the real longhand, and reachable from
+        // standalone `font-variant`. Named *Keywords (plural), not FontVariantCaps, to avoid colliding
+        // with the FontVariantCaps enum type itself - same convention as FontVariantLigatureTokens
+        // (dict) vs. FontVariantLigatureToken (enum) below.
+        public static readonly FrozenDictionary<string, FontVariantCaps> FontVariantCapsKeywords =
+            new Dictionary<string, FontVariantCaps>(StringComparer.OrdinalIgnoreCase)
             {
-                {Keywords.Normal, FontVariant.Normal},
-                {Keywords.SmallCaps, FontVariant.SmallCaps}
+                {Keywords.Normal, FontVariantCaps.Normal},
+                {Keywords.SmallCaps, FontVariantCaps.SmallCaps},
+                {Keywords.AllSmallCaps, FontVariantCaps.AllSmallCaps},
+                {Keywords.PetiteCaps, FontVariantCaps.PetiteCaps},
+                {Keywords.AllPetiteCaps, FontVariantCaps.AllPetiteCaps},
+                {Keywords.Unicase, FontVariantCaps.Unicase},
+                {Keywords.TitlingCaps, FontVariantCaps.TitlingCaps}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        // The restricted `<font-variant-css2>` grammar (normal | small-caps) - the only caps values
+        // reachable from inside the `font` shorthand's embedded variant slot, per spec.
+        public static readonly FrozenDictionary<string, FontVariantCaps> FontVariantCss2Keywords =
+            new Dictionary<string, FontVariantCaps>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Normal, FontVariantCaps.Normal},
+                {Keywords.SmallCaps, FontVariantCaps.SmallCaps}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, FontVariantLigatureToken> FontVariantLigatureTokens =
             new Dictionary<string, FontVariantLigatureToken>(StringComparer.OrdinalIgnoreCase)
@@ -218,6 +235,31 @@ namespace PeachPDF.CSS
                 {Keywords.NoHistoricalLigatures, FontVariantLigatureToken.NoHistoricalLigatures},
                 {Keywords.Contextual, FontVariantLigatureToken.Contextual},
                 {Keywords.NoContextual, FontVariantLigatureToken.NoContextual}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontVariantNumericToken> FontVariantNumericTokens =
+            new Dictionary<string, FontVariantNumericToken>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.LiningNums, FontVariantNumericToken.LiningNums},
+                {Keywords.OldstyleNums, FontVariantNumericToken.OldstyleNums},
+                {Keywords.ProportionalNums, FontVariantNumericToken.ProportionalNums},
+                {Keywords.TabularNums, FontVariantNumericToken.TabularNums},
+                {Keywords.DiagonalFractions, FontVariantNumericToken.DiagonalFractions},
+                {Keywords.StackedFractions, FontVariantNumericToken.StackedFractions},
+                {Keywords.Ordinal, FontVariantNumericToken.Ordinal},
+                {Keywords.SlashedZero, FontVariantNumericToken.SlashedZero}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontVariantEastAsianToken> FontVariantEastAsianTokens =
+            new Dictionary<string, FontVariantEastAsianToken>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Jis78Forms, FontVariantEastAsianToken.Jis78Forms},
+                {Keywords.Jis83Forms, FontVariantEastAsianToken.Jis83Forms},
+                {Keywords.Jis90Forms, FontVariantEastAsianToken.Jis90Forms},
+                {Keywords.Jis04Forms, FontVariantEastAsianToken.Jis04Forms},
+                {Keywords.Simplified, FontVariantEastAsianToken.Simplified},
+                {Keywords.Traditional, FontVariantEastAsianToken.Traditional},
+                {Keywords.FullWidth, FontVariantEastAsianToken.FullWidth},
+                {Keywords.ProportionalWidth, FontVariantEastAsianToken.ProportionalWidth},
+                {Keywords.Ruby, FontVariantEastAsianToken.Ruby}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, DirectionMode> DirectionModes =
             new Dictionary<string, DirectionMode>(StringComparer.OrdinalIgnoreCase)

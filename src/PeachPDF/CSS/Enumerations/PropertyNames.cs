@@ -123,7 +123,10 @@ namespace PeachPDF.CSS
         public static readonly string FontStyle = "font-style";
         public static readonly string FontStretch = "font-stretch";
         public static readonly string FontVariant = "font-variant";
+        public static readonly string FontVariantCaps = "font-variant-caps";
         public static readonly string FontVariantLigatures = "font-variant-ligatures";
+        public static readonly string FontVariantNumeric = "font-variant-numeric";
+        public static readonly string FontVariantEastAsian = "font-variant-east-asian";
         public static readonly string FontWeight = "font-weight";
         public static readonly string Font = "font";
         public static readonly string Gap = "gap";

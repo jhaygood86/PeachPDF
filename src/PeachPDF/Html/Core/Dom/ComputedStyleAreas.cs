@@ -343,8 +343,11 @@ namespace PeachPDF.Html.Core.Dom
 
         public string FontSize { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontSize)!;
         public string FontStyle { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontStyle)!;
-        public string FontVariant { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontVariant)!;
+        public string FontVariantCaps { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontVariantCaps)!;
         public string FontVariantLigatures { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontVariantLigatures)!;
+        public string FontVariantNumeric { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontVariantNumeric)!;
+        public string FontVariantEastAsian { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontVariantEastAsian)!;
+        public string FontFeatureSettings { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontFeatureSettings)!;
         public string FontWeight { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontWeight)!;
         public string FontStretch { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontStretch)!;
         public string FontPalette { get; init; } = CssDefaults.GetInitialValue(PropertyNames.FontPalette)!;

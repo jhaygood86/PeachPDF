@@ -74,7 +74,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 _cmapInfo.AddChars(text);
         }
 
-        internal void AddShapedText(string text, LigatureFeatures features)
+        internal void AddShapedText(string text, TextShapingFeatures features)
         {
             if (_cmapInfo != null)
                 _cmapInfo.AddShapedText(text, features);

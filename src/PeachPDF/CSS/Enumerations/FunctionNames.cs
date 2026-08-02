@@ -2,6 +2,9 @@ namespace PeachPDF.CSS
 {
     internal static class FunctionNames
     {
+        // Prince's proprietary font-variant escape hatch - accepted as an authoring-compatibility
+        // input form only (see PrinceOpenTypeConverter); never documented or emitted downstream.
+        public static readonly string PrinceOpenType = "prince-opentype";
         public static readonly string Url = "url";
         public static readonly string UrlPrefix = "url-prefix";
         public static readonly string Domain = "domain";

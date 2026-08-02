@@ -46,7 +46,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Measure string directly from font data.
         /// </summary>
-        public static XSize MeasureString(string text, XFont font, XStringFormat stringFormat, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public static XSize MeasureString(string text, XFont font, XStringFormat stringFormat, TextShapingFeatures features)
         {
             XSize size = new XSize();
 
@@ -80,7 +80,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 void FlushLine()
                 {
                     width = 0;
-                    foreach (ShapedGlyph glyph in descriptor.Shape(lineText.ToString(), ligatureFeatures))
+                    foreach (ShapedGlyph glyph in descriptor.Shape(lineText.ToString(), features))
                         width += descriptor.GlyphIndexToWidth(glyph.GlyphIndex);
                     lineText.Clear();
                 }

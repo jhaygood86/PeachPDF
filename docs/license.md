@@ -69,6 +69,7 @@ Every font the repository bundles lives in one place — the `assets/fonts/` dir
 | Inter | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Code Pro | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
 | Source Sans 3 | Tests | [SIL OFL 1.1](https://openfontlicense.org/) |
+| gsubtest-lookup3 (synthetic GSUB conformance font; © web-platform-tests contributors) — the only publicly available font found with real petite-caps/all-petite-caps GSUB Alternate Substitution data; see `assets/fonts/gsubtest-lookup3.LICENSE.txt` | Tests | [3-Clause BSD](https://github.com/web-platform-tests/wpt/blob/master/LICENSE.md) |
 
 The two hand-authored `COLR` color-glyph fixtures used by the color-font tests (`ColorTestV0.ttf` / `ColorTestV1.ttf`) contain no third-party font data and are released into the public domain (CC0); see `assets/fonts/ColorTestFonts.LICENSE.txt`.
 

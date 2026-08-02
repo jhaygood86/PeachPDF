@@ -193,9 +193,13 @@ p {{ width: 400px; }}
             // font-variant: small-caps splits by letter case AND the ranged family forces per-codepoint
             // resolution: the two mechanisms must compose - fragments carry both the small-caps size scale
             // and the per-codepoint marker, still glued so the split introduces no new wrap opportunity.
+            // Uses Source Code Pro (confirmed via byte inspection to carry zero caps-family GSUB tags) -
+            // Source Sans 3 has real smcp/c2sc data, which would make ActualFontVariantCaps resolve away
+            // from None and skip synthesis entirely (the new, correct behavior for a font that actually
+            // supports the feature), defeating the point of this synthesis/per-codepoint-composition test.
             var html = $@"<!DOCTYPE html>
 <html><head><style>
-@font-face {{ font-family: 'Caps'; src: url('data:font/truetype;base64,{B64(BundledFonts.Ttf)}') format('truetype'); unicode-range: U+41-5A; }}
+@font-face {{ font-family: 'Caps'; src: url('data:font/opentype;base64,{B64(BundledFonts.Otf)}') format('opentype'); unicode-range: U+41-5A; }}
 body {{ font-family: 'Caps'; font-size: 14pt; font-variant: small-caps; }}
 p {{ width: 400px; }}
 </style></head>

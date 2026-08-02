@@ -58,10 +58,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         }
 
         /// <summary>Paints every shaped glyph of the run, advancing the pen by each glyph's advance width.</summary>
-        public void Paint(string text, LigatureFeatures ligatureFeatures)
+        public void Paint(string text, TextShapingFeatures features)
         {
             double penX = 0;
-            foreach (ShapedGlyph glyph in _descriptor.Shape(text, ligatureFeatures))
+            foreach (ShapedGlyph glyph in _descriptor.Shape(text, features))
             {
                 PaintGlyph(glyph.GlyphIndex, _baselineX + penX);
                 penX += _descriptor.GlyphIndexToWidth(glyph.GlyphIndex) * _scale + _letterSpacing;

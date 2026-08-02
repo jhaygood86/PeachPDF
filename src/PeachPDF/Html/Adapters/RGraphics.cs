@@ -281,23 +281,24 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         /// <param name="str">the string to measure</param>
         /// <param name="font">the font to measure string with</param>
-        /// <param name="ligatureFeatures">
-        /// which GSUB ligature features (see <see cref="LigatureFeatures"/>) to apply when shaping
+        /// <param name="features">
+        /// which GSUB features (see <see cref="TextShapingFeatures"/>) to apply when shaping
         /// <paramref name="str"/> - must match what <see cref="DrawString"/> will use for the same
         /// text, so the measured width matches what's actually drawn.
         /// </param>
         /// <returns>the size of the string</returns>
-        public abstract RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default);
+        public abstract RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null);
 
         /// <summary>
-        /// The number of glyphs <paramref name="str"/> shapes into once GSUB ligature substitution is
-        /// applied - always &lt;= <paramref name="str"/>'s character count, less whenever a ligature
-        /// merges more than one character into a single glyph. Used to size the per-glyph <c>letter-
-        /// spacing</c> gap count a word's box must reserve (the PDF <c>Tc</c> operator adds one gap per
-        /// glyph actually shown, not per source character), so it stays in sync with what <see
-        /// cref="DrawString"/> paints for the same text/font/<paramref name="ligatureFeatures"/>.
+        /// The number of glyphs <paramref name="str"/> shapes into once GSUB substitution is applied -
+        /// always &lt;= <paramref name="str"/>'s character count, less whenever a ligature merges more
+        /// than one character into a single glyph (single substitution never changes the count). Used
+        /// to size the per-glyph <c>letter-spacing</c> gap count a word's box must reserve (the PDF
+        /// <c>Tc</c> operator adds one gap per glyph actually shown, not per source character), so it
+        /// stays in sync with what <see cref="DrawString"/> paints for the same text/font/
+        /// <paramref name="features"/>.
         /// </summary>
-        public abstract int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default);
+        public abstract int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null);
 
         /// <summary>
         /// Measure the width of string under max width restriction calculating the number of characters that can fit and the width those characters take.<br/>
@@ -330,11 +331,12 @@ namespace PeachPDF.Html.Adapters
         /// for a COLR/CPAL color font; <c>null</c> (the default/common case) selects palette 0 with no
         /// overrides, identical to how color-glyph drawing always worked before this parameter existed.
         /// </param>
-        /// <param name="ligatureFeatures">
-        /// which GSUB ligature features (see <see cref="LigatureFeatures"/>) to apply when shaping
-        /// <paramref name="str"/> - the resolved CSS <c>font-variant-ligatures</c> value.
+        /// <param name="features">
+        /// which GSUB features (see <see cref="TextShapingFeatures"/>) to apply when shaping
+        /// <paramref name="str"/> - the resolved CSS <c>font-variant-*</c>/<c>font-feature-settings</c>
+        /// values.
         /// </param>
-        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default);
+        public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null);
 
         /// <summary>
         /// Builds the vector outline of a glyph run as a fillable/strokeable <see cref="RGraphicsPath"/>,
@@ -349,8 +351,8 @@ namespace PeachPDF.Html.Adapters
         /// <param name="font">the font to outline with</param>
         /// <param name="baselineOrigin">the pen origin on the text baseline (user-space units)</param>
         /// <param name="letterSpacing">extra advance between glyphs (same units as <paramref name="baselineOrigin"/>)</param>
-        /// <param name="ligatureFeatures">which GSUB ligature features (see <see cref="LigatureFeatures"/>) to apply when shaping <paramref name="str"/></param>
-        public abstract RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, LigatureFeatures ligatureFeatures = LigatureFeatures.Default);
+        /// <param name="features">which GSUB features (see <see cref="TextShapingFeatures"/>) to apply when shaping <paramref name="str"/></param>
+        public abstract RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null);
 
         /// <summary>
         /// Draws a line connecting the two points specified by the coordinate pairs.

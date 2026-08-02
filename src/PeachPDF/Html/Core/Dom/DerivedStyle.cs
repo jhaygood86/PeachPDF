@@ -605,13 +605,13 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// The resolved GSUB ligature features (see <see cref="LigatureFeatures"/>) for this box's
-        /// text, from the CSS <c>font-variant-ligatures</c> value. Only the common-ligatures axis
-        /// (and <c>none</c>) changes shaping here - <c>discretionary-ligatures</c>/
-        /// <c>historical-ligatures</c>/<c>contextual</c> parse but don't yet affect it (no
-        /// <c>dlig</c>/<c>hlig</c>/<c>calt</c> lookup application), so any value other than <c>none</c>
-        /// or one containing <c>no-common-ligatures</c> resolves to the default (ligatures on).
-        /// Per the CSS Fonts spec, required ligatures (<c>rlig</c>) are never affected by this
-        /// property - not even by <c>none</c> - so the common-ligatures-off case still resolves to
+        /// text, from the CSS <c>font-variant-ligatures</c> value. The common-ligatures axis (and
+        /// <c>none</c>) and the discretionary/historical axes all change shaping (real <c>dlig</c>/
+        /// <c>hlig</c> GSUB substitution, since both are Lookup Type 4 like common ligatures) -
+        /// <c>contextual</c> still parses but doesn't yet affect it (no <c>calt</c> lookup application,
+        /// which needs GSUB chaining-context lookup types this codebase doesn't read). Per the CSS
+        /// Fonts spec, required ligatures (<c>rlig</c>) are never affected by this property - not even
+        /// by <c>none</c> - so the common-ligatures-off case still resolves to
         /// <see cref="LigatureFeatures.Required"/> rather than <see cref="LigatureFeatures.None"/>.
         /// </summary>
         public LigatureFeatures ActualFontVariantLigatures
@@ -621,11 +621,193 @@ namespace PeachPDF.Html.Core.Dom
                 if (_actualFontVariantLigatures is { } cached) return cached;
 
                 var value = Style.Font.FontVariantLigatures;
-                bool disabled = value == CssConstants.None
-                    || value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(CssConstants.NoCommonLigatures);
+                if (value == CssConstants.None)
+                {
+                    _actualFontVariantLigatures = LigatureFeatures.Required;
+                    return LigatureFeatures.Required;
+                }
 
-                var resolved = disabled ? LigatureFeatures.Required : LigatureFeatures.Default;
+                var tokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var resolved = tokens.Contains(CssConstants.NoCommonLigatures) ? LigatureFeatures.Required : LigatureFeatures.Default;
+                if (tokens.Contains(CssConstants.DiscretionaryLigatures)) resolved |= LigatureFeatures.Discretionary;
+                if (tokens.Contains(CssConstants.HistoricalLigatures)) resolved |= LigatureFeatures.Historical;
+
                 _actualFontVariantLigatures = resolved;
+                return resolved;
+            }
+        }
+
+        private FontVariantCapsFeature? _actualFontVariantCaps;
+
+        /// <summary>
+        /// The caps feature that should actually be requested from the shaping layer for this box's
+        /// text: <see cref="FontVariantCapsFeature.None"/> for <c>normal</c>, for a keyword the
+        /// resolved font lacks full GSUB support for (see <see cref="RFont.SupportsFontVariantCaps"/>),
+        /// or - for small-caps/all-small-caps specifically - whenever <c>CssBox.AddWord</c> is instead
+        /// synthesizing the effect (real substitution must never also be requested in that case).
+        /// </summary>
+        public FontVariantCapsFeature ActualFontVariantCaps
+        {
+            get
+            {
+                if (_actualFontVariantCaps is { } cached) return cached;
+
+                var requested = Style.Font.FontVariantCaps switch
+                {
+                    CssConstants.SmallCaps => FontVariantCapsFeature.SmallCaps,
+                    CssConstants.AllSmallCaps => FontVariantCapsFeature.AllSmallCaps,
+                    CssConstants.PetiteCaps => FontVariantCapsFeature.PetiteCaps,
+                    CssConstants.AllPetiteCaps => FontVariantCapsFeature.AllPetiteCaps,
+                    CssConstants.Unicase => FontVariantCapsFeature.Unicase,
+                    CssConstants.TitlingCaps => FontVariantCapsFeature.TitlingCaps,
+                    _ => FontVariantCapsFeature.None,
+                };
+
+                var resolved = requested != FontVariantCapsFeature.None && ActualFont.SupportsFontVariantCaps(requested)
+                    ? requested
+                    : FontVariantCapsFeature.None;
+
+                _actualFontVariantCaps = resolved;
+                return resolved;
+            }
+        }
+
+        private NumericFeatures? _actualFontVariantNumeric;
+
+        /// <summary>The resolved GSUB numeric features (CSS <c>font-variant-numeric</c>) for this box's
+        /// text - no capability gating (unlike caps): a tag the resolved font lacks simply activates no
+        /// lookup and is silently inert.</summary>
+        public NumericFeatures ActualFontVariantNumeric
+        {
+            get
+            {
+                if (_actualFontVariantNumeric is { } cached) return cached;
+
+                var resolved = NumericFeatures.None;
+                foreach (var token in Style.Font.FontVariantNumeric.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    resolved |= token switch
+                    {
+                        CssConstants.LiningNums => NumericFeatures.LiningNums,
+                        CssConstants.OldstyleNums => NumericFeatures.OldstyleNums,
+                        CssConstants.ProportionalNums => NumericFeatures.ProportionalNums,
+                        CssConstants.TabularNums => NumericFeatures.TabularNums,
+                        CssConstants.DiagonalFractions => NumericFeatures.DiagonalFractions,
+                        CssConstants.StackedFractions => NumericFeatures.StackedFractions,
+                        CssConstants.Ordinal => NumericFeatures.Ordinal,
+                        CssConstants.SlashedZero => NumericFeatures.SlashedZero,
+                        _ => NumericFeatures.None,
+                    };
+                }
+
+                _actualFontVariantNumeric = resolved;
+                return resolved;
+            }
+        }
+
+        private EastAsianFeatures? _actualFontVariantEastAsian;
+
+        /// <summary>The resolved GSUB east-asian features (CSS <c>font-variant-east-asian</c>) for this
+        /// box's text - no capability gating, same rationale as <see cref="ActualFontVariantNumeric"/>.</summary>
+        public EastAsianFeatures ActualFontVariantEastAsian
+        {
+            get
+            {
+                if (_actualFontVariantEastAsian is { } cached) return cached;
+
+                var resolved = EastAsianFeatures.None;
+                foreach (var token in Style.Font.FontVariantEastAsian.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    resolved |= token switch
+                    {
+                        CssConstants.Jis78Forms => EastAsianFeatures.Jis78,
+                        CssConstants.Jis83Forms => EastAsianFeatures.Jis83,
+                        CssConstants.Jis90Forms => EastAsianFeatures.Jis90,
+                        CssConstants.Jis04Forms => EastAsianFeatures.Jis04,
+                        CssConstants.Simplified => EastAsianFeatures.Simplified,
+                        CssConstants.Traditional => EastAsianFeatures.Traditional,
+                        CssConstants.FullWidth => EastAsianFeatures.FullWidth,
+                        CssConstants.ProportionalWidth => EastAsianFeatures.ProportionalWidth,
+                        CssConstants.Ruby => EastAsianFeatures.Ruby,
+                        _ => EastAsianFeatures.None,
+                    };
+                }
+
+                _actualFontVariantEastAsian = resolved;
+                return resolved;
+            }
+        }
+
+        private IReadOnlyList<(string Tag, int Value)>? _actualFontFeatureSettings;
+
+        /// <summary>
+        /// The resolved explicit OpenType feature tags (CSS <c>font-feature-settings</c>) for this
+        /// box's text, parsed from the cascaded string (e.g. <c>"smcp" 1, "onum" 1</c>) into
+        /// (tag, value) pairs - <c>on</c>/<c>off</c> resolve to 1/0, a bare tag with no value defaults
+        /// to 1. <c>normal</c> resolves to an empty list.
+        /// </summary>
+        public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings
+        {
+            get
+            {
+                if (_actualFontFeatureSettings is { } cached) return cached;
+
+                var value = Style.Font.FontFeatureSettings;
+                var resolved = value == CssConstants.Normal
+                    ? []
+                    : ParseFontFeatureSettings(value);
+
+                _actualFontFeatureSettings = resolved;
+                return resolved;
+            }
+        }
+
+        private static IReadOnlyList<(string Tag, int Value)> ParseFontFeatureSettings(string value)
+        {
+            var entries = new List<(string, int)>();
+
+            foreach (var rawEntry in value.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = rawEntry.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 0) continue;
+
+                var tag = parts[0].Trim('"');
+                var settingValue = 1;
+                if (parts.Length > 1)
+                {
+                    var rawValue = parts[1];
+                    if (rawValue == CssConstants.Off) settingValue = 0;
+                    else if (rawValue != CssConstants.On) int.TryParse(rawValue, out settingValue);
+                }
+
+                entries.Add((tag, settingValue));
+            }
+
+            return entries;
+        }
+
+        private TextShapingFeatures? _actualTextShapingFeatures;
+
+        /// <summary>
+        /// The single combined GSUB feature request for this box's text - ligatures, caps, numeric,
+        /// east-asian, and explicit <c>font-feature-settings</c> tags all folded into one
+        /// <see cref="TextShapingFeatures"/> value, the one actually threaded into every measure/paint
+        /// call site.
+        /// </summary>
+        public TextShapingFeatures ActualTextShapingFeatures
+        {
+            get
+            {
+                if (_actualTextShapingFeatures is { } cached) return cached;
+
+                var resolved = new TextShapingFeatures(
+                    ActualFontVariantLigatures,
+                    ActualFontVariantCaps,
+                    ActualFontVariantNumeric,
+                    ActualFontVariantEastAsian,
+                    ActualFontFeatureSettings);
+
+                _actualTextShapingFeatures = resolved;
                 return resolved;
             }
         }

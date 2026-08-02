@@ -1262,13 +1262,13 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public string FontVariant
+        public string FontVariantCaps
         {
-            get => _computedStyle.Font.FontVariant;
+            get => _computedStyle.Font.FontVariantCaps;
             set
             {
                 var area = _computedStyle.Font;
-                var newArea = area.SetPropertyValue(area.FontVariant, value, static (a, v) => a with { FontVariant = v });
+                var newArea = area.SetPropertyValue(area.FontVariantCaps, value, static (a, v) => a with { FontVariantCaps = v });
                 _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
@@ -1280,6 +1280,39 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var area = _computedStyle.Font;
                 var newArea = area.SetPropertyValue(area.FontVariantLigatures, value, static (a, v) => a with { FontVariantLigatures = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
+        }
+
+        public string FontVariantNumeric
+        {
+            get => _computedStyle.Font.FontVariantNumeric;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontVariantNumeric, value, static (a, v) => a with { FontVariantNumeric = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
+        }
+
+        public string FontVariantEastAsian
+        {
+            get => _computedStyle.Font.FontVariantEastAsian;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontVariantEastAsian, value, static (a, v) => a with { FontVariantEastAsian = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
+            }
+        }
+
+        public string FontFeatureSettings
+        {
+            get => _computedStyle.Font.FontFeatureSettings;
+            set
+            {
+                var area = _computedStyle.Font;
+                var newArea = area.SetPropertyValue(area.FontFeatureSettings, value, static (a, v) => a with { FontFeatureSettings = v });
                 _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Font = a });
             }
         }
@@ -1828,6 +1861,23 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>Gets the resolved GSUB ligature features (CSS <c>font-variant-ligatures</c>) for this box's text.</summary>
         public LigatureFeatures ActualFontVariantLigatures => DerivedStyle.ActualFontVariantLigatures;
+
+        /// <summary>
+        /// Gets the resolved CSS <c>font-variant-caps</c> feature - <see cref="FontVariantCapsFeature.None"/>
+        /// when the value is <c>normal</c>, when it's a keyword the resolved font lacks full GSUB
+        /// support for, or when <see cref="AddWord"/> is instead synthesizing the effect.
+        /// </summary>
+        public FontVariantCapsFeature ActualFontVariantCaps => DerivedStyle.ActualFontVariantCaps;
+
+        /// <summary>Gets the resolved explicit OpenType feature tags (CSS <c>font-feature-settings</c>) for this box's text.</summary>
+        public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings => DerivedStyle.ActualFontFeatureSettings;
+
+        /// <summary>
+        /// Gets the single combined GSUB feature request (ligatures + caps + numeric + east-asian +
+        /// explicit <c>font-feature-settings</c> tags) for this box's text - the one value actually
+        /// threaded into every measure/paint call.
+        /// </summary>
+        public TextShapingFeatures ActualTextShapingFeatures => DerivedStyle.ActualTextShapingFeatures;
 
         /// <summary>
         /// This box's own <see cref="FontWeight"/>, resolved to a concrete CSS Fonts numeric weight (1-1000).

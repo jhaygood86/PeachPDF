@@ -1199,9 +1199,9 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, TextShapingFeatures? features = null)
         {
-            DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing, fontPalette, ligatureFeatures);
+            DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing, fontPalette, features);
         }
 
 
@@ -1216,7 +1216,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, TextShapingFeatures? features = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1235,7 +1235,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
                 format = XStringFormats.Default;
 
             if (_renderer != null)
-                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, ligatureFeatures);
+                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, features ?? TextShapingFeatures.Default);
         }
 
         // ----- MeasureString ------------------------------------------------------------------------
@@ -1243,7 +1243,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public XSize MeasureString(string text, XFont font, XStringFormat stringFormat, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public XSize MeasureString(string text, XFont font, XStringFormat stringFormat, TextShapingFeatures? features = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1252,16 +1252,16 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
             if (stringFormat == null)
                 throw new ArgumentNullException("stringFormat");
 
-            XSize size = FontHelper.MeasureString(text, font, XStringFormats.Default, ligatureFeatures);
+            XSize size = FontHelper.MeasureString(text, font, XStringFormats.Default, features ?? TextShapingFeatures.Default);
             return size;
         }
 
         /// <summary>
         /// Measures the specified string when drawn with the specified font.
         /// </summary>
-        public XSize MeasureString(string text, XFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public XSize MeasureString(string text, XFont font, TextShapingFeatures? features = null)
         {
-            return MeasureString(text, font, XStringFormats.Default, ligatureFeatures);
+            return MeasureString(text, font, XStringFormats.Default, features);
         }
 
         // ----- DrawImage ----------------------------------------------------------------------------
