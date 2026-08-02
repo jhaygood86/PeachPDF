@@ -1,0 +1,126 @@
+{
+  "$schema": "./css-properties.schema.json",
+  "$comment": "Source of truth for PeachPDF's CSS/SVG property dispatch, consumed by PeachPDF.SourceGenerators to emit CssPropertyRegistry.g.cs / SvgPropertyRegistry.g.cs. See CLAUDE.md's generator section for the authoring workflow and the PPGxxx diagnostics that check this file. This is the first, deliberately small slice (10 representative entries spanning every schema shape) that proves the generator design before the remaining ~180 HTML/SVG properties are authored in a follow-up change — see the generator infrastructure PR.",
+  "properties": [
+    {
+      "name": "border-bottom-width",
+      "comment": "Reproduces the old CssUtils.IsValidLengthProperty helper exactly: a valid length, or the auto keyword (checked case-insensitively, matching that helper's InvariantCultureIgnoreCase check — an existing inconsistency vs. most other keyword checks in this codebase, encoded as-is rather than silently fixed).",
+      "inherited": false,
+      "initialValue": "medium",
+      "cssDataType": ["length", "keyword"],
+      "supportedValues": ["auto"],
+      "keywordComparison": "invariant-ignore-case",
+      "html": { "propertyPath": "BorderBottomWidth", "csharpDataType": "string", "area": "BorderArea" }
+    },
+    {
+      "name": "transform",
+      "comment": "Unconditional assign in the old dispatch — Layer A (the CSS-OM) is the real grammar authority for this property; Layer B has never re-validated it.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "any",
+      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" }
+    },
+    {
+      "name": "box-sizing",
+      "comment": "Replaces the old CssUtils.IsValidBoxSizing helper.",
+      "inherited": false,
+      "initialValue": "content-box",
+      "cssDataType": "keyword",
+      "supportedValues": ["border-box", "content-box"],
+      "keywordComparison": "ordinal",
+      "html": { "propertyPath": "BoxSizing", "csharpDataType": "string", "area": "BoxModelArea" }
+    },
+    {
+      "name": "direction",
+      "comment": "CssProperty<T>.FromCssText never rejects — it falls back to the keyword instead of leaving the value unset. TrySet/SupportsDeclaration therefore always return true for this property, matching today's behavior exactly (a pre-existing leniency, not something this migration changes). The svg binding is a carrier-only, hand-written entry (applyIn: manual) — SVG never stores direction on SvgElement, only threads it through SvgInheritedPaint for text runs, so it is deliberately excluded from the generated SVG dispatch (see SvgTreeBuilder.ApplyCommon's future manual-property section).",
+      "inherited": true,
+      "initialValue": "ltr",
+      "cssDataType": { "type": "enum-keyword", "enumType": "DirectionMode", "keywordMap": "Map.DirectionModes", "fallback": "DirectionMode.Ltr" },
+      "html": {
+        "propertyPath": "Direction",
+        "csharpDataType": "CssProperty<DirectionMode>",
+        "area": "TextArea",
+        "getterExpression": "{box}.Direction.ToString()"
+      },
+      "svg": {
+        "propertyPath": null,
+        "inheritedFrom": "Direction",
+        "invalidBehavior": "inherit",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "page-break-after",
+      "comment": "Legacy alias of break-after (css-break-3 §3.3), sharing its storage; the CSS2.1 'always' keyword remaps to break-after's 'page'. aliasOf is intentionally omitted here — break-after itself isn't one of this slice's 10 representative entries, and aliasOf's cross-entry check (PPG007) needs both names present; it is demonstrated once break-after is authored in the full property batch.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "any",
+      "html": {
+        "propertyPath": "BreakAfter",
+        "csharpDataType": "string",
+        "area": "BreakArea",
+        "customSetter": "{box}.BreakAfter = {value} is CssConstants.Always ? CssConstants.Page : {value};"
+      }
+    },
+    {
+      "name": "font-family",
+      "comment": "Multi-field write: the resolved family (FontFamily) and the raw authored list (FontFamilyList) both come from one declaration. The initial value is UA/platform-defined (CssConstants.DefaultFont is computed per-platform at runtime), hence an {expression} rather than a string literal.",
+      "inherited": true,
+      "initialValue": { "expression": "CssConstants.DefaultFont" },
+      "cssDataType": "any",
+      "html": {
+        "propertyPath": "FontFamily",
+        "csharpDataType": "string?",
+        "area": "FontArea",
+        "customSetter": "{box}.FontFamily = {parser}.GetFontFamilyByName({value}); {box}.FontFamilyList = {value};"
+      }
+    },
+    {
+      "name": "margin-block-start",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space — CssBox.LogicalProperties.cs. Read exactly once by CssBox.ResolveLogicalProperties, which maps it to one of margin-top/-right/-bottom/-left depending on this box's own resolved direction/writing-mode; that cross-property resolution stays hand-written (a single JSON entry cannot express a function of two other properties' resolved values). No initial value by design: the physical property it resolves into already has one. Validation mirrors margin-top's (none).",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "cssDataType": "any",
+      "resolvesTo": { "group": "margin", "axis": "block", "side": "start" },
+      "html": { "propertyPath": "MarginBlockStart", "csharpDataType": "string?", "area": null }
+    },
+    {
+      "name": "overflow-wrap",
+      "comment": "Grammar accepted by Layer A, deliberately unimplemented by Layer B (docs/html-css-support.md). TrySet/SupportsDeclaration correctly return false, replacing the old CssUtils dispatch's silent no-op lambda. inherited: false and initialValue: null both preserve today's actual behavior (CssDefaults never listed it as inherited, despite CSS Text 4 §3 specifying inheritance for it) rather than silently fixing a spec deviation this migration isn't scoped to touch.",
+      "inherited": false,
+      "initialValue": null,
+      "cssDataType": "unsupported",
+      "html": { "propertyPath": null, "csharpDataType": null, "hasGetter": false, "snapshot": false }
+    },
+    {
+      "name": "fill",
+      "comment": "SVG <paint> (svg-shapes-1.1 §13.2): none | url(#id) | currentColor | <color>. Produces a structured SvgPaint, not a string, so it needs its own data type rather than HTML's plain 'color'. url()-to-pattern-vs-gradient resolution (SvgTreeBuilder.ResolveUrlPaintKind) is not yet wired into the generated setter — that lands with the SVG cutover batch, which also refactors SvgTreeBuilder.ApplyCommon to call this registry for real rendering.",
+      "inherited": true,
+      "initialValue": "black",
+      "cssDataType": "svg-paint",
+      "svg": {
+        "propertyPath": "Fill",
+        "csharpDataType": "SvgPaint",
+        "inheritedFrom": "Fill",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke-linecap",
+      "comment": "Preserves SvgValueParsers.ParseLineCap's current silent fallback to 'butt' on an invalid value (invalidBehavior: initial) rather than SVG 1.1 §11.4's specified fallback to the inherited value — an existing spec deviation, encoded as-is and tracked separately, not fixed by this migration.",
+      "inherited": true,
+      "initialValue": "butt",
+      "cssDataType": "keyword",
+      "supportedValues": ["butt", "round", "square"],
+      "keywordComparison": "ordinal-ignore-case",
+      "svg": {
+        "propertyPath": "StrokeLineCap",
+        "csharpDataType": "RLineCap",
+        "inheritedFrom": "StrokeLineCap",
+        "invalidBehavior": "initial",
+        "customSetter": "{element}.StrokeLineCap = {value}.Trim().ToLowerInvariant() switch { \"round\" => RLineCap.Round, \"square\" => RLineCap.Square, _ => RLineCap.Butt };"
+      }
+    }
+  ]
+}

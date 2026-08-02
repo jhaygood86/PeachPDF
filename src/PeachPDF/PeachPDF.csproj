@@ -52,6 +52,29 @@
 		<InternalsVisibleTo Include="PeachPDF.Tests" />
 		<InternalsVisibleTo Include="PeachPDF.Cli" />
 	</ItemGroup>
+	<!--
+		css-properties.json is the source of truth CssPropertyRegistry.g.cs / SvgPropertyRegistry.g.cs
+		are generated from - see PeachPDF.SourceGenerators and CLAUDE.md's generator section. It's build
+		input, not package content, so it's excluded from the implicit None/Pack glob and delivered to
+		the analyzer only via AdditionalFiles (the schema file is editor-only tooling, left as plain None).
+	-->
+	<ItemGroup>
+		<None Remove="css-properties.json" />
+		<AdditionalFiles Include="css-properties.json" />
+	</ItemGroup>
+	<ItemGroup>
+		<!--
+			UndefineProperties strips the publish-time global properties dotnet publish/PublishAot=true set
+			before they reach this reference - without it, they cascade into the referenced project graph
+			even with ReferenceOutputAssembly="false", and PublishAot=true fails outright on netstandard2.0
+			(NETSDK1207, "Ahead-of-time compilation is not supported for the target framework") when
+			publishing PeachPDF.Cli, which references this project transitively.
+		-->
+		<ProjectReference Include="..\PeachPDF.SourceGenerators\PeachPDF.SourceGenerators.csproj"
+			OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all"
+			UndefineProperties="PublishAot;PublishTrimmed;PublishSingleFile;PublishReadyToRun;SelfContained;RuntimeIdentifier"
+			SetTargetFramework="TargetFramework=netstandard2.0" />
+	</ItemGroup>
 	<ItemGroup>
 		<None Include="..\..\README.md" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />

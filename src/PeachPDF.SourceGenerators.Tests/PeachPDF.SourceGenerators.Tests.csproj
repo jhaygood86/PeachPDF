@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Single-TFM net8.0 - this project only exercises the generator's own logic (JSON reader,
+       model parser, IIncrementalGenerator pipeline via CSharpGeneratorDriver), never PeachPDF's
+       AOT/WASM-relevant surface, so there's nothing net10.0-specific worth double-running for. -->
+  <PropertyGroup>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.analyzers" Version="1.27.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      A plain ProjectReference (not OutputItemType="Analyzer") - these tests call the generator's
+      types directly (CssPropertyGenerator, JsonParser, PropertyModelParser) rather than consuming
+      it as a build-time analyzer, so the ordinary reference-and-call shape is what's needed here.
+    -->
+    <ProjectReference Include="..\PeachPDF.SourceGenerators\PeachPDF.SourceGenerators.csproj" />
+    <!-- Needed so PPG010/PPG011's symbol checks can be tested against the real CssBox/SvgElement shape. -->
+    <ProjectReference Include="..\PeachPDF\PeachPDF.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>
