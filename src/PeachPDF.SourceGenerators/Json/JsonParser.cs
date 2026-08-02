@@ -1,334 +1,135 @@
 using System.Collections.Generic;
-using System.Globalization;
 using System.Text;
+using System.Text.Json;
 
 namespace PeachPDF.SourceGenerators.Json
 {
     /// <summary>
-    /// A minimal, strict, hand-written JSON reader (objects/arrays/strings/numbers/booleans/null,
-    /// standard escapes) for <c>css-properties.json</c>. Not a general-purpose library - this project
-    /// is an analyzer (netstandard2.0, loaded directly into csc's process with none of its
-    /// PackageReferences available - see PeachPDF.SourceGenerators.csproj's remarks), so
-    /// System.Text.Json is not an option here. Strict on purpose: no comments, no trailing commas -
-    /// the schema is entirely under this repo's control, so leniency would only hide authoring
-    /// mistakes the diagnostics below exist to catch.
+    /// Parses <c>css-properties.json</c> into a <see cref="JsonValue"/> tree using
+    /// <see cref="Utf8JsonReader"/> as the tokenizer (strings/escapes, number grammar, structural
+    /// validity - trailing commas and comments rejected, matching <see cref="JsonReaderOptions"/>'s
+    /// defaults, made explicit below since the schema is entirely under this repo's control and
+    /// leniency would only hide authoring mistakes the PPGxxx diagnostics exist to catch). Not a thin
+    /// wrapper over <see cref="JsonDocument"/>/<see cref="JsonElement"/>, because neither retains a
+    /// parsed node's source position - PPG002 etc. need to point a diagnostic at the specific JSON
+    /// entry that's wrong, not just "somewhere in this file", so this builds its own minimal DOM
+    /// (<see cref="JsonValue"/>) that records each node's line/column as it reads.
     /// </summary>
     internal static class JsonParser
     {
+        private static readonly JsonReaderOptions Options = new()
+        {
+            AllowTrailingCommas = false,
+            CommentHandling = JsonCommentHandling.Disallow,
+        };
+
         public static bool TryParse(string text, out JsonValue? root, out List<JsonError> errors)
         {
-            var scanner = new Scanner(text);
             errors = new List<JsonError>();
+            var bytes = Encoding.UTF8.GetBytes(text);
+            var reader = new Utf8JsonReader(bytes, Options);
 
             try
             {
-                scanner.SkipWhitespace();
-                root = scanner.ParseValue(errors);
-                scanner.SkipWhitespace();
+                root = ReadNextValue(ref reader, bytes);
 
-                if (errors.Count == 0 && !scanner.IsAtEnd)
+                if (reader.Read())
                 {
-                    errors.Add(new JsonError("Unexpected trailing content after the JSON document's root value.",
-                        scanner.Line, scanner.Column));
+                    var (line, column) = LocationOf(bytes, reader.TokenStartIndex);
+                    errors.Add(new JsonError("Unexpected trailing content after the JSON document's root value.", line, column));
                 }
             }
-            catch (JsonScanException ex)
+            catch (JsonException ex)
             {
                 root = null;
-                errors.Add(new JsonError(ex.Message, ex.Line, ex.Column));
+                var line = (int)(ex.LineNumber ?? 0) + 1;
+                var column = (int)(ex.BytePositionInLine ?? 0) + 1;
+                errors.Add(new JsonError(ex.Message, line, column));
             }
 
             return errors.Count == 0 && root is not null;
         }
 
-        private sealed class JsonScanException : System.Exception
+        private static JsonValue ReadNextValue(ref Utf8JsonReader reader, byte[] bytes)
         {
-            public int Line { get; }
-            public int Column { get; }
+            if (!reader.Read())
+                throw new JsonException("Unexpected end of input; expected a JSON value.");
 
-            public JsonScanException(string message, int line, int column) : base(message)
+            return InterpretCurrentToken(ref reader, bytes);
+        }
+
+        private static JsonValue InterpretCurrentToken(ref Utf8JsonReader reader, byte[] bytes)
+        {
+            var (line, column) = LocationOf(bytes, reader.TokenStartIndex);
+
+            switch (reader.TokenType)
             {
-                Line = line;
-                Column = column;
+                case JsonTokenType.StartObject: return ReadObject(ref reader, bytes, line, column);
+                case JsonTokenType.StartArray: return ReadArray(ref reader, bytes, line, column);
+                case JsonTokenType.String: return new JsonValue(JsonValueKind.String, line, column, stringValue: reader.GetString());
+                case JsonTokenType.Number: return new JsonValue(JsonValueKind.Number, line, column, numberValue: reader.GetDouble());
+                case JsonTokenType.True: return new JsonValue(JsonValueKind.True, line, column);
+                case JsonTokenType.False: return new JsonValue(JsonValueKind.False, line, column);
+                case JsonTokenType.Null: return new JsonValue(JsonValueKind.Null, line, column);
+                default: throw new JsonException($"Unexpected token '{reader.TokenType}'.");
             }
         }
 
-        private sealed class Scanner
+        private static JsonValue ReadObject(ref Utf8JsonReader reader, byte[] bytes, int line, int column)
         {
-            private readonly string _text;
-            private int _index;
+            var members = new List<JsonMember>();
 
-            public int Line { get; private set; } = 1;
-            public int Column { get; private set; } = 1;
-
-            public Scanner(string text)
+            while (true)
             {
-                _text = text;
-            }
-
-            public bool IsAtEnd => _index >= _text.Length;
-
-            private char Current => _text[_index];
-
-            private void Advance()
-            {
-                if (_text[_index] == '\n')
-                {
-                    Line++;
-                    Column = 1;
-                }
-                else
-                {
-                    Column++;
-                }
-
-                _index++;
-            }
-
-            private void Fail(string message) => throw new JsonScanException(message, Line, Column);
-
-            public void SkipWhitespace()
-            {
-                while (!IsAtEnd && (Current is ' ' or '\t' or '\r' or '\n'))
-                    Advance();
-            }
-
-            public JsonValue ParseValue(List<JsonError> errors)
-            {
-                if (IsAtEnd) Fail("Unexpected end of input; expected a JSON value.");
-
-                return Current switch
-                {
-                    '{' => ParseObject(errors),
-                    '[' => ParseArray(errors),
-                    '"' => ParseStringValue(),
-                    't' => ParseLiteral("true", JsonValueKind.True),
-                    'f' => ParseLiteral("false", JsonValueKind.False),
-                    'n' => ParseLiteral("null", JsonValueKind.Null),
-                    '-' => ParseNumber(),
-                    >= '0' and <= '9' => ParseNumber(),
-                    _ => FailValue($"Unexpected character '{Current}'.")
-                };
-            }
-
-            private JsonValue FailValue(string message)
-            {
-                Fail(message);
-                return null!; // unreachable — Fail always throws
-            }
-
-            private JsonValue ParseLiteral(string literal, JsonValueKind kind)
-            {
-                var (line, column) = (Line, Column);
-                foreach (var expected in literal)
-                {
-                    if (IsAtEnd || Current != expected)
-                        Fail($"Expected literal '{literal}'.");
-                    Advance();
-                }
-
-                return new JsonValue(kind, line, column);
-            }
-
-            private JsonValue ParseObject(List<JsonError> errors)
-            {
-                var (line, column) = (Line, Column);
-                Advance(); // '{'
-                var members = new List<JsonMember>();
-
-                SkipWhitespace();
-                if (!IsAtEnd && Current == '}')
-                {
-                    Advance();
+                if (!reader.Read()) throw new JsonException("Unexpected end of input inside an object.");
+                if (reader.TokenType == JsonTokenType.EndObject)
                     return new JsonValue(JsonValueKind.Object, line, column, objectMembers: members);
-                }
+                if (reader.TokenType != JsonTokenType.PropertyName)
+                    throw new JsonException("Expected a string property name.");
 
-                while (true)
-                {
-                    SkipWhitespace();
-                    if (IsAtEnd || Current != '"')
-                        Fail("Expected a string property name.");
-
-                    var name = ParseStringValue().StringValue!;
-                    SkipWhitespace();
-
-                    if (IsAtEnd || Current != ':')
-                        Fail("Expected ':' after a property name.");
-                    Advance();
-
-                    SkipWhitespace();
-                    var value = ParseValue(errors);
-                    members.Add(new JsonMember(name, value));
-
-                    SkipWhitespace();
-                    if (IsAtEnd) Fail("Unexpected end of input inside an object.");
-
-                    if (Current == ',')
-                    {
-                        Advance();
-                        SkipWhitespace();
-                        if (!IsAtEnd && Current == '}')
-                            Fail("Trailing comma is not allowed before '}'.");
-                        continue;
-                    }
-
-                    if (Current == '}')
-                    {
-                        Advance();
-                        break;
-                    }
-
-                    Fail("Expected ',' or '}' in object.");
-                }
-
-                return new JsonValue(JsonValueKind.Object, line, column, objectMembers: members);
+                var name = reader.GetString()!;
+                var value = ReadNextValue(ref reader, bytes);
+                members.Add(new JsonMember(name, value));
             }
+        }
 
-            private JsonValue ParseArray(List<JsonError> errors)
+        private static JsonValue ReadArray(ref Utf8JsonReader reader, byte[] bytes, int line, int column)
+        {
+            var items = new List<JsonValue>();
+
+            while (true)
             {
-                var (line, column) = (Line, Column);
-                Advance(); // '['
-                var items = new List<JsonValue>();
-
-                SkipWhitespace();
-                if (!IsAtEnd && Current == ']')
-                {
-                    Advance();
+                if (!reader.Read()) throw new JsonException("Unexpected end of input inside an array.");
+                if (reader.TokenType == JsonTokenType.EndArray)
                     return new JsonValue(JsonValueKind.Array, line, column, arrayItems: items);
-                }
 
-                while (true)
-                {
-                    SkipWhitespace();
-                    items.Add(ParseValue(errors));
-                    SkipWhitespace();
-
-                    if (IsAtEnd) Fail("Unexpected end of input inside an array.");
-
-                    if (Current == ',')
-                    {
-                        Advance();
-                        SkipWhitespace();
-                        if (!IsAtEnd && Current == ']')
-                            Fail("Trailing comma is not allowed before ']'.");
-                        continue;
-                    }
-
-                    if (Current == ']')
-                    {
-                        Advance();
-                        break;
-                    }
-
-                    Fail("Expected ',' or ']' in array.");
-                }
-
-                return new JsonValue(JsonValueKind.Array, line, column, arrayItems: items);
+                items.Add(InterpretCurrentToken(ref reader, bytes));
             }
+        }
 
-            private JsonValue ParseStringValue()
+        /// <summary>
+        /// Converts a UTF-8 byte offset (<see cref="Utf8JsonReader.TokenStartIndex"/>) into a 1-based
+        /// (line, column), by decoding the byte prefix up to that offset and counting characters -
+        /// correct for multi-byte UTF-8 sequences too, since a token always starts on a codepoint
+        /// boundary.
+        /// </summary>
+        private static (int Line, int Column) LocationOf(byte[] bytes, long byteOffset)
+        {
+            var prefix = Encoding.UTF8.GetString(bytes, 0, (int)byteOffset);
+            var line = 1;
+            var lastNewlineIndex = -1;
+
+            for (var i = 0; i < prefix.Length; i++)
             {
-                var (line, column) = (Line, Column);
-                Advance(); // opening quote
-                var sb = new StringBuilder();
-
-                while (true)
+                if (prefix[i] == '\n')
                 {
-                    if (IsAtEnd) Fail("Unterminated string literal.");
-
-                    var c = Current;
-                    if (c == '"')
-                    {
-                        Advance();
-                        break;
-                    }
-
-                    if (c == '\\')
-                    {
-                        Advance();
-                        if (IsAtEnd) Fail("Unterminated escape sequence.");
-                        var escape = Current;
-                        switch (escape)
-                        {
-                            case '"': sb.Append('"'); Advance(); break;
-                            case '\\': sb.Append('\\'); Advance(); break;
-                            case '/': sb.Append('/'); Advance(); break;
-                            case 'b': sb.Append('\b'); Advance(); break;
-                            case 'f': sb.Append('\f'); Advance(); break;
-                            case 'n': sb.Append('\n'); Advance(); break;
-                            case 'r': sb.Append('\r'); Advance(); break;
-                            case 't': sb.Append('\t'); Advance(); break;
-                            case 'u':
-                                Advance();
-                                sb.Append(ParseUnicodeEscape());
-                                break;
-                            default:
-                                Fail($"Invalid escape sequence '\\{escape}'.");
-                                break;
-                        }
-
-                        continue;
-                    }
-
-                    if (c < 0x20)
-                        Fail("Unescaped control character in string literal.");
-
-                    sb.Append(c);
-                    Advance();
+                    line++;
+                    lastNewlineIndex = i;
                 }
-
-                return new JsonValue(JsonValueKind.String, line, column, stringValue: sb.ToString());
             }
 
-            private char ParseUnicodeEscape()
-            {
-                if (_index + 4 > _text.Length)
-                    Fail("Truncated \\u escape sequence.");
-
-                var hex = _text.Substring(_index, 4);
-                if (!ushort.TryParse(hex, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var code))
-                    Fail($"Invalid \\u escape sequence '\\u{hex}'.");
-
-                for (var i = 0; i < 4; i++) Advance();
-                return (char)code;
-            }
-
-            private JsonValue ParseNumber()
-            {
-                var (line, column) = (Line, Column);
-                var start = _index;
-
-                if (!IsAtEnd && Current == '-') Advance();
-
-                if (IsAtEnd || Current is < '0' or > '9') Fail("Expected a digit.");
-                if (Current == '0')
-                {
-                    Advance();
-                }
-                else
-                {
-                    while (!IsAtEnd && Current is >= '0' and <= '9') Advance();
-                }
-
-                if (!IsAtEnd && Current == '.')
-                {
-                    Advance();
-                    if (IsAtEnd || Current is < '0' or > '9') Fail("Expected a digit after decimal point.");
-                    while (!IsAtEnd && Current is >= '0' and <= '9') Advance();
-                }
-
-                if (!IsAtEnd && (Current == 'e' || Current == 'E'))
-                {
-                    Advance();
-                    if (!IsAtEnd && (Current == '+' || Current == '-')) Advance();
-                    if (IsAtEnd || Current is < '0' or > '9') Fail("Expected a digit in exponent.");
-                    while (!IsAtEnd && Current is >= '0' and <= '9') Advance();
-                }
-
-                var text = _text.Substring(start, _index - start);
-                var value = double.Parse(text, CultureInfo.InvariantCulture);
-                return new JsonValue(JsonValueKind.Number, line, column, numberValue: value);
-            }
+            var column = prefix.Length - lastNewlineIndex;
+            return (line, column);
         }
     }
 }
