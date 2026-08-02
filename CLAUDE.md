@@ -155,13 +155,17 @@ validates a JSON entry's `propertyPath`/`csharpDataType` against the *real* `Css
 build time (`PPG010`/`PPG011`), so a mismatch is a build error naming both files, not a silently wrong
 dictionary entry.
 
-**Current state:** only 10 representative entries exist so far (one per schema shape — see the file's
-`$comment`), and neither `CssUtils` nor `SvgTreeBuilder.ApplyCommon`'s hand-written dispatch calls the
-generated registries yet — they're generated and tested *alongside* the existing code, proving the
-generator design before the remaining ~180 HTML/SVG properties are authored and the hand-written
-dispatch is cut over to it. `CssPropertyRegistryEquivalenceTests.cs` (`PeachPDF.Tests`) asserts the two
-dispatch paths agree for every property that exists in both today; that equivalence proof is the thing to
-extend, not skip, when adding entries ahead of a cutover.
+**Current state:** all 166 HTML longhand + CSS logical properties are authored (10 original representative
+entries + 133 plain HTML properties + 23 logical properties), but SVG properties are not yet authored and
+neither `CssUtils` nor `SvgTreeBuilder.ApplyCommon`'s hand-written dispatch calls the generated registries
+yet — they're generated and tested *alongside* the existing code, proving every entry byte-for-byte
+equivalent before the hand-written HTML dispatch is cut over to it and the ~15 SVG properties are authored
+and cut over. `CssPropertyRegistryEquivalenceTests.cs` (`PeachPDF.Tests`) covers the properties whose
+semantics are subtle enough to warrant a hand-picked, targeted case (custom setters, enum-backed
+properties, SVG); `CssPropertyRegistrySweepEquivalenceTests.cs` complements it with a generic sweep — every
+plain-getter property crossed against a shared value corpus — to catch a transcription mistake (wrong area,
+wrong keyword comparison, wrong data type) a hand-picked case might not happen to probe. Both are the
+equivalence proof to extend, not skip, when adding entries ahead of a cutover.
 
 **Adding a property**: add one object to `css-properties.json`'s `properties` array. `cssDataType` names
 a grammar (`length`, `color`, `keyword` + `supportedValues`, `integer`, `{type:"enum-keyword", ...}` for a

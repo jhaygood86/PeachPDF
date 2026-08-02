@@ -11,11 +11,13 @@ namespace PeachPDF.Tests.Html.Core.Utils
     /// <summary>
     /// Proves the generated <see cref="CssPropertyRegistry"/>/<see cref="SvgPropertyRegistry"/> (built
     /// from css-properties.json by PeachPDF.SourceGenerators) behave identically to the hand-written
-    /// <see cref="CssUtils"/> dispatch / <c>SvgValueParsers</c> calls for the 10 properties authored so
-    /// far — the first, deliberately small slice this generator infrastructure change proves out before
-    /// the remaining ~180 properties are migrated in a follow-up change. Both registries currently run
+    /// <see cref="CssUtils"/> dispatch / <c>SvgValueParsers</c> calls. Both registries currently run
     /// *alongside* the hand-written dispatch (nothing production calls them yet), so this is the actual
-    /// evidence of "zero production behavior change" for this change, not merely an assertion of intent.
+    /// evidence of "zero production behavior change" for this migration, not merely an assertion of
+    /// intent. This file covers the properties whose semantics are subtle enough to warrant a
+    /// hand-picked, targeted case (custom setters, enum-backed properties, SVG); the properties with a
+    /// plain string getter are instead covered exhaustively by
+    /// <see cref="CssPropertyRegistrySweepEquivalenceTests"/>'s generic value-corpus sweep.
     /// </summary>
     public class CssPropertyRegistryEquivalenceTests
     {
@@ -156,6 +158,43 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var applied = CssPropertyRegistry.TrySet(parser, box, "overflow-wrap", "break-word");
 
             Assert.False(applied);
+        }
+
+        [Theory]
+        [InlineData("url(image.png)")]
+        [InlineData("none")]
+        [InlineData("bogus")]
+        [InlineData("")]
+        public void BackgroundImage_Matches_Old_Dispatch(string value)
+        {
+            // No getter on either dispatch path (CssUtils._propertyGetters' own documented gap - a
+            // structured field, not retrievable as a raw string) - compare the actual stored field
+            // directly instead of going through Get/GetPropertyValue.
+            var (oldBox, parser) = NewBoxAndParser();
+            var (newBox, _) = NewBoxAndParser();
+
+            CssUtils.SetPropertyValue(parser, oldBox, "background-image", value);
+            var applied = CssPropertyRegistry.TrySet(parser, newBox, "background-image", value);
+
+            Assert.True(applied); // unconditional in the old dispatch too - never rejects
+            Assert.Equal(oldBox.BackgroundImages?.Count, newBox.BackgroundImages?.Count);
+        }
+
+        [Theory]
+        [InlineData("url(image.png)")]
+        [InlineData("none")]
+        [InlineData("bogus")]
+        [InlineData("")]
+        public void ListStyleImage_Matches_Old_Dispatch(string value)
+        {
+            var (oldBox, parser) = NewBoxAndParser();
+            var (newBox, _) = NewBoxAndParser();
+
+            CssUtils.SetPropertyValue(parser, oldBox, "list-style-image", value);
+            var applied = CssPropertyRegistry.TrySet(parser, newBox, "list-style-image", value);
+
+            Assert.True(applied);
+            Assert.Equal(oldBox.ListStyleImage, newBox.ListStyleImage);
         }
 
         [Theory]
