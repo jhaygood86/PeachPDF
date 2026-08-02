@@ -178,6 +178,21 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("02.", b.Text);
         }
 
+        [Fact]
+        public async Task CounterSet_OverridesCounterResetOnTheSameElement()
+        {
+            // CSS Lists 3 §2.3: counter-set applies after counter-reset on the same element, so it must
+            // win over that element's own reset - content: counter(x) must reflect the set value (100),
+            // not the reset value (0) counter-reset alone would leave it at.
+            var root = await BuildAndLayout(Wrap(
+                "<style>li::before { content: counter(x) \". \" }</style>"
+                + "<ol style='counter-reset: x'><li id='a' style='counter-set: x 100'>a</li></ol>"));
+
+            var beforeA = FindById(root, "a")!.Boxes.Single(b => b.IsBeforePseudoElement);
+
+            Assert.Equal("100. ", beforeA.Text);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

@@ -246,6 +246,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.Content, () => new ContentProperty());
             AddLonghand(PropertyNames.CounterIncrement, () => new CounterIncrementProperty());
             AddLonghand(PropertyNames.CounterReset, () => new CounterResetProperty());
+            AddLonghand(PropertyNames.CounterSet, () => new CounterSetProperty());
             AddLonghand(PropertyNames.Cursor, () => new CursorProperty());
             AddLonghand(PropertyNames.Direction, () => new DirectionProperty());
             AddLonghand(PropertyNames.Display, () => new DisplayProperty());

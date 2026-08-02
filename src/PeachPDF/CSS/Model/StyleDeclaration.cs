@@ -883,6 +883,12 @@ namespace PeachPDF.CSS
             set => SetPropertyValue(PropertyNames.CounterReset, value);
         }
 
+        public string CounterSet
+        {
+            get => GetPropertyValue(PropertyNames.CounterSet);
+            set => SetPropertyValue(PropertyNames.CounterSet, value);
+        }
+
         public string Float
         {
             get => GetPropertyValue(PropertyNames.Float);
