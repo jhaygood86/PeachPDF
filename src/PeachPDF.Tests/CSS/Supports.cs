@@ -188,6 +188,28 @@ namespace PeachPDF.Tests.CSS
             Assert.True(supports.Condition.Check());
         }
 
+        // column-span's cssDataType includes 'all' (real dispatch/ColumnSpanProperty stores it), but its
+        // supportsDataType override excludes it - CssLayoutEngineColumns.cs never reads ColumnSpan, so
+        // 'column-span: all' has no layout effect and @supports must say no. Same shape as break-before's
+        // region/avoid-region split above.
+        [Fact]
+        public void SupportsColumnSpanAllRule_NotGenuinelyEnforced()
+        {
+            var source = @"@supports (column-span: all) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsColumnSpanNoneRule()
+        {
+            var source = @"@supports (column-span: none) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
         // direction's enum-keyword validator now checks Map.DirectionModes' own keys instead of
         // unconditionally returning true - a value outside {ltr, rtl} must fail.
         [Fact]
