@@ -421,6 +421,113 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task NamedString_InlineTarget_DoesNotAccumulateStaleEntriesAcrossReflow()
+        {
+            // Same re-banding shape as NamedString_Y_TracksTheColumnItLandsIn, but string-set now
+            // targets an inline <b> reached only through FlowBox, not a block box's own
+            // PerformLayoutPrologue - the one path that already withdraws a stale registration before
+            // re-registering. Without the same guard in FlowBox, each Phase-1/Phase-2 re-layout (and
+            // any column-fill retry) leaves one more orphaned NamedString behind.
+            var html = Wrap(@"
+                <style>.item b { string-set: entry content(text); }</style>
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' id='i1' style='height:80px'>one</div>
+                    <div class='item' id='i2' style='height:10px'><b id='b2'>two</b></div>
+                    <div class='item' id='i3' style='height:10px'>three</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+            var mc = FindById(root, "mc")!;
+            var i2 = FindById(root, "i2")!;
+            var b2 = FindById(root, "b2")!;
+
+            // Confirm the fixture actually forces re-banding before trusting the assertions below.
+            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be re-banded into column 2");
+
+            var namedString = Assert.Single(b2.NamedStrings.Values);
+            Assert.Equal(i2.Location.Y, namedString.Y, 1);
+
+            // The regression guard: without unregistering a stale entry before re-registering, this
+            // accumulates one orphaned "entry"/"two" per re-layout instead of staying at exactly one.
+            var documentEntry = Assert.Single(container.NamedStrings, ns => ns.Name == "entry" && ns.Value == "two");
+            Assert.Equal(i2.Location.Y, documentEntry.Y, 1);
+        }
+
+        [Fact]
+        public async Task NamedPageElement_InlineTarget_DoesNotAccumulateStaleEntriesAcrossReflow()
+        {
+            // Same re-banding fixture as NamedString_InlineTarget_DoesNotAccumulateStaleEntriesAcrossReflow,
+            // exercising the `page` registration's twin unregister-before-register gap in the same
+            // FlowBox code path. (Unlike the block-level page property, an inline target's `page`
+            // value does not force a break of its own - css2.1 §13.2's page-transition break check
+            // runs against block-level boxes - so this only asserts against re-registration, not a
+            // page transition.)
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' id='i1' style='height:80px'>one</div>
+                    <div class='item' id='i2' style='height:10px'><b id='b2' style='page:chapter'>two</b></div>
+                    <div class='item' id='i3' style='height:10px'>three</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+            var mc = FindById(root, "mc")!;
+            var i2 = FindById(root, "i2")!;
+
+            // Confirm the fixture actually forces re-banding before trusting the assertion below.
+            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be re-banded into column 2");
+
+            // Exactly one entry is the regression guard - the inline path used to leave one orphaned
+            // NamedPageElement behind per re-layout instead of withdrawing the earlier one first.
+            Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
+        }
+
+        [Fact]
+        public async Task NamedString_InlineFlexTarget_DoesNotAccumulateStaleEntriesAcrossReflow()
+        {
+            // Same re-banding fixture as NamedString_InlineTarget_DoesNotAccumulateStaleEntriesAcrossReflow,
+            // but through FlowBox's separate InlineFlex branch (CssLayoutEngine.cs), which finalizes
+            // string-set eagerly rather than splitting it across entry/exit like the plain-inline case -
+            // and has the identical missing unregister-before-register guard.
+            var html = Wrap(@"
+                <style>.item span { string-set: entry content(text); }</style>
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' id='i1' style='height:80px'>one</div>
+                    <div class='item' id='i2' style='height:10px'><span id='b2' style='display:inline-flex'>two</span></div>
+                    <div class='item' id='i3' style='height:10px'>three</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+            var mc = FindById(root, "mc")!;
+            var i2 = FindById(root, "i2")!;
+
+            // Confirm the fixture actually forces re-banding before trusting the assertions below.
+            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be re-banded into column 2");
+
+            // The regression guard: without unregistering a stale entry before re-registering, this
+            // accumulates one orphaned "entry"/"two" per re-layout instead of staying at exactly one.
+            Assert.Single(container.NamedStrings, ns => ns.Name == "entry" && ns.Value == "two");
+        }
+
+        [Fact]
+        public async Task NamedPageElement_InlineFlexTarget_DoesNotAccumulateStaleEntriesAcrossReflow()
+        {
+            // Same re-banding fixture, exercising the `page` registration's twin gap in the same
+            // InlineFlex branch of FlowBox.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' id='i1' style='height:80px'>one</div>
+                    <div class='item' id='i2' style='height:10px'><span id='b2' style='display:inline-flex; page:chapter'>two</span></div>
+                    <div class='item' id='i3' style='height:10px'>three</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+            var mc = FindById(root, "mc")!;
+            var i2 = FindById(root, "i2")!;
+
+            Assert.True(i2.Location.X > mc.ClientLeft + 50, "expected i2 to be re-banded into column 2");
+
+            // Exactly one entry is the regression guard - the InlineFlex branch used to leave one
+            // orphaned NamedPageElement behind per re-layout instead of withdrawing the earlier one first.
+            Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
+        }
+
+        [Fact]
         public async Task ActualSize_MatchesRealFinalGeometry_NotInflatedPhase1Height()
         {
             // 4 items of 80px each into 2 columns at a 100px page height. Phase 1's un-banded virtual

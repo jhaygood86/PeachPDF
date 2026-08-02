@@ -41,7 +41,6 @@ namespace PeachPDF.Html.Core.Dom
             int pageNumber,
             int totalPages,
             double pageY,
-            double pageContentHeight,
             IReadOnlyList<NamedString> namedStrings,
             RAdapter adapter,
             StyleDeclaration? pageStyle,
@@ -73,11 +72,10 @@ namespace PeachPDF.Html.Core.Dom
                     continue;
                 }
 
-                // pageY and pageContentHeight are internal-pixel document space, the same space
-                // NamedString Ys are registered in - deriving the band from the point-space
-                // pageSize/margins here used to skew named-string page attribution whenever
-                // ShrinkToFit made PixelsPerPoint diverge from 1.0.
-                var text = ResolveContent(contentValue, pageNumber, totalPages, pageY, pageContentHeight, namedStrings);
+                // pageY is internal-pixel document space, the same space NamedString Ys are registered
+                // in - deriving page attribution from the point-space pageSize/margins here used to
+                // skew it whenever ShrinkToFit made PixelsPerPoint diverge from 1.0.
+                var text = ResolveContent(contentValue, pageNumber, totalPages, pageY, htmlContainer, namedStrings);
                 if (text == null)
                     continue;
 
@@ -164,12 +162,19 @@ namespace PeachPDF.Html.Core.Dom
                 });
         }
 
-        private static string? ResolveContent(
+        /// <summary>
+        /// Resolves a margin box's text <c>content</c> declaration - string literals, <c>counter()</c>/
+        /// <c>counters()</c>, and <c>string()</c> - against this page's context. <c>string()</c>'s page
+        /// attribution goes through <see cref="ResolveNamedString"/> via <see cref="HtmlContainerInt.SlotStartingAt"/>,
+        /// the same table <paramref name="pageY"/> itself was derived from - see that method's own
+        /// <c>pageIndexOf</c> doc for why a raw Y-range window isn't used here.
+        /// </summary>
+        internal static string? ResolveContent(
             string contentValue,
             int pageNumber,
             int totalPages,
             double pageY,
-            double pageHeight,
+            HtmlContainerInt htmlContainer,
             IReadOnlyList<NamedString> namedStrings)
         {
             if (contentValue.Equals("none", StringComparison.OrdinalIgnoreCase))
@@ -206,7 +211,8 @@ namespace PeachPDF.Html.Core.Dom
                         if (args.Length > 0 && args[0] is KeywordToken nameToken)
                         {
                             var keyword = args.Length > 1 && args[1] is KeywordToken kw ? kw.Data : "first";
-                            sb.Append(ResolveNamedString(nameToken.Data, keyword, pageY, pageHeight, namedStrings));
+                            var currentPageIndex = htmlContainer.SlotStartingAt(pageY);
+                            sb.Append(ResolveNamedString(nameToken.Data, keyword, currentPageIndex, htmlContainer.SlotStartingAt, namedStrings));
                         }
                         break;
                     }
@@ -216,48 +222,61 @@ namespace PeachPDF.Html.Core.Dom
             return sb.Length > 0 ? sb.ToString() : null;
         }
 
-        // A NamedString's Y and this page's boundary are computed via independent accumulation paths
-        // (row/column layout math vs. per-page scroll-offset accumulation), so a value genuinely meant
-        // to sit exactly at a page boundary can differ from it by a hairline of floating-point noise -
-        // without tolerance, that noise alone can exclude the true first/last string on a page. This is
-        // a boundary-precision fuzz factor only, not a layout unit - deliberately much smaller than any
-        // real line height.
-        internal const double PageBoundaryEpsilon = HtmlContainerInt.PageBoundaryEpsilon;
-
+        /// <summary>
+        /// Resolves <c>string(&lt;name&gt;, first|start|last|first-except)</c> against the document-level
+        /// <see cref="NamedString"/> list for the page starting at pagination slot <paramref name="currentPageIndex"/>.
+        /// </summary>
+        /// <param name="name">The <c>string-set</c> name (the <c>string()</c> function's first argument).</param>
+        /// <param name="keyword">One of <c>first</c>/<c>start</c>/<c>last</c>/<c>first-except</c> (the
+        /// <c>string()</c> function's optional second argument, defaulting to <c>first</c>).</param>
+        /// <param name="currentPageIndex">The pagination slot of the page this margin box is being
+        /// painted for, from the same <paramref name="pageIndexOf"/> table every candidate is measured
+        /// against.</param>
+        /// <param name="pageIndexOf">
+        /// Maps a <see cref="NamedString"/>'s own document Y to the pagination slot that owns it - always
+        /// <see cref="HtmlContainerInt.SlotStartingAt"/> in production, so every candidate is attributed to
+        /// a page via the exact same authoritative table <paramref name="currentPageIndex"/> itself was
+        /// derived from. This replaces an earlier design that compared a candidate's raw Y against
+        /// <c>[pageY - epsilon, pageY + pageHeight + epsilon)</c> directly: two boxes at the very top of
+        /// different columns on the *same* page can land on the same Y (both are "row 1" of their own
+        /// column), and when that shared Y sits within a hairline of a page boundary, a symmetric epsilon
+        /// widened at both ends of *every* page's window let a box on the far side of the boundary satisfy
+        /// the near side's window too - observed against css4.pub's Icelandic dictionary, where a
+        /// paragraph opening column 2 of one page was picked as the running header's "last" value for the
+        /// *previous* page. Attributing every candidate to an unambiguous single slot up front - the same
+        /// slot a fresh top-of-page box would resolve to via <see cref="HtmlContainerInt.SlotStartingAt"/>
+        /// elsewhere - removes the overlap a symmetric window can't avoid, without reintroducing the
+        /// original hairline-exclusion bug the epsilon existed to fix in the first place (a value meant to
+        /// land exactly on a page's own top, but off by float noise, is still nudged onto that same page by
+        /// the shared <see cref="HtmlContainerInt.PageBoundaryEpsilon"/> baked into <c>SlotStartingAt</c>).
+        /// </param>
+        /// <param name="namedStrings">The document-level named-string list, in registration order.</param>
         internal static string ResolveNamedString(
             string name,
             string keyword,
-            double pageY,
-            double pageHeight,
+            int currentPageIndex,
+            Func<double, int> pageIndexOf,
             IReadOnlyList<NamedString> namedStrings)
         {
-            var pageEnd = pageY + pageHeight;
-            // Widen the acceptance window outward on both ends by a hairline, rather than shrinking it -
-            // shrinking risks excluding a genuinely-valid boundary-adjacent value from its own true page;
-            // widening can only extend a value's reach into an adjacent page's window at the razor-thin
-            // margin where that ambiguity already exists in principle.
-            var pageStartInclusive = pageY - PageBoundaryEpsilon;
-            var pageEndInclusive = pageEnd + PageBoundaryEpsilon;
-
             return keyword.ToLowerInvariant() switch
             {
                 // last assignment that started before this page (running header)
                 "start" => namedStrings
-                    .LastOrDefault(s => s.Name == name && s.Y < pageStartInclusive)?.Value ?? string.Empty,
+                    .LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) < currentPageIndex)?.Value ?? string.Empty,
                 // first assignment on this page
                 "first" => namedStrings
-                    .FirstOrDefault(s => s.Name == name && s.Y >= pageStartInclusive && s.Y < pageEndInclusive)?.Value
-                    ?? namedStrings.LastOrDefault(s => s.Name == name && s.Y < pageStartInclusive)?.Value
+                    .FirstOrDefault(s => s.Name == name && pageIndexOf(s.Y) == currentPageIndex)?.Value
+                    ?? namedStrings.LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) < currentPageIndex)?.Value
                     ?? string.Empty,
                 // last assignment on this page
                 "last" => namedStrings
-                    .LastOrDefault(s => s.Name == name && s.Y >= pageStartInclusive && s.Y < pageEndInclusive)?.Value
-                    ?? namedStrings.LastOrDefault(s => s.Name == name && s.Y < pageStartInclusive)?.Value
+                    .LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) == currentPageIndex)?.Value
+                    ?? namedStrings.LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) < currentPageIndex)?.Value
                     ?? string.Empty,
                 // first-except: return empty on the page where this string is first assigned
-                "first-except" => namedStrings.Any(s => s.Name == name && s.Y >= pageStartInclusive && s.Y < pageEndInclusive)
+                "first-except" => namedStrings.Any(s => s.Name == name && pageIndexOf(s.Y) == currentPageIndex)
                     ? string.Empty
-                    : namedStrings.LastOrDefault(s => s.Name == name && s.Y < pageStartInclusive)?.Value ?? string.Empty,
+                    : namedStrings.LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) < currentPageIndex)?.Value ?? string.Empty,
                 _ => namedStrings.FirstOrDefault(s => s.Name == name)?.Value ?? string.Empty,
             };
         }
