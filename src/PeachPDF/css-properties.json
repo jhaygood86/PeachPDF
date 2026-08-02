@@ -1,10 +1,10 @@
 {
   "$schema": "./css-properties.schema.json",
-  "$comment": "Source of truth for PeachPDF's CSS/SVG property dispatch, consumed by PeachPDF.SourceGenerators to emit CssPropertyRegistry.g.cs / SvgPropertyRegistry.g.cs. See CLAUDE.md's generator section for the authoring workflow and the PPGxxx diagnostics that check this file. This is the first, deliberately small slice (10 representative entries spanning every schema shape) that proves the generator design before the remaining ~180 HTML/SVG properties are authored in a follow-up change — see the generator infrastructure PR.",
+  "$comment": "Source of truth for PeachPDF's CSS/SVG property dispatch, consumed by PeachPDF.SourceGenerators to emit CssPropertyRegistry.g.cs / SvgPropertyRegistry.g.cs. See CLAUDE.md's generator section for the authoring workflow and the PPGxxx diagnostics that check this file. Every HTML/SVG property PeachPDF's renderer dispatches lives here — see docs/html-css-support.md for the reader-facing compatibility matrix this data backs.",
   "properties": [
     {
       "name": "border-bottom-width",
-      "comment": "Reproduces the old CssUtils.IsValidLengthProperty helper exactly: a valid length, or the auto keyword (checked case-insensitively, matching that helper's InvariantCultureIgnoreCase check — an existing inconsistency vs. most other keyword checks in this codebase, encoded as-is rather than silently fixed).",
+      "comment": "Accepts a valid length, or the auto keyword (compared case-insensitively — an existing inconsistency vs. most other keyword checks in this codebase, encoded as-is rather than silently fixed).",
       "inherited": false,
       "initialValue": "medium",
       "cssDataType": [
@@ -23,10 +23,11 @@
     },
     {
       "name": "transform",
-      "comment": "Unconditional assign in the old dispatch — Layer A (the CSS-OM) is the real grammar authority for this property; Layer B has never re-validated it.",
+      "comment": "cssDataType 'cssom' keeps real dispatch exactly as permissive as before (matching actual CSS transform-list semantics: a value with one unimplemented function, e.g. perspective(), is still syntactically valid and its implemented functions still apply - see TransformIntegrationTests.Perspective_IsUnsupported_TreatedAsIdentity). supportsDataType 'transform' is the stricter, @supports-only grammar (CssValueParser.IsValidTransformValue): the real set of transform functions BuildFunctionMatrix implements at paint time. perspective() parses as valid CSS but is silently dropped at paint time, so it must not report as @supports-true even though it's still accepted and stored by real dispatch.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
+      "supportsDataType": "transform",
       "html": {
         "propertyPath": "Transform",
         "csharpDataType": "string",
@@ -52,7 +53,7 @@
     },
     {
       "name": "direction",
-      "comment": "CssProperty<T>.FromCssText never rejects — it falls back to the keyword instead of leaving the value unset. TrySet/SupportsDeclaration therefore always return true for this property, matching today's behavior exactly (a pre-existing leniency, not something this migration changes). The svg binding is a carrier-only, hand-written entry (applyIn: manual) — SVG never stores direction on SvgElement, only threads it through SvgInheritedPaint for text runs, so it is deliberately excluded from the generated SVG dispatch (see SvgTreeBuilder.ApplyCommon's future manual-property section).",
+      "comment": "TrySet/SupportsDeclaration validate the value against Map.DirectionModes' own keys (ltr/rtl, case-insensitive) via the enum-keyword data type; an unrecognized value is rejected. CssProperty<T>.FromCssText itself never rejects once a value reaches the setter — it falls back to the keyword default (ltr) — so the fallback only applies to a value that already passed validation upstream. The svg binding is a carrier-only, hand-written entry (applyIn: manual) — SVG never stores direction on SvgElement, only threads it through SvgInheritedPaint for text runs, so it is deliberately excluded from the generated SVG dispatch (see SvgTreeBuilder.ApplyCommon's manual-property section).",
       "inherited": true,
       "initialValue": "ltr",
       "cssDataType": {
@@ -76,10 +77,11 @@
     },
     {
       "name": "page-break-after",
-      "comment": "Legacy alias of break-after (css-break-3 §3.3), sharing its storage; the CSS2.1 'always' keyword remaps to break-after's 'page'. aliasOf is intentionally omitted here — break-after itself isn't one of this slice's 10 representative entries, and aliasOf's cross-entry check (PPG007) needs both names present; it is demonstrated once break-after is authored in the full property batch.",
+      "comment": "Legacy alias of break-after (css-break-3 §3.3), sharing its storage; the CSS2.1 'always' keyword remaps to break-after's 'page'.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
+      "aliasOf": "break-after",
       "html": {
         "propertyPath": "BreakAfter",
         "csharpDataType": "string",
@@ -94,7 +96,7 @@
       "initialValue": {
         "expression": "CssConstants.DefaultFont"
       },
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "FontFamily",
         "csharpDataType": "string?",
@@ -105,10 +107,16 @@
     {
       "name": "margin-block-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space — CssBox.LogicalProperties.cs. Read exactly once by CssBox.ResolveLogicalProperties, which maps it to one of margin-top/-right/-bottom/-left depending on this box's own resolved direction/writing-mode; that cross-property resolution stays hand-written (a single JSON entry cannot express a function of two other properties' resolved values). No initial value by design: the physical property it resolves into already has one. Validation mirrors margin-top's (none).",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
-      "cssDataType": "any",
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "resolvesTo": {
         "group": "margin",
         "axis": "block",
@@ -509,7 +517,7 @@
       "name": "border-top-left-radius",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BorderTopLeftRadius",
         "csharpDataType": "string",
@@ -520,7 +528,7 @@
       "name": "border-top-right-radius",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BorderTopRightRadius",
         "csharpDataType": "string",
@@ -531,7 +539,7 @@
       "name": "border-bottom-right-radius",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BorderBottomRightRadius",
         "csharpDataType": "string",
@@ -542,7 +550,7 @@
       "name": "border-bottom-left-radius",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BorderBottomLeftRadius",
         "csharpDataType": "string",
@@ -553,7 +561,7 @@
       "name": "box-shadow",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BoxShadow",
         "csharpDataType": "string",
@@ -564,7 +572,7 @@
       "name": "transform-origin",
       "inherited": false,
       "initialValue": "50% 50% 0",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "TransformOrigin",
         "csharpDataType": "string",
@@ -575,7 +583,7 @@
       "name": "clip-path",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "ClipPath",
         "csharpDataType": "string",
@@ -586,7 +594,7 @@
       "name": "aspect-ratio",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "AspectRatio",
         "csharpDataType": "string",
@@ -595,14 +603,15 @@
     },
     {
       "name": "opacity",
-      "comment": "Shared name, different grammar per side: HTML's CSS opacity is stored as a raw string with no validation (cssDataType 'any', matching the old unconditional-assign dispatch exactly), while SVG's <opacity-value> (css-color-4 §14, clamped [0,1]) is a real double the renderer composites down the subtree at paint time — not inherited, so there is no inheritedFrom carrier. The svg block's customValidator/customSetter override the shared 'any' cssDataType with the real TryParseOpacity grammar; its own out-param default (1.0) already equals both the initial value and SvgElement's Opacity constructor default, so 'leave field unwritten on failure' (invalidBehavior: leave-unset) reproduces SvgTreeBuilder.ApplyCommon's old present-but-invalid behavior exactly.",
+      "comment": "customValidator implements <alpha-value> (css-color-4 §14): a plain number or a percentage, matching CssValueParser.ParseNumber's actual grammar (which the html setter's ActualOpacity resolution calls) rather than the cssDataType 'number' clause alone, which doesn't accept a percentage.",
       "inherited": false,
       "initialValue": "1",
-      "cssDataType": "any",
+      "cssDataType": "number",
       "html": {
         "propertyPath": "Opacity",
         "csharpDataType": "string",
-        "area": "VisualEffectsArea"
+        "area": "VisualEffectsArea",
+        "customValidator": "{value}.EndsWith('%') ? double.TryParse({value}[..^1], global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _) : double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)"
       },
       "svg": {
         "propertyPath": "Opacity",
@@ -616,7 +625,7 @@
       "name": "content",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "Content",
         "csharpDataType": "string",
@@ -627,7 +636,7 @@
       "name": "counter-increment",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "CounterIncrement",
         "csharpDataType": "string",
@@ -638,7 +647,7 @@
       "name": "counter-reset",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "CounterReset",
         "csharpDataType": "string",
@@ -649,7 +658,7 @@
       "name": "counter-set",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "CounterSet",
         "csharpDataType": "string",
@@ -660,7 +669,7 @@
       "name": "string-set",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "StringSet",
         "csharpDataType": "string",
@@ -671,7 +680,7 @@
       "name": "page",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "PageName",
         "csharpDataType": "string",
@@ -682,7 +691,7 @@
       "name": "-peachpdf-pdf-tag-type",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "PdfTagType",
         "csharpDataType": "string",
@@ -693,7 +702,13 @@
       "name": "margin-bottom",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "html": {
         "propertyPath": "MarginBottom",
         "csharpDataType": "string",
@@ -704,7 +719,13 @@
       "name": "margin-left",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "html": {
         "propertyPath": "MarginLeft",
         "csharpDataType": "string",
@@ -715,7 +736,13 @@
       "name": "margin-right",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "html": {
         "propertyPath": "MarginRight",
         "csharpDataType": "string",
@@ -726,7 +753,13 @@
       "name": "margin-top",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "html": {
         "propertyPath": "MarginTop",
         "csharpDataType": "string",
@@ -737,7 +770,7 @@
       "name": "padding-bottom",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "length",
       "html": {
         "propertyPath": "PaddingBottom",
         "csharpDataType": "string",
@@ -748,7 +781,7 @@
       "name": "padding-left",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "length",
       "html": {
         "propertyPath": "PaddingLeft",
         "csharpDataType": "string",
@@ -759,7 +792,7 @@
       "name": "padding-right",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "length",
       "html": {
         "propertyPath": "PaddingRight",
         "csharpDataType": "string",
@@ -770,7 +803,7 @@
       "name": "padding-top",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "length",
       "html": {
         "propertyPath": "PaddingTop",
         "csharpDataType": "string",
@@ -781,7 +814,13 @@
       "name": "left",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "html": {
         "propertyPath": "Left",
         "csharpDataType": "string",
@@ -792,7 +831,13 @@
       "name": "top",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "html": {
         "propertyPath": "Top",
         "csharpDataType": "string",
@@ -803,7 +848,13 @@
       "name": "right",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "html": {
         "propertyPath": "Right",
         "csharpDataType": "string",
@@ -814,7 +865,13 @@
       "name": "bottom",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "html": {
         "propertyPath": "Bottom",
         "csharpDataType": "string",
@@ -931,9 +988,37 @@
     },
     {
       "name": "break-before",
+      "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "avoid-region",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "column",
+        "region"
+      ],
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "column"
+      ],
       "html": {
         "propertyPath": "BreakBefore",
         "csharpDataType": "string",
@@ -942,9 +1027,24 @@
     },
     {
       "name": "break-inside",
+      "comment": "avoid-region is stored (real dispatch) like break-before/-after's region/avoid-region, but excluded from supportsDataType's stricter @supports-only list for the same reason - see break-before's comment.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "avoid-region"
+      ],
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column"
+      ],
       "html": {
         "propertyPath": "BreakInside",
         "csharpDataType": "string",
@@ -953,9 +1053,37 @@
     },
     {
       "name": "break-after",
+      "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "avoid-region",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "column",
+        "region"
+      ],
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "column"
+      ],
       "html": {
         "propertyPath": "BreakAfter",
         "csharpDataType": "string",
@@ -967,7 +1095,8 @@
       "comment": "Legacy alias of break-before (css-break-3 §3.3); the CSS2.1 'always' keyword remaps to break-before's 'page'.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
+      "aliasOf": "break-before",
       "html": {
         "propertyPath": "BreakBefore",
         "csharpDataType": "string",
@@ -980,7 +1109,7 @@
       "comment": "Legacy alias of break-inside, sharing its storage - no value remap on this axis.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "aliasOf": "break-inside",
       "html": {
         "propertyPath": "BreakInside",
@@ -1036,7 +1165,7 @@
       "name": "background-position",
       "inherited": false,
       "initialValue": "0% 0%",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BackgroundPosition",
         "csharpDataType": "string",
@@ -1047,7 +1176,7 @@
       "name": "background-repeat",
       "inherited": false,
       "initialValue": "repeat",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BackgroundRepeat",
         "csharpDataType": "string",
@@ -1058,7 +1187,7 @@
       "name": "background-size",
       "inherited": false,
       "initialValue": "auto auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BackgroundSize",
         "csharpDataType": "string",
@@ -1069,7 +1198,7 @@
       "name": "background-origin",
       "inherited": false,
       "initialValue": "padding-box",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BackgroundOrigin",
         "csharpDataType": "string",
@@ -1080,7 +1209,7 @@
       "name": "background-clip",
       "inherited": false,
       "initialValue": "border-box",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BackgroundClip",
         "csharpDataType": "string",
@@ -1091,7 +1220,12 @@
       "name": "background-attachment",
       "inherited": false,
       "initialValue": "scroll",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "scroll",
+        "fixed",
+        "local"
+      ],
       "html": {
         "propertyPath": "BackgroundAttachment",
         "csharpDataType": "string",
@@ -1102,7 +1236,14 @@
       "name": "object-fit",
       "inherited": false,
       "initialValue": "fill",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "fill",
+        "contain",
+        "cover",
+        "none",
+        "scale-down"
+      ],
       "html": {
         "propertyPath": "ObjectFit",
         "csharpDataType": "string",
@@ -1113,7 +1254,7 @@
       "name": "object-position",
       "inherited": false,
       "initialValue": "50% 50%",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "ObjectPosition",
         "csharpDataType": "string",
@@ -1150,10 +1291,10 @@
     },
     {
       "name": "background-image",
-      "comment": "Parses into a structurally different field (image list), never rejects - matches the old unconditional-assign dispatch exactly.",
+      "comment": "Parses into a structurally different field (image list) via a custom setter; cssDataType 'cssom' delegates grammar validation to the CSS-OM's own BackgroundImageProperty.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BackgroundImages",
         "csharpDataType": "IReadOnlyList<CssImage>?",
@@ -1167,7 +1308,27 @@
       "name": "display",
       "inherited": false,
       "initialValue": "inline",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "block",
+        "inline",
+        "inline-block",
+        "none",
+        "flex",
+        "inline-flex",
+        "grid",
+        "inline-grid",
+        "table",
+        "table-row",
+        "table-cell",
+        "table-header-group",
+        "table-footer-group",
+        "table-row-group",
+        "table-column",
+        "table-column-group",
+        "table-caption",
+        "list-item"
+      ],
       "html": {
         "propertyPath": "Display",
         "csharpDataType": "string",
@@ -1178,7 +1339,12 @@
       "name": "float",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "left",
+        "right",
+        "none"
+      ],
       "html": {
         "propertyPath": "Float",
         "csharpDataType": "string",
@@ -1189,7 +1355,13 @@
       "name": "clear",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "left",
+        "right",
+        "both",
+        "none"
+      ],
       "html": {
         "propertyPath": "Clear",
         "csharpDataType": "string",
@@ -1200,7 +1372,14 @@
       "name": "position",
       "inherited": false,
       "initialValue": "static",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "static",
+        "relative",
+        "absolute",
+        "fixed",
+        "sticky"
+      ],
       "html": {
         "propertyPath": "Position",
         "csharpDataType": "string",
@@ -1209,9 +1388,16 @@
     },
     {
       "name": "overflow",
+      "comment": "'clip' is intentionally excluded - CssUtilsTests/MonolithicContentTests confirm it isn't (and wasn't, pre-migration) an accepted value, so it never overrides the inherited/initial 'visible' and MonolithicContent.IsScrollContainer sees 'visible', not a stored 'clip'. 'auto'/'scroll' are genuinely used by MonolithicContent.IsScrollContainer (a non-visible overflow makes a box a scroll container, treated as monolithic/unbreakable across pages) even though they don't distinguish real interactive scrolling from 'hidden' - both are meaningful CSS Overflow 3 values for a non-interactive, paginated renderer.",
       "inherited": false,
       "initialValue": "visible",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "visible",
+        "hidden",
+        "scroll",
+        "auto"
+      ],
       "html": {
         "propertyPath": "Overflow",
         "csharpDataType": "string",
@@ -1240,7 +1426,11 @@
       "name": "border-collapse",
       "inherited": true,
       "initialValue": "separate",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "collapse",
+        "separate"
+      ],
       "html": {
         "propertyPath": "BorderCollapse",
         "csharpDataType": "string",
@@ -1251,7 +1441,7 @@
       "name": "border-spacing",
       "inherited": true,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "BorderSpacing",
         "csharpDataType": "string",
@@ -1262,7 +1452,11 @@
       "name": "empty-cells",
       "inherited": true,
       "initialValue": "show",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "show",
+        "hide"
+      ],
       "html": {
         "propertyPath": "EmptyCells",
         "csharpDataType": "string",
@@ -1271,10 +1465,16 @@
     },
     {
       "name": "line-height",
-      "comment": "line-height's grammar (length | percentage | <number> | normal) is wider than the shared length+keyword shape used elsewhere, AND mixes case sensitivity per-keyword (auto matched case-insensitively via the old IsValidLengthProperty helper's own leniency quirk, normal matched case-sensitively) - a customValidator reproduces the exact old behavior rather than normalizing it.",
+      "comment": "A unitless multiplier value (e.g. 'line-height: 1.5') is not modeled here and reports unsupported - IsValidLength requires a unit or a bare zero, matching ParseLength's own length-only reading at DerivedStyle.ActualLineHeight.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "normal"
+      ],
       "html": {
         "propertyPath": "LineHeight",
         "csharpDataType": "string",
@@ -1286,7 +1486,17 @@
       "name": "vertical-align",
       "inherited": false,
       "initialValue": "baseline",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "baseline",
+        "sub",
+        "super",
+        "top",
+        "bottom",
+        "middle",
+        "text-top",
+        "text-bottom"
+      ],
       "html": {
         "propertyPath": "VerticalAlign",
         "csharpDataType": "string",
@@ -1297,7 +1507,7 @@
       "name": "text-indent",
       "inherited": true,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "length",
       "html": {
         "propertyPath": "TextIndent",
         "csharpDataType": "string",
@@ -1308,7 +1518,15 @@
       "name": "text-align",
       "inherited": true,
       "initialValue": "start",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "left",
+        "right",
+        "center",
+        "justify",
+        "start",
+        "end"
+      ],
       "html": {
         "propertyPath": "TextAlign",
         "csharpDataType": "string",
@@ -1319,7 +1537,13 @@
       "name": "text-transform",
       "inherited": true,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "uppercase",
+        "lowercase",
+        "capitalize"
+      ],
       "html": {
         "propertyPath": "TextTransform",
         "csharpDataType": "string",
@@ -1330,7 +1554,14 @@
       "name": "white-space",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "normal",
+        "nowrap",
+        "pre",
+        "pre-wrap",
+        "pre-line"
+      ],
       "html": {
         "propertyPath": "WhiteSpace",
         "csharpDataType": "string",
@@ -1341,7 +1572,11 @@
       "name": "word-break",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "normal",
+        "break-all"
+      ],
       "html": {
         "propertyPath": "WordBreak",
         "csharpDataType": "string",
@@ -1352,7 +1587,11 @@
       "name": "visibility",
       "inherited": true,
       "initialValue": "visible",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "visible",
+        "hidden"
+      ],
       "html": {
         "propertyPath": "Visibility",
         "csharpDataType": "string",
@@ -1363,7 +1602,13 @@
       "name": "word-spacing",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "normal"
+      ],
       "html": {
         "propertyPath": "WordSpacing",
         "csharpDataType": "string",
@@ -1374,7 +1619,13 @@
       "name": "letter-spacing",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "normal"
+      ],
       "html": {
         "propertyPath": "LetterSpacing",
         "csharpDataType": "string",
@@ -1436,7 +1687,7 @@
       "name": "text-decoration-line",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "TextDecorationLine",
         "csharpDataType": "string",
@@ -1447,7 +1698,7 @@
       "name": "text-decoration-style",
       "inherited": false,
       "initialValue": "solid",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "TextDecorationStyle",
         "csharpDataType": "string",
@@ -1456,10 +1707,13 @@
     },
     {
       "name": "text-decoration-color",
-      "comment": "No color validation in the old dispatch despite being a color property - a pre-existing gap, preserved as-is.",
+      "comment": "Real color grammar now validated (was previously a documented gap: no color validation despite being a color property).",
       "inherited": false,
       "initialValue": "currentcolor",
-      "cssDataType": "any",
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
       "html": {
         "propertyPath": "TextDecorationColor",
         "csharpDataType": "string",
@@ -1470,7 +1724,22 @@
       "name": "font-size",
       "inherited": true,
       "initialValue": "medium",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "xx-small",
+        "x-small",
+        "small",
+        "medium",
+        "large",
+        "x-large",
+        "xx-large",
+        "xxx-large",
+        "smaller",
+        "larger"
+      ],
       "html": {
         "propertyPath": "FontSize",
         "csharpDataType": "string",
@@ -1481,7 +1750,7 @@
       "name": "font-style",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "FontStyle",
         "csharpDataType": "string",
@@ -1492,7 +1761,7 @@
       "name": "font-variant-caps",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "FontVariantCaps",
         "csharpDataType": "string",
@@ -1503,7 +1772,7 @@
       "name": "font-variant-ligatures",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "FontVariantLigatures",
         "csharpDataType": "string",
@@ -1514,7 +1783,7 @@
       "name": "font-variant-numeric",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "FontVariantNumeric",
         "csharpDataType": "string",
@@ -1525,7 +1794,7 @@
       "name": "font-variant-east-asian",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "FontVariantEastAsian",
         "csharpDataType": "string",
@@ -1536,7 +1805,7 @@
       "name": "font-feature-settings",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "FontFeatureSettings",
         "csharpDataType": "string",
@@ -1545,9 +1814,21 @@
     },
     {
       "name": "font-weight",
+      "comment": "CSS Fonts 4's <number> form is validated as a plain integer (FontWeightResolver/FontResolver.PickNearestWeight use int.TryParse, not a fractional number) - no 1-1000 range is enforced by that parse itself, so the integer clause is left unbounded rather than asserting a range this codebase doesn't actually check.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": [
+        "keyword",
+        {
+          "type": "integer"
+        }
+      ],
+      "supportedValues": [
+        "normal",
+        "bold",
+        "bolder",
+        "lighter"
+      ],
       "html": {
         "propertyPath": "FontWeight",
         "csharpDataType": "string",
@@ -1558,7 +1839,18 @@
       "name": "font-stretch",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "normal",
+        "ultra-condensed",
+        "extra-condensed",
+        "condensed",
+        "semi-condensed",
+        "semi-expanded",
+        "expanded",
+        "extra-expanded",
+        "ultra-expanded"
+      ],
       "html": {
         "propertyPath": "FontStretch",
         "csharpDataType": "string",
@@ -1569,7 +1861,7 @@
       "name": "font-palette",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "FontPalette",
         "csharpDataType": "string",
@@ -1580,7 +1872,11 @@
       "name": "list-style-position",
       "inherited": true,
       "initialValue": "outside",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "inside",
+        "outside"
+      ],
       "html": {
         "propertyPath": "ListStylePosition",
         "csharpDataType": "string",
@@ -1591,7 +1887,29 @@
       "name": "list-style-type",
       "inherited": true,
       "initialValue": "disc",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "disc",
+        "circle",
+        "square",
+        "decimal",
+        "decimal-leading-zero",
+        "lower-roman",
+        "upper-roman",
+        "lower-alpha",
+        "upper-alpha",
+        "lower-latin",
+        "upper-latin",
+        "lower-greek",
+        "armenian",
+        "georgian",
+        "hebrew",
+        "hiragana",
+        "hiragana-iroha",
+        "katakana",
+        "katakana-iroha",
+        "none"
+      ],
       "html": {
         "propertyPath": "ListStyleType",
         "csharpDataType": "string",
@@ -1600,10 +1918,10 @@
     },
     {
       "name": "list-style-image",
-      "comment": "Parses into a structured field, never rejects - matches the old unconditional-assign dispatch exactly.",
+      "comment": "Parses into a structured field via a custom setter; cssDataType 'cssom' delegates grammar validation to the CSS-OM's own ListStyleImageProperty.",
       "inherited": true,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "ListStyleImage",
         "csharpDataType": "CssImage?",
@@ -1617,7 +1935,13 @@
       "name": "flex-direction",
       "inherited": false,
       "initialValue": "row",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "row",
+        "row-reverse",
+        "column",
+        "column-reverse"
+      ],
       "html": {
         "propertyPath": "FlexDirection",
         "csharpDataType": "string",
@@ -1628,7 +1952,12 @@
       "name": "flex-wrap",
       "inherited": false,
       "initialValue": "nowrap",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "nowrap",
+        "wrap",
+        "wrap-reverse"
+      ],
       "html": {
         "propertyPath": "FlexWrap",
         "csharpDataType": "string",
@@ -1639,7 +1968,15 @@
       "name": "justify-content",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "flex-start",
+        "flex-end",
+        "center",
+        "space-between",
+        "space-around",
+        "space-evenly"
+      ],
       "html": {
         "propertyPath": "JustifyContent",
         "csharpDataType": "string",
@@ -1648,9 +1985,20 @@
     },
     {
       "name": "align-items",
+      "comment": "supportedValues is the union of what CssLayoutEngineFlex's ComputeCrossOffsets and CssLayoutEngineGrid's ResolveSelfAlignment/AlignmentOffset each genuinely distinguish - align-items serves both layout modes and this entry can't tell which one a given box uses.",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "flex-start",
+        "flex-end",
+        "start",
+        "end",
+        "center",
+        "stretch",
+        "normal",
+        "baseline"
+      ],
       "html": {
         "propertyPath": "AlignItems",
         "csharpDataType": "string",
@@ -1661,7 +2009,17 @@
       "name": "align-content",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "flex-start",
+        "flex-end",
+        "center",
+        "space-between",
+        "space-around",
+        "space-evenly",
+        "stretch",
+        "normal"
+      ],
       "html": {
         "propertyPath": "AlignContent",
         "csharpDataType": "string",
@@ -1672,7 +2030,7 @@
       "name": "flex-grow",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "number",
       "html": {
         "propertyPath": "FlexGrow",
         "csharpDataType": "string",
@@ -1683,7 +2041,7 @@
       "name": "flex-shrink",
       "inherited": false,
       "initialValue": "1",
-      "cssDataType": "any",
+      "cssDataType": "number",
       "html": {
         "propertyPath": "FlexShrink",
         "csharpDataType": "string",
@@ -1694,7 +2052,14 @@
       "name": "flex-basis",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto",
+        "content"
+      ],
       "html": {
         "propertyPath": "FlexBasis",
         "csharpDataType": "string",
@@ -1703,9 +2068,21 @@
     },
     {
       "name": "align-self",
+      "comment": "Same union as align-items, plus 'auto' (defers to the container's align-items, CssLayoutEngineFlex.ComputeCrossOffsets).",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "flex-start",
+        "flex-end",
+        "start",
+        "end",
+        "center",
+        "stretch",
+        "normal",
+        "baseline"
+      ],
       "html": {
         "propertyPath": "AlignSelf",
         "csharpDataType": "string",
@@ -1716,7 +2093,7 @@
       "name": "order",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "integer",
       "html": {
         "propertyPath": "Order",
         "csharpDataType": "string",
@@ -1727,7 +2104,7 @@
       "name": "row-gap",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "length",
       "html": {
         "propertyPath": "FlexRowGap",
         "csharpDataType": "string",
@@ -1738,7 +2115,7 @@
       "name": "column-gap",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": "any",
+      "cssDataType": "length",
       "html": {
         "propertyPath": "FlexColumnGap",
         "csharpDataType": "string",
@@ -1747,10 +2124,10 @@
     },
     {
       "name": "grid-template-columns",
-      "comment": "The string setter is unconditional in the old dispatch (no validity check) - customSetter reproduces that exactly. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch - a tracked follow-up, not a regression (the old string-setter behavior this generates is unconditional either way).",
+      "comment": "cssDataType 'cssom' delegates grammar validation to the CSS-OM's own GridTemplateColumnsProperty; the string setter itself is unconditional once that validation passes. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch — a tracked follow-up, not a regression.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridTemplateColumns",
         "csharpDataType": "CssProperty<GridTemplate>",
@@ -1761,10 +2138,10 @@
     },
     {
       "name": "grid-template-rows",
-      "comment": "The string setter is unconditional in the old dispatch (no validity check) - customSetter reproduces that exactly. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch - a tracked follow-up, not a regression (the old string-setter behavior this generates is unconditional either way).",
+      "comment": "cssDataType 'cssom' delegates grammar validation to the CSS-OM's own GridTemplateRowsProperty; the string setter itself is unconditional once that validation passes. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch — a tracked follow-up, not a regression.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridTemplateRows",
         "csharpDataType": "CssProperty<GridTemplate>",
@@ -1777,7 +2154,7 @@
       "name": "grid-template-areas",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridTemplateAreas",
         "csharpDataType": "string",
@@ -1788,7 +2165,7 @@
       "name": "grid-auto-columns",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridAutoColumns",
         "csharpDataType": "string",
@@ -1799,7 +2176,7 @@
       "name": "grid-auto-rows",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridAutoRows",
         "csharpDataType": "string",
@@ -1810,7 +2187,7 @@
       "name": "grid-auto-flow",
       "inherited": false,
       "initialValue": "row",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridAutoFlow",
         "csharpDataType": "string",
@@ -1821,7 +2198,14 @@
       "name": "justify-items",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "start",
+        "end",
+        "center",
+        "stretch",
+        "normal"
+      ],
       "html": {
         "propertyPath": "JustifyItems",
         "csharpDataType": "string",
@@ -1832,7 +2216,15 @@
       "name": "justify-self",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "start",
+        "end",
+        "center",
+        "stretch",
+        "normal"
+      ],
       "html": {
         "propertyPath": "JustifySelf",
         "csharpDataType": "string",
@@ -1843,7 +2235,7 @@
       "name": "grid-column-start",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridColumnStart",
         "csharpDataType": "string",
@@ -1854,7 +2246,7 @@
       "name": "grid-column-end",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridColumnEnd",
         "csharpDataType": "string",
@@ -1865,7 +2257,7 @@
       "name": "grid-row-start",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridRowStart",
         "csharpDataType": "string",
@@ -1876,7 +2268,7 @@
       "name": "grid-row-end",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "any",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "GridRowEnd",
         "csharpDataType": "string",
@@ -2013,15 +2405,21 @@
     {
       "name": "margin-block-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "resolvesTo": {
         "group": "margin",
         "axis": "block",
         "side": "end"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "MarginBlockEnd",
         "csharpDataType": "string?",
@@ -2031,15 +2429,21 @@
     {
       "name": "margin-inline-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "resolvesTo": {
         "group": "margin",
         "axis": "inline",
         "side": "start"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "MarginInlineStart",
         "csharpDataType": "string?",
@@ -2049,15 +2453,21 @@
     {
       "name": "margin-inline-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "resolvesTo": {
         "group": "margin",
         "axis": "inline",
         "side": "end"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "MarginInlineEnd",
         "csharpDataType": "string?",
@@ -2067,15 +2477,15 @@
     {
       "name": "padding-block-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": "length",
       "resolvesTo": {
         "group": "padding",
         "axis": "block",
         "side": "start"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "PaddingBlockStart",
         "csharpDataType": "string?",
@@ -2085,15 +2495,15 @@
     {
       "name": "padding-block-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": "length",
       "resolvesTo": {
         "group": "padding",
         "axis": "block",
         "side": "end"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "PaddingBlockEnd",
         "csharpDataType": "string?",
@@ -2103,15 +2513,15 @@
     {
       "name": "padding-inline-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": "length",
       "resolvesTo": {
         "group": "padding",
         "axis": "inline",
         "side": "start"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "PaddingInlineStart",
         "csharpDataType": "string?",
@@ -2121,15 +2531,15 @@
     {
       "name": "padding-inline-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": "length",
       "resolvesTo": {
         "group": "padding",
         "axis": "inline",
         "side": "end"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "PaddingInlineEnd",
         "csharpDataType": "string?",
@@ -2139,15 +2549,21 @@
     {
       "name": "inset-block-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "resolvesTo": {
         "group": "inset",
         "axis": "block",
         "side": "start"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "InsetBlockStart",
         "csharpDataType": "string?",
@@ -2157,15 +2573,21 @@
     {
       "name": "inset-block-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "resolvesTo": {
         "group": "inset",
         "axis": "block",
         "side": "end"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "InsetBlockEnd",
         "csharpDataType": "string?",
@@ -2175,15 +2597,21 @@
     {
       "name": "inset-inline-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "resolvesTo": {
         "group": "inset",
         "axis": "inline",
         "side": "start"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "InsetInlineStart",
         "csharpDataType": "string?",
@@ -2193,15 +2621,21 @@
     {
       "name": "inset-inline-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
-      "category": "logical",
       "inherited": false,
       "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
       "resolvesTo": {
         "group": "inset",
         "axis": "inline",
         "side": "end"
       },
-      "cssDataType": "any",
       "html": {
         "propertyPath": "InsetInlineEnd",
         "csharpDataType": "string?",

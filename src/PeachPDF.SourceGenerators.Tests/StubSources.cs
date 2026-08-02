@@ -28,5 +28,23 @@ namespace PeachPDF.SourceGenerators.Tests
                 }
             }
             """;
+
+        /// <summary>A minimal SvgElement whose only member has no setter, for PPG010's "no setter" branch.</summary>
+        public const string SvgElementWithReadOnlyMember = """
+            namespace PeachPDF.Html.Core.Dom
+            {
+                public class CssBox
+                {
+                }
+            }
+
+            namespace PeachPDF.Svg
+            {
+                public class SvgElement
+                {
+                    public double ReadOnlyOpacity { get; } = 1.0;
+                }
+            }
+            """;
     }
 }

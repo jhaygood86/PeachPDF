@@ -57,6 +57,23 @@
           "type": "string",
           "description": "Names a legacy alias's target (e.g. page-break-after -> break-after). PPG007 requires the target to exist and to declare the identical initialValue."
         },
+        "supportsDataType": {
+          "description": "Optional, stricter grammar used only by the generated Supports_*/SupportsDeclaration (the @supports oracle) - cssDataType keeps gating real cascade dispatch (Validate_*/Set_*) unchanged. Same shape as cssDataType. Needed when a value is genuinely accepted and stored by real dispatch (matching actual CSS semantics: a value list with one unimplemented member - e.g. a transform function, a break-before keyword - is still syntactically valid and its implemented members still apply) but @supports here uses a stricter standard: does PeachPDF's renderer actually honor this specific value (see issue #283), not just does it parse. Omit when Supports_* should simply forward to Validate_* (the common case).",
+          "oneOf": [
+            { "$ref": "#/definitions/dataType" },
+            { "type": "array", "items": { "$ref": "#/definitions/dataType" } }
+          ]
+        },
+        "supportsSupportedValues": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "supportedValues override for supportsDataType's own 'keyword' clause, when it needs a narrower list than the base entry's supportedValues (e.g. break-before's Supports_* excludes region/avoid-region, which parse and are stored but are inert - no FragmentationContext.Region exists). Falls back to the base supportedValues when supportsDataType uses 'keyword' but this is omitted."
+        },
+        "supportsKeywordComparison": {
+          "type": "string",
+          "enum": ["ordinal", "ordinal-ignore-case", "invariant-ignore-case"],
+          "description": "keywordComparison override for supportsDataType's own 'keyword' clause. Falls back to the base keywordComparison when omitted."
+        },
         "resolvesTo": {
           "type": "object",
           "description": "Logical-category only (PPG014 otherwise); descriptive metadata the generator surfaces as CssPropertyRegistry.LogicalProperties for a completeness test against CssBox.ResolveLogicalProperties — the resolution algorithm itself stays hand-written.",
@@ -76,9 +93,10 @@
         {
           "type": "string",
           "enum": [
-            "any", "unsupported", "length", "color", "current-color", "keyword", "integer", "number",
+            "cssom", "unsupported", "length", "color", "current-color", "transform", "keyword", "integer", "number",
             "svg-paint", "svg-opacity", "svg-length", "svg-length-list", "svg-transform", "svg-reference"
-          ]
+          ],
+          "description": "'cssom' means 'no dedicated grammar modeled here' — HTML validation delegates to the real CSS-OM property for the same name (PropertyFactory + StylesheetParser), so it still only accepts what that property's own grammar accepts. Unless a property genuinely accepts unconstrained text, prefer a specific data type (keyword/length/integer/...) over 'cssom' so the accepted grammar is visible in this file rather than only in the CSS-OM."
         },
         {
           "type": "object",
@@ -103,7 +121,7 @@
         {
           "type": "object",
           "required": ["type", "enumType", "keywordMap", "fallback"],
-          "description": "A CssProperty<T>-backed property (direction, writing-mode, unicode-bidi, ...). Never rejects — CssProperty<T>.FromCssText falls back to the given keyword instead of leaving the value unset, so validation is always true for this data type; this reproduces existing behavior exactly, not a new leniency.",
+          "description": "A CssProperty<T>-backed property (direction, writing-mode, unicode-bidi, ...). Validation checks the value against keywordMap's own keys; only a recognized keyword passes. CssProperty<T>.FromCssText itself never rejects a value that reaches the setter — it falls back to the given keyword instead of leaving the value unset — but that fallback only runs once validation has already accepted the value.",
           "properties": {
             "type": { "const": "enum-keyword" },
             "enumType": { "type": "string" },

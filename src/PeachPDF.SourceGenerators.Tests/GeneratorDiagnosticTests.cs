@@ -47,9 +47,9 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } },
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -83,7 +83,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "html": { "propertyPath": null, "csharpDataType": null, "area": null } }
                   ]
                 }
@@ -100,7 +100,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -117,7 +117,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": "auto", "aliasOf": "does-not-exist", "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": "auto", "aliasOf": "does-not-exist", "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -134,9 +134,9 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": "auto", "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": "auto", "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } },
-                    { "name": "y", "inherited": false, "initialValue": "different", "aliasOf": "x", "cssDataType": "any",
+                    { "name": "y", "inherited": false, "initialValue": "different", "aliasOf": "x", "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -153,7 +153,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea",
                                 "customSetter": "if (true) return false; {box}.Transform = {value};" } }
                   ]
@@ -171,7 +171,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea",
                                 "customSetter": "var returnValue = {value}; {box}.Transform = returnValue;" } }
                   ]
@@ -189,7 +189,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any", "supportedValues": ["a", "b"],
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom", "supportedValues": ["a", "b"],
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -207,7 +207,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "svg": { "propertyPath": "DoesNotExist", "csharpDataType": "string", "invalidBehavior": "leave-unset" } }
                   ]
                 }
@@ -224,7 +224,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "fill", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "fill", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "svg": { "propertyPath": "Fill", "csharpDataType": "SvgPaint", "invalidBehavior": "leave-unset" } }
                   ]
                 }
@@ -242,7 +242,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "html": { "propertyPath": "DoesNotExist", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -259,7 +259,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "html": { "propertyPath": "NoSetter", "csharpDataType": "int", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -276,7 +276,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "any",
+                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -293,7 +293,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "NotARealArea" } }
                   ]
                 }
@@ -310,7 +310,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "category": "logical", "inherited": false, "initialValue": "not-null", "cssDataType": "any",
+                    { "name": "x", "category": "logical", "inherited": false, "initialValue": "not-null", "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": null } }
                   ]
                 }
@@ -327,7 +327,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "any",
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
                       "resolvesTo": { "group": "margin", "axis": "block", "side": "start" },
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
@@ -345,7 +345,263 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "any",
+                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "cssom",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Empty(result.Diagnostics);
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_An_Entry_In_Properties_Is_Not_An_Object()
+        {
+            var json = """{ "properties": [ "not an object" ] }""";
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_An_Entry_Has_No_String_Name()
+        {
+            var json = """{ "properties": [ { "inherited": false, "initialValue": "none", "cssDataType": "cssom" } ] }""";
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_An_Entry_Is_Missing_The_Boolean_Inherited_Field()
+        {
+            var json = """{ "properties": [ { "name": "x", "initialValue": "none", "cssDataType": "cssom" } ] }""";
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_SupportedValues_Is_Not_An_Array()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "keyword", "supportedValues": "not-an-array",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_InitialValue_Is_Neither_A_String_Null_Nor_An_Expression_Object()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": 5, "cssDataType": "cssom",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_Category_Is_Not_A_String()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "category": 5, "cssDataType": "cssom",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_Category_Is_An_Unrecognized_String()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "category": "bogus", "cssDataType": "cssom",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_Html_Is_Not_An_Object()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom", "html": "not-an-object" }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_Svg_Is_Not_An_Object()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom", "svg": "not-an-object" }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG001_Fires_When_Svg_Is_Missing_Required_InvalidBehavior()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "fill", "inherited": false, "initialValue": null, "cssDataType": "svg-paint",
+                      "svg": { "propertyPath": "Fill", "csharpDataType": "string" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG001", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG002_Fires_For_An_Unknown_DataType_Object_Shape()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": { "type": "bogus-shape" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG002", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG002_Fires_When_A_DataType_Is_Neither_A_String_Nor_An_Object()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": 5,
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG002", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG010_Fires_When_Svg_PropertyPath_Names_A_Property_With_No_Setter()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "cssom",
+                      "svg": { "propertyPath": "ReadOnlyOpacity", "csharpDataType": "double", "invalidBehavior": "leave-unset" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.SvgElementWithReadOnlyMember);
+
+            Assert.Contains("PPG010", IdsOf(result));
+        }
+
+        [Fact]
+        public void Parsed_DataType_Parses_Without_Diagnostics()
+        {
+            // Schema-reserved shape with no current entry using it (no binding, so no codegen is
+            // attempted) - this only proves ParseSingleDataType reads its converter/resultType/typedValueType fields.
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null,
+                      "cssDataType": { "type": "parsed", "converter": "SomeConverter.FromCssText",
+                                        "resultType": "SomeResult", "typedValueType": "SomeTypedValue" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Empty(result.Diagnostics);
+        }
+
+        [Fact]
+        public void SvgTransform_And_SvgReference_DataTypes_Parse_Without_Diagnostics()
+        {
+            // Schema-reserved data types with no current entry using them (no binding either, so no
+            // codegen is attempted) - this only proves ParseSingleDataType's string mapping accepts them.
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": "svg-transform" },
+                    { "name": "y", "inherited": false, "initialValue": null, "cssDataType": "svg-reference" }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Empty(result.Diagnostics);
+        }
+
+        [Fact]
+        public void SupportsDataType_And_SupportsSupportedValues_Parse_Without_Diagnostics()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "break-before", "inherited": false, "initialValue": "auto", "cssDataType": "keyword",
+                      "supportedValues": ["auto", "region"], "supportsDataType": "keyword", "supportsSupportedValues": ["auto"],
+                      "supportsKeywordComparison": "ordinal-ignore-case",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }

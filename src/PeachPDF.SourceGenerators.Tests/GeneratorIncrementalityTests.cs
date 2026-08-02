@@ -15,7 +15,7 @@ namespace PeachPDF.SourceGenerators.Tests
         private const string SimpleJson = """
             {
               "properties": [
-                { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "any",
+                { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "cssom",
                   "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
               ]
             }

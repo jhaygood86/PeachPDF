@@ -144,6 +144,81 @@ namespace PeachPDF.Tests.CSS
             Assert.False(supports.Condition.Check());
         }
 
+        // transform's cssDataType is 'cssom' (permissive - matches real dispatch, which still applies a
+        // transform-list's recognized functions even when one is unimplemented) but its supportsDataType
+        // override ('transform', backed by CssValueParser.IsValidTransformValue) is stricter: perspective()
+        // parses as valid CSS but paint silently drops it, so @supports must say no even though the
+        // declaration itself would still be accepted and stored by real cascade dispatch.
+        [Fact]
+        public void SupportsTransformRotateRule()
+        {
+            var source = @"@supports (transform: rotate(10deg)) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsTransformPerspectiveRule_NotGenuinelyRendered()
+        {
+            var source = @"@supports (transform: perspective(300px)) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
+        }
+
+        // break-before's cssDataType includes region/avoid-region (real dispatch stores any css-break-4
+        // keyword), but its supportsDataType override excludes them - BreakValues.cs's fragmentation logic
+        // never acts on them (no FragmentationContext.Region), so @supports must say no.
+        [Fact]
+        public void SupportsBreakBeforeRegionRule_NotGenuinelyEnforced()
+        {
+            var source = @"@supports (break-before: region) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsBreakBeforePageRule()
+        {
+            var source = @"@supports (break-before: page) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
+        // direction's enum-keyword validator now checks Map.DirectionModes' own keys instead of
+        // unconditionally returning true - a value outside {ltr, rtl} must fail.
+        [Fact]
+        public void SupportsDirectionRule()
+        {
+            var source = @"@supports (direction: rtl) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsDirectionGarbageValueRule_NoLongerAlwaysTrue()
+        {
+            var source = @"@supports (direction: sideways) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
+        }
+
+        // display's cssDataType is a real keyword list (not 'cssom') - a syntactically-plausible but
+        // unimplemented value like 'contents' must report unsupported.
+        [Fact]
+        public void SupportsDisplayContentsRule_NotImplemented()
+        {
+            var source = @"@supports (display: contents) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
+        }
+
         [Fact]
         public void SupportsPaddingTopOrPaddingLeftRule()
         {

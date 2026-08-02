@@ -160,9 +160,23 @@ namespace PeachPDF.SourceGenerators.Model
                     $"\"{name}\" declares \"supportedValues\" but no data type in its union uses it.", json));
             }
 
-            var keywordComparison = ParseKeywordComparison(json);
+            var keywordComparison = ParseKeywordComparison(json, "keywordComparison");
             var aliasOf = json.TryGetProperty("aliasOf", out var aliasOfJson) && aliasOfJson.IsString ? aliasOfJson.StringValue : null;
             var resolvesTo = ParseResolvesTo(json);
+
+            IReadOnlyList<DataTypeSpec>? supportsDataTypes = null;
+            IReadOnlyList<string>? supportsSupportedValues = null;
+            KeywordComparison? supportsKeywordComparison = null;
+            if (json.TryGetProperty("supportsDataType", out var supportsDataTypeJson))
+            {
+                supportsDataTypes = ParseDataTypes(name, supportsDataTypeJson, diagnostics);
+
+                if (json.TryGetProperty("supportsSupportedValues", out var supportsSupportedValuesJson) && supportsSupportedValuesJson.IsArray)
+                    supportsSupportedValues = supportsSupportedValuesJson.ArrayItems.Select(v => v.StringValue ?? "").ToList();
+
+                if (json.TryGetProperty("supportsKeywordComparison", out _))
+                    supportsKeywordComparison = ParseKeywordComparison(json, "supportsKeywordComparison");
+            }
 
             if (category == PropertyCategory.Logical)
             {
@@ -183,7 +197,8 @@ namespace PeachPDF.SourceGenerators.Model
             var svg = ParseSvgBinding(name, json, dataTypes, diagnostics);
 
             return new PropertyEntry(name, inherited, initialValueKind, initialValueText, category, dataTypes,
-                supportedValues, keywordComparison, aliasOf, resolvesTo, html, svg, json.Line, json.Column);
+                supportedValues, keywordComparison, aliasOf, resolvesTo, html, svg, json.Line, json.Column,
+                supportsDataTypes, supportsSupportedValues, supportsKeywordComparison);
         }
 
         private static (InitialValueKind Kind, string? Text, bool Ok) ParseInitialValue(string name, JsonValue json, List<ModelDiagnostic> diagnostics)
@@ -221,9 +236,9 @@ namespace PeachPDF.SourceGenerators.Model
             }
         }
 
-        private static KeywordComparison ParseKeywordComparison(JsonValue json)
+        private static KeywordComparison ParseKeywordComparison(JsonValue json, string fieldName)
         {
-            if (!json.TryGetProperty("keywordComparison", out var value) || !value.IsString)
+            if (!json.TryGetProperty(fieldName, out var value) || !value.IsString)
                 return KeywordComparison.Ordinal;
 
             return value.StringValue switch
@@ -272,11 +287,12 @@ namespace PeachPDF.SourceGenerators.Model
             {
                 return json.StringValue switch
                 {
-                    "any" => DataTypeSpec.Simple(DataTypeKind.Any),
+                    "cssom" => DataTypeSpec.Simple(DataTypeKind.CssOm),
                     "unsupported" => DataTypeSpec.Simple(DataTypeKind.Unsupported),
                     "length" => DataTypeSpec.Simple(DataTypeKind.Length),
                     "color" => DataTypeSpec.Simple(DataTypeKind.Color),
                     "current-color" => DataTypeSpec.Simple(DataTypeKind.CurrentColor),
+                    "transform" => DataTypeSpec.Simple(DataTypeKind.Transform),
                     "keyword" => DataTypeSpec.Simple(DataTypeKind.Keyword),
                     "integer" => DataTypeSpec.Simple(DataTypeKind.Integer),
                     "number" => DataTypeSpec.Simple(DataTypeKind.Number),

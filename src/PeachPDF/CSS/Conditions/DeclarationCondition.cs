@@ -37,23 +37,32 @@ namespace PeachPDF.CSS
             if (CssPropertyRegistry.SupportsDeclaration(name, value) || SvgPropertyRegistry.SupportsDeclaration(name, value))
                 return true;
 
-            if (PropertyFactory.Instance.IsShorthand(name))
+            if (_property is ShorthandProperty shorthand)
             {
                 // css-properties.json is longhand-only (Layer A/CSS-OM expands a shorthand into its
                 // longhands before Layer B - CssUtils/CssPropertyRegistry - ever sees a name), so a
                 // shorthand condition (e.g. `@supports (background: red)`) never matches the direct
                 // check above. A CSS-wide keyword (CSS Cascade & Inheritance 4 §7.3) is always valid
-                // for a recognized property regardless of its grammar; otherwise it's "supported"
-                // here iff every longhand the shorthand expands to is one Layer B actually
-                // dispatches - deliberately coarser than validating `value` against the shorthand's
-                // own grammar (Layer A already proved the condition parsed at all; re-deriving
-                // shorthand-value splitting would duplicate Layer A's grammar, which this repo's
-                // "one parser" convention rules out - see CLAUDE.md).
+                // for a recognized property regardless of its grammar.
                 if (CssGlobalKeywords.TryParse(value, out _))
                     return true;
 
-                return PropertyFactory.Instance.GetLonghands(name)
-                    .All(longhand => CssPropertyRegistry.SupportsDeclaration(longhand, CssPropertyRegistry.GetInitialValue(longhand) ?? string.Empty));
+                // Let Layer A's own shorthand grammar - ShorthandProperty.Export, the exact mechanism
+                // StylesheetComposer uses to expand a real shorthand declaration into longhands during
+                // parsing - resolve what `value` actually means per longhand, rather than re-deriving
+                // shorthand grammar here (this repo's "one parser" convention - see CLAUDE.md). A
+                // shorthand always sets every longhand it covers, explicitly or implicitly reset to its
+                // initial value, so this genuinely answers "is `background: red` supported" (every
+                // longhand it resolves to is one Layer B dispatches), not merely "is background a name
+                // Layer A recognizes as a shorthand."
+                if (!shorthand.TrySetValue(_tokenValue))
+                    return false;
+
+                var longhands = PropertyFactory.Instance.CreateLonghandsFor(name);
+                shorthand.Export(longhands);
+
+                return longhands.All(longhand =>
+                    CssGlobalKeywords.TryParse(longhand.Value, out _) || CssPropertyRegistry.SupportsDeclaration(longhand.Name, longhand.Value));
             }
 
             // Same CSS-wide-keyword rule as above, for a longhand: gated on the property actually

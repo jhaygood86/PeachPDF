@@ -45,6 +45,7 @@ namespace PeachPDF.SourceGenerators.Emit
             EmitHtmlSetterDictionary(sb, htmlEntries);
             EmitHtmlGetterDictionary(sb, htmlEntries);
             EmitHtmlValidatorDictionary(sb, htmlEntries);
+            EmitHtmlSupportsValidatorDictionary(sb, htmlEntries);
             EmitInheritedProperties(sb, htmlEntries);
             EmitInitialValues(sb, htmlEntries);
             EmitSnapshotPropertyNames(sb, htmlEntries);
@@ -65,7 +66,7 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine();
             sb.AppendLine("        /// <summary>Validation only — no box, no mutation, no side effects. The @supports render-layer oracle.</summary>");
             sb.AppendLine("        internal static bool SupportsDeclaration(CssValueParser parser, string name, string value) =>");
-            sb.AppendLine("            _validators.TryGetValue(name, out var validator) && validator(parser, value);");
+            sb.AppendLine("            _supportsValidators.TryGetValue(name, out var validator) && validator(parser, value);");
             sb.AppendLine();
             sb.AppendLine("        /// <summary>Nominal-context overload for a caller (e.g. an @supports condition leaf) with no live parser/adapter of its own — grammar validation needs *an* adapter, not the document's real one.</summary>");
             sb.AppendLine("        internal static bool SupportsDeclaration(string name, string value) =>");
@@ -89,6 +90,7 @@ namespace PeachPDF.SourceGenerators.Emit
             if (isUnsupported)
             {
                 sb.AppendLine($"        private static bool Validate_{id}(CssValueParser parser, string value) => false;");
+                sb.AppendLine($"        private static bool Supports_{id}(CssValueParser parser, string value) => false;");
                 sb.AppendLine($"        private static bool Set_{id}(CssValueParser parser, CssBox box, string value) => false;");
                 return;
             }
@@ -98,6 +100,17 @@ namespace PeachPDF.SourceGenerators.Emit
                 : ValidatorExpressionBuilder.BuildHtml(entry);
 
             sb.AppendLine($"        private static bool Validate_{id}(CssValueParser parser, string value) => {validatorExpr};");
+
+            if (entry.SupportsCssDataTypes is not null)
+            {
+                var supportsExpr = ValidatorExpressionBuilder.BuildHtml(entry, entry.SupportsCssDataTypes,
+                    entry.SupportsSupportedValues ?? entry.SupportedValues, entry.SupportsKeywordComparison ?? entry.KeywordComparison);
+                sb.AppendLine($"        private static bool Supports_{id}(CssValueParser parser, string value) => {supportsExpr};");
+            }
+            else
+            {
+                sb.AppendLine($"        private static bool Supports_{id}(CssValueParser parser, string value) => Validate_{id}(parser, value);");
+            }
 
             sb.AppendLine($"        private static bool Set_{id}(CssValueParser parser, CssBox box, string value)");
             sb.AppendLine("        {");
@@ -161,6 +174,17 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("            {");
             foreach (var entry in entries)
                 sb.AppendLine($"                [{StringLiteral(entry.Name)}] = Validate_{PascalCase(entry.Name)},");
+            sb.AppendLine("            }.ToFrozenDictionary(StringComparer.Ordinal);");
+        }
+
+        private static void EmitHtmlSupportsValidatorDictionary(StringBuilder sb, List<PropertyEntry> entries)
+        {
+            sb.AppendLine();
+            sb.AppendLine("        private static readonly FrozenDictionary<string, Func<CssValueParser, string, bool>> _supportsValidators =");
+            sb.AppendLine("            new Dictionary<string, Func<CssValueParser, string, bool>>(StringComparer.Ordinal)");
+            sb.AppendLine("            {");
+            foreach (var entry in entries)
+                sb.AppendLine($"                [{StringLiteral(entry.Name)}] = Supports_{PascalCase(entry.Name)},");
             sb.AppendLine("            }.ToFrozenDictionary(StringComparer.Ordinal);");
         }
 
@@ -336,7 +360,7 @@ namespace PeachPDF.SourceGenerators.Emit
                 DataTypeKind.SvgLengthList =>
                     "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal);\n" +
                     $"if (parsed is null) return false;\nelement.{svg.PropertyPath} = parsed;\nreturn true;",
-                DataTypeKind.Any => $"element.{svg.PropertyPath} = value;\nreturn true;",
+                DataTypeKind.CssOm => $"element.{svg.PropertyPath} = value;\nreturn true;",
                 _ => throw new NotSupportedException(
                     $"DataTypeKind.{kind} has no default SVG setter and \"{entry.Name}\" declares no customSetter."),
             };

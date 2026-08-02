@@ -49,6 +49,21 @@ namespace PeachPDF.SourceGenerators.Model
         public IReadOnlyList<DataTypeSpec> CssDataTypes { get; }
         public IReadOnlyList<string>? SupportedValues { get; }
         public KeywordComparison KeywordComparison { get; }
+
+        /// <summary>
+        /// An optional, stricter grammar used only by <c>Supports_*</c>/<c>SupportsDeclaration</c> (the
+        /// @supports oracle), leaving <c>Validate_*</c>/<c>Set_*</c> (real cascade dispatch) on the base
+        /// <see cref="CssDataTypes"/>. Needed when a value is genuinely accepted and stored by the real
+        /// renderer (matching actual CSS parsing semantics: a value list with one unimplemented member,
+        /// like a `transform` function or a `break-before` keyword, is still syntactically valid and the
+        /// implemented members still apply) but that acceptance is broader than "PeachPDF's renderer
+        /// actually honors this specific value" — which is the stricter standard @supports uses here
+        /// (see issue #283). Null (the common case) means Supports_* simply forwards to Validate_*.
+        /// </summary>
+        public IReadOnlyList<DataTypeSpec>? SupportsCssDataTypes { get; }
+        public IReadOnlyList<string>? SupportsSupportedValues { get; }
+        public KeywordComparison? SupportsKeywordComparison { get; }
+
         public string? AliasOf { get; }
         public LogicalTarget? ResolvesTo { get; }
         public HtmlBinding? Html { get; }
@@ -61,7 +76,9 @@ namespace PeachPDF.SourceGenerators.Model
         public PropertyEntry(string name, bool inherited, InitialValueKind initialValueKind, string? initialValueText,
             PropertyCategory category, IReadOnlyList<DataTypeSpec> cssDataTypes, IReadOnlyList<string>? supportedValues,
             KeywordComparison keywordComparison, string? aliasOf, LogicalTarget? resolvesTo,
-            HtmlBinding? html, SvgBinding? svg, int line, int column)
+            HtmlBinding? html, SvgBinding? svg, int line, int column,
+            IReadOnlyList<DataTypeSpec>? supportsCssDataTypes = null, IReadOnlyList<string>? supportsSupportedValues = null,
+            KeywordComparison? supportsKeywordComparison = null)
         {
             Name = name;
             Inherited = inherited;
@@ -71,6 +88,9 @@ namespace PeachPDF.SourceGenerators.Model
             CssDataTypes = cssDataTypes;
             SupportedValues = supportedValues;
             KeywordComparison = keywordComparison;
+            SupportsCssDataTypes = supportsCssDataTypes;
+            SupportsSupportedValues = supportsSupportedValues;
+            SupportsKeywordComparison = supportsKeywordComparison;
             AliasOf = aliasOf;
             ResolvesTo = resolvesTo;
             Html = html;

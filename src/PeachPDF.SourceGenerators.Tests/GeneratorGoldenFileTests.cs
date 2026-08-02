@@ -12,7 +12,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "any",
+                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -23,9 +23,15 @@ namespace PeachPDF.SourceGenerators.Tests
             var generated = result.Results.Single().GeneratedSources
                 .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
 
-            Assert.Contains("private static bool Validate_Transform(CssValueParser parser, string value) => true;", generated);
+            Assert.Contains(
+                "private static bool Validate_Transform(CssValueParser parser, string value) => " +
+                "global::PeachPDF.CSS.PropertyFactory.Instance.Create(\"transform\") is not { } knownProperty || " +
+                "(global::PeachPDF.CSS.StylesheetParser.Default.ParseValue(value) is { } tokenValue && knownProperty.TrySetValue(tokenValue));",
+                generated);
+            Assert.Contains("private static bool Supports_Transform(CssValueParser parser, string value) => Validate_Transform(parser, value);", generated);
             Assert.Contains("box.Transform = value;", generated);
             Assert.Contains("[\"transform\"] = Set_Transform,", generated);
+            Assert.Contains("[\"transform\"] = Supports_Transform,", generated);
             Assert.Contains("[\"transform\"] = \"none\",", generated);
         }
 
@@ -35,7 +41,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "any",
+                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "cssom",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -48,6 +54,75 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains("internal static bool SupportsDeclaration(string name, string value) =>", generated);
             Assert.Contains("SupportsDeclaration(new CssValueParser(new global::PeachPDF.Adapters.PdfSharpAdapter()), name, value);", generated);
+        }
+
+        [Fact]
+        public void Emits_A_Distinct_Supports_Method_When_SupportsDataType_Overrides_The_Base_Grammar()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "break-before", "inherited": false, "initialValue": "auto", "cssDataType": "keyword",
+                      "supportedValues": ["auto", "region"],
+                      "supportsDataType": "keyword", "supportsSupportedValues": ["auto"],
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains("private static bool Validate_BreakBefore(CssValueParser parser, string value) => value is \"auto\" or \"region\";", generated);
+            Assert.Contains("private static bool Supports_BreakBefore(CssValueParser parser, string value) => value is \"auto\";", generated);
+            Assert.Contains("[\"break-before\"] = Set_BreakBefore,", generated);
+            Assert.Contains("[\"break-before\"] = Supports_BreakBefore,", generated);
+        }
+
+        [Fact]
+        public void Emits_The_Real_Transform_Function_Grammar_For_The_Transform_DataType()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "transform",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_Transform(CssValueParser parser, string value) => " +
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidTransformValue(value);",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_Min_And_Max_Bounds_For_A_Standalone_Integer_DataType()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "order", "inherited": false, "initialValue": "0",
+                      "cssDataType": { "type": "integer", "min": -1000, "max": 1000 },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains("int.TryParse(value, out var parsedInt) && parsedInt >= -1000 && parsedInt <= 1000", generated);
         }
 
         [Fact]
@@ -120,7 +195,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "direction", "inherited": true, "initialValue": "ltr", "cssDataType": "any",
+                    { "name": "direction", "inherited": true, "initialValue": "ltr", "cssDataType": "cssom",
                       "svg": { "propertyPath": null, "inheritedFrom": "Direction", "invalidBehavior": "inherit", "applyIn": "manual" } }
                   ]
                 }

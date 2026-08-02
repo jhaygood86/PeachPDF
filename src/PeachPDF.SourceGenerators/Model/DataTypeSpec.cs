@@ -2,11 +2,16 @@ namespace PeachPDF.SourceGenerators.Model
 {
     internal enum DataTypeKind
     {
-        Any,
+        /// <summary>No dedicated grammar modeled in this schema — HTML validation delegates to the real
+        /// CSS-OM property for the same name (<c>PeachPDF.CSS.PropertyFactory</c>/<c>StylesheetParser</c>),
+        /// so "cssom" still only accepts what that property's own grammar accepts, not literally anything.
+        /// See <c>ValidatorExpressionBuilder.BuildCssOmClause</c>.</summary>
+        CssOm,
         Unsupported,
         Length,
         Color,
         CurrentColor,
+        Transform,
         Keyword,
         Integer,
         Number,
