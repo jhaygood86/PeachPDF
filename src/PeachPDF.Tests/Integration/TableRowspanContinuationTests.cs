@@ -670,5 +670,104 @@ namespace PeachPDF.Tests.Integration
             Assert.True(recorded >= contentBottom - 0.01,
                 $"PageBreakBottoms[{contentSlot}]={recorded:F1} is below the content's own {contentBottom:F1}");
         }
+
+        /// <summary>
+        /// A spanning cell in the table's <i>last</i> column, whose own opening row already needs more than
+        /// one resumption pass to finish, still closes at the row that ends its span - it does not get
+        /// stuck at its own bare content bottom.
+        /// </summary>
+        /// <remarks>
+        /// <c>InsertEmptyBoxes</c> only creates a <see cref="CssSpacingBox"/> placeholder for a span by
+        /// walking the later row's <i>existing</i> cells, so a span in the last column gets no placeholder
+        /// anywhere in the tree (<see href="https://github.com/jhaygood86/PeachPDF/issues/522">issue
+        /// #522</see>) - the row that ends the span reaches the cell only through
+        /// <c>TableRowCursor.RowSpannedBoxes</c>, never through a <c>CssSpacingBox</c>. Every other fixture
+        /// in this file spans a non-last column, so all of them reach <c>CloseSpanningCell</c> down the
+        /// <c>CssSpacingBox</c> arm regardless of how the vertical-alignment loop's dispatch is ordered -
+        /// which is exactly why a real regression there (<c>CloseSpanningCell</c> never being entered at
+        /// all for a cell that needed more than one resumption pass, because
+        /// <c>TableRowCursor.ResumedFromAnEarlierPass</c> matched a stale carried record from the cell's own
+        /// opening row) passed every one of them unmodified. This fixture's last-column placement is what
+        /// actually exercises the <c>RowSpannedBoxes</c>-only arm - confirmed by reverting just the
+        /// vertical-alignment loop's dispatch order and watching this fail (<c>cell.ActualBottom</c> stuck
+        /// at its own ~293pt content bottom rather than the ending row's ~309pt).
+        /// </remarks>
+        [Fact]
+        public async Task ASpanningCellInTheLastColumn_StillClosesAfterMultipleResumptionPasses()
+        {
+            var words = string.Join(" ", Enumerable.Range(0, 40).Select(i => $"word{i:0000}"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<table style='width:150pt'>"
+                    + $"<tr><td>a</td><td id='span' rowspan='3'>{words}</td></tr>"
+                    + "<tr><td>b</td></tr>"
+                    + "<tr><td>c</td></tr></table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var cell = SpanningCell(root);
+            var contentBottom = CssBox.GetMaximumBottom(cell, 0d);
+            var cellSlot = container.SlotStartingAt(cell.Location.Y);
+            var contentSlot = container.SlotEndingAt(contentBottom);
+            var rows = RowsOf(root);
+            var endingRowSlot = container.SlotStartingAt(rows[2].Location.Y);
+
+            Assert.True(cellSlot < contentSlot, "fixture does not overflow its opening band, so it asserts nothing");
+            Assert.Equal(contentSlot, endingRowSlot);
+
+            // Without the dispatch fix, CloseSpanningCell is never entered for this cell at all, and it
+            // closes at its own bare content bottom instead - well above the ending row's own bottom.
+            var expected = Math.Max(rows[2].ActualBottom, contentBottom);
+            Assert.Equal(expected, cell.ActualBottom, 0.01);
+        }
+
+        /// <summary>
+        /// A spanning cell's content overflowing into the row that ends its span raises that row's own,
+        /// ordinary sibling cell to match - not just the spanning cell itself.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>TableRowCursor.MaxBottom</c> deliberately excludes a spanning cell from a row's height (so the
+        /// straddle correction can still move the row), so without <c>LayoutBodyRow</c>'s pre-pass, the
+        /// row's own ordinary cell would close at its own bare one-line height rather than being raised to
+        /// meet the spanning cell.
+        /// </para>
+        /// <para>
+        /// The sibling has to be genuinely <i>short</i> on its own for this to discriminate anything. A
+        /// first attempt at this fixture gave the ending row's sibling a 100pt <c>&lt;div&gt;</c>, meant to
+        /// be shorter than the spanning cell's own overflow - but that row's own top already lands past the
+        /// first page (the spanning cell's overflow pushes it there), so a 100pt div measured from that
+        /// already-late Y landed <i>past</i> the spanning cell's own content bottom by coincidence, passing
+        /// regardless of whether the pre-pass ran at all. A bare one-line cell has no such accidental
+        /// height. Confirmed by disabling just the pre-pass (leaving the dispatch fix and everything else
+        /// alone) and watching the sibling assertion below fail by roughly 115pt.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public async Task ASpanningCellsOverflowIntoTheEndingRow_RaisesItsShortSiblingToMatch()
+        {
+            var words = string.Join(" ", Enumerable.Range(0, 60).Select(i => $"word{i:0000}"));
+
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<table style='width:150pt'>"
+                    + $"<tr><td>a</td><td id='span' rowspan='3'>{words}</td></tr>"
+                    + "<tr><td>b</td></tr>"
+                    + "<tr><td>c</td></tr></table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var cell = SpanningCell(root);
+            var rows = RowsOf(root);
+
+            // A single short line, reachable only via RowSpannedBoxes here (no CssSpacingBox for the
+            // earlier per-cell tracking loop to have already folded the spanning cell's height into
+            // rowMaxBottom through), so nothing but the pre-pass raises it to meet the spanning cell.
+            var realSiblings = rows[2].Boxes.Where(b => b is not CssSpacingBox).ToList();
+            Assert.NotEmpty(realSiblings);
+            foreach (var sibling in realSiblings)
+            {
+                Assert.Equal(cell.ActualBottom, sibling.ActualBottom, 0.01);
+            }
+        }
     }
 }
