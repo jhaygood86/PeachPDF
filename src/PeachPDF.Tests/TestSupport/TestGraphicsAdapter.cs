@@ -117,6 +117,7 @@ namespace PeachPDF.Tests.TestSupport
         public override double LeftPadding => 0;
         public override double GetWhitespaceWidth(RGraphics graphics) => size * 0.25;
         public override bool HasGlyph(System.Text.Rune rune) => true;
+        public override bool SupportsFontVariantCaps(FontVariantCapsFeature feature) => false;
         public override string FaceKey => "test";
     }
 
@@ -207,7 +208,7 @@ namespace PeachPDF.Tests.TestSupport
 
         public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
         {
             var call = new DrawStringCall(str, font, color, point, size, letterSpacing);
             DrawStringCalls.Add(call);
@@ -272,7 +273,7 @@ namespace PeachPDF.Tests.TestSupport
         /// paths can be driven and their <see cref="DrawPath(RBrush, RGraphicsPath)"/>/
         /// <see cref="DrawPath(RPen, RGraphicsPath)"/> calls recorded.
         /// </summary>
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null)
         {
             var path = new TestGraphicsPath();
             var penX = baselineOrigin.X;
@@ -309,8 +310,8 @@ namespace PeachPDF.Tests.TestSupport
         public override void BeginMarkedContent(string structureType, int mcid) { }
         public override void EndMarkedContent() { }
         public override void BeginArtifact() { }
-        public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => new((str?.Length ?? 0) * font.Size * 0.6, font.Height);
-        public override int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default) => str?.Length ?? 0;
+        public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new((str?.Length ?? 0) * font.Size * 0.6, font.Height);
+        public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
         {
             charFit = str?.Length ?? 0;

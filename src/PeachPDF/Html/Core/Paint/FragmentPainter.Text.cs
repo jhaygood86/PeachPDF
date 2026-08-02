@@ -54,7 +54,7 @@ namespace PeachPDF.Html.Core.Paint
                 var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
                 var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
                 var text = word.FirstLineText ?? word.Text!;
-                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualFontVariantLigatures);
+                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
             }
         }
     }

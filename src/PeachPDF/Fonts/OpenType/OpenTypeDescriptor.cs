@@ -273,12 +273,21 @@ namespace PeachPDF.Fonts.OpenType
 
         /// <summary>
         /// Maps <paramref name="text"/> to a shaped glyph run: one glyph per codepoint via
-        /// <see cref="CharCodeToGlyphIndex"/>, then GSUB ligature substitution (<c>liga</c>/<c>clig</c>/
-        /// <c>rlig</c>) when <paramref name="features"/> requests it and the font has a GSUB table.
-        /// The single glyph-walk shared by measurement, painting, outline extraction and glyph
-        /// subsetting/embedding - see <see cref="GsubShaper"/>.
+        /// <see cref="CharCodeToGlyphIndex"/>, then GSUB substitution for whatever <paramref name="features"/>
+        /// requests and the font has a GSUB table for. The single glyph-walk shared by measurement,
+        /// painting, outline extraction and glyph subsetting/embedding - see <see cref="GsubShaper"/>.
         /// </summary>
-        public IReadOnlyList<ShapedGlyph> Shape(string text, LigatureFeatures features) => GsubShaper.Shape(this, text, features);
+        public IReadOnlyList<ShapedGlyph> Shape(string text, TextShapingFeatures features) => GsubShaper.Shape(this, text, features);
+
+        /// <summary>
+        /// Whether this font's GSUB table defines an active lookup for every tag in
+        /// <paramref name="requiredTags"/> - checked independently per tag (see
+        /// <see cref="GsubTable.SupportsAllFeatureTags"/>), under the same script preference
+        /// <see cref="GsubShaper.Shape"/> itself resolves against, so "supported" and "actually
+        /// applied" never disagree.
+        /// </summary>
+        public bool SupportsFeatureTags(IReadOnlySet<string> requiredTags)
+            => FontFace.gsub?.Table?.SupportsAllFeatureTags(GsubShaper.ScriptPreference, requiredTags) ?? false;
 
         /// <summary>
         /// True when this font carries COLR + CPAL color-glyph data over glyf outlines, so its color

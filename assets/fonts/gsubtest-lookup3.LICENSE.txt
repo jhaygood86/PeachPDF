@@ -1,0 +1,43 @@
+gsubtest-lookup3.otf is a synthetic OpenType GSUB conformance-test font from the
+web-platform-tests project (css/css-fonts/support/fonts/gsubtest-lookup3.otf),
+Copyright web-platform-tests contributors, licensed under the 3-Clause BSD
+License.
+
+Every glyph the font can substitute to spells out the literal word "PASS" or
+"FAIL" as vector outlines - the font exists purely so a test can activate a
+named OpenType feature and check which word rendered. It is bundled solely as
+a test asset: PeachPDF's own bundled display fonts (Source Sans 3, Source Code
+Pro) don't implement most of the rarer font-variant-caps keywords via any GSUB
+lookup type at all, and this font is the only publicly available one found
+that implements font-variant-caps' petite-caps/all-petite-caps via GSUB
+Alternate Substitution (Lookup Type 3) - letting the test suite prove real
+Alternate Substitution glyph selection end to end, not just the Single
+Substitution (Lookup Type 1) path Source Sans 3 already covers for
+small-caps/all-small-caps/titling-caps.
+
+Full license text: https://github.com/web-platform-tests/wpt/blob/master/LICENSE.md
+Source: https://github.com/web-platform-tests/wpt/blob/master/css/css-fonts/support/fonts/gsubtest-lookup3.otf
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.

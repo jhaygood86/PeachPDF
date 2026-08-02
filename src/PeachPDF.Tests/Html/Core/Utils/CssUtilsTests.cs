@@ -240,7 +240,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["clear", "both"], ["position", "absolute"], ["line-height", "1.5"], ["vertical-align", "middle"], ["text-indent", "20px"],
             ["text-align", "center"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
             ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"],
-            ["font-style", "italic"], ["font-variant", "small-caps"], ["font-weight", "bold"], ["font-stretch", "condensed"],
+            ["font-style", "italic"], ["font-variant-caps", "small-caps"], ["font-weight", "bold"], ["font-stretch", "condensed"],
             ["list-style-position", "inside"], ["list-style-type", "square"], ["overflow", "hidden"], ["z-index", "5"],
             ["flex-direction", "column"], ["flex-wrap", "wrap"], ["justify-content", "center"], ["align-items", "stretch"], ["align-content", "center"],
             ["flex-grow", "2"], ["flex-shrink", "0"], ["flex-basis", "auto"], ["align-self", "center"], ["order", "3"],
@@ -309,6 +309,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("gap", "90px", "row-gap")]
         [InlineData("list-style", "square inside", "list-style-type")]
         [InlineData("border-radius", "90px", "border-top-left-radius")]
+        [InlineData("font-variant", "all-small-caps", "font-variant-caps")]
         public async Task SetPropertyValue_ShorthandName_IsIgnoredByLayerB(string shorthand, string shorthandValue, string longhand)
         {
             var (box, parser) = await FindDivBoxAndParser("");
@@ -322,6 +323,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
                 "flex-grow" => "5",
                 "flex-direction" => "row-reverse",
                 "list-style-type" => "square",
+                "font-variant-caps" => "small-caps",
                 _ => "7px", // the length-valued longhands
             };
             CssUtils.SetPropertyValue(parser, box, longhand, seed);
@@ -338,7 +340,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public async Task Shorthand_InAuthorCss_ExpandsToLonghands_ViaLayerA()
         {
-            var box = await FindDivBox("margin: 1px 2px 3px 4px; flex: 2 3 40px; border-top: 5px dashed black");
+            var box = await FindDivBox("margin: 1px 2px 3px 4px; flex: 2 3 40px; border-top: 5px dashed black; font-variant: small-caps");
+
+            Assert.Equal("small-caps", CssUtils.GetPropertyValue(box, "font-variant-caps"));
 
             Assert.Equal("1px", CssUtils.GetPropertyValue(box, "margin-top"));
             Assert.Equal("2px", CssUtils.GetPropertyValue(box, "margin-right"));
@@ -482,6 +486,102 @@ namespace PeachPDF.Tests.Html.Core.Utils
             CssUtils.SetPropertyValue(parser, box, name, invalid);
 
             Assert.Equal(valid, CssUtils.GetPropertyValue(box, name));
+        }
+
+        // --- font-variant shorthand combinator + prince-opentype decomposition ---
+
+        [Fact]
+        public async Task FontVariant_ShorthandSpelling_DrivesSameLonghandAsCapsLonghandSpelling()
+        {
+            var box = await FindDivBox("font-variant: small-caps;");
+
+            Assert.Equal("small-caps", box.FontVariantCaps);
+        }
+
+        [Fact]
+        public async Task FontVariant_CombinesCapsLigaturesAndNumericAxesInOneDeclaration()
+        {
+            var box = await FindDivBox("font-variant: small-caps common-ligatures oldstyle-nums tabular-nums;");
+
+            Assert.Equal("small-caps", box.FontVariantCaps);
+            Assert.Equal("common-ligatures", box.FontVariantLigatures);
+            Assert.Equal("oldstyle-nums tabular-nums", box.FontVariantNumeric);
+        }
+
+        [Fact]
+        public async Task FontVariant_None_ResetsLigaturesToNoneAndEverythingElseToNormal()
+        {
+            var box = await FindDivBox("font-variant: none;");
+
+            Assert.Equal("none", box.FontVariantLigatures);
+            Assert.Equal("normal", box.FontVariantCaps);
+            Assert.Equal("normal", box.FontVariantNumeric);
+            Assert.Equal("normal", box.FontVariantEastAsian);
+        }
+
+        [Fact]
+        public async Task FontShorthand_ResetsAllFourFontVariantLonghandsToInitial()
+        {
+            var box = await FindDivBox(
+                "font-variant-caps: petite-caps; font-variant-ligatures: no-common-ligatures; " +
+                "font-variant-numeric: oldstyle-nums; font-variant-east-asian: ruby; font: 16pt sans-serif;");
+
+            Assert.Equal("normal", box.FontVariantCaps);
+            Assert.Equal("normal", box.FontVariantLigatures);
+            Assert.Equal("normal", box.FontVariantNumeric);
+            Assert.Equal("normal", box.FontVariantEastAsian);
+        }
+
+        [Fact]
+        public async Task PrinceOpenType_CapsTagPair_DecomposesToAllSmallCaps()
+        {
+            var box = await FindDivBox("font-variant: prince-opentype(smcp, c2sc);");
+
+            Assert.Equal("all-small-caps", box.FontVariantCaps);
+            Assert.Equal("normal", box.FontVariantLigatures);
+            Assert.Equal("normal", box.FontFeatureSettings);
+        }
+
+        [Fact]
+        public async Task PrinceOpenType_LigatureTag_DecomposesToCommonLigatures()
+        {
+            var box = await FindDivBox("font-variant: prince-opentype(liga);");
+
+            Assert.Equal("common-ligatures", box.FontVariantLigatures);
+            Assert.Equal("normal", box.FontVariantCaps);
+        }
+
+        [Fact]
+        public async Task PrinceOpenType_DiscretionaryLigatureAndOldstyleNumTags_SplitAcrossRealLonghands()
+        {
+            // dlig/onum each have a real standards-compliant home now (font-variant-ligatures /
+            // font-variant-numeric) - neither should fall through to font-feature-settings.
+            var box = await FindDivBox("font-variant: prince-opentype(dlig, onum);");
+
+            Assert.Equal("discretionary-ligatures", box.FontVariantLigatures);
+            Assert.Equal("oldstyle-nums", box.FontVariantNumeric);
+            Assert.Equal("normal", box.FontFeatureSettings);
+        }
+
+        [Fact]
+        public async Task PrinceOpenType_UnrecognizedTagWithValue_FallsThroughToFontFeatureSettings()
+        {
+            var box = await FindDivBox("font-variant: prince-opentype(smcp, ss01 2);");
+
+            Assert.Equal("small-caps", box.FontVariantCaps);
+            Assert.Equal("\"ss01\" 2", box.FontFeatureSettings);
+        }
+
+        [Fact]
+        public async Task PrinceOpenType_UnmappableCapsTagAlone_IsDroppedNotApproximated()
+        {
+            // c2sc alone (capitals-to-small-caps with no smcp) matches none of the 6 defined
+            // font-variant-caps keyword<->tag-set combinations - dropped, not approximated, and NOT
+            // passed through to font-feature-settings either (it's a recognized-but-unmappable tag).
+            var box = await FindDivBox("font-variant: prince-opentype(c2sc);");
+
+            Assert.Equal("normal", box.FontVariantCaps);
+            Assert.Equal("normal", box.FontFeatureSettings);
         }
 
         // --- Helpers ---

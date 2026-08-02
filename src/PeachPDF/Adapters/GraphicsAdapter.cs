@@ -132,11 +132,11 @@ namespace PeachPDF.Adapters
             }
         }
 
-        public override RSize MeasureString(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null)
         {
             var fontAdapter = (FontAdapter)font;
             var realFont = fontAdapter.Font;
-            var size = _g.MeasureString(str, realFont, _stringFormat, ligatureFeatures);
+            var size = _g.MeasureString(str, realFont, _stringFormat, features ?? TextShapingFeatures.Default);
 
             if (!(font.Height < 0)) return Utils.Convert(size, PixelsPerPoint);
 
@@ -158,10 +158,10 @@ namespace PeachPDF.Adapters
             return Utils.Convert(size, PixelsPerPoint);
         }
 
-        public override int CountShapedGlyphs(string str, RFont font, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null)
         {
             var descriptor = ((FontAdapter)font).Font.Descriptor;
-            return descriptor.Shape(str, ligatureFeatures).Count;
+            return descriptor.Shape(str, features ?? TextShapingFeatures.Default).Count;
         }
 
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)
@@ -170,7 +170,7 @@ namespace PeachPDF.Adapters
             throw new NotSupportedException();
         }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
         {
             var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
             var xPoint = Utils.Convert(point, PixelsPerPoint);
@@ -181,7 +181,7 @@ namespace PeachPDF.Adapters
             // extra draw calls and the string stays a single, contiguous, copy/paste- and
             // tagged-PDF-friendly text run regardless of its value.
             var xLetterSpacing = letterSpacing / PixelsPerPoint;
-            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), ligatureFeatures);
+            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), features ?? TextShapingFeatures.Default);
         }
 
         /// <summary>
@@ -200,8 +200,9 @@ namespace PeachPDF.Adapters
             return new XGlyphPalette(palette.BasePaletteIndex, overrides);
         }
 
-        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, LigatureFeatures ligatureFeatures = LigatureFeatures.Default)
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null)
         {
+            var resolvedFeatures = features ?? TextShapingFeatures.Default;
             var realFont = ((FontAdapter)font).Font;
             var descriptor = realFont.Descriptor;
             if (descriptor is null || descriptor.UnitsPerEm == 0)
@@ -220,7 +221,7 @@ namespace PeachPDF.Adapters
             double baseY = baselineOrigin.Y;
             bool anyGeometry = false;
 
-            foreach (ShapedGlyph glyph in descriptor.Shape(str, ligatureFeatures))
+            foreach (ShapedGlyph glyph in descriptor.Shape(str, resolvedFeatures))
             {
                 int glyphId = glyph.GlyphIndex;
 

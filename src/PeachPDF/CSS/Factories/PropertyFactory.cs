@@ -267,27 +267,42 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FlexWrap, () => new FlexWrapProperty());
             AddLonghand(PropertyNames.Float, () => new FloatProperty());
 
-            // CSS Fonts 4 §7.7 "Reset Implicitly": the font-variant-* longhands (font-variant-ligatures
-            // among them) reset to their initial value whenever `font` is set, even though none of
-            // them can be written as part of `font`'s own shorthand syntax - ShorthandProperty.Export
-            // does exactly that for any longhand in this list the grammar didn't extract a value for.
-            // font-size-adjust/font-palette are on the same spec list but aren't listed here yet
-            // (pre-existing, not introduced by font-variant-ligatures).
+            // CSS Fonts 4 §7.7 "Reset Implicitly": the font-variant-* longhands (and
+            // font-feature-settings) reset to their initial value whenever `font` is set, even though
+            // none of them can be written as part of `font`'s own shorthand syntax -
+            // ShorthandProperty.Export does exactly that for any longhand in this list the grammar
+            // didn't extract a value for. font-size-adjust/font-palette are on the same spec list but
+            // aren't listed here yet (pre-existing, not introduced by this change).
             AddShorthand(PropertyNames.Font, () => new FontProperty(),
                 PropertyNames.FontFamily,
                 PropertyNames.FontSize,
                 PropertyNames.FontStretch,
                 PropertyNames.FontStyle,
-                PropertyNames.FontVariant,
+                PropertyNames.FontVariantCaps,
                 PropertyNames.FontVariantLigatures,
+                PropertyNames.FontVariantNumeric,
+                PropertyNames.FontVariantEastAsian,
                 PropertyNames.FontWeight,
                 PropertyNames.LineHeight);
             AddLonghand(PropertyNames.FontFamily, () => new FontFamilyProperty(), false, true);
             AddLonghand(PropertyNames.FontSize, () => new FontSizeProperty(), true);
             AddLonghand(PropertyNames.FontSizeAdjust, () => new FontSizeAdjustProperty(), true);
             AddLonghand(PropertyNames.FontStyle, () => new FontStyleProperty(), false, true);
-            AddLonghand(PropertyNames.FontVariant, () => new FontVariantProperty(), false, true);
+            // font-variant is a real shorthand (see FontVariantProperty) over the 4 longhands below
+            // plus font-feature-settings; the @font-face `font-variant` descriptor is a separate,
+            // unrelated, never-cascaded registration (FontFaceVariantProperty, added to _fontsBuilder
+            // directly below, since AddShorthand has no `font: true` flag).
+            AddShorthand(PropertyNames.FontVariant, () => new FontVariantProperty(),
+                PropertyNames.FontVariantCaps,
+                PropertyNames.FontVariantLigatures,
+                PropertyNames.FontVariantNumeric,
+                PropertyNames.FontVariantEastAsian,
+                PropertyNames.FontFeatureSettings);
+            AddLonghand(PropertyNames.FontVariantCaps, () => new FontVariantCapsProperty());
             AddLonghand(PropertyNames.FontVariantLigatures, () => new FontVariantLigaturesProperty());
+            AddLonghand(PropertyNames.FontVariantNumeric, () => new FontVariantNumericProperty());
+            AddLonghand(PropertyNames.FontVariantEastAsian, () => new FontVariantEastAsianProperty());
+            AddLonghand(PropertyNames.FontFeatureSettings, () => new FontFeatureSettingsProperty());
             AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true, true);
             AddLonghand(PropertyNames.FontStretch, () => new FontStretchProperty(), true, true);
             AddLonghand(PropertyNames.FontPalette, () => new FontPaletteProperty());
@@ -548,6 +563,7 @@ namespace PeachPDF.CSS
 
             _fontsBuilder.Add(PropertyNames.Src, () => new SrcProperty());
             _fontsBuilder.Add(PropertyNames.UnicodeRange, () => new UnicodeRangeProperty());
+            _fontsBuilder.Add(PropertyNames.FontVariant, () => new FontFaceVariantProperty());
 
             _fonts = _fontsBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 

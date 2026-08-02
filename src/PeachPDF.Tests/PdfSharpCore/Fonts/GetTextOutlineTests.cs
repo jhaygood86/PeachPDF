@@ -125,8 +125,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // what drawing two separate 'f' outlines would produce.
             var (g, font) = await Setup(BundledFonts.Ttf, 100);
 
-            var unligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, LigatureFeatures.None)!;
-            var ligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, LigatureFeatures.Default)!;
+            var unligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new TextShapingFeatures(LigatureFeatures.None))!;
+            var ligated = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new TextShapingFeatures(LigatureFeatures.Default))!;
 
             Assert.Equal(2, SubpathCount(unligated));
             Assert.Equal(1, SubpathCount(ligated));
@@ -144,7 +144,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             double RightEdge(LigatureFeatures features)
             {
-                var outline = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, features)!;
+                var outline = g.GetTextOutline("ff", font, new RPoint(0, 100), letterSpacing: 0, new TextShapingFeatures(features))!;
                 var maxX = Points(outline).Max(p => p.X);
                 outline.Dispose();
                 return maxX;

@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Text;
 
 namespace PeachPDF.Html.Adapters
 {
@@ -53,6 +54,16 @@ namespace PeachPDF.Html.Adapters
         /// font lacks a character is re-resolved against the rest of the <c>font-family</c> stack.
         /// </summary>
         public abstract bool HasGlyph(System.Text.Rune rune);
+
+        /// <summary>
+        /// Whether this font's GSUB table defines an active lookup for every OpenType feature tag
+        /// <paramref name="feature"/> needs (e.g. both <c>smcp</c> and <c>c2sc</c> for
+        /// <see cref="FontVariantCapsFeature.AllSmallCaps"/> - see <see cref="GsubShaper.GetFeatureTags"/>).
+        /// Called from <c>CssBox.AddWord</c>'s synthesis gate, which runs during DOM/box-tree
+        /// parsing - before any <see cref="RGraphics"/> exists - so this lives on <see cref="RFont"/>
+        /// itself rather than the graphics abstraction, mirroring <see cref="HasGlyph"/>.
+        /// </summary>
+        public abstract bool SupportsFontVariantCaps(FontVariantCapsFeature feature);
 
         /// <summary>
         /// A stable identity for the concrete face this font renders with, used only to coalesce adjacent

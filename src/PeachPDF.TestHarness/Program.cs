@@ -6498,6 +6498,74 @@ await SaveShowcaseAsync("gsub_ligatures", "Text &amp; Fonts", "GSUB Ligatures",
     "actually turns a font's ligatures on and off, for both ordinary text and gradient-filled SVG text.",
     ligatureHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// font-variant-caps: real GSUB smcp/c2sc/titl substitution on a font that has the feature (Source
+// Sans 3, confirmed via direct byte inspection), falling back to a synthesized uppercase+shrink
+// approximation on a font that doesn't (Source Code Pro, confirmed to carry zero caps-family GSUB
+// tags) - both are the same CSS, only the resolved font differs. font-variant-numeric activates a
+// font's real numeric-variant GSUB features (oldstyle figures, tabular figures, slashed zero) the
+// same way.
+var sourceCodeProB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceCodePro-Regular.otf")));
+var fontVariantCapsHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'SCP'; src: url('data:font/opentype;base64,{sourceCodeProB64}') format('opentype'); }}" +
+    "body { font-family: 'SS3', serif; margin: 0; color: #222 }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.2em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.8em; color: #555; font-family: Arial, sans-serif }" +
+    "table.caps { border-collapse: collapse; width: 100%; font-size: 16pt }" +
+    "table.caps th { font-size: 8pt; font-family: Arial, sans-serif; color: #666; text-align: left; padding: 4px 8px }" +
+    "table.caps td { padding: 6px 8px; border-top: 1px solid #ddd }" +
+    "table.caps td.label { font-size: 8pt; font-family: Arial, sans-serif; color: #666; vertical-align: middle }" +
+    "</style></head><body>" +
+    "<h1>Font Variant: Caps &amp; Numerals</h1>" +
+    "<p class=\"intro\">PeachPDF prefers a font's real OpenType GSUB substitution for " +
+    "<code>font-variant-caps</code> and <code>font-variant-numeric</code>, falling back to a " +
+    "synthesized approximation only where the standard specifically allows one.</p>" +
+
+    "<h2>font-variant-caps: real GSUB vs. synthesized fallback</h2>" +
+    "<p class=\"intro\">Source Sans 3 has real <code>smcp</code>/<code>c2sc</code>/<code>titl</code> " +
+    "data, so its small-caps/all-small-caps/titling-caps below use actual substituted glyphs and the " +
+    "text stays a single run. Source Code Pro has none of those features, so the same CSS instead " +
+    "synthesizes small-caps/all-small-caps by upper-casing and shrinking the affected letters - " +
+    "<code>petite-caps</code>/<code>unicase</code> never synthesize, so on a font that lacks them " +
+    "(both bundled fonts here) they render identically to normal text.</p>" +
+    "<table class=\"caps\">" +
+    "<tr><th>font-variant-caps</th><th>Source Sans 3 (real GSUB)</th><th>Source Code Pro (synthesized/none)</th></tr>" +
+    "<tr><td class=\"label\">small-caps</td>" +
+    "<td style=\"font-family: 'SS3'; font-variant-caps: small-caps\">Hello World</td>" +
+    "<td style=\"font-family: 'SCP'; font-variant-caps: small-caps\">Hello World</td></tr>" +
+    "<tr><td class=\"label\">all-small-caps</td>" +
+    "<td style=\"font-family: 'SS3'; font-variant-caps: all-small-caps\">Hello World</td>" +
+    "<td style=\"font-family: 'SCP'; font-variant-caps: all-small-caps\">Hello World</td></tr>" +
+    "<tr><td class=\"label\">titling-caps</td>" +
+    "<td style=\"font-family: 'SS3'; font-variant-caps: titling-caps\">Hello World</td>" +
+    "<td style=\"font-family: 'SCP'; font-variant-caps: titling-caps\">Hello World</td></tr>" +
+    "<tr><td class=\"label\">petite-caps</td>" +
+    "<td style=\"font-family: 'SS3'; font-variant-caps: petite-caps\">Hello World</td>" +
+    "<td style=\"font-family: 'SCP'; font-variant-caps: petite-caps\">Hello World</td></tr>" +
+    "</table>" +
+
+    "<h2>font-variant-numeric: real GSUB numeric substitution</h2>" +
+    "<p class=\"intro\">Source Sans 3 has real <code>onum</code>/<code>tnum</code>/<code>zero</code> " +
+    "data - oldstyle figures use lowercase-height/descending forms instead of the default lining " +
+    "figures, tabular figures fix every digit to the same advance width for column alignment, and " +
+    "slashed-zero adds a distinguishing slash through the digit 0.</p>" +
+    "<table class=\"caps\" style=\"font-family: 'SS3'; font-size: 20pt\">" +
+    "<tr><th>font-variant-numeric</th><th>Sample</th></tr>" +
+    "<tr><td class=\"label\">normal (lining, default)</td><td>1234567890</td></tr>" +
+    "<tr><td class=\"label\">oldstyle-nums</td><td style=\"font-variant-numeric: oldstyle-nums\">1234567890</td></tr>" +
+    "<tr><td class=\"label\">tabular-nums</td><td style=\"font-variant-numeric: tabular-nums\">1234567890</td></tr>" +
+    "<tr><td class=\"label\">slashed-zero</td><td style=\"font-variant-numeric: slashed-zero\">1002000</td></tr>" +
+    "</table>" +
+    "</body></html>";
+await SaveShowcaseAsync("font_variant_caps", "Text &amp; Fonts", "Font Variant: Caps &amp; Numerals",
+    "font-variant-caps prefers a font's real GSUB smcp/c2sc/titl substitution, falling back to a " +
+    "synthesized approximation only where the standard allows it; font-variant-numeric activates a " +
+    "font's real oldstyle/tabular/slashed-zero GSUB features the same way.",
+    fontVariantCapsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Bidirectional text: the `dir` global attribute (including `auto`), `<bdo>`/`<bdi>`, CSS
 // direction/unicode-bidi, and a real UAX#9 Unicode Bidi Algorithm - not the old whole-word-mirror
 // approximation. Real Hebrew (strong-R) content, not placeholder boxes, so per-character
