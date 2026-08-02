@@ -69,6 +69,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         IReadOnlyList<int> FinishedLineIndexes,
         RPoint PlacementOrigin) : BreakToken(Box, ResumeSlotIndex)
     {
+        /// <inheritdoc />
+        internal override IReadOnlyList<BreakToken> FanOutContinuations =>
+            UnfinishedLines.Select(line => line.ItemToken).ToList();
+
         /// <summary>
         /// Compared by <b>contents</b>, for the same reason <see cref="FlexBreakToken"/> states it — see
         /// its own remarks for why <see cref="Lines"/>/<see cref="PlacementOrigin"/> are excluded.

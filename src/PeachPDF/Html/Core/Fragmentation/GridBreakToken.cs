@@ -70,6 +70,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         IReadOnlyDictionary<CssBox, GridSubgridContext> SubgridContexts,
         RPoint PlacementOrigin) : BreakToken(Box, ResumeSlotIndex)
     {
+        /// <inheritdoc />
+        internal override IReadOnlyList<BreakToken> FanOutContinuations =>
+            UnfinishedItems.Select(item => item.Token).ToList();
+
         /// <summary>
         /// Compared by <b>contents</b>, for the same reason <see cref="FlexBreakToken"/> states it: the
         /// driver's no-progress backstop is an equality test between consecutive passes' records, and a

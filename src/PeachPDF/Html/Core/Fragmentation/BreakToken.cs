@@ -30,7 +30,19 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// an engine that positions its own children — so the fragmentainer it overflows is not in general
     /// the one after the fragmentainer the pass nominally started in.
     /// </param>
-    internal abstract record BreakToken(CssBox Box, int ResumeSlotIndex);
+    internal abstract record BreakToken(CssBox Box, int ResumeSlotIndex)
+    {
+        /// <summary>
+        /// This token's per-child continuations, for a token naming more than one — the
+        /// <see href="https://www.w3.org/TR/css-break-3/#parallel-flows">§2.1 parallel-flows</see> shape
+        /// <see cref="TableBreakToken"/>/<see cref="FlexBreakToken"/>/<see cref="GridBreakToken"/>/
+        /// <see cref="FlexColumnBreakToken"/> all share, each overriding this to expose its own
+        /// per-cell/per-item tokens. Empty for every other kind, whose one child (if any) is
+        /// <see cref="BlockBreakToken.ChildToken"/> instead — <see cref="FragmentEmitter.RecordChain"/> is
+        /// this member's one reader, and walks both shapes the same way.
+        /// </summary>
+        internal virtual IReadOnlyList<BreakToken> FanOutContinuations => [];
+    }
 
     /// <summary>
     /// A block container stopped part-way through its in-flow children.
