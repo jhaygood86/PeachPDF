@@ -84,8 +84,8 @@ and neither specific to page-boundary closing:
 
 ## Evidence
 
-- Full `net8.0` suite: 7393 passed, 0 failed, 9 skipped (one more than the pre-fix baseline of 7392, for
-  the new same-band regression test).
+- Full `net8.0` suite: 7395 passed, 0 failed, 9 skipped (7393 after the original fix, 7395 after the
+  correction above added the two discriminating tests).
 - `diff-cover` against `origin/main`: 100% on the changed lines.
 - `dotnet build PeachPDF.slnx -t:Rebuild`: 0 warnings.
 - Two-renderer (PDFium + MuPDF) rasterization of `paged_media_table_rowspan_break`'s Q4 fixture, viewed
@@ -94,6 +94,24 @@ and neither specific to page-boundary closing:
   alignment fix — the row that ends the span (December) shows both the sibling `<td>`s' and the spanning
   cell's bottom borders meeting at the same height, on both renderers.
 - Dedicated regression tests: `ASpanningCellWhoseContentFinishesInTheSameBandTheSpanEndsIn_ClosesAtTheRowsOwnBottom`
-  (same-band close and sibling-border alignment together) and
-  `ASpanningCellWhoseContentFinishesSeveralBandsBeforeTheSpanEnds_ClosesAtItsOwnBand` (`contentSlot < slot`
-  case), each verified to fail against the corresponding defect before its fix landed.
+  (same-band close) and `ASpanningCellWhoseContentFinishesSeveralBandsBeforeTheSpanEnds_ClosesAtItsOwnBand`
+  (`contentSlot < slot` case), each verified to fail against the corresponding defect before its fix
+  landed.
+- **Correction, found by a post-merge review after this fix had already landed**: the two tests above both
+  place the spanning cell in a non-last column, so the row that ends the span always reaches it through the
+  `CssSpacingBox` arm — which reaches `CloseSpanningCell` regardless of how the vertical-alignment loop's
+  dispatch is ordered. Reverting *only* the dispatch-ordering fix left both tests passing unmodified, which
+  directly contradicted this file's original claim that they guarded it. Reverting *only* the sibling-
+  alignment pre-pass also left them passing, because the same `CssSpacingBox` arm's earlier per-cell
+  tracking loop had already folded the spanning cell's height into `rowMaxBottom` before the pre-pass could
+  matter. Two further, narrower tests were added to actually discriminate each fix on its own:
+  `ASpanningCellInTheLastColumn_StillClosesAfterMultipleResumptionPasses` (last-column span, so only
+  `RowSpannedBoxes` reaches it — verified to fail against the pre-dispatch-fix code) and
+  `ASpanningCellsOverflowIntoTheEndingRow_RaisesItsShortSiblingToMatch` (a genuinely one-line sibling, not a
+  tall `<div>` whose own height happened to already exceed the spanning cell's — verified to fail with just
+  the pre-pass disabled). A second, related, currently-shipping defect was found during this same
+  investigation and filed as [#593](https://github.com/jhaygood86/PeachPDF/issues/593): the loop's
+  `FinishedOnAnEarlierPass` guard, one line above the `boxesThatEndOnRow` check the dispatch fix reordered,
+  has the identical stale-match shape whenever an unrelated *sibling* in the cell's own opening row needed
+  its own resumption pass — left unfixed here since it is a distinct, pre-existing defect, not a regression
+  from this change.
