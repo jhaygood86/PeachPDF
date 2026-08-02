@@ -1257,8 +1257,26 @@ namespace PeachPDF.Html.Core.Dom
             // and named-page registration (normally done near the top/bottom of PerformLayoutImp) have to
             // happen for inline boxes. blockBox itself is excluded since its own PerformLayoutImp already
             // handles it correctly before CreateLineBoxes is even called.
-            if (box != blockBox && !string.IsNullOrEmpty(box.StringSet) && box.StringSet != CssConstants.None)
+            // Gated on opensHere for the same reason FirstHostingLineBox is above: a pass resuming this
+            // box's flow into a later fragmentainer re-enters it from the top (its already-placed words
+            // are only skipped by ordinal further down), so without this guard a resumed pass would
+            // re-run ApplyStringSet using *this* pass's fresh coordinates - overwriting the box's true
+            // position (set when it actually opened) with wherever the resumed fragmentainer happens to
+            // start. string-set fires exactly once per box per opening, mirroring a block box's own
+            // once-per-_prologueDone guarantee.
+            if (opensHere && box != blockBox && !string.IsNullOrEmpty(box.StringSet) && box.StringSet != CssConstants.None)
             {
+                // Unlike a block box's PerformLayoutPrologue, nothing else withdraws this box's previous
+                // registration before FlowBox re-opens it (a multicol measurement pass, a re-banding
+                // re-layout, or a column-fill retry all re-run this) - so without unregistering first, a
+                // stale entry from an earlier pass survives as an orphan, still eligible to match some
+                // page's Y window in MarginBoxRenderer.ResolveNamedString.
+                if (box.NamedStrings.Count > 0)
+                {
+                    box.HtmlContainer?.UnregisterNamedStrings(box.NamedStrings.Values);
+                    box.NamedStrings.Clear();
+                }
+
                 CssNamedStringEngine.ApplyStringSet(box);
             }
 
@@ -1591,6 +1609,14 @@ namespace PeachPDF.Html.Core.Dom
                     // FlowBox recursion case above.
                     if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != CssConstants.None)
                     {
+                        // Same re-entry hazard as the plain-inline FlowBox path above: withdraw whatever
+                        // this box registered on an earlier pass before registering again.
+                        if (b.NamedStrings.Count > 0)
+                        {
+                            b.HtmlContainer?.UnregisterNamedStrings(b.NamedStrings.Values);
+                            b.NamedStrings.Clear();
+                        }
+
                         CssNamedStringEngine.ApplyStringSet(b);
                         foreach (var namedString in b.NamedStrings.Values)
                         {
@@ -1600,6 +1626,11 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (!string.IsNullOrEmpty(b.PageName) && b.PageName != "auto")
                     {
+                        if (b.RegisteredNamedPageElement is { } staleFlexPageElement)
+                        {
+                            b.HtmlContainer?.UnregisterNamedPageElement(staleFlexPageElement);
+                        }
+
                         b.RegisteredNamedPageElement = b.HtmlContainer?.RegisterNamedPageElement(b.PageName, b.Location.Y);
                     }
 
@@ -1693,8 +1724,14 @@ namespace PeachPDF.Html.Core.Dom
             // Finalize what was captured at entry, now that this box's content has actually been placed
             // and coordinates.CurrentY reflects where it landed - mirrors CssBox.PerformLayoutImp's own
             // late-stage Y-correction/named-page registration (done there once Location is final), which
-            // a plain inline box never gets a Location for in the first place.
-            if (box != blockBox)
+            // a plain inline box never gets a Location for in the first place. Gated on opensHere for the
+            // same reason as the entry-side guard above: a pass merely resuming this box's already-placed
+            // content into a later fragmentainer must not re-stamp its NamedStrings/named-page Y to
+            // wherever *this* pass's cursor happens to sit (typically the resumed fragmentainer's own
+            // top, since the walk hasn't advanced past already-placed words yet) - that both discards the
+            // box's true position from when it actually opened and, for named-page, would corrupt
+            // ActivePageName for content after it.
+            if (opensHere && box != blockBox)
             {
                 if (box.NamedStrings.Count > 0)
                 {
@@ -1706,6 +1743,14 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (!string.IsNullOrEmpty(box.PageName) && box.PageName != "auto")
                 {
+                    // Same re-entry hazard as the string-set guard above: without withdrawing a stale
+                    // registration first, a re-banding re-layout or column-fill retry leaves an orphaned
+                    // NamedPageElement behind, corrupting ActivePageName for whatever comes after it.
+                    if (box.RegisteredNamedPageElement is { } stalePageElement)
+                    {
+                        box.HtmlContainer?.UnregisterNamedPageElement(stalePageElement);
+                    }
+
                     box.RegisteredNamedPageElement = box.HtmlContainer?.RegisterNamedPageElement(box.PageName, coordinates.CurrentY);
                 }
             }
