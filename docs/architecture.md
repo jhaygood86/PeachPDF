@@ -293,6 +293,15 @@ Left/right overrides vary the content-box *width*: each page's own margins defin
 9. **`currentColor`** — `CssUtils.ApplyCurrentColor` resolves any `currentColor` keyword references.
 10. **Text decoration propagation** — because `text-decoration` does not inherit through the CSS `inherit` mechanism but does visually propagate to inline children, it is explicitly copied down to child boxes that contain actual text.
 
+`CssDefaults.InitialValues`/`InheritedProperties` and the actual per-property parse-validate-and-assign
+step behind `CssUtils.SetPropertyValue`/`GetPropertyValue` (and the equivalent for SVG presentation
+properties, `SvgTreeBuilder.ApplyCommon`) are generated at build time from a single JSON source,
+`src/PeachPDF/css-properties.json`, by a Roslyn source generator (`src/PeachPDF.SourceGenerators`) rather
+than hand-written per property. This keeps every property's inheritance flag, initial value, and value
+grammar in one place instead of several hand-synchronized tables, and is what a future `@supports`
+implementation will query for "does this renderer actually accept this declaration." See CLAUDE.md's
+"CSS/SVG property registry generator" section for the schema and authoring workflow.
+
 ### Post-styling corrections
 
 After the cascade, `DomParser` runs a series of correction passes to make the tree structurally valid for layout:
