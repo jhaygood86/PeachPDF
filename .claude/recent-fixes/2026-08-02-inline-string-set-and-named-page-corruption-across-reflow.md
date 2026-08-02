@@ -1,4 +1,4 @@
-# An inline `string-set`/`page` target lost its true position across multicol reflow and resumed page continuations
+# Wrong `string(name, first|last)` running headers: inline registration corruption plus a page-boundary matching flaw
 
 ## What was actually wrong
 
@@ -35,6 +35,25 @@ guarantees that guard provides:
    for **both** pages (a term that opened on page 5 got attributed to page 6, and `first`/`last`
    resolution on both pages shifted around it).
 
+A third, independent bug in `MarginBoxRenderer.ResolveNamedString` (`src/PeachPDF/Html/Core/Dom/MarginBoxRenderer.cs`)
+compounded the first two — this one pre-existing (from an earlier, incomplete pass at the same
+dictionary.html symptom, `a61a82da` "Fix running headers across multicol page breaks") rather than
+introduced by bugs 1/2 above:
+
+3. **A symmetric page-boundary epsilon window admits the wrong page's content.** `ResolveNamedString`
+   picked `first`/`last` by testing each candidate's raw `Y` against `[pageY - epsilon, pageY + pageHeight
+   + epsilon)`, widened by `PageBoundaryEpsilon` (0.5) on *both* ends to absorb float drift between a
+   `NamedString`'s `Y` and the page geometry's own accumulation path. But two boxes opening different
+   columns on the *same* page land on the identical Y — both are "row 1" of their own column — and when
+   that shared Y sits within a hairline of a page boundary (which it does *by construction* for a page's
+   own first row), the widened window at the *previous* page's far end admits it too: a paragraph opening
+   column 2 of page N could be picked as page N-1's "last" value, even though dozens of genuinely-page-N-1
+   entries separate them in DOM order and only the epsilon coincidence pulls it in. Fixed by attributing
+   every candidate to a single, unambiguous pagination slot via `HtmlContainerInt.SlotStartingAt` (the same
+   top-edge, nudge-onto-the-later-page convention already used everywhere else a box's own Y needs a page
+   index) rather than testing raw-Y window membership per page — removing the two-sided-window's inherent
+   overlap without reintroducing the original hairline-exclusion bug the epsilon existed to fix.
+
 ## What was found by running it, not by reading it
 
 Fixing only bug 1 (verified first, in isolation, via four synthetic multicol re-banding tests) was
@@ -53,6 +72,18 @@ accidentally construct so it can't discriminate the real corruption path) would 
 2 only manifests when a *single paragraph's own content* — not just the container — straddles a real page
 break, a shape none of the existing multicol test fixtures exercised.
 
+Bug 3 surfaced the same way, later in the same document: the user reported page 831's `string(term, last)`
+showing `ör-skreiðr`, a term whose paragraph actually opens column 2 of page 832. Diagnostic
+instrumentation dumping every `term` `NamedString`'s `Y` alongside each page's own boundary (temporarily
+added to `PdfGenerator.AddPdfPages`, removed before landing) showed `ör-skreiðr` and `ör-nafn` — the
+*correct* page-832 "first" — sharing the exact same `Y`, both equal to page 832's own top: a real, correct
+column-1/column-2 coincidence (bugs 1/2 were already fixed by this point; the `Y`s themselves were right),
+not a registration bug. `ResolveNamedString`'s window-based matching was what mis-attributed one of the
+two. After the `SlotStartingAt`-based fix, a global check dumping every one of the document's 14,644
+`term` registrations and asserting their pagination-slot attribution is non-decreasing in document order
+found zero violations — the same order-preservation property bugs 1/2's fixes established locally, now
+confirmed to hold at full-document scale for bug 3's fix too.
+
 ## What was deliberately not done
 
 - `CssNamedStringEngine.GetNamedStringValue` / `CssContentEngine.GetNamedStringValue` (the naive global
@@ -68,13 +99,27 @@ break, a shape none of the existing multicol test fixtures exercised.
 
 ## Evidence
 
-- Full `net8.0` suite: 7530 passed, 0 failed, 9 skipped.
+- Full `net8.0` suite: 7536 passed, 0 failed, 9 skipped.
 - `dotnet build PeachPDF.slnx -t:Rebuild`: 0 warnings.
-- Six new regression tests, each individually confirmed (by temporarily reverting the relevant guard) to
+- Ten new regression tests, each individually confirmed (by temporarily reverting the relevant guard) to
   fail before its fix and pass after: four in `MulticolLayoutIntegrationTests.cs` covering bug 1
   (`NamedString_InlineTarget_DoesNotAccumulateStaleEntriesAcrossReflow` and its named-page/inline-flex
   variants), two in the new `ResumedInlineNamedStringLayoutIntegrationTests.cs` covering bug 2
-  (`NamedString_InlineTarget_KeepsTruePositionAcrossResumedContinuation` and its named-page variant).
-- End-to-end: rendered the real `dictionary.html` via the `peachpdf` CLI before and after the fix and
-  compared rasterized running headers for pages 3–20 — self-consistent (monotonic, adjacent-page-boundary
-  matching) after, visibly scrambled before.
+  (`NamedString_InlineTarget_KeepsTruePositionAcrossResumedContinuation` and its named-page variant), and
+  four covering bug 3 in `MarginBoxRendererNamedStringTests.cs`/`MarginBoxResolveNamedStringTests.cs`
+  (`Last_ColumnTopsOfTheNextPageDoNotLeakOntoThisPagesLast` and
+  `ResolveContent_StringFunction_DoesNotLeakAColumnTopFromTheNextPage`, the latter exercising the real
+  `ResolveContent` call site rather than `ResolveNamedString` directly). `ResolveContent` was changed from
+  `private` to `internal` for the latter's direct unit-test access, matching `ResolveNamedString`'s
+  existing visibility.
+- One existing test (`Last_ValueHairlineBelowPageEnd_StillResolvesAsLastOnPage`) had its expectation
+  deliberately corrected rather than preserved: a value within epsilon of a page's *end* boundary is now
+  consistently treated as opening the *next* page (matching `SlotStartingAt`'s established top-edge
+  convention elsewhere), not as trailing off the current one — the old expectation encoded exactly the
+  two-sided-window ambiguity bug 3's fix removes. A companion test confirms the same value now correctly
+  resolves as the next page's own `first`.
+- End-to-end: rendered the real `dictionary.html` (all 834 pages) via the `peachpdf` CLI before and after
+  each fix. Pages 3–20 self-consistent (monotonic, adjacent-page-boundary matching) after bugs 1+2's fix;
+  page 831/832 (the user-reported case) corrected after bug 3's fix, confirmed both by rasterized text
+  extraction and a full-document scan asserting all 14,644 `term` registrations' pagination-slot
+  attribution is non-decreasing in document order (zero violations).

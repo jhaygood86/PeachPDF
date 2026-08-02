@@ -406,7 +406,6 @@ namespace PeachPDF
                         pageNumber,
                         totalPages,
                         pageY,
-                        geom.BandHeight,
                         container.NamedStrings,
                         _pdfSharpAdapter,
                         applicablePageStyle,
