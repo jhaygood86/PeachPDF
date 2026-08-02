@@ -69,6 +69,10 @@ namespace PeachPDF.Tests.CSS
         [Fact]
         public void SupportsBackgroundRedWithImportantRule()
         {
+            // "background" is a shorthand - never authored into css-properties.json directly (Layer B
+            // is longhand-only) - so this exercises DeclarationCondition.Check()'s shorthand fallback:
+            // every longhand background expands to (background-color/-image/-position/-size/-repeat/
+            // -origin/-clip/-attachment) is one Layer B genuinely dispatches.
             var source = @"@supports (background: red !important) { }";
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
@@ -76,6 +80,68 @@ namespace PeachPDF.Tests.CSS
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("(background: red !important)", supports.ConditionText);
             Assert.True(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsBackgroundInheritRule()
+        {
+            // A CSS-wide keyword is valid for a recognized shorthand too, taking the shorthand
+            // fallback's own keyword short-circuit rather than the per-longhand check.
+            var source = @"@supports (background: inherit) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
+        // The old oracle (Property.TrySetValue) is a proven mismatch in both directions:
+        // animation-name parses fine in the CSS-OM but Layer B never dispatches it (false positive);
+        // fill isn't registered in the CSS-OM's PropertyFactory at all despite full SVG support
+        // (false negative). These two prove DeclarationCondition.Check() now gets both right.
+        [Fact]
+        public void SupportsAnimationNameRule_NoLongerFalsePositive()
+        {
+            var source = @"@supports (animation-name: spin) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsSvgFillRule_NoLongerFalseNegative()
+        {
+            var source = @"@supports (fill: red) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
+        [Theory]
+        [InlineData("inherit")]
+        [InlineData("initial")]
+        [InlineData("unset")]
+        [InlineData("revert")]
+        [InlineData("revert-layer")]
+        public void SupportsCssWideKeywordRule_AlwaysSupportedForARecognizedProperty(string keyword)
+        {
+            // Every property accepts the CSS-wide keywords (CSS Cascade & Inheritance 4 §7.3) - even
+            // "color: unset" wouldn't otherwise pass CssPropertyRegistry.SupportsDeclaration's own
+            // color grammar check.
+            var source = $@"@supports (color: {keyword}) {{ }}";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsCssWideKeywordRule_StillFailsForAnUnrecognizedProperty()
+        {
+            // A CSS-wide keyword is valid for any REAL property, but doesn't make up for the property
+            // itself not existing - background-transparency isn't a property PeachPDF (or any CSS
+            // implementation) recognizes under any value.
+            var source = @"@supports (background-transparency: inherit) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
         }
 
         [Fact]
@@ -134,6 +200,12 @@ namespace PeachPDF.Tests.CSS
             Assert.True(supports.Condition.Check());
         }
 
+        // PeachPDF's CSS-OM parses transition-property/animation-name fine (it understands the
+        // grammar), but the render engine never dispatches either - they aren't authored into
+        // css-properties.json (see CLAUDE.md's generator section), so both branches of the OR are
+        // false and the AND short-circuits false regardless of `transform` (which genuinely is
+        // supported). This is the exact false-positive the old oracle (CSS-OM grammar validity
+        // alone) got wrong; asserting False here is what proves the fix, not a regression.
         [Fact]
         public void SupportsTransitionOrAnimationNameAndTransformFrontBracketRule()
         {
@@ -145,7 +217,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("((transition-property: color) or (animation-name: foo)) and (transform: rotate(10deg))", supports.ConditionText);
-            Assert.True(supports.Condition.Check());
+            Assert.False(supports.Condition.Check());
         }
 
         [Fact]
@@ -159,7 +231,7 @@ namespace PeachPDF.Tests.CSS
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.Equal("(transition-property: color) or ((animation-name: foo) and (transform: rotate(10deg)))", supports.ConditionText);
-            Assert.True(supports.Condition.Check());
+            Assert.False(supports.Condition.Check());
         }
 
         [Fact]

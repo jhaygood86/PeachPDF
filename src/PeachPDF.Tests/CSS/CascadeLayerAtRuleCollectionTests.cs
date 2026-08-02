@@ -14,7 +14,10 @@ namespace PeachPDF.Tests.CSS;
 /// block (or an <c>@media</c> inside a layer) must still be collected. Before this,
 /// the three collectors only scanned top-level rules, so wrapping them in a layer — the exact shape a
 /// utility framework emits — silently dropped them. <c>CssData.EnumerateRulesRecursive</c> now descends
-/// the grouping at-rules, and the collectors use it.
+/// the grouping at-rules, and the collectors use it. Also covers the same descent through a
+/// <c>@supports</c> block whose condition evaluates true (per CSS Conditional Rules 3/4 §3, any at-rule
+/// may appear inside one) — see <c>ConditionGroupingRuleIntegrationTests</c> for the plain style-rule
+/// cascade side of real <c>@supports</c> evaluation.
 /// </summary>
 public class CascadeLayerAtRuleCollectionTests
 {
@@ -46,6 +49,48 @@ public class CascadeLayerAtRuleCollectionTests
         // var(--swatch) must resolve to the registered initial-value — proving the @property was collected.
         var html = Html(
             "@layer tokens { @property --swatch { syntax: \"<color>\"; initial-value: #0000ff; inherits: false; } }" +
+            " p { color: var(--swatch); }",
+            "<p>text</p>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal("rgb(0, 0, 255)", box.Color);
+    }
+
+    // ── @supports-guarded at-rules are collected only when the condition is true ─
+
+    [Fact]
+    public async Task EnumerateRulesRecursive_FindsAtRulesNestedInATrueSupportsBlock()
+    {
+        const string css =
+            "@supports (display: flex) { @font-face { font-family: L; src: url(a.woff2); } " +
+            "  @property --x { syntax: \"<color>\"; initial-value: red; inherits: false; } }";
+
+        var cssData = await CssData.Parse(new PdfSharpAdapter(), css, combineWithDefault: false);
+        var all = cssData.EnumerateRulesRecursive().ToList();
+
+        Assert.Single(all.OfType<IFontFaceRule>());
+        Assert.Single(all.OfType<IPropertyRule>());
+    }
+
+    [Fact]
+    public async Task EnumerateRulesRecursive_SkipsAtRulesNestedInAFalseSupportsBlock()
+    {
+        // animation-name parses in the CSS-OM but PeachPDF never renders animations, so this condition
+        // is false - the @property inside must not be collected (its var() below falls back, not to the
+        // registered initial-value).
+        const string css =
+            "@supports (animation-name: spin) { @property --x { syntax: \"<color>\"; initial-value: red; inherits: false; } }";
+
+        var cssData = await CssData.Parse(new PdfSharpAdapter(), css, combineWithDefault: false);
+        var all = cssData.EnumerateRulesRecursive().ToList();
+
+        Assert.Empty(all.OfType<IPropertyRule>());
+    }
+
+    [Fact]
+    public async Task PropertyInsideATrueSupportsBlock_IsRegistered_AndItsInitialValueResolves()
+    {
+        var html = Html(
+            "@supports (display: flex) { @property --swatch { syntax: \"<color>\"; initial-value: #0000ff; inherits: false; } }" +
             " p { color: var(--swatch); }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");

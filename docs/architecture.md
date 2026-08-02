@@ -298,9 +298,10 @@ step behind `CssUtils.SetPropertyValue`/`GetPropertyValue` (and the equivalent f
 properties, `SvgTreeBuilder.ApplyCommon`) are generated at build time from a single JSON source,
 `src/PeachPDF/css-properties.json`, by a Roslyn source generator (`src/PeachPDF.SourceGenerators`) rather
 than hand-written per property. This keeps every property's inheritance flag, initial value, and value
-grammar in one place instead of several hand-synchronized tables, and is what a future `@supports`
-implementation will query for "does this renderer actually accept this declaration." See CLAUDE.md's
-"CSS/SVG property registry generator" section for the schema and authoring workflow.
+grammar in one place instead of several hand-synchronized tables — and is exactly what real `@supports`
+evaluation (§[CSS At-Rules](html-css-support.md#css-at-rules)) queries for "does this renderer actually
+accept this declaration," via `CssPropertyRegistry`/`SvgPropertyRegistry`'s `SupportsDeclaration`. See
+CLAUDE.md's "CSS/SVG property registry generator" section for the schema and authoring workflow.
 
 ### Post-styling corrections
 

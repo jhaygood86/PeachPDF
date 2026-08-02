@@ -66,6 +66,10 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("        /// <summary>Validation only — no box, no mutation, no side effects. The @supports render-layer oracle.</summary>");
             sb.AppendLine("        internal static bool SupportsDeclaration(CssValueParser parser, string name, string value) =>");
             sb.AppendLine("            _validators.TryGetValue(name, out var validator) && validator(parser, value);");
+            sb.AppendLine();
+            sb.AppendLine("        /// <summary>Nominal-context overload for a caller (e.g. an @supports condition leaf) with no live parser/adapter of its own — grammar validation needs *an* adapter, not the document's real one.</summary>");
+            sb.AppendLine("        internal static bool SupportsDeclaration(string name, string value) =>");
+            sb.AppendLine("            SupportsDeclaration(new CssValueParser(new global::PeachPDF.Adapters.PdfSharpAdapter()), name, value);");
 
             sb.AppendLine("    }");
             sb.AppendLine("}");
@@ -262,6 +266,8 @@ namespace PeachPDF.SourceGenerators.Emit
             EmitSvgInheritedProperties(sb, svgEntries);
             EmitSvgInitialValues(sb, svgEntries);
 
+            sb.AppendLine();
+            sb.AppendLine("        internal static bool IsKnownProperty(string name) => _setters.ContainsKey(name);");
             sb.AppendLine();
             sb.AppendLine("        internal static bool TrySet(SvgElement element, string name, string value, in SvgPropertyContext ctx) =>");
             sb.AppendLine("            _setters.TryGetValue(name, out var setter) && setter(element, ctx, value);");

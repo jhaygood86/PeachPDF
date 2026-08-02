@@ -30,6 +30,27 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_A_Nominal_Context_SupportsDeclaration_Overload_For_Callers_With_No_Live_Parser()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "any",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains("internal static bool SupportsDeclaration(string name, string value) =>", generated);
+            Assert.Contains("SupportsDeclaration(new CssValueParser(new global::PeachPDF.Adapters.PdfSharpAdapter()), name, value);", generated);
+        }
+
+        [Fact]
         public void Emits_Keyword_Validation_With_The_Declared_Comparison()
         {
             var json = """
