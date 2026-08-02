@@ -36,6 +36,34 @@ ending row's, the close is `Math.Max(rowMaxBottom, contentBottom)` instead, with
 slice-bottom for the band the row loop is still filling, unlike an earlier band it has already broken
 away from via `TakeBreakBeforeRow`.
 
+A post-change review of that first version found a genuine regression in it before it merged: the
+`contentSlot >= slot` branch also wrote `PageBreakBottoms[slot]` unconditionally, including on a pass
+where the row loop was still filling that same band with *later* content — corrupting the table's own
+bottom-border clip for content that hadn't been laid out yet. Removed entirely; that branch only needs to
+raise `rowMaxBottom`, not record a slice-bottom the row loop hasn't finished deciding. The review also
+found the `else` (`contentSlot < slot`) branch's close could reach several bands past the content's own
+band by anchoring on `cellSlot` instead of `contentSlot`; both the `PageBottomOf` lookup and the
+`StateSpanningCellContinuation` call now anchor on `contentSlot`.
+
+Verifying the user-visible fix by rasterizing the Q4 fixture surfaced two more defects, both pre-existing
+and neither specific to page-boundary closing:
+
+- **The sibling cells in the row that ends the span didn't raise their own height to match the spanning
+  cell.** `TableRowCursor.MaxBottom` deliberately excludes a spanning cell from a row's height (needed for
+  the straddle correction to still move the row), so a plain `<td>` beside a still-overflowing rowspan
+  cell closed at the smaller value — its bottom border cut across the rowspan cell rather than meeting its
+  edge. Fixed with a pre-pass in `LayoutBodyRow`, run before the row's ordinary vertical-alignment loop,
+  that raises `rowMaxBottom` to the spanning cell's own `contentBottom` wherever its content reaches at
+  least as far as the row's own band — so every cell the row aligns sees the same final bottom.
+- **`CloseSpanningCell` was never being called at all for a cell that took more than one resumption pass
+  to finish**, regardless of the fix above. The vertical-alignment loop's dispatch asked
+  `ResumedFromAnEarlierPass`/`stoppedCells` before asking whether the cell was in this row's own
+  `boxesThatEndOnRow` — and `ResumedFromAnEarlierPass` matches by reference against a carried record
+  seeded when the cell's own *opening* row was first resumed, several rows earlier, a record that is never
+  cleared once consumed. Reordering the two checks (`boxesThatEndOnRow` first) fixed it; a cell reaching
+  that branch belongs to an earlier row by construction, so the stale resumed-match is never the right
+  answer there.
+
 ## What was deliberately not done
 
 - No new break-token machinery (an `OverflowedSpanningCells`-style field on `TableBreakToken`, mirroring
@@ -43,7 +71,8 @@ away from via `TakeBreakBeforeRow`.
   would have been solving a problem that doesn't exist: the cell's content already stops and resumes
   correctly across real per-pass fragments through the table's ordinary continuation
   (`TableRowCursor.UnfinishedCells`/`Continuation`) — the same channel every other overflowing cell uses,
-  rowspan or not. The only thing missing was the cosmetic box-close question this fix actually addresses.
+  rowspan or not. The only things missing were the cosmetic box-close question this fix addresses, the
+  sibling-alignment question, and the dispatch-ordering bug that kept the close from running at all.
 - A separate, pre-existing defect found while verifying the fix's own new test
   (`ASpanningCellWhoseContentOverflowsItsBand_IsFragmentedAcrossEveryBandItOccupies`) was left alone and
   filed as [#590](https://github.com/jhaygood86/PeachPDF/issues/590): `FragmentEmitter.RecordChain` only
@@ -55,15 +84,16 @@ away from via `TakeBreakBeforeRow`.
 
 ## Evidence
 
-- Full `net8.0` suite: 7392 passed, 0 failed, 9 skipped.
+- Full `net8.0` suite: 7393 passed, 0 failed, 9 skipped (one more than the pre-fix baseline of 7392, for
+  the new same-band regression test).
 - `diff-cover` against `origin/main`: 100% on the changed lines.
 - `dotnet build PeachPDF.slnx -t:Rebuild`: 0 warnings.
-- Two-renderer (PDFium + MuPDF) rasterization of `paged_media_table_rowspan_break`'s new Q4 fixture,
-  viewed directly: the spanning cell's tint/border now correctly cuts off at the page foot with no
-  border drawn there, and resumes at the next page's top with no border repainted there either —
-  matching css-tables-3 §6.1's "top borders must not be repainted in continuation fragments."
-- A dedicated regression test for the same-band close
-  (`ASpanningCellWhoseContentFinishesInTheSameBandTheSpanEndsIn_ClosesAtTheRowsOwnBottom`) was verified
-  to actually fail against the fix's first (incomplete) version before the `PageBreakBottoms[slot]`
-  creation was added, and to fail again when the `contentSlot >= slot` branch is forced off — confirming
-  it is a real regression guard, not a tautology.
+- Two-renderer (PDFium + MuPDF) rasterization of `paged_media_table_rowspan_break`'s Q4 fixture, viewed
+  directly: the spanning cell's tint/border now correctly cuts off at the page foot with no border drawn
+  there, resumes at the next page's top with no border repainted there either, and — for the sibling
+  alignment fix — the row that ends the span (December) shows both the sibling `<td>`s' and the spanning
+  cell's bottom borders meeting at the same height, on both renderers.
+- Dedicated regression tests: `ASpanningCellWhoseContentFinishesInTheSameBandTheSpanEndsIn_ClosesAtTheRowsOwnBottom`
+  (same-band close and sibling-border alignment together) and
+  `ASpanningCellWhoseContentFinishesSeveralBandsBeforeTheSpanEnds_ClosesAtItsOwnBand` (`contentSlot < slot`
+  case), each verified to fail against the corresponding defect before its fix landed.

@@ -74,4 +74,31 @@ only the later row's *existing* cells, so a spacer that belongs after the last o
 measured, a `rowspan` cell in the **last column** produces no spacer anywhere in the tree
 ([#522](https://github.com/jhaygood86/PeachPDF/issues/522)). `RowSpannedBoxes` is the reliable
 answer. (A spacer that *is* created is also reachable twice, since `CssBox`'s `ParentBox` setter appends
-it to the table while `InsertEmptyBoxes` inserts it into the row.)
+it to the table while `InsertEmptyBoxes` inserts it into the row.) The spacer is still load-bearing for a
+separate reason unrelated to closing or detecting a span: `GetCellRealColumnIndex` counts a later row's
+own real cells by summing `colspan` across `row.Boxes`, so without a placeholder occupying the spanned
+column, every real cell after it in that row would be miscounted by one column, corrupting column-width
+distribution and cell positioning for the whole row. That role stays regardless of #522.
+
+**`boxesThatEndOnRow` (`TableRowCursor.RowSpannedBoxes[rowIndex]`) must be asked before
+`ResumedFromAnEarlierPass`/`stoppedCells`, not after.** `ResumedFromAnEarlierPass` matches by reference
+against a carried record seeded when *this pass* first resumed the cell at the row that **opened** its
+span — several rows before the one now ending it — and that record is never cleared once consumed.
+Asking it first for a cell that also appears in `boxesThatEndOnRow` reads that stale match and `continue`s
+past it, so `CloseSpanningCell` is never entered at all for a cell whose own content took more than one
+resumption pass to finish: measured as the exact shape of
+[issue #521](https://github.com/jhaygood86/PeachPDF/issues/521) once the `contentSlot` fix above was in
+place — the close-at-band-boundary logic was correct, but the call it depends on silently never ran.
+
+**A spanning cell's own content overflowing into the row that ends its span must raise `rowMaxBottom`
+for every cell in that row, not just the spanning cell.** Unpaginated table layout already grows every
+row a tall rowspan cell spans (ordinary flow), but paginated layout's `rowMaxBottom` for that row comes
+from `TableRowCursor.MaxBottom`, which deliberately excludes spanning cells (needed so the straddle
+correction can still move the row — see `RecordForeignWrite` above). Left alone, the row's *other* cells
+close at the smaller `MaxBottom` value while the spanning cell itself closes lower (at its own
+`contentBottom`), so their bottom borders no longer line up — visible as a sibling `<td>`'s border cutting
+across the still-open rowspan cell rather than meeting its edge. `LayoutBodyRow` asks
+`SpanningCellBandGeometry` for every box in `boxesThatEndOnRow` *before* the row's ordinary
+vertical-alignment loop runs, and raises `rowMaxBottom` to `contentBottom` wherever the cell's own content
+band (`contentSlot`) reaches at least as far as the row's band (`slot`) — so every cell this row aligns,
+spanning or not, sees the same final value.

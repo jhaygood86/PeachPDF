@@ -2429,6 +2429,34 @@ namespace PeachPDF.Html.Core.Dom
                 boxesToVerticallyAlign = boxesToVerticallyAlign.Union(boxesThatEndOnRow);
             }
 
+            // A spanning cell whose own content overflows into this row's own band has to raise the
+            // row for every cell in it, not just itself - ordinary (unpaginated) table layout grows
+            // every row a tall rowspan cell spans, and the loop below would otherwise give this row's
+            // other cells only rowMaxBottom, the smaller value TableRowCursor.MaxBottom tracking
+            // deliberately settled for without the spanning cell (needed so the straddle correction can
+            // still move this row - see RecordForeignWrite). Asked before that loop runs, and before
+            // CloseSpanningCell answers the same question for the spanning cell itself, so every cell
+            // this row aligns sees the one, final rowMaxBottom.
+            if (boxesThatEndOnRow is { Count: > 0 }
+                && _tableBox.HtmlContainer is { HasRealPageGrid: true } alignmentContainer
+                && alignmentContainer.CurrentFragmentainer is { HasOwnBand: false })
+            {
+                var slot = cursor.SlotIndex;
+
+                foreach (var spanningCell in boxesThatEndOnRow)
+                {
+                    if (cursor.FinishedOnAnEarlierPass(spanningCell)) continue;
+
+                    var (cellSlot, contentBottom, contentSlot) =
+                        SpanningCellBandGeometry(spanningCell, alignmentContainer);
+
+                    if (cellSlot < slot && contentSlot >= slot)
+                    {
+                        rowMaxBottom = Math.Max(rowMaxBottom, contentBottom);
+                    }
+                }
+            }
+
             foreach (var cell in boxesToVerticallyAlign)
             {
                 // Nothing of this cell belongs to this fragmentainer, so neither does its geometry: giving
@@ -2443,6 +2471,19 @@ namespace PeachPDF.Html.Core.Dom
                         CloseSpanningCell(g, spacer.ExtendedBox, cursor, rowMaxBottom);
                     }
                 }
+                else if (boxesThatEndOnRow?.Contains(cell) ?? false)
+                {
+                    // Asked before the resumed/stopped arm below, and that order is load-bearing rather
+                    // than incidental: a cell reaching here belongs to an *earlier* row, so
+                    // TableRowCursor.ResumedFromAnEarlierPass can still answer true for it - matched by
+                    // reference against a carried record this pass's own resumption seeded while placing
+                    // that earlier, opening row, several rows before this one. The record is never cleared
+                    // once that row consumes it, so asking the resumed/stopped question first read that
+                    // stale match and skipped closing the cell's box entirely for the rest of the pass -
+                    // measured as CloseSpanningCell never once entered for a cell whose own content took
+                    // more than one resumption pass to finish (issue #521's exact shape).
+                    CloseSpanningCell(g, cell, cursor, rowMaxBottom);
+                }
                 else if (stoppedCells.Contains(cell) || cursor.ResumedFromAnEarlierPass(cell))
                 {
                     // Only a cell whose fragment both opens and closes in this fragmentainer has leftover
@@ -2450,14 +2491,11 @@ namespace PeachPDF.Html.Core.Dom
                     // definition, and one that *continues an earlier* fragment had where its content sits
                     // settled by the pass that opened it - re-aligning that drags content an earlier
                     // fragmentainer has already emitted onto this page, which is a whole line drawn on two
-                    // pages rather than a cosmetic shift. Asked after the CssSpacingBox arm rather than
-                    // beside the FinishedCells guard above, because a spacer that stopped still has to
-                    // align the cell it stands in for.
+                    // pages rather than a cosmetic shift. Asked after the CssSpacingBox and boxesThatEndOnRow
+                    // arms rather than beside the FinishedCells guard above, because a spacer that stopped
+                    // still has to align the cell it stands in for, and a spanning cell ending this row must
+                    // reach CloseSpanningCell even where it also - falsely, for this row - answers resumed.
                     continue;
-                }
-                else if (boxesThatEndOnRow?.Contains(cell) ?? false)
-                {
-                    CloseSpanningCell(g, cell, cursor, rowMaxBottom);
                 }
                 else if (GetRowSpan(cell) == 1)
                 {
@@ -2536,7 +2574,20 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/521">issue #521</see>): a stated
         /// shell is consulted only for a band where nothing real was found at all
         /// (<c>FragmentEmitter.ShellIn</c>), so it can never stand in for a band the cell's content already
-        /// occupies.
+        /// occupies. The anchor band for both the close and the table's own slice-bottom record is
+        /// therefore wherever the content itself ends (<see cref="SpanningCellBandGeometry"/>'s
+        /// <c>ContentSlot</c>), not always <c>cellSlot</c> — the two coincide exactly when the content
+        /// fits the band it opened in, which is #511's original, narrower case.
+        /// </para>
+        /// <para>
+        /// Where the content's own band reaches the row ending the span (or, in principle, past it),
+        /// there is no later, empty band left to state a shell over — and no <c>PageBreakBottoms</c> entry
+        /// may be created for that band either, unlike every other slice-bottom write here: <c>slot</c> is
+        /// the band the row loop is still <i>filling</i>, and content the loop places there after this row
+        /// would then read as below a slice bottom recorded before the band actually closed. This
+        /// asymmetry cost a real regression to find: an earlier draft of this fix wrote one anyway, and a
+        /// table with further rows in the same band had its bottom border clipped through the middle of
+        /// itself, with those later rows rendered outside it entirely.
         /// </para>
         /// <para>
         /// Every write here is recorded on the cursor
@@ -2551,7 +2602,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="cursor">
         /// this pass's row cursor, which names the band the row is in and records the write
         /// </param>
-        /// <param name="rowMaxBottom">the bottom the row being placed reached</param>
+        /// <param name="rowMaxBottom">
+        /// the bottom the row being placed reached — already raised, before this is called, to the
+        /// content-based bottom <see cref="LayoutBodyRow"/>'s own pre-pass computed for this same cell, if
+        /// its content reaches into this same band
+        /// </param>
         private void CloseSpanningCell(RGraphics g, CssBox cell, TableRowCursor cursor, double rowMaxBottom)
         {
             // The same cell arrives twice on a row that reaches it both as a CssSpacingBox's ExtendedBox
@@ -2581,81 +2636,54 @@ namespace PeachPDF.Html.Core.Dom
             if (container is { HasRealPageGrid: true }
                 && container.CurrentFragmentainer is { HasOwnBand: false })
             {
-                var cellSlot = container.SlotStartingAt(cell.Location.Y);
-
-                // The cell's own content may already reach past this band - a rowspan cell whose content
-                // alone needs more than one band stops and resumes exactly like any other box, through the
-                // ordinary per-pass fragment it is given on each band it is laid out against
-                // (TableRowCursor.UnfinishedCells/Continuation). Closing the box here does not discard any
-                // of that: FragmentEmitter.ShellIn is consulted only for a band where the real per-pass
-                // walk found nothing at all for the box (see its call site's own remarks), so a band that
-                // already holds the cell's real content is untouched by the shell stated below, and one
-                // that does not is exactly what a continuing box's decoration needs stated for it - see
-                // issue #521.
-                var contentBottom = CssBox.GetMaximumBottom(cell, 0d);
+                var (cellSlot, contentBottom, contentSlot) = SpanningCellBandGeometry(cell, container);
                 var band = cellSlot < slot ? container.BandOfSlot(cellSlot) : default;
 
                 if (cellSlot < slot
                     && HtmlContainerInt.FallsPast(rowMaxBottom, band))
                 {
-                    // Which band the cell's own content actually reaches into. Everywhere strictly after
-                    // it is a band the cell has nothing real in, which is what a continuation shell is
-                    // for; the band it shares with the content is not, because FragmentEmitter.ShellIn
-                    // never stands in for a band that already holds real content anywhere for this box -
-                    // stating one there would be discarded outright, not merely redundant, so that band's
-                    // close has to be the real close, not a stated one.
-                    var contentSlot = container.SlotEndingAt(contentBottom);
-
                     if (contentSlot >= slot)
                     {
                         // The content reaches into the very band the row ending the span is in (or, in
                         // principle, past it), so there is no later, empty band left to state a shell
                         // over - this band's own content-bearing fragment already carries the box's real
                         // bounds, and the close is simply however far the row - or the content, wherever
-                        // it reaches lower - actually goes. See issue #521.
+                        // it reaches lower - actually goes (rowMaxBottom already carries the content's own
+                        // bottom where LayoutBodyRow's pre-pass found it reaching further, so this Math.Max
+                        // is mostly belt: it still matters when this is the only spanning cell the row
+                        // loop has not yet accounted for). No PageBreakBottoms write here - see this
+                        // method's own remarks for why slot may not take one.
                         bottom = Math.Max(rowMaxBottom, contentBottom);
-
-                        // Unlike cellSlot below, slot is the band the row loop is still filling - no
-                        // break has moved it on yet, so nothing else has necessarily recorded a slice
-                        // bottom for it at all. Created rather than only raised, then: this may be the
-                        // table's very last band, with no later TakeBreakBeforeRow call left to write one,
-                        // and a border clipped to a missing record falls back to the fragment's own
-                        // natural bottom - correct only when nothing in it reaches lower than that.
-                        _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
-
-                        if (!_tableBox.PageBreakBottoms.TryGetValue(slot, out var sameSlotRecorded)
-                            || bottom > sameSlotRecorded)
-                        {
-                            _tableBox.PageBreakBottoms[slot] = bottom;
-                        }
                     }
                     else
                     {
-                        // Where the table's own slice on that band ends, which is what the cell has to
-                        // close level with: FragmentPainter clips the table's bottom border to the same
-                        // record, so a cell closing below it is a tint drawn past the table's own edge.
-                        // Bounded by the foot of the band less the room a repeated <tfoot> holds there,
-                        // since that record includes the footer, and never taken above the cell's own
-                        // content.
-                        bottom = container.PageBottomOf(cellSlot) - RepeatedFooterHeight;
+                        // Where the table's own slice on the band the content itself ends in stops, which
+                        // is what the cell has to close level with: FragmentPainter clips the table's
+                        // bottom border to the same record, so a cell closing below it is a tint drawn
+                        // past the table's own edge. Bounded by the foot of the band less the room a
+                        // repeated <tfoot> holds there, since that record includes the footer, and never
+                        // taken above the cell's own content.
+                        bottom = container.PageBottomOf(contentSlot) - RepeatedFooterHeight;
 
-                        if (_tableBox.PageBreakBottoms?.TryGetValue(cellSlot, out var sliceBottom) is true)
+                        if (_tableBox.PageBreakBottoms?.TryGetValue(contentSlot, out var sliceBottom) is true)
                             bottom = Math.Min(bottom, sliceBottom);
 
                         bottom = Math.Max(bottom, contentBottom);
 
                         // And the slice follows the cell where the cell's own content is what reaches
-                        // lowest. MaxBottom never counts a spanning cell before the row that ends it, so a
-                        // tall cell opened by a short row closes below the record its own table wrote -
-                        // and the bottom border clipped to that record would then be drawn across the
-                        // cell.
+                        // lowest in that band. MaxBottom never counts a spanning cell before the row that
+                        // ends it, so a tall cell opened by a short row closes below the record its own
+                        // table wrote - and the bottom border clipped to that record would then be drawn
+                        // across the cell. contentSlot, not cellSlot: the content may now reach several
+                        // bands past the one the span opened in, and cellSlot's own record has nothing to
+                        // do with a close that belongs there instead.
                         if (_tableBox.PageBreakBottoms is { } bottoms
-                            && bottoms.TryGetValue(cellSlot, out var recorded) && bottom > recorded)
+                            && bottoms.TryGetValue(contentSlot, out var recorded) && bottom > recorded)
                         {
-                            bottoms[cellSlot] = bottom;
+                            bottoms[contentSlot] = bottom;
                         }
 
-                        StateSpanningCellContinuation(container, cell, cellSlot, slot, rowMaxBottom);
+                        StateSpanningCellContinuation(container, cell, contentSlot, slot, rowMaxBottom);
                     }
                 }
             }
@@ -2665,6 +2693,29 @@ namespace PeachPDF.Html.Core.Dom
             var applied = CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
 
             cursor.RecordForeignWrite(cell, previousBottom, applied);
+        }
+
+        /// <summary>
+        /// A spanning cell's own band geometry: the band its box opened in, how far its own content
+        /// actually reaches (<see cref="CssBox.GetMaximumBottom"/>), and which band that content itself
+        /// ends in.
+        /// </summary>
+        /// <remarks>
+        /// Shared between <see cref="LayoutBodyRow"/>'s own pre-pass - which asks whether a spanning
+        /// cell's content reaches into the row's own band <i>before</i> any of that row's other cells are
+        /// given their height, so the row is raised for everyone rather than only for the spanning cell
+        /// itself - and <see cref="CloseSpanningCell"/>, which asks the same two questions again to decide
+        /// how its own box closes and where the table's own slice-bottom record belongs. One shared
+        /// computation, so the two can never disagree about what a cell's content reaches.
+        /// </remarks>
+        private static (int CellSlot, double ContentBottom, int ContentSlot) SpanningCellBandGeometry(
+            CssBox cell, HtmlContainerInt container)
+        {
+            var cellSlot = container.SlotStartingAt(cell.Location.Y);
+            var contentBottom = CssBox.GetMaximumBottom(cell, 0d);
+            var contentSlot = container.SlotEndingAt(contentBottom);
+
+            return (cellSlot, contentBottom, contentSlot);
         }
 
         /// <summary>

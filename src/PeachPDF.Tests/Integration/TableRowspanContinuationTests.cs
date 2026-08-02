@@ -522,7 +522,12 @@ namespace PeachPDF.Tests.Integration
                     .SelectMany(f => f.Words)
                     .Select(w => w.Word));
 
-            Assert.All(cell.Words, word => Assert.Contains(word, claimed));
+            // cell.Words itself is empty - a <td> with text authors its words onto an anonymous child
+            // line box, not directly onto the cell - so the census has to walk the cell's own subtree
+            // rather than asking the cell's own (always-empty) Words collection.
+            var authoredWords = LayoutHarness.Descendants(cell).SelectMany(b => b.Words).ToList();
+            Assert.NotEmpty(authoredWords);
+            Assert.All(authoredWords, word => Assert.Contains(word, claimed));
 
             // Deliberately not asserted here: which of these fragments' own top/bottom edges are break
             // edges rather than the box's own. FragmentEmitter.RecordChain only walks a BlockBreakToken's
@@ -584,12 +589,86 @@ namespace PeachPDF.Tests.Integration
             Assert.True(cellSlot < contentSlot, "fixture does not overflow its opening band, so it asserts nothing");
             Assert.Equal(contentSlot, endingRowSlot);
 
-            Assert.True(cell.ActualBottom >= rows[2].ActualBottom - 0.01,
-                $"the cell closed at {cell.ActualBottom:F1}, above the ending row's own bottom of "
-                + $"{rows[2].ActualBottom:F1} - its remaining rows would show no tint or border at all");
+            // Precise, not just a lower bound: the row's own natural bottom (100pt of content) is smaller
+            // than the spanning cell's own content here, so a formula that used rowMaxBottom alone (the
+            // pre-fix stretch, or a naive same-band close) and one that used Math.Max(rowMaxBottom,
+            // contentBottom) would disagree, and only the latter is correct.
+            var expected = Math.Max(rows[2].ActualBottom, contentBottom);
+            Assert.Equal(expected, cell.ActualBottom, 0.01);
 
+            // And every other *real* cell in the row the span ends on closes level with it too - a
+            // rowspan cell taller than the rows it spans grows those rows in ordinary (unpaginated) table
+            // layout, and TableRowCursor.MaxBottom deliberately excluding the spanning cell from that
+            // calculation (for the straddle correction's own sake) must not leave the row's other cells
+            // behind. rows[2].Boxes also holds the CssSpacingBox placeholder standing in for the spanning
+            // cell itself, whose own geometry is a separate bookkeeping concern from column alignment and
+            // is not this fixture's subject, so only the row's own non-placeholder cells are checked.
+            var realSiblings = rows[2].Boxes.Where(b => b is not CssSpacingBox).ToList();
+            Assert.NotEmpty(realSiblings);
+            foreach (var sibling in realSiblings)
+            {
+                Assert.Equal(cell.ActualBottom, sibling.ActualBottom, 0.01);
+            }
+        }
+
+        /// <summary>
+        /// A spanning cell whose own content finishes several bands <i>before</i> the row ending the span
+        /// closes at the band its content actually ends in, not at the band it opened in - the content may
+        /// now reach past more than one band beyond where the span itself began.
+        /// </summary>
+        /// <remarks>
+        /// Before this, the close was always anchored to <c>cellSlot</c> (the band the box opened in),
+        /// which is only correct when the content fits inside that same band - #511's original, narrower
+        /// case. Where the content reaches further, anchoring to <c>cellSlot</c> still clamps the close up
+        /// to <c>contentBottom</c> (never above the content), but the <i>table's own slice-bottom record</i>
+        /// it raises is keyed to the wrong band - <c>cellSlot</c>, several bands short of where the content
+        /// and the table's own border actually belong.
+        /// </remarks>
+        [Fact]
+        public async Task ASpanningCellWhoseContentFinishesSeveralBandsBeforeTheSpanEnds_ClosesAtItsOwnBand()
+        {
+            var words = string.Join(" ", Enumerable.Range(0, 90).Select(i => $"word{i:0000}"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<table style='width:150pt'>"
+                    + $"<tr><td id='span' rowspan='3'>{words}</td><td>a</td></tr>"
+                    + "<tr><td><div style='height:240pt'>b</div></td></tr>"
+                    + "<tr><td><div style='height:240pt'>c</div></td></tr></table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var cell = SpanningCell(root);
+            var contentBottom = CssBox.GetMaximumBottom(cell, 0d);
+            var cellSlot = container.SlotStartingAt(cell.Location.Y);
+            var contentSlot = container.SlotEndingAt(contentBottom);
+            var rows = RowsOf(root);
+            var endingRowSlot = container.SlotStartingAt(rows[2].Location.Y);
+
+            Assert.True(cellSlot < contentSlot,
+                "fixture does not overflow past the band it opened in, so it asserts nothing");
+            Assert.True(contentSlot < endingRowSlot,
+                "fixture's content already reaches the ending row's own band - the other test covers that "
+                + "shape, this one wants a genuinely earlier content band");
+
+            // The close is anchored to contentSlot's own band-foot, clamped up to contentBottom - and is
+            // therefore far below the ending row's own (much lower) bottom, which a stretched box, or one
+            // wrongly anchored to cellSlot's much-earlier band, would not be.
+            var band = container.BandOfSlot(contentSlot);
+            Assert.True(cell.ActualBottom <= band.Bottom + 0.5,
+                $"the cell closed at {cell.ActualBottom:F1}, past contentSlot {contentSlot}'s own band foot "
+                + $"of {band.Bottom:F1}");
             Assert.True(cell.ActualBottom >= contentBottom - 0.01,
                 $"the cell's box closes at {cell.ActualBottom:F1}, above its content's {contentBottom:F1}");
+            Assert.True(cell.ActualBottom < rows[2].ActualBottom - 1,
+                $"the cell closed at {cell.ActualBottom:F1}, at or past the ending row's own bottom of "
+                + $"{rows[2].ActualBottom:F1} - it should have closed several bands earlier instead");
+
+            // And the table's own slice-bottom record for that band follows the content, not cellSlot's.
+            var table = LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            Assert.NotNull(table.PageBreakBottoms);
+            Assert.True(table.PageBreakBottoms!.TryGetValue(contentSlot, out var recorded));
+            Assert.True(recorded >= contentBottom - 0.01,
+                $"PageBreakBottoms[{contentSlot}]={recorded:F1} is below the content's own {contentBottom:F1}");
         }
     }
 }
