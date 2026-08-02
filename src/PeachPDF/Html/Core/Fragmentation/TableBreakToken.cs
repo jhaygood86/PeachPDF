@@ -67,6 +67,10 @@ namespace PeachPDF.Html.Core.Fragmentation
         IReadOnlyList<CssBox> FinishedCells,
         IReadOnlyDictionary<int, IReadOnlyList<CssBox>> RowSpannedBoxes) : BreakToken(Box, ResumeSlotIndex)
     {
+        /// <inheritdoc />
+        internal override IReadOnlyList<BreakToken> FanOutContinuations =>
+            UnfinishedCells.Select(cell => cell.Token).ToList();
+
         /// <summary>
         /// Compared by <b>contents</b>, because the driver's no-progress backstop is an equality test.
         /// </summary>

@@ -529,15 +529,22 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEmpty(authoredWords);
             Assert.All(authoredWords, word => Assert.Contains(word, claimed));
 
-            // Deliberately not asserted here: which of these fragments' own top/bottom edges are break
-            // edges rather than the box's own. FragmentEmitter.RecordChain only walks a BlockBreakToken's
-            // linear ChildToken chain, so it never marks a TableBreakToken's per-cell continuations
-            // (TableRowCursor.UnfinishedCells) - a cell whose own content keeps producing genuinely new
-            // fragments (as against a stated shell, which ResumesAnEarlierFragment/ContinuesIntoALaterFragment
-            // also recognize) reports every fragment as owning both its own edges. That is a pre-existing
-            // gap independent of rowspan or this fix - confirmed on a plain, non-rowspan multi-page <td> -
-            // and is filed and out of scope here: see
-            // https://github.com/jhaygood86/PeachPDF/issues/590.
+            // And only the first of these real, content-holding fragments owns its own top edge, and only
+            // the last its own bottom edge - the class of gap issue #590 fixed: FragmentEmitter.RecordChain
+            // used to walk only a BlockBreakToken's linear ChildToken chain, never a TableBreakToken's
+            // per-cell continuations (TableRowCursor.UnfinishedCells), so a cell whose own content kept
+            // producing genuinely new fragments (as against a stated shell, which
+            // ResumesAnEarlierFragment/ContinuesIntoALaterFragment already recognized through
+            // Draft.ShellRect) reported every fragment as owning both its own edges.
+            var lastFragmentIndex = fragments.Count - 1;
+
+            for (var i = 0; i <= lastFragmentIndex; i++)
+            {
+                var slice = Assert.Single(fragments[i].Fragment.Lines).Slice;
+
+                Assert.Equal(i == 0, slice.HasTopEdge);
+                Assert.Equal(i == lastFragmentIndex, slice.HasBottomEdge);
+            }
         }
 
         /// <summary>

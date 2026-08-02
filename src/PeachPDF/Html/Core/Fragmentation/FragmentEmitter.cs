@@ -1232,12 +1232,32 @@ namespace PeachPDF.Html.Core.Fragmentation
                 $"and '{full}' without it. Pruning must only ever decline to walk a subtree that would " +
                 $"have produced nothing.");
 
+        /// <summary>
+        /// Walks a break-token chain, marking every box it names as continuing in <paramref name="slot"/>.
+        /// A <see cref="BlockBreakToken"/> chain is linear (box → its one continuing child → ...), but a
+        /// fan-out token (<see cref="TableBreakToken"/> and its <see cref="BreakToken.FanOutContinuations"/>
+        /// siblings) names several §2.1 parallel flows at once — each is walked in turn, recursively, since
+        /// a cell/item's own continuation can itself be a linear chain or a further fan-out (a table nested
+        /// in a table cell, say).
+        /// </summary>
         private static void RecordChain(BreakToken? token, int slot, HashSet<(FragmentKey, int)> into)
         {
             for (var link = token; link is not null;)
             {
                 into.Add((new FragmentKey(link.Box, null, 0), slot));
-                link = link is BlockBreakToken { ChildToken: { } child } ? child : null;
+
+                if (link is BlockBreakToken { ChildToken: { } child })
+                {
+                    link = child;
+                    continue;
+                }
+
+                foreach (var continuation in link.FanOutContinuations)
+                {
+                    RecordChain(continuation, slot, into);
+                }
+
+                link = null;
             }
         }
 
