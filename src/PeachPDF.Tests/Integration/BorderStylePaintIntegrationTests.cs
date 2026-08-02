@@ -86,6 +86,82 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task BorderRightStyleDouble_DrawsTwoEqualWidthVerticalStripesWithGap()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='border-right-style: double; border-right-width: 12pt; border-right-color: rgb(51,51,51)'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            Assert.Equal(2, lines.Count);
+            var outer = lines[0];
+            var inner = lines[1];
+
+            // A right-edge border stripe is vertical: constant X, varying Y - the mirror image of the
+            // top-edge case (BorderStyleDouble_DrawsTwoEqualWidthStripesWithGap) on the other axis.
+            Assert.Equal(outer.X1, outer.X2, 1);
+            Assert.Equal(inner.X1, inner.X2, 1);
+            Assert.Equal(RColor.FromArgb(51, 51, 51), outer.Color);
+            Assert.Equal(RColor.FromArgb(51, 51, 51), inner.Color);
+            Assert.Equal(4, outer.Width, 1);
+            Assert.Equal(4, inner.Width, 1);
+
+            var outerNearEdge = outer.X1 - outer.Width / 2;
+            var innerFarEdge = inner.X1 + inner.Width / 2;
+            Assert.True(outerNearEdge > innerFarEdge, "expected a visible gap between the two double-border stripes");
+        }
+
+        [Fact]
+        public async Task BorderLeftStyleGroove_OuterStripeIsDarker_InnerStripeIsBaseColor()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='border-left-style: groove; border-left-width: 12px; border-left-color: rgb(51,51,51)'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var lines = g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToList();
+            Assert.Equal(2, lines.Count);
+
+            Assert.Equal(RColor.FromArgb(25, 25, 25), lines[0].Color);
+            Assert.Equal(RColor.FromArgb(51, 51, 51), lines[1].Color);
+        }
+
+        [Fact]
+        public async Task BorderColorPerSide_ResolvesDistinctColorPerEdge_IncludingCurrentColor()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='b' style='width:40px; height:40px; border-style:solid; border-width:4px; color: rgb(9,9,9); "
+                + "border-top-color: rgb(1,0,0); border-right-color: rgb(0,1,0); "
+                + "border-bottom-color: rgb(0,0,1); border-left-color: currentcolor'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, div, g);
+
+            var polys = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
+            Assert.Equal(4, polys.Count);
+
+            static (double X, double Y) Centroid(TestRecordingGraphics.DrawPolygonCall p) =>
+                (p.Points.Average(pt => pt.X), p.Points.Average(pt => pt.Y));
+
+            var withCentroids = polys.Select(p => (Poly: p, Centroid: Centroid(p))).ToList();
+            var top = withCentroids.OrderBy(t => t.Centroid.Y).First();
+            var bottom = withCentroids.OrderByDescending(t => t.Centroid.Y).First();
+            var left = withCentroids.OrderBy(t => t.Centroid.X).First();
+            var right = withCentroids.OrderByDescending(t => t.Centroid.X).First();
+
+            Assert.Equal(RColor.FromArgb(1, 0, 0), top.Poly.Color);
+            Assert.Equal(RColor.FromArgb(0, 1, 0), right.Poly.Color);
+            Assert.Equal(RColor.FromArgb(0, 0, 1), bottom.Poly.Color);
+            Assert.Equal(RColor.FromArgb(9, 9, 9), left.Poly.Color);
+        }
+
+        [Fact]
         public async Task BorderStyleRidge_IsMirrorImageOfGroove()
         {
             var (grooveRoot, container) = await BuildAndLayout(Wrap(
