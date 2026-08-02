@@ -1097,7 +1097,7 @@
     },
     {
       "name": "border-collapse",
-      "inherited": false,
+      "inherited": true,
       "initialValue": "separate",
       "cssDataType": "any",
       "html": {
@@ -1108,7 +1108,7 @@
     },
     {
       "name": "border-spacing",
-      "inherited": false,
+      "inherited": true,
       "initialValue": "0",
       "cssDataType": "any",
       "html": {

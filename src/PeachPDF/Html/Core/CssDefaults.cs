@@ -196,6 +196,8 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// CSS properties that are inherited from a parent element (per CSS spec and PeachPDF's InheritStyle implementation).
+        /// Forwards to the generated <see cref="CssPropertyRegistry"/> — the single, JSON-authored source of
+        /// every property's inheritance/initial-value/dispatch metadata (see CLAUDE.md's generator section).
         /// </summary>
         /// <remarks>
         /// <c>box-sizing</c> is deliberately absent: <a href="https://www.w3.org/TR/css-sizing-3/#box-sizing">CSS
@@ -210,209 +212,19 @@ namespace PeachPDF.Html.Core
         /// which (before the fix) relied on that unconditional inheritance to seed its shadow box - see
         /// <c>Parse.DomParser.ResolveFirstLineStyle</c>'s explicit re-seed.
         /// </remarks>
-        public static readonly FrozenSet<string> InheritedProperties = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
-        {
-            "border-collapse", "border-spacing",
-            "color",
-            "direction",
-            "empty-cells",
-            "font-family", "font-feature-settings", "font-palette", "font-size", "font-stretch", "font-style",
-            "font-variant-caps", "font-variant-east-asian", "font-variant-ligatures", "font-variant-numeric", "font-weight",
-            "hyphens",
-            "letter-spacing",
-            "line-height",
-            "list-style-image", "list-style-position", "list-style-type",
-            "orphans", "widows",
-            "text-align", "text-indent",
-            "text-transform",
-            "visibility",
-            "white-space",
-            "word-break",
-            "word-spacing",
-            "writing-mode",
-        }.ToFrozenSet(System.StringComparer.OrdinalIgnoreCase);
+        public static FrozenSet<string> InheritedProperties => CssPropertyRegistry.InheritedProperties;
 
         /// <summary>
-        /// The single, authoritative store of CSS spec initial values for every property PeachPDF handles.
-        /// Exposed read-only as <see cref="InitialValues"/> and read via <see cref="GetInitialValue"/>. It is
-        /// the one source used both to seed every box's defaults at the start of the cascade
-        /// (<see cref="Parse.DomParser.CascadeApplyStyles"/>, per CSS Cascade &amp; Inheritance 4 §2.1
-        /// "Defaulting") and to resolve the <c>initial</c>/<c>unset</c>/<c>revert</c> keywords — so the two can
-        /// never disagree, and there is no second copy to drift.
-        /// </summary>
-        private static readonly FrozenDictionary<string, string?> _allInitialValues = new Dictionary<string, string?>(System.StringComparer.OrdinalIgnoreCase)
-        {
-            { PropertyNames.BackgroundAttachment, CssConstants.Scroll },
-            { PropertyNames.BackgroundClip, CssConstants.BorderBox },
-            { PropertyNames.BackgroundColor, CssConstants.Transparent },
-            { PropertyNames.BackgroundImage, CssConstants.None },
-            { PropertyNames.BackgroundOrigin, CssConstants.PaddingBox },
-            { PropertyNames.BackgroundPosition, "0% 0%" },
-            { "background-repeat", CssConstants.Repeat },
-            { "background-size", $"{CssConstants.Auto} {CssConstants.Auto}" },
-            { "border-bottom-color", CssConstants.CurrentColor },
-            { "border-bottom-style", CssConstants.None },
-            { "border-bottom-width", CssConstants.Medium },
-            { "border-bottom-left-radius", "0" },
-            { "border-bottom-right-radius", "0" },
-            { "border-collapse", "separate" },
-            { "border-left-color", CssConstants.CurrentColor },
-            { "border-left-style", CssConstants.None },
-            { "border-left-width", CssConstants.Medium },
-            { "border-right-color", CssConstants.CurrentColor },
-            { "border-right-style", CssConstants.None },
-            { "border-right-width", CssConstants.Medium },
-            { "border-spacing", "0" },
-            { "border-top-color", CssConstants.CurrentColor },
-            { "border-top-style", CssConstants.None },
-            { "border-top-width", CssConstants.Medium },
-            { "border-top-left-radius", "0" },
-            { "border-top-right-radius", "0" },
-            { "bottom", CssConstants.Auto },
-            { PropertyNames.BoxDecorationBreak, CssConstants.Slice },
-            { "box-sizing", CssConstants.ContentBox },
-            { "break-after", CssConstants.Auto },
-            { "break-before", CssConstants.Auto },
-            { "break-inside", CssConstants.Auto },
-            { "clear", CssConstants.None },
-            { "color", "black" },
-            { "column-count", CssConstants.Auto },
-            { "column-width", CssConstants.Auto },
-            { "column-fill", "balance" },
-            { "column-span", CssConstants.None },
-            { "column-rule-width", CssConstants.Medium },
-            { "column-rule-style", CssConstants.None },
-            { "column-rule-color", CssConstants.CurrentColor },
-            { "content", CssConstants.Normal },
-            { "counter-increment", CssConstants.None },
-            { "counter-reset", CssConstants.None },
-            { "counter-set", CssConstants.None },
-            { "direction", "ltr" },
-            { "display", CssConstants.Inline },
-            { "empty-cells", "show" },
-            { "float", CssConstants.None },
-            // The initial font-family is UA-defined (CSS Fonts 4 §2.2); PeachPDF's UA default is the
-            // platform-resolved default font, matching what an unset family falls back to at font realization.
-            { "font-family", CssConstants.DefaultFont },
-            { "font-size", CssConstants.Medium },
-            { "font-stretch", CssConstants.Normal },
-            { "font-style", CssConstants.Normal },
-            { "font-variant-caps", CssConstants.Normal },
-            { "font-variant-ligatures", CssConstants.Normal },
-            { "font-variant-numeric", CssConstants.Normal },
-            { "font-variant-east-asian", CssConstants.Normal },
-            { "font-feature-settings", CssConstants.Normal },
-            { "font-weight", CssConstants.Normal },
-            { "height", CssConstants.Auto },
-            { "hyphens", "manual" },
-            { "left", CssConstants.Auto },
-            { "line-height", CssConstants.Normal },
-            { "list-style-image", CssConstants.None },
-            { "list-style-position", CssConstants.Outside },
-            { "list-style-type", "disc" },
-            { "margin-bottom", "0" },
-            { "margin-left", "0" },
-            { "margin-right", "0" },
-            { "margin-top", "0" },
-            { "max-width", CssConstants.None },
-            { "max-height", CssConstants.None },
-            { "min-width", "0" },
-            { "min-height", "0" },
-            { "orphans", "2" },
-            { "widows", "2" },
-            { "overflow", "visible" },
-            { "padding-bottom", "0" },
-            { "padding-left", "0" },
-            { "padding-right", "0" },
-            { "padding-top", "0" },
-            // css-break-3 §3.3: the legacy page-break-* aliases share their break-* counterparts'
-            // storage, but need their own entries so "initial"/"unset"/"revert" resolve on either spelling.
-            // They must stay equal to the break-* entries above - the seed loop writes both to the same
-            // CssBox field in unspecified dictionary order, so a divergent pair would pick a winner at random.
-            { "page-break-after", CssConstants.Auto },
-            { "page-break-before", CssConstants.Auto },
-            { "page-break-inside", CssConstants.Auto },
-            { PropertyNames.PdfTagType, CssConstants.Auto },
-            { "position", "static" },
-            { "right", CssConstants.Auto },
-            { "string-set", CssConstants.None },
-            { "text-align", CssConstants.Start },
-            { "text-decoration-color", CssConstants.CurrentColor },
-            { "text-decoration-line", CssConstants.None },
-            { "text-decoration-style", CssConstants.Solid },
-            { "text-indent", "0" },
-            { "text-transform", CssConstants.None },
-            { "top", CssConstants.Auto },
-            { "transform", CssConstants.None },
-            { "clip-path", CssConstants.None },
-            { "aspect-ratio", CssConstants.Auto },
-            { "box-shadow", CssConstants.None },
-            { "transform-origin", "50% 50% 0" },
-            { "opacity", "1" },
-            { "unicode-bidi", CssConstants.Normal },
-            { "vertical-align", "baseline" },
-            { "visibility", "visible" },
-            { "white-space", CssConstants.Normal },
-            { "width", CssConstants.Auto },
-            { "word-break", CssConstants.Normal },
-            { "word-spacing", CssConstants.Normal },
-            { "letter-spacing", CssConstants.Normal },
-            { "writing-mode", Keywords.HorizontalTb },
-            { "z-index", CssConstants.Auto },
-
-            // Flex container/item, Grid container/item, object-fit/position, font-palette, and page were
-            // missing entirely until the ComputedStyle-per-area split - meaning "initial"/"unset"/"revert"
-            // on any of them was a silent no-op (DomParser.AssignCssBlock's `value is null` short-circuit).
-            // Added here so every property has exactly one initial-value source; most values match the
-            // real CSS spec initial value, with two pragmatic exceptions carried over unchanged from what
-            // ComputedStyle's own field initializers already used (not introduced by this change):
-            // - row-gap/column-gap: css-align-3 §8.1's real initial value is "normal", not "0" - which
-            //   ends up equivalent to 0 for flex/grid but is 1em for multicol. CssLayoutEngineColumns
-            //   already special-cases the stored "0" to mean "1em" for multicol's own column-gap reads,
-            //   so this is a shared, already-compensated-for value, not a plain spec mismatch.
-            // - justify-items: css-align-3 §6.2's real initial value is "legacy", which nothing in this
-            //   codebase parses or acts on (only plain alignment keywords are supported) - "normal" is a
-            //   deliberate stand-in until "legacy <side>" support exists.
-            { PropertyNames.FlexDirection, "row" },
-            { PropertyNames.FlexWrap, "nowrap" },
-            { PropertyNames.JustifyContent, CssConstants.Normal },
-            { PropertyNames.AlignItems, CssConstants.Normal },
-            { PropertyNames.AlignContent, CssConstants.Normal },
-            { PropertyNames.FlexGrow, "0" },
-            { PropertyNames.FlexShrink, "1" },
-            { PropertyNames.FlexBasis, CssConstants.Auto },
-            { PropertyNames.AlignSelf, CssConstants.Auto },
-            { PropertyNames.Order, "0" },
-            { PropertyNames.RowGap, "0" },
-            { PropertyNames.ColumnGap, "0" },
-            { PropertyNames.GridTemplateColumns, CssConstants.None },
-            { PropertyNames.GridTemplateRows, CssConstants.None },
-            { PropertyNames.GridTemplateAreas, CssConstants.None },
-            { PropertyNames.GridAutoColumns, CssConstants.Auto },
-            { PropertyNames.GridAutoRows, CssConstants.Auto },
-            { PropertyNames.GridAutoFlow, CssConstants.Row },
-            { PropertyNames.JustifyItems, CssConstants.Normal },
-            { PropertyNames.JustifySelf, CssConstants.Auto },
-            { PropertyNames.GridColumnStart, CssConstants.Auto },
-            { PropertyNames.GridColumnEnd, CssConstants.Auto },
-            { PropertyNames.GridRowStart, CssConstants.Auto },
-            { PropertyNames.GridRowEnd, CssConstants.Auto },
-            { PropertyNames.ObjectFit, CssConstants.Fill },
-            { PropertyNames.ObjectPosition, "50% 50%" },
-            { PropertyNames.FontPalette, CssConstants.Normal },
-            // CSS Paged Media 3's `page` initial value is `auto`; CssBox.HasExplicitPageName already
-            // treats "auto" and empty-string equivalently, so this is safe alongside the pre-existing
-            // string.Empty some code paths use as a sentinel.
-            { PropertyNames.PageName, CssConstants.Auto },
-        }.ToFrozenDictionary(System.StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// Returns the CSS spec initial value for the given property name, or null if unknown.
+        /// Returns the CSS spec initial value for the given property name, or null if unknown. Forwards to
+        /// <see cref="CssPropertyRegistry.GetInitialValue"/> — the single source used both to seed every box's
+        /// defaults at the start of the cascade (<see cref="Parse.DomParser.CascadeApplyStyles"/>, per CSS
+        /// Cascade &amp; Inheritance 4 §2.1 "Defaulting") and to resolve the <c>initial</c>/<c>unset</c>/
+        /// <c>revert</c> keywords — so the two can never disagree, and there is no second copy to drift.
         /// </summary>
         public static string? GetInitialValue(string propertyName) =>
-            _allInitialValues.TryGetValue(propertyName, out var v) ? v : null;
+            CssPropertyRegistry.GetInitialValue(propertyName);
 
         /// <summary>The single initial-value store, exposed read-only so the cascade can seed every box from it.</summary>
-        public static IReadOnlyDictionary<string, string?> InitialValues => _allInitialValues;
+        public static IReadOnlyDictionary<string, string?> InitialValues => CssPropertyRegistry.InitialValues;
     }
 }

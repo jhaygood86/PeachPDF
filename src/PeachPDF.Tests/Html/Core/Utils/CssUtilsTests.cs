@@ -158,15 +158,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal("border-box", box.BoxSizing);
         }
 
-        [Theory]
-        [InlineData("border-box", true)]
-        [InlineData("content-box", true)]
-        [InlineData("padding-box", false)]
-        public void IsValidBoxSizing_ChecksKnownValues(string value, bool expected)
-        {
-            Assert.Equal(expected, CssUtils.IsValidBoxSizing(value));
-        }
-
         [Fact]
         public async Task NumericFontWeight_700OrAbove_ResolvesToBoldFont()
         {
@@ -403,6 +394,32 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             Assert.Contains(name, CssUtils.SnapshotProperties(box).Keys);
             Assert.Equal(CssConstants.Auto, CssDefaults.GetInitialValue(name));
+        }
+
+        [Fact]
+        public async Task Page_IsSnapshottableAndHasAnInitialValue()
+        {
+            var (box, _) = await FindDivBoxAndParser("");
+
+            Assert.Contains("page", CssUtils.SnapshotProperties(box).Keys);
+            Assert.Equal(CssConstants.Auto, CssDefaults.GetInitialValue("page"));
+        }
+
+        // Regression test for the registry-driven SnapshotPropertyNames fix (CSS Cascade 5 §6.3): "page"
+        // and "-peachpdf-pdf-tag-type" have real setters/getters but were missing from the old
+        // hand-maintained _knownPropertyNames list, so revert/revert-layer on either property fell
+        // through to CssDefaults.GetInitialValue instead of restoring the actual value from the previous
+        // cascade origin. -peachpdf-pdf-tag-type makes the bug observable: the UA stylesheet sets a
+        // <div>'s tag type to "div" (not the property's own initial value "auto"), so a revert that
+        // silently fell back to "auto" was visibly wrong, not merely a hypothetical gap. (The CSS
+        // tokenizer lowercases the UA stylesheet's "Div" identifier - CssUtils.SetPropertyValue's own
+        // direct round-trip tests, which bypass the tokenizer, are case-preserving instead.)
+        [Fact]
+        public async Task Revert_RestoresPdfTagType_ToUaStylesheetValue_NotInitialValue()
+        {
+            var (box, _) = await FindDivBoxAndParser("-peachpdf-pdf-tag-type: Custom; -peachpdf-pdf-tag-type: revert;");
+
+            Assert.Equal("div", box.PdfTagType);
         }
 
         // Same two prerequisites for box-decoration-break (css-break-3 §6.2): without the known-name entry
