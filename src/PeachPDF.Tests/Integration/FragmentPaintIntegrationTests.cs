@@ -153,6 +153,34 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(recording.DrawStringCalls, c => c.Text.Contains("SpannedCell"));
         }
 
+        [Fact]
+        public async Task VisibilityHidden_ReservesLayoutSpace_ButPaintsNothing_VisibleSiblingStillPaints()
+        {
+            // Unlike display:none (which removes the box from layout entirely), visibility:hidden must
+            // still reserve its own space - the visible sibling starts right after it, not overlapping.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div id='hidden' style='visibility:hidden;height:50pt;background:rgb(10,20,30)'>Hidden</div>"
+                    + "<div id='visible' style='height:50pt;background:rgb(40,50,60)'>Visible</div>"),
+                pageHeight: 300, margin: 0);
+
+            var hidden = LayoutHarness.FindById(root, "hidden")!;
+            var visible = LayoutHarness.FindById(root, "visible")!;
+
+            Assert.Equal(hidden.ActualBottom, visible.Location.Y, 1);
+
+            var recording = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, recording, 0);
+
+            Assert.DoesNotContain(recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
+                r => r.Color == RColorOf(10, 20, 30));
+            Assert.DoesNotContain(recording.DrawStringCalls, c => c.Text.Contains("Hidden"));
+
+            Assert.Contains(recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
+                r => r.Color == RColorOf(40, 50, 60));
+            Assert.Contains(recording.DrawStringCalls, c => c.Text.Contains("Visible"));
+        }
+
         private static RColor RColorOf(int r, int g, int b) =>
             RColor.FromArgb(r, g, b);
 

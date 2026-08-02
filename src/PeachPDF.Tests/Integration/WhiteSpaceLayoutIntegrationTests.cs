@@ -118,6 +118,31 @@ namespace PeachPDF.Tests.Integration
                 "expected ordinary space to still allow wrapping, for contrast with nbsp");
         }
 
+        // ─── word-break: break-all forces a mid-word break normal cannot find ──────
+
+        [Fact]
+        public async Task BreakAll_ForcesMidWordBreak_ContrastNormal()
+        {
+            // A single unbroken run with no space anywhere: "normal" has no break opportunity at all
+            // and must lay the whole word out on one (overflowing) line, while "break-all" must wrap it.
+            const string longWord = "abcdefghijklmnopqrstuvwxyz";
+
+            var (normalRoot, _) = await BuildAndLayout(Wrap($"<p id='p' style='width:50pt'>{longWord}</p>"));
+            var pNormal = FindById(normalRoot, "p")!;
+
+            var (breakAllRoot, _) = await BuildAndLayout(
+                Wrap($"<p id='p' style='width:50pt; word-break:break-all'>{longWord}</p>"));
+            var pBreakAll = FindById(breakAllRoot, "p")!;
+
+            // An overflowing word can push a leading empty line box ahead of it regardless of
+            // word-break - count only the lines that actually carry part of the word.
+            static int LinesWithWordContent(CssBox box) =>
+                box.LineBoxes.Count(lb => lb.Words.Any(w => !string.IsNullOrEmpty(w.Text)));
+
+            Assert.Equal(1, LinesWithWordContent(pNormal));
+            Assert.True(LinesWithWordContent(pBreakAll) > 1, "expected break-all to force a mid-word break");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
