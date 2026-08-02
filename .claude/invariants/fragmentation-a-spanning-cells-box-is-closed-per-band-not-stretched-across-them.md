@@ -39,12 +39,24 @@ Three rules the close depends on, each of which cost something to find:
   the `PageBreakBottoms` entry its own table wrote, and the bottom border clipped to that entry would be
   drawn across the cell. Raise the record rather than closing the cell at it — see the next rule for why
   the close cannot give way.
-- **It may never close above the cell's own content.** Only the *box* is fragmented; what lies below the
-  close is then inside no fragment at all. Measured as ~100 unclaimed words in
-  `TableCellBreakTokenTests.APaginatingTable_DropsNoWord`, which is the suite's word census and the
-  thing that catches it. A cell whose content overflows its band keeps the stretched box — that case
-  wants the flow-level continuation §6.1 asks for, which is not the box close's to invent
-  ([its gap file](../accepted-gaps/table-a-rowspan-cells-own-content-is-not-continued-past-its-band.md)).
+- **It may never close above the cell's own content, but closing *at* a band the content already
+  occupies is safe — `FragmentEmitter.ShellIn` is consulted only for a band its real per-pass walk found
+  nothing in at all.** A rowspan cell whose own content needs more than one band stops and resumes
+  exactly like any other box, through the table's ordinary per-cell continuation
+  (`TableRowCursor.UnfinishedCells`/`Continuation`), so its real fragments already exist in every band it
+  actually occupies by the time `CloseSpanningCell` runs for its ending row — stating a continuation
+  shell over one of those bands too is discarded outright rather than merely redundant, never a risk of
+  displacing the real content ([issue #521](https://github.com/jhaygood86/PeachPDF/issues/521)).
+- **Where the content reaches into the very band the row ending the span lands in, there is no later,
+  empty band left to state a shell over, and the close cannot use the `cellSlot`-band arithmetic above at
+  all.** `CloseSpanningCell` asks `SlotEndingAt(contentBottom)` against `slot` for exactly this: when the
+  content's own band is `>= slot`, the close is `Math.Max(rowMaxBottom, contentBottom)`, not
+  `Math.Max(PageBottomOf(cellSlot), ...)` — closing at `cellSlot`'s own band-foot in this shape closed the
+  box *above* the row's remaining span (measured: the rowspan's other rows in that same band lost their
+  tint and border entirely, rendering `paged_media_table_rowspan_break`'s own Q4 fixture). `PageBreakBottoms[slot]`
+  has to be created here, not merely raised like the `cellSlot` entry below — nothing else has necessarily
+  written a slice-bottom for the band the row loop is still filling, unlike a band it has already broken
+  away from.
 - **Each cell is closed exactly once per row.** `boxesToVerticallyAlign` is
   `row.Boxes ∪ boxesThatEndOnRow`, so a spanning cell arrives twice, and
   `CssLayoutEngine.ApplyCellVerticalAlignment` **offsets a subtree rather than assigning a position** —

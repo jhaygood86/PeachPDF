@@ -2120,6 +2120,12 @@ await SaveShowcaseAsync("paged_media_table_tall_row", "Paged Media", "Table Row 
 // through the page edge (issue #511). The row that *ends* the span is carried onto the next page whole,
 // like any other row; it used to be the one case the row loop declined to move.
 //
+// Q4 adds a second shape, this time on the Note column itself: its rowspan cell's own content is long
+// enough to overflow the page it opened on *by itself*, before the row that ends the span - two pages
+// later - is even reached (issue #521). Before that fix the cell's box was left stretched across every
+// page in between rather than genuinely continued - visible as the tint and border running past this
+// page's own foot instead of closing there and reopening on the next.
+//
 // The tint and the border on the spanning cell are the whole point of the fixture: the change is
 // entirely in where that cell's box begins and ends, and a cell with no background cannot show it.
 var rowspanBreakHtml = """
@@ -2134,6 +2140,7 @@ var rowspanBreakHtml = """
     thead th { background: #e2e8f0; font-size: 8pt; text-align: left }
     td.quarter { background: #cffafe; border-left: 2pt solid #0e7490; font-weight: bold;
                  vertical-align: middle; text-align: center }
+    td.overflowing { background: #cffafe; border-left: 2pt solid #0e7490 }
     td.wide { height: 46pt }
     </style></head><body>
     <h1>A rowspan across a page break</h1>
@@ -2150,6 +2157,21 @@ var rowspanBreakHtml = """
         <tr><td>June</td><td class="wide">So this row, which ends the span, is carried over whole.</td></tr>
         <tr><td class="quarter" rowspan="2">Q3</td><td>July</td><td class="wide">A third span, after the break.</td></tr>
         <tr><td>August</td><td class="wide">Closing the table.</td></tr>
+        <tr><td>Q4</td><td>October</td><td class="overflowing" rowspan="3">
+          This note is deliberately long, on purpose: long enough that the spanning cell's own content
+          overflows the page it opened on before the row that ends the span is even reached. The cell's
+          box now closes at the foot of every page it passes through and reopens at the head of the
+          next, rather than one box stretched from where it opened all the way to where the span ends.
+          Padding this out with enough further sentences to make that genuinely happen on an A6 page is
+          the whole point of this paragraph, so here are several more: the quarterly close took longer
+          than usual this year because two suppliers changed their invoicing format at the same time,
+          and reconciling both against the ledger by hand consumed most of the first week alone. A third
+          supplier's statement arrived a full month late, which pushed the final reconciliation past the
+          date this note was meant to be filed by, and that in turn delayed the quarter's own closing
+          meeting by several more days than anyone had planned for going into it.
+        </td></tr>
+        <tr><td class="wide">Q4</td><td class="wide">November</td></tr>
+        <tr><td class="wide">Q4</td><td class="wide">December</td></tr>
       </tbody>
     </table>
     </body></html>
@@ -2162,7 +2184,9 @@ await SaveShowcaseAsync("paged_media_table_rowspan_break", "Paged Media", "Rowsp
     + "carried onto the next page whole, like any other row, rather than being left straddling the "
     + "boundary and drawn cut through by it. This is what both other engines do: Gecko re-reflows the "
     + "spanning cell against the remaining space and continues it, and Blink treats every cell as its "
-    + "own §2.1 parallel flow.",
+    + "own §2.1 parallel flow. Q4 adds the case where the cell's own content, not just its span, "
+    + "overflows the page it opened on: it is fragmented across every page it passes through rather "
+    + "than left stretched from where it opened to where the span ends (issue #521).",
     rowspanBreakHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
 // ── whether a <thead> repeats at all ───────────────────────────────────────
