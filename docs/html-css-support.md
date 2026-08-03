@@ -922,7 +922,7 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 | `:not(S)` | Matches an element that does not match `S`. Nesting `:not()` inside `:not()` (e.g. `:not(:not(.foo))`) is rejected — the whole enclosing selector is invalid and the rule matches nothing |
 | `:is(S)`, `:matches(S)` | Matches an element that matches any selector in the (comma-separated, forgiving) list `S`. `:matches()` is the legacy alias for `:is()` |
 | `:where(S)` | Like `:is(S)`, but always contributes **zero specificity** (CSS Selectors 4 §16) — so a rule written with `:where(…)` is overridden by any normal selector, which is how reset/normalize layers stay low-priority |
-| `:has(S)` | Matches an element with a descendant matching `S`; `S` may be a comma-separated selector list. Only the default descendant relationship is supported — CSS4 leading-combinator forms (`:has(> S)`, `:has(+ S)`, `:has(~ S)`) are not supported and are silently discarded by the parser |
+| `:has(S)` | Matches an element with a descendant matching `S`; `S` may be a comma-separated, forgiving relative-selector list. Each alternative may carry its own leading combinator: `:has(S)`/`:has(> S)`/`:has(+ S)`/`:has(~ S)` match a descendant/direct child/next sibling/any following sibling matching `S`, respectively (e.g. `:has(> .a, + .b)` mixes forms across alternatives) |
 | `:-webkit-any(S)`, `:-moz-any(S)` | The legacy vendor spellings of `:is(S)`, with identical behaviour |
 | All others | Parsed but not matched — rules are silently ignored |
 

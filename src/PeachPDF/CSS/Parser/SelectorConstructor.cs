@@ -14,6 +14,8 @@ namespace PeachPDF.CSS
         private ISelector _temp;
         private ListSelector _group;
         private ComplexSelector _complex;
+        private Combinator _pendingLeadingCombinator = Combinator.Descendent;
+        private List<Combinator> _leadingCombinators;
         private string _attrName;
         private string _attrValue;
         private string _attrOp;
@@ -99,6 +101,54 @@ namespace PeachPDF.CSS
             return _group;
         }
 
+        /// <summary>
+        /// Like <see cref="GetResult"/>, but wraps each (possibly comma-separated) alternative with the
+        /// leading combinator captured for it, for :has()'s forgiving-relative-selector-list grammar
+        /// (CSS Selectors 4 §4.5) - only HasFunctionState calls this. An alternative whose leading
+        /// combinator is anything other than child/adjacent-sibling/sibling (the default descendant
+        /// case, and any other combinator that can reach this position, e.g. a namespace pipe) is
+        /// returned unwrapped, reproducing the pre-existing behavior for those cases exactly.
+        /// </summary>
+        public ISelector GetRelativeResult()
+        {
+            if (!IsValid) return new UnknownSelector();
+
+            if (_complex != null)
+            {
+                _complex.ConcludeSelector(_temp);
+                _temp = _complex;
+                _complex = null;
+            }
+
+            var alternativeCount = (_group?.Length ?? 0) + (_temp != null ? 1 : 0);
+            if (alternativeCount == 0) return AllSelector.Create();
+
+            if (alternativeCount == 1)
+            {
+                return _temp != null
+                    ? WrapRelative(_pendingLeadingCombinator, _temp)
+                    : WrapRelative(_leadingCombinators[0], _group[0]);
+            }
+
+            var list = new ListSelector();
+            if (_group != null)
+            {
+                for (var i = 0; i < _group.Length; i++)
+                    list.Add(WrapRelative(_leadingCombinators[i], _group[i]));
+            }
+            if (_temp != null)
+            {
+                list.Add(WrapRelative(_pendingLeadingCombinator, _temp));
+            }
+            return list;
+        }
+
+        private static ISelector WrapRelative(Combinator combinator, ISelector selector) =>
+            combinator == Combinator.Child || combinator == Combinator.AdjacentSibling ||
+            combinator == Combinator.Sibling
+                ? new RelativeSelector(combinator, selector)
+                : selector;
+
         public void Apply(Token token)
         {
             if (token.Type == TokenType.Comment) return;
@@ -147,6 +197,8 @@ namespace PeachPDF.CSS
             _temp = null;
             _group = null;
             _complex = null;
+            _pendingLeadingCombinator = Combinator.Descendent;
+            _leadingCombinators = null;
             _valid = true;
             IsNested = false;
             _ready = true;
@@ -374,6 +426,10 @@ namespace PeachPDF.CSS
                 _group.Add(_temp);
             }
 
+            _leadingCombinators ??= new List<Combinator>();
+            _leadingCombinators.Add(_pendingLeadingCombinator);
+            _pendingLeadingCombinator = Combinator.Descendent;
+
             _temp = null;
         }
 
@@ -399,6 +455,7 @@ namespace PeachPDF.CSS
             }
             else
             {
+                _pendingLeadingCombinator = _combinators.Count > 0 ? GetCombinator() : Combinator.Descendent;
                 _combinators.Clear();
                 _temp = selector;
             }
@@ -606,7 +663,7 @@ namespace PeachPDF.CSS
             public override ISelector Produce()
             {
                 var valid = _nested.IsValid;
-                var sel = _nested.GetResult();
+                var sel = _nested.GetRelativeResult();
 
                 return valid ? new HasSelector(sel) : null;
             }

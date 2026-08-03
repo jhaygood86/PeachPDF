@@ -1165,14 +1165,127 @@ namespace PeachPDF.Html.Core
 
         private static bool DoesSelectorMatch(HasSelector hasSelector, ICssDomNode? node)
         {
-            return node is not null && HasDescendantMatch(node, hasSelector.Inner);
+            return node is not null && HasRelativeMatch(node, hasSelector.Inner);
+        }
+
+        /// <summary>
+        /// Evaluates :has()'s (possibly comma-separated) relative-selector-list argument against node,
+        /// treating node as the implicit :scope. A <see cref="RelativeSelector"/> alternative walks its
+        /// complex-selector chain forward from node via <see cref="MatchesRelativeChain"/>, anchoring
+        /// the chain's FIRST compound to node via the leading combinator (CSS Selectors 4 §4.5); anything
+        /// else (a plain selector - the default descendant case) falls back to
+        /// <see cref="HasDescendantMatch"/>. See SelectorConstructor.GetRelativeResult() for how
+        /// <see cref="HasSelector.Inner"/> gets built.
+        /// </summary>
+        private static bool HasRelativeMatch(ICssDomNode node, ISelector inner)
+        {
+            if (inner is ListSelector list) return list.Any(alt => HasRelativeMatch(node, alt));
+
+            if (inner is RelativeSelector relative)
+                return MatchesRelativeChain(node, relative.Combinator, relative.Selector);
+
+            return HasDescendantMatch(node, inner);
+        }
+
+        /// <summary>
+        /// Walks a :has() relative selector's complex-selector chain forward from anchor: the chain's
+        /// FIRST compound is related to anchor via combinator (the relative selector's leading
+        /// combinator), and each subsequent compound is related to the PREVIOUS compound's match via
+        /// that compound's own internal combinator (its <see cref="ComplexSelector"/> entry's
+        /// Delimiter) - e.g. for ":has(&gt; .a .b)", ".a" must be a direct child of :scope, and ".b" a
+        /// descendant of THAT ".a" match, not of :scope directly. This is a forward search (existence of
+        /// a valid subject reachable from anchor), unlike <see cref="DoesSelectorMatch(ComplexSelector, ICssDomNode?)"/>'s
+        /// backward walk from a fixed subject up through its ancestors - anchoring the WHOLE chain
+        /// against a single one-hop candidate (as if testing "does this direct child match '.a .b' as
+        /// its own subject") would wrongly require the anchor's child itself to satisfy the chain's LAST
+        /// compound instead of its first.
+        /// </summary>
+        private static bool MatchesRelativeChain(ICssDomNode anchor, Combinator combinator, ISelector selector)
+        {
+            if (selector is ComplexSelector complex)
+                return MatchesChainStep(anchor, combinator, complex.ToList(), 0);
+
+            return RelativeCandidates(anchor, combinator).Any(candidate => DoesSelectorMatch(selector, candidate));
+        }
+
+        private static bool MatchesChainStep(ICssDomNode anchor, Combinator combinator,
+            IReadOnlyList<CombinatorSelector> entries, int index)
+        {
+            var compound = entries[index].Selector;
+            if (compound is null) return false;
+
+            foreach (var candidate in RelativeCandidates(anchor, combinator))
+            {
+                if (!DoesSelectorMatch(compound, candidate)) continue;
+                if (index == entries.Count - 1) return true;
+                if (MatchesChainStep(candidate, DelimiterToCombinator(entries[index].Delimiter), entries, index + 1))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>Element nodes related to anchor via combinator - direct children, the immediate next sibling, following siblings, or (default/anything unrecognized) any-depth descendants - each filtered to real elements (TagName is not null), skipping anonymous/text nodes.</summary>
+        private static IEnumerable<ICssDomNode> RelativeCandidates(ICssDomNode anchor, Combinator combinator)
+        {
+            if (combinator == Combinator.Child)
+                return anchor.Children.Where(c => c.TagName is not null);
+
+            if (combinator == Combinator.AdjacentSibling)
+            {
+                var next = GetNextSiblingElement(anchor);
+                return next is null ? [] : [next];
+            }
+
+            if (combinator == Combinator.Sibling) return FollowingSiblingElements(anchor);
+
+            return AllDescendants(anchor);
+        }
+
+        private static Combinator DelimiterToCombinator(string? delimiter) => delimiter switch
+        {
+            Combinators.Child => Combinator.Child,
+            Combinators.Adjacent => Combinator.AdjacentSibling,
+            Combinators.Sibling => Combinator.Sibling,
+            _ => Combinator.Descendent
+        };
+
+        /// <summary>The next element sibling (skipping anonymous/text nodes) after node, in document order - the forward analogue of the preceding-sibling walk in DoesSelectorMatch(ComplexSelector, node)'s "+"/"~" cases, used for :has(+ S)/:has(~ S).</summary>
+        private static ICssDomNode? GetNextSiblingElement(ICssDomNode node)
+        {
+            var parent = node.Parent;
+            if (parent is null) return null;
+            var siblings = parent.Children.Where(b => b.TagName is not null).ToList();
+            var idx = siblings.IndexOf(node);
+            return idx >= 0 && idx + 1 < siblings.Count ? siblings[idx + 1] : null;
+        }
+
+        /// <summary>Every element sibling following node, in document order - materializes the filtered sibling list once rather than re-walking parent.Children on each step (unlike a GetNextSiblingElement chain, which is O(n^2) over a long run of siblings).</summary>
+        private static IEnumerable<ICssDomNode> FollowingSiblingElements(ICssDomNode node)
+        {
+            var parent = node.Parent;
+            if (parent is null) yield break;
+
+            var siblings = parent.Children.Where(b => b.TagName is not null).ToList();
+            var idx = siblings.IndexOf(node);
+            if (idx < 0) yield break;
+
+            for (var i = idx + 1; i < siblings.Count; i++) yield return siblings[i];
+        }
+
+        private static IEnumerable<ICssDomNode> AllDescendants(ICssDomNode node)
+        {
+            foreach (var child in node.Children)
+            {
+                yield return child;
+                foreach (var descendant in AllDescendants(child)) yield return descendant;
+            }
         }
 
         /// <summary>
         /// Recursively searches box's descendants (at any depth) for one matching inner, short-
         /// circuiting on the first hit - mirrors the shape of DomUtils.GetBoxById/GetBoxByTagName.
-        /// Backs :has()'s default (descendant) relative-selector form; leading-combinator forms
-        /// (":has(&gt; x)"/"+"/"~") aren't supported - see HasSelector's doc comment.
+        /// Backs :has()'s default (descendant) relative-selector form.
         /// </summary>
         private static bool HasDescendantMatch(ICssDomNode node, ISelector inner)
         {
