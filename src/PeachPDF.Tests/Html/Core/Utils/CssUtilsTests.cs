@@ -590,6 +590,32 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(valid, CssUtils.GetPropertyValue(box, name));
         }
 
+        // Issue #598: a keyword-valued property must accept a non-canonical-case spelling and store it
+        // canonicalized — not just validate it. "column-width: AUTO" is the issue's own motivating example
+        // (previously rejected, unlike "width: AUTO"); "object-fit"/"width" prove the same generator fix
+        // also closes the latent storage bug in properties that were already case-insensitive.
+        [Theory]
+        [InlineData("column-width", "AUTO", "auto")]
+        [InlineData("width", "AUTO", "auto")]
+        [InlineData("box-sizing", "BORDER-BOX", "border-box")]
+        [InlineData("display", "BLOCK", "block")]
+        [InlineData("overflow", "AUTO", "auto")]
+        [InlineData("text-align", "CENTER", "center")]
+        [InlineData("border-top-style", "SOLID", "solid")]
+        [InlineData("flex-direction", "ROW", "row")]
+        [InlineData("justify-content", "CENTER", "center")]
+        [InlineData("column-span", "ALL", "all")]
+        [InlineData("object-fit", "COVER", "cover")]
+        public async Task SetPropertyValue_KeywordValue_AcceptsNonCanonicalCaseAndStoresCanonically(
+            string name, string nonCanonical, string canonical)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, name, nonCanonical);
+
+            Assert.Equal(canonical, CssUtils.GetPropertyValue(box, name));
+        }
+
         // --- font-variant shorthand combinator + prince-opentype decomposition ---
 
         [Fact]

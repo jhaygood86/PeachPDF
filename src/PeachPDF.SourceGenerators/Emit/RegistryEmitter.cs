@@ -141,7 +141,36 @@ namespace PeachPDF.SourceGenerators.Emit
                 return $"box.{html.PropertyPath} = CssProperty<{dt.EnumType}>.FromCssText(value, {dt.KeywordMap}, {dt.Fallback});";
             }
 
+            // A case-insensitively-matched keyword (plain "keyword", or the keyword side of a union like
+            // "length" | "keyword") must be stored in its canonical (as-authored-in-JSON) casing, not the
+            // raw input — every downstream layout/paint comparison against this field is an ordinal match
+            // against a lowercase CssConstants.* literal, so an uncanonicalized "BLOCK" would validate but
+            // then silently fail to match anything (issue #598). A non-keyword value (e.g. an actual length
+            // for a union property) falls through the chain unchanged.
+            var hasCaseInsensitiveKeyword = entry.KeywordComparison != KeywordComparison.Ordinal &&
+                                             entry.CssDataTypes.Any(dt => dt.Kind == DataTypeKind.Keyword);
+            if (hasCaseInsensitiveKeyword)
+                return $"box.{html.PropertyPath} = {BuildKeywordCanonicalizationExpression(entry.SupportedValues, entry.KeywordComparison)};";
+
             return $"box.{html.PropertyPath} = value;";
+        }
+
+        /// <summary>Maps a case-insensitively-matched keyword back to its canonical spelling from
+        /// <paramref name="supportedValues"/>; a value matching none of them (already validated as
+        /// something else, e.g. a length) passes through unchanged.</summary>
+        private static string BuildKeywordCanonicalizationExpression(IReadOnlyList<string>? supportedValues,
+            KeywordComparison keywordComparison)
+        {
+            var values = supportedValues ?? Array.Empty<string>();
+            if (values.Count == 0) return "value";
+
+            var comparison = keywordComparison == KeywordComparison.OrdinalIgnoreCase
+                ? "global::System.StringComparison.OrdinalIgnoreCase"
+                : "global::System.StringComparison.InvariantCultureIgnoreCase";
+
+            var chain = string.Concat(values.Select(v =>
+                $"value.Equals({StringLiteral(v)}, {comparison}) ? {StringLiteral(v)} : "));
+            return chain + "value";
         }
 
         private static void EmitHtmlSetterDictionary(StringBuilder sb, List<PropertyEntry> entries)
