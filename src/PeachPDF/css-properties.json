@@ -1545,7 +1545,7 @@
       "name": "text-indent",
       "inherited": true,
       "initialValue": "0",
-      "cssDataType": "length",
+      "cssDataType": "cssom",
       "html": {
         "propertyPath": "TextIndent",
         "csharpDataType": "string",

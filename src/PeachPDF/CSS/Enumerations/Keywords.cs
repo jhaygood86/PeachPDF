@@ -94,6 +94,8 @@
         public static readonly string SpaceAround = "space-around";
         public static readonly string SpaceEvenly = "space-evenly";
         public static readonly string Justify = "justify";
+        public static readonly string Hanging = "hanging";
+        public static readonly string EachLine = "each-line";
         public static readonly string Underline = "underline";
         public static readonly string Overline = "overline";
         public static readonly string LineThrough = "line-through";
