@@ -11,14 +11,18 @@ opacity-modifier syntax (`bg-[#2563eb]/50`) to `color-mix()`, so roughly half of
 isn't a bare `#hex`/`rgb()`/`rgba()` (named colors, `hsl()`, `oklch()`, `color-mix()`, ...). It called
 `GetCssTokens(substring)` with the default `inValueContext: false`. `Lexer`'s `#`-handling branches on
 `IsInValue`: `false` routes through `HashStart()`, which requires the *first* character after `#` to be a
-name-**start** code point (CSS Syntax §4.3.4) — a letter passes, but a digit doesn't, so `#2563eb` fell
-through to `NewDelimiter('#')` (a bare `#` token) instead of a `Hash` token, and the rest of the string
-tokenized as unrelated number/ident tokens `ColorFunctionExtensions.ToResolvedColor` never recognized.
-`true` routes through `ColorLiteral()` instead, which classifies purely on whether every character is a hex
-digit (`IsHex()`), regardless of position — so both `#e11d48` and `#2563eb` come out as a single `Color`
-token either way. This distinction (and the fix) is already documented on `GetCssTokens` itself, at
-`Html/Core/Parse/CssValueParser.cs:474-476` — the comment was correct, `GetColorByName` just wasn't
-following it.
+name-**start** code point (`Lexer.IsNameStart()`, no digits/hyphens) — a letter passes, but a digit doesn't,
+so `#2563eb` fell through to `NewDelimiter('#')` (a bare `#` token) instead of a `Hash` token, and the rest
+of the string tokenized as unrelated number/ident tokens `ColorFunctionExtensions.ToResolvedColor` never
+recognized. Note this is `HashStart()`'s *own* rule, not CSS Syntax Level 3 §4.3.4's: the spec's hash-token
+branch only requires a name code point (`IsNameStart()` **or** a digit/hyphen) or a valid escape, which a
+digit satisfies — so `HashStart()` is itself a narrower, pre-existing, still-unfixed deviation from the spec
+for anything reaching it outside "value" context; this fix routes color-mix() parsing around it rather than
+correcting it. `true` routes through `ColorLiteral()` instead, which classifies purely on whether every
+character is a hex digit (`IsHex()`), regardless of position — so both `#e11d48` and `#2563eb` come out as a
+single `Color` token either way. This distinction (and the fix) is already documented on `GetCssTokens`
+itself, at `Html/Core/Parse/CssValueParser.cs:474-476` — the comment was correct, `GetColorByName` just
+wasn't following it.
 
 **Fix:** `GetColorByName` now calls `GetCssTokens(substring, inValueContext: true)`. One-line functional
 change; the rest of the diff is the doc comment explaining why.
