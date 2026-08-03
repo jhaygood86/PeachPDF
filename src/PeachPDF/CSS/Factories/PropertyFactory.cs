@@ -241,6 +241,8 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.Clear, () => new ClearProperty());
             AddLonghand(PropertyNames.Clip, () => new ClipProperty(), true);
             AddLonghand(PropertyNames.Color, () => new ColorProperty(), true);
+            AddShorthand(PropertyNames.Container, () => new ContainerProperty(),
+                PropertyNames.ContainerName, PropertyNames.ContainerType);
             AddLonghand(PropertyNames.ContainerName, () => new ContainerNameProperty());
             AddLonghand(PropertyNames.ContainerType, () => new ContainerTypeProperty());
             AddLonghand(PropertyNames.Content, () => new ContentProperty());

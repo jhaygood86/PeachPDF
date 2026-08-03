@@ -28,5 +28,11 @@ namespace PeachPDF.CSS
         public static readonly string Rem = "rem";
         public static readonly string Pc = "pc";
         public static readonly string Percent = "%";
+        public static readonly string Cqw = "cqw";
+        public static readonly string Cqh = "cqh";
+        public static readonly string Cqi = "cqi";
+        public static readonly string Cqb = "cqb";
+        public static readonly string Cqmin = "cqmin";
+        public static readonly string Cqmax = "cqmax";
     }
 }

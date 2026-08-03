@@ -307,6 +307,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter FloatingConverter = Map.FloatingModes.ToConverter();
         public static readonly IValueConverter DisplayModeConverter = Map.DisplayModes.ToConverter();
         public static readonly IValueConverter ContainerTypeConverter = Map.ContainerTypes.ToConverter();
+        public static readonly IValueConverter ContainerShorthandConverter = new ContainerShorthandConverter();
         public static readonly IValueConverter ClearModeConverter = Map.ClearModes.ToConverter();
         public static readonly IValueConverter FontStretchConverter = Map.FontStretches.ToConverter();
         // "oblique" alone matches via the plain keyword map (tried first); "oblique <angle>" (CSS Fonts

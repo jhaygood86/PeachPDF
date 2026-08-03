@@ -71,5 +71,6 @@ namespace PeachPDF.CSS
         public static readonly string ImageSet = "image-set";
         public static readonly string CrossFade = "cross-fade";
         public static readonly string Element = "element";
+        public static readonly string Style = "style";
     }
 }

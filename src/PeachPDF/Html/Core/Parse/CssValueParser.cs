@@ -151,7 +151,7 @@ namespace PeachPDF.Html.Core.Parse
         /// callers that do their own lightweight text scanning of a length string (like
         /// <see cref="Dom.CssBox"/>'s FontSize setter, which regex-searches for a bare "Nem"
         /// substring to eagerly convert em to points) know to leave a calc() expression alone rather than
-        /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool)"/>'s
+        /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool, double?, double?)"/>'s
         /// real evaluation instead.
         /// </summary>
         public static bool IsCalcFunction(string value)
@@ -162,7 +162,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Recognizes a length string that is a single calc-family (calc/min/max/clamp) function, e.g. for
         /// the syntactic gate in <see cref="IsValidLength"/> and the evaluation branch in
-        /// <see cref="ParseLength(string, double, double, double, string, bool)"/>. Real
+        /// <see cref="ParseLength(string, double, double, double, string, bool, double?, double?)"/>. Real
         /// grammar/type validation already happened in Layer A's CalcValueConverter for any value that
         /// didn't arrive via the var() substitution bypass; this is a syntactic recognizer only.
         /// </summary>
@@ -239,7 +239,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>the parsed length value with adjustments</returns>
         public static double ParseLength(string length, double hundredPercent, CssBox box)
         {
-            return ParseLength(length, hundredPercent, box.GetEmHeight(), box.GetRemHeight(), null, false);
+            var (containerInlinePt, containerBlockPt) = box.GetContainerRelativeUnitBasis();
+
+            return ParseLength(length, hundredPercent, box.GetEmHeight(), box.GetRemHeight(), null, false,
+                containerInlinePt, containerBlockPt);
         }
 
         /// <summary>
@@ -251,8 +254,14 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="remFactor"></param>
         /// <param name="defaultUnit"></param>
         /// <param name="returnPoints">Allows the return double to be in points. If false, result will be pixels</param>
+        /// <param name="containerInlineSizePt">See <see cref="Length.ToPixels"/>'s parameter of the same
+        /// name. <c>null</c> for every call site with no candidate box in scope (media queries, `@page`
+        /// margins) - `cq*` units then resolve to 0, same as the box-aware overload's own container-less
+        /// fallback.</param>
+        /// <param name="containerBlockSizePt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
         /// <returns>the parsed length value with adjustments</returns>
-        public static double ParseLength(string length, double hundredPercent, double emFactor, double remFactor, string? defaultUnit, bool returnPoints)
+        public static double ParseLength(string length, double hundredPercent, double emFactor, double remFactor, string? defaultUnit, bool returnPoints,
+            double? containerInlineSizePt = null, double? containerBlockSizePt = null)
         {
             //Return zero if no length specified, zero specified
             if (string.IsNullOrEmpty(length) || length == "0")
@@ -265,7 +274,7 @@ namespace PeachPDF.Html.Core.Parse
                 // result here should be unreachable, but 0 is the same "can't make sense of this" fallback
                 // used elsewhere in this method for any other degenerate input.
                 var node = CalcParser.Parse(calcFunction);
-                var context = new CalcContext(hundredPercent, emFactor, remFactor, returnPoints);
+                var context = new CalcContext(hundredPercent, emFactor, remFactor, returnPoints, containerInlineSizePt, containerBlockSizePt);
                 var pixels = node is not null ? CalcEvaluator.Evaluate(node, context) : null;
 
                 return pixels ?? 0d;
@@ -286,7 +295,7 @@ namespace PeachPDF.Html.Core.Parse
 
             var lengthUnit = unit is not null ? Length.GetUnit(unit) : Length.Unit.None;
 
-            return new Length((float)number!.Value, lengthUnit).ToPixels(emFactor, remFactor, hundredPercent);
+            return new Length((float)number!.Value, lengthUnit).ToPixels(emFactor, remFactor, hundredPercent, containerInlineSizePt, containerBlockSizePt);
         }
 
         /// <summary>

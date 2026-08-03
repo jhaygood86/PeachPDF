@@ -143,7 +143,14 @@ namespace PeachPDF.Html.Core
             }
         }
 
-        private static bool CompareLength(MediaFeature feature, double? actualPt)
+        /// <summary>
+        /// Compares a length-valued feature (e.g. <c>min-width</c>) against a known size in points.
+        /// Shared with <see cref="ContainerQueryMatcher"/> (container size queries use the exact same
+        /// feature/comparison model @media does, just against a container's size instead of the page's) -
+        /// see CLAUDE.md's "don't write two parsers for the same grammar" rule; this is the numeric-
+        /// comparison half of that, not grammar, but still one algorithm that shouldn't fork.
+        /// </summary>
+        internal static bool CompareLength(MediaFeature feature, double? actualPt)
         {
             if (actualPt is not { } actual) return true;   // no page geometry → permissive
             if (feature.AsLength() is not { } length) return true;
@@ -174,7 +181,8 @@ namespace PeachPDF.Html.Core
             return string.Equals(feature.Value, deviceValue, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static bool CompareNumeric(double actual, double value, MediaFeatureComparison comparison)
+        /// <summary>Shared with <see cref="ContainerQueryMatcher"/> - see <see cref="CompareLength"/>'s remarks.</summary>
+        internal static bool CompareNumeric(double actual, double value, MediaFeatureComparison comparison)
         {
             const double epsilon = 1e-6;
             return comparison switch

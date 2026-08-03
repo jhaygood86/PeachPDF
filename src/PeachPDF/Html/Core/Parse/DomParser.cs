@@ -56,8 +56,12 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="html">the html to parse</param>
         /// <param name="htmlContainer">the html container to use for reference resolve</param>
         /// <param name="cssData">the css data to use</param>
+        /// <param name="containerSizes">Every eligible <c>@container</c> query container's resolved size
+        /// from the previous layout pass, or <c>null</c> on the container-query convergence loop's first
+        /// pass (<see cref="HtmlContainerInt.PerformLayout"/>) - every <c>@container</c> condition then
+        /// evaluates false, the correct bootstrap. <c>null</c> for every caller that isn't that loop.</param>
         /// <returns>the root of the generated tree</returns>
-        public async Task<(CssBox cssBox, CssData cssData, HtmlDocumentMetadata metadata)> GenerateCssTree(string html, HtmlContainerInt htmlContainer, CssData cssData)
+        public async Task<(CssBox cssBox, CssData cssData, HtmlDocumentMetadata metadata)> GenerateCssTree(string html, HtmlContainerInt htmlContainer, CssData cssData, ContainerQuerySizes? containerSizes = null)
         {
             CssBox.ClearCounter();
             var root = HtmlParser.ParseDocument(html);
@@ -119,11 +123,11 @@ namespace PeachPDF.Html.Core.Parse
             // can't corrupt the structure SvgTreeBuilder reads. The *restructuring* passes below
             // (block/inline/anonymous-table normalization) DO reparent boxes, so each guards against
             // descending into a CssBoxSvg - see their `if (box is CssBoxSvg) return;` and issue #159.
-            CascadeApplyStyles(cssValueParser, root, cssData, media);
+            CascadeApplyStyles(cssValueParser, root, cssData, media, containerSizes);
 
-            EnsureListItemMarkers(cssValueParser, root, cssData, media);
+            EnsureListItemMarkers(cssValueParser, root, cssData, media, containerSizes);
 
-            ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media);
+            ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media, containerSizes);
 
             // Must run after the cascade (it reads each box's resolved Direction/UnicodeBidi) and
             // before CorrectTextBoxes (the first place that calls CssBox.ParseToWords, which consults
@@ -571,7 +575,8 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the box to apply the style to</param>
         /// <param name="cssData">the style data for the html</param>
         /// <param name="media">The media type to apply styles to</param>
-        private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
+        /// <param name="containerSizes">See <see cref="GenerateCssTree"/>'s parameter of the same name.</param>
+        private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null)
         {
             // 1. Defaulting (CSS Cascade & Inheritance 4 §2.1): every property starts at its initial value,
             //    drawn from the single initial-value store. The cascade phases below then override, and the
@@ -625,11 +630,11 @@ namespace PeachPDF.Html.Core.Parse
             // Matched rules are already sorted by CssData (specificity ascending, then true source
             // order) - materialize each origin once so both the normal and important passes below
             // reuse the same matched/sorted list instead of re-querying CssData twice per origin.
-            var uaRules = cssData.GetUserAgentStyleRules(media, box).ToList();
+            var uaRules = cssData.GetUserAgentStyleRules(media, box, containerSizes).ToList();
             // Author rules come in BOTH the normal-declaration order and the reversed !important layer
             // order (CSS Cascade 5 §6.4.2), matched once; each rule carries its @layer rank so the
             // author passes below can band rules by layer for revert-layer.
-            var (authorNormal, authorImportant) = cssData.GetAuthorStyleRulesForCascade(media, box);
+            var (authorNormal, authorImportant) = cssData.GetAuthorStyleRulesForCascade(media, box, containerSizes);
 
             // Inline style is parsed up front - parsing is pure text -> rule with no cascade side
             // effects, so hoisting it here (ahead of TranslateAttributes, which still runs at its
@@ -756,12 +761,12 @@ namespace PeachPDF.Html.Core.Parse
             if (!box.FirstLineProcessed)
             {
                 box.FirstLineProcessed = true;
-                ResolveFirstLineStyle(valueParser, box, cssData, media);
+                ResolveFirstLineStyle(valueParser, box, cssData, media, containerSizes);
             }
 
             foreach (var childBox in box.Boxes)
             {
-                CascadeApplyStyles(valueParser, childBox, cssData, media);
+                CascadeApplyStyles(valueParser, childBox, cssData, media, containerSizes);
             }
         }
 
@@ -803,10 +808,10 @@ namespace PeachPDF.Html.Core.Parse
         /// same declaration-application machinery as the real cascade. No inline-style handling either -
         /// inline style can never carry a <c>::first-line</c> suffix, so it plays no part here.
         /// </summary>
-        private static void ResolveFirstLineStyle(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
+        private static void ResolveFirstLineStyle(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null)
         {
-            var firstLineUaRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: true).ToList();
-            var firstLineAuthorRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: false).ToList();
+            var firstLineUaRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: true, containerSizes).ToList();
+            var firstLineAuthorRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: false, containerSizes).ToList();
 
             if (firstLineUaRules.Count == 0 && firstLineAuthorRules.Count == 0) return;
 
@@ -848,7 +853,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <see cref="CorrectTextBoxes"/> (so the new box's content gets resolved by that same pass,
         /// same as every other marker box).
         /// </summary>
-        private static void EnsureListItemMarkers(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
+        private static void EnsureListItemMarkers(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null)
         {
             if (box.Display == CssConstants.ListItem && !box.Boxes.Any(b => b.IsMarkerPseudoElement))
             {
@@ -858,14 +863,14 @@ namespace PeachPDF.Html.Core.Parse
                 // No InheritStyle() call here: CascadeApplyStyles below unconditionally re-defaults
                 // (its own step 1) and re-inherits (step 2, box.InheritStyle()) as soon as it starts, so
                 // a pre-emptive inherit here would just be immediately discarded and redone.
-                CascadeApplyStyles(valueParser, markerBox, cssData, media);
+                CascadeApplyStyles(valueParser, markerBox, cssData, media, containerSizes);
             }
 
             foreach (var childBox in box.Boxes.ToArray())
             {
                 if (!childBox.IsMarkerPseudoElement)
                 {
-                    EnsureListItemMarkers(valueParser, childBox, cssData, media);
+                    EnsureListItemMarkers(valueParser, childBox, cssData, media, containerSizes);
                 }
             }
         }
@@ -884,7 +889,7 @@ namespace PeachPDF.Html.Core.Parse
         /// matched element - see <see cref="CssBox.MatchesFirstLetterSelector"/>'s doc comment for why
         /// that forces this into a separate, later pass instead.
         /// </summary>
-        private static void ApplyFirstLetterPseudoElements(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media)
+        private static void ApplyFirstLetterPseudoElements(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null)
         {
             if (box.MatchesFirstLetterSelector && !box.FirstLetterProcessed)
             {
@@ -893,7 +898,7 @@ namespace PeachPDF.Html.Core.Parse
                 var textBox = FindFirstLetterTargetTextBox(box);
                 if (textBox != null)
                 {
-                    SplitFirstLetter(valueParser, cssData, media, box, textBox);
+                    SplitFirstLetter(valueParser, cssData, media, box, textBox, containerSizes);
                 }
             }
 
@@ -901,7 +906,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 if (!childBox.IsFirstLetterPseudoElement)
                 {
-                    ApplyFirstLetterPseudoElements(valueParser, childBox, cssData, media);
+                    ApplyFirstLetterPseudoElements(valueParser, childBox, cssData, media, containerSizes);
                 }
             }
         }
@@ -961,7 +966,7 @@ namespace PeachPDF.Html.Core.Parse
         /// declarations actually apply on top of that inherited baseline, the same as
         /// <see cref="EnsureListItemMarkers"/> does for its own synthesized marker box.
         /// </summary>
-        private static void SplitFirstLetter(CssValueParser valueParser, CssData cssData, MediaQueryContext media, CssBox originatingBox, CssBox textBox)
+        private static void SplitFirstLetter(CssValueParser valueParser, CssData cssData, MediaQueryContext media, CssBox originatingBox, CssBox textBox, ContainerQuerySizes? containerSizes = null)
         {
             var text = textBox.Text!;
             var idx = 0;
@@ -1000,7 +1005,7 @@ namespace PeachPDF.Html.Core.Parse
             // No InheritStyle() call here: CascadeApplyStyles below unconditionally re-defaults (its
             // own step 1) and re-inherits (step 2, box.InheritStyle()) as soon as it starts, so a
             // pre-emptive inherit here would just be immediately discarded and redone.
-            CascadeApplyStyles(valueParser, firstLetterBox, cssData, media);
+            CascadeApplyStyles(valueParser, firstLetterBox, cssData, media, containerSizes);
         }
 
         /// <summary>

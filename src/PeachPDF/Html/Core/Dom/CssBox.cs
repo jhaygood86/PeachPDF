@@ -29,6 +29,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using PeachPDF.Html.Core.Fragments;
+// CssBox declares a property literally named ContainerType, which shadows the CSS-OM enum type of the
+// same name within this file - alias it so the enum stays referenceable (same trick ComputedStyleAreas
+// uses for WritingMode).
+using ContainerTypeEnum = PeachPDF.CSS.ContainerType;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -429,6 +433,81 @@ namespace PeachPDF.Html.Core.Dom
 
                 return box;
             }
+        }
+
+        /// <summary>
+        /// Which kind of <c>@container</c> eligibility <see cref="FindNearestQueryContainer"/> should
+        /// check. CSS Containment 3 SS7.2: a <c>size</c>/<c>inline-size</c> query container is required for
+        /// size-feature conditions (<c>width</c>/<c>height</c>/etc.), but a style-feature (<c>style()</c>)
+        /// query is eligible against any element that declares <c>container-type</c> at all - including
+        /// its initial <c>normal</c> value, which only opts an element out of *size* containment, not out
+        /// of being a query container for style queries.
+        /// </summary>
+        internal enum QueryKind { Size, Style }
+
+        /// <summary>
+        /// Walks ancestors (starting at <see cref="ParentBox"/>, never this box itself) for the nearest
+        /// one eligible as an <c>@container</c> query container, per CSS Containment 3 SS7.2. With
+        /// <paramref name="name"/> given, the ancestor's own <see cref="CssBox.ContainerName"/> list
+        /// (whitespace-separated <c>&lt;custom-ident&gt;</c>s, case-sensitive) must contain it; with no
+        /// name, the nearest eligible ancestor wins regardless of its own name. Returns <c>null</c> when no
+        /// eligible ancestor exists - CSS Containment 3's "unknown" query-container state, which callers
+        /// must treat as falsy for <c>@container</c> (a deliberate divergence from how <c>@media</c>
+        /// features fall back to permissive-true on missing viewport geometry - a missing container here
+        /// is invalid authoring, not a missing render context).
+        /// </summary>
+        internal CssBox? FindNearestQueryContainer(string? name, QueryKind kind = QueryKind.Size)
+        {
+            var candidate = ParentBox;
+            while (candidate is not null)
+            {
+                // Style queries: every element is container-type-bearing (normal is the initial value),
+                // so only size queries actually restrict eligibility to Size/InlineSize containers.
+                var isEligible = kind != QueryKind.Size
+                    || candidate.ContainerType.Value is ContainerTypeEnum.Size or ContainerTypeEnum.InlineSize;
+
+                if (isEligible && (name is null || ContainerNameMatches(candidate.ContainerName, name)))
+                    return candidate;
+
+                candidate = candidate.ParentBox;
+            }
+
+            return null;
+        }
+
+        private static bool ContainerNameMatches(string containerName, string queriedName)
+        {
+            if (string.IsNullOrEmpty(containerName) || containerName == CssConstants.None) return false;
+
+            foreach (var part in containerName.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                // <custom-ident> is case-sensitive.
+                if (string.Equals(part, queriedName, StringComparison.Ordinal)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The nearest unnamed ancestor <c>@container</c> size query container's current content-box
+        /// size, resolved for <c>cqw</c>/<c>cqi</c>/<c>cqh</c>/<c>cqb</c>/<c>cqmin</c>/<c>cqmax</c> unit
+        /// resolution (CSS Containment 3 SS6.2) - shared by every length-resolution call site (<see
+        /// cref="Parse.CssValueParser.ParseLength(string, double, CssBox)"/>, font-size) so there is one
+        /// place that decides how a box's nearest container's size is measured, not one per caller.
+        /// Block size is only ever non-null for a <c>size</c> container - an <c>inline-size</c> container
+        /// doesn't track the block axis at all.
+        /// </summary>
+        internal (double? InlineSizePt, double? BlockSizePt) GetContainerRelativeUnitBasis()
+        {
+            var container = FindNearestQueryContainer(name: null);
+            if (container is null) return (null, null);
+
+            double? inlinePt = container.ClientRight - container.ClientLeft;
+            double? blockPt = container.ContainerType.Value == ContainerTypeEnum.Size
+                ? container.ClientBottom - container.ClientTop
+                : null;
+
+            return (inlinePt, blockPt);
         }
 
         public bool IsHeightCalculated { get; set; } = false;

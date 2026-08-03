@@ -775,7 +775,7 @@ Limitations:
 | `@media` | Supported; `print` and `all` media types apply, `screen` is ignored, and **feature queries** (`min-width`/`max-width`/range syntax, `orientation`, `resolution`, `prefers-color-scheme`, …) are evaluated against the page box and renderer characteristics; see [CSS Media Queries](#css-media-queries) below |
 | `@keyframes` | Not supported |
 | `@supports` | Supported ([CSS Conditional Rules 3/4](https://developer.mozilla.org/en-US/docs/Web/CSS/@supports)). `(property: value)`, `not (…)`, `(…) and (…)`, `(…) or (…)`, and arbitrary nesting are evaluated against PeachPDF's actual implemented property set, not just whether the value parses — `animation-name` parses but reports unsupported (never rendered), while SVG-only properties like `fill`/`stroke` correctly report supported. A shorthand is supported only when the CSS-OM expands it into longhands that are all themselves supported, not merely by recognizing the shorthand's name. The five CSS-wide keywords (`inherit`/`initial`/`unset`/`revert`/`revert-layer`) are always accepted. Two known, narrow gaps: a property with no dedicated grammar falls back to CSS-OM parse-validity rather than a full layout/paint-verified check, and a few hand-dispatched properties (`mask`, `marker`/`marker-start`/`marker-mid`/`marker-end`, SVG `clip-path`) aren't covered by this oracle and report unsupported despite working. Any at-rule may appear inside a true-condition block and is collected normally |
-| `@container` | **The whole block is ignored** — the container-size condition depends on the nearest matched element's own layout, which (unlike `@supports`'s condition) isn't a static, parse-time-decidable fact, so it cannot be evaluated; the inner rules never apply. Container-relative units (`cqw`/`cqi`/etc.) are not supported |
+| `@container` | Supported ([CSS Containment 3](https://developer.mozilla.org/en-US/docs/Web/CSS/@container)). Size queries (`@container (min-width: 300px) { … }`) and `style()` queries (`@container style(--theme: dark) { … }`) are both evaluated, against the nearest ancestor query container's real resolved size/style — see [CSS Container Queries](#css-container-queries) below for the full support table and behavior |
 | `@layer` | [Cascade layers](https://developer.mozilla.org/en-US/docs/Web/CSS/@layer) are supported. Both the block form (`@layer name { … }`, including anonymous `@layer { … }`) and the statement form (`@layer a, b, c;`, which declares layer order) are parsed and honored. Layer precedence follows CSS Cascade 5: for **normal** declarations an unlayered rule beats any layered rule, and among layers a later-declared layer beats an earlier one — this ordering is applied **ahead of specificity**, so a low-specificity rule in a later layer wins over a high-specificity rule in an earlier layer. Specificity then source order break ties within a single layer. For **`!important`** declarations the layer order **reverses**: an earlier layer beats a later one, and a layered `!important` rule beats an unlayered one. **Nested layers** are ordered as a tree — a parent layer's whole subtree is contiguous and its sub-layers are ordered by first appearance within that parent (so `@layer a.b; @layer c; @layer a.d;` ranks `a.b`, `a.d`, then `c`). An `@font-face`/`@property`/`@page` rule nested inside an `@layer` block (or an `@media`/`@supports` within one) is collected. Remaining simplification: when a single layer mixes direct rules with its own nested sub-layers, the parent's direct rules are ranked before those sub-layers (the exact interleaving is not modeled) |
 | `@import` | Full support; the imported stylesheet is fetched and its rules merged in place, including transitively nested `@import`s (with circular-import protection). Relative `url()` references inside an imported stylesheet — including `@font-face src` — resolve against that stylesheet's own location, not the document's |
 
@@ -977,6 +977,45 @@ PeachPDF renders to PDF, so only media queries that target the `print` medium (o
 | `prefers-reduced-motion` | Yes | Reports `reduce` (a static PDF has no motion) |
 | `prefers-contrast`, `prefers-reduced-transparency` | Yes | Report `no-preference` |
 | A feature name PeachPDF doesn't recognize | No | The whole media query is invalid and its block does not apply (per Media Queries 4, an unknown feature is false) |
+
+---
+
+## CSS Container Queries
+
+Supported ([CSS Containment 3](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_containment/Container_queries)). An element opts in to being a query container with the `container-type`/`container-name` properties (or the `container` shorthand); `@container` rules then apply based on that container's own resolved size or style rather than the page. Both forms — size queries and `style()` queries — evaluate against the **nearest eligible ancestor** query container, walking up from the matched element; an unnamed query uses the nearest eligible ancestor regardless of its name, and a named query (`@container sidebar (...)`) skips straight to the nearest ancestor declaring that name in its own `container-name`, even if a nearer ancestor is eligible but unnamed.
+
+```css
+.card-list {
+  container-type: inline-size;
+  container-name: cards;
+}
+
+/* applies once .card-list's own content-box width reaches 400px */
+@container cards (min-width: 400px) {
+  .card { display: flex; }
+}
+
+/* style queries read a container's own resolved value, most commonly a custom property */
+@container style(--theme: dark) {
+  .card { background: black; color: white; }
+}
+```
+
+| Property/at-rule | Notes |
+|---|---|
+| `container-type` | `normal` (initial — no size containment), `size` (tracks both the inline and block axis), `inline-size` (tracks only the inline axis) |
+| `container-name` | `none` (initial) or a space-separated list of `<custom-ident>`s an `@container` rule can name to target this container specifically |
+| `container` shorthand | `container: <name> / <type>` — expands to the two longhands above; the `/ <type>` half is optional and resets `container-type` to `normal` when omitted |
+| `@container <condition> { }` | Unnamed size query — applies against the nearest ancestor with `container-type: size` or `inline-size` |
+| `@container <name> <condition> { }` | Named size query — applies against the nearest ancestor whose own `container-name` includes `<name>` and whose `container-type` is `size`/`inline-size` |
+| `width`/`min-width`/`max-width`/`inline-size` (and the `min-`/`max-`/range-syntax forms) | Evaluated against the container's own resolved inline-axis size |
+| `height`/`min-height`/`max-height`/`block-size`, `aspect-ratio`, `orientation` | Evaluated against the container's own resolved block-axis size — **only meaningful against a `container-type: size` container**; against an `inline-size`-only container these never match (it tracks the inline axis only), regardless of the container's actual height |
+| `style(<property>: <value>)` | Matches when the nearest eligible ancestor query container's own resolved value for `<property>` equals `<value>`. Unlike size queries, **any** query container is eligible regardless of `container-type` — `container-type: normal` (the initial value, so effectively any element) still qualifies, since a style query needs no layout containment. `and`/`or`/`not` combine multiple `style()` feature checks; a combined operand needs its own parenthesized declaration (`style((--a: 1) and (--b: 2))`), matching `@supports`'s own grammar. Comparison is a trimmed, literal-text match against the container's resolved value — reliable for custom properties (values are opaque, author-controlled text) and for a standard property whose authored value already matches PeachPDF's own canonical serialization (e.g. keyword values like `style(display: block)`), but not full computed-value equivalence (`style(color: red)` won't match a container that resolves to `rgb(255, 0, 0)`) |
+| `cqw`, `cqi` | 1% of the nearest ancestor query container's own resolved inline-axis size |
+| `cqh`, `cqb` | 1% of the nearest ancestor query container's own resolved block-axis size (only meaningful against a `size` container — `0` against an `inline-size`-only one, which doesn't track that axis) |
+| `cqmin`, `cqmax` | The smaller/larger of `cqi` and `cqb` |
+| Container-relative unit with no eligible ancestor container | Resolves to `0` — the same documented fallback `vw`/`vh`/`vmin`/`vmax` already use (PeachPDF has no viewport-unit numerator to fall back to either) |
+| Container-relative unit in `font-size` (e.g. `font-size: 10cqw`) | Resolves to `0` for any element with text content — a font-caching order limitation, not the general no-ancestor-container fallback above; a real ancestor container is found, but its size isn't available yet at the point text content first resolves the font. Works only for the uncommon case of an element with no text content of its own |
 
 ---
 
@@ -1271,6 +1310,7 @@ PeachPDF supports [`calc()`](https://developer.mozilla.org/en-US/docs/Web/CSS/ca
 | Divide-by-zero / invalid category mixes (`calc(10px + 5)`, `calc(1px * 1px)`, `calc(10px + 5deg)`) | Rejected | The whole declaration is treated as invalid, the same as any other malformed CSS value |
 | Time and resolution units (`s`, `dpi`) inside a math function | Not supported | PeachPDF doesn't support these unit categories at all, with or without a math function |
 | Viewport units (`vw`/`vh`/`vmin`/`vmax`) inside a math function | Not supported | PeachPDF has no viewport-unit support anywhere |
+| Container-relative units (`cqw`/`cqi`/`cqb`/`cqmin`/`cqmax`) inside a math function | Full | Resolved against the nearest ancestor query container's own size, the same basis the plain (non-`calc()`) unit form uses — see [CSS Container Queries](#css-container-queries) |
 | A math function inside CSS Grid track sizing | Full | A `calc()`/`min()`/`max()`/`clamp()` length resolves as a grid track size — bare, and inside `minmax()`/`fit-content()`/`repeat()` arguments (a wrong-category math function, e.g. an angle, drops the whole track list at parse time) |
 | A math function for an `<integer>`-typed property (`z-index`, `order`, `widows`) | Full | Must type-check as a plain `<number>` (a length/percentage/angle-category expression is rejected); the result is rounded to the nearest integer, ties away from zero, and folded to a literal at parse time — the same as a `<number>`-typed property, calc() is resolved eagerly rather than kept symbolic, since an integer-category expression has no relative unit to defer to layout |
 
@@ -1367,4 +1407,4 @@ The following CSS features are not supported:
 - **`word-wrap` / `overflow-wrap`**
 - **`outline`** and `outline-*` properties
 - **CSS selectors** — see the [CSS Selectors](#css-selectors) section above for what is and is not supported
-- **Viewport units** (`vw`, `vh`, `vmin`, `vmax`) and container-relative units (`cqw`, `cqi`, etc.) — note responsive `@media` feature queries (`min-width`, `prefers-color-scheme`, …) **are** supported (see [CSS Media Queries](#css-media-queries)); it is the viewport/container length *units* that are not
+- **Viewport units** (`vw`, `vh`, `vmin`, `vmax`) — note responsive `@media` feature queries (`min-width`, `prefers-color-scheme`, …) **are** supported (see [CSS Media Queries](#css-media-queries)); it is the viewport length *units* that are not. Container-relative units (`cqw`/`cqi`/`cqb`/`cqmin`/`cqmax`) **are** now supported when resolved against a real ancestor query container (see [CSS Container Queries](#css-container-queries)); only the no-eligible-container fallback still resolves to `0` rather than falling through to a small-viewport unit, since PeachPDF has no viewport-unit numerator to fall back to either

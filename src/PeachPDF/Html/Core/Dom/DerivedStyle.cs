@@ -852,7 +852,14 @@ namespace PeachPDF.Html.Core.Dom
                     remSize = CssConstants.FontSize;
                 }
 
-                var fsize = FontSizeResolver.Resolve(Style.Font.FontSize, parentSize, remSize);
+                // For a box with text content this basis is unreachable in practice - word-splitting
+                // (DomParser.CorrectTextBoxes, during cascade) reads ActualFont before any layout pass
+                // exists, caching this size permanently against a container that hasn't been laid out yet.
+                // Correct only for a box whose ActualFont happens to first be read post-layout - see
+                // .claude/accepted-gaps/font-size-container-relative-units-resolve-to-zero-for-text-content.md.
+                var (containerInlinePt, containerBlockPt) = Owner.GetContainerRelativeUnitBasis();
+                var fsize = FontSizeResolver.Resolve(Style.Font.FontSize, parentSize, remSize,
+                    containerInlinePt, containerBlockPt);
 
                 _actualFont = Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
                               ?? Owner.GetCachedFont(CssConstants.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus);

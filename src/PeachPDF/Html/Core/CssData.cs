@@ -64,7 +64,19 @@ namespace PeachPDF.Html.Core
         // (null = unlayered). The layer's numeric precedence rank is resolved lazily at sort time from
         // _layerRanks - which is only known after the whole layer tree has been walked (a nested
         // sub-layer's rank depends on where its parent first appeared), so it can't be baked in here.
-        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, string? LayerName);
+        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, ContainerCondition[]? EnclosingContainers, string? LayerName);
+
+        /// <summary>
+        /// One level of an <c>@container</c> nesting chain a rule is indexed under: the rule's own
+        /// declared <c>&lt;container-name&gt;</c> (null when unnamed) and its condition, either a plain
+        /// size-feature <see cref="MediaList"/> (reusing <c>@media</c>'s grammar - see
+        /// <see cref="ContainerRule"/>) or a <c>style()</c> query tree. Exactly one of
+        /// <see cref="SizeCondition"/>/<see cref="StyleCondition"/> is non-null. Carried forward the same
+        /// way <see cref="MediaList"/>[] EnclosingMedia is - deferred, per-candidate-box evaluation
+        /// (<see cref="ContainerQueryMatcher"/>) rather than resolved once at index-build time, since
+        /// (unlike <c>@supports</c>) neither form is a static, argument-free fact.
+        /// </summary>
+        internal readonly record struct ContainerCondition(string? Name, MediaList? SizeCondition, IStyleQueryCondition? StyleCondition);
 
         // A style rule paired with its resolved @layer rank, for the cascade's author passes (which
         // need the rank both to reverse layer order for !important and to band rules by layer for
@@ -102,7 +114,7 @@ namespace PeachPDF.Html.Core
 
             foreach (var stylesheet in Stylesheets)
             {
-                IndexRules(stylesheet.Rules, stylesheet.IsUserAgent, null, null, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                IndexRules(stylesheet.Rules, stylesheet.IsUserAgent, null, null, null, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
             }
 
             _layerRanks = layerRegistry.ComputeRanks();
@@ -208,15 +220,16 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// Walks a rule list in true document order, recursing into <c>@media</c> blocks (any
-        /// nesting depth) in place, and buckets every style rule found - assigning each an
+        /// Walks a rule list in true document order, recursing into <c>@media</c>/<c>@container</c>
+        /// blocks (any nesting depth) in place, and buckets every style rule found - assigning each an
         /// ever-increasing <see cref="IndexedRule.DocumentOrder"/> and recording the chain of
-        /// enclosing media conditions it's nested under, if any.
+        /// enclosing media/container conditions it's nested under, if any.
         /// </summary>
         private static void IndexRules(
             IEnumerable<IRule> rules,
             bool isUserAgent,
             MediaList[]? enclosingMedia,
+            ContainerCondition[]? enclosingContainers,
             string? currentLayer,
             Dictionary<string, List<IndexedRule>> tagIndex,
             Dictionary<string, List<IndexedRule>> classIndex,
@@ -231,7 +244,7 @@ namespace PeachPDF.Html.Core
                 switch (rule)
                 {
                     case IStyleRule styleRule:
-                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, currentLayer);
+                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, enclosingContainers, currentLayer);
 
                         keys.Clear();
                         CollectIndexKeys(styleRule.Selector, keys);
@@ -263,14 +276,14 @@ namespace PeachPDF.Html.Core
                         // media/@layer context and right after the parent in document order (so it wins
                         // ties by source order, matching its textual position after the parent).
                         if (styleRule.NestedRules.Count > 0)
-                            IndexRules(styleRule.NestedRules, isUserAgent, enclosingMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                            IndexRules(styleRule.NestedRules, isUserAgent, enclosingMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
 
                     case IMediaRule mediaRule:
                         var nestedMedia = enclosingMedia is null
                             ? [mediaRule.Media]
                             : (MediaList[])[.. enclosingMedia, mediaRule.Media];
-                        IndexRules(mediaRule.Rules, isUserAgent, nestedMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                        IndexRules(mediaRule.Rules, isUserAgent, nestedMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
 
                     // @layer statement (`@layer a, b, c;`) only declares layer order — register each
@@ -288,7 +301,7 @@ namespace PeachPDF.Html.Core
                             : QualifyLayer(currentLayer, layerRule.Name);
                         if (!string.IsNullOrEmpty(layerRule.Name))
                             layerRegistry.Register(qualified);
-                        IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, qualified, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                        IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, enclosingContainers, qualified, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
 
                     // @supports: the condition is invariant (IConditionFunction.Check() takes no
@@ -301,14 +314,28 @@ namespace PeachPDF.Html.Core
                     // up, just decided by the real condition now instead of unconditionally.
                     case ISupportsRule supportsRule:
                         if (supportsRule.Condition.Check())
-                            IndexRules(supportsRule.Rules, isUserAgent, enclosingMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                            IndexRules(supportsRule.Rules, isUserAgent, enclosingMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
 
-                    // @container: PeachPDF cannot evaluate the condition (truthiness depends on the
-                    // nearest matched element's own container size, not a static parse-time fact the
-                    // way @supports's condition is - there is no element in scope here to test against),
-                    // so the whole block is IGNORED — its inner rules are not indexed and therefore never
-                    // apply. Tracked at #284. @keyframes/@document/etc. are likewise not indexed.
+                    // @container: truthiness depends on the nearest matched element's own container
+                    // size/style, a per-candidate-box fact - unconditionally descend and carry the
+                    // condition forward as deferred state, exactly like @media's EnclosingMedia chain
+                    // (see ContainerQueryMatcher.Matches, consulted lazily in GatherMatchedRules.Collect).
+                    case IContainerRule containerRule:
+                        var containerName = string.IsNullOrEmpty(containerRule.Name) ? null : containerRule.Name;
+                        // ContainerRule.Media is a non-null (but empty) MediaList even on the style()
+                        // branch - AppendChild(new MediaList(...)) runs unconditionally in its constructor
+                        // - so SizeCondition must be nulled out explicitly here to keep this record's own
+                        // documented "exactly one of SizeCondition/StyleCondition is set" invariant true.
+                        var condition = new ContainerCondition(
+                            containerName,
+                            containerRule.StyleCondition is null ? containerRule.Media : null,
+                            containerRule.StyleCondition);
+                        var nestedContainers = enclosingContainers is null
+                            ? [condition]
+                            : (ContainerCondition[])[.. enclosingContainers, condition];
+                        IndexRules(containerRule.Rules, isUserAgent, enclosingMedia, nestedContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                        break;
                 }
             }
         }
@@ -318,14 +345,15 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// Enumerates every rule in every stylesheet, descending into the grouping at-rules whose
-        /// contents participate directly in the document (<c>@layer</c>/<c>@media</c>/a
+        /// contents participate directly in the document (<c>@layer</c>/<c>@media</c>/<c>@container</c>/a
         /// true-condition <c>@supports</c>) so an <c>@font-face</c>/<c>@property</c>/<c>@page</c>
         /// nested inside one is still found — including one guarded by <c>@supports</c>, per CSS
         /// Conditional Rules 3/4 §3 (any at-rule may appear inside a supports-rule's block).
-        /// <c>@container</c> is NOT descended — its condition can't be evaluated (see
-        /// <see cref="IndexRules"/>'s matching case), so the whole block is ignored. Source order is
-        /// preserved (a grouping rule's children are yielded at the grouping rule's own position), so
-        /// last-declared-wins collection stays correct.
+        /// <c>@media</c>/<c>@container</c> are descended unconditionally, same as <c>@layer</c> - their
+        /// per-candidate-box truthiness has no bearing on whether a font/registration nested inside is
+        /// collected (see the matching <c>IMediaRule</c> case's identical unconditional descent). Source
+        /// order is preserved (a grouping rule's children are yielded at the grouping rule's own
+        /// position), so last-declared-wins collection stays correct.
         /// </summary>
         internal IEnumerable<IRule> EnumerateRulesRecursive()
         {
@@ -352,12 +380,15 @@ namespace PeachPDF.Html.Core
                         foreach (var child in FlattenRules(mediaRule.Rules))
                             yield return child;
                         break;
+                    case IContainerRule containerRule:
+                        foreach (var child in FlattenRules(containerRule.Rules))
+                            yield return child;
+                        break;
                     case ISupportsRule supportsRule:
                         if (supportsRule.Condition.Check())
                             foreach (var child in FlattenRules(supportsRule.Rules))
                                 yield return child;
                         break;
-                    // @container is intentionally not descended — its block is ignored.
                 }
             }
         }
@@ -452,14 +483,14 @@ namespace PeachPDF.Html.Core
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
         }
 
-        internal IEnumerable<IStyleRule> GetStyleRules(MediaQueryContext media, ICssDomNode node) =>
-            GetStyleRulesByOrigin(media, node, userAgentOnly: null);
+        internal IEnumerable<IStyleRule> GetStyleRules(MediaQueryContext media, ICssDomNode node, ContainerQuerySizes? containerSizes = null) =>
+            GetStyleRulesByOrigin(media, node, userAgentOnly: null, containerSizes: containerSizes);
 
-        internal IEnumerable<IStyleRule> GetUserAgentStyleRules(MediaQueryContext media, ICssDomNode node) =>
-            GetStyleRulesByOrigin(media, node, userAgentOnly: true);
+        internal IEnumerable<IStyleRule> GetUserAgentStyleRules(MediaQueryContext media, ICssDomNode node, ContainerQuerySizes? containerSizes = null) =>
+            GetStyleRulesByOrigin(media, node, userAgentOnly: true, containerSizes: containerSizes);
 
-        internal IEnumerable<IStyleRule> GetAuthorStyleRules(MediaQueryContext media, ICssDomNode node) =>
-            GetStyleRulesByOrigin(media, node, userAgentOnly: false);
+        internal IEnumerable<IStyleRule> GetAuthorStyleRules(MediaQueryContext media, ICssDomNode node, ContainerQuerySizes? containerSizes = null) =>
+            GetStyleRulesByOrigin(media, node, userAgentOnly: false, containerSizes: containerSizes);
 
         /// <summary>
         /// Same candidate-gathering (tag/class/id/universal index buckets) as
@@ -471,8 +502,8 @@ namespace PeachPDF.Html.Core
         /// pass to re-match against, so this is the only way its declarations are ever gathered at all.
         /// See <c>DomParser.ResolveFirstLineStyle</c>, its only caller.
         /// </summary>
-        internal IEnumerable<IStyleRule> GetFirstLineStyleRules(MediaQueryContext media, CssBox box, bool userAgentOnly) =>
-            GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true);
+        internal IEnumerable<IStyleRule> GetFirstLineStyleRules(MediaQueryContext media, CssBox box, bool userAgentOnly, ContainerQuerySizes? containerSizes = null) =>
+            GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true, containerSizes: containerSizes);
 
         /// <summary>
         /// Author style rules for the HTML cascade, in BOTH the normal-declaration order and the
@@ -489,9 +520,9 @@ namespace PeachPDF.Html.Core
         /// <c>revert-layer</c>. Only the HTML cascade (<c>DomParser.CascadeApplyStyles</c>) needs this;
         /// UA/first-line/SVG paths keep <see cref="GetStyleRulesByOrigin"/>.
         /// </summary>
-        internal (List<LayeredStyleRule> Normal, List<LayeredStyleRule> Important) GetAuthorStyleRulesForCascade(MediaQueryContext media, ICssDomNode node)
+        internal (List<LayeredStyleRule> Normal, List<LayeredStyleRule> Important) GetAuthorStyleRulesForCascade(MediaQueryContext media, ICssDomNode node, ContainerQuerySizes? containerSizes = null)
         {
-            var matched = GatherMatchedRules(media, node, userAgentOnly: false, firstLineOnly: false);
+            var matched = GatherMatchedRules(media, node, userAgentOnly: false, firstLineOnly: false, containerSizes);
 
             List<LayeredStyleRule> Sort(bool importantOrder)
             {
@@ -513,9 +544,9 @@ namespace PeachPDF.Html.Core
             return (normal, important);
         }
 
-        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false)
+        private IEnumerable<IStyleRule> GetStyleRulesByOrigin(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false, ContainerQuerySizes? containerSizes = null)
         {
-            var matched = GatherMatchedRules(media, node, userAgentOnly, firstLineOnly);
+            var matched = GatherMatchedRules(media, node, userAgentOnly, firstLineOnly, containerSizes);
 
             // Stable sort by specificity, tie-broken by DocumentOrder (true source order, including
             // across the plain-rule/@media boundary, assigned once up front by IndexRules) - equal-
@@ -544,7 +575,7 @@ namespace PeachPDF.Html.Core
         /// apply their own cascade ordering. Extracted so the normal and <c>!important</c> author
         /// orderings can share one matching pass (see <see cref="GetAuthorStyleRulesForCascade"/>).
         /// </summary>
-        private List<IndexedRule> GatherMatchedRules(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly)
+        private List<IndexedRule> GatherMatchedRules(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly, ContainerQuerySizes? containerSizes = null)
         {
             EnsureIndex();
 
@@ -558,6 +589,12 @@ namespace PeachPDF.Html.Core
             {
                 if (userAgentOnly.HasValue && indexed.IsUserAgent != userAgentOnly.Value) return;
                 if (!MediaQueryMatcher.Matches(indexed.EnclosingMedia, media)) return;
+                // @container is HTML-only (no query-container concept for SVG) - an SVG node (never a
+                // CssBox) permissively skips the check the same way a rule with no @container nesting
+                // does, since ContainerQueryMatcher.Matches needs a CssBox to walk ParentBox from.
+                if (indexed.EnclosingContainers is not null && node is CssBox containerCandidate
+                    && !ContainerQueryMatcher.Matches(indexed.EnclosingContainers, containerCandidate, containerSizes))
+                    return;
                 // firstLineOnly is HTML-cascade-only (DomParser.ResolveFirstLineStyle), always a CssBox.
                 var isMatch = firstLineOnly
                     ? MatchesAsFirstLineSelector(indexed.Rule.Selector, (CssBox)node)

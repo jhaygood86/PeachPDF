@@ -120,6 +120,18 @@ namespace PeachPDF.CSS
                         return UnitNames.Vmax;
                     case Unit.Percent:
                         return UnitNames.Percent;
+                    case Unit.Cqw:
+                        return UnitNames.Cqw;
+                    case Unit.Cqh:
+                        return UnitNames.Cqh;
+                    case Unit.Cqi:
+                        return UnitNames.Cqi;
+                    case Unit.Cqb:
+                        return UnitNames.Cqb;
+                    case Unit.Cqmin:
+                        return UnitNames.Cqmin;
+                    case Unit.Cqmax:
+                        return UnitNames.Cqmax;
                     default:
                         return string.Empty;
                 }
@@ -217,6 +229,12 @@ namespace PeachPDF.CSS
                 "vmax" => Unit.Vmax,
                 "vmin" => Unit.Vmin,
                 "vw" => Unit.Vw,
+                "cqw" => Unit.Cqw,
+                "cqh" => Unit.Cqh,
+                "cqi" => Unit.Cqi,
+                "cqb" => Unit.Cqb,
+                "cqmin" => Unit.Cqmin,
+                "cqmax" => Unit.Cqmax,
                 "%" => Unit.Percent,
                 _ => Unit.None
             };
@@ -239,7 +257,18 @@ namespace PeachPDF.CSS
         /// <param name="emFactor">Pixels per 1em, i.e. the relevant font size in pixels.</param>
         /// <param name="remFactor">Pixels per 1rem, i.e. the root element's font size in pixels.</param>
         /// <param name="hundredPercent">The pixel value equivalent to 100%.</param>
-        internal double ToPixels(double emFactor, double remFactor, double hundredPercent)
+        /// <param name="containerInlineSizePt">The nearest ancestor query container's own resolved
+        /// inline-axis (width) size in points, for <c>cqw</c>/<c>cqi</c>/<c>cqmin</c>/<c>cqmax</c> -
+        /// <c>null</c> when there is no eligible ancestor container (see
+        /// <see cref="Html.Core.Dom.CssBox.FindNearestQueryContainer"/>), which resolves those units to 0
+        /// (the same documented-accepted fallback <c>vw</c>/<c>vh</c>/<c>vmin</c>/<c>vmax</c> already
+        /// use).</param>
+        /// <param name="containerBlockSizePt">The nearest ancestor query container's own resolved
+        /// block-axis (height) size in points, for <c>cqh</c>/<c>cqb</c>/<c>cqmin</c>/<c>cqmax</c> -
+        /// <c>null</c> with no eligible container, or when the eligible container is
+        /// <c>inline-size</c>-only (it doesn't track the block axis either).</param>
+        internal double ToPixels(double emFactor, double remFactor, double hundredPercent,
+            double? containerInlineSizePt = null, double? containerBlockSizePt = null)
         {
             // The engine's internal layout unit is 1 point (PixelsPerInch defaults to 72), so
             // physical units (in/cm/mm/pc/pt) resolve directly against points. CSS px resolves
@@ -262,6 +291,10 @@ namespace PeachPDF.CSS
                 Unit.Cm => // 1 cm = 72/2.54 pt
                     (72d / 2.54d) * Value,
                 Unit.Percent => hundredPercent / 100d * Value,
+                Unit.Cqw or Unit.Cqi => (containerInlineSizePt ?? 0d) / 100d * Value,
+                Unit.Cqh or Unit.Cqb => (containerBlockSizePt ?? 0d) / 100d * Value,
+                Unit.Cqmin => Math.Min(containerInlineSizePt ?? 0d, containerBlockSizePt ?? 0d) / 100d * Value,
+                Unit.Cqmax => Math.Max(containerInlineSizePt ?? 0d, containerBlockSizePt ?? 0d) / 100d * Value,
                 _ => 0d
             };
         }
@@ -310,7 +343,18 @@ namespace PeachPDF.CSS
             Vh,
             Vmin,
             Vmax,
-            Percent
+            Percent,
+            // CSS Containment 3 §6.2 container-relative units. Resolved against the nearest ancestor
+            // query container's own content-box size (CssBox.FindNearestQueryContainer) - see ToPixels'
+            // containerInlineSizePt/containerBlockSizePt parameters. With no eligible ancestor container,
+            // these fall through to 0 in ToPixels, the same documented-accepted fallback vw/vh/vmin/vmax
+            // already use (PeachPDF has no small-viewport-unit numerator to fall back to either).
+            Cqw,
+            Cqh,
+            Cqi,
+            Cqb,
+            Cqmin,
+            Cqmax
         }
 
         /// <summary>
