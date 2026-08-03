@@ -82,9 +82,9 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // column-gap is shared with flex/grid (same CSS property, see CssBox.FlexColumnGap); its
-            // initial value "normal" (CSS Box Alignment Module Level 3 §8.3) computes differently per
-            // layout mode — flex/grid resolve it to 0, multicol resolves it to a UA-convention value
-            // (commonly 1em, matching real-world browser behavior).
+            // initial value "normal" (CSS Box Alignment Module Level 3 §8.3) behaves differently per
+            // layout mode — flex/grid resolve it to 0, multicol resolves it to exactly 1em (the value
+            // the spec itself mandates for "normal" in a multi-column container).
             var gap = columnsBox.FlexColumnGap == CssConstants.Normal
                 ? CssValueParser.ParseLength("1em", containerWidth, columnsBox)
                 : CssValueParser.ParseLength(columnsBox.FlexColumnGap, containerWidth, columnsBox);

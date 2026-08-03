@@ -165,6 +165,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal("10px", box.FlexColumnGap);
             Assert.Equal("10px", box.FlexRowGap);
         }
+
         [Fact]
         public async Task SetPropertyValue_ZIndex_AutoOrInteger_IsAccepted()
         {
