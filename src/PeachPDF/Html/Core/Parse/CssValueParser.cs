@@ -1745,7 +1745,12 @@ namespace PeachPDF.Html.Core.Parse
             // Tokenization and grammar parsing are the CSS-OM's job: ToResolvedColor resolves named
             // colors, hex, and every color function (rgb/hsl/hwb/gray/lab/oklab/lch/oklch/color-mix) to a
             // concrete Color. This method's only remaining role is the Color -> RColor conversion.
-            var parsed = GetCssTokens(substring).ToResolvedColor();
+            // inValueContext: true so a hex value nested inside a function (e.g. a color-mix() operand)
+            // always lexes to a single Color token regardless of its leading character - without it, a
+            // digit-leading hex (e.g. "#2563eb") lexes as '#' + a number instead of a Hash token, since
+            // digits aren't name-start code points, while a letter-leading hex (e.g. "#e11d48") still
+            // lexes fine as a Hash token (see GetCssTokens' inValueContext doc comment).
+            var parsed = GetCssTokens(substring, inValueContext: true).ToResolvedColor();
 
             if (parsed.HasValue)
             {

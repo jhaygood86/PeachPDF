@@ -5702,6 +5702,14 @@ var modernColorHtml =
         $"<div class=\"swatch\" style=\"background: color-mix(in oklab, oklch(0.62 0.2 265) {p}%, transparent)\"><span>{p}%</span></div>")) +
     "</div></div>" +
 
+    // Tailwind v4 compiles bg-[#2563eb]/50 to exactly this shape - a digit-leading hex color-mix()
+    // operand used to be silently dropped while a letter-leading one (e.g. #e11d48) resolved fine.
+    "<h3>color-mix() with a hex operand (Tailwind v4 opacity-modifier shape)</h3>" +
+    "<div class=\"checker\"><div class=\"row\">" +
+    "<div class=\"swatch\" style=\"background: color-mix(in oklab, #2563eb 50%, transparent)\"><span>#2563eb/50</span></div>" +
+    "<div class=\"swatch\" style=\"background: color-mix(in oklab, #e11d48 50%, transparent)\"><span>#e11d48/50</span></div>" +
+    "</div></div>" +
+
     "<h3>color-mix() blends</h3>" +
     "<div class=\"row\">" +
     "<div class=\"swatch\" style=\"background: color-mix(in oklch, oklch(0.7 0.2 30), oklch(0.7 0.2 260))\"><span>oklch mix</span></div>" +
@@ -5712,8 +5720,8 @@ var modernColorHtml =
 
 await SaveShowcaseAsync("modern_colors", "Color", "Modern CSS Colors (oklch, color-mix)",
     "A wide-gamut palette authored in oklch() with oklab()/lab()/lch()/hsl()/hwb() companions, plus " +
-    "color-mix() opacity modifiers and blends composited over a checkerboard — the CSS Color 4/5 function " +
-    "set modern utility frameworks emit, resolved to real PDF colors.",
+    "color-mix() opacity modifiers (including hex operands of either form) and blends composited over a " +
+    "checkerboard — the CSS Color 4/5 function set modern utility frameworks emit, resolved to real PDF colors.",
     modernColorHtml, pdfConfig);
 
 // ── @layer cascade layers: layer order beats specificity; unlayered beats layered ─────
