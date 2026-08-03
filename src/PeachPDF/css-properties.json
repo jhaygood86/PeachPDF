@@ -2254,7 +2254,6 @@
     },
     {
       "name": "justify-items",
-      "comment": "supportedValues deliberately excludes 'right' - CssLayoutEngineGrid.cs's AlignmentOffset already handles it, but Converters.JustifyItemsConverter aliases AlignItemsConverter wholesale (Converters.cs, 'justify-items / justify-self share align-items/align-self's value grammar'), which has no left/right case since those keywords are only spec-valid on the justify axis - so 'justify-items: right' is rejected by Layer A's own parser before a declaration ever reaches this registry, regardless of what's listed here. See .claude/accepted-gaps/justify-items-self-right-left-not-parseable.md.",
       "inherited": false,
       "initialValue": "normal",
       "cssDataType": "keyword",
@@ -2264,7 +2263,9 @@
         "self-end",
         "center",
         "stretch",
-        "normal"
+        "normal",
+        "left",
+        "right"
       ],
       "html": {
         "propertyPath": "JustifyItems",
@@ -2274,7 +2275,6 @@
     },
     {
       "name": "justify-self",
-      "comment": "supportedValues deliberately excludes 'right' - same Layer A parser gap as justify-items (Converters.JustifySelfConverter aliases AlignSelfConverter). See .claude/accepted-gaps/justify-items-self-right-left-not-parseable.md.",
       "inherited": false,
       "initialValue": "auto",
       "cssDataType": "keyword",
@@ -2285,7 +2285,9 @@
         "self-end",
         "center",
         "stretch",
-        "normal"
+        "normal",
+        "left",
+        "right"
       ],
       "html": {
         "propertyPath": "JustifySelf",

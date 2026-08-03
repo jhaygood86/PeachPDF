@@ -506,12 +506,31 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("align-self", "self-end", "self-end")]
         [InlineData("justify-items", "self-end", "self-end")]
         [InlineData("justify-self", "self-end", "self-end")]
+        [InlineData("justify-items", "right", "right")]
+        [InlineData("justify-items", "left", "left")]
+        [InlineData("justify-self", "right", "right")]
+        [InlineData("justify-self", "left", "left")]
         [InlineData("word-break", "keep-all", "keep-all")]
         public async Task Cascade_PreviouslyDroppedKeyword_NowStored(string property, string value, string expected)
         {
             var (box, _) = await FindDivBoxAndParser($"{property}: {value};");
 
             Assert.Equal(expected, CssUtils.GetPropertyValue(box, property));
+        }
+
+        [Theory]
+        [InlineData("align-items")]
+        [InlineData("align-self")]
+        public async Task SetPropertyValue_AlignAxisRight_StaysRejected(string property)
+        {
+            // Guards the fix for justify-items/justify-self's own left/right support (issue #605):
+            // left/right are only spec-valid on the inline (justify) axis, so align-items/align-self's
+            // shared converter must keep rejecting them rather than picking up the new keywords too.
+            var (box, parser) = await FindDivBoxAndParser($"{property}: center;");
+
+            CssUtils.SetPropertyValue(parser, box, property, "right");
+
+            Assert.Equal("center", CssUtils.GetPropertyValue(box, property));
         }
 
         [Fact]

@@ -360,10 +360,13 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter AlignSelfConverter = AlignItemsConverter.OrAuto();
 
-        // justify-items / justify-self share align-items/align-self's value grammar for the keywords the
-        // grid engine honors (start/end/center/stretch/normal; baseline falls back to start at layout).
-        public static readonly IValueConverter JustifyItemsConverter = AlignItemsConverter;
-        public static readonly IValueConverter JustifySelfConverter = AlignSelfConverter;
+        // justify-items / justify-self share align-items/align-self's <self-position> grammar, plus the
+        // physical left/right keywords (CSS Box Alignment Level 3 §5) that are only valid on the inline
+        // (justify) axis - which is why align-items/align-self themselves don't accept them.
+        public static readonly IValueConverter JustifyItemsConverter =
+            AlignItemsConverter.Or(Keywords.Left).Or(Keywords.Right);
+        public static readonly IValueConverter JustifySelfConverter =
+            AlignSelfConverter.Or(Keywords.Left).Or(Keywords.Right);
 
         // place-items / place-content / place-self: <align> <justify>? — one value applies to both axes.
         public static readonly IValueConverter PlaceItemsConverter =
