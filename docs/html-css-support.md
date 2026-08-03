@@ -575,7 +575,7 @@ One limitation at a column boundary specifically: a multi-column container neste
 | `column-rule-style` | [column-rule-style](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-style) | `solid`, `dashed`, `dotted`; `double`/`groove`/`ridge`/`inset`/`outset` render as `solid` |
 | `column-rule-color` | [column-rule-color](https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-color) | Full support, including `currentcolor` |
 | `column-fill` | [column-fill](https://developer.mozilla.org/en-US/docs/Web/CSS/column-fill) | `balance` (the default) is solved per row via a binary search for the minimum column height that still packs as many children into the row as the full page budget would, floored at an even share of the content so that splittable content balances too — tighter than a single closed-form estimate, especially with unevenly-sized children. `auto` fills each column to capacity before starting the next |
-| `column-span` | [column-span](https://developer.mozilla.org/en-US/docs/Web/CSS/column-span) | Parsed and accepted but has no effect — a `column-span: all` element does not yet break out of the column flow |
+| `column-span` | [column-span](https://developer.mozilla.org/en-US/docs/Web/CSS/column-span) | `all` breaks the column flow: a spanning element renders at the container's full content width, splitting the columns before and after it into independently-balanced runs. Only a **direct** child of the multi-column container is recognized as spanning — a `column-span: all` declared on a deeper descendant has no effect |
 
 ### Positioning
 

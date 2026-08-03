@@ -4036,6 +4036,20 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
             "box-decoration-break: clone &mdash; the same wrapper, each fragment re-opening with its own top border and padding",
             "clone")) +
 
+    // §3's column-span: all. The heading breaks the column flow into two independently-balanced runs -
+    // each of its own 6 entries splits 3-and-3 across the two columns, not 6-and-6 as if the heading
+    // were an ordinary column item in the middle of one 12-entry flow. column-rule draws within each
+    // run but never through the heading itself.
+    McSection("13 &mdash; column-span: all",
+        "<div class=\"frame\"><div class=\"label\">columns: 2; column-rule: 0.5pt solid #000; a heading with column-span: all splits the flow into two runs</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+        McEntries(6, "before") +
+        "<h2 style=\"column-span:all;background:#fdf3e3;border:0.5pt solid #d68910;padding:3pt;margin:0.3em 0\">" +
+        "A heading spanning both columns" +
+        "</h2>" +
+        McEntries(6, "after") +
+        "</div></div>") +
+
     "</body></html>";
 
 await SaveShowcaseAsync("multicol", "Layout", "Multi-column Layout",

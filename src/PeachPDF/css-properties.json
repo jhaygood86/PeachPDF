@@ -2396,7 +2396,6 @@
     },
     {
       "name": "column-span",
-      "comment": "cssDataType's own supportedValues includes 'all' because real dispatch stores it (ColumnSpanProperty/ColumnSpanConverter accept and round-trip it) even though CssLayoutEngineColumns.cs never reads ComputedStyleAreas.MultiColumnArea.ColumnSpan - a 'column-span: all' element does not break out of the column flow (docs/html-css-support.md's column-span row already discloses this). supportsDataType is the stricter, @supports-only list excluding 'all' for exactly that reason, same shape as break-before's region/avoid-region split.",
       "inherited": false,
       "initialValue": "none",
       "cssDataType": "keyword",
@@ -2405,10 +2404,6 @@
         "all"
       ],
       "keywordComparison": "ordinal",
-      "supportsDataType": "keyword",
-      "supportsSupportedValues": [
-        "none"
-      ],
       "html": {
         "propertyPath": "ColumnSpan",
         "csharpDataType": "string",

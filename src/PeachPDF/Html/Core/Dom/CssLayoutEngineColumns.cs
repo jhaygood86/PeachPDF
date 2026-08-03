@@ -110,27 +110,276 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            // Phase 1 (measurement): lay out every child as one tall, single virtual column at the
-            // resolved column width, reusing ordinary block layout untouched. Breaking stays suppressed
-            // here - these are provisional positions spanning many page bands, and a token recorded
-            // against them would name a place nothing ends up. Its only product is how tall the content
-            // is, which is what column-fill: balance needs before it can pick a column height.
-            var originalRight = columnsBox.ActualRight;
-            columnsBox.ActualRight = columnsBox.Location.X + columnWidth + columnsBox.ActualBoxSizeIncludedWidth;
-            columnsBox.ActualBottom = columnsBox.Location.Y;
+            // A column-span:all child (css-multicol-1 §3) breaks the column flow into independent
+            // segments before and after it, each spanning the container's own full width while it is laid
+            // out. Partitioned once, up front, in document order - see BuildSegments/ColumnSegment. Every
+            // segment below is driven through the same FillColumns primitive an ordinary single-run
+            // container already used, just with different column geometry per segment kind: a run keeps
+            // this container's resolved (columnCount, columnWidth); a span is modeled as one column that
+            // happens to be the whole container width, which gets its pagination/break-token/resume
+            // handling for free rather than needing a second, separately-tested code path.
+            var segments = BuildSegments(children);
 
-            // Each child's own PerformLayoutImp unconditionally grows HtmlContainer.ActualSize's
-            // monotonic high-water mark using its Phase-1 virtual (un-banded, single-tall-column) bottom,
-            // which can be far larger than its real final position. That's harmless when later, real
-            // content elsewhere in the document legitimately supersedes it - but for the last multi-column
-            // container in a document, nothing supersedes it, permanently inflating the page count with
-            // phantom trailing pages. Snapshot/restore around the virtual pass so only Phase 2's real,
-            // re-banded geometry (via columnsBox's own ActualBottom below, which flows into ActualSize
-            // normally once this method returns) can grow it.
-            // Only on the pass that starts this container. A resumed one continues children the earlier
-            // fragment already measured, and re-measuring them would overwrite the geometry it placed.
+            // A continuation starts at the fragmentainer it resumed into, not at the container's own top,
+            // which is back on the page this one is continuing from.
+            var boxTop = resume is not null && htmlContainer.CurrentFragmentainer is { } resumed
+                ? resumed.ResumeContentTop
+                : columnsBox.ClientTop;
+
+            var columnLeft = columnsBox.ClientLeft;
+            var pitch = columnWidth + gap;
+            var originalRight = columnsBox.ActualRight;
+
+            // boxTop is a fragmentainer's own content-top edge, not an arbitrary interior coordinate - a
+            // top edge flush on (or, from arithmetic noise, a hair below) a page boundary begins the
+            // later slot per HtmlContainerInt.SlotStartingAt's own convention. The raw PageIndexOf makes
+            // no such distinction and can resolve the exact boundary to the page being LEFT instead: this
+            // page's own budget then computes to zero, and every later pass recomputes the same boxTop
+            // from that same (wrong, un-advanced) slot forever, so the container never reaches a fresh
+            // page and instead re-fills the one it already exhausted - visibly, every remaining word lands
+            // at that one frozen Y (see #573's investigation, reproduced with a non-Letter page size).
+            var startSlot = htmlContainer.HasRealPageGrid ? htmlContainer.SlotStartingAt(boxTop) : 0;
+
+            // The measurement pass a fresh run runs below ran every child's prologue, which is
+            // once-per-box and owns RectanglesReset. The real fill lays the same boxes out again from
+            // scratch, so it has to be let back in - the shared rollback the driver's own pass re-entry
+            // uses (#355, #371). Done once here, over every remaining child regardless of which segment it
+            // falls in: a resumed pass's own RollBackTo walks the container's real Boxes by identity from
+            // the resume point, not the list handed to it, so partitioning the children into segments does
+            // not change what this call does.
+            PassRewind.RollBackTo(resume, children);
+
+            // A container laid out again from the start may land in a different slot than the one it
+            // recorded its columns in, so what it recorded anywhere describes geometry that no longer
+            // exists. A resumed one is the opposite case: the columns it filled on earlier pages are
+            // still there.
+            htmlContainer.ClearNestedFragmentainers(columnsBox, resume is null ? null : startSlot);
+
+            // A resumed pass continues only the segment the earlier fragment stopped inside - the ones
+            // before it already finished on an earlier page, and the ones after it were never reached.
+            var segmentStartIndex = 0;
+
+            if (resume is not null)
+            {
+                var resumeBoundary = children[FirstChildIndexOf(resume, children)];
+                var foundAt = segments.FindIndex(s => s.Children.Contains(resumeBoundary));
+                if (foundAt >= 0) segmentStartIndex = foundAt;
+            }
+
+            var ruleSegments = new List<(double X, double Top, double Bottom)>();
+            var contentBottomOverall = boxTop;
+
+            // How many entries this pass has already appended to _nested[(columnsBox, startSlot)] - a
+            // later segment's own balance retry must discard only what it itself just recorded there, not
+            // an earlier segment's already-finished columns sharing the same slot key.
+            var recordedSoFar = 0;
+            BreakToken? carry = null;
+
+            // Where the *next* segment's own fill should tell CssBox.FillFragmentainerWithBlockChildren
+            // to start reading columnsBox.Boxes from - distinct from segmentResume below. A null resume
+            // there means "do this run's own Phase 1/balance as fresh", which is right for every segment
+            // but the one actually continuing from an earlier page; passed to FillFragmentainerWithBlockChildren
+            // as null, though, it means "start at Boxes[0]" - which is only ever true of the very first
+            // segment. Every later segment's own first child is never Boxes[0], so it needs a real token
+            // naming it, which is exactly what the previous segment's own span-boundary carry already is.
+            BreakToken? startAt = null;
+
+            for (var segIndex = segmentStartIndex; segIndex < segments.Count; segIndex++)
+            {
+                var segment = segments[segIndex];
+                var segmentResume = segIndex == segmentStartIndex ? resume : null;
+                var segmentStartAt = segIndex == segmentStartIndex ? resume : startAt;
+
+                // What is left of this container's own page. A column, or a spanning box standing in for
+                // one, can never be taller than that, so it is the ceiling on every target below.
+                var pageBudget = htmlContainer.HasRealPageGrid
+                    ? htmlContainer.PageBottomOf(startSlot) - boxTop
+                    : double.MaxValue / 4;
+
+                double contentBottom;
+                int filledColumns;
+
+                if (segment.IsSpanning)
+                {
+                    // The run before this span (if any) discovered it was column-span:all only after
+                    // laying it out once, at that run's own column width - CssBox.LayoutBlockChildren
+                    // checks break-before only once a child has already been placed. That discarded
+                    // attempt's prologue must be let back in before the real fill below, exactly as a
+                    // retried column-fill:balance attempt already is elsewhere, or the span keeps the
+                    // wrong (column, not container) width its own prologue will not resolve again.
+                    PassRewind.RollBackTo(segmentResume, segment.Children);
+
+                    // One column that happens to be the whole container width - not balanced (there is
+                    // nothing to balance a single column against) and not retried (its target already is
+                    // the full remaining page budget, so a carry here can only mean the page is genuinely
+                    // full).
+                    const int spanColumnCount = 1;
+                    const double spanPitch = 0; // unused: FillColumns only ever reaches col 0 here.
+
+                    (carry, contentBottom, filledColumns) = await FillColumns(
+                        g, columnsBox, segment.Children, segmentStartAt, boxTop, pageBudget, columnLeft,
+                        spanPitch, containerWidth, containerWidth, spanColumnCount, startSlot,
+                        htmlContainer);
+                }
+                else
+                {
+                    List<(double X, double Top, double Bottom)> runRuleSegments;
+
+                    (carry, contentBottom, filledColumns, runRuleSegments) = await LayoutRunSegment(
+                        g, columnsBox, segment.Children, segmentResume, segmentStartAt, boxTop,
+                        pageBudget, columnLeft, pitch, columnWidth, containerWidth, columnCount, startSlot,
+                        htmlContainer, originalRight, recordedSoFar);
+
+                    ruleSegments.AddRange(runRuleSegments);
+                }
+
+                recordedSoFar += filledColumns;
+                boxTop = Math.Max(boxTop, contentBottom);
+                contentBottomOverall = Math.Max(contentBottomOverall, contentBottom);
+
+                if (carry is not null)
+                {
+                    // Not an overflow: BuildSegments already placed the spanning child this run's carry
+                    // names as segments[segIndex + 1], so the loop just continues into it on this same
+                    // page rather than deferring anything to a resumed pass - carrying the token itself
+                    // forward as that next segment's own traversal start.
+                    if (IsColumnSpanBoundary(carry))
+                    {
+                        startAt = carry;
+                        carry = null;
+                    }
+                    else
+                    {
+                        // This segment did not finish, so neither can the ones after it - they are
+                        // deferred whole to this container's next resumed pass, exactly as a single run's
+                        // own overflow defers past its last column today.
+                        break;
+                    }
+                }
+                else
+                {
+                    startAt = null;
+                }
+            }
+
+            // Accumulated, not assigned: this container is laid out once per page fragment, and the last
+            // fragment's rules are not the only ones drawn.
+            columnsBox.ColumnRuleSegments = resume is null || columnsBox.ColumnRuleSegments is null
+                ? ruleSegments
+                : [.. columnsBox.ColumnRuleSegments, .. ruleSegments];
+
+            columnsBox.ActualBottom = Math.Max(boxTop, contentBottomOverall);
+
+            // The column loop narrowed the container to one column at a time, and the shared child loop
+            // walks every box - so an out-of-flow child resolved its position against a *column*. The
+            // containing block css-multicol gives it is the multi-column container, so they are laid out
+            // once more here, with the container back at its own width.
+            await columnsBox.LayoutOutOfFlowChildrenAgain(g);
+
+            // Content the last segment could not hold belongs to the next page, and this container is not
+            // the fragmentation context root - so the token travels up the ordinary chain and the page
+            // driver opens it, exactly as it would for any other block box that did not finish.
+            if (carry is not null)
+            {
+                columnsBox.SetPendingBreakToken(RetargetToTheNextPage(carry, htmlContainer, startSlot));
+            }
+        }
+
+        private const int MaxFillAttempts = 4;
+        private const double TargetGrowthPerAttempt = 1.2;
+
+        /// <summary>
+        /// One piece of a column flow split by <c>column-span: all</c> — either an ordinary run of
+        /// children destined for this container's resolved columns, or a single spanning child destined
+        /// for one column the full container width wide.
+        /// </summary>
+        private readonly record struct ColumnSegment(List<CssBox> Children, bool IsSpanning);
+
+        /// <summary>
+        /// Partitions <paramref name="children"/>, in document order, into alternating column runs and
+        /// <c>column-span: all</c> singletons — css-multicol-1 §3's "the column-span property... breaks
+        /// the column flow into segments". A leading or trailing span, or two spans with no run between
+        /// them, fall out of the same walk rather than needing their own cases; with no spanning child at
+        /// all, this returns exactly one run holding every child, unchanged from before this method
+        /// existed.
+        /// </summary>
+        private static List<ColumnSegment> BuildSegments(List<CssBox> children)
+        {
+            var segments = new List<ColumnSegment>();
+            var run = new List<CssBox>();
+
+            foreach (var child in children)
+            {
+                if (child.ColumnSpan == CssConstants.All)
+                {
+                    if (run.Count > 0)
+                    {
+                        segments.Add(new ColumnSegment(run, IsSpanning: false));
+                        run = [];
+                    }
+
+                    segments.Add(new ColumnSegment([child], IsSpanning: true));
+                }
+                else
+                {
+                    run.Add(child);
+                }
+            }
+
+            if (run.Count > 0)
+            {
+                segments.Add(new ColumnSegment(run, IsSpanning: false));
+            }
+
+            return segments;
+        }
+
+        /// <summary>
+        /// Fills one column-span-free run into <paramref name="columnCount"/> columns — the whole of what
+        /// a column-span-free container's Phase 1 measurement and Phase 2 balance-retry loop did before
+        /// this container's content could be split into more than one run, scoped to just this run's own
+        /// children. <paramref name="recordedBefore"/> is how many entries this pass has already recorded
+        /// for <c>(columnsBox, startSlot)</c> before this run started - an earlier run sharing the same
+        /// slot key - so this run's own balance retries discard only what they themselves added on top of
+        /// that baseline.
+        /// </summary>
+        /// <remarks>
+        /// <paramref name="resume"/> and <paramref name="startAt"/> answer different questions and are
+        /// equal only for the segment actually continuing from an earlier page. <paramref name="resume"/>
+        /// gates Phase 1/balance ("is this run's own content already measured, from an earlier page?");
+        /// <paramref name="startAt"/> is what <see cref="FillColumns"/> hands
+        /// <c>CssBox.FillFragmentainerWithBlockChildren</c> to know where in <c>columnsBox.Boxes</c> to
+        /// begin reading - null there means "start at <c>Boxes[0]</c>", which is only ever true of the
+        /// very first segment. Every run after a span needs a real token naming its own first child, even
+        /// though it is otherwise entered exactly as fresh as the first segment was.
+        /// </remarks>
+        private static async ValueTask<(BreakToken? Carry, double ContentBottom, int FilledColumns,
+            List<(double X, double Top, double Bottom)> RuleSegments)> LayoutRunSegment(
+            RGraphics g, CssBox columnsBox, List<CssBox> children, BreakToken? resume, BreakToken? startAt,
+            double boxTop, double pageBudget, double columnLeft, double pitch, double columnWidth,
+            double containerWidth, int columnCount, int startSlot, HtmlContainerInt htmlContainer,
+            double originalRight, int recordedBefore)
+        {
+            // Phase 1 (measurement): lay out every child of this run as one tall, single virtual column at
+            // the resolved column width, reusing ordinary block layout untouched. Breaking stays
+            // suppressed here - these are provisional positions spanning many page bands, and a token
+            // recorded against them would name a place nothing ends up. Its only product is how tall the
+            // content is, which is what column-fill: balance needs before it can pick a column height.
+            // Skipped on a resumed run - a resumed run's remaining children were already measured on an
+            // earlier page, and re-measuring them would overwrite the geometry it placed.
             if (resume is null)
             {
+                columnsBox.ActualRight = columnsBox.Location.X + columnWidth + columnsBox.ActualBoxSizeIncludedWidth;
+                columnsBox.ActualBottom = columnsBox.Location.Y;
+
+                // Each child's own PerformLayoutImp unconditionally grows HtmlContainer.ActualSize's
+                // monotonic high-water mark using its Phase-1 virtual (un-banded, single-tall-column)
+                // bottom, which can be far larger than its real final position. That's harmless when
+                // later, real content elsewhere in the document legitimately supersedes it - but for the
+                // last run in a document, nothing supersedes it, permanently inflating the page count with
+                // phantom trailing pages. Snapshot/restore around the virtual pass so only Phase 2's real,
+                // re-banded geometry (via columnsBox's own ActualBottom, which flows into ActualSize
+                // normally once Layout returns) can grow it.
                 var actualSizeBeforeVirtualPass = htmlContainer.ActualSize;
                 var measurementContext = htmlContainer.DetachFragmentainer();
 
@@ -147,37 +396,9 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 htmlContainer.ActualSize = actualSizeBeforeVirtualPass;
+
+                columnsBox.ActualRight = originalRight;
             }
-
-            columnsBox.ActualRight = originalRight;
-
-            // Phase 2: fill each column as a real fragmentainer, in the same shape LayoutDocument
-            // fills pages - establish a context, run the ordinary block-children loop into it, read back
-            // where it stopped, open the next one there.
-            // A continuation starts at the fragmentainer it resumed into, not at the container's own top,
-            // which is back on the page this one is continuing from.
-            var boxTop = resume is not null && htmlContainer.CurrentFragmentainer is { } resumed
-                ? resumed.ResumeContentTop
-                : columnsBox.ClientTop;
-
-            var columnLeft = columnsBox.ClientLeft;
-            var pitch = columnWidth + gap;
-
-            // boxTop is a fragmentainer's own content-top edge, not an arbitrary interior coordinate - a
-            // top edge flush on (or, from arithmetic noise, a hair below) a page boundary begins the
-            // later slot per HtmlContainerInt.SlotStartingAt's own convention. The raw PageIndexOf makes
-            // no such distinction and can resolve the exact boundary to the page being LEFT instead: this
-            // page's own budget then computes to zero, and every later pass recomputes the same boxTop
-            // from that same (wrong, un-advanced) slot forever, so the container never reaches a fresh
-            // page and instead re-fills the one it already exhausted - visibly, every remaining word lands
-            // at that one frozen Y (see #573's investigation, reproduced with a non-Letter page size).
-            var startSlot = htmlContainer.HasRealPageGrid ? htmlContainer.SlotStartingAt(boxTop) : 0;
-
-            // What is left of this container's own page. A column can never be taller than that, so it
-            // is the ceiling on every target below.
-            var pageBudget = htmlContainer.HasRealPageGrid
-                ? htmlContainer.PageBottomOf(startSlot) - boxTop
-                : double.MaxValue / 4;
 
             // column-fill: balance (the default) aims for equal-height columns rather than filling each
             // one before starting the next. An even share of the measured height is the ideal, but it is
@@ -198,11 +419,11 @@ namespace PeachPDF.Html.Core.Dom
                 ? EstimateBalancedColumnHeight(children, 0, columnCount, pageBudget)
                 : pageBudget;
 
-            var ruleSegments = new List<(double X, double Top, double Bottom)>();
-
-            // The measurement pass ran every child's prologue, which is once-per-box and owns
+            // The measurement pass above ran every child's prologue, which is once-per-box and owns
             // RectanglesReset. The real fill lays the same boxes out again from scratch, so it has to be
-            // let back in - the shared rollback the driver's own pass re-entry uses (#355, #371).
+            // let back in - the shared rollback the driver's own pass re-entry uses (#355, #371). On a
+            // resumed run this is a no-op past what Layout's own top-level call already did (there was no
+            // measurement pass to undo), but on a fresh run this is the call that undoes it.
             PassRewind.RollBackTo(resume, children);
 
             BreakToken? carry;
@@ -215,16 +436,16 @@ namespace PeachPDF.Html.Core.Dom
             // mid-document rather than as balancing. Where that happens the target is grown and the fill
             // run again, up to the page's own budget, which is the point at which balancing has given up
             // and the content genuinely does not fit this fragment.
-            // A container laid out again from the start may land in a different slot than the one it recorded
-            // its columns in, so what it recorded anywhere describes geometry that no longer exists. A
-            // resumed one is the opposite case: the columns it filled on earlier pages are still there.
-            htmlContainer.ClearNestedFragmentainers(columnsBox, resume is null ? null : startSlot);
-
             for (var attempt = 0; ; attempt++)
             {
                 (carry, contentBottom, filledColumns) =
-                    await FillColumns(g, columnsBox, children, resume, boxTop, target, columnLeft, pitch,
+                    await FillColumns(g, columnsBox, children, startAt, boxTop, target, columnLeft, pitch,
                         columnWidth, containerWidth, columnCount, startSlot, htmlContainer);
+
+                // The run ended because the next child spans, not because it ran out of room - there is
+                // nothing to balance a target against that was never trying to include the span anyway,
+                // so there is nothing to retry either.
+                if (IsColumnSpanBoundary(carry)) break;
 
                 if (attempt >= MaxFillAttempts) break;
 
@@ -277,41 +498,24 @@ namespace PeachPDF.Html.Core.Dom
 
                 PassRewind.RollBackTo(resume, children);
 
-                // The attempt being discarded recorded columns of its own.
-                htmlContainer.ClearNestedFragmentainers(columnsBox, startSlot);
+                // The attempt being discarded recorded columns of its own - but only its own: an earlier
+                // run sharing this (columnsBox, startSlot) slot already finished and must not be erased
+                // by this run's retry.
+                htmlContainer.ClearNestedFragmentainersFrom(columnsBox, startSlot, recordedBefore);
             }
 
-            // One rule per gap between the columns actually used, spanning the content they hold.
+            // One rule per gap between the columns actually used in this run, spanning the content they
+            // hold - never through a spanning box, which is never part of a run.
+            var gap = pitch - columnWidth;
+            var ruleSegments = new List<(double X, double Top, double Bottom)>();
+
             for (var c = 1; c < filledColumns; c++)
             {
                 ruleSegments.Add((columnLeft + c * pitch - gap / 2, boxTop, contentBottom));
             }
 
-            // Accumulated, not assigned: this container is laid out once per page fragment, and the last
-            // fragment's rules are not the only ones drawn.
-            columnsBox.ColumnRuleSegments = resume is null || columnsBox.ColumnRuleSegments is null
-                ? ruleSegments
-                : [.. columnsBox.ColumnRuleSegments, .. ruleSegments];
-
-            columnsBox.ActualBottom = Math.Max(boxTop, contentBottom);
-
-            // The column loop narrowed the container to one column at a time, and the shared child loop
-            // walks every box - so an out-of-flow child resolved its position against a *column*. The
-            // containing block css-multicol gives it is the multi-column container, so they are laid out
-            // once more here, with the container back at its own width.
-            await columnsBox.LayoutOutOfFlowChildrenAgain(g);
-
-            // Content the last column could not hold belongs to the next page, and this container is not
-            // the fragmentation context root - so the token travels up the ordinary chain and the page
-            // driver opens it, exactly as it would for any other block box that did not finish.
-            if (carry is not null)
-            {
-                columnsBox.SetPendingBreakToken(RetargetToTheNextPage(carry, htmlContainer, startSlot));
-            }
+            return (carry, contentBottom, filledColumns, ruleSegments);
         }
-
-        private const int MaxFillAttempts = 4;
-        private const double TargetGrowthPerAttempt = 1.2;
 
         /// <summary>
         /// Fills this container's columns once at <paramref name="target"/>, returning what would not fit,
@@ -405,11 +609,32 @@ namespace PeachPDF.Html.Core.Dom
                     break;
                 }
 
+                // css-multicol-1 §3: the next child is column-span:all (CssBox.LayoutBlockChildren raised
+                // the break-before for it), so this run ends here rather than continuing into another
+                // column of its own - the caller (LayoutRunSegment/Layout) reads a boundary named this way
+                // as a clean handoff to the spanning child, not as this run running out of room.
+                if (IsColumnSpanBoundary(columnsBox.PendingBreakToken))
+                {
+                    carry = columnsBox.TakePendingBreakToken();
+                    break;
+                }
+
                 carry = ResumeInTheNextColumn(columnsBox, boxTop, startSlot);
             }
 
             return (carry, contentBottom, filledColumns);
         }
+
+        /// <summary>
+        /// Whether <paramref name="token"/> is <c>CssBox.FillFragmentainerWithBlockChildren</c>'s own
+        /// <c>column-span: all</c> signal (css-multicol-1 §3) - raised either just before a spanning
+        /// direct child, or just after one, so the two cases are told apart by the flag itself rather than
+        /// by re-deriving it from whichever box the token names (that box is the span in the first case,
+        /// and ordinary content in the second). Either way, a run ends cleanly here rather than running
+        /// out of room for another column of its own.
+        /// </summary>
+        private static bool IsColumnSpanBoundary(BreakToken? token) =>
+            token is BlockBreakToken { IsColumnSpanHandoff: true };
 
         /// <summary>
         /// The boxes <paramref name="token"/> says continue past this column — the chain from the container
@@ -787,7 +1012,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Read-only dry run of the real packing loop in <see cref="Layout"/>: given a candidate column
+        /// Read-only dry run of the real packing loop in <see cref="FillColumns"/>: given a candidate column
         /// height (<paramref name="rowTarget"/>), returns how many of the children starting at
         /// <paramref name="startIndex"/> fit within <paramref name="columnCount"/> columns before the
         /// row would need to overflow into a new one, and the tallest column height that resulted.

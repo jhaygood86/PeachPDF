@@ -596,6 +596,28 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
+        /// Discards only the nested fragmentainers <paramref name="contextRoot"/> recorded in
+        /// <paramref name="slot"/> from index <paramref name="keepFirst"/> onward, leaving the ones
+        /// before it untouched.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="ClearNestedFragmentainers"/>'s single-slot form wipes the whole list, which is right
+        /// only while one run of columns ever occupies a slot. A <c>column-span: all</c> element splits a
+        /// multi-column container's content into independent runs that share the same
+        /// <paramref name="slot"/> — an earlier run's columns are already finished and recorded by the
+        /// time a later run's own balance retry needs to discard <i>its</i> abandoned attempt, and that
+        /// discard must not erase the earlier run's geometry along with it.
+        /// </remarks>
+        internal void ClearNestedFragmentainersFrom(CssBox contextRoot, int slot, int keepFirst)
+        {
+            if (!_nested.TryGetValue((contextRoot, slot), out var fragmentainers)) return;
+            if (fragmentainers.Count <= keepFirst) return;
+
+            fragmentainers.RemoveRange(keepFirst, fragmentainers.Count - keepFirst);
+            contextRoot.DiscardEmittedNothing();
+        }
+
+        /// <summary>
         /// States that <paramref name="box"/> occupies <paramref name="rect"/> in the fragmentainer that
         /// rectangle falls in, while holding none of its content there —
         /// <see href="https://www.w3.org/TR/css-tables-3/#fragmentation">css-tables-3 §6.1</see>'s cell that

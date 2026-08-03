@@ -75,6 +75,15 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// to say this because the page vehicle cannot: a forced page break is realized by <i>placement</i>,
     /// and placement cannot escape a container whose engine decides which fragmentainer content lands in.
     /// </param>
+    /// <param name="IsColumnSpanHandoff">
+    /// whether this break-before is <c>CssBox.LayoutBlockChildren</c>'s own <c>column-span: all</c>
+    /// signal (css-multicol-1 §3) rather than an ordinary content boundary — raised either just before a
+    /// spanning direct child of the multi-column container being filled, or just after one (so its own
+    /// single-column fill does not walk straight into whatever ordinary content follows it). Named boxes
+    /// differ between the two (the span itself, or whatever comes after it), so <c>CssLayoutEngineColumns</c>
+    /// reads this flag rather than re-deriving "is this a span boundary" from <see cref="ResumeChildIndex"/>'s
+    /// own box: a clean handoff to the next segment either way, never a genuine overflow.
+    /// </param>
     internal sealed record BlockBreakToken(
         CssBox Box,
         int ResumeSlotIndex,
@@ -82,7 +91,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         BreakToken? ChildToken,
         bool IsBreakBefore,
         double? ResumeTopOverride,
-        bool EscapesNestedFragmentainer = false) : BreakToken(Box, ResumeSlotIndex);
+        bool EscapesNestedFragmentainer = false,
+        bool IsColumnSpanHandoff = false) : BreakToken(Box, ResumeSlotIndex);
 
     /// <summary>
     /// A block container's inline flow stopped part-way through its content.

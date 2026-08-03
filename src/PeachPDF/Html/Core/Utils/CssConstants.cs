@@ -25,6 +25,7 @@ namespace PeachPDF.Html.Core.Utils
     {
         public const string Absolute = "absolute";
         public const string After = "after";
+        public const string All = "all";
         public const string Marker = "marker";
         public const string FirstLetter = "first-letter";
         public const string FirstLine = "first-line";
