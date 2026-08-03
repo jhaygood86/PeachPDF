@@ -3,11 +3,14 @@ using System.IO;
 namespace PeachPDF.CSS
 {
     /// <summary>
-    /// The relational pseudo-class ":has(S)" - matches an element that has a descendant matching S.
-    /// v1 only supports the default (descendant) relative-selector form; leading-combinator forms
-    /// like ":has(&gt; S)"/":has(+ S)"/":has(~ S)" are not supported (the parser silently discards a
-    /// leading combinator today - see SelectorConstructor.Insert(ISelector) - and fixing that touches
-    /// shared parsing code well beyond :has() itself, so it's an explicit, documented follow-up).
+    /// The relational pseudo-class ":has(S)" - matches an element that has a descendant matching S. Also
+    /// supports CSS Selectors 4's leading-combinator relative-selector forms - ":has(&gt; S)" (direct
+    /// child), ":has(+ S)" (next sibling), ":has(~ S)" (any following sibling) - and a forgiving,
+    /// comma-separated list of such alternatives (":has(&gt; .a, + .b)"), each carrying its own leading
+    /// combinator. <see cref="Inner"/> is either a plain <see cref="ISelector"/> (default descendant
+    /// form), a <see cref="RelativeSelector"/> (single non-default alternative), or a
+    /// <see cref="ListSelector"/> mixing either shape per alternative - see
+    /// SelectorConstructor.GetRelativeResult() (parsing) and CssData.HasRelativeMatch (matching).
     /// </summary>
     internal sealed class HasSelector : StylesheetNode, ISelector
     {

@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -11,7 +12,7 @@ namespace PeachPDF.Tests.CSS;
 /// permanently inert (rebuilt into a fake PseudoClassSelector that could only ever match ":link").
 /// :is() didn't parse at all before this change.
 /// </summary>
-public class RelationalPseudoClassSelectorTests
+public class RelationalPseudoClassSelectorTests : CssConstructionFunctions
 {
     // ── :not() ─────────────────────────────────────────────────────────────────
 
@@ -115,6 +116,123 @@ public class RelationalPseudoClassSelectorTests
         var no = await FindBoxById(html, "no");
         Assert.NotEqual("transparent", yes.BackgroundColor);
         Assert.Equal("transparent", no.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Has_ChildCombinator_MatchesOnlyDirectChild()
+    {
+        // ":has(> .foo)" must NOT behave like plain ":has(.foo)" - a .foo that's only a grandchild
+        // (nested one level deeper than a direct child) must not satisfy the child-combinator form.
+        var html = Html(
+            "div:has(> .foo) { background-color: #ff0000; }",
+            "<div id='yes'><span class='foo'>x</span></div><div id='no'><section><span class='foo'>x</span></section></div>");
+        var yes = await FindBoxById(html, "yes");
+        var no = await FindBoxById(html, "no");
+        Assert.NotEqual("transparent", yes.BackgroundColor);
+        Assert.Equal("transparent", no.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Has_ChildCombinator_WithMultiCompoundArgument_AnchorsOnlyItsFirstCompoundToTheChild()
+    {
+        // ":has(> .a .b)" means the DIRECT CHILD must match ".a", and ".b" must be a descendant of
+        // THAT child - not that the direct child itself must satisfy the whole ".a .b" chain as its
+        // own subject (which would require the child to literally match ".b").
+        // ".b" is nested two levels below ".a" (not a direct child of it) to exercise the recursive
+        // any-depth descendant search for the chain's internal (non-leading) combinator, not just its
+        // first level.
+        var html = Html(
+            "div:has(> .a .b) { background-color: #ff0000; }",
+            "<div id='yes'><section class='a'><em><span class='b'>x</span></em></section></div>" +
+            "<div id='no'><div><section class='a'><em><span class='b'>x</span></em></section></div></div>" +
+            "<div id='no-descendant'><section class='a'><em>no b here</em></section></div>");
+        var yes = await FindBoxById(html, "yes");
+        var no = await FindBoxById(html, "no");
+        var noDescendant = await FindBoxById(html, "no-descendant");
+        Assert.NotEqual("transparent", yes.BackgroundColor);
+        Assert.Equal("transparent", no.BackgroundColor);
+        Assert.Equal("transparent", noDescendant.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Has_ChildCombinator_WithUniversalSelector_DoesNotMatchATextOnlyChild()
+    {
+        // ":has(> *)" must only consider real element children - a child that's pure text (no element
+        // child at all) must not satisfy it, even though "*" matches any non-root node in general.
+        var html = Html(
+            "div:has(> *) { background-color: #ff0000; }",
+            "<div id='yes'><span>x</span></div><div id='no'>just text</div>");
+        var yes = await FindBoxById(html, "yes");
+        var no = await FindBoxById(html, "no");
+        Assert.NotEqual("transparent", yes.BackgroundColor);
+        Assert.Equal("transparent", no.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Has_AdjacentSiblingCombinator_MatchesOnlyImmediateNextSibling()
+    {
+        var html = Html(
+            "div:has(+ .foo) { background-color: #ff0000; }",
+            "<div id='yes'></div><span class='foo'>x</span>" +
+            "<div id='no'></div><section></section><span class='foo'>x</span>");
+        var yes = await FindBoxById(html, "yes");
+        var no = await FindBoxById(html, "no");
+        Assert.NotEqual("transparent", yes.BackgroundColor);
+        Assert.Equal("transparent", no.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Has_GeneralSiblingCombinator_MatchesAnyFollowingSibling()
+    {
+        // Same markup shape as the adjacent-sibling test's "no" case (.foo is a later, not immediate,
+        // sibling) - "~" must succeed where "+" fails.
+        var html = Html(
+            "div:has(~ .foo) { background-color: #ff0000; }",
+            "<div id='yes'></div><section></section><span class='foo'>x</span>" +
+            "<div id='no'></div>");
+        var yes = await FindBoxById(html, "yes");
+        var no = await FindBoxById(html, "no");
+        Assert.NotEqual("transparent", yes.BackgroundColor);
+        Assert.Equal("transparent", no.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task Has_MixedLeadingCombinatorsInCommaList_MatchesEitherBranch()
+    {
+        // Each comma-separated alternative tracks its own leading combinator independently.
+        var html = Html(
+            "div:has(> .a, + .b) { background-color: #ff0000; }",
+            "<div id='child'><span class='a'>x</span></div>" +
+            "<div id='sibling'></div><span class='b'>x</span>" +
+            "<div id='none'><section><span class='a'>x</span></section></div>");
+        var child = await FindBoxById(html, "child");
+        var sibling = await FindBoxById(html, "sibling");
+        var none = await FindBoxById(html, "none");
+        Assert.NotEqual("transparent", child.BackgroundColor);
+        Assert.NotEqual("transparent", sibling.BackgroundColor);
+        Assert.Equal("transparent", none.BackgroundColor);
+    }
+
+    [Theory]
+    [InlineData("div:has(> .foo)")]
+    [InlineData("div:has(+ .foo)")]
+    [InlineData("div:has(~ .foo)")]
+    [InlineData("div:has(.foo)")]
+    public void Has_LeadingCombinator_RoundTripsThroughSelectorText(string selector)
+    {
+        var sheet = ParseStyleSheet($"{selector} {{ }}");
+        Assert.Equal(1, sheet.Rules.Length);
+        Assert.Equal(selector, ((StyleRule)sheet.Rules[0]).SelectorText);
+    }
+
+    [Fact]
+    public void Has_MixedLeadingCombinatorsInCommaList_RoundTripsThroughSelectorText()
+    {
+        // ListSelector.ToCss doesn't insert a space after its comma (existing, pre-existing behavior -
+        // see ListSelector.cs), so this asserts separately from the single-alternative cases above.
+        var sheet = ParseStyleSheet("div:has(> .a, + .b) { }");
+        Assert.Equal(1, sheet.Rules.Length);
+        Assert.Equal("div:has(> .a,+ .b)", ((StyleRule)sheet.Rules[0]).SelectorText);
     }
 
     // ── :where() ───────────────────────────────────────────────────────────────
