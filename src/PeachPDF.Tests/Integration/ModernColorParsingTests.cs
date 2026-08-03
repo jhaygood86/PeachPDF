@@ -214,6 +214,21 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(c.A, 126, 129);
         }
 
+        [Theory]
+        [InlineData("#e11d48", 225, 29, 72)]  // letter-leading hex operand - worked even before the fix
+        [InlineData("#2563eb", 37, 99, 235)]  // digit-leading hex operand - regression, see issue #608
+        public void ColorMix_WithHexOperand_IsOpacityModifier(string hex, int r, int g, int b)
+        {
+            // Tailwind v4 compiles `bg-[#2563eb]/50` to `color-mix(in oklab, #2563eb 50%, transparent)`.
+            // A digit-leading hex operand tokenized as '#' + a number rather than a single hex color
+            // token, so it silently failed to resolve while a letter-leading hex worked.
+            var c = Parse($"color-mix(in oklab, {hex} 50%, transparent)");
+            Assert.InRange(c.R, r - 2, r + 2);
+            Assert.InRange(c.G, g - 2, g + 2);
+            Assert.InRange(c.B, b - 2, b + 2);
+            Assert.InRange(c.A, 126, 129);
+        }
+
         // ── End-to-end: the value survives the cascade and paints ────────────────
 
         [Fact]
