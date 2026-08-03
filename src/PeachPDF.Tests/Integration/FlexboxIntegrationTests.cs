@@ -534,6 +534,23 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(gap, 13, 17);
         }
 
+        [Fact]
+        public async Task ColumnGap_Unset_ResolvesToZero()
+        {
+            // column-gap's initial value is the keyword "normal" (CSS Box Alignment Module Level 3
+            // §8.3), which computes to 0 for a flex container - unlike multicol's ~1em UA convention.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; width:300pt;'>
+                    <div class='item' style='width:60pt; height:20pt; flex-shrink:0;'></div>
+                    <div class='item' style='width:60pt; height:20pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var items = FindAllByClass(root, "item");
+            Assert.Equal(2, items.Count);
+            double gap = items[1].Location.X - items[0].ActualRight;
+            Assert.InRange(gap, -0.5, 0.5);
+        }
+
         // ─── flex-wrap: wrap-reverse ─────────────────────────────────────────────
 
         [Fact]

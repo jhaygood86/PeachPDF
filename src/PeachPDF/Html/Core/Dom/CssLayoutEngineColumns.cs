@@ -81,12 +81,11 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            // column-gap is shared with flex/grid (same CSS property, see CssBox.FlexColumnGap), whose
-            // spec-correct default is 0 — but multicol's own default ("normal") has always rendered as
-            // roughly 1em in practice. Since the shared field can't distinguish "explicitly 0" from
-            // "never set", treat the shared default value as multicol's 1em default; an explicit
-            // `column-gap: 0` is indistinguishable from this and, rarely, will render as ~1em instead.
-            var gap = columnsBox.FlexColumnGap == "0"
+            // column-gap is shared with flex/grid (same CSS property, see CssBox.FlexColumnGap); its
+            // initial value "normal" (CSS Box Alignment Module Level 3 §8.3) behaves differently per
+            // layout mode — flex/grid resolve it to 0, multicol resolves it to exactly 1em (the value
+            // the spec itself mandates for "normal" in a multi-column container).
+            var gap = columnsBox.FlexColumnGap == CssConstants.Normal
                 ? CssValueParser.ParseLength("1em", containerWidth, columnsBox)
                 : CssValueParser.ParseLength(columnsBox.FlexColumnGap, containerWidth, columnsBox);
             var (columnCount, columnWidth) = ResolveColumns(columnsBox, containerWidth, gap);

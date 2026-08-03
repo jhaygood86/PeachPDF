@@ -35,7 +35,8 @@ namespace PeachPDF.Tests.CSS.PropertyTests
                     new object[] { "0.5cm" },
                     new object[] { "0.5cm 2mm" },
                     new object[] { "16% 100%" },
-                    new object[] { "21px 82%" }
+                    new object[] { "21px 82%" },
+                    new object[] { "normal" }
                 }.Union(LengthOrPercentOrGlobalTestValues.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance), ObjectArrayComparer.Instance);
             }
         }
@@ -54,6 +55,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
                     new object[] { "0.5cm 2mm", "0.5cm", "2mm" },
                     new object[] { "16% 100%", "16%", "100%" },
                     new object[] { "21px 82%", "21px", "82%" },
+                    new object[] { "normal", "normal", "normal" },
                     new object[] { "initial inherit", "initial", "inherit" },
                     new object[] { "unset revert-layer", "unset", "revert-layer" },
                 };

@@ -2,7 +2,7 @@
 {
     internal sealed class RowGapProperty : Property
     {
-        private static readonly IValueConverter StyleConverter = Converters.LengthOrPercentConverter
+        private static readonly IValueConverter StyleConverter = Converters.LengthOrPercentOrNormalConverter
                                                                            .OrGlobalValue()
                                                                            .OrDefault(0);
 
