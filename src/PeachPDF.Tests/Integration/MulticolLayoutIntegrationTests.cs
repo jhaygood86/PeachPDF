@@ -595,6 +595,259 @@ namespace PeachPDF.Tests.Integration
                 $"expected ActualSize.Height well under Phase 1's un-banded 320, got {container.ActualSize.Height}");
         }
 
+        // ─── column-span: all (#602) ────────────────────────────────────────────────
+
+        [Fact]
+        public async Task ColumnSpanAll_SpansTheFullContainerWidth_BetweenTwoColumnRuns()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='pre' style='height:20px'></div>
+                    <div class='pre' style='height:20px'></div>
+                    <div id='span' style='column-span:all; height:15px'></div>
+                    <div class='post' style='height:20px'></div>
+                    <div class='post' style='height:20px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+            var span = FindById(root, "span")!;
+            var pre = FindAllByClass(root, "pre");
+            var post = FindAllByClass(root, "post");
+
+            Assert.Equal(2, pre.Count);
+            Assert.Equal(2, post.Count);
+
+            // The span sits at the container's own left edge and reaches its own right edge - the full
+            // content width, not one column's - rather than at some column's own narrower position.
+            Assert.Equal(mc.ClientLeft, span.Location.X, 1);
+            Assert.Equal(mc.ActualRight, span.ActualRight, 1);
+
+            // Both runs still split across the two columns on either side of the span.
+            Assert.Contains(pre, i => i.Location.X > mc.ClientLeft + 50);
+            Assert.Contains(post, i => i.Location.X > mc.ClientLeft + 50);
+
+            // The span sits below both pre-run items and above both post-run items.
+            Assert.All(pre, i => Assert.True(i.ActualBottom <= span.Location.Y + 0.5));
+            Assert.All(post, i => Assert.True(i.Location.Y >= span.ActualBottom - 0.5));
+
+            AssertNoOverlaps([.. pre, span, .. post]);
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_EachRunBalancesIndependently()
+        {
+            // 4 equal items before the span, 4 equal items after - column-fill: balance (the default)
+            // must spread each run's own 4 items 2-and-2 across the container's two columns, not treat
+            // the whole 8-item flow as one balancing problem that happens to have a full-width box in
+            // the middle of it.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='pre' style='height:20px'></div>
+                    <div class='pre' style='height:20px'></div>
+                    <div class='pre' style='height:20px'></div>
+                    <div class='pre' style='height:20px'></div>
+                    <div id='span' style='column-span:all; height:15px'></div>
+                    <div class='post' style='height:20px'></div>
+                    <div class='post' style='height:20px'></div>
+                    <div class='post' style='height:20px'></div>
+                    <div class='post' style='height:20px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+            var pre = FindAllByClass(root, "pre");
+            var post = FindAllByClass(root, "post");
+
+            Assert.Equal(2, pre.Count(i => System.Math.Abs(i.Location.X - mc.ClientLeft) < 0.5));
+            Assert.Equal(2, pre.Count(i => i.Location.X > mc.ClientLeft + 50));
+            Assert.Equal(2, post.Count(i => System.Math.Abs(i.Location.X - mc.ClientLeft) < 0.5));
+            Assert.Equal(2, post.Count(i => i.Location.X > mc.ClientLeft + 50));
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_ColumnRule_OneSegmentPerRun_NeverThroughTheSpan()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-rule:1px solid black; column-gap:0; width:200px'>
+                    <div class='pre' style='height:20px'></div>
+                    <div class='pre' style='height:20px'></div>
+                    <div id='span' style='column-span:all; height:15px'></div>
+                    <div class='post' style='height:20px'></div>
+                    <div class='post' style='height:20px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+            var span = FindById(root, "span")!;
+
+            Assert.NotNull(mc.ColumnRuleSegments);
+            // 2 columns -> 1 internal gap per run; pre-run and post-run -> 2 segments total, none of
+            // them contributed by the span itself.
+            Assert.Equal(2, mc.ColumnRuleSegments!.Count);
+
+            Assert.All(mc.ColumnRuleSegments!, seg =>
+                Assert.False(seg.Top < span.ActualBottom - 0.5 && span.Location.Y < seg.Bottom - 0.5,
+                    $"rule segment [{seg.Top},{seg.Bottom}] overlaps the span [{span.Location.Y},{span.ActualBottom}]"));
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_LeadingSpan_StartsAtTheContainersOwnTop()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div id='span' style='column-span:all; height:15px'></div>
+                    <div class='item' style='height:20px'></div>
+                    <div class='item' style='height:20px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+            var span = FindById(root, "span")!;
+            var items = FindAllByClass(root, "item");
+
+            Assert.Equal(mc.ClientTop, span.Location.Y, 1);
+            Assert.Equal(mc.ClientLeft, span.Location.X, 1);
+            Assert.Equal(mc.ActualRight, span.ActualRight, 1);
+            Assert.All(items, i => Assert.True(i.Location.Y >= span.ActualBottom - 0.5));
+            AssertNoOverlaps([span, .. items]);
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_TrailingSpan_EndsTheColumnFlow()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' style='height:20px'></div>
+                    <div class='item' style='height:20px'></div>
+                    <div id='span' style='column-span:all; height:15px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+            var span = FindById(root, "span")!;
+            var items = FindAllByClass(root, "item");
+
+            Assert.Equal(mc.ClientLeft, span.Location.X, 1);
+            Assert.Equal(mc.ActualRight, span.ActualRight, 1);
+            Assert.All(items, i => Assert.True(i.ActualBottom <= span.Location.Y + 0.5));
+            Assert.Equal(mc.ActualBottom, span.ActualBottom, 1);
+            AssertNoOverlaps([.. items, span]);
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_TwoConsecutiveSpans_BothFullWidthStackedVertically()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div class='item' style='height:20px'></div>
+                    <div id='span1' style='column-span:all; height:15px'></div>
+                    <div id='span2' style='column-span:all; height:12px'></div>
+                    <div class='item' style='height:20px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+            var span1 = FindById(root, "span1")!;
+            var span2 = FindById(root, "span2")!;
+
+            Assert.Equal(mc.ClientLeft, span1.Location.X, 1);
+            Assert.Equal(mc.ClientLeft, span2.Location.X, 1);
+            Assert.Equal(mc.ActualRight, span1.ActualRight, 1);
+            Assert.Equal(mc.ActualRight, span2.ActualRight, 1);
+            Assert.True(span2.Location.Y >= span1.ActualBottom - 0.5, "expected span2 stacked below span1");
+            AssertNoOverlaps([span1, span2]);
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_WithColumnCount1_DegeneratesToOrdinaryBlockFlow()
+        {
+            // With only one column region already, spanning is a no-op - the columnCount <= 1 branch
+            // never partitions into segments at all, so this must behave exactly like an ordinary
+            // block-flow sibling.
+            var html = Wrap(@"
+                <div id='mc' style='columns:1; width:200px'>
+                    <div class='item' style='height:20px'></div>
+                    <div id='span' style='column-span:all; height:15px'></div>
+                    <div class='item' style='height:20px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var items = FindAllByClass(root, "item");
+            var span = FindById(root, "span")!;
+
+            Assert.Equal(2, items.Count);
+            Assert.Equal(items[0].Location.X, span.Location.X, 1);
+            Assert.Equal(items[0].Location.X, items[1].Location.X, 1);
+            Assert.True(span.Location.Y > items[0].Location.Y);
+            Assert.True(items[1].Location.Y > span.Location.Y);
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_RetryInThePostSpanRun_DoesNotEraseThePreSpanRunsFragments()
+        {
+            // Regression for the _nested fragmentainer-bookkeeping hazard the segmented design
+            // introduced: FragmentEmitter._nested is keyed by (columnsBox, slot), and before this fix a
+            // later run's own balance-retry cleared the whole key - including an earlier run's
+            // already-finished, correct columns sharing it. An oversized first child in the post-span
+            // run (too tall for the remaining page budget, forced whole per this engine's atomic-child
+            // model - the same shape as OversizedForcedChild_ColumnRuleDoesNotOverlapContent) reliably
+            // drives that run's own target-growth retry.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-rule:1px solid black; column-gap:0; width:200px'>
+                    <div class='pre' id='p1' style='height:2px'></div>
+                    <div id='span' style='column-span:all; height:2px'></div>
+                    <div class='post' style='height:80px'></div>
+                    <div class='post' style='height:10px'></div>
+                    <div class='post' style='height:10px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 30);
+            var mc = FindById(root, "mc")!;
+            var p1 = FindById(root, "p1")!;
+            var span = FindById(root, "span")!;
+            var post = FindAllByClass(root, "post");
+
+            Assert.Equal(3, post.Count);
+            AssertNoOverlaps([p1, span, .. post]);
+
+            // The pre-span run's own column was recorded before the post-span run's retry - if the
+            // retry had cleared the whole (mc, slot) entry instead of just its own tail, this box would
+            // have no fragment at all rather than a real, non-degenerate one.
+            var fragment = FragmentPaintHarness.FragmentOf(container, p1, page: 0);
+            Assert.True(fragment.Rect.Width > 0 && fragment.Rect.Height > 0);
+
+            Assert.NotNull(mc.ColumnRuleSegments);
+            Assert.NotEmpty(mc.ColumnRuleSegments!);
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_PostSpanRunOverflowingThePage_ResumesOnlyThatRun()
+        {
+            // Real text in each item, so every page it lands on carries printable content and is
+            // materialized (see ContentBeyondTheLastColumn_ResumesOnTheNextPage above for why).
+            var postItems = string.Concat(Enumerable.Range(1, 12)
+                .Select(i => $"<div class='post' id='p{i}' style='height:40px'>Item {i}</div>"));
+            var html = Wrap($@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div id='pre' style='height:20px'>Pre</div>
+                    <div id='span' style='column-span:all; height:20px'>Span</div>
+                    {postItems}
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 120);
+
+            var pre = FindById(root, "pre")!;
+            var span = FindById(root, "span")!;
+            var post = FindAllByClass(root, "post");
+
+            Assert.Equal(12, post.Count);
+            AssertNoOverlaps([pre, span, .. post]);
+
+            Assert.True(container.FragmentainerPasses > 1, "expected the post-span run to have resumed");
+
+            // The pre-span run and the span itself both finished on the first page - only the post-span
+            // run's overflow should have carried on to a later one.
+            Assert.Equal(0, container.PageIndexOf(pre.Location.Y));
+            Assert.Equal(0, container.PageIndexOf(span.Location.Y));
+            Assert.Contains(post, i => container.PageIndexOf(i.Location.Y) > 0);
+
+            // Two columns maintained across every page the post-span run occupies.
+            var xs = post.Select(b => System.Math.Round(b.Location.X)).Distinct().ToList();
+            Assert.Equal(2, xs.Count);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         // Minimal RGraphics spy recording only DrawLine calls - per this repo's painting-test

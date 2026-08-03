@@ -1570,6 +1570,14 @@ namespace PeachPDF.Html.Core
             _emitter?.ClearNestedFragmentainers(contextRoot, slot);
 
         /// <summary>
+        /// Discards only what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> from
+        /// index <paramref name="keepFirst"/> onward, leaving an earlier <c>column-span: all</c> run's
+        /// already-finished columns in the same slot untouched.
+        /// </summary>
+        internal void ClearNestedFragmentainersFrom(CssBox contextRoot, int slot, int keepFirst) =>
+            _emitter?.ClearNestedFragmentainersFrom(contextRoot, slot, keepFirst);
+
+        /// <summary>
         /// States that <paramref name="box"/> occupies <paramref name="rect"/> in the fragmentainer that
         /// rectangle falls in while holding none of its content there — see
         /// <see cref="FragmentEmitter.RecordContinuationShell"/>.

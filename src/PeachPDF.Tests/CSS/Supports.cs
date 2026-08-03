@@ -188,17 +188,16 @@ namespace PeachPDF.Tests.CSS
             Assert.True(supports.Condition.Check());
         }
 
-        // column-span's cssDataType includes 'all' (real dispatch/ColumnSpanProperty stores it), but its
-        // supportsDataType override excludes it - CssLayoutEngineColumns.cs never reads ColumnSpan, so
-        // 'column-span: all' has no layout effect and @supports must say no. Same shape as break-before's
-        // region/avoid-region split above.
+        // column-span: all breaks the column flow (CssLayoutEngineColumns.cs reads ColumnSpan and drives
+        // spanning-column layout for it - see #602), so it now has an ordinary keyword entry with no
+        // supportsDataType override, and @supports must say yes.
         [Fact]
-        public void SupportsColumnSpanAllRule_NotGenuinelyEnforced()
+        public void SupportsColumnSpanAllRule()
         {
             var source = @"@supports (column-span: all) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check());
+            Assert.True(supports.Condition.Check());
         }
 
         [Fact]
