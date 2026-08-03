@@ -4545,6 +4545,44 @@ await SaveShowcaseAsync("first_line", "Typography & Text", "::first-line",
     "The ::first-line pseudo-element styling the first rendered line of a paragraph.",
     firstLineHtml, pdfConfig);
 
+// --- text-indent showcase (CSS Text 3 §3: plain, hanging, each-line, hanging + each-line) ---
+
+const string TextIndentCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Georgia, serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif; break-after: avoid }
+    p { margin: 0 0 0.8em; width: 380px }
+    .plain { text-indent: 2em }
+    .hanging { text-indent: 2em hanging }
+    .eachline { text-indent: 2em each-line }
+    .both { text-indent: 2em hanging each-line }
+    </style>
+    """;
+
+var textIndentHtml = "<!DOCTYPE html><html><head>" + TextIndentCss + "</head><body>" +
+
+    "<h1>CSS Text 3 text-indent Test Page</h1>" +
+
+    "<h2>Plain (first line only)</h2>" +
+    "<p class=\"plain\">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>" +
+
+    "<h2>hanging (a bibliography-style hanging indent - every line except the first)</h2>" +
+    "<p class=\"hanging\">Doe, J. (2026). A very long reference title that wraps onto a second and third line, exactly the case a hanging indent is meant for. <em>Journal of Typesetting</em>, 12(3), 45&ndash;67.</p>" +
+
+    "<h2>each-line (indents the first line and the line after every &lt;br&gt;, not soft-wrapped continuations)</h2>" +
+    "<p class=\"eachline\">Roses are red,<br>Violets are blue,<br>This line is long enough that it wraps onto a continuation line which stays flush,<br>And so, dear reader, are you.</p>" +
+
+    "<h2>hanging each-line together (only soft-wrap continuations are indented)</h2>" +
+    "<p class=\"both\">Roses are red,<br>Violets are blue,<br>This line is long enough that it wraps onto a continuation line which is indented,<br>And so, dear reader, are you.</p>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
+    "text-indent's plain, hanging, and each-line forms (CSS Text 3), including their combination.",
+    textIndentHtml, pdfConfig);
+
 // --- CSS1 canvas background showcase ---
 
 var canvasBackgroundHtml = "<!DOCTYPE html><html><head><style>" +

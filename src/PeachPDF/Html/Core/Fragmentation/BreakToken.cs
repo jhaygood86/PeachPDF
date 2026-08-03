@@ -109,13 +109,21 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// (<see href="https://www.w3.org/TR/css-break-3/#widows-orphans">§5.4</see>: line boxes left in a
     /// fragment before the break), which the cumulative count cannot answer for any fragment but the first.
     /// </param>
+    /// <param name="FollowsForcedBreak">
+    /// <see cref="Dom.CssLineBox.FollowsForcedBreak"/> of the line-in-progress the break discarded (a line
+    /// box is monolithic, css-break-3 §4.1, so the whole of it - not just the word that didn't fit - moves
+    /// to the next fragmentainer, and <c>CreateLineBoxes</c> rebuilds it there as a fresh seed line). Carried
+    /// across the boundary so <c>text-indent: each-line</c> (CSS Text 3 §3) still recognizes a resumed line
+    /// that follows a forced break in the source, rather than only a line born mid-fragmentainer.
+    /// </param>
     internal sealed record InlineBreakToken(
         CssBox Box,
         int ResumeSlotIndex,
         IReadOnlyList<int> ResumePath,
         int ResumeWordIndex,
         int CompletedLineCount,
-        int LinesKeptHere = 0) : BreakToken(Box, ResumeSlotIndex)
+        int LinesKeptHere = 0,
+        bool FollowsForcedBreak = false) : BreakToken(Box, ResumeSlotIndex)
     {
         /// <summary>
         /// Compared by <b>contents</b>, because the driver's no-progress backstop is an equality test —
@@ -139,10 +147,11 @@ namespace PeachPDF.Html.Core.Fragmentation
             && ResumeWordIndex == other.ResumeWordIndex
             && CompletedLineCount == other.CompletedLineCount
             && LinesKeptHere == other.LinesKeptHere
+            && FollowsForcedBreak == other.FollowsForcedBreak
             && ResumePath.SequenceEqual(other.ResumePath);
 
         public override int GetHashCode() =>
             HashCode.Combine(Box, ResumeSlotIndex, ResumeWordIndex, CompletedLineCount, LinesKeptHere,
-                ResumePath.Count);
+                FollowsForcedBreak, ResumePath.Count);
     }
 }

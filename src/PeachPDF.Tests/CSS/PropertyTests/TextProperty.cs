@@ -203,6 +203,84 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         }
 
         [Fact]
+        public void TextIndentLegalHanging()
+        {
+            var snippet = "text-indent:40pt hanging";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-indent", property.Name);
+            Assert.True(property.HasValue);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextIndentProperty>(property);
+            var concrete = (TextIndentProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.Equal("40pt hanging", concrete.Value);
+        }
+
+        [Fact]
+        public void TextIndentLegalEachLine()
+        {
+            var snippet = "text-indent:40pt each-line";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-indent", property.Name);
+            Assert.True(property.HasValue);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextIndentProperty>(property);
+            var concrete = (TextIndentProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.Equal("40pt each-line", concrete.Value);
+        }
+
+        [Fact]
+        public void TextIndentLegalHangingEachLine()
+        {
+            var snippet = "text-indent:40pt hanging each-line";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-indent", property.Name);
+            Assert.True(property.HasValue);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextIndentProperty>(property);
+            var concrete = (TextIndentProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.Equal("40pt hanging each-line", concrete.Value);
+        }
+
+        [Fact]
+        public void TextIndentLegalReorderedKeywordsPreservesAuthoredOrder()
+        {
+            var snippet = "text-indent:each-line hanging 40pt";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-indent", property.Name);
+            Assert.True(property.HasValue);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextIndentProperty>(property);
+            var concrete = (TextIndentProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.Equal("each-line hanging 40pt", concrete.Value);
+        }
+
+        [Fact]
+        public void TextIndentIllegalHangingAloneMissingLength()
+        {
+            var snippet = "text-indent:hanging";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-indent", property.Name);
+            Assert.False(property.HasValue);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextIndentProperty>(property);
+        }
+
+        [Fact]
+        public void TextIndentIllegalDuplicateKeyword()
+        {
+            var snippet = "text-indent:40pt hanging hanging";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("text-indent", property.Name);
+            Assert.False(property.HasValue);
+            Assert.False(property.IsImportant);
+            Assert.IsType<TextIndentProperty>(property);
+        }
+
+        [Fact]
         public void TextDecorationIllegal()
         {
             var snippet = "text-decoration: line-pass";

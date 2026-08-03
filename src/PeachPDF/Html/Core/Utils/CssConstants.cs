@@ -83,6 +83,8 @@ namespace PeachPDF.Html.Core.Utils
         public const string Inset = "inset";
         public const string Italic = "italic";
         public const string Justify = "justify";
+        public const string Hanging = "hanging";
+        public const string EachLine = "each-line";
         public const string Large = "large";
         public const string Larger = "larger";
         public const string Left = "left";

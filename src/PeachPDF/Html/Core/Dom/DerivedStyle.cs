@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Parse;
@@ -503,6 +504,8 @@ namespace PeachPDF.Html.Core.Dom
         private double _actualLetterSpacing = double.NaN;
 
         private double _actualTextIndent = double.NaN;
+        private bool _actualTextIndentHanging;
+        private bool _actualTextIndentEachLine;
 
         public double ActualWordSpacing => _actualWordSpacing;
         public double ActualLetterSpacing => _actualLetterSpacing;
@@ -533,13 +536,56 @@ namespace PeachPDF.Html.Core.Dom
                 : CssValueParser.ParseLength(Style.Text.LetterSpacing, 1, Owner);
         }
 
+        /// <summary>The length/percentage component of <c>text-indent</c>, resolved to layout units. Which
+        /// line(s) it applies to depends on <see cref="ActualTextIndentHanging"/>/
+        /// <see cref="ActualTextIndentEachLine"/> - see <c>CssLayoutEngine.GetLineTextIndent</c>.</summary>
         public double ActualTextIndent
         {
             get
             {
-                if (double.IsNaN(_actualTextIndent))
-                    _actualTextIndent = CssValueParser.ParseLength(Style.Text.TextIndent, Owner.Size.Width, Owner);
+                EnsureTextIndentResolved();
                 return _actualTextIndent;
+            }
+        }
+
+        /// <summary>Whether <c>text-indent</c>'s <c>hanging</c> keyword was specified (CSS Text 3 §3).</summary>
+        public bool ActualTextIndentHanging
+        {
+            get
+            {
+                EnsureTextIndentResolved();
+                return _actualTextIndentHanging;
+            }
+        }
+
+        /// <summary>Whether <c>text-indent</c>'s <c>each-line</c> keyword was specified (CSS Text 3 §3).</summary>
+        public bool ActualTextIndentEachLine
+        {
+            get
+            {
+                EnsureTextIndentResolved();
+                return _actualTextIndentEachLine;
+            }
+        }
+
+        /// <summary>Resolves and caches <see cref="ActualTextIndent"/>/<see cref="ActualTextIndentHanging"/>/
+        /// <see cref="ActualTextIndentEachLine"/> together, since they all come from one parse of the same
+        /// <c>text-indent</c> value (<see cref="TextIndentGrammar"/>, shared with the CSS-OM layer that
+        /// validated it at parse time).</summary>
+        private void EnsureTextIndentResolved()
+        {
+            if (!double.IsNaN(_actualTextIndent)) return;
+
+            var tokens = CssValueParser.GetCssTokens(Style.Text.TextIndent);
+            if (TextIndentGrammar.TryParse(tokens, out var length, out var hasHanging, out var hasEachLine))
+            {
+                _actualTextIndent = CssValueParser.ParseLength(length.Text, Owner.Size.Width, Owner);
+                _actualTextIndentHanging = hasHanging;
+                _actualTextIndentEachLine = hasEachLine;
+            }
+            else
+            {
+                _actualTextIndent = 0;
             }
         }
 

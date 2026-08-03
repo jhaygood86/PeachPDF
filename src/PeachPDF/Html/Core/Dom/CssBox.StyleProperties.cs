@@ -1064,13 +1064,23 @@ namespace PeachPDF.Html.Core.Dom
             set
             {
                 var area = _computedStyle.Text;
-                var newArea = area.SetPropertyValue(area.TextIndent, NoEms(value), static (a, v) => a with { TextIndent = v });
+                var newArea = area.SetPropertyValue(area.TextIndent, NoEmsTextIndent(value), static (a, v) => a with { TextIndent = v });
                 _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });
             }
         }
 
-        /// <summary>Gets the text indentation (on first line only).</summary>
+        /// <summary>Gets the text indentation of an indented line (see <see cref="ActualTextIndentHanging"/>/
+        /// <see cref="ActualTextIndentEachLine"/> for which lines that is).</summary>
         public double ActualTextIndent => DerivedStyle.ActualTextIndent;
+
+        /// <summary>Whether <c>text-indent</c>'s <c>hanging</c> keyword was specified - inverts which
+        /// lines <see cref="ActualTextIndent"/> applies to (CSS Text 3 §3).</summary>
+        public bool ActualTextIndentHanging => DerivedStyle.ActualTextIndentHanging;
+
+        /// <summary>Whether <c>text-indent</c>'s <c>each-line</c> keyword was specified - also applies
+        /// <see cref="ActualTextIndent"/> to the line after every forced break, not just the block's own
+        /// first line (CSS Text 3 §3).</summary>
+        public bool ActualTextIndentEachLine => DerivedStyle.ActualTextIndentEachLine;
 
         public string TextAlign
         {
@@ -1956,6 +1966,25 @@ namespace PeachPDF.Html.Core.Dom
                 length = len.ConvertEmToPoints(GetEmHeight()).ToString();
             }
             return length;
+        }
+
+        /// <summary>Like <see cref="NoEms"/>, but for <c>text-indent</c>'s compound
+        /// <c>&lt;length-percentage&gt; &amp;&amp; hanging? &amp;&amp; each-line?</c> grammar - <see cref="CssLength"/>
+        /// only understands a bare length, so it must be isolated from any trailing keyword before eager
+        /// em-to-pt conversion can run, then the keywords reattached.</summary>
+        private string NoEmsTextIndent(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+
+            var tokens = CssValueParser.GetCssTokens(value);
+            if (!TextIndentGrammar.TryParse(tokens, out var length, out var hasHanging, out var hasEachLine))
+                return value; // a global keyword (initial/inherit/...) or an already-invalid value - left untouched, as NoEms does
+
+            List<string> parts = [NoEms(length.Text)];
+            if (hasHanging) parts.Add(CssConstants.Hanging);
+            if (hasEachLine) parts.Add(CssConstants.EachLine);
+
+            return string.Join(' ', parts);
         }
 
         /// <summary>

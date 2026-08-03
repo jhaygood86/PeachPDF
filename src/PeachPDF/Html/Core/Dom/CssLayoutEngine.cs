@@ -324,12 +324,25 @@ namespace PeachPDF.Html.Core.Dom
                     : 0)
                 : blockBox.ClientTop;
 
-            var seedLine = new CssLineBox(blockBox);
+            // A resumed pass's seed line rebuilds whole the line-in-progress the previous pass discarded
+            // (a line box is monolithic, css-break-3 §4.1) - carrying its FollowsForcedBreak bit forward
+            // is what lets `text-indent: each-line` (CSS Text 3 §3) still recognize a resumed line that
+            // follows a forced break in the source, not just one born mid-fragmentainer.
+            var seedLine = new CssLineBox(blockBox) { FollowsForcedBreak = resume?.FollowsForcedBreak ?? false };
+
+            // text-indent's line-start-side placement (CSS Text 3 §3) is physical-left for LTR, so it is
+            // added to the flow's starting X here; for RTL the line-start side is physical-right, which
+            // FlowBox instead reserves by narrowing the wrap boundary (see its own `isRtl` handling) -
+            // adding it here too would double-reserve the space and can make ApplyRightAlignment's
+            // indent-aware flush target unreachable by a mere shift.
+            var isRtl = blockBox.Direction.Value == DirectionMode.Rtl;
 
             CssLineBoxCoordinates coordinates = new()
             {
                 Line = seedLine,
-                CurrentX = startX + (resume is null ? blockBox.ActualTextIndent : 0),
+                CurrentX = startX + (!isRtl
+                    ? GetLineTextIndent(blockBox, isFirstLine: resume is null, seedLine.FollowsForcedBreak)
+                    : 0),
                 CurrentY = startY,
                 MaxRight = startX,
                 MaxBottom = startY,
@@ -1235,6 +1248,13 @@ namespace PeachPDF.Html.Core.Dom
             var startX = coordinates.CurrentX;
             var startY = coordinates.CurrentY;
 
+            // text-indent's line-start side is physical-right under RTL (CSS Text 3 §3) - reserved here by
+            // narrowing the wrap boundary for the currently-active line's own indent, rather than by an
+            // added CurrentX offset (which is what LTR uses; see CreateLineBoxes'/this function's own
+            // `coordinates.CurrentX += GetLineTextIndent(...)` sites, both skipped for RTL). Recomputed
+            // per line rather than cached, since which line is "current" changes as this walk wraps.
+            var isRtl = blockBox.Direction.Value == DirectionMode.Rtl;
+
             // Since #321 a pass fills one fragmentainer, so a resumed pass re-enters this box from the
             // top even when its content began pages ago - the words it already placed are skipped by
             // ordinal below. Read before any of them are visited, this names the ordinal of the box's
@@ -1368,7 +1388,11 @@ namespace PeachPDF.Html.Core.Dom
                         foreach (var word in b.Words)
                             boxRight += word.FullWidth;
 
-                        if (boxRight > limitRight)
+                        var noWrapLimitRight = isRtl
+                            ? limitRight - GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak)
+                            : limitRight;
+
+                        if (boxRight > noWrapLimitRight)
                             wrapNoWrapBox = true;
                     }
 
@@ -1397,6 +1421,14 @@ namespace PeachPDF.Html.Core.Dom
                         {
                             actualLimitRight = lastRightIntersectingFloatBox.Location.X -
                                                lastRightIntersectingFloatBox.ActualMarginLeft - rightSpacing;
+                        }
+
+                        // RTL reserves text-indent's line-start space on this (wrap-boundary) side instead
+                        // of an added CurrentX offset - see this function's own `isRtl` comment.
+                        if (isRtl)
+                        {
+                            actualLimitRight -= GetLineTextIndent(blockBox,
+                                coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak);
                         }
 
                         var overflows = b.WhiteSpace != CssConstants.NoWrap && b.WhiteSpace != CssConstants.Pre
@@ -1453,9 +1485,19 @@ namespace PeachPDF.Html.Core.Dom
                                 coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + leftSpacing;
                             }
 
-                            coordinates.Line = new CssLineBox(blockBox);
+                            coordinates.Line = new CssLineBox(blockBox) { FollowsForcedBreak = word.IsLineBreak };
                             coordinates.LineStartOrdinal = wordOrdinal;
                             coordinates.Line.StartOrdinal = wordOrdinal;
+
+                            // Never the block's first formatted line (that's the seed line CreateLineBoxes
+                            // creates) - only `each-line`/`hanging` (CSS Text 3 §3) can select this line.
+                            // RTL reserves the same space on the opposite (wrap-boundary) side instead -
+                            // see the seed line's own comment on `isRtl`.
+                            if (!isRtl)
+                            {
+                                coordinates.CurrentX += GetLineTextIndent(blockBox, isFirstLine: false,
+                                    coordinates.Line.FollowsForcedBreak);
+                            }
 
                             if (word.IsImage || word.Equals(b.FirstWord))
                             {
@@ -1529,7 +1571,8 @@ namespace PeachPDF.Html.Core.Dom
                                         // was trying to sit in), never assumed to be "the pass after this
                                         // one" - see ResumeSlotForBreakBefore's own remarks.
                                         word.ResumeSlotForBreakBefore(),
-                                        [], coordinates.LineStartOrdinal, CompletedLineCount: 0);
+                                        [], coordinates.LineStartOrdinal, CompletedLineCount: 0,
+                                        FollowsForcedBreak: coordinates.Line.FollowsForcedBreak);
                                     return;
                                 }
 
@@ -2228,6 +2271,24 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Resolves the used <c>text-indent</c> for one line (CSS Text 3 §3): the plain
+        /// <c>&lt;length-percentage&gt;</c> applies to the block's first formatted line only; <c>each-line</c>
+        /// additionally applies it to the line following every forced break; <c>hanging</c> inverts the
+        /// selection (every line *except* the ones above). <paramref name="isFirstLine"/> is the block's true
+        /// first formatted line, not merely the first line of a page fragment - a resumed fragment's opening
+        /// line passes <c>false</c> here, so under <c>hanging</c> it is (correctly) still indented, being a
+        /// non-first line. Its <paramref name="followsForcedBreak"/> is carried over from the line-in-progress
+        /// the break discarded (<see cref="Fragmentation.InlineBreakToken.FollowsForcedBreak"/>) rather than
+        /// assumed false, so <c>each-line</c> still recognizes a resumed line that follows a forced break in
+        /// the source.
+        /// </summary>
+        private static double GetLineTextIndent(CssBox blockBox, bool isFirstLine, bool followsForcedBreak)
+        {
+            var selected = isFirstLine || (blockBox.ActualTextIndentEachLine && followsForcedBreak);
+            return (blockBox.ActualTextIndentHanging ? !selected : selected) ? blockBox.ActualTextIndent : 0d;
+        }
+
+        /// <summary>
         /// Spreads the words of <paramref name="lineBox"/> to fill its measure, per
         /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">CSS Text §7.3</see>'s
         /// <c>justify</c>.
@@ -2246,7 +2307,8 @@ namespace PeachPDF.Html.Core.Dom
             if (blockFinished && lineBox.Equals(lineBox.OwnerBox.LineBoxes[^1]))
                 return;
 
-            var indent = lineBox.Equals(lineBox.OwnerBox.LineBoxes[0]) ? lineBox.OwnerBox.ActualTextIndent : 0f;
+            var indent = GetLineTextIndent(lineBox.OwnerBox, lineBox.Equals(lineBox.OwnerBox.LineBoxes[0]),
+                lineBox.FollowsForcedBreak);
             var textSum = 0d;
             var words = 0d;
             var availWidth = lineBox.OwnerBox.ClientRectangle.Width - indent;
@@ -2262,7 +2324,17 @@ namespace PeachPDF.Html.Core.Dom
                 return; //Avoid Zero division
 
             var spacing = (availWidth - textSum) / words; //Spacing that will be used
-            var currentX = lineBox.OwnerBox.ClientLeft + indent;
+
+            // text-indent belongs on the line-start side (CSS Text 3 §3), which is the physical right
+            // under RTL - so the indent moves from the leading `currentX` offset to the trailing forced-
+            // flush edge instead (mirroring ApplyRightAlignment's own direction handling below, including
+            // why FlowBox's RTL wrap-boundary narrowing has to agree with this: the words this line holds
+            // were already wrapped assuming the reduced measure `availWidth` computes above). This
+            // runs before ApplyBidiReordering, which only reflects positions within the span these two
+            // edges bound - it never moves the span itself - so which edge carries the indent here is
+            // what decides which physical side it ends up on after mirroring.
+            var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
+            var currentX = lineBox.OwnerBox.ClientLeft + (isRtl ? 0 : indent);
 
             foreach (var word in lineBox.Words)
             {
@@ -2271,7 +2343,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (word == lineBox.Words[^1])
                 {
-                    word.Left = lineBox.OwnerBox.ClientRight - word.Width;
+                    word.Left = lineBox.OwnerBox.ClientRight - word.Width - (isRtl ? indent : 0);
                 }
             }
         }
@@ -2315,9 +2387,25 @@ namespace PeachPDF.Html.Core.Dom
             if (line.Words.Count == 0)
                 return;
 
+            // ApplyRightAlignment runs for every plain RTL paragraph (RTL's default `text-align: start`
+            // resolves to `right`), and it runs before ApplyBidiReordering, which only mirrors positions
+            // within the span this flush-right shift establishes - it never moves the span's own edges.
+            // text-indent's line-start-side space (CSS Text 3 §3) is what puts it on the physical right
+            // after mirroring, instead of stranding it on the left next to the reading-order-last
+            // character - but insetting the flush target here is only half of that: FlowBox already
+            // narrowed the wrap boundary by this same amount for RTL (its own `isRtl` handling), so
+            // content never naturally reaches past this reduced target in the first place. Insetting only
+            // here, while still adding the indent to the flow-time CurrentX offset (what an earlier version
+            // of this fix did), double-reserves the space and can leave `diff` negative - the guard below
+            // then leaves the line exactly where flow put it, un-aligned, whenever a line's natural
+            // slack is smaller than the indent.
+            var isFirstLine = line.Equals(line.OwnerBox.LineBoxes[0]);
+            var indent = GetLineTextIndent(line.OwnerBox, isFirstLine, line.FollowsForcedBreak);
+            var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
 
             var lastWord = line.Words[^1];
-            var right = line.OwnerBox.ActualRight - line.OwnerBox.ActualPaddingRight - line.OwnerBox.ActualBorderRightWidth;
+            var right = line.OwnerBox.ActualRight - line.OwnerBox.ActualPaddingRight - line.OwnerBox.ActualBorderRightWidth
+                        - (isRtl ? indent : 0);
             var diff = right - lastWord.Right - lastWord.OwnerBox.ActualBorderRightWidth - lastWord.OwnerBox.ActualPaddingRight;
 
             if (!(diff > 0)) return;

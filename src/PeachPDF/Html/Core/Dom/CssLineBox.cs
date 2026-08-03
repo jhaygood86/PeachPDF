@@ -51,6 +51,15 @@ namespace PeachPDF.Html.Core.Dom
         public int StartOrdinal { get; internal set; }
 
         /// <summary>
+        /// Whether this line was created because a forced-break word (<see cref="CssRect.IsLineBreak"/> -
+        /// the synthetic <c>"\n"</c> marker from a <c>&lt;br&gt;</c> or a preserved newline) ended the
+        /// previous line, as opposed to a natural/no-wrap-box wrap. Defaults false (the seed line of a
+        /// block, or a fragmentainer's resumed opening line, is never a forced break). This is the signal
+        /// <c>text-indent: each-line</c> needs (CSS Text 3 §3) - see <c>CssLayoutEngine.GetLineTextIndent</c>.
+        /// </summary>
+        public bool FollowsForcedBreak { get; internal set; }
+
+        /// <summary>
         /// Gets the words inside the linebox
         /// </summary>
         public List<CssRect> Words { get; }
