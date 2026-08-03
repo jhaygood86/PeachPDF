@@ -158,15 +158,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal("border-box", box.BoxSizing);
         }
 
-        [Theory]
-        [InlineData("border-box", true)]
-        [InlineData("content-box", true)]
-        [InlineData("padding-box", false)]
-        public void IsValidBoxSizing_ChecksKnownValues(string value, bool expected)
-        {
-            Assert.Equal(expected, CssUtils.IsValidBoxSizing(value));
-        }
-
         [Fact]
         public async Task NumericFontWeight_700OrAbove_ResolvesToBoldFont()
         {
@@ -405,6 +396,32 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(CssConstants.Auto, CssDefaults.GetInitialValue(name));
         }
 
+        [Fact]
+        public async Task Page_IsSnapshottableAndHasAnInitialValue()
+        {
+            var (box, _) = await FindDivBoxAndParser("");
+
+            Assert.Contains("page", CssUtils.SnapshotProperties(box).Keys);
+            Assert.Equal(CssConstants.Auto, CssDefaults.GetInitialValue("page"));
+        }
+
+        // Regression test for the registry-driven SnapshotPropertyNames fix (CSS Cascade 5 §6.3): "page"
+        // and "-peachpdf-pdf-tag-type" have real setters/getters but were missing from the old
+        // hand-maintained _knownPropertyNames list, so revert/revert-layer on either property fell
+        // through to CssDefaults.GetInitialValue instead of restoring the actual value from the previous
+        // cascade origin. -peachpdf-pdf-tag-type makes the bug observable: the UA stylesheet sets a
+        // <div>'s tag type to "div" (not the property's own initial value "auto"), so a revert that
+        // silently fell back to "auto" was visibly wrong, not merely a hypothetical gap. (The CSS
+        // tokenizer lowercases the UA stylesheet's "Div" identifier - CssUtils.SetPropertyValue's own
+        // direct round-trip tests, which bypass the tokenizer, are case-preserving instead.)
+        [Fact]
+        public async Task Revert_RestoresPdfTagType_ToUaStylesheetValue_NotInitialValue()
+        {
+            var (box, _) = await FindDivBoxAndParser("-peachpdf-pdf-tag-type: Custom; -peachpdf-pdf-tag-type: revert;");
+
+            Assert.Equal("div", box.PdfTagType);
+        }
+
         // Same two prerequisites for box-decoration-break (css-break-3 §6.2): without the known-name entry
         // there is no revert snapshot to roll back to, and without the initial-value entry
         // "initial"/"unset"/"revert" resolve to null and the declaration is dropped. The behavioural
@@ -433,6 +450,28 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var (box, _) = await FindDivBoxAndParser(css + ";");
 
             Assert.Equal(expected, box.BreakBefore);
+        }
+
+        // Regression coverage for the spec-compliance audit's biggest category of finding: a value that's
+        // genuinely handled by real layout code (CssLayoutEngineFlex.cs/CssLayoutEngineGrid.cs/CssBox.cs)
+        // but was missing from the JSON's supportedValues, so the generated Validate_X rejected it before
+        // it ever reached the box - silently dropping a value that used to work under the pre-migration
+        // permissive cssom passthrough. Each row here would fail if that value were still missing.
+        [Theory]
+        [InlineData("display", "inline-table", "inline-table")]
+        [InlineData("justify-content", "normal", "normal")]
+        [InlineData("justify-content", "end", "end")]
+        [InlineData("align-content", "end", "end")]
+        [InlineData("align-items", "self-end", "self-end")]
+        [InlineData("align-self", "self-end", "self-end")]
+        [InlineData("justify-items", "self-end", "self-end")]
+        [InlineData("justify-self", "self-end", "self-end")]
+        [InlineData("word-break", "keep-all", "keep-all")]
+        public async Task Cascade_PreviouslyDroppedKeyword_NowStored(string property, string value, string expected)
+        {
+            var (box, _) = await FindDivBoxAndParser($"{property}: {value};");
+
+            Assert.Equal(expected, CssUtils.GetPropertyValue(box, property));
         }
 
         [Fact]
@@ -478,6 +517,10 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("box-decoration-break", "sliced", "clone")]
         [InlineData("column-count", "0", "2")]
         [InlineData("column-span", "sometimes", "all")]
+        [InlineData("flex-grow", "-1", "2")]
+        [InlineData("flex-shrink", "-1", "2")]
+        [InlineData("font-size", "xxx-large", "large")]
+        [InlineData("line-height", "auto", "1.5")]
         public async Task SetPropertyValue_InvalidValue_IsRejected(string name, string invalid, string valid)
         {
             var (box, parser) = await FindDivBoxAndParser("");

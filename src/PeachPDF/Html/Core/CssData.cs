@@ -291,12 +291,24 @@ namespace PeachPDF.Html.Core
                         IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, qualified, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
                         break;
 
-                    // @supports / @container: PeachPDF cannot evaluate the condition (Layer B has no
-                    // supports/container-query engine), so the whole block is IGNORED — its inner rules
-                    // are not indexed and therefore never apply. This is deliberately conservative: rather
-                    // than apply rules whose guard we can't test (which can apply a `not`-guarded fallback
-                    // and its enhanced counterpart at once), we drop them. Tracked at #283 (@supports) /
-                    // #284 (@container). @keyframes/@document/etc. are likewise not indexed.
+                    // @supports: the condition is invariant (IConditionFunction.Check() takes no
+                    // arguments - unlike @media, which is re-evaluated per query since media features
+                    // can vary per call, see MediaQueryMatcher.Matches below), so it's resolved once,
+                    // right here, rather than carried forward as per-query state the way EnclosingMedia
+                    // is. A true condition indexes the nested rules normally (inheriting the surrounding
+                    // media/@layer context, exactly like an IMediaRule with no conditions); a false one
+                    // contributes nothing - the same "block is a no-op" outcome as before this was wired
+                    // up, just decided by the real condition now instead of unconditionally.
+                    case ISupportsRule supportsRule:
+                        if (supportsRule.Condition.Check())
+                            IndexRules(supportsRule.Rules, isUserAgent, enclosingMedia, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                        break;
+
+                    // @container: PeachPDF cannot evaluate the condition (truthiness depends on the
+                    // nearest matched element's own container size, not a static parse-time fact the
+                    // way @supports's condition is - there is no element in scope here to test against),
+                    // so the whole block is IGNORED — its inner rules are not indexed and therefore never
+                    // apply. Tracked at #284. @keyframes/@document/etc. are likewise not indexed.
                 }
             }
         }
@@ -306,12 +318,14 @@ namespace PeachPDF.Html.Core
 
         /// <summary>
         /// Enumerates every rule in every stylesheet, descending into the grouping at-rules whose
-        /// contents participate directly in the document (<c>@layer</c>/<c>@media</c>) so an
-        /// <c>@font-face</c>/<c>@property</c>/<c>@page</c> nested inside one is still found.
-        /// <c>@supports</c>/<c>@container</c> are NOT descended — their condition can't be evaluated, so
-        /// the whole block (including any nested at-rules) is ignored, matching <see cref="IndexRules"/>.
-        /// Source order is preserved (a grouping rule's children are yielded at the grouping rule's own
-        /// position), so last-declared-wins collection stays correct.
+        /// contents participate directly in the document (<c>@layer</c>/<c>@media</c>/a
+        /// true-condition <c>@supports</c>) so an <c>@font-face</c>/<c>@property</c>/<c>@page</c>
+        /// nested inside one is still found — including one guarded by <c>@supports</c>, per CSS
+        /// Conditional Rules 3/4 §3 (any at-rule may appear inside a supports-rule's block).
+        /// <c>@container</c> is NOT descended — its condition can't be evaluated (see
+        /// <see cref="IndexRules"/>'s matching case), so the whole block is ignored. Source order is
+        /// preserved (a grouping rule's children are yielded at the grouping rule's own position), so
+        /// last-declared-wins collection stays correct.
         /// </summary>
         internal IEnumerable<IRule> EnumerateRulesRecursive()
         {
@@ -338,7 +352,12 @@ namespace PeachPDF.Html.Core
                         foreach (var child in FlattenRules(mediaRule.Rules))
                             yield return child;
                         break;
-                    // @supports/@container are intentionally not descended — their block is ignored.
+                    case ISupportsRule supportsRule:
+                        if (supportsRule.Condition.Check())
+                            foreach (var child in FlattenRules(supportsRule.Rules))
+                                yield return child;
+                        break;
+                    // @container is intentionally not descended — its block is ignored.
                 }
             }
         }

@@ -729,6 +729,43 @@ namespace PeachPDF.Html.Core.Parse
         private static bool Named(string data, string functionName) =>
             string.Equals(data, functionName, StringComparison.OrdinalIgnoreCase);
 
+        private static bool IsRecognizedTransformFunctionName(string name) =>
+            Named(name, FunctionNames.Translate) || Named(name, FunctionNames.TranslateX) || Named(name, FunctionNames.TranslateY) ||
+            Named(name, FunctionNames.TranslateZ) || Named(name, FunctionNames.Translate3d) ||
+            Named(name, FunctionNames.Scale) || Named(name, FunctionNames.ScaleX) || Named(name, FunctionNames.ScaleY) ||
+            Named(name, FunctionNames.ScaleZ) || Named(name, FunctionNames.Scale3d) ||
+            Named(name, FunctionNames.Rotate) || Named(name, FunctionNames.RotateX) || Named(name, FunctionNames.RotateY) ||
+            Named(name, FunctionNames.RotateZ) || Named(name, FunctionNames.Rotate3d) ||
+            Named(name, FunctionNames.SkewX) || Named(name, FunctionNames.SkewY) || Named(name, FunctionNames.Skew) ||
+            Named(name, FunctionNames.Matrix) || Named(name, FunctionNames.Matrix3d);
+
+        /// <summary>
+        /// Whether every function in a <c>transform</c> value is one <see cref="BuildFunctionMatrix"/>
+        /// actually implements - the real paint-time support surface, not the broader CSS Transforms
+        /// grammar a generic CSS-OM parser would accept. <c>perspective()</c>, for example, parses as
+        /// valid CSS syntax but paint silently drops it (contributes identity, see
+        /// <see cref="BuildFunctionMatrix"/>'s final fallback) - a value that is accepted but never
+        /// actually honored, which is exactly what an @supports oracle must not report as supported.
+        /// Used by <c>CssPropertyRegistry</c>'s <c>cssDataType: "transform"</c> validator.
+        /// </summary>
+        public static bool IsValidTransformValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || string.Equals(value.Trim(), CssConstants.None, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            List<Token> tokens;
+            try
+            {
+                tokens = GetCssTokens(value);
+            }
+            catch
+            {
+                return false;
+            }
+
+            return tokens.Count > 0 && tokens.All(t => t is FunctionToken ft && IsRecognizedTransformFunctionName(ft.Data));
+        }
+
         private static string SingleTokenText(List<Token> group) =>
             group.Count > 0 ? group[0].ToValue() : "0";
 

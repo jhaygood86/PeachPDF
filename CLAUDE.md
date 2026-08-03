@@ -47,6 +47,8 @@ If a new or changed feature gives PeachPDF a new visible capability, add a new s
 - `src/PeachPDF.Tests/` — xUnit test suite, multi-targets net8.0/net10.0.
 - `src/PeachPDF.Cli/` — the `peachpdf` command-line tool (net10.0-only, NativeAOT-published; conventional command-line argument grammar). Also serves as the library's AOT smoke test (a successful `dotnet publish -p:PublishAot=true` proves the whole pipeline AOT-compiles and runs) — replacing the removed `PeachPDF.AotSmokeTest`. The published native binary's assembly name stays `PeachPDF.Cli` (naming it `peachpdf` collides case-insensitively with the `PeachPDF` library and breaks project-reference restore); the release workflow renames it to `peachpdf` when packaging.
 - `src/PeachPDF.Cli.Tests/` — xUnit v3 test suite for the CLI (net10.0-only, to reference the net10-only CLI). Library-behavior changes the CLI depends on are tested in `PeachPDF.Tests` instead (they exercise `PeachPDF` internals); `.github/workflows/test.yml` runs both projects' coverage into one directory so the diff-coverage gate covers the CLI too.
+- `src/PeachPDF.SourceGenerators/` — a Roslyn `IIncrementalGenerator` (netstandard2.0, referenced from `PeachPDF.csproj` as an `Analyzer` `ProjectReference`, never shipped) that turns `src/PeachPDF/css-properties.json` into `CssPropertyRegistry.g.cs`/`SvgPropertyRegistry.g.cs` inside `PeachPDF`. See [CSS/SVG property registry generator](#csssvg-property-registry-generator) below.
+- `src/PeachPDF.SourceGenerators.Tests/` — xUnit v3 test suite for the generator itself (net8.0-only; JSON reader, `PPGxxx` diagnostics, generated-output shape, incrementality), separate from `PeachPDF.Tests` since it drives `CSharpGeneratorDriver` over in-memory compilations rather than testing `PeachPDF` behavior. `.github/workflows/test.yml` runs it into the same coverage directory as the other test projects.
 - `src/PeachPDF.TestHarness/` — a runnable showcase app for visually exercising features (`Program.cs`).
 - `src/PeachPDF.Demo.BlazorWasm/` — the in-browser demo (net10.0-only, Blazor WebAssembly), published to `peachpdf.net/demo/` by `pages.yml`. It is also the library's **WebAssembly smoke test**: a browser has no system fonts, no file system and no Brotli decoder, so it exercises exactly the constraints a server host hides. See its `README.md` for the WOFF-not-WOFF2 and `hyphens: auto` limitations that fall out of the missing Brotli decoder.
 - `assets/fonts/` — **every** font asset the repo bundles, shared by Tests, TestHarness and the demo (each links what it needs into its own output; the demo stages its copies into `wwwroot/fonts/`, which is gitignored build output). Licences sit beside the fonts as `<Name>.LICENSE.txt`; the generator/conversion scripts live here too. Nothing here ships in the library or its NuGet package.
@@ -138,6 +140,70 @@ Report findings the same way `/code-review` does; fix what's actually wrong, and
 - The `Html/Adapters` layer (`RGraphics`/`RAdapter`/`RPen`/etc.) is the abstraction boundary between layout/paint logic and the concrete PDF backend (`PdfSharpCore`). New rendering primitives (tiling, soft masks, dash patterns, etc.) get added here first, then implemented in `GraphicsAdapter`/`XGraphics`/`XGraphicsPdfRenderer`. Check whether an abstract `RGraphics` member you're adding needs updates to the test-only mock implementations (`SpyGraphics` in `TransformIntegrationTests.cs`, `RecordingGraphics` in `CssLayoutEngineTablePageBreakTests.cs`).
 - Before building new PDF-writing infrastructure (patterns, soft masks, shadings), check whether `PdfSharpCore` already has an unused primitive for it (`XForm`/`PdfFormXObject`, `PdfTilingPattern`, `PdfSoftMask` have all been found pre-existing-but-uncalled at various points) rather than assuming it needs to be built from scratch.
 - A `/Luminosity` soft mask's `/G` form AND the content form it masks both need their own `/Group << /S /Transparency /CS ... /I true >>` transparency-group dictionary for spec-conformant readers to actually apply the mask — `XForm`/`PdfFormXObject` don't set this automatically.
+
+## CSS/SVG property registry generator
+
+`src/PeachPDF/css-properties.json` (schema: `src/PeachPDF/css-properties.schema.json`) is the source of
+truth for how PeachPDF applies a CSS/SVG property to `CssBox`/`SvgElement` — inheritance, initial value,
+C# storage location, grammar/validation, and (for the minority that need it) custom setter code. A Roslyn
+source generator (`src/PeachPDF.SourceGenerators/CssPropertyGenerator.cs`) reads it at build time and
+emits `CssPropertyRegistry.g.cs` (namespace `PeachPDF.Html.Core.Utils`) and `SvgPropertyRegistry.g.cs`
+(namespace `PeachPDF.Svg`), each with a bool-returning `TrySet`/`Get` per longhand property plus a
+validation-only `SupportsDeclaration` (the render-layer oracle a future `@supports` implementation
+consumes). This replaces re-deriving a property's grammar by hand each time one is added — the generator
+validates a JSON entry's `propertyPath`/`csharpDataType` against the *real* `CssBox`/`SvgElement` shape at
+build time (`PPG010`/`PPG011`), so a mismatch is a build error naming both files, not a silently wrong
+dictionary entry.
+
+**Current state:** full cutover on both sides. `CssUtils.SetPropertyValue`/`GetPropertyValue`/
+`SnapshotProperties` forward to the generated `CssPropertyRegistry`, and `SvgTreeBuilder.ApplyCommon`
+calls the generated `SvgPropertyRegistry.TrySet` for every common presentation property (fill, stroke,
+stroke-width/-miterlimit/-dasharray/-dashoffset, opacity, fill-rule, fill-opacity, stroke-opacity,
+stroke-linecap, stroke-linejoin) while keeping its own per-property null/`inherit`/invalid-value fallback
+decision — which genuinely differs per property (see each entry's `svg.invalidBehavior` and comment) — since
+the generator has no notion of "the inherited value" to fall back to on its own. `clip-path`, `mask`,
+`marker`/`marker-start`/`marker-mid`/`marker-end`, and `direction` stay hand-written in `ApplyCommon`
+(URL extraction with a side effect, a three-way shorthand override, and a carrier-only property never
+stored on `SvgElement`, respectively — see the plan's reasoning, still accurate). `SvgPropertyContext`
+(generated) carries what a common-property setter needs beyond the raw value: `Adapter`/`ContextColor`,
+`ViewportDiagonal` (for percentage stroke-width/dashoffset/dasharray), and a `ResolveUrlPaintKind`
+delegate (fill/stroke's url()-to-pattern-vs-gradient reclassification, which needs the current document's
+id registries `SvgPropertyContext` itself doesn't carry). `SvgPropertyRegistryEquivalenceTests.cs`
+(`PeachPDF.Tests`) proves the generated SVG dispatch matches `SvgValueParsers` directly, and the SVG
+showcases were re-rasterized through both PDFium and MuPDF (byte-identical PDF content streams
+before/after the `ApplyCommon` refactor) per this repo's paint-verification convention. HTML's own
+equivalence proof (`CssPropertyRegistryEquivalenceTests.cs`/`CssPropertyRegistrySweepEquivalenceTests.cs`)
+no longer exists as a separate file — since `CssUtils` forwards directly to `CssPropertyRegistry`,
+`CssUtilsTests.cs` exercising `CssUtils`'s public API already covers it end-to-end.
+
+**Adding a property**: add one object to `css-properties.json`'s `properties` array. `cssDataType` names
+a grammar (`length`, `color`, `keyword` + `supportedValues`, `integer`, `{type:"enum-keyword", ...}` for a
+`CssProperty<T>`-backed property, `svg-paint`, etc. — see the schema file for the full list) that the
+generator validates against by calling PeachPDF's own real parsers (`CssValueParser`/`SvgValueParsers`),
+never a second, independently-derived grammar check. Reach for `customSetter`/`customValidator` (raw C#,
+tokens `{value}`/`{box}`/`{element}`/`{parser}`/`{ctx}`) only when a property doesn't fit any grammar —
+a multi-field write (`font-family`), a value remap (`page-break-after`'s legacy `always`→`page`), or a
+structurally different storage type. Keep that escape hatch rare: 5 of the 164 hand-written HTML
+properties needed it, and on the SVG side only the four keyword-enum-backed properties
+(`fill-rule`/`stroke-linecap`/`stroke-linejoin`/`opacity`'s svg binding) — each just re-calls the shared
+`SvgValueParsers.TryParseX` a second time to get the typed `out` value, since the generic `Validate_X`
+guard already ran the same check and discarded it — a much higher rate usually means the data type
+vocabulary needs a new case, not another `customSetter`. The 12 `PPG001`–`PPG014` diagnostics
+(`src/PeachPDF.SourceGenerators/Diagnostics.cs`) are
+the first thing to read when a build breaks on a JSON change; `PPG010`/`PPG011` (symbol mismatches) and
+`PPG007` (alias/initial-value disagreement) are the ones most likely to catch a real authoring mistake
+rather than a shape typo.
+
+The generator project itself needed one non-obvious fix worth knowing before touching its `.csproj`:
+`PeachPDF.csproj`'s `Analyzer` `ProjectReference` to it (`ReferenceOutputAssembly="false"`) does not stop
+a publish-time global property like `PublishAot=true` (set by `PeachPDF.Cli`'s AOT smoke test) from
+reaching the generator project's own restore/evaluation — neither `UndefineProperties` nor
+`SetTargetFramework` on that reference stops it, since NuGet's restore-graph walk doesn't consult that
+edge metadata the way MSBuild's own build-time project-to-project protocol does. Left alone this trips
+`NETSDK1207` (AOT unsupported for `netstandard2.0`) even though the generator is never itself published;
+`PeachPDF.SourceGenerators.csproj` pre-sets `<_RequiresILLinkPack>false</_RequiresILLinkPack>` to
+short-circuit the SDK computation that would otherwise derive `true` from `PublishAot` alone, regardless
+of target framework.
 
 ## Out of scope / accepted gaps (don't relitigate without new information)
 

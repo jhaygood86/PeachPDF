@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Roslyn incremental generator that turns css-properties.json into CssPropertyRegistry.g.cs /
+    SvgPropertyRegistry.g.cs inside PeachPDF (see PeachPDF.csproj's Analyzer ProjectReference).
+    Analyzers load into the compiler's own process, so this must target netstandard2.0 - the lowest
+    common denominator every supported Roslyn host (VS, dotnet build, the IDE) can load - overriding
+    src/Directory.Build.props's net8.0;net10.0 default. OutputItemType="Analyzer" on the referencing
+    ProjectReference passes only this project's own DLL to csc, not its PackageReferences' assemblies
+    (confirmed: this project's own build output directory contains only PeachPDF.SourceGenerators.dll,
+    nothing copied from NuGet) - normally a real problem for a dependency, but System.Text.Json is
+    inbox in every modern .NET runtime's shared framework since .NET Core 3.0, and the actual analyzer
+    host this repo's build ever loads into (the SDK's bundled Roslyn/bincore csc, a modern .NET Core
+    process - confirmed by building through the real OutputItemType="Analyzer" path, not just this
+    project's own unit tests, which reference it as an ordinary ProjectReference and would pull the
+    package in via ordinary binary-copy regardless) resolves it from there rather than needing the
+    package's own DLL physically present. The PackageReference below exists purely for netstandard2.0's
+    compile-time API surface, not for anything runtime-loadable. This reasoning does NOT extend to
+    third-party JSON libraries (Newtonsoft.Json, etc.) - those are never inbox and would still throw
+    FileNotFoundException at generator-load time.
+  -->
+  <PropertyGroup>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <!--
+      PeachPDF.csproj's ProjectReference to this project (OutputItemType="Analyzer",
+      ReferenceOutputAssembly="false") does NOT stop a publish-time global property like PublishAot=true
+      (set by PeachPDF.Cli's `dotnet publish -p:PublishAot=true`, the repo's AOT smoke test) from
+      reaching this project's own evaluation during restore - neither UndefineProperties nor
+      SetTargetFramework on that ProjectReference item prevents it, since NuGet's restore-graph walk
+      doesn't consult that edge metadata the way MSBuild's own P2P build protocol does. Left alone,
+      Microsoft.NET.Publish.targets unconditionally sets _RequiresILLinkPack=true whenever
+      $(PublishAot)=='true' - regardless of target framework - which then makes
+      Microsoft.NET.Sdk.FrameworkReferenceResolution.targets run ProcessFrameworkReferences with
+      PublishAot=true against netstandard2.0 and fail with NETSDK1207 ("Ahead-of-time compilation is
+      not supported for the target framework"), even though this project is never itself published.
+      Pre-setting _RequiresILLinkPack here (a plain, non-global project property, unlike PublishAot)
+      short-circuits that computation before it runs, since the SDK's own target only computes it
+      when still unset.
+    -->
+    <_RequiresILLinkPack>false</_RequiresILLinkPack>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+    <!--
+      Pinned to net8.0's own inbox version (this repo's minimum supported TFM, src/Directory.Build.props)
+      DELIBERATELY LOW, not latest: whatever Roslyn host loads this analyzer (dotnet build's bundled
+      csc, a different SDK version in CI, an IDE's analyzer host) resolves this reference against ITS
+      OWN runtime's inbox System.Text.Json - and standard .NET assembly-version unification only lets a
+      NEWER present assembly satisfy an OLDER reference, never the other way round. Confirmed empirically:
+      pinning to 9.0.0 built fine here but threw FileNotFoundException ("Could not load ... Version=9.0.0.0")
+      the moment a net8.0 host (this project's own test project, PeachPDF.SourceGenerators.Tests) tried to
+      actually run the generator, because net8.0's shared framework only carries System.Text.Json 8.0.0.0.
+      8.0.0 is the safe floor for this repo; do not bump this without re-verifying generator load against
+      every host TFM this repo builds under (net8.0 and net10.0 today).
+    -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+
+</Project>

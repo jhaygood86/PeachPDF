@@ -1,0 +1,2989 @@
+{
+  "$schema": "./css-properties.schema.json",
+  "$comment": "Source of truth for PeachPDF's CSS/SVG property dispatch, consumed by PeachPDF.SourceGenerators to emit CssPropertyRegistry.g.cs / SvgPropertyRegistry.g.cs. See CLAUDE.md's generator section for the authoring workflow and the PPGxxx diagnostics that check this file. Every HTML/SVG property PeachPDF's renderer dispatches lives here — see docs/html-css-support.md for the reader-facing compatibility matrix this data backs.",
+  "properties": [
+    {
+      "name": "border-bottom-width",
+      "comment": "Accepts a valid length, or the auto keyword (compared case-insensitively — an existing inconsistency vs. most other keyword checks in this codebase, encoded as-is rather than silently fixed).",
+      "inherited": false,
+      "initialValue": "medium",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BorderBottomWidth",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "transform",
+      "comment": "cssDataType 'cssom' keeps real dispatch exactly as permissive as before (matching actual CSS transform-list semantics: a value with one unimplemented function, e.g. perspective(), is still syntactically valid and its implemented functions still apply - see TransformIntegrationTests.Perspective_IsUnsupported_TreatedAsIdentity). supportsDataType 'transform' is the stricter, @supports-only grammar (CssValueParser.IsValidTransformValue): the real set of transform functions BuildFunctionMatrix implements at paint time. perspective() parses as valid CSS but is silently dropped at paint time, so it must not report as @supports-true even though it's still accepted and stored by real dispatch.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "supportsDataType": "transform",
+      "html": {
+        "propertyPath": "Transform",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "box-sizing",
+      "comment": "Replaces the old CssUtils.IsValidBoxSizing helper.",
+      "inherited": false,
+      "initialValue": "content-box",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "border-box",
+        "content-box"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BoxSizing",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "direction",
+      "comment": "TrySet/SupportsDeclaration validate the value against Map.DirectionModes' own keys (ltr/rtl, case-insensitive) via the enum-keyword data type; an unrecognized value is rejected. CssProperty<T>.FromCssText itself never rejects once a value reaches the setter — it falls back to the keyword default (ltr) — so the fallback only applies to a value that already passed validation upstream. The svg binding is a carrier-only, hand-written entry (applyIn: manual) — SVG never stores direction on SvgElement, only threads it through SvgInheritedPaint for text runs, so it is deliberately excluded from the generated SVG dispatch (see SvgTreeBuilder.ApplyCommon's manual-property section).",
+      "inherited": true,
+      "initialValue": "ltr",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "DirectionMode",
+        "keywordMap": "Map.DirectionModes",
+        "fallback": "DirectionMode.Ltr"
+      },
+      "html": {
+        "propertyPath": "Direction",
+        "csharpDataType": "CssProperty<DirectionMode>",
+        "area": "TextArea",
+        "getterExpression": "{box}.Direction.ToString()"
+      },
+      "svg": {
+        "propertyPath": null,
+        "inheritedFrom": "Direction",
+        "invalidBehavior": "inherit",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "page-break-after",
+      "comment": "Legacy alias of break-after (css-break-3 §3.3), sharing its storage; the CSS2.1 'always' keyword remaps to break-after's 'page'.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "aliasOf": "break-after",
+      "html": {
+        "propertyPath": "BreakAfter",
+        "csharpDataType": "string",
+        "area": "BreakArea",
+        "customSetter": "{box}.BreakAfter = {value} is CssConstants.Always ? CssConstants.Page : {value};"
+      }
+    },
+    {
+      "name": "font-family",
+      "comment": "Multi-field write: the resolved family (FontFamily) and the raw authored list (FontFamilyList) both come from one declaration. The initial value is UA/platform-defined (CssConstants.DefaultFont is computed per-platform at runtime), hence an {expression} rather than a string literal.",
+      "inherited": true,
+      "initialValue": {
+        "expression": "CssConstants.DefaultFont"
+      },
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "FontFamily",
+        "csharpDataType": "string?",
+        "area": "FontArea",
+        "customSetter": "{box}.FontFamily = {parser}.GetFontFamilyByName({value}); {box}.FontFamilyList = {value};"
+      }
+    },
+    {
+      "name": "margin-block-start",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space — CssBox.LogicalProperties.cs. Read exactly once by CssBox.ResolveLogicalProperties, which maps it to one of margin-top/-right/-bottom/-left depending on this box's own resolved direction/writing-mode; that cross-property resolution stays hand-written (a single JSON entry cannot express a function of two other properties' resolved values). No initial value by design: the physical property it resolves into already has one. Validation mirrors margin-top's (none).",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "resolvesTo": {
+        "group": "margin",
+        "axis": "block",
+        "side": "start"
+      },
+      "html": {
+        "propertyPath": "MarginBlockStart",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "overflow-wrap",
+      "comment": "Grammar accepted by Layer A, deliberately unimplemented by Layer B (docs/html-css-support.md). TrySet/SupportsDeclaration correctly return false, replacing the old CssUtils dispatch's silent no-op lambda. inherited: false and initialValue: null both preserve today's actual behavior (CssDefaults never listed it as inherited, despite CSS Text 4 §3 specifying inheritance for it) rather than silently fixing a spec deviation this migration isn't scoped to touch.",
+      "inherited": false,
+      "initialValue": null,
+      "cssDataType": "unsupported",
+      "html": {
+        "propertyPath": null,
+        "csharpDataType": null,
+        "hasGetter": false,
+        "snapshot": false
+      }
+    },
+    {
+      "name": "fill",
+      "comment": "SVG <paint> (svg-shapes-1.1 §13.2): none | url(#id) | currentColor | <color>. Produces a structured SvgPaint, not a string, so it needs its own data type rather than HTML's plain 'color'. No customSetter needed — the generated default svg-paint setter already reclassifies a url() reference from gradient to pattern against the current document's id registries via ctx.ResolveUrlPaintKind (SvgTreeBuilder.ResolveUrlPaintKind bound as a delegate); SvgValueParsers.TryParsePaint has no document context of its own and always classifies url(#id) as GradientRef.",
+      "inherited": true,
+      "initialValue": "black",
+      "cssDataType": "svg-paint",
+      "svg": {
+        "propertyPath": "Fill",
+        "csharpDataType": "SvgPaint",
+        "inheritedFrom": "Fill",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke",
+      "comment": "Same SVG <paint> grammar and url()-reclassification need as fill (see its comment) — stroke just targets a different SvgElement field and a different initial value/inherited carrier.",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": "svg-paint",
+      "svg": {
+        "propertyPath": "Stroke",
+        "csharpDataType": "SvgPaint",
+        "inheritedFrom": "Stroke",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke-width",
+      "comment": "SVG <length> (svg-strokeprops-1.1 §11.4), percentages resolved against the viewport diagonal via ctx.ViewportDiagonal. Falls back to the inherited value on an invalid value, matching SvgTreeBuilder.ApplyCommon's existing '?? inherited.StrokeWidth' behavior.",
+      "inherited": true,
+      "initialValue": "1",
+      "cssDataType": "svg-length",
+      "svg": {
+        "propertyPath": "StrokeWidth",
+        "csharpDataType": "double",
+        "inheritedFrom": "StrokeWidth",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke-miterlimit",
+      "comment": "SVG <number> (svg-strokeprops-1.1 §11.4), parsed via the shared SvgValueParsers.ParseLength grammar with no reference length (a plain unitless number is what the spec actually allows here, and ParseLength already accepts a bare number). Falls back to the inherited value on an invalid value.",
+      "inherited": true,
+      "initialValue": "4",
+      "cssDataType": "svg-length",
+      "svg": {
+        "propertyPath": "StrokeMiterLimit",
+        "csharpDataType": "double",
+        "inheritedFrom": "StrokeMiterLimit",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke-dashoffset",
+      "comment": "SVG <length> (svg-strokeprops-1.1 §11.4), percentages resolved against the viewport diagonal. Falls back to the inherited value on an invalid value.",
+      "inherited": true,
+      "initialValue": "0",
+      "cssDataType": "svg-length",
+      "svg": {
+        "propertyPath": "StrokeDashOffset",
+        "csharpDataType": "double",
+        "inheritedFrom": "StrokeDashOffset",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "stroke-dasharray",
+      "comment": "SVG <length># | none (svg-strokeprops-1.1 §11.4) — SvgValueParsers.ParseDashArray already returns null (invalid) vs. an array, so this is its own data type (svg-length-list) rather than a plain length. Falls back to the inherited value on an invalid value.",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": "svg-length-list",
+      "svg": {
+        "propertyPath": "StrokeDashArray",
+        "csharpDataType": "double[]",
+        "inheritedFrom": "StrokeDashArray",
+        "invalidBehavior": "inherit"
+      }
+    },
+    {
+      "name": "fill-rule",
+      "comment": "Preserves SvgValueParsers.TryParseFillRule's current silent fallback to 'nonzero' on an invalid value (invalidBehavior: leave-unset, since SvgElement's own FillRule constructor default is already Nonzero) rather than SVG 1.1 §11.4's specified fallback to the inherited value — an existing spec deviation, encoded as-is and tracked separately (see the stroke-linecap entry's identical note), not fixed by this migration. supportedValues/keywordComparison document the real grammar; customValidator/customSetter reuse the shared TryParseFillRule parser directly rather than re-deriving a keyword→enum mapping (customSetter code runs only after Validate_FillRule already passed, so the second TryParseFillRule call here can never itself fail).",
+      "inherited": true,
+      "initialValue": "nonzero",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "nonzero",
+        "evenodd"
+      ],
+      "keywordComparison": "ordinal-ignore-case",
+      "svg": {
+        "propertyPath": "FillRule",
+        "csharpDataType": "RFillMode",
+        "inheritedFrom": "FillRule",
+        "invalidBehavior": "leave-unset",
+        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseFillRule({value}, out _)",
+        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseFillRule({value}, out var parsed);\n{element}.FillRule = parsed;"
+      }
+    },
+    {
+      "name": "fill-opacity",
+      "comment": "Same shape as opacity (see its comment) — TryParseOpacity's own fallback (1.0) already equals both the initial value and SvgElement's FillOpacity constructor default, so 'leave field unwritten on failure' reproduces SvgTreeBuilder.ApplyCommon's existing present-but-invalid behavior exactly (distinct from stroke-width/etc., which fall back to inherited instead).",
+      "inherited": true,
+      "initialValue": "1",
+      "cssDataType": "svg-opacity",
+      "svg": {
+        "propertyPath": "FillOpacity",
+        "csharpDataType": "double",
+        "inheritedFrom": "FillOpacity",
+        "invalidBehavior": "leave-unset"
+      }
+    },
+    {
+      "name": "stroke-opacity",
+      "comment": "Same shape as fill-opacity (see its comment).",
+      "inherited": true,
+      "initialValue": "1",
+      "cssDataType": "svg-opacity",
+      "svg": {
+        "propertyPath": "StrokeOpacity",
+        "csharpDataType": "double",
+        "inheritedFrom": "StrokeOpacity",
+        "invalidBehavior": "leave-unset"
+      }
+    },
+    {
+      "name": "stroke-linecap",
+      "comment": "Preserves SvgValueParsers.TryParseLineCap's current silent fallback to 'butt' on an invalid value (invalidBehavior: leave-unset, since SvgElement's own StrokeLineCap constructor default is already Butt) rather than SVG 1.1 §11.4's specified fallback to the inherited value — an existing spec deviation, encoded as-is and tracked separately, not fixed by this migration. customValidator/customSetter reuse the shared TryParseLineCap parser directly (see the fill-rule entry's identical note) instead of the inline enum-mapping switch this entry used before the SVG cutover.",
+      "inherited": true,
+      "initialValue": "butt",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "butt",
+        "round",
+        "square"
+      ],
+      "keywordComparison": "ordinal-ignore-case",
+      "svg": {
+        "propertyPath": "StrokeLineCap",
+        "csharpDataType": "RLineCap",
+        "inheritedFrom": "StrokeLineCap",
+        "invalidBehavior": "leave-unset",
+        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineCap({value}, out _)",
+        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineCap({value}, out var parsed);\n{element}.StrokeLineCap = parsed;"
+      }
+    },
+    {
+      "name": "stroke-linejoin",
+      "comment": "Same shape as stroke-linecap (see its comment) — TryParseLineJoin's own fallback (Miter) already equals SvgElement's StrokeLineJoin constructor default.",
+      "inherited": true,
+      "initialValue": "miter",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "miter",
+        "round",
+        "bevel"
+      ],
+      "keywordComparison": "ordinal-ignore-case",
+      "svg": {
+        "propertyPath": "StrokeLineJoin",
+        "csharpDataType": "RLineJoin",
+        "inheritedFrom": "StrokeLineJoin",
+        "invalidBehavior": "leave-unset",
+        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineJoin({value}, out _)",
+        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineJoin({value}, out var parsed);\n{element}.StrokeLineJoin = parsed;"
+      }
+    },
+    {
+      "name": "border-left-width",
+      "inherited": false,
+      "initialValue": "medium",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BorderLeftWidth",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-right-width",
+      "inherited": false,
+      "initialValue": "medium",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BorderRightWidth",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-top-width",
+      "inherited": false,
+      "initialValue": "medium",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BorderTopWidth",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-bottom-style",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "solid",
+        "hidden",
+        "dotted",
+        "dashed",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BorderBottomStyle",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-left-style",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "solid",
+        "hidden",
+        "dotted",
+        "dashed",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BorderLeftStyle",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-right-style",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "solid",
+        "hidden",
+        "dotted",
+        "dashed",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BorderRightStyle",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-top-style",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "solid",
+        "hidden",
+        "dotted",
+        "dashed",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BorderTopStyle",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-bottom-color",
+      "inherited": false,
+      "initialValue": "currentcolor",
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "BorderBottomColor",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-left-color",
+      "inherited": false,
+      "initialValue": "currentcolor",
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "BorderLeftColor",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-right-color",
+      "inherited": false,
+      "initialValue": "currentcolor",
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "BorderRightColor",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-top-color",
+      "inherited": false,
+      "initialValue": "currentcolor",
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "BorderTopColor",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-top-left-radius",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BorderTopLeftRadius",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-top-right-radius",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BorderTopRightRadius",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-bottom-right-radius",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BorderBottomRightRadius",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-bottom-left-radius",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BorderBottomLeftRadius",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "box-shadow",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BoxShadow",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "transform-origin",
+      "inherited": false,
+      "initialValue": "50% 50% 0",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "TransformOrigin",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "clip-path",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "ClipPath",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "aspect-ratio",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "AspectRatio",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "opacity",
+      "comment": "customValidator implements <alpha-value> (css-color-4 §14): a plain number or a percentage, matching CssValueParser.ParseNumber's actual grammar (which the html setter's ActualOpacity resolution calls) rather than the cssDataType 'number' clause alone, which doesn't accept a percentage.",
+      "inherited": false,
+      "initialValue": "1",
+      "cssDataType": "number",
+      "html": {
+        "propertyPath": "Opacity",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea",
+        "customValidator": "{value}.EndsWith('%') ? double.TryParse({value}[..^1], global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _) : double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)"
+      },
+      "svg": {
+        "propertyPath": "Opacity",
+        "csharpDataType": "double",
+        "invalidBehavior": "leave-unset",
+        "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity({value}, out _)",
+        "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity({value}, out var parsed);\n{element}.Opacity = parsed;"
+      }
+    },
+    {
+      "name": "content",
+      "inherited": false,
+      "initialValue": "normal",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "Content",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "counter-increment",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "CounterIncrement",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "counter-reset",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "CounterReset",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "counter-set",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "CounterSet",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "string-set",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "StringSet",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "page",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "PageName",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-tag-type",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "PdfTagType",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "margin-bottom",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "html": {
+        "propertyPath": "MarginBottom",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "margin-left",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "html": {
+        "propertyPath": "MarginLeft",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "margin-right",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "html": {
+        "propertyPath": "MarginRight",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "margin-top",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "html": {
+        "propertyPath": "MarginTop",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "padding-bottom",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "PaddingBottom",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "padding-left",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "PaddingLeft",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "padding-right",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "PaddingRight",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "padding-top",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "PaddingTop",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "left",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "html": {
+        "propertyPath": "Left",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "top",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "html": {
+        "propertyPath": "Top",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "right",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "html": {
+        "propertyPath": "Right",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "bottom",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "html": {
+        "propertyPath": "Bottom",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "width",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "Width",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "max-width",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "MaxWidth",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "min-width",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "MinWidth",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "height",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "Height",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "max-height",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "MaxHeight",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "min-height",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "MinHeight",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "break-before",
+      "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "avoid-region",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "column",
+        "region"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "column"
+      ],
+      "html": {
+        "propertyPath": "BreakBefore",
+        "csharpDataType": "string",
+        "area": "BreakArea"
+      }
+    },
+    {
+      "name": "break-inside",
+      "comment": "avoid-region is stored (real dispatch) like break-before/-after's region/avoid-region, but excluded from supportsDataType's stricter @supports-only list for the same reason - see break-before's comment.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "avoid-region"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column"
+      ],
+      "html": {
+        "propertyPath": "BreakInside",
+        "csharpDataType": "string",
+        "area": "BreakArea"
+      }
+    },
+    {
+      "name": "break-after",
+      "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "avoid-region",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "column",
+        "region"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "auto",
+        "avoid",
+        "avoid-page",
+        "avoid-column",
+        "page",
+        "left",
+        "right",
+        "recto",
+        "verso",
+        "column"
+      ],
+      "html": {
+        "propertyPath": "BreakAfter",
+        "csharpDataType": "string",
+        "area": "BreakArea"
+      }
+    },
+    {
+      "name": "page-break-before",
+      "comment": "Legacy alias of break-before (css-break-3 §3.3); the CSS2.1 'always' keyword remaps to break-before's 'page'.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "aliasOf": "break-before",
+      "html": {
+        "propertyPath": "BreakBefore",
+        "csharpDataType": "string",
+        "area": "BreakArea",
+        "customSetter": "{box}.BreakBefore = {value} is CssConstants.Always ? CssConstants.Page : {value};"
+      }
+    },
+    {
+      "name": "page-break-inside",
+      "comment": "Legacy alias of break-inside, sharing its storage - no value remap on this axis.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "aliasOf": "break-inside",
+      "html": {
+        "propertyPath": "BreakInside",
+        "csharpDataType": "string",
+        "area": "BreakArea"
+      }
+    },
+    {
+      "name": "box-decoration-break",
+      "inherited": false,
+      "initialValue": "slice",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "slice",
+        "clone"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BoxDecorationBreak",
+        "csharpDataType": "string",
+        "area": "BreakArea"
+      }
+    },
+    {
+      "name": "orphans",
+      "inherited": true,
+      "initialValue": "2",
+      "cssDataType": {
+        "type": "integer",
+        "min": 1
+      },
+      "html": {
+        "propertyPath": "Orphans",
+        "csharpDataType": "string",
+        "area": "PaginationArea"
+      }
+    },
+    {
+      "name": "widows",
+      "inherited": true,
+      "initialValue": "2",
+      "cssDataType": {
+        "type": "integer",
+        "min": 1
+      },
+      "html": {
+        "propertyPath": "Widows",
+        "csharpDataType": "string",
+        "area": "PaginationArea"
+      }
+    },
+    {
+      "name": "background-position",
+      "inherited": false,
+      "initialValue": "0% 0%",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BackgroundPosition",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
+      "name": "background-repeat",
+      "inherited": false,
+      "initialValue": "repeat",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BackgroundRepeat",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
+      "name": "background-size",
+      "inherited": false,
+      "initialValue": "auto auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BackgroundSize",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
+      "name": "background-origin",
+      "inherited": false,
+      "initialValue": "padding-box",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BackgroundOrigin",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
+      "name": "background-clip",
+      "inherited": false,
+      "initialValue": "border-box",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BackgroundClip",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
+      "name": "background-attachment",
+      "inherited": false,
+      "initialValue": "scroll",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "scroll",
+        "fixed",
+        "local"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BackgroundAttachment",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
+      "name": "object-fit",
+      "inherited": false,
+      "initialValue": "fill",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "fill",
+        "contain",
+        "cover",
+        "none",
+        "scale-down"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "ObjectFit",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
+      "name": "object-position",
+      "inherited": false,
+      "initialValue": "50% 50%",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "ObjectPosition",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
+      "name": "background-color",
+      "inherited": false,
+      "initialValue": "transparent",
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "BackgroundColor",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
+      "name": "color",
+      "inherited": true,
+      "initialValue": "black",
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "Color",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "background-image",
+      "comment": "Parses into a structurally different field (image list) via a custom setter; cssDataType 'cssom' delegates grammar validation to the CSS-OM's own BackgroundImageProperty.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BackgroundImages",
+        "csharpDataType": "IReadOnlyList<CssImage>?",
+        "area": "BackgroundArea",
+        "customSetter": "{box}.BackgroundImages = {parser}.ParseImages({value});",
+        "hasGetter": false,
+        "snapshot": false
+      }
+    },
+    {
+      "name": "display",
+      "inherited": false,
+      "initialValue": "inline",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "block",
+        "inline",
+        "inline-block",
+        "none",
+        "flex",
+        "inline-flex",
+        "grid",
+        "inline-grid",
+        "table",
+        "inline-table",
+        "table-row",
+        "table-cell",
+        "table-header-group",
+        "table-footer-group",
+        "table-row-group",
+        "table-column",
+        "table-column-group",
+        "table-caption",
+        "list-item"
+      ],
+      "html": {
+        "propertyPath": "Display",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "float",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "left",
+        "right",
+        "none"
+      ],
+      "html": {
+        "propertyPath": "Float",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "clear",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "left",
+        "right",
+        "both",
+        "none"
+      ],
+      "html": {
+        "propertyPath": "Clear",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "position",
+      "inherited": false,
+      "initialValue": "static",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "static",
+        "relative",
+        "absolute",
+        "fixed",
+        "sticky"
+      ],
+      "html": {
+        "propertyPath": "Position",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "overflow",
+      "comment": "'clip' is intentionally excluded - CssUtilsTests/MonolithicContentTests confirm it isn't (and wasn't, pre-migration) an accepted value, so it never overrides the inherited/initial 'visible' and MonolithicContent.IsScrollContainer sees 'visible', not a stored 'clip'. 'auto'/'scroll' are genuinely used by MonolithicContent.IsScrollContainer (a non-visible overflow makes a box a scroll container, treated as monolithic/unbreakable across pages) even though they don't distinguish real interactive scrolling from 'hidden' - both are meaningful CSS Overflow 3 values for a non-interactive, paginated renderer.",
+      "inherited": false,
+      "initialValue": "visible",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "visible",
+        "hidden",
+        "scroll",
+        "auto"
+      ],
+      "html": {
+        "propertyPath": "Overflow",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "z-index",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "keyword",
+        "integer"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "ZIndex",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "border-collapse",
+      "inherited": true,
+      "initialValue": "separate",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "collapse",
+        "separate"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BorderCollapse",
+        "csharpDataType": "string",
+        "area": "TableArea"
+      }
+    },
+    {
+      "name": "border-spacing",
+      "inherited": true,
+      "initialValue": "0",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BorderSpacing",
+        "csharpDataType": "string",
+        "area": "TableArea"
+      }
+    },
+    {
+      "name": "empty-cells",
+      "inherited": true,
+      "initialValue": "show",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "show",
+        "hide"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "EmptyCells",
+        "csharpDataType": "string",
+        "area": "TableArea"
+      }
+    },
+    {
+      "name": "line-height",
+      "comment": "A unitless multiplier value (e.g. 'line-height: 1.5') is not modeled here and reports unsupported - IsValidLength requires a unit or a bare zero, matching ParseLength's own length-only reading at DerivedStyle.ActualLineHeight. customValidator deliberately excludes 'auto' - CSS Inline Layout 3's grammar is 'normal | <number> | <length-percentage>', auto was never part of it; DerivedStyle.ActualLineHeight has no special case for it and would silently collapse line height to 0 if it were accepted (a pre-existing quirk carried over from the old IsValidLengthProperty helper written for width/height-style 'auto' properties, not spec-derived).",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "normal"
+      ],
+      "html": {
+        "propertyPath": "LineHeight",
+        "csharpDataType": "string",
+        "area": "TextArea",
+        "customValidator": "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength({value}) || {value} == \"normal\" || double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)"
+      }
+    },
+    {
+      "name": "vertical-align",
+      "inherited": false,
+      "initialValue": "baseline",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "baseline",
+        "sub",
+        "super",
+        "top",
+        "bottom",
+        "middle",
+        "text-top",
+        "text-bottom"
+      ],
+      "html": {
+        "propertyPath": "VerticalAlign",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "text-indent",
+      "inherited": true,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "TextIndent",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "text-align",
+      "inherited": true,
+      "initialValue": "start",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "left",
+        "right",
+        "center",
+        "justify",
+        "start",
+        "end"
+      ],
+      "html": {
+        "propertyPath": "TextAlign",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "text-transform",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "uppercase",
+        "lowercase",
+        "capitalize"
+      ],
+      "html": {
+        "propertyPath": "TextTransform",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "white-space",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "normal",
+        "nowrap",
+        "pre",
+        "pre-wrap",
+        "pre-line"
+      ],
+      "html": {
+        "propertyPath": "WhiteSpace",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "word-break",
+      "comment": "cssDataType's own supportedValues includes keep-all because Layer A's own WordBreakConverter/Map.WordBreaks parses and stores it as valid CSS (WordBreak.KeepAll), even though CssBox.cs's line-breaking logic only special-cases break-all - keep-all has no distinct effect (see .claude/accepted-gaps/word-break-keep-all-no-effect.md). supportsDataType is the stricter, @supports-only list excluding keep-all for exactly that reason, same shape as break-before's region/avoid-region split.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "normal",
+        "break-all",
+        "keep-all"
+      ],
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "normal",
+        "break-all"
+      ],
+      "html": {
+        "propertyPath": "WordBreak",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "visibility",
+      "inherited": true,
+      "initialValue": "visible",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "visible",
+        "hidden"
+      ],
+      "html": {
+        "propertyPath": "Visibility",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "word-spacing",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "normal"
+      ],
+      "html": {
+        "propertyPath": "WordSpacing",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "letter-spacing",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "normal"
+      ],
+      "html": {
+        "propertyPath": "LetterSpacing",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "writing-mode",
+      "inherited": true,
+      "initialValue": "horizontal-tb",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "WritingMode",
+        "keywordMap": "Map.WritingModes",
+        "fallback": "WritingMode.HorizontalTb"
+      },
+      "html": {
+        "propertyPath": "WritingMode",
+        "csharpDataType": "CssProperty<WritingMode>",
+        "area": "TextArea",
+        "getterExpression": "{box}.WritingMode.ToString()"
+      }
+    },
+    {
+      "name": "unicode-bidi",
+      "inherited": false,
+      "initialValue": "normal",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "UnicodeMode",
+        "keywordMap": "Map.UnicodeModes",
+        "fallback": "UnicodeMode.Normal"
+      },
+      "html": {
+        "propertyPath": "UnicodeBidi",
+        "csharpDataType": "CssProperty<UnicodeMode>",
+        "area": "TextArea",
+        "getterExpression": "{box}.UnicodeBidi.ToString()"
+      }
+    },
+    {
+      "name": "hyphens",
+      "inherited": true,
+      "initialValue": "manual",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "manual",
+        "auto"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "Hyphens",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "text-decoration-line",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "TextDecorationLine",
+        "csharpDataType": "string",
+        "area": "TextDecorationArea"
+      }
+    },
+    {
+      "name": "text-decoration-style",
+      "inherited": false,
+      "initialValue": "solid",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "TextDecorationStyle",
+        "csharpDataType": "string",
+        "area": "TextDecorationArea"
+      }
+    },
+    {
+      "name": "text-decoration-color",
+      "comment": "Real color grammar now validated (was previously a documented gap: no color validation despite being a color property).",
+      "inherited": false,
+      "initialValue": "currentcolor",
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "TextDecorationColor",
+        "csharpDataType": "string",
+        "area": "TextDecorationArea"
+      }
+    },
+    {
+      "name": "font-size",
+      "comment": "supportedValues deliberately excludes CSS Fonts 4's xxx-large - FontSizeResolver.Resolve's switch has no case for it, so an accepted 'font-size: xxx-large' would fall through to CssValueParser.ParseLength (which can't parse the bare keyword), Math.Max(0, ...)-clamp to 0, and silently render invisible text rather than being rejected.",
+      "inherited": true,
+      "initialValue": "medium",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "xx-small",
+        "x-small",
+        "small",
+        "medium",
+        "large",
+        "x-large",
+        "xx-large",
+        "smaller",
+        "larger"
+      ],
+      "html": {
+        "propertyPath": "FontSize",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-style",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "FontStyle",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-variant-caps",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "FontVariantCaps",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-variant-ligatures",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "FontVariantLigatures",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-variant-numeric",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "FontVariantNumeric",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-variant-east-asian",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "FontVariantEastAsian",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-feature-settings",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "FontFeatureSettings",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-weight",
+      "comment": "CSS Fonts 4's <number> form is validated as a plain integer (FontWeightResolver/FontResolver.PickNearestWeight use int.TryParse, not a fractional number) - no 1-1000 range is enforced by that parse itself, so the integer clause is left unbounded rather than asserting a range this codebase doesn't actually check.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": [
+        "keyword",
+        {
+          "type": "integer"
+        }
+      ],
+      "supportedValues": [
+        "normal",
+        "bold",
+        "bolder",
+        "lighter"
+      ],
+      "html": {
+        "propertyPath": "FontWeight",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-stretch",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "normal",
+        "ultra-condensed",
+        "extra-condensed",
+        "condensed",
+        "semi-condensed",
+        "semi-expanded",
+        "expanded",
+        "extra-expanded",
+        "ultra-expanded"
+      ],
+      "html": {
+        "propertyPath": "FontStretch",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "font-palette",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "FontPalette",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
+      "name": "list-style-position",
+      "inherited": true,
+      "initialValue": "outside",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "inside",
+        "outside"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "ListStylePosition",
+        "csharpDataType": "string",
+        "area": "ListArea"
+      }
+    },
+    {
+      "name": "list-style-type",
+      "inherited": true,
+      "initialValue": "disc",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "disc",
+        "circle",
+        "square",
+        "decimal",
+        "decimal-leading-zero",
+        "lower-roman",
+        "upper-roman",
+        "lower-alpha",
+        "upper-alpha",
+        "lower-latin",
+        "upper-latin",
+        "lower-greek",
+        "armenian",
+        "georgian",
+        "hebrew",
+        "hiragana",
+        "hiragana-iroha",
+        "katakana",
+        "katakana-iroha",
+        "none"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "ListStyleType",
+        "csharpDataType": "string",
+        "area": "ListArea"
+      }
+    },
+    {
+      "name": "list-style-image",
+      "comment": "Parses into a structured field via a custom setter; cssDataType 'cssom' delegates grammar validation to the CSS-OM's own ListStyleImageProperty.",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "ListStyleImage",
+        "csharpDataType": "CssImage?",
+        "area": "ListArea",
+        "customSetter": "{box}.ListStyleImage = {parser}.ParseImage({value});",
+        "hasGetter": false,
+        "snapshot": false
+      }
+    },
+    {
+      "name": "flex-direction",
+      "inherited": false,
+      "initialValue": "row",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "row",
+        "row-reverse",
+        "column",
+        "column-reverse"
+      ],
+      "html": {
+        "propertyPath": "FlexDirection",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "flex-wrap",
+      "inherited": false,
+      "initialValue": "nowrap",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "nowrap",
+        "wrap",
+        "wrap-reverse"
+      ],
+      "html": {
+        "propertyPath": "FlexWrap",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "justify-content",
+      "inherited": false,
+      "initialValue": "normal",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "normal",
+        "flex-start",
+        "flex-end",
+        "end",
+        "center",
+        "space-between",
+        "space-around",
+        "space-evenly"
+      ],
+      "html": {
+        "propertyPath": "JustifyContent",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "align-items",
+      "comment": "supportedValues is the union of what CssLayoutEngineFlex's ComputeCrossOffsets and CssLayoutEngineGrid's ResolveSelfAlignment/AlignmentOffset each genuinely distinguish - align-items serves both layout modes and this entry can't tell which one a given box uses.",
+      "inherited": false,
+      "initialValue": "normal",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "flex-start",
+        "flex-end",
+        "start",
+        "end",
+        "self-end",
+        "center",
+        "stretch",
+        "normal",
+        "baseline"
+      ],
+      "html": {
+        "propertyPath": "AlignItems",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "align-content",
+      "inherited": false,
+      "initialValue": "normal",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "flex-start",
+        "flex-end",
+        "end",
+        "center",
+        "space-between",
+        "space-around",
+        "space-evenly",
+        "stretch",
+        "normal"
+      ],
+      "html": {
+        "propertyPath": "AlignContent",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "flex-grow",
+      "comment": "customValidator rejects a negative <number> - css-flexbox-1 §7.1.1 defines flex-grow as a non-negative number, and CssLayoutEngineFlex.cs sums ParseFloat(box.FlexGrow) directly into free-space distribution math with no clamp, so an accepted negative value would corrupt that calculation rather than being merely inert.",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "number",
+      "html": {
+        "propertyPath": "FlexGrow",
+        "csharpDataType": "string",
+        "area": "FlexArea",
+        "customValidator": "double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out var flexGrowParsed) && flexGrowParsed >= 0"
+      }
+    },
+    {
+      "name": "flex-shrink",
+      "comment": "customValidator rejects a negative <number> - css-flexbox-1 §7.1.2 defines flex-shrink as a non-negative number, and CssLayoutEngineFlex.cs multiplies ParseFloat(box.FlexShrink) directly into shrink-factor math with no clamp, so an accepted negative value would corrupt that calculation rather than being merely inert.",
+      "inherited": false,
+      "initialValue": "1",
+      "cssDataType": "number",
+      "html": {
+        "propertyPath": "FlexShrink",
+        "csharpDataType": "string",
+        "area": "FlexArea",
+        "customValidator": "double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out var flexShrinkParsed) && flexShrinkParsed >= 0"
+      }
+    },
+    {
+      "name": "flex-basis",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto",
+        "content"
+      ],
+      "html": {
+        "propertyPath": "FlexBasis",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "align-self",
+      "comment": "Same union as align-items, plus 'auto' (defers to the container's align-items, CssLayoutEngineFlex.ComputeCrossOffsets).",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "flex-start",
+        "flex-end",
+        "start",
+        "end",
+        "self-end",
+        "center",
+        "stretch",
+        "normal",
+        "baseline"
+      ],
+      "html": {
+        "propertyPath": "AlignSelf",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "order",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "integer",
+      "html": {
+        "propertyPath": "Order",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "row-gap",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "FlexRowGap",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "column-gap",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "FlexColumnGap",
+        "csharpDataType": "string",
+        "area": "FlexArea"
+      }
+    },
+    {
+      "name": "grid-template-columns",
+      "comment": "cssDataType 'cssom' delegates grammar validation to the CSS-OM's own GridTemplateColumnsProperty; the string setter itself is unconditional once that validation passes. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch — a tracked follow-up, not a regression.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridTemplateColumns",
+        "csharpDataType": "CssProperty<GridTemplate>",
+        "area": "GridArea",
+        "customSetter": "{box}.GridTemplateColumns = GridTemplateValueConverter.FromCssText({value});",
+        "getterExpression": "{box}.GridTemplateColumns.ToString()"
+      }
+    },
+    {
+      "name": "grid-template-rows",
+      "comment": "cssDataType 'cssom' delegates grammar validation to the CSS-OM's own GridTemplateRowsProperty; the string setter itself is unconditional once that validation passes. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch — a tracked follow-up, not a regression.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridTemplateRows",
+        "csharpDataType": "CssProperty<GridTemplate>",
+        "area": "GridArea",
+        "customSetter": "{box}.GridTemplateRows = GridTemplateValueConverter.FromCssText({value});",
+        "getterExpression": "{box}.GridTemplateRows.ToString()"
+      }
+    },
+    {
+      "name": "grid-template-areas",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridTemplateAreas",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "grid-auto-columns",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridAutoColumns",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "grid-auto-rows",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridAutoRows",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "grid-auto-flow",
+      "inherited": false,
+      "initialValue": "row",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridAutoFlow",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "justify-items",
+      "comment": "supportedValues deliberately excludes 'right' - CssLayoutEngineGrid.cs's AlignmentOffset already handles it, but Converters.JustifyItemsConverter aliases AlignItemsConverter wholesale (Converters.cs, 'justify-items / justify-self share align-items/align-self's value grammar'), which has no left/right case since those keywords are only spec-valid on the justify axis - so 'justify-items: right' is rejected by Layer A's own parser before a declaration ever reaches this registry, regardless of what's listed here. See .claude/accepted-gaps/justify-items-self-right-left-not-parseable.md.",
+      "inherited": false,
+      "initialValue": "normal",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "start",
+        "end",
+        "self-end",
+        "center",
+        "stretch",
+        "normal"
+      ],
+      "html": {
+        "propertyPath": "JustifyItems",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "justify-self",
+      "comment": "supportedValues deliberately excludes 'right' - same Layer A parser gap as justify-items (Converters.JustifySelfConverter aliases AlignSelfConverter). See .claude/accepted-gaps/justify-items-self-right-left-not-parseable.md.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "start",
+        "end",
+        "self-end",
+        "center",
+        "stretch",
+        "normal"
+      ],
+      "html": {
+        "propertyPath": "JustifySelf",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "grid-column-start",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridColumnStart",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "grid-column-end",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridColumnEnd",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "grid-row-start",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridRowStart",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "grid-row-end",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "GridRowEnd",
+        "csharpDataType": "string",
+        "area": "GridArea"
+      }
+    },
+    {
+      "name": "column-count",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "keyword",
+        {
+          "type": "integer",
+          "min": 1
+        }
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "ColumnCount",
+        "csharpDataType": "string",
+        "area": "MultiColumnArea"
+      }
+    },
+    {
+      "name": "column-width",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "keyword",
+        "length"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "ColumnWidth",
+        "csharpDataType": "string",
+        "area": "MultiColumnArea"
+      }
+    },
+    {
+      "name": "column-fill",
+      "inherited": false,
+      "initialValue": "balance",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "auto",
+        "balance"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "ColumnFill",
+        "csharpDataType": "string",
+        "area": "MultiColumnArea"
+      }
+    },
+    {
+      "name": "column-span",
+      "comment": "cssDataType's own supportedValues includes 'all' because real dispatch stores it (ColumnSpanProperty/ColumnSpanConverter accept and round-trip it) even though CssLayoutEngineColumns.cs never reads ComputedStyleAreas.MultiColumnArea.ColumnSpan - a 'column-span: all' element does not break out of the column flow (docs/html-css-support.md's column-span row already discloses this). supportsDataType is the stricter, @supports-only list excluding 'all' for exactly that reason, same shape as break-before's region/avoid-region split.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "all"
+      ],
+      "keywordComparison": "ordinal",
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "none"
+      ],
+      "html": {
+        "propertyPath": "ColumnSpan",
+        "csharpDataType": "string",
+        "area": "MultiColumnArea"
+      }
+    },
+    {
+      "name": "column-rule-width",
+      "inherited": false,
+      "initialValue": "medium",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "ColumnRuleWidth",
+        "csharpDataType": "string",
+        "area": "MultiColumnArea"
+      }
+    },
+    {
+      "name": "column-rule-style",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "solid",
+        "hidden",
+        "dotted",
+        "dashed",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "ColumnRuleStyle",
+        "csharpDataType": "string",
+        "area": "MultiColumnArea"
+      }
+    },
+    {
+      "name": "column-rule-color",
+      "inherited": false,
+      "initialValue": "currentcolor",
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "ColumnRuleColor",
+        "csharpDataType": "string",
+        "area": "MultiColumnArea"
+      }
+    },
+    {
+      "name": "margin-block-end",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "resolvesTo": {
+        "group": "margin",
+        "axis": "block",
+        "side": "end"
+      },
+      "html": {
+        "propertyPath": "MarginBlockEnd",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "margin-inline-start",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "resolvesTo": {
+        "group": "margin",
+        "axis": "inline",
+        "side": "start"
+      },
+      "html": {
+        "propertyPath": "MarginInlineStart",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "margin-inline-end",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "resolvesTo": {
+        "group": "margin",
+        "axis": "inline",
+        "side": "end"
+      },
+      "html": {
+        "propertyPath": "MarginInlineEnd",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "padding-block-start",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": "length",
+      "resolvesTo": {
+        "group": "padding",
+        "axis": "block",
+        "side": "start"
+      },
+      "html": {
+        "propertyPath": "PaddingBlockStart",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "padding-block-end",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": "length",
+      "resolvesTo": {
+        "group": "padding",
+        "axis": "block",
+        "side": "end"
+      },
+      "html": {
+        "propertyPath": "PaddingBlockEnd",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "padding-inline-start",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": "length",
+      "resolvesTo": {
+        "group": "padding",
+        "axis": "inline",
+        "side": "start"
+      },
+      "html": {
+        "propertyPath": "PaddingInlineStart",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "padding-inline-end",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": "length",
+      "resolvesTo": {
+        "group": "padding",
+        "axis": "inline",
+        "side": "end"
+      },
+      "html": {
+        "propertyPath": "PaddingInlineEnd",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "inset-block-start",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "resolvesTo": {
+        "group": "inset",
+        "axis": "block",
+        "side": "start"
+      },
+      "html": {
+        "propertyPath": "InsetBlockStart",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "inset-block-end",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "resolvesTo": {
+        "group": "inset",
+        "axis": "block",
+        "side": "end"
+      },
+      "html": {
+        "propertyPath": "InsetBlockEnd",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "inset-inline-start",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "resolvesTo": {
+        "group": "inset",
+        "axis": "inline",
+        "side": "start"
+      },
+      "html": {
+        "propertyPath": "InsetInlineStart",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "inset-inline-end",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
+      "inherited": false,
+      "initialValue": null,
+      "category": "logical",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "resolvesTo": {
+        "group": "inset",
+        "axis": "inline",
+        "side": "end"
+      },
+      "html": {
+        "propertyPath": "InsetInlineEnd",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-block-start-width",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-width",
+        "axis": "block",
+        "side": "start"
+      },
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BorderBlockStartWidth",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-block-start-style",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-style",
+        "axis": "block",
+        "side": "start"
+      },
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "solid",
+        "hidden",
+        "dotted",
+        "dashed",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BorderBlockStartStyle",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-block-start-color",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-color",
+        "axis": "block",
+        "side": "start"
+      },
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "BorderBlockStartColor",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-block-end-width",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-width",
+        "axis": "block",
+        "side": "end"
+      },
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BorderBlockEndWidth",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-block-end-style",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-style",
+        "axis": "block",
+        "side": "end"
+      },
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "solid",
+        "hidden",
+        "dotted",
+        "dashed",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BorderBlockEndStyle",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-block-end-color",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-color",
+        "axis": "block",
+        "side": "end"
+      },
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "BorderBlockEndColor",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-inline-start-width",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-width",
+        "axis": "inline",
+        "side": "start"
+      },
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BorderInlineStartWidth",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-inline-start-style",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-style",
+        "axis": "inline",
+        "side": "start"
+      },
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "solid",
+        "hidden",
+        "dotted",
+        "dashed",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BorderInlineStartStyle",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-inline-start-color",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-color",
+        "axis": "inline",
+        "side": "start"
+      },
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "BorderInlineStartColor",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-inline-end-width",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-width",
+        "axis": "inline",
+        "side": "end"
+      },
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "BorderInlineEndWidth",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-inline-end-style",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-style",
+        "axis": "inline",
+        "side": "end"
+      },
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "none",
+        "solid",
+        "hidden",
+        "dotted",
+        "dashed",
+        "double",
+        "groove",
+        "ridge",
+        "inset",
+        "outset"
+      ],
+      "keywordComparison": "ordinal",
+      "html": {
+        "propertyPath": "BorderInlineEndStyle",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-inline-end-color",
+      "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
+      "category": "logical",
+      "inherited": false,
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-color",
+        "axis": "inline",
+        "side": "end"
+      },
+      "cssDataType": [
+        "color",
+        "current-color"
+      ],
+      "html": {
+        "propertyPath": "BorderInlineEndColor",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    }
+  ]
+}

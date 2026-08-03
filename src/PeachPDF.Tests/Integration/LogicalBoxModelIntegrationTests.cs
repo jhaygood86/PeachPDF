@@ -208,6 +208,24 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(15, el.ActualMarginLeft, 1);
         }
 
+        [Fact]
+        public async Task PaddingRight_AddsToBorderBoxWidth_ContentBoxSizing()
+        {
+            // content-box (the default box-sizing): a declared width is content-only, so the border
+            // box must grow by padding-right on top of it - proving padding-right reaches layout as a
+            // real geometry effect, not just a cascaded string (LogicalLonghand_ResolvesToPhysicalLonghand
+            // above only proves that much for its logical-property callers).
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  #el { width: 50pt; padding-right: 15pt; }
+                </style></head><body><div id="el">x</div></body></html>
+                """;
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el")!;
+
+            Assert.Equal(65, el.ActualRight - el.Location.X, 1);
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────────
 
         private static async Task<CssBox> CascadedDiv(string declarations)

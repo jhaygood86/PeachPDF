@@ -1,0 +1,182 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/jhaygood86/peachpdf/css-properties.schema.json",
+  "title": "PeachPDF CSS/SVG property registry",
+  "description": "Schema for css-properties.json, consumed by PeachPDF.SourceGenerators to emit CssPropertyRegistry.g.cs / SvgPropertyRegistry.g.cs. See CLAUDE.md's generator section for the full authoring guide and the PPGxxx diagnostics that enforce this shape at build time.",
+  "type": "object",
+  "required": ["properties"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "$comment": { "type": "string" },
+    "properties": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/propertyEntry" }
+    }
+  },
+  "definitions": {
+    "propertyEntry": {
+      "type": "object",
+      "required": ["name", "inherited", "initialValue", "cssDataType"],
+      "properties": {
+        "name": { "type": "string", "description": "The CSS property name, e.g. \"border-bottom-width\"." },
+        "comment": { "type": "string" },
+        "inherited": { "type": "boolean", "description": "CSS 2.1 §6.2 inheritance. Drives the generated InheritedProperties set." },
+        "initialValue": {
+          "description": "A string literal, an {expression} spliced verbatim as C# (for a runtime/platform-computed default like CssConstants.DefaultFont), or null to declare 'no initial value, by design' (a logical scratch field, or a genuinely unimplemented property). The key must always be present — PPG006 fires if it's missing entirely.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "null" },
+            { "type": "object", "required": ["expression"], "properties": { "expression": { "type": "string" } } }
+          ]
+        },
+        "category": {
+          "type": "string",
+          "enum": ["normal", "logical", "unsupported"],
+          "default": "normal",
+          "description": "\"logical\" marks one of the 24 CSS Logical Properties scratch fields (see CssBox.LogicalProperties.cs) — requires initialValue: null and permits resolvesTo."
+        },
+        "cssDataType": {
+          "description": "A single data type, or an array (union — any member matching accepts the value). See the type list below; object forms carry extra fields.",
+          "oneOf": [
+            { "$ref": "#/definitions/dataType" },
+            { "type": "array", "items": { "$ref": "#/definitions/dataType" } }
+          ]
+        },
+        "supportedValues": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Required when cssDataType includes \"keyword\" (PPG004 if missing); an error to declare otherwise (PPG009 warns)."
+        },
+        "keywordComparison": {
+          "type": "string",
+          "enum": ["ordinal", "ordinal-ignore-case", "invariant-ignore-case"],
+          "default": "ordinal",
+          "description": "How supportedValues are compared. Existing CssUtils helpers disagree on this per property (e.g. 'auto' is checked case-insensitively for lengths but not for most other keywords) — encode the real current behavior per entry rather than picking one comparison for everything."
+        },
+        "aliasOf": {
+          "type": "string",
+          "description": "Names a legacy alias's target (e.g. page-break-after -> break-after). PPG007 requires the target to exist and to declare the identical initialValue."
+        },
+        "supportsDataType": {
+          "description": "Optional, stricter grammar used only by the generated Supports_*/SupportsDeclaration (the @supports oracle) - cssDataType keeps gating real cascade dispatch (Validate_*/Set_*) unchanged. Same shape as cssDataType. Needed when a value is genuinely accepted and stored by real dispatch (matching actual CSS semantics: a value list with one unimplemented member - e.g. a transform function, a break-before keyword - is still syntactically valid and its implemented members still apply) but @supports here uses a stricter standard: does PeachPDF's renderer actually honor this specific value (see issue #283), not just does it parse. Omit when Supports_* should simply forward to Validate_* (the common case).",
+          "oneOf": [
+            { "$ref": "#/definitions/dataType" },
+            { "type": "array", "items": { "$ref": "#/definitions/dataType" } }
+          ]
+        },
+        "supportsSupportedValues": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "supportedValues override for supportsDataType's own 'keyword' clause, when it needs a narrower list than the base entry's supportedValues (e.g. break-before's Supports_* excludes region/avoid-region, which parse and are stored but are inert - no FragmentationContext.Region exists). Falls back to the base supportedValues when supportsDataType uses 'keyword' but this is omitted."
+        },
+        "supportsKeywordComparison": {
+          "type": "string",
+          "enum": ["ordinal", "ordinal-ignore-case", "invariant-ignore-case"],
+          "description": "keywordComparison override for supportsDataType's own 'keyword' clause. Falls back to the base keywordComparison when omitted."
+        },
+        "resolvesTo": {
+          "type": "object",
+          "description": "Logical-category only (PPG014 otherwise); descriptive metadata the generator surfaces as CssPropertyRegistry.LogicalProperties for a completeness test against CssBox.ResolveLogicalProperties — the resolution algorithm itself stays hand-written.",
+          "required": ["group", "axis", "side"],
+          "properties": {
+            "group": { "type": "string", "enum": ["margin", "padding", "inset", "border-width", "border-style", "border-color"] },
+            "axis": { "type": "string", "enum": ["block", "inline"] },
+            "side": { "type": "string", "enum": ["start", "end"] }
+          }
+        },
+        "html": { "$ref": "#/definitions/htmlBinding" },
+        "svg": { "$ref": "#/definitions/svgBinding" }
+      }
+    },
+    "dataType": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "cssom", "unsupported", "length", "color", "current-color", "transform", "keyword", "integer", "number",
+            "svg-paint", "svg-opacity", "svg-length", "svg-length-list", "svg-transform", "svg-reference"
+          ],
+          "description": "'cssom' means 'no dedicated grammar modeled here' — HTML validation delegates to the real CSS-OM property for the same name (PropertyFactory + StylesheetParser), so it still only accepts what that property's own grammar accepts. Unless a property genuinely accepts unconstrained text, prefer a specific data type (keyword/length/integer/...) over 'cssom' so the accepted grammar is visible in this file rather than only in the CSS-OM."
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "integer" },
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "converter"],
+          "description": "Delegates validation+conversion to an existing shared converter (e.g. GridTemplateValueConverter.FromCssText) instead of re-deriving grammar this codebase already parses elsewhere — see CLAUDE.md's 'one parser' rule.",
+          "properties": {
+            "type": { "const": "parsed" },
+            "converter": { "type": "string" },
+            "resultType": { "type": "string" },
+            "typedValueType": { "type": "string", "description": "For a property that also needs a typed (IPropertyValue) fast path, e.g. grid-template-columns." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "enumType", "keywordMap", "fallback"],
+          "description": "A CssProperty<T>-backed property (direction, writing-mode, unicode-bidi, ...). Validation checks the value against keywordMap's own keys; only a recognized keyword passes. CssProperty<T>.FromCssText itself never rejects a value that reaches the setter — it falls back to the given keyword instead of leaving the value unset — but that fallback only runs once validation has already accepted the value.",
+          "properties": {
+            "type": { "const": "enum-keyword" },
+            "enumType": { "type": "string" },
+            "keywordMap": { "type": "string" },
+            "fallback": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "htmlBinding": {
+      "type": "object",
+      "properties": {
+        "propertyPath": {
+          "type": ["string", "null"],
+          "description": "Simple member name on CssBox (or the logical scratch-property name). Null only for an unsupported entry with no storage. PPG011 checks this against CssBox's real shape."
+        },
+        "csharpDataType": { "type": ["string", "null"] },
+        "area": {
+          "type": ["string", "null"],
+          "description": "The ComputedStyleAreas record this property lives in (e.g. \"BorderArea\"), or null for a logical/unsupported entry. PPG012 checks this against the known area list."
+        },
+        "hasGetter": { "type": "boolean", "default": true },
+        "getterExpression": { "type": "string", "description": "Raw C# when the getter isn't a bare field read, e.g. \"{box}.Direction.ToString()\"." },
+        "customValidator": { "type": "string", "description": "Raw C# boolean expression, overriding the data-type-driven validator entirely." },
+        "customSetter": {
+          "type": "string",
+          "description": "Raw C# statements, spliced in after validation already passed (PPG008 forbids `return` — success is implicit). Tokens: {value}, {box}, {parser}."
+        },
+        "snapshot": { "type": "boolean", "description": "Defaults to hasGetter. Whether this property participates in cascade snapshot/revert (CssPropertyRegistry.SnapshotPropertyNames)." }
+      }
+    },
+    "svgBinding": {
+      "type": "object",
+      "required": ["invalidBehavior"],
+      "properties": {
+        "propertyPath": {
+          "type": ["string", "null"],
+          "description": "Simple member name on SvgElement, or null for a carrier-only property never stored on SvgElement (e.g. direction). PPG010 checks this against SvgElement's real shape."
+        },
+        "csharpDataType": { "type": ["string", "null"] },
+        "inheritedFrom": { "type": "string", "description": "The SvgInheritedPaint member carrying this property's inherited value forward through recursive tree-building." },
+        "invalidBehavior": {
+          "type": "string",
+          "enum": ["inherit", "initial", "leave-unset"],
+          "description": "What SvgTreeBuilder.ApplyCommon does for an invalid value — this genuinely differs per property today (encode the real behavior; don't normalize to one choice)."
+        },
+        "applyIn": {
+          "type": "string",
+          "enum": ["common", "manual"],
+          "default": "common",
+          "description": "\"manual\" properties (clip-path, mask, marker*, direction) are excluded from the generated dispatch entirely and stay hand-written in ApplyCommon."
+        },
+        "customValidator": { "type": "string" },
+        "customSetter": { "type": "string", "description": "Tokens: {value}, {element}, {ctx}." }
+      }
+    }
+  }
+}

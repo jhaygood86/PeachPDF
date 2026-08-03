@@ -119,7 +119,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 _realizedLineJoin = (int)pen._lineJoin;
             }
 
-            if (_realizedLineCap == (int)XLineJoin.Miter)
+            if (_realizedLineJoin == (int)XLineJoin.Miter)
             {
                 if (_realizedMiterLimit != (int)pen._miterLimit && (int)pen._miterLimit != 0)
                 {

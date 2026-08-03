@@ -3,6 +3,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 using System.Linq;
 
 namespace PeachPDF.Tests.Html.Core.Dom
@@ -708,6 +709,82 @@ Assert.NotNull(tbody);
             var expectedX = wrap.ClientLeft + (wrapWidth - tableWidth) / 2;
 
             Assert.Equal(expectedX, table.Location.X, precision: 3);
+        }
+
+        #endregion
+
+        #region Border-collapse Tests
+
+        [Theory]
+        [InlineData("collapse", -1)]
+        [InlineData("separate", 8)]
+        public async Task TableLayout_BorderCollapse_ControlsGapBetweenAdjacentCells(string borderCollapse, double expectedGap)
+        {
+            // CssLayoutEngineTable.GetHorizontalSpacing() returns -1pt (cells overlap by 1pt, merging
+            // their shared border) under "collapse", or the real border-spacing under "separate" - this
+            // asserts the actual per-cell X gap that value produces, not just that BorderCollapse is
+            // stored on the box.
+            var html = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table {{ border-collapse: {borderCollapse}; border-spacing: 8pt; }}
+        td {{ border: 2pt solid black; padding: 4pt; }}
+    </style>
+</head>
+<body>
+    <table>
+        <tr><td id='c1'>Cell 1</td><td id='c2'>Cell 2</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var c1 = FindById(rootBox, "c1");
+            var c2 = FindById(rootBox, "c2");
+
+            Assert.NotNull(c1);
+            Assert.NotNull(c2);
+
+            var gap = c2!.Location.X - c1!.ActualRight;
+            Assert.Equal(expectedGap, gap, 1);
+        }
+
+        [Fact]
+        public async Task EmptyCellsHide_SuppressesPaintForEmptyCellOnly()
+        {
+            var (rootBox, container) = await BuildCssBoxTree(@"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; }
+        td { border: 2pt solid rgb(51,51,51); background-color: rgb(200,200,200); padding: 4pt; }
+        #empty { empty-cells: hide; }
+        #full { empty-cells: show; }
+    </style>
+</head>
+<body>
+    <table>
+        <tr><td id='empty'></td><td id='full'>x</td></tr>
+    </table>
+</body>
+</html>");
+
+            var emptyCell = FindById(rootBox, "empty");
+            var fullCell = FindById(rootBox, "full");
+            Assert.NotNull(emptyCell);
+            Assert.NotNull(fullCell);
+
+            var gEmpty = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, emptyCell!, gEmpty);
+            Assert.Empty(gEmpty.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+            Assert.Empty(gEmpty.Log.OfType<TestRecordingGraphics.DrawRectCall>());
+
+            var gFull = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, fullCell!, gFull);
+            Assert.NotEmpty(gFull.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
         }
 
         #endregion

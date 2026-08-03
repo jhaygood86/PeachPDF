@@ -832,55 +832,92 @@ namespace PeachPDF.Svg
             // without duplicating the inherit/fallback logic per property.
             string? Attr(string name) => ResolveStyledAttr(node, name);
 
+            // The context every generated common-property setter needs beyond the raw value: color
+            // resolution, the current viewport diagonal (for percentage lengths), and the url()-to-
+            // pattern-vs-gradient reclassification ParsePaint can't do on its own (see ResolveUrlPaintKind).
+            var ctx = new SvgPropertyContext(_adapter, _contextColor, ViewportDiagonal, ResolveUrlPaintKind);
+
+            // Each property below keeps ApplyCommon's own null/"inherit"/invalid-value fallback
+            // decision (which genuinely differs per property — see css-properties.json's svg.invalidBehavior
+            // comments) and delegates only the parse-and-validate step to the generated registry, whose
+            // TrySet already returns false without writing the field on failure. That "leave unset on
+            // failure" contract reproduces the old hardcoded-keyword fallback for fill/stroke/fill-rule/
+            // fill-opacity/stroke-opacity/stroke-linecap/stroke-linejoin exactly, because SvgElement's own
+            // constructor defaults were already chosen to equal those hardcoded fallbacks.
+
             var fillAttr = Attr("fill");
-            element.Fill = fillAttr is null || fillAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? inherited.Fill
-                : ResolveUrlPaintKind(SvgValueParsers.ParsePaint(fillAttr, _adapter, _contextColor));
+            if (fillAttr is null || fillAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                element.Fill = inherited.Fill;
+            else
+                SvgPropertyRegistry.TrySet(element, "fill", fillAttr, in ctx);
 
             var strokeAttr = Attr("stroke");
-            element.Stroke = strokeAttr is null || strokeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? inherited.Stroke
-                : ResolveUrlPaintKind(SvgValueParsers.ParsePaint(strokeAttr, _adapter, _contextColor));
+            if (strokeAttr is null || strokeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                element.Stroke = inherited.Stroke;
+            else
+                SvgPropertyRegistry.TrySet(element, "stroke", strokeAttr, in ctx);
 
-            element.StrokeWidth = SvgValueParsers.ParseLength(Attr("stroke-width"), ViewportDiagonal) ?? inherited.StrokeWidth;
-            element.StrokeMiterLimit = SvgValueParsers.ParseLength(Attr("stroke-miterlimit")) ?? inherited.StrokeMiterLimit;
-            element.Opacity = SvgValueParsers.ParseOpacity(Attr("opacity"));
+            // stroke-width/-miterlimit/-dashoffset/-dasharray fall back to the INHERITED value (not a
+            // hardcoded default) on an invalid value, unlike the properties above - TrySet's return is
+            // checked explicitly here.
+            var strokeWidthAttr = Attr("stroke-width");
+            if (strokeWidthAttr is null || strokeWidthAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "stroke-width", strokeWidthAttr, in ctx))
+                element.StrokeWidth = inherited.StrokeWidth;
+
+            var strokeMiterLimitAttr = Attr("stroke-miterlimit");
+            if (strokeMiterLimitAttr is null || strokeMiterLimitAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "stroke-miterlimit", strokeMiterLimitAttr, in ctx))
+                element.StrokeMiterLimit = inherited.StrokeMiterLimit;
+
+            // opacity is not inherited (composites down the subtree at paint time instead) and, unlike
+            // every other property here, was never given "inherit" handling in the pre-cutover code
+            // either - an explicit "inherit" value is simply invalid input, same as any other bogus value.
+            var opacityAttr = Attr("opacity");
+            if (opacityAttr is not null)
+                SvgPropertyRegistry.TrySet(element, "opacity", opacityAttr, in ctx);
+
             element.Transform = SvgTransformParser.Parse(Attr("transform"));
 
             var fillRuleAttr = Attr("fill-rule");
-            element.FillRule = fillRuleAttr is null || fillRuleAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? inherited.FillRule
-                : SvgValueParsers.ParseFillRule(fillRuleAttr);
+            if (fillRuleAttr is null || fillRuleAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                element.FillRule = inherited.FillRule;
+            else
+                SvgPropertyRegistry.TrySet(element, "fill-rule", fillRuleAttr, in ctx);
 
             var fillOpacityAttr = Attr("fill-opacity");
-            element.FillOpacity = fillOpacityAttr is null || fillOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? inherited.FillOpacity
-                : SvgValueParsers.ParseOpacity(fillOpacityAttr);
+            if (fillOpacityAttr is null || fillOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                element.FillOpacity = inherited.FillOpacity;
+            else
+                SvgPropertyRegistry.TrySet(element, "fill-opacity", fillOpacityAttr, in ctx);
 
             var strokeOpacityAttr = Attr("stroke-opacity");
-            element.StrokeOpacity = strokeOpacityAttr is null || strokeOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? inherited.StrokeOpacity
-                : SvgValueParsers.ParseOpacity(strokeOpacityAttr);
+            if (strokeOpacityAttr is null || strokeOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                element.StrokeOpacity = inherited.StrokeOpacity;
+            else
+                SvgPropertyRegistry.TrySet(element, "stroke-opacity", strokeOpacityAttr, in ctx);
 
             var lineCapAttr = Attr("stroke-linecap");
-            element.StrokeLineCap = lineCapAttr is null || lineCapAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? inherited.StrokeLineCap
-                : SvgValueParsers.ParseLineCap(lineCapAttr);
+            if (lineCapAttr is null || lineCapAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                element.StrokeLineCap = inherited.StrokeLineCap;
+            else
+                SvgPropertyRegistry.TrySet(element, "stroke-linecap", lineCapAttr, in ctx);
 
             var lineJoinAttr = Attr("stroke-linejoin");
-            element.StrokeLineJoin = lineJoinAttr is null || lineJoinAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? inherited.StrokeLineJoin
-                : SvgValueParsers.ParseLineJoin(lineJoinAttr);
+            if (lineJoinAttr is null || lineJoinAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                element.StrokeLineJoin = inherited.StrokeLineJoin;
+            else
+                SvgPropertyRegistry.TrySet(element, "stroke-linejoin", lineJoinAttr, in ctx);
 
             var dashArrayAttr = Attr("stroke-dasharray");
-            element.StrokeDashArray = dashArrayAttr is null || dashArrayAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? inherited.StrokeDashArray
-                : SvgValueParsers.ParseDashArray(dashArrayAttr, ViewportDiagonal) ?? inherited.StrokeDashArray;
+            if (dashArrayAttr is null || dashArrayAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "stroke-dasharray", dashArrayAttr, in ctx))
+                element.StrokeDashArray = inherited.StrokeDashArray;
 
             var dashOffsetAttr = Attr("stroke-dashoffset");
-            element.StrokeDashOffset = dashOffsetAttr is null || dashOffsetAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
-                ? inherited.StrokeDashOffset
-                : SvgValueParsers.ParseLength(dashOffsetAttr, ViewportDiagonal) ?? inherited.StrokeDashOffset;
+            if (dashOffsetAttr is null || dashOffsetAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "stroke-dashoffset", dashOffsetAttr, in ctx))
+                element.StrokeDashOffset = inherited.StrokeDashOffset;
 
             var clipPathAttr = Attr("clip-path");
             if (!string.IsNullOrWhiteSpace(clipPathAttr))

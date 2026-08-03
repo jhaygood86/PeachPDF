@@ -203,6 +203,103 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task InlineSvg_StrokeDashoffset_ShiftsPdfDashPhase()
+        {
+            // Extends the dasharray-only case above with a non-zero stroke-dashoffset: the PDF "d"
+            // operator's phase operand (the value after "]") must carry the offset, not stay at the
+            // dasharray-only case's implicit "0".
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <path d="M10,10 L90,10" stroke="#000000" stroke-width="1" stroke-dasharray="4,2" stroke-dashoffset="3"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("[4 2]3 d\n", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_StrokeOpacity_AppliesRealPdfStrokeTransparency()
+        {
+            // stroke-opacity must independently reduce stroke alpha via a real PDF ExtGState "/CA"
+            // entry (not just parsed-and-ignored), distinct from fill-opacity's "/ca" and from the
+            // shape's own group opacity - mirrors InlineSvg_FillOpacity_AppliesRealPdfTransparency.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="#ff0000" stroke-opacity="0.5" stroke-width="4"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/CA 0.5", pdfText);
+        }
+
+        [Theory]
+        [InlineData("butt", 0)]
+        [InlineData("round", 1)]
+        [InlineData("square", 2)]
+        public async Task InlineSvg_StrokeLinecap_RendersPdfJOperator(string linecap, int expectedCode)
+        {
+            var html = $"""
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <path d="M10,10 L90,10" stroke="#000000" stroke-width="4" stroke-linecap="{linecap}"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains($"{expectedCode} J\n", pdfText);
+        }
+
+        [Theory]
+        [InlineData("miter", 0)]
+        [InlineData("round", 1)]
+        [InlineData("bevel", 2)]
+        public async Task InlineSvg_StrokeLinejoin_RendersPdfJOperator(string linejoin, int expectedCode)
+        {
+            var html = $"""
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <path d="M10,10 L90,10" stroke="#000000" stroke-width="4" stroke-linejoin="{linejoin}"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains($"{expectedCode} j\n", pdfText);
+        }
+
+        [Fact]
+        public async Task InlineSvg_StrokeMiterlimit_RendersPdfMOperator_GatedByLinejoinNotLinecap()
+        {
+            // Regression test for a PdfGraphicsState.RealizePen bug: the "M" operator's emission was
+            // gated on _realizedLineCap instead of _realizedLineJoin (XLineCap.Flat and XLineJoin.Miter
+            // are both numeric 0, so the mistake was invisible whenever line-cap happened to be the
+            // default "butt"). Using a non-default stroke-linecap here with the default (miter)
+            // stroke-linejoin proves "M" is genuinely keyed off line-join.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <svg viewBox="0 0 100 100" width="100" height="100">
+                  <path d="M10,10 L90,10" stroke="#000000" stroke-width="4" stroke-linecap="round" stroke-miterlimit="10"/>
+                </svg>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("10 M\n", pdfText);
+        }
+
+        [Fact]
         public async Task InlineSvg_RotateTransform_ProducesNonAxisAlignedMatrix()
         {
             // Before Phase 2, rotate() was parsed but contributed no transform at all - the group's
