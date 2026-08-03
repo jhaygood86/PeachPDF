@@ -2159,8 +2159,9 @@
     {
       "name": "row-gap",
       "inherited": false,
-      "initialValue": "0",
-      "cssDataType": "length",
+      "initialValue": "normal",
+      "cssDataType": ["length", "keyword"],
+      "supportedValues": ["normal"],
       "html": {
         "propertyPath": "FlexRowGap",
         "csharpDataType": "string",
@@ -2170,8 +2171,9 @@
     {
       "name": "column-gap",
       "inherited": false,
-      "initialValue": "0",
-      "cssDataType": "length",
+      "initialValue": "normal",
+      "cssDataType": ["length", "keyword"],
+      "supportedValues": ["normal"],
       "html": {
         "propertyPath": "FlexColumnGap",
         "csharpDataType": "string",

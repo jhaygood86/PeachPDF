@@ -141,6 +141,22 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ColumnGap_Unset_ResolvesToZero()
+        {
+            // column-gap's initial value is the keyword "normal" (CSS Box Alignment Module Level 3
+            // §8.3), which computes to 0 for a grid container - unlike multicol's ~1em UA convention.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:100pt 100pt;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(0, b.Location.X - a.ActualRight, 1.0);
+        }
+
+        [Fact]
         public async Task ExplicitRowHeights_AreUsed()
         {
             var html = Wrap(@"

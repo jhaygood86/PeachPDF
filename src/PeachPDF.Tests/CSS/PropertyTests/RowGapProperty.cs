@@ -8,6 +8,10 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [MemberData(nameof(LengthOrPercentOrGlobalTestValues))]
         public void RowGapLegalValues(string value)
             => TestForLegalValue<RowGapProperty>(PropertyNames.RowGap, value);
+
+        [Fact]
+        public void RowGapAcceptsNormalKeyword()
+            => TestForLegalValue<RowGapProperty>(PropertyNames.RowGap, "normal");
     }
 }
 

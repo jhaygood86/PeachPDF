@@ -126,6 +126,45 @@ namespace PeachPDF.Tests.Html.Core.Utils
             CssUtils.SetPropertyValue(parser, box, "column-span", "none");
             Assert.Equal("none", box.ColumnSpan);
         }
+
+        [Theory]
+        [InlineData("column-gap")]
+        [InlineData("row-gap")]
+        public void ColumnRowGap_InitialValueIsNormal(string name)
+        {
+            Assert.Equal(CssConstants.Normal, CssDefaults.GetInitialValue(name));
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_ColumnGapRowGap_AcceptsNormalAndLength()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            Assert.Equal("normal", box.FlexColumnGap);
+            Assert.Equal("normal", box.FlexRowGap);
+
+            CssUtils.SetPropertyValue(parser, box, "column-gap", "10px");
+            CssUtils.SetPropertyValue(parser, box, "row-gap", "1em");
+            Assert.Equal("10px", box.FlexColumnGap);
+            Assert.Equal("1em", box.FlexRowGap);
+
+            CssUtils.SetPropertyValue(parser, box, "column-gap", "normal");
+            CssUtils.SetPropertyValue(parser, box, "row-gap", "normal");
+            Assert.Equal("normal", box.FlexColumnGap);
+            Assert.Equal("normal", box.FlexRowGap);
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_ColumnGapRowGap_InvalidValue_IsIgnored()
+        {
+            var (box, parser) = await FindDivBoxAndParser("column-gap: 10px; row-gap: 10px;");
+
+            CssUtils.SetPropertyValue(parser, box, "column-gap", "banana");
+            CssUtils.SetPropertyValue(parser, box, "row-gap", "banana");
+
+            Assert.Equal("10px", box.FlexColumnGap);
+            Assert.Equal("10px", box.FlexRowGap);
+        }
         [Fact]
         public async Task SetPropertyValue_ZIndex_AutoOrInteger_IsAccepted()
         {

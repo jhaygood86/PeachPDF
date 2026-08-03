@@ -382,13 +382,11 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter OptionalNumberConverter = NumberConverter.OrNone();
 
-        //public static readonly IValueConverter LengthOrNormalConverter =
-        //    LengthConverter.Or(Keywords.Normal, new Length(1f, Length.Unit.Em));
-
         public static readonly IValueConverter OptionalLengthConverter = LengthConverter.Or(Keywords.Normal);
         public static readonly IValueConverter AutoLengthConverter = LengthConverter.OrAuto();
         public static readonly IValueConverter OptionalLengthOrPercentConverter = LengthOrPercentConverter.OrNone();
         public static readonly IValueConverter AutoLengthOrPercentConverter = LengthOrPercentConverter.OrAuto();
+        public static readonly IValueConverter LengthOrPercentOrNormalConverter = LengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter OptionalPercentOrFractionConverter = PercentOrFractionConverter.OrDefault(1f);
         public static readonly IValueConverter OptionalPercentOrNumberConverter = PercentOrNumberConverter.OrDefault(1f);
 

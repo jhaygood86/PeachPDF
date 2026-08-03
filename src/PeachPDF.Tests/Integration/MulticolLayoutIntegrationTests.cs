@@ -146,6 +146,46 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ColumnGapUnset_ResolvesToOneEmGap()
+        {
+            // No column-gap declared: the shared field's initial value "normal" (CSS Box Alignment
+            // Module Level 3 §8.3) resolves to a UA-convention ~1em gap for multicol, matching
+            // real-world browser behavior.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; width:200pt; font-size:16px'>
+                    <div class='item' style='height:400px'></div>
+                    <div class='item' style='height:20px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var items = FindAllByClass(root, "item");
+            var mc = FindById(root, "mc")!;
+
+            // 1em = the box's own font-size, eagerly resolved to layout points (16px * 0.75pt/px = 12pt).
+            const double expectedGap = 12;
+            var expectedColumnWidth = (200 - expectedGap) / 2;
+            Assert.Equal(mc.ClientLeft + expectedColumnWidth + expectedGap, items[1].Location.X, 1);
+        }
+
+        [Fact]
+        public async Task ColumnGapExplicitZero_ProducesNoGapBetweenColumns()
+        {
+            // Regression: before this fix, an explicit "column-gap: 0" was indistinguishable from the
+            // unset default (both stored as the literal string "0") and was incorrectly substituted
+            // with ~1em by CssLayoutEngineColumns.Layout's old sentinel check.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200pt; font-size:16px'>
+                    <div class='item' style='height:400px'></div>
+                    <div class='item' style='height:20px'></div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 1000);
+            var items = FindAllByClass(root, "item");
+            var mc = FindById(root, "mc")!;
+
+            var expectedColumnWidth = 200 / 2.0;
+            Assert.Equal(mc.ClientLeft + expectedColumnWidth, items[1].Location.X, 1);
+        }
+
+        [Fact]
         public async Task ColumnWidth_ProducesMultipleColumnsAutomatically()
         {
             var html = Wrap(@"
@@ -940,9 +980,13 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(itemCount, placed.Count);
 
             // The frozen-page bug left the container on a small, fixed number of pages regardless of how
-            // much content remained; 400 items at this page height must span well beyond that.
+            // much content remained; 400 items at this page height must span well beyond that. (The
+            // threshold sits a bit below the column width this fixture actually gets, since "column-gap:
+            // 0" now resolves to a genuine zero gap - see CssLayoutEngineColumns.Layout - rather than the
+            // ~1em the pre-fix sentinel bug substituted, giving each column a little more width and so a
+            // little more text per line.)
             var pageCount = placed.Select(b => container.PageIndexOf(b.Location.Y)).Distinct().Count();
-            Assert.True(pageCount > 20, $"expected the container to span many pages, landed on {pageCount}");
+            Assert.True(pageCount > 15, $"expected the container to span many pages, landed on {pageCount}");
 
             AssertNoOverlaps(placed);
 
