@@ -2952,6 +2952,35 @@ namespace PeachPDF.Html.Core.Dom
                     // to it a second time. A box that asks not to be broken and does not fit a whole
                     // column is therefore split rather than walked from column to column - §4.3's fourth
                     // tier, where the constraint is given up rather than acted on pointlessly.
+                    // css-multicol-1 §3's column-span: all - a direct child of the multi-column container
+                    // that establishes the very column context being filled, so a break falls before it
+                    // exactly as a forced column break would, but for CssLayoutEngineColumns to read
+                    // differently: not "open the next column of this run", but "this run ends here; lay the
+                    // spanning box out at the container's own width, then start a fresh run after it". A
+                    // deeper descendant marked column-span:all is deliberately not recognized here - only
+                    // the box whose own loop is directly inside the fill (this == ContextRoot) asks the
+                    // question, matching this engine's existing atomic-per-top-level-child model. Gated on
+                    // EstablishesMultiColumnContext too: column-span has no effect outside a multi-column
+                    // container (css-multicol-1 §3), and HasOwnBand alone does not say which kind of
+                    // fragmentainer this is - a table row context could otherwise misread it.
+                    //
+                    // Checked before the ordinary forced-column-break/avoid-column arm below, not after:
+                    // a column-span:all child that also happens to carry break-before:column or
+                    // break-inside:avoid-column must still end this run rather than being pushed into
+                    // "the next column of this run", which is the answer that arm would otherwise give it.
+                    if (i > start
+                        && EstablishesMultiColumnContext
+                        && HtmlContainer is { IsFragmenting: true }
+                        && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } spanContext
+                        && ReferenceEquals(this, spanContext.ContextRoot)
+                        && childBox.ColumnSpan == CssConstants.All)
+                    {
+                        PendingBreakToken = new BlockBreakToken(
+                            this, spanContext.SlotIndex, i, null, IsBreakBefore: true, null,
+                            IsColumnSpanHandoff: true);
+                        return true;
+                    }
+
                     if (i > start
                         && HtmlContainer is { IsFragmenting: true }
                         && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } columnContext
@@ -2966,30 +2995,6 @@ namespace PeachPDF.Html.Core.Dom
                         return true;
                     }
 
-                    // css-multicol-1 §3's column-span: all - a direct child of the multi-column container
-                    // that establishes the very column context being filled, so a break falls before it
-                    // exactly as a forced column break would, but for CssLayoutEngineColumns to read
-                    // differently: not "open the next column of this run", but "this run ends here; lay the
-                    // spanning box out at the container's own width, then start a fresh run after it". A
-                    // deeper descendant marked column-span:all is deliberately not recognized here - only
-                    // the box whose own loop is directly inside the fill (this == ContextRoot) asks the
-                    // question, matching this engine's existing atomic-per-top-level-child model. Gated on
-                    // EstablishesMultiColumnContext too: column-span has no effect outside a multi-column
-                    // container (css-multicol-1 §3), and HasOwnBand alone does not say which kind of
-                    // fragmentainer this is - a table row context could otherwise misread it.
-                    if (i > start
-                        && EstablishesMultiColumnContext
-                        && HtmlContainer is { IsFragmenting: true }
-                        && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } spanContext
-                        && ReferenceEquals(this, spanContext.ContextRoot)
-                        && childBox.ColumnSpan == CssConstants.All)
-                    {
-                        PendingBreakToken = new BlockBreakToken(
-                            this, spanContext.SlotIndex, i, null, IsBreakBefore: true, null,
-                            IsColumnSpanHandoff: true);
-                        return true;
-                    }
-
                     // The mirror case: childBox itself is the column-span:all box, laid out here because
                     // it is what this fill actually began at (i == start) - a leading span, or one this
                     // container is resuming straight into. The check above never fires for it (i == start,
@@ -2997,10 +3002,17 @@ namespace PeachPDF.Html.Core.Dom
                     // whatever ordinary content follows, laid out at its full width rather than the
                     // multi-column run's own. Ends the flow immediately after it instead, so the caller
                     // opens a fresh run - at the resolved column geometry - for what comes next.
+                    //
+                    // Gated on childBox.PendingBreakToken being null: a span whose own content does not
+                    // fit this fragmentainer already has a pending record of its own, naming where *it*
+                    // continues - overwriting that here instead of falling through to the ordinary
+                    // propagation arm below would silently drop everything from that point on, since
+                    // nothing else carries the discarded record forward.
                     if (i == start
                         && i + 1 < Boxes.Count
                         && EstablishesMultiColumnContext
                         && childBox.ColumnSpan == CssConstants.All
+                        && childBox.PendingBreakToken is null
                         && HtmlContainer is { IsFragmenting: true }
                         && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } afterSpanContext
                         && ReferenceEquals(this, afterSpanContext.ContextRoot))

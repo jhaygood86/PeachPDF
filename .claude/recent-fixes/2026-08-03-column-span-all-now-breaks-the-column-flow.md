@@ -60,6 +60,21 @@ running them, each with a distinct, non-obvious root cause:
    survives it — not just that layout doesn't overlap, since this bug is invisible at the `CssBox`
    geometry level and only shows up in fragment-tree materialization.
 
+## A fifth defect, caught by post-change review rather than by any of the above
+
+The break-*after* check in defect 2 above fired unconditionally once the span itself had been laid out
+- including when the span's own content did not fit the fragmentainer and it already carried a
+`PendingBreakToken` of its own naming where *it* resumes. Overwriting that record with "resume at
+whatever follows the span" (rather than falling through to the ordinary `childBox.PendingBreakToken is
+{} childToken` propagation arm) silently dropped every one of the span's own children from the overflow
+point on - none of the 10 tests written alongside the original fix used a span tall enough to overflow a
+page, so this shipped past the suite, the coverage gate, and the rasterization check. Fixed by gating the
+break-after check on `childBox.PendingBreakToken is null`, and reordering the break-before check ahead of
+the pre-existing forced-column-break/avoid-column arm so a span that also carries `break-before: column`
+isn't misrouted into "the next column of this run" before the span check is ever reached.
+`ColumnSpanAll_SpanTallerThanOnePage_ContinuesRatherThanDroppingContent` reproduces it directly - verified
+failing against the pre-fix code (`git stash` on just `CssBox.cs`) before confirming the fix.
+
 ## Deliberately not done
 
 Only a **direct** child of the multi-column container is recognized as spanning — the same scope the

@@ -848,6 +848,49 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(2, xs.Count);
         }
 
+        [Fact]
+        public async Task ColumnSpanAll_SpanTallerThanOnePage_ContinuesRatherThanDroppingContent()
+        {
+            // Regression: the break-after check that ends a span's own fill right after it (so a run
+            // opens fresh for whatever follows) must not fire while the span itself still has a pending
+            // continuation of its own - a span whose content does not fit one page already carries a
+            // record naming where *it* resumes, and overwriting that with "resume at whatever follows
+            // the span" instead of falling through to the ordinary propagation silently dropped
+            // everything from the overflow point on.
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div id='pre' style='height:10px'>Pre</div>
+                    <div id='span' style='column-span:all'>
+                        <p id='s1' style='height:60px'>S1</p>
+                        <p id='s2' style='height:60px'>S2</p>
+                        <p id='s3' style='height:60px'>S3</p>
+                        <p id='s4' style='height:60px'>S4</p>
+                    </div>
+                    <div class='post' id='post1' style='height:20px'>Post1</div>
+                    <div class='post' id='post2' style='height:20px'>Post2</div>
+                </div>");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 100);
+
+            var pre = FindById(root, "pre")!;
+            var s1 = FindById(root, "s1")!;
+            var s2 = FindById(root, "s2")!;
+            var s3 = FindById(root, "s3")!;
+            var s4 = FindById(root, "s4")!;
+            var post = FindAllByClass(root, "post");
+
+            Assert.Equal(2, post.Count);
+
+            // None of the span's own children were silently dropped - each kept real, distinct geometry.
+            Assert.All([s1, s2, s3, s4], s => Assert.True(s.ActualBottom > s.Location.Y));
+            AssertNoOverlaps([pre, s1, s2, s3, s4, .. post]);
+
+            // The span's own content spilled across more than one page.
+            Assert.True(container.FragmentainerPasses > 1, "expected the span itself to have resumed");
+
+            // The post-span run still lands after all of the span's content, wherever that ended up.
+            Assert.All(post, p => Assert.True(p.Location.Y >= s4.ActualBottom - 0.5));
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         // Minimal RGraphics spy recording only DrawLine calls - per this repo's painting-test
