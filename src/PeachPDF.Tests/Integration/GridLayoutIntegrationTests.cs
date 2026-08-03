@@ -407,6 +407,51 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task JustifySelfRight_PositionsItemAtCellEnd()
+        {
+            // Regression coverage for issue #605: justify-self:right previously failed to parse at all
+            // (Layer A rejected it before cascade dispatch), so the item fell back to stretch/start.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:200pt;'>
+                    <div id='a' style='justify-self:right; width:40pt; height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            // 40pt item right-aligned in a 200pt track → starts at left+160, same as justify-self:end.
+            Assert.Equal(container.ClientLeft + 160, a.Location.X, 1.5);
+        }
+
+        [Fact]
+        public async Task JustifyItemsRight_ItemWithNoOverride_SitsAtCellEnd()
+        {
+            // Regression coverage for issue #605: justify-items:right previously failed to parse at all.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; justify-items:right; width:200pt; grid-template-columns:200pt;'>
+                    <div id='a' style='width:40pt; height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            Assert.Equal(container.ClientLeft + 160, a.Location.X, 1.5);
+        }
+
+        [Fact]
+        public async Task JustifySelfLeft_ItemUsesContentWidth_AtCellStart()
+        {
+            // Regression coverage for issue #605: justify-self:left previously failed to parse at all.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:200pt;'>
+                    <div id='a' style='justify-self:left; height:20pt; padding:0 10pt;'>X</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            Assert.True(a.ActualBoxSizingWidth < 100, $"item should shrink to content, was {a.ActualBoxSizingWidth}");
+            Assert.Equal(container.ClientLeft, a.Location.X, 1.0);
+        }
+
+        [Fact]
         public async Task JustifyContentCenter_CentersTracksInContainer()
         {
             var html = Wrap(@"
