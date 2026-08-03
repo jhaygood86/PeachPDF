@@ -272,6 +272,30 @@ namespace PeachPDF.CSS
             {
                 {Keywords.Auto, AutoKeyword.Auto}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, BoxSizingMode> BoxSizingModes =
+            new Dictionary<string, BoxSizingMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.BorderBox, BoxSizingMode.BorderBox},
+                {Keywords.ContentBox, BoxSizingMode.ContentBox}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, BoxDecorationBreakMode> BoxDecorationBreakModes =
+            new Dictionary<string, BoxDecorationBreakMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Slice, BoxDecorationBreakMode.Slice},
+                {Keywords.Clone, BoxDecorationBreakMode.Clone}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, ColumnFillMode> ColumnFillModes =
+            new Dictionary<string, ColumnFillMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, ColumnFillMode.Auto},
+                {Keywords.Balance, ColumnFillMode.Balance}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, ColumnSpanMode> ColumnSpanModes =
+            new Dictionary<string, ColumnSpanMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.None, ColumnSpanMode.None},
+                {Keywords.All, ColumnSpanMode.All}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, WritingMode> WritingModes =
             new Dictionary<string, WritingMode>(StringComparer.OrdinalIgnoreCase)
             {

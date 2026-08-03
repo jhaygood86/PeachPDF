@@ -1360,7 +1360,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     coordinates.CurrentX += leftSpacing;
                 }
-                else if (b.BoxDecorationBreak == CssConstants.Clone)
+                else if (b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone)
                 {
                     childClonedResumeStart += leftSpacing;
                 }
@@ -1368,7 +1368,7 @@ namespace PeachPDF.Html.Core.Dom
                 // What the guard above actually put on the cursor. The float branches below re-establish
                 // the line start from scratch rather than adjusting it, so they have to re-apply the same
                 // amount - re-applying the raw `leftSpacing` would put back exactly what `slice` suppresses.
-                var appliedLeftSpacing = childOpensHere || b.BoxDecorationBreak == CssConstants.Clone ? leftSpacing : 0;
+                var appliedLeftSpacing = childOpensHere || b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone ? leftSpacing : 0;
 
                 var lastLeftIntersectingFloatBox = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
 

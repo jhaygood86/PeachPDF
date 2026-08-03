@@ -50,6 +50,28 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Theory]
+        [InlineData("ltr", "ltr")]
+        [InlineData("LTR", "ltr")]     // issue #598: matched case-insensitively, stored canonicalized
+        [InlineData("Rtl", "rtl")]
+        public void FromCssText_KeywordMatch_StoresCanonicalCasing(string authored, string expectedText)
+        {
+            var p = CssProperty<DirectionMode>.FromCssText(authored, Map.DirectionModes, DirectionMode.Ltr);
+
+            Assert.False(p.IsGlobalValue);
+            Assert.False(p.IsUnresolved);
+            Assert.Equal(expectedText, p.ToString());
+        }
+
+        [Fact]
+        public void FromCssText_UnrecognizedKeyword_FallsBackAndKeepsRawText()
+        {
+            var p = CssProperty<DirectionMode>.FromCssText("sideways", Map.DirectionModes, DirectionMode.Ltr);
+
+            Assert.Equal(DirectionMode.Ltr, p.Value);
+            Assert.Equal("sideways", p.ToString());
+        }
+
+        [Theory]
         [InlineData("inherit")]
         [InlineData("INITIAL")]      // case-insensitive
         [InlineData("revert-layer")]

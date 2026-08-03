@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -78,7 +79,7 @@ namespace PeachPDF.Html.Core.Paint
         {
             var slice = line.Slice;
 
-            if (box.BoxDecorationBreak == CssConstants.Clone)
+            if (box.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone)
             {
                 // Each fragment is wrapped independently, so its own band-cut box IS its decoration area
                 // and every edge of it is a real edge - a box crossing a page boundary gets a closed

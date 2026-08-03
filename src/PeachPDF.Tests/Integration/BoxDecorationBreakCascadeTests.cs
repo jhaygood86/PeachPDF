@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
@@ -32,7 +33,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await FindTargetBox($"box-decoration-break: {authored}");
 
-            Assert.Equal(expected, box.BoxDecorationBreak);
+            Assert.Equal(expected, box.BoxDecorationBreak.ToString());
         }
 
         [Fact]
@@ -40,7 +41,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await FindTargetBox("");
 
-            Assert.Equal(CssConstants.Slice, box.BoxDecorationBreak);
+            Assert.Equal(BoxDecorationBreakMode.Slice, box.BoxDecorationBreak.Value);
         }
 
         // ── the CSS-wide keywords ──────────────────────────────────────────────
@@ -58,7 +59,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await FindTargetBox($"box-decoration-break: {keyword}", lowerPriorityCss: "box-decoration-break: clone");
 
-            Assert.Equal(CssConstants.Slice, box.BoxDecorationBreak);
+            Assert.Equal(BoxDecorationBreakMode.Slice, box.BoxDecorationBreak.Value);
         }
 
         // The companion direction: the lower-priority "clone" really is what the keyword rolls back, so the
@@ -68,7 +69,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await FindTargetBox("", lowerPriorityCss: "box-decoration-break: clone");
 
-            Assert.Equal(CssConstants.Clone, box.BoxDecorationBreak);
+            Assert.Equal(BoxDecorationBreakMode.Clone, box.BoxDecorationBreak.Value);
         }
 
         // What distinguishes the _knownPropertyNames entry from the initial-value entry: revert-layer rolls
@@ -89,7 +90,7 @@ namespace PeachPDF.Tests.Integration
 
             var box = await FindById(html, "target");
 
-            Assert.Equal(CssConstants.Clone, box.BoxDecorationBreak);
+            Assert.Equal(BoxDecorationBreakMode.Clone, box.BoxDecorationBreak.Value);
         }
 
         // box-decoration-break is not inherited, so an explicit "inherit" is the only way a child picks up
@@ -105,7 +106,7 @@ namespace PeachPDF.Tests.Integration
 
             var child = await FindById(html, "child");
 
-            Assert.Equal(CssConstants.Clone, child.BoxDecorationBreak);
+            Assert.Equal(BoxDecorationBreakMode.Clone, child.BoxDecorationBreak.Value);
         }
 
         // ...and without one it stays at the initial value, however the parent is styled.
@@ -120,7 +121,7 @@ namespace PeachPDF.Tests.Integration
 
             var child = await FindById(html, "child");
 
-            Assert.Equal(CssConstants.Slice, child.BoxDecorationBreak);
+            Assert.Equal(BoxDecorationBreakMode.Slice, child.BoxDecorationBreak.Value);
         }
 
         // ── the two structural-clone call sites ────────────────────────────────
@@ -152,7 +153,7 @@ namespace PeachPDF.Tests.Integration
 
             var proxies = table!.Boxes.OfType<CssProxyBox>().ToList();
             Assert.NotEmpty(proxies);
-            Assert.All(proxies, proxy => Assert.Equal(CssConstants.Clone, proxy.BoxDecorationBreak));
+            Assert.All(proxies, proxy => Assert.Equal(BoxDecorationBreakMode.Clone, proxy.BoxDecorationBreak.Value));
         }
 
         // DomParser's block-in-inline correction splits one element's box into several. Every resulting
@@ -169,7 +170,7 @@ namespace PeachPDF.Tests.Integration
 
             // The correction really did split the span, rather than leaving a single box.
             Assert.True(spanBoxes.Count > 1, $"expected the span to be split, found {spanBoxes.Count} box(es)");
-            Assert.All(spanBoxes, b => Assert.Equal(CssConstants.Clone, b.BoxDecorationBreak));
+            Assert.All(spanBoxes, b => Assert.Equal(BoxDecorationBreakMode.Clone, b.BoxDecorationBreak.Value));
         }
 
         // ── helpers ───────────────────────────────────────────────────────────

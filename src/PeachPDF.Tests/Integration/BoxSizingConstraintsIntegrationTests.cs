@@ -207,6 +207,61 @@ namespace PeachPDF.Tests.Integration
                 $"Cell 'a' should be widened to at least its min-width:200px: {a.ActualBoxSizingWidth}");
         }
 
+        // ─── Shrink-to-fit width (CssBox.CalculateActualRight) ─────────────────────
+        //
+        // CalculateActualRight only does real work (rather than early-returning the already-resolved
+        // ActualRight most boxes have by the time it runs - a placed child's own frame resolves it via
+        // ResolveOwnInlineSize, and the root box is sized directly by HtmlContainerInt) for a box whose
+        // width genuinely hasn't been settled yet. Rather than chase the exact real-markup shape that
+        // leaves a box in that state, build a normal box tree through real layout (so ContainingBlock,
+        // paddings, and margins are all genuinely resolved) and then invoke the method directly with
+        // ActualRight forced back to its "unresolved" sentinel - exercising its actual box-sizing-aware
+        // max-right-edge walk against real per-box geometry, not hand-constructed internals.
+
+        [Fact]
+        public async Task CalculateActualRight_BorderBoxSelfAndChild_AddsChildsOwnMarginOnBothSides()
+        {
+            var html = Wrap(@"
+                <div id='item' style='box-sizing:border-box; padding:5px; border:2px solid black;'>
+                    <div id='kid' style='box-sizing:border-box; width:100px; padding:10px; border:3px solid black; margin-right:7px;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            var kid = FindById(root, "kid")!;
+
+            item.ActualRight = 1_000_000;
+            var actualRight = item.CalculateActualRight();
+
+            // BoxSizingMode.BorderBox on both self and child: the child's own margin-right is added on
+            // top of its (already padding/border-inclusive) border-box right edge, then the parent's own
+            // border-box padding+border is added on top of that.
+            var expected = kid.ActualRight - kid.RelativeOffsetX + kid.ActualMarginRight
+                           + item.ActualPaddingRight + item.ActualMarginRight + item.ActualBorderRightWidth;
+            Assert.Equal(expected, actualRight, 3);
+        }
+
+        [Fact]
+        public async Task CalculateActualRight_ContentBoxSelfAndChild_DoesNotDoubleCountEitherMargin()
+        {
+            var html = Wrap(@"
+                <div id='item' style='box-sizing:content-box; padding:5px; border:2px solid black;'>
+                    <div id='kid' style='box-sizing:content-box; width:100px; margin-right:7px;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            var kid = FindById(root, "kid")!;
+
+            item.ActualRight = 1_000_000;
+            var actualRight = item.CalculateActualRight();
+
+            // BoxSizingMode.ContentBox on both self and child: neither side's own margin is added a
+            // second time (additionalMarginRight is 0 for content-box), so this is just the child's
+            // already-margin-inclusive right edge plus the parent's own content-box padding+border.
+            var expected = kid.ActualRight - kid.RelativeOffsetX
+                           + item.ActualPaddingRight + item.ActualBorderRightWidth;
+            Assert.Equal(expected, actualRight, 3);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
