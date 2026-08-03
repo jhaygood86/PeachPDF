@@ -96,7 +96,16 @@ namespace PeachPDF.CSS
                 return Global(keyword);
             if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
                 return Unresolved(value);
-            return FromValue(value, keywordMap.TryGetValue(value.Trim(), out var parsed) ? parsed : fallback);
+
+            var trimmed = value.Trim();
+            if (!keywordMap.TryGetValue(trimmed, out var parsed))
+                return FromValue(value, fallback);
+
+            // The matched keyword is stored canonicalized (lowercase — every keyword this codebase's
+            // Map.* dictionaries recognize is authored in lowercase ASCII), not the raw input, so
+            // ToString() round-trips to the canonical spelling regardless of how it was cased (issue
+            // #598) — a case-insensitively-matched "LTR" must not silently become "LTR" again on readback.
+            return FromValue(trimmed.ToLowerInvariant(), parsed);
         }
 
         public override string ToString() => _cssText;

@@ -161,7 +161,8 @@ namespace PeachPDF.Html.Core.Dom
         public string MaxHeight { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MaxHeight)!;
         public string MinHeight { get; init; } = CssDefaults.GetInitialValue(PropertyNames.MinHeight)!;
 
-        public string BoxSizing { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BoxSizing)!;
+        public CssProperty<BoxSizingMode> BoxSizing { get; init; } =
+            CssProperty<BoxSizingMode>.FromCssText(CssDefaults.GetInitialValue(PropertyNames.BoxSizing)!, Map.BoxSizingModes, BoxSizingMode.ContentBox);
     }
 
     #endregion
@@ -179,7 +180,8 @@ namespace PeachPDF.Html.Core.Dom
         public string BreakBefore { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BreakBefore)!;
         public string BreakInside { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BreakInside)!;
         public string BreakAfter { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BreakAfter)!;
-        public string BoxDecorationBreak { get; init; } = CssDefaults.GetInitialValue(PropertyNames.BoxDecorationBreak)!;
+        public CssProperty<BoxDecorationBreakMode> BoxDecorationBreak { get; init; } =
+            CssProperty<BoxDecorationBreakMode>.FromCssText(CssDefaults.GetInitialValue(PropertyNames.BoxDecorationBreak)!, Map.BoxDecorationBreakModes, BoxDecorationBreakMode.Slice);
     }
 
     #endregion
@@ -451,8 +453,10 @@ namespace PeachPDF.Html.Core.Dom
 
         public string ColumnCount { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnCount)!;
         public string ColumnWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnWidth)!;
-        public string ColumnFill { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnFill)!;
-        public string ColumnSpan { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnSpan)!;
+        public CssProperty<ColumnFillMode> ColumnFill { get; init; } =
+            CssProperty<ColumnFillMode>.FromCssText(CssDefaults.GetInitialValue(PropertyNames.ColumnFill)!, Map.ColumnFillModes, ColumnFillMode.Balance);
+        public CssProperty<ColumnSpanMode> ColumnSpan { get; init; } =
+            CssProperty<ColumnSpanMode>.FromCssText(CssDefaults.GetInitialValue(PropertyNames.ColumnSpan)!, Map.ColumnSpanModes, ColumnSpanMode.None);
         public string ColumnRuleWidth { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnRuleWidth)!;
         public string ColumnRuleStyle { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnRuleStyle)!;
         public string ColumnRuleColor { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ColumnRuleColor)!;

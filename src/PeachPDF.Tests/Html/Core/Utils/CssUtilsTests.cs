@@ -109,10 +109,12 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var (box, parser) = await FindDivBoxAndParser("");
 
             CssUtils.SetPropertyValue(parser, box, "column-fill", "balance");
-            Assert.Equal("balance", box.ColumnFill);
+            Assert.Equal("balance", box.ColumnFill.ToString());
+            Assert.Equal(ColumnFillMode.Balance, box.ColumnFill.Value);
 
             CssUtils.SetPropertyValue(parser, box, "column-fill", "auto");
-            Assert.Equal("auto", box.ColumnFill);
+            Assert.Equal("auto", box.ColumnFill.ToString());
+            Assert.Equal(ColumnFillMode.Auto, box.ColumnFill.Value);
         }
 
         [Fact]
@@ -121,10 +123,12 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var (box, parser) = await FindDivBoxAndParser("");
 
             CssUtils.SetPropertyValue(parser, box, "column-span", "all");
-            Assert.Equal("all", box.ColumnSpan);
+            Assert.Equal("all", box.ColumnSpan.ToString());
+            Assert.Equal(ColumnSpanMode.All, box.ColumnSpan.Value);
 
             CssUtils.SetPropertyValue(parser, box, "column-span", "none");
-            Assert.Equal("none", box.ColumnSpan);
+            Assert.Equal("none", box.ColumnSpan.ToString());
+            Assert.Equal(ColumnSpanMode.None, box.ColumnSpan.Value);
         }
 
         [Theory]
@@ -197,7 +201,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             CssUtils.SetPropertyValue(parser, box, "box-sizing", "not-a-real-value");
 
-            Assert.Equal("border-box", box.BoxSizing);
+            Assert.Equal("border-box", box.BoxSizing.ToString());
         }
 
         [Fact]

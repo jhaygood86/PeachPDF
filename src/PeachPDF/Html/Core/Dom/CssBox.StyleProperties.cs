@@ -360,7 +360,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public string BoxSizing
+        public CssProperty<BoxSizingMode> BoxSizing
         {
             get => _computedStyle.BoxModel.BoxSizing;
             set
@@ -596,7 +596,7 @@ namespace PeachPDF.Html.Core.Dom
         // (Html/Core/Fragments/SliceGeometry) - deliberately not against BoxFragment's
         // IsFirstFragment/IsLastFragment, whose span includes descendants. Layout also reserves room for
         // cloned decorations, so a cloned border at a break pushes content rather than overlapping it.
-        public string BoxDecorationBreak
+        public CssProperty<BoxDecorationBreakMode> BoxDecorationBreak
         {
             get => _computedStyle.Break.BoxDecorationBreak;
             set
@@ -1751,7 +1751,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public string ColumnFill
+        public CssProperty<ColumnFillMode> ColumnFill
         {
             get => _computedStyle.MultiColumn.ColumnFill;
             set
@@ -1762,7 +1762,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public string ColumnSpan
+        public CssProperty<ColumnSpanMode> ColumnSpan
         {
             get => _computedStyle.MultiColumn.ColumnSpan;
             set
@@ -2070,10 +2070,10 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                return BoxSizing switch
+                return BoxSizing.Value switch
                 {
-                    CssConstants.ContentBox => ActualPaddingLeft + ActualPaddingRight + ActualBorderLeftWidth + ActualBorderRightWidth,
-                    CssConstants.BorderBox => 0,
+                    BoxSizingMode.ContentBox => ActualPaddingLeft + ActualPaddingRight + ActualBorderLeftWidth + ActualBorderRightWidth,
+                    BoxSizingMode.BorderBox => 0,
                     _ => throw new HtmlRenderException("Unknown box sizing", HtmlRenderErrorType.Layout)
                 };
             }
@@ -2085,10 +2085,10 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                return BoxSizing switch
+                return BoxSizing.Value switch
                 {
-                    CssConstants.ContentBox => ActualPaddingTop + ActualPaddingBottom + ActualBorderTopWidth + ActualBorderBottomWidth,
-                    CssConstants.BorderBox => 0,
+                    BoxSizingMode.ContentBox => ActualPaddingTop + ActualPaddingBottom + ActualBorderTopWidth + ActualBorderBottomWidth,
+                    BoxSizingMode.BorderBox => 0,
                     _ => throw new HtmlRenderException("Unknown box sizing", HtmlRenderErrorType.Layout)
                 };
             }

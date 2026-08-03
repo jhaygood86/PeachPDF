@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -170,7 +171,7 @@ namespace PeachPDF.Html.Core.Dom
             // rectangle covers its own leading and trailing border and padding rather than only the ones at
             // the box's true ends (css-break-3 §6.2). CssLayoutEngine.FlowBox reserves the matching room, so
             // the rectangle and the content inside it agree.
-            var clonesDecorations = box.BoxDecorationBreak == CssConstants.Clone;
+            var clonesDecorations = box.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone;
 
             if (clonesDecorations || (box.FirstHostingLineBox != null && box.FirstHostingLineBox.Equals(this)) || box.IsImage)
                 x -= leftSpacing;

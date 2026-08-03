@@ -2973,7 +2973,7 @@ namespace PeachPDF.Html.Core.Dom
                         && HtmlContainer is { IsFragmenting: true }
                         && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } spanContext
                         && ReferenceEquals(this, spanContext.ContextRoot)
-                        && childBox.ColumnSpan == CssConstants.All)
+                        && childBox.ColumnSpan.Value == ColumnSpanMode.All)
                     {
                         PendingBreakToken = new BlockBreakToken(
                             this, spanContext.SlotIndex, i, null, IsBreakBefore: true, null,
@@ -3011,7 +3011,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (i == start
                         && i + 1 < Boxes.Count
                         && EstablishesMultiColumnContext
-                        && childBox.ColumnSpan == CssConstants.All
+                        && childBox.ColumnSpan.Value == ColumnSpanMode.All
                         && childBox.PendingBreakToken is null
                         && HtmlContainer is { IsFragmenting: true }
                         && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } afterSpanContext
@@ -5538,10 +5538,10 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var box in Boxes)
             {
-                additionalMarginRight = box.BoxSizing switch
+                additionalMarginRight = box.BoxSizing.Value switch
                 {
-                    CssConstants.ContentBox => 0,
-                    CssConstants.BorderBox => box.ActualMarginRight,
+                    BoxSizingMode.ContentBox => 0,
+                    BoxSizingMode.BorderBox => box.ActualMarginRight,
                     _ => throw new HtmlRenderException("Unknown BoxSizing", HtmlRenderErrorType.Layout)
                 };
 
@@ -5551,10 +5551,10 @@ namespace PeachPDF.Html.Core.Dom
                 maxRight = Math.Max(maxRight, box.ActualRight - box.RelativeOffsetX + additionalMarginRight);
             }
 
-            additionalMarginRight = BoxSizing switch
+            additionalMarginRight = BoxSizing.Value switch
             {
-                CssConstants.ContentBox => 0,
-                CssConstants.BorderBox => ActualMarginRight,
+                BoxSizingMode.ContentBox => 0,
+                BoxSizingMode.BorderBox => ActualMarginRight,
                 _ => throw new HtmlRenderException("Unknown BoxSizing", HtmlRenderErrorType.Layout)
             };
 

@@ -36,19 +36,20 @@
     },
     {
       "name": "box-sizing",
-      "comment": "Replaces the old CssUtils.IsValidBoxSizing helper.",
+      "comment": "Replaces the old CssUtils.IsValidBoxSizing helper. CssProperty<BoxSizingMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
       "initialValue": "content-box",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "border-box",
-        "content-box"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BoxSizingMode",
+        "keywordMap": "Map.BoxSizingModes",
+        "fallback": "BoxSizingMode.ContentBox"
+      },
       "html": {
         "propertyPath": "BoxSizing",
-        "csharpDataType": "string",
-        "area": "BoxModelArea"
+        "csharpDataType": "CssProperty<BoxSizingMode>",
+        "area": "BoxModelArea",
+        "getterExpression": "{box}.BoxSizing.ToString()"
       }
     },
     {
@@ -1131,18 +1132,20 @@
     },
     {
       "name": "box-decoration-break",
+      "comment": "CssProperty<BoxDecorationBreakMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
       "initialValue": "slice",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "slice",
-        "clone"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BoxDecorationBreakMode",
+        "keywordMap": "Map.BoxDecorationBreakModes",
+        "fallback": "BoxDecorationBreakMode.Slice"
+      },
       "html": {
         "propertyPath": "BoxDecorationBreak",
-        "csharpDataType": "string",
-        "area": "BreakArea"
+        "csharpDataType": "CssProperty<BoxDecorationBreakMode>",
+        "area": "BreakArea",
+        "getterExpression": "{box}.BoxDecorationBreak.ToString()"
       }
     },
     {
@@ -2418,34 +2421,38 @@
     },
     {
       "name": "column-fill",
+      "comment": "CssProperty<ColumnFillMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
       "initialValue": "balance",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "auto",
-        "balance"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ColumnFillMode",
+        "keywordMap": "Map.ColumnFillModes",
+        "fallback": "ColumnFillMode.Balance"
+      },
       "html": {
         "propertyPath": "ColumnFill",
-        "csharpDataType": "string",
-        "area": "MultiColumnArea"
+        "csharpDataType": "CssProperty<ColumnFillMode>",
+        "area": "MultiColumnArea",
+        "getterExpression": "{box}.ColumnFill.ToString()"
       }
     },
     {
       "name": "column-span",
+      "comment": "CssProperty<ColumnSpanMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "none",
-        "all"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ColumnSpanMode",
+        "keywordMap": "Map.ColumnSpanModes",
+        "fallback": "ColumnSpanMode.None"
+      },
       "html": {
         "propertyPath": "ColumnSpan",
-        "csharpDataType": "string",
-        "area": "MultiColumnArea"
+        "csharpDataType": "CssProperty<ColumnSpanMode>",
+        "area": "MultiColumnArea",
+        "getterExpression": "{box}.ColumnSpan.ToString()"
       }
     },
     {

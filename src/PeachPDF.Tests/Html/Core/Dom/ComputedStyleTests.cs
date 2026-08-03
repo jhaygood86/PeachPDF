@@ -172,13 +172,17 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             // box-sizing was deliberately made non-inherited (CSS Box Sizing 3 §3) - BoxModel (which now
             // holds BoxSizing) must therefore never be among the areas InheritStyle adopts by reference.
-            var parent = new CssBox(null, null) { BoxSizing = "border-box", Width = "100px" };
+            var parent = new CssBox(null, null)
+            {
+                BoxSizing = CssProperty<BoxSizingMode>.FromCssText("border-box", Map.BoxSizingModes, BoxSizingMode.ContentBox),
+                Width = "100px"
+            };
             var child = new CssBox(parent, null);
 
             child.InheritStyle();
 
             Assert.NotSame(parent.ComputedStyle.BoxModel, child.ComputedStyle.BoxModel);
-            Assert.Equal("content-box", child.BoxSizing);
+            Assert.Equal("content-box", child.BoxSizing.ToString());
             Assert.Equal("auto", child.Width);
         }
 
@@ -212,12 +216,15 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // BoxDecorationBreak/the break properties/PdfTagType. Without this, a border-box element split
             // across an inline/block boundary would have its continuation fragment silently revert to the
             // CSS initial content-box.
-            var source = new CssBox(null, null) { BoxSizing = "border-box" };
+            var source = new CssBox(null, null)
+            {
+                BoxSizing = CssProperty<BoxSizingMode>.FromCssText("border-box", Map.BoxSizingModes, BoxSizingMode.ContentBox)
+            };
             var clone = new CssBox(null, null);
 
             clone.InheritStyle(source, everything: true);
 
-            Assert.Equal("border-box", clone.BoxSizing);
+            Assert.Equal("border-box", clone.BoxSizing.ToString());
         }
 
         [Fact]
@@ -297,7 +304,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
         /// <para>
         /// Every <see cref="CSS.CssProperty{T}"/>-backed property (<c>direction</c>/<c>unicode-bidi</c>/
         /// <c>writing-mode</c>/<c>container-type</c>/<c>z-index</c>/<c>grid-template-columns</c>/
-        /// <c>-rows</c>) is exempt from needing an exception here: <see cref="CSS.CssProperty{T}"/> is a
+        /// <c>-rows</c>/<c>box-sizing</c>/<c>box-decoration-break</c>/<c>column-fill</c>/<c>column-span</c>)
+        /// is exempt from needing an exception here: <see cref="CSS.CssProperty{T}"/> is a
         /// record, and every T it's instantiated with (an enum, <see cref="CSS.CssKeywordOrValue{TEnum,TValue}"/>,
         /// or <see cref="CSS.GridTemplate"/> — the latter two records too, with <see cref="CSS.GridTemplate"/>
         /// giving its list/dictionary-typed members explicit content equality since the BCL collection

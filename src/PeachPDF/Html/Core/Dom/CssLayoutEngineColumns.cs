@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
@@ -310,7 +311,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var child in children)
             {
-                if (child.ColumnSpan == CssConstants.All)
+                if (child.ColumnSpan.Value == ColumnSpanMode.All)
                 {
                     if (run.Count > 0)
                     {
@@ -413,7 +414,7 @@ namespace PeachPDF.Html.Core.Dom
             // it, so the first fragment starts from the estimate (its measurement pass has just said how
             // tall everything is) and a continuation starts from the full budget and is re-balanced below
             // once the fill has shown that the remainder ends here.
-            var balances = columnsBox.ColumnFill != CssConstants.Auto;
+            var balances = columnsBox.ColumnFill.Value != ColumnFillMode.Auto;
 
             var target = balances && resume is null
                 ? EstimateBalancedColumnHeight(children, 0, columnCount, pageBudget)

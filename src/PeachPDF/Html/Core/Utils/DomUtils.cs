@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
@@ -740,7 +741,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         internal static bool AnyBoxClonesDecorations(CssBox box)
         {
-            if (box.BoxDecorationBreak == CssConstants.Clone) return true;
+            if (box.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone) return true;
 
             foreach (var child in box.Boxes)
             {
@@ -811,7 +812,7 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 }
 
-                if (current.BoxDecorationBreak == CssConstants.Clone)
+                if (current.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone)
                     total += current.ActualBorderTopWidth + current.ActualPaddingTop;
             }
 
@@ -851,7 +852,7 @@ namespace PeachPDF.Html.Core.Utils
         /// content it holds — each level of a nested cloning stack closes inside its ancestors' own close.
         /// </remarks>
         internal static double OwnClonedBlockEnd(CssBox box) =>
-            box.BoxDecorationBreak == CssConstants.Clone
+            box.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone
                 ? box.ActualBorderBottomWidth + box.ActualPaddingBottom
                 : 0;
 
@@ -873,7 +874,7 @@ namespace PeachPDF.Html.Core.Utils
 
             for (var current = from; current is not null && !ReferenceEquals(current, stopAt); current = current.ParentBox)
             {
-                if (current.BoxDecorationBreak == CssConstants.Clone)
+                if (current.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone)
                     total += current.ActualMarginLeft + current.ActualBorderLeftWidth + current.ActualPaddingLeft;
             }
 
@@ -890,7 +891,7 @@ namespace PeachPDF.Html.Core.Utils
 
             for (var current = from; current is not null && !ReferenceEquals(current, stopAt); current = current.ParentBox)
             {
-                if (current.BoxDecorationBreak == CssConstants.Clone)
+                if (current.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone)
                     total += current.ActualMarginRight + current.ActualBorderRightWidth + current.ActualPaddingRight;
             }
 

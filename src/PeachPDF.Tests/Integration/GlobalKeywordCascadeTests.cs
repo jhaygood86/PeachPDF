@@ -522,7 +522,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("content-box", child!.BoxSizing);
+            Assert.Equal("content-box", child!.BoxSizing.ToString());
         }
 
         [Fact]
@@ -542,7 +542,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("border-box", child!.BoxSizing);
+            Assert.Equal("border-box", child!.BoxSizing.ToString());
         }
 
         // ── regression: vertical-align is spec-correctly not inherited (issue #530) ──
