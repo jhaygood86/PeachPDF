@@ -1006,6 +1006,7 @@
         "column",
         "region"
       ],
+      "keywordComparison": "invariant-ignore-case",
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "auto",
@@ -1038,6 +1039,7 @@
         "avoid-column",
         "avoid-region"
       ],
+      "keywordComparison": "invariant-ignore-case",
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "auto",
@@ -1071,6 +1073,7 @@
         "column",
         "region"
       ],
+      "keywordComparison": "invariant-ignore-case",
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "auto",
@@ -1226,6 +1229,7 @@
         "fixed",
         "local"
       ],
+      "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "BackgroundAttachment",
         "csharpDataType": "string",
@@ -1244,6 +1248,7 @@
         "none",
         "scale-down"
       ],
+      "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "ObjectFit",
         "csharpDataType": "string",
@@ -1319,6 +1324,7 @@
         "grid",
         "inline-grid",
         "table",
+        "inline-table",
         "table-row",
         "table-cell",
         "table-header-group",
@@ -1431,6 +1437,7 @@
         "collapse",
         "separate"
       ],
+      "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "BorderCollapse",
         "csharpDataType": "string",
@@ -1457,6 +1464,7 @@
         "show",
         "hide"
       ],
+      "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "EmptyCells",
         "csharpDataType": "string",
@@ -1465,7 +1473,7 @@
     },
     {
       "name": "line-height",
-      "comment": "A unitless multiplier value (e.g. 'line-height: 1.5') is not modeled here and reports unsupported - IsValidLength requires a unit or a bare zero, matching ParseLength's own length-only reading at DerivedStyle.ActualLineHeight.",
+      "comment": "A unitless multiplier value (e.g. 'line-height: 1.5') is not modeled here and reports unsupported - IsValidLength requires a unit or a bare zero, matching ParseLength's own length-only reading at DerivedStyle.ActualLineHeight. customValidator deliberately excludes 'auto' - CSS Inline Layout 3's grammar is 'normal | <number> | <length-percentage>', auto was never part of it; DerivedStyle.ActualLineHeight has no special case for it and would silently collapse line height to 0 if it were accepted (a pre-existing quirk carried over from the old IsValidLengthProperty helper written for width/height-style 'auto' properties, not spec-derived).",
       "inherited": true,
       "initialValue": "normal",
       "cssDataType": [
@@ -1479,7 +1487,7 @@
         "propertyPath": "LineHeight",
         "csharpDataType": "string",
         "area": "TextArea",
-        "customValidator": "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength({value}) || {value}.Equals(\"auto\", global::System.StringComparison.InvariantCultureIgnoreCase) || {value} == \"normal\" || double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)"
+        "customValidator": "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength({value}) || {value} == \"normal\" || double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)"
       }
     },
     {
@@ -1570,10 +1578,17 @@
     },
     {
       "name": "word-break",
+      "comment": "cssDataType's own supportedValues includes keep-all because Layer A's own WordBreakConverter/Map.WordBreaks parses and stores it as valid CSS (WordBreak.KeepAll), even though CssBox.cs's line-breaking logic only special-cases break-all - keep-all has no distinct effect (see .claude/accepted-gaps/word-break-keep-all-no-effect.md). supportsDataType is the stricter, @supports-only list excluding keep-all for exactly that reason, same shape as break-before's region/avoid-region split.",
       "inherited": true,
       "initialValue": "normal",
       "cssDataType": "keyword",
       "supportedValues": [
+        "normal",
+        "break-all",
+        "keep-all"
+      ],
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
         "normal",
         "break-all"
       ],
@@ -1722,6 +1737,7 @@
     },
     {
       "name": "font-size",
+      "comment": "supportedValues deliberately excludes CSS Fonts 4's xxx-large - FontSizeResolver.Resolve's switch has no case for it, so an accepted 'font-size: xxx-large' would fall through to CssValueParser.ParseLength (which can't parse the bare keyword), Math.Max(0, ...)-clamp to 0, and silently render invisible text rather than being rejected.",
       "inherited": true,
       "initialValue": "medium",
       "cssDataType": [
@@ -1736,7 +1752,6 @@
         "large",
         "x-large",
         "xx-large",
-        "xxx-large",
         "smaller",
         "larger"
       ],
@@ -1877,6 +1892,7 @@
         "inside",
         "outside"
       ],
+      "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "ListStylePosition",
         "csharpDataType": "string",
@@ -1910,6 +1926,7 @@
         "katakana-iroha",
         "none"
       ],
+      "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "ListStyleType",
         "csharpDataType": "string",
@@ -1970,8 +1987,10 @@
       "initialValue": "normal",
       "cssDataType": "keyword",
       "supportedValues": [
+        "normal",
         "flex-start",
         "flex-end",
+        "end",
         "center",
         "space-between",
         "space-around",
@@ -1994,6 +2013,7 @@
         "flex-end",
         "start",
         "end",
+        "self-end",
         "center",
         "stretch",
         "normal",
@@ -2013,6 +2033,7 @@
       "supportedValues": [
         "flex-start",
         "flex-end",
+        "end",
         "center",
         "space-between",
         "space-around",
@@ -2028,24 +2049,28 @@
     },
     {
       "name": "flex-grow",
+      "comment": "customValidator rejects a negative <number> - css-flexbox-1 §7.1.1 defines flex-grow as a non-negative number, and CssLayoutEngineFlex.cs sums ParseFloat(box.FlexGrow) directly into free-space distribution math with no clamp, so an accepted negative value would corrupt that calculation rather than being merely inert.",
       "inherited": false,
       "initialValue": "0",
       "cssDataType": "number",
       "html": {
         "propertyPath": "FlexGrow",
         "csharpDataType": "string",
-        "area": "FlexArea"
+        "area": "FlexArea",
+        "customValidator": "double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out var flexGrowParsed) && flexGrowParsed >= 0"
       }
     },
     {
       "name": "flex-shrink",
+      "comment": "customValidator rejects a negative <number> - css-flexbox-1 §7.1.2 defines flex-shrink as a non-negative number, and CssLayoutEngineFlex.cs multiplies ParseFloat(box.FlexShrink) directly into shrink-factor math with no clamp, so an accepted negative value would corrupt that calculation rather than being merely inert.",
       "inherited": false,
       "initialValue": "1",
       "cssDataType": "number",
       "html": {
         "propertyPath": "FlexShrink",
         "csharpDataType": "string",
-        "area": "FlexArea"
+        "area": "FlexArea",
+        "customValidator": "double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out var flexShrinkParsed) && flexShrinkParsed >= 0"
       }
     },
     {
@@ -2078,6 +2103,7 @@
         "flex-end",
         "start",
         "end",
+        "self-end",
         "center",
         "stretch",
         "normal",
@@ -2196,12 +2222,14 @@
     },
     {
       "name": "justify-items",
+      "comment": "supportedValues deliberately excludes 'right' - CssLayoutEngineGrid.cs's AlignmentOffset already handles it, but Converters.JustifyItemsConverter aliases AlignItemsConverter wholesale (Converters.cs, 'justify-items / justify-self share align-items/align-self's value grammar'), which has no left/right case since those keywords are only spec-valid on the justify axis - so 'justify-items: right' is rejected by Layer A's own parser before a declaration ever reaches this registry, regardless of what's listed here. See .claude/accepted-gaps/justify-items-self-right-left-not-parseable.md.",
       "inherited": false,
       "initialValue": "normal",
       "cssDataType": "keyword",
       "supportedValues": [
         "start",
         "end",
+        "self-end",
         "center",
         "stretch",
         "normal"
@@ -2214,6 +2242,7 @@
     },
     {
       "name": "justify-self",
+      "comment": "supportedValues deliberately excludes 'right' - same Layer A parser gap as justify-items (Converters.JustifySelfConverter aliases AlignSelfConverter). See .claude/accepted-gaps/justify-items-self-right-left-not-parseable.md.",
       "inherited": false,
       "initialValue": "auto",
       "cssDataType": "keyword",
@@ -2221,6 +2250,7 @@
         "auto",
         "start",
         "end",
+        "self-end",
         "center",
         "stretch",
         "normal"

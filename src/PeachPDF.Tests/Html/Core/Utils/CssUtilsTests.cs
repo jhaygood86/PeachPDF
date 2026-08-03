@@ -452,6 +452,28 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(expected, box.BreakBefore);
         }
 
+        // Regression coverage for the spec-compliance audit's biggest category of finding: a value that's
+        // genuinely handled by real layout code (CssLayoutEngineFlex.cs/CssLayoutEngineGrid.cs/CssBox.cs)
+        // but was missing from the JSON's supportedValues, so the generated Validate_X rejected it before
+        // it ever reached the box - silently dropping a value that used to work under the pre-migration
+        // permissive cssom passthrough. Each row here would fail if that value were still missing.
+        [Theory]
+        [InlineData("display", "inline-table", "inline-table")]
+        [InlineData("justify-content", "normal", "normal")]
+        [InlineData("justify-content", "end", "end")]
+        [InlineData("align-content", "end", "end")]
+        [InlineData("align-items", "self-end", "self-end")]
+        [InlineData("align-self", "self-end", "self-end")]
+        [InlineData("justify-items", "self-end", "self-end")]
+        [InlineData("justify-self", "self-end", "self-end")]
+        [InlineData("word-break", "keep-all", "keep-all")]
+        public async Task Cascade_PreviouslyDroppedKeyword_NowStored(string property, string value, string expected)
+        {
+            var (box, _) = await FindDivBoxAndParser($"{property}: {value};");
+
+            Assert.Equal(expected, CssUtils.GetPropertyValue(box, property));
+        }
+
         [Fact]
         public async Task Cascade_PageBreakBeforeAlways_StillMapsToPage()
         {
@@ -495,6 +517,10 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("box-decoration-break", "sliced", "clone")]
         [InlineData("column-count", "0", "2")]
         [InlineData("column-span", "sometimes", "all")]
+        [InlineData("flex-grow", "-1", "2")]
+        [InlineData("flex-shrink", "-1", "2")]
+        [InlineData("font-size", "xxx-large", "large")]
+        [InlineData("line-height", "auto", "1.5")]
         public async Task SetPropertyValue_InvalidValue_IsRejected(string name, string invalid, string valid)
         {
             var (box, parser) = await FindDivBoxAndParser("");

@@ -210,6 +210,28 @@ namespace PeachPDF.Tests.CSS
             Assert.True(supports.Condition.Check());
         }
 
+        // word-break's cssDataType includes 'keep-all' (Layer A's own WordBreakConverter/Map.WordBreaks
+        // parses and stores it), but its supportsDataType override excludes it - CssBox.cs's line-breaking
+        // logic only special-cases break-all, so 'keep-all' has no distinct effect and @supports must say
+        // no. Same shape as break-before/column-span above.
+        [Fact]
+        public void SupportsWordBreakKeepAllRule_NotGenuinelyEnforced()
+        {
+            var source = @"@supports (word-break: keep-all) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsWordBreakAllRule()
+        {
+            var source = @"@supports (word-break: break-all) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
         // direction's enum-keyword validator now checks Map.DirectionModes' own keys instead of
         // unconditionally returning true - a value outside {ltr, rtl} must fail.
         [Fact]
