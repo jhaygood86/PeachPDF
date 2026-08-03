@@ -611,5 +611,67 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Empty(result.Diagnostics);
         }
+
+        [Fact]
+        public void KeywordOrValue_DataType_Parses_Without_Diagnostics()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "z-index", "inherited": false, "initialValue": "auto",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "AutoKeyword", "keywordMap": "Map.AutoKeywords",
+                        "fallback": "AutoKeyword.Auto", "valueType": "integer" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Empty(result.Diagnostics);
+        }
+
+        [Fact]
+        public void PPG011_Passes_Against_The_Real_CssBox_For_A_KeywordOrValue_Entry()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "z-index", "inherited": false, "initialValue": "auto",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "AutoKeyword", "keywordMap": "Map.AutoKeywords",
+                        "fallback": "AutoKeyword.Auto", "valueType": "integer" },
+                      "html": { "propertyPath": "ZIndex", "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, int>>", "area": "DisplayPositioningArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, includePeachPdfReference: true);
+
+            Assert.DoesNotContain("PPG011", IdsOf(result));
+        }
+
+        [Fact]
+        public void KeywordOrValue_UnrecognizedValueType_FailsGenerationLoudly()
+        {
+            // valueType is only editor/schema-validated ("integer"/"length"), not re-checked at C# parse
+            // time — KeywordOrValueGrammar.Resolve is the one place that guards against an author (or a
+            // future value-type addition nobody wired up yet) writing something neither
+            // ValidatorExpressionBuilder nor RegistryEmitter know how to turn into real C#.
+            var json = """
+                {
+                  "properties": [
+                    { "name": "z-index", "inherited": false, "initialValue": "auto",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "AutoKeyword", "keywordMap": "Map.AutoKeywords",
+                        "fallback": "AutoKeyword.Auto", "valueType": "banana" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("CS8785", IdsOf(result));
+            Assert.Contains(result.Diagnostics, d => d.GetMessage().Contains("valueType \"banana\""));
+        }
     }
 }

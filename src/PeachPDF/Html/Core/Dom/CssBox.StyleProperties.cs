@@ -1436,7 +1436,7 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Z-index
 
-        public string ZIndex
+        public CssProperty<CssKeywordOrValue<AutoKeyword, int>> ZIndex
         {
             get => _computedStyle.DisplayPositioning.ZIndex;
             set

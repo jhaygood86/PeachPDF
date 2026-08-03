@@ -1456,20 +1456,21 @@
     },
     {
       "name": "z-index",
+      "comment": "CssKeywordOrValue<AutoKeyword, int>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": [
-        "keyword",
-        "integer"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "integer"
+      },
       "html": {
         "propertyPath": "ZIndex",
-        "csharpDataType": "string",
-        "area": "DisplayPositioningArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, int>>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.ZIndex.ToString()"
       }
     },
     {

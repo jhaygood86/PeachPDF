@@ -141,6 +141,16 @@ namespace PeachPDF.SourceGenerators.Emit
                 return $"box.{html.PropertyPath} = CssProperty<{dt.EnumType}>.FromCssText(value, {dt.KeywordMap}, {dt.Fallback});";
             }
 
+            if (entry.CssDataTypes.Count == 1 && entry.CssDataTypes[0].Kind == DataTypeKind.KeywordOrValue)
+            {
+                var dt = entry.CssDataTypes[0];
+                var resolved = KeywordOrValueGrammar.Resolve(entry, dt);
+                // Explicit type arguments: a method-group argument (int.TryParse) doesn't drive generic
+                // inference for TValue the way a concrete delegate instance would.
+                return $"box.{html.PropertyPath} = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<{dt.EnumType}, {resolved.CSharpType}>" +
+                       $"(value, {dt.KeywordMap}, {resolved.TryParseMethod}, {dt.Fallback});";
+            }
+
             // A case-insensitively-matched keyword (plain "keyword", or the keyword side of a union like
             // "length" | "keyword") must be stored in its canonical (as-authored-in-JSON) casing, not the
             // raw input — every downstream layout/paint comparison against this field is an ordinal match

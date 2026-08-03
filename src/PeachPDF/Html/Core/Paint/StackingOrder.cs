@@ -183,9 +183,9 @@ namespace PeachPDF.Html.Core.Paint
             {
                 var zIndex = 0;
 
-                if (participant.Box.ZIndex is not CssConstants.Auto)
+                if (participant.Box.ZIndex.Value is { IsValue: true } zIndexValue)
                 {
-                    zIndex = int.Parse(participant.Box.ZIndex);
+                    zIndex = zIndexValue.Value.GetValueOrDefault();
                 }
 
                 if (!boxesByLayer.TryGetValue(zIndex, out var layer))

@@ -337,6 +337,15 @@ namespace PeachPDF.SourceGenerators.Model
                         return new DataTypeSpec(DataTypeKind.EnumKeyword,
                             enumType: enumTypeValue.StringValue, keywordMap: keywordMapValue.StringValue, fallback: fallbackValue.StringValue);
 
+                    case "keyword-or-value":
+                        json.TryGetProperty("enumType", out var korvEnumTypeValue);
+                        json.TryGetProperty("keywordMap", out var korvKeywordMapValue);
+                        json.TryGetProperty("fallback", out var korvFallbackValue);
+                        json.TryGetProperty("valueType", out var korvValueTypeValue);
+                        return new DataTypeSpec(DataTypeKind.KeywordOrValue,
+                            enumType: korvEnumTypeValue.StringValue, keywordMap: korvKeywordMapValue.StringValue,
+                            fallback: korvFallbackValue.StringValue, valueType: korvValueTypeValue.StringValue);
+
                     default:
                         diagnostics.Add(Error(DiagnosticCode.UnknownDataType,
                             $"\"{name}\" declares an unknown cssDataType object shape \"{typeValue.StringValue}\".", json));

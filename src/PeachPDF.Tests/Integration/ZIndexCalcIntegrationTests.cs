@@ -10,8 +10,9 @@ namespace PeachPDF.Tests.Integration
     /// Level 4 §10.9), through the full cascade pipeline - not just the CSS-OM parser level covered by
     /// <c>WptCssPositionInsetLogicalParsingTests</c>. <c>CssUtils.cs</c>'s DOM-application step gates
     /// z-index on <c>int.TryParse</c> before assigning <see cref="CssBox.ZIndex"/>, and
-    /// <c>StackingOrder</c> later does a bare <c>int.Parse(box.ZIndex)</c> - both would break if a
-    /// z-index calc() only got as far as parsing without also being folded to a literal integer string.
+    /// <c>StackingOrder</c> later reads <c>box.ZIndex.Value.Value</c> (the resolved
+    /// <c>CssKeywordOrValue&lt;AutoKeyword,int&gt;</c>'s int side) - both would break if a z-index calc()
+    /// only got as far as parsing without also being folded to a literal integer string.
     /// </summary>
     public class ZIndexCalcIntegrationTests
     {
@@ -24,7 +25,8 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "t");
 
             Assert.NotNull(box);
-            Assert.Equal("1", box!.ZIndex);
+            Assert.Equal("1", box!.ZIndex.ToString());
+            Assert.True(box.ZIndex.Value is { IsValue: true, Value: 1 });
         }
 
         [Fact]
@@ -36,7 +38,8 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "t");
 
             Assert.NotNull(box);
-            Assert.Equal("-6", box!.ZIndex);
+            Assert.Equal("-6", box!.ZIndex.ToString());
+            Assert.True(box.ZIndex.Value is { IsValue: true, Value: -6 });
         }
     }
 }

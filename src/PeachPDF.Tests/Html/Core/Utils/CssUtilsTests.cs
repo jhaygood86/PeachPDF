@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(box.Overflow, CssUtils.GetPropertyValue(box, "overflow"));
             Assert.Equal(box.TextAlign, CssUtils.GetPropertyValue(box, "text-align"));
             Assert.Equal(box.FontWeight, CssUtils.GetPropertyValue(box, "font-weight"));
-            Assert.Equal(box.ZIndex, CssUtils.GetPropertyValue(box, "z-index"));
+            Assert.Equal(box.ZIndex.ToString(), CssUtils.GetPropertyValue(box, "z-index"));
         }
 
         [Fact]
@@ -172,10 +172,12 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var (box, parser) = await FindDivBoxAndParser("");
 
             CssUtils.SetPropertyValue(parser, box, "z-index", "auto");
-            Assert.Equal("auto", box.ZIndex);
+            Assert.Equal("auto", box.ZIndex.ToString());
+            Assert.True(box.ZIndex.Value is { IsKeyword: true });
 
             CssUtils.SetPropertyValue(parser, box, "z-index", "5");
-            Assert.Equal("5", box.ZIndex);
+            Assert.Equal("5", box.ZIndex.ToString());
+            Assert.True(box.ZIndex.Value is { IsValue: true, Value: 5 });
         }
 
         [Fact]
@@ -185,7 +187,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             CssUtils.SetPropertyValue(parser, box, "z-index", "not-a-number");
 
-            Assert.Equal("3", box.ZIndex);
+            Assert.Equal("3", box.ZIndex.ToString());
         }
 
         [Fact]
