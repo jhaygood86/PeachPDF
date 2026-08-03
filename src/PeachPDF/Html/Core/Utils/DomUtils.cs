@@ -904,7 +904,7 @@ namespace PeachPDF.Html.Core.Utils
                 return true;
             }
 
-            if (box.Position is CssConstants.Absolute or CssConstants.Relative && box.ZIndex is not CssConstants.Auto)
+            if (box.Position is CssConstants.Absolute or CssConstants.Relative && box.ZIndex.Value is { IsValue: true })
             {
                 return true;
             }
@@ -917,7 +917,7 @@ namespace PeachPDF.Html.Core.Utils
             // Flex item with a z-index other than auto establishes a stacking context even without a
             // `position` value of its own (CSS Flexible Box Layout §z-order), unlike a plain block/
             // inline child, which needs position:relative/absolute for z-index to have any effect at all.
-            if (box.ZIndex is not CssConstants.Auto &&
+            if (box.ZIndex.Value is { IsValue: true } &&
                 box.ParentBox?.Display is CssConstants.Flex or CssConstants.InlineFlex)
             {
                 return true;

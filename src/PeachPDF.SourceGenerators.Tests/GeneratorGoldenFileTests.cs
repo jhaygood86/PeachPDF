@@ -226,6 +226,62 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_KeywordOrValue_Validation_And_Storage_For_An_Integer_Or_Auto_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "z-index", "inherited": false, "initialValue": "auto",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "AutoKeyword", "keywordMap": "Map.AutoKeywords",
+                        "fallback": "AutoKeyword.Auto", "valueType": "integer" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_ZIndex(CssValueParser parser, string value) => " +
+                "Map.AutoKeywords.ContainsKey(value) || int.TryParse(value, out _);",
+                generated);
+            Assert.Contains(
+                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, int>(value, Map.AutoKeywords, int.TryParse, AutoKeyword.Auto);",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_KeywordOrValue_Validation_And_Storage_For_A_Length_Or_Auto_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "column-width", "inherited": false, "initialValue": "auto",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "AutoKeyword", "keywordMap": "Map.AutoKeywords",
+                        "fallback": "AutoKeyword.Auto", "valueType": "length" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_ColumnWidth(CssValueParser parser, string value) => " +
+                "Map.AutoKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength(value);",
+                generated);
+            Assert.Contains(
+                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, global::PeachPDF.CSS.Length>(value, Map.AutoKeywords, global::PeachPDF.CSS.Length.TryParse, AutoKeyword.Auto);",
+                generated);
+        }
+
+        [Fact]
         public void Emits_False_For_An_Unsupported_Property()
         {
             var json = """

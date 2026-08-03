@@ -1,5 +1,6 @@
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -25,9 +26,12 @@ namespace PeachPDF.CSS
     /// <summary>
     /// A single grid <c>&lt;track-size&gt;</c>. Fixed/percentage/fit-content values keep their authored
     /// component string (<see cref="Value"/>) for Layer B to resolve against the container; <c>fr</c> keeps
-    /// its numeric factor (<see cref="Flex"/>); <c>minmax()</c> keeps its two sub-breadths.
+    /// its numeric factor (<see cref="Flex"/>); <c>minmax()</c> keeps its two sub-breadths. A record (not a
+    /// plain class) so the value it carries through <see cref="CssProperty{T}"/> compares by content, not
+    /// by reference — every field here is itself value-equal (Kind/Value/Flex directly, Min/Max
+    /// recursively through this same record equality), so no custom Equals/GetHashCode is needed.
     /// </summary>
-    internal sealed class GridTrackSize
+    internal sealed record GridTrackSize
     {
         public GridTrackKind Kind { get; private init; }
         public string Value { get; private init; }
@@ -51,7 +55,16 @@ namespace PeachPDF.CSS
     /// <c>repeat(N,…)</c>-expanded) tracks, plus at most one layout-time <c>repeat(auto-fill|auto-fit,…)</c>
     /// section recorded as an insertion point since its count is resolved during layout.
     /// </summary>
-    internal sealed class GridTemplate
+    /// <remarks>
+    /// A record, like <see cref="GridTrackSize"/>, so it compares by content through
+    /// <see cref="CssProperty{T}"/> — but three members are collections, which the .NET BCL never gives
+    /// structural equality by default (<c>List{T}</c>/<c>Dictionary{TKey,TValue}</c> both fall back to
+    /// reference equality), so a record's synthesized <c>Equals</c>/<c>GetHashCode</c> alone would not
+    /// actually be content-based for <see cref="Tracks"/>/<see cref="AutoRepeatTracks"/>/
+    /// <see cref="LineNames"/>. <see cref="Equals(GridTemplate)"/>/<see cref="GetHashCode"/> below replace
+    /// the synthesized members with ones that walk those collections explicitly.
+    /// </remarks>
+    internal sealed record GridTemplate
     {
         /// <summary>The fixed tracks (with the auto-repeat section, if any, NOT included here — it is
         /// spliced in at <see cref="AutoRepeatInsertIndex"/> at layout time).</summary>
@@ -76,6 +89,36 @@ namespace PeachPDF.CSS
         public bool IsSubgrid { get; init; }
 
         public bool IsNone => !IsSubgrid && Tracks.Count == 0 && AutoRepeat == GridAutoRepeatKind.None;
+
+        public bool Equals(GridTemplate other) =>
+            other is not null &&
+            AutoRepeat == other.AutoRepeat &&
+            AutoRepeatInsertIndex == other.AutoRepeatInsertIndex &&
+            IsSubgrid == other.IsSubgrid &&
+            Tracks.SequenceEqual(other.Tracks) &&
+            (AutoRepeatTracks ?? []).SequenceEqual(other.AutoRepeatTracks ?? []) &&
+            LineNamesEqual(LineNames, other.LineNames);
+
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(AutoRepeat);
+            hash.Add(AutoRepeatInsertIndex);
+            hash.Add(IsSubgrid);
+            foreach (var track in Tracks) hash.Add(track);
+            foreach (var track in AutoRepeatTracks ?? []) hash.Add(track);
+            foreach (var (name, lines) in LineNames.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            {
+                hash.Add(name);
+                foreach (var line in lines) hash.Add(line);
+            }
+            return hash.ToHashCode();
+        }
+
+        private static bool LineNamesEqual(
+            IReadOnlyDictionary<string, IReadOnlyList<int>> a, IReadOnlyDictionary<string, IReadOnlyList<int>> b) =>
+            a.Count == b.Count &&
+            a.All(kv => b.TryGetValue(kv.Key, out var otherLines) && kv.Value.SequenceEqual(otherLines));
     }
 
     /// <summary>

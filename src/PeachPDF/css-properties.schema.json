@@ -128,6 +128,18 @@
             "keywordMap": { "type": "string" },
             "fallback": { "type": "string" }
           }
+        },
+        {
+          "type": "object",
+          "required": ["type", "enumType", "keywordMap", "fallback", "valueType"],
+          "description": "A CssProperty<CssKeywordOrValue<TEnum,TValue>>-backed property for a '<value> | keyword' grammar (z-index's <integer> | auto, column-width's <length> | auto, ...) that can't use plain 'keyword' or 'enum-keyword' since it isn't keyword-only. Validation checks keywordMap's own keys (case-insensitive, like enum-keyword) OR the valueType grammar; no separate supportedValues/keywordComparison needed. CssKeywordOrValueParser.FromCssText mirrors CssProperty<T>.FromCssText's fallback behavior.",
+          "properties": {
+            "type": { "const": "keyword-or-value" },
+            "enumType": { "type": "string" },
+            "keywordMap": { "type": "string" },
+            "fallback": { "type": "string" },
+            "valueType": { "type": "string", "enum": ["integer", "length"], "description": "The non-keyword side's grammar and TValue — must match a TryParse-shaped parser (int.TryParse, Length.TryParse) RegistryEmitter knows how to call." }
+          }
         }
       ]
     },

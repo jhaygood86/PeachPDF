@@ -17,6 +17,7 @@ namespace PeachPDF.SourceGenerators.Model
         Number,
         Parsed,
         EnumKeyword,
+        KeywordOrValue,
         SvgPaint,
         SvgOpacity,
         SvgLength,
@@ -45,14 +46,17 @@ namespace PeachPDF.SourceGenerators.Model
         public string? ResultType { get; }
         public string? TypedValueType { get; }
 
-        // "enum-keyword"
+        // "enum-keyword", "keyword-or-value"
         public string? EnumType { get; }
         public string? KeywordMap { get; }
         public string? Fallback { get; }
 
+        // "keyword-or-value" — the non-keyword side's grammar/C# type ("integer" or "length")
+        public string? ValueType { get; }
+
         public DataTypeSpec(DataTypeKind kind, double? min = null, double? max = null,
             string? converter = null, string? resultType = null, string? typedValueType = null,
-            string? enumType = null, string? keywordMap = null, string? fallback = null)
+            string? enumType = null, string? keywordMap = null, string? fallback = null, string? valueType = null)
         {
             Kind = kind;
             Min = min;
@@ -63,6 +67,7 @@ namespace PeachPDF.SourceGenerators.Model
             EnumType = enumType;
             KeywordMap = keywordMap;
             Fallback = fallback;
+            ValueType = valueType;
         }
 
         public static DataTypeSpec Simple(DataTypeKind kind) => new(kind);

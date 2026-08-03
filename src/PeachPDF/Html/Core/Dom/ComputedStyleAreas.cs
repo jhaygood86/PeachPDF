@@ -238,7 +238,11 @@ namespace PeachPDF.Html.Core.Dom
         public string Float { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Float)!;
         public string Clear { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Clear)!;
         public string Position { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Position)!;
-        public string ZIndex { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ZIndex)!;
+        // Issue #598's follow-up: typed union storage (CssKeywordOrValue<AutoKeyword, int>) instead of a
+        // raw string, same mechanism as Direction/UnicodeBidi/WritingMode below.
+        public CssProperty<CssKeywordOrValue<AutoKeyword, int>> ZIndex { get; init; } =
+            CssKeywordOrValueParser.FromCssText<AutoKeyword, int>(
+                CssDefaults.GetInitialValue(PropertyNames.ZIndex)!, Map.AutoKeywords, int.TryParse, AutoKeyword.Auto);
         public string Overflow { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Overflow)!;
 
         // ContainerType carries its parsed enum through the cascade (CssProperty<T>), same as

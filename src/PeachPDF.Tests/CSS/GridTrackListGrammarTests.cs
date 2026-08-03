@@ -204,5 +204,45 @@ namespace PeachPDF.Tests.CSS
         {
             Assert.Null(GridTrackListGrammar.TryParseTrackSizeList(CssValueParser.GetCssTokens(value)));
         }
+
+        // ── value equality — GridTemplate/GridTrackSize are the CssProperty<T> type argument for
+        // grid-template-columns/-rows, so the cascade's copy-on-write comparison depends on two separately
+        // parsed instances of the same authored text comparing equal (see CssProperty<T>'s own remarks). ──
+
+        [Theory]
+        [InlineData("100px 1fr auto")]
+        [InlineData("minmax(100px, 1fr) minmax(min-content, max-content)")]
+        [InlineData("[start] 100px [middle] 1fr [end]")]
+        [InlineData("repeat(auto-fill, minmax(200px, 1fr))")]
+        [InlineData("100px repeat(2, 1fr) 100px")]
+        public void GridTemplate_TwoSeparateParsesOfTheSameText_AreEqual(string value)
+        {
+            var a = Parse(value);
+            var b = Parse(value);
+
+            Assert.NotSame(a, b);
+            Assert.Equal(a, b);
+            Assert.Equal(a.GetHashCode(), b.GetHashCode());
+        }
+
+        [Theory]
+        [InlineData("100px 1fr", "100px 2fr")]                 // different track
+        [InlineData("100px 1fr", "100px 1fr 1fr")]              // different track count
+        [InlineData("[a] 100px", "[b] 100px")]                  // different line name
+        [InlineData("repeat(auto-fill, 100px)", "repeat(auto-fit, 100px)")] // different auto-repeat kind
+        public void GridTemplate_DifferingText_AreNotEqual(string a, string b)
+        {
+            Assert.NotEqual(Parse(a), Parse(b));
+        }
+
+        [Fact]
+        public void GridTemplate_SubgridWithNoNamedLines_EqualsAnotherEmptySubgrid()
+        {
+            var a = Parse("subgrid");
+            var b = Parse("subgrid");
+
+            Assert.Equal(a, b);
+            Assert.Equal(a.GetHashCode(), b.GetHashCode());
+        }
     }
 }

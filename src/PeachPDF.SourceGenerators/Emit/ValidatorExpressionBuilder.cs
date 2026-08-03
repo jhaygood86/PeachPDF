@@ -39,6 +39,7 @@ namespace PeachPDF.SourceGenerators.Emit
             DataTypeKind.Integer => BuildIntegerClause(dt),
             DataTypeKind.Number => "double.TryParse(value, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)",
             DataTypeKind.EnumKeyword => $"{dt.KeywordMap}.ContainsKey(value)",
+            DataTypeKind.KeywordOrValue => BuildKeywordOrValueClause(entry, dt),
             DataTypeKind.SvgPaint => "global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.Adapter, ctx.ContextColor, out _)",
             DataTypeKind.SvgOpacity => "global::PeachPDF.Svg.SvgValueParsers.TryParseOpacity(value, out _)",
             DataTypeKind.SvgLength => "global::PeachPDF.Svg.SvgValueParsers.ParseLength(value, ctx.ViewportDiagonal) is not null",
@@ -87,6 +88,13 @@ namespace PeachPDF.SourceGenerators.Emit
 
             return string.Join(" || ", values.Select(v => $"value.Equals(\"{Escape(v)}\", {comparison})"));
         }
+
+        /// <summary>A "&lt;value&gt; | keyword" union (e.g. <c>z-index</c>'s <c>&lt;integer&gt; | auto</c>) —
+        /// the keyword side is matched case-insensitively via its own <see cref="DataTypeSpec.KeywordMap"/>
+        /// (same as <see cref="DataTypeKind.EnumKeyword"/>), the value side reuses the real grammar for
+        /// <see cref="DataTypeSpec.ValueType"/> (<see cref="KeywordOrValueGrammar"/>).</summary>
+        private static string BuildKeywordOrValueClause(PropertyEntry entry, DataTypeSpec dt) =>
+            $"{dt.KeywordMap}.ContainsKey(value) || {KeywordOrValueGrammar.Resolve(entry, dt).ValueClause}";
 
         private static string BuildIntegerClause(DataTypeSpec dt)
         {

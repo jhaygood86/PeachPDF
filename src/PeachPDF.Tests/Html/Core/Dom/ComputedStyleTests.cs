@@ -295,13 +295,17 @@ namespace PeachPDF.Tests.Html.Core.Dom
         /// silently reintroducing a correctness bug) if a future area/property addition breaks the
         /// no-op assumption the fast path depends on.
         /// <para>
-        /// <c>direction</c>/<c>unicode-bidi</c>/<c>writing-mode</c>/<c>container-type</c> joined the
-        /// exception set for the same reason <c>grid-template-columns</c>/<c>-rows</c> are already here:
-        /// all six are <see cref="CSS.CssProperty{T}"/>-typed (a <see langword="sealed class"/> with no
-        /// value equality), so <c>CssProperty{T}.FromCssText</c> re-parsing the same initial-value
-        /// string always produces a new, reference-distinct instance even when the parsed value is
-        /// identical - the cascade's copy-on-write comparison has no way to see through that and always
-        /// clones the area.
+        /// Every <see cref="CSS.CssProperty{T}"/>-backed property (<c>direction</c>/<c>unicode-bidi</c>/
+        /// <c>writing-mode</c>/<c>container-type</c>/<c>z-index</c>/<c>grid-template-columns</c>/
+        /// <c>-rows</c>) is exempt from needing an exception here: <see cref="CSS.CssProperty{T}"/> is a
+        /// record, and every T it's instantiated with (an enum, <see cref="CSS.CssKeywordOrValue{TEnum,TValue}"/>,
+        /// or <see cref="CSS.GridTemplate"/> — the latter two records too, with <see cref="CSS.GridTemplate"/>
+        /// giving its list/dictionary-typed members explicit content equality since the BCL collection
+        /// types don't have that by default) compares by value, so re-parsing the same initial-value
+        /// string twice correctly produces an equal <see cref="CSS.CssProperty{T}"/> and the cascade's
+        /// copy-on-write comparison sees the real no-op. Only <c>font-family</c> remains, for an unrelated
+        /// reason: its setter is a multi-field write (<c>FontFamily</c> + <c>FontFamilyList</c> from one
+        /// declaration), not a <see cref="CSS.CssProperty{T}"/> reference-equality artifact.
         /// </para>
         /// </summary>
         [Fact]
@@ -310,12 +314,6 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var knownExceptions = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
             {
                 PropertyNames.FontFamily,
-                PropertyNames.GridTemplateColumns,
-                PropertyNames.GridTemplateRows,
-                PropertyNames.Direction,
-                PropertyNames.UnicodeBidirectional,
-                PropertyNames.WritingMode,
-                PropertyNames.ContainerType,
             };
             var parser = new CssValueParser(new PdfSharpAdapter());
             var unexpectedlyNotNoOp = new List<string>();

@@ -28,8 +28,17 @@ namespace PeachPDF.CSS
     /// The authored/keyword text is retained so the string-based getter/snapshot/revert cascade path keeps
     /// working (<see cref="ToString"/>). Grid templates (<c>T = GridTemplate</c>) are the first adopter; the
     /// mechanism is intended to eventually back every box property.
+    /// <para>
+    /// A <c>record</c>, not a plain class: the cascade's copy-on-write comparison (<c>ComputedStyleAreas
+    /// .SetPropertyValue</c>) needs to see that re-parsing the same authored text twice (e.g. the cascade
+    /// defaulting loop re-applying a property's own initial value to a fresh box) produces an <i>equal</i>
+    /// value, not just an equal-looking one — value equality here is what lets that stay a real no-op
+    /// instead of always cloning the area. (Whether <typeparamref name="T"/> itself compares by value
+    /// still depends on T — an enum or record T like <see cref="CssKeywordOrValue{TEnum,TValue}"/> gets a
+    /// real no-op; a plain-class T like <c>GridTemplate</c> falls back to reference equality on Value.)
+    /// </para>
     /// </summary>
-    internal sealed class CssProperty<T>
+    internal sealed record CssProperty<T>
     {
         private readonly string _cssText;
 
