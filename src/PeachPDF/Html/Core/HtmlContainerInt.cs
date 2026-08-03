@@ -515,6 +515,15 @@ namespace PeachPDF.Html.Core
         internal bool HasCloneDecorations { get; private set; }
 
         /// <summary>
+        /// Whether any box in the current document establishes a <c>@container</c> size query container
+        /// (<c>container-type: size</c>/<c>inline-size</c>). Gates the container-query convergence loop
+        /// in <see cref="PerformLayout"/> - a document with none (the overwhelming majority) never pays
+        /// for more than this one settling walk plus the one unconditional baseline layout pass every
+        /// document already took before this feature existed.
+        /// </summary>
+        internal bool HasSizeContainers { get; private set; }
+
+        /// <summary>
         /// Whether any box in the current document is out-of-flow (floated, absolutely positioned, or
         /// fixed). Computed alongside <see cref="HasFloatedBoxes"/> and used by
         /// <see cref="Paint.FragmentPainter"/> to decide whether Bounds-based page-visibility pruning is safe (an
@@ -676,16 +685,29 @@ namespace PeachPDF.Html.Core
         /// </summary>
         /// <param name="htmlSource">the html to init with, init empty if not given</param>
         /// <param name="baseCssData">optional: the stylesheet to init with, init default if not given</param>
-        public async Task SetHtml(string htmlSource, CssData? baseCssData = null)
+        /// <param name="containerSizes">Every eligible <c>@container</c> query container's resolved size
+        /// from the previous layout pass - see <see cref="DomParser.GenerateCssTree"/>. <c>null</c> for
+        /// every caller except <see cref="PerformLayout"/>'s own container-query convergence loop, which
+        /// re-invokes this method between passes via <see cref="_lastHtmlSource"/>/<see cref="_lastBaseCssData"/>.</param>
+        public async Task SetHtml(string htmlSource, CssData? baseCssData = null, ContainerQuerySizes? containerSizes = null)
         {
+            _lastHtmlSource = htmlSource;
+            _lastBaseCssData = baseCssData;
+
             Clear();
             if (string.IsNullOrEmpty(htmlSource)) return;
 
             CssData = baseCssData ?? await Adapter.GetDefaultCssData();
 
             DomParser parser = new(CssParser);
-            (Root, CssData, DocumentMetadata) = await parser.GenerateCssTree(htmlSource, this, CssData);
+            (Root, CssData, DocumentMetadata) = await parser.GenerateCssTree(htmlSource, this, CssData, containerSizes);
         }
+
+        // Remembered so PerformLayout's container-query convergence loop can re-invoke SetHtml itself
+        // between passes (a full re-parse + re-cascade, the same "wholesale redo" PdfGenerator.SetContent's
+        // ShrinkToFit path already trusts) without its caller having to hold onto the original html/cssData.
+        private string? _lastHtmlSource;
+        private CssData? _lastBaseCssData;
 
         /// <summary>
         /// Clear the content of the HTML container releasing any resources used to render previously existing content.
@@ -753,10 +775,74 @@ namespace PeachPDF.Html.Core
         /// Measures the bounds of box and children, recursively.
         /// </summary>
         /// <param name="g">Device context to draw</param>
+        /// <summary>
+        /// Lays out the document, then - if it declares any <c>@container</c> size query container -
+        /// runs a bounded convergence loop on top: <see cref="PerformLayoutOnePass"/>'s first invocation
+        /// is the correct bootstrap (no container size data yet, so every <c>@container</c> condition
+        /// evaluates false, exactly today's pre-fix behavior), after which every size container's
+        /// resolved content-box size is read off the finished tree and, if it differs from the previous
+        /// pass's (or this is the first refinement pass), a full re-parse + re-cascade + re-layout is run
+        /// against the new sizes - the same "wholesale redo" <see cref="PdfGenerator.SetContent"/>'s
+        /// ShrinkToFit path already trusts, just re-triggered per container size rather than once per
+        /// global scale factor. Capped at 3 refinement passes (4 total, matching
+        /// <see cref="UseVariablePageWidth"/>'s own established 3-iteration cap): on cap exceeded, the
+        /// last pass's result is accepted silently, the same bounded-not-perfect stance already used
+        /// there for a structurally identical layout-depends-on-layout problem. A document with no size
+        /// container anywhere - the overwhelming majority - pays for exactly one extra tree walk
+        /// (<see cref="HasSizeContainers"/>) beyond what layout already cost before this feature existed.
+        /// </summary>
         public async ValueTask PerformLayout(RGraphics g)
         {
             ArgumentNullException.ThrowIfNull(g);
 
+            await PerformLayoutOnePass(g);
+
+            if (!HasSizeContainers) return;
+
+            var previous = BuildContainerQuerySizes();
+            const int maxRefinementPasses = 3;
+            for (var pass = 0; pass < maxRefinementPasses; pass++)
+            {
+                if (_lastHtmlSource is null) break; // SetHtml was never actually called with real content
+
+                await SetHtml(_lastHtmlSource, _lastBaseCssData, previous);
+                await PerformLayoutOnePass(g);
+
+                var current = BuildContainerQuerySizes();
+                if (previous.SizesEqual(current)) break;
+                previous = current;
+            }
+        }
+
+        /// <summary>Builds the container-size-by-Id map <see cref="PerformLayout"/>'s convergence loop
+        /// compares pass-over-pass and feeds into the next pass's cascade - see
+        /// <see cref="ContainerQuerySizes"/>'s own remarks on why <see cref="Dom.CssBox.Id"/> is a safe
+        /// cross-pass key.</summary>
+        private ContainerQuerySizes BuildContainerQuerySizes()
+        {
+            var byId = new Dictionary<uint, ContainerQueryContext>();
+
+            void Walk(CssBox box)
+            {
+                if (box.ContainerType.Value is CSS.ContainerType.Size or CSS.ContainerType.InlineSize)
+                {
+                    var isSize = box.ContainerType.Value == CSS.ContainerType.Size;
+                    byId[box.Id] = new ContainerQueryContext(
+                        InlineSizePt: box.ClientRight - box.ClientLeft,
+                        BlockSizePt: isSize ? box.ClientBottom - box.ClientTop : null,
+                        ContainerName: box.ContainerName);
+                }
+
+                foreach (var child in box.Boxes)
+                    Walk(child);
+            }
+
+            if (Root is not null) Walk(Root);
+            return new ContainerQuerySizes(byId);
+        }
+
+        private async ValueTask PerformLayoutOnePass(RGraphics g)
+        {
             ActualSize = RSize.Empty;
             FloatScanCalls = 0;
             FloatScanBoxVisits = 0;
@@ -777,6 +863,11 @@ namespace PeachPDF.Html.Core
             // Depends on cascaded style only, and layout itself consults it, so it has to be settled before
             // the first pass rather than alongside the post-layout flags below.
             HasCloneDecorations = DomUtils.AnyBoxClonesDecorations(Root);
+
+            // Also cascade-only, and cheap enough to recompute every pass (a document declaring a size
+            // container is rare, and PerformLayout's own convergence loop already needs this exact
+            // answer to decide whether to run at all).
+            HasSizeContainers = DomUtils.AnyBoxEstablishesSizeContainer(Root);
 
             // Also purely cascade-driven, and also needed *during* the passes now that fragments are emitted
             // as each one ends: CSS Paged Media 3 §3.2's content-empty-page rule reads

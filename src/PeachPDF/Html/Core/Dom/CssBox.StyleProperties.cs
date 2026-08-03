@@ -982,6 +982,28 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        public CssProperty<ContainerType> ContainerType
+        {
+            get => _computedStyle.DisplayPositioning.ContainerType;
+            set
+            {
+                var area = _computedStyle.DisplayPositioning;
+                var newArea = area.SetPropertyValue(area.ContainerType, value, static (a, v) => a with { ContainerType = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+            }
+        }
+
+        public string ContainerName
+        {
+            get => _computedStyle.DisplayPositioning.ContainerName;
+            set
+            {
+                var area = _computedStyle.DisplayPositioning;
+                var newArea = area.SetPropertyValue(area.ContainerName, value, static (a, v) => a with { ContainerName = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+            }
+        }
+
         public string Clear
         {
             get => _computedStyle.DisplayPositioning.Clear;

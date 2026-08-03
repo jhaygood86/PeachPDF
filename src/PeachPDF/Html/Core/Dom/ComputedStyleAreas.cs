@@ -5,6 +5,8 @@ using System.Collections.Generic;
 // The Text area below declares a property literally named WritingMode, which shadows the CSS-OM enum
 // type of the same name within this file - alias it so the enum stays referenceable.
 using WritingModeEnum = PeachPDF.CSS.WritingMode;
+// Same shadowing issue for the DisplayPositioning area's ContainerType property below.
+using ContainerTypeEnum = PeachPDF.CSS.ContainerType;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -238,6 +240,12 @@ namespace PeachPDF.Html.Core.Dom
         public string Position { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Position)!;
         public string ZIndex { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ZIndex)!;
         public string Overflow { get; init; } = CssDefaults.GetInitialValue(PropertyNames.Overflow)!;
+
+        // ContainerType carries its parsed enum through the cascade (CssProperty<T>), same as
+        // Direction/UnicodeBidi/WritingMode in the Text area below.
+        public CssProperty<ContainerTypeEnum> ContainerType { get; init; } =
+            CssProperty<ContainerTypeEnum>.FromCssText(CssDefaults.GetInitialValue(PropertyNames.ContainerType)!, Map.ContainerTypes, ContainerTypeEnum.Normal);
+        public string ContainerName { get; init; } = CssDefaults.GetInitialValue(PropertyNames.ContainerName)!;
     }
 
     #endregion

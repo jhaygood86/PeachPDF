@@ -289,8 +289,37 @@ namespace PeachPDF.CSS
             ParseComments(ref token);
             rule.Name = GetRuleName(ref token);
             ParseComments(ref token);
-            FillMediaList(rule.Media, TokenType.CurlyBracketOpen, ref token);
-            ParseComments(ref token);
+
+            // A style() condition (CSS Containment 3 SS7.3) replaces the ordinary size-feature MediaList
+            // grammar entirely for this rule - the two forms are mutually exclusive per rule, a v1
+            // simplification against the spec's single shared <container-condition> grammar (which in
+            // principle lets a top-level and/or mix style() and size-feature alternatives). See
+            // ContainerQueryMatcher's remarks.
+            //
+            // Unlike @supports's bare `(...)` condition grouping (RoundBracketOpen, walked live off the
+            // shared lexer stream via NextToken() - see ExtractCondition), `style(...)` is an actual
+            // function call: the lexer already tokenizes its entire argument list into one self-contained
+            // FunctionToken (see FunctionToken.ArgumentTokens) before ever returning it, so a NextToken()
+            // call here would skip straight past the whole function to whatever follows it (the rule's
+            // `{`), not step into its contents. The style-query grammar below is therefore parsed from
+            // that already-materialized token list with its own local index cursor, not from the shared
+            // lexer/NextToken() state ExtractCondition's family relies on.
+            if (token.Type == TokenType.Function && token.Data.Isi(FunctionNames.Style) && token is FunctionToken styleFunction)
+            {
+                // Not .ToList() - ValueExtensions.ToList(this IEnumerable<Token>) is a comma-splitting
+                // helper (List<List<Token>>) that shadows System.Linq's for this exact parameter type.
+                var styleTokens = new List<Token>(styleFunction.ArgumentTokens);
+                var styleIndex = 0;
+                rule.StyleCondition = AggregateStyleCondition(styleTokens, ref styleIndex);
+
+                token = NextToken();
+                ParseComments(ref token);
+            }
+            else
+            {
+                FillMediaList(rule.Media, TokenType.CurlyBracketOpen, ref token);
+                ParseComments(ref token);
+            }
 
             if (token.Type != TokenType.CurlyBracketOpen)
                 while (token.Type != TokenType.EndOfFile)
@@ -1347,6 +1376,126 @@ namespace PeachPDF.CSS
 
                 token = NextToken();
                 ParseComments(ref token);
+            }
+
+            return list;
+        }
+
+        // ── @container style(...) (CSS Containment 3 SS7.3) ─────────────────────────────────
+        //
+        // Mirrors AggregateCondition/ExtractCondition/MultipleConditions above token-for-token, but
+        // produces an IStyleQueryCondition tree (per-candidate-box Check(CssBox), not IConditionFunction's
+        // argument-free Check()). Per <style-query>'s grammar, <style-feature> = ( <declaration> ) - a
+        // combined operand needs its own parens exactly like @supports's <declaration> leaf does
+        // (style((--a: 1) and (--b: 2))) - but style()'s own outer parens already supply that grouping
+        // for the single/unparenthesized-combinator-free form (style(--a: 1)), so ExtractStyleCondition
+        // additionally accepts a bare declaration starting directly on an Ident token, which
+        // ExtractCondition (@supports) never does.
+
+        // The style()-argument token list has no meaningful EndOfFile token of its own (FunctionToken.
+        // ArgumentTokens strips the trailing RoundBracketClose), so "no more tokens" is simply
+        // index >= tokens.Count throughout this family, mirroring how the live-stream methods above
+        // check token.Type == TokenType.EndOfFile.
+        private static void SkipStyleWhitespace(List<Token> tokens, ref int index)
+        {
+            while (index < tokens.Count && tokens[index].Type is TokenType.Whitespace or TokenType.Comment)
+                index++;
+        }
+
+        private IStyleQueryCondition AggregateStyleCondition(List<Token> tokens, ref int index)
+        {
+            var condition = ExtractStyleCondition(tokens, ref index);
+
+            if (condition == null) return null;
+
+            SkipStyleWhitespace(tokens, ref index);
+            if (index >= tokens.Count) return condition;
+
+            var conjunction = tokens[index].Data;
+
+            if (conjunction.Isi(Keywords.And) || conjunction.Isi(Keywords.Or))
+            {
+                index++;
+                SkipStyleWhitespace(tokens, ref index);
+                var conditions = MultipleStyleConditions(tokens, ref index, condition, conjunction);
+                condition = conjunction.Isi(Keywords.And)
+                    ? new StyleAndCondition(conditions)
+                    : new StyleOrCondition(conditions);
+            }
+
+            return condition;
+        }
+
+        private IStyleQueryCondition ExtractStyleCondition(List<Token> tokens, ref int index)
+        {
+            if (index >= tokens.Count) return null;
+            var token = tokens[index];
+
+            if (token.Type == TokenType.RoundBracketOpen)
+            {
+                index++;
+                SkipStyleWhitespace(tokens, ref index);
+                var condition = AggregateStyleCondition(tokens, ref index);
+
+                SkipStyleWhitespace(tokens, ref index);
+                if (index < tokens.Count && tokens[index].Type == TokenType.RoundBracketClose) index++;
+
+                return condition;
+            }
+
+            if (token.Data.Isi(Keywords.Not))
+            {
+                index++;
+                SkipStyleWhitespace(tokens, ref index);
+                return new StyleNotCondition(ExtractStyleCondition(tokens, ref index));
+            }
+
+            if (token.Type == TokenType.Ident)
+            {
+                return ExtractStyleDeclaration(tokens, ref index);
+            }
+
+            return null;
+        }
+
+        private IStyleQueryCondition ExtractStyleDeclaration(List<Token> tokens, ref int index)
+        {
+            var propertyName = tokens[index].Data;
+            index++;
+            SkipStyleWhitespace(tokens, ref index);
+
+            if (index >= tokens.Count || tokens[index].Type != TokenType.Colon) return null;
+            index++;
+            SkipStyleWhitespace(tokens, ref index);
+
+            var valueTokens = new List<Token>();
+            while (index < tokens.Count && tokens[index].Type != TokenType.RoundBracketClose)
+            {
+                valueTokens.Add(tokens[index]);
+                index++;
+            }
+
+            var value = new TokenValue(valueTokens).Text;
+            return new StyleDeclarationCondition(propertyName, value);
+        }
+
+        private List<IStyleQueryCondition> MultipleStyleConditions(List<Token> tokens, ref int index, IStyleQueryCondition condition, string connector)
+        {
+            var list = new List<IStyleQueryCondition> { condition };
+
+            while (index < tokens.Count)
+            {
+                condition = ExtractStyleCondition(tokens, ref index);
+
+                if (condition == null) break;
+
+                list.Add(condition);
+
+                SkipStyleWhitespace(tokens, ref index);
+                if (index >= tokens.Count || !tokens[index].Data.Isi(connector)) break;
+
+                index++;
+                SkipStyleWhitespace(tokens, ref index);
             }
 
             return list;

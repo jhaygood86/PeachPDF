@@ -186,7 +186,14 @@ namespace PeachPDF.CSS
                     pixels = number.Value;
                     return true;
 
-                case DimensionCalcNode dimension when dimension.Unit is not (Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex):
+                // Container-relative units (like em/rem/ex) need layout context this Layer-A-only fold has
+                // none of - a `50cqw` leaf folded here with no container size in scope would permanently
+                // bake in 0 as the canonical CssText, losing the unit before layout ever gets a chance to
+                // resolve it against a real container (see CalcParser.IsSupportedLengthUnit, which accepts
+                // these units into calc() specifically so layout's own CalcEvaluator can resolve them).
+                case DimensionCalcNode dimension when dimension.Unit is not (Length.Unit.Em or Length.Unit.Rem or
+                    Length.Unit.Ex or Length.Unit.Cqw or Length.Unit.Cqh or Length.Unit.Cqi or Length.Unit.Cqb or
+                    Length.Unit.Cqmin or Length.Unit.Cqmax):
                     pixels = new Length((float)dimension.Value, dimension.Unit).ToPixels(0, 0, 0);
                     return true;
 

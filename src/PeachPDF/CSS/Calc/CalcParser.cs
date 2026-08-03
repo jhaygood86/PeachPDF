@@ -236,7 +236,9 @@ namespace PeachPDF.CSS
         private static bool IsSupportedLengthUnit(Length.Unit unit)
         {
             return unit is Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex or Length.Unit.Px or
-                Length.Unit.Mm or Length.Unit.Cm or Length.Unit.In or Length.Unit.Pt or Length.Unit.Pc;
+                Length.Unit.Mm or Length.Unit.Cm or Length.Unit.In or Length.Unit.Pt or Length.Unit.Pc or
+                Length.Unit.Cqw or Length.Unit.Cqh or Length.Unit.Cqi or Length.Unit.Cqb or
+                Length.Unit.Cqmin or Length.Unit.Cqmax;
         }
 
         /// <summary>Whether <paramref name="name"/> is one of calc/min/max/clamp (case-insensitive).</summary>

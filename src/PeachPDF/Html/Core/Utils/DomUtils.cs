@@ -751,6 +751,27 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Whether any box in <paramref name="box"/>'s subtree establishes a <c>@container</c> size query
+        /// container (<c>container-type: size</c> or <c>inline-size</c> - <c>normal</c> doesn't count,
+        /// since it establishes no size containment). Gates
+        /// <see cref="HtmlContainerInt.PerformLayout"/>'s container-query convergence loop: the
+        /// overwhelming majority of documents declare no size container at all, and for those the loop
+        /// must cost nothing beyond this one tree walk (the same cost category as
+        /// <see cref="AnyBoxClonesDecorations"/>, already run at the same point every pass).
+        /// </summary>
+        internal static bool AnyBoxEstablishesSizeContainer(CssBox box)
+        {
+            if (box.ContainerType.Value is PeachPDF.CSS.ContainerType.Size or PeachPDF.CSS.ContainerType.InlineSize) return true;
+
+            foreach (var child in box.Boxes)
+            {
+                if (AnyBoxEstablishesSizeContainer(child)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// The block-start border and padding that <c>box-decoration-break: clone</c> re-inserts when a
         /// fragmentation break lands inside a box
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>): each

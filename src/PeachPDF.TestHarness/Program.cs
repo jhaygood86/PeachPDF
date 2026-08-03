@@ -6365,6 +6365,66 @@ await SaveShowcaseAsync("responsive_media_dark", "Responsive Design", "Dark Mode
         PreferredColorScheme = PdfColorScheme.Dark
     });
 
+// ── Responsive @container size queries ─────────────────────────────────────
+// Proves @container is NOT @media in a different name: one page, one stylesheet, one card
+// component - three containers of different declared widths, each a `container-type: inline-size`
+// query container. The @container (min-width: ...) breakpoint is evaluated against each container's
+// OWN resolved width, not the page's, so the identical .card markup lays out differently in each
+// one purely because of the width its own wrapper declares.
+const string containerQueryHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+      html, body { margin: 0; font-family: sans-serif; background: #ffffff; color: #1f2937; }
+      .wrap { padding: 28px; }
+      h1 { font-size: 20pt; margin: 0 0 6px; }
+      h1 code { background: #f3f4f6; padding: 2px 6px; border-radius: 5px; font-size: 15pt; }
+      p.lede { font-size: 10.5pt; color: #475569; margin: 0 0 20px; max-width: 640px; }
+      .container { container-type: inline-size; container-name: card-shelf; border: 1px dashed #94a3b8; border-radius: 10px; padding: 14px; margin-bottom: 18px; }
+      .container-label { font-size: 9pt; color: #64748b; margin: 0 0 10px; font-family: monospace; }
+      .card { display: flex; flex-direction: column; gap: 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px; }
+      .card .thumb { width: 100%; height: 40px; border-radius: 6px; background: linear-gradient(135deg, #60a5fa, #2563eb); flex: none; }
+      .card .card-text { display: flex; flex-direction: column; gap: 4px; }
+      .card h2 { margin: 0; font-size: 12pt; color: #1d4ed8; }
+      .card p { margin: 0; font-size: 9.5pt; line-height: 1.4; color: #475569; }
+      /* Applies once THIS container's own content-box width reaches 400px - independent of every
+         other .container on the page, and independent of the page width itself. */
+      @container card-shelf (min-width: 400px) {
+        .card { flex-direction: row; align-items: center; }
+        .card .thumb { width: 80px; height: 56px; }
+      }
+    </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <h1>Responsive <code>@container</code></h1>
+        <p class="lede">The same <code>.card</code> component, unmodified, in three containers of different widths on one page. Each stacks or goes horizontal purely from its own container's width crossing <code>@container (min-width: 400px)</code> - not the page's.</p>
+        <div class="container" style="width: 220px;">
+          <p class="container-label">container-type: inline-size; width: 220px</p>
+          <div class="card"><div class="thumb"></div><div class="card-text"><h2>Stacked</h2><p>Narrower than 400px, so the card stays a column.</p></div></div>
+        </div>
+        <div class="container" style="width: 500px;">
+          <p class="container-label">container-type: inline-size; width: 500px</p>
+          <div class="card"><div class="thumb"></div><div class="card-text"><h2>Horizontal</h2><p>500px crosses the 400px breakpoint, so the same rule flips this card to a row.</p></div></div>
+        </div>
+        <div class="container" style="width: 320px;">
+          <p class="container-label">container-type: inline-size; width: 320px</p>
+          <div class="card"><div class="thumb"></div><div class="card-text"><h2>Stacked</h2><p>320px is still under 400px, so this one stays stacked too - despite being on the exact same page as the 500px one above.</p></div></div>
+        </div>
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("container_queries", "Responsive Design", "Responsive @container (size queries)",
+    "Three `container-type: inline-size` containers of different declared widths on one page, all " +
+    "using the identical `.card` component. The `@container card-shelf (min-width: 400px)` rule " +
+    "applies independently per container - the 500px one flips to a horizontal layout while the " +
+    "220px and 320px ones stay stacked, proving the breakpoint reads each container's own resolved " +
+    "width rather than the page's.",
+    containerQueryHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Color fonts (COLR/CPAL) rendered as vector content. The hero row is a subset of the real COLRv1
 // build of Noto Color Emoji; the feature breakdown uses a small hand-authored public-domain COLRv1
 // fixture whose glyphs isolate each paint feature.

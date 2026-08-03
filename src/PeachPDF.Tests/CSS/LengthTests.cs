@@ -30,6 +30,12 @@ namespace PeachPDF.Tests.CSS
         [InlineData((int)Length.Unit.Vh, false)]
         [InlineData((int)Length.Unit.Vmin, false)]
         [InlineData((int)Length.Unit.Vmax, false)]
+        [InlineData((int)Length.Unit.Cqw, false)]
+        [InlineData((int)Length.Unit.Cqh, false)]
+        [InlineData((int)Length.Unit.Cqi, false)]
+        [InlineData((int)Length.Unit.Cqb, false)]
+        [InlineData((int)Length.Unit.Cqmin, false)]
+        [InlineData((int)Length.Unit.Cqmax, false)]
         public void IsAbsolute_And_IsRelative_MatchUnitCategory(int unitValue, bool expectedAbsolute)
         {
             var length = new Length(1f, (Length.Unit)unitValue);
@@ -53,6 +59,12 @@ namespace PeachPDF.Tests.CSS
         [InlineData((int)Length.Unit.Vh, "vh")]
         [InlineData((int)Length.Unit.Vmin, "vmin")]
         [InlineData((int)Length.Unit.Vmax, "vmax")]
+        [InlineData((int)Length.Unit.Cqw, "cqw")]
+        [InlineData((int)Length.Unit.Cqh, "cqh")]
+        [InlineData((int)Length.Unit.Cqi, "cqi")]
+        [InlineData((int)Length.Unit.Cqb, "cqb")]
+        [InlineData((int)Length.Unit.Cqmin, "cqmin")]
+        [InlineData((int)Length.Unit.Cqmax, "cqmax")]
         [InlineData((int)Length.Unit.Percent, "%")]
         [InlineData((int)Length.Unit.None, "")]
         public void UnitString_MatchesUnitName(int unitValue, string expected)
@@ -77,6 +89,12 @@ namespace PeachPDF.Tests.CSS
         [InlineData("vmax", (int)Length.Unit.Vmax)]
         [InlineData("vmin", (int)Length.Unit.Vmin)]
         [InlineData("vw", (int)Length.Unit.Vw)]
+        [InlineData("cqw", (int)Length.Unit.Cqw)]
+        [InlineData("cqh", (int)Length.Unit.Cqh)]
+        [InlineData("cqi", (int)Length.Unit.Cqi)]
+        [InlineData("cqb", (int)Length.Unit.Cqb)]
+        [InlineData("cqmin", (int)Length.Unit.Cqmin)]
+        [InlineData("cqmax", (int)Length.Unit.Cqmax)]
         [InlineData("%", (int)Length.Unit.Percent)]
         [InlineData("bogus", (int)Length.Unit.None)]
         public void GetUnit_ParsesKnownSuffixes(string suffix, int expectedValue)
@@ -171,6 +189,36 @@ namespace PeachPDF.Tests.CSS
             var length = new Length(50f, Length.Unit.Percent);
 
             Assert.Equal(100d, length.ToPixels(0, 0, 200));
+        }
+
+        [Theory]
+        [InlineData((int)Length.Unit.Cqw, 200d, 100d, 100d)]  // 50% of the 200pt container inline size
+        [InlineData((int)Length.Unit.Cqi, 200d, 100d, 100d)]  // same as cqw (inline axis, horizontal writing mode)
+        [InlineData((int)Length.Unit.Cqh, 100d, 200d, 100d)]  // 50% of the 200pt container block size
+        [InlineData((int)Length.Unit.Cqb, 100d, 200d, 100d)]  // same as cqh
+        [InlineData((int)Length.Unit.Cqmin, 300d, 100d, 50d)] // min(300,100) = 100 -> 50% = 50
+        [InlineData((int)Length.Unit.Cqmax, 300d, 100d, 150d)] // max(300,100) = 300 -> 50% = 150
+        public void ToPixels_ContainerRelativeUnit_UsesContainerSize(int unitValue, double inlinePt, double blockPt, double expected)
+        {
+            var length = new Length(50f, (Length.Unit)unitValue);
+
+            Assert.Equal(expected, length.ToPixels(0, 0, 0, inlinePt, blockPt));
+        }
+
+        [Theory]
+        [InlineData((int)Length.Unit.Cqw)]
+        [InlineData((int)Length.Unit.Cqh)]
+        [InlineData((int)Length.Unit.Cqi)]
+        [InlineData((int)Length.Unit.Cqb)]
+        [InlineData((int)Length.Unit.Cqmin)]
+        [InlineData((int)Length.Unit.Cqmax)]
+        public void ToPixels_ContainerRelativeUnit_WithNoAncestorContainer_ResolvesToZero(int unitValue)
+        {
+            // No container size supplied (both null) - the same documented-accepted 0 fallback vw/vh/
+            // vmin/vmax already use, since PeachPDF has no viewport-unit numerator to fall back to either.
+            var length = new Length(50f, (Length.Unit)unitValue);
+
+            Assert.Equal(0d, length.ToPixels(0, 0, 0));
         }
 
         [Fact]

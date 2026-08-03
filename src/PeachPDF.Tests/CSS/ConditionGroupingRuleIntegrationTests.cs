@@ -9,14 +9,19 @@ using PeachPDF.Svg;
 namespace PeachPDF.Tests.CSS;
 
 /// <summary>
-/// <c>@supports</c> and <c>@container</c> block handling. <c>@supports</c>'s condition is now genuinely
+/// <c>@supports</c> and <c>@container</c> block handling. <c>@supports</c>'s condition is genuinely
 /// evaluated (<see cref="CssData.IndexRules"/>/<see cref="CssData.FlattenRules"/> resolve
 /// <c>IConditionFunction.Check()</c> once, statically, since the condition takes no arguments and can't
 /// vary per query) against the actual set of HTML/SVG properties PeachPDF's renderer implements — see
 /// <see cref="PeachPDF.CSS.DeclarationCondition"/> and CLAUDE.md's "CSS/SVG property registry generator"
-/// section. <c>@container</c> still has no evaluatable condition (truthiness depends on the nearest
-/// matched element's own container size, which isn't known at parse time the way <c>@supports</c>'s is),
-/// so it's still ignored entirely — the inner rules are never indexed. Tracked at #284.
+/// section. <c>@container</c>'s condition is genuinely evaluated too, per-candidate-box, against the
+/// nearest ancestor <c>container-type: size</c>/<c>inline-size</c> element's resolved size — see
+/// <see cref="ContainerQueryMatcher"/> and <see cref="HtmlContainerInt.PerformLayout"/>'s convergence
+/// loop for how a layout-derived fact (size) feeds back into cascade. This file only covers the two
+/// tests that fit this class's narrow "does the block apply at all" shape (an established container
+/// matching, and no eligible container existing); the full feature (size features, named/unnamed
+/// queries, the convergence loop itself, <c>style()</c> queries) is
+/// <see cref="ContainerQueryLayoutIntegrationTests"/>.
 /// </summary>
 public class ConditionGroupingRuleIntegrationTests
 {
@@ -113,8 +118,22 @@ public class ConditionGroupingRuleIntegrationTests
     }
 
     [Fact]
-    public async Task Container_InnerRules_AreIgnored()
+    public async Task Container_InnerRules_Apply_WhenAnEligibleAncestorContainerMatches()
     {
+        var html = Html(
+            "#box { container-type: inline-size; width: 300px; } " +
+            "@container (min-width: 200px) { p { color: #0000ff; } }",
+            "<div id=\"box\"><p>text</p></div>");
+        var box = await FindBoxByTag(html, "p");
+        Assert.Equal(Blue, box.Color);
+    }
+
+    [Fact]
+    public async Task Container_InnerRules_DoNotApply_WhenNoAncestorEstablishesAQueryContainer()
+    {
+        // No ancestor declares container-type: size/inline-size - CSS Containment 3 §7.2's "unknown"
+        // query-container state, which is falsy for @container (unlike @media's permissive-on-missing-
+        // geometry stance for width/height - see ContainerQueryMatcher's remarks).
         var html = Html(
             "@container (min-width: 100px) { p { color: #0000ff; } }",
             "<p>text</p>");

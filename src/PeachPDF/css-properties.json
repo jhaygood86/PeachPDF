@@ -1342,6 +1342,36 @@
       }
     },
     {
+      "name": "container-type",
+      "comment": "CSS Containment 3 SS2. Establishes this box as a query container for @container: 'size' contains both axes (inline + block), 'inline-size' only the inline axis, 'normal' establishes no size query container (but still a style-query container - see CssBox.FindNearestQueryContainer's QueryKind.Style branch). Not inherited.",
+      "inherited": false,
+      "initialValue": "normal",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ContainerType",
+        "keywordMap": "Map.ContainerTypes",
+        "fallback": "ContainerType.Normal"
+      },
+      "html": {
+        "propertyPath": "ContainerType",
+        "csharpDataType": "CssProperty<ContainerType>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.ContainerType.ToString()"
+      }
+    },
+    {
+      "name": "container-name",
+      "comment": "CSS Containment 3 SS2. Raw space-separated <custom-ident>+ list (or 'none'), stored as text - PeachPDF.CSS.ContainerNameProperty does not yet validate full custom-ident grammar (an existing simplification), so this delegates to it rather than re-deriving a second parser (see CLAUDE.md's 'one parser' rule). Splitting on whitespace and matching against an @container rule's queried name happens at container-resolution time (CssBox.FindNearestQueryContainer), not here.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "ContainerName",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
       "name": "float",
       "inherited": false,
       "initialValue": "none",
