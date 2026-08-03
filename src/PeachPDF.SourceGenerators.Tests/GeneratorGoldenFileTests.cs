@@ -144,6 +144,85 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
 
             Assert.Contains("value is \"border-box\" or \"content-box\"", generated);
+            // A case-sensitive (ordinal) keyword property must keep the plain assignment shape — no
+            // canonicalization chain — since Validate_* already guarantees an exact-case match.
+            Assert.Contains("box.Transform = value;", generated);
+        }
+
+        [Fact]
+        public void Emits_Keyword_Storage_Canonicalized_To_Declared_Casing_For_OrdinalIgnoreCase()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "box-sizing", "inherited": false, "initialValue": "content-box", "cssDataType": "keyword",
+                      "supportedValues": ["border-box", "content-box"], "keywordComparison": "ordinal-ignore-case",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            // Issue #598: a case-insensitively-matched keyword must be stored in its canonical (as-authored)
+            // casing, not the raw input — every downstream layout/paint comparison is an ordinal match
+            // against a lowercase CssConstants.* literal.
+            Assert.Contains(
+                "box.Transform = value.Equals(\"border-box\", global::System.StringComparison.OrdinalIgnoreCase) ? \"border-box\" : " +
+                "value.Equals(\"content-box\", global::System.StringComparison.OrdinalIgnoreCase) ? \"content-box\" : value;",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_Keyword_Storage_Canonicalized_To_Declared_Casing_For_InvariantIgnoreCase()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "box-sizing", "inherited": false, "initialValue": "content-box", "cssDataType": "keyword",
+                      "supportedValues": ["border-box", "content-box"], "keywordComparison": "invariant-ignore-case",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "box.Transform = value.Equals(\"border-box\", global::System.StringComparison.InvariantCultureIgnoreCase) ? \"border-box\" : " +
+                "value.Equals(\"content-box\", global::System.StringComparison.InvariantCultureIgnoreCase) ? \"content-box\" : value;",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_Keyword_Storage_Unchanged_For_A_Union_Length_Or_Keyword_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "column-width", "inherited": false, "initialValue": "auto", "cssDataType": ["length", "keyword"],
+                      "supportedValues": ["auto"], "keywordComparison": "ordinal-ignore-case",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            // A value that matches neither keyword (e.g. an actual length like "12px") falls through the
+            // canonicalization chain unchanged rather than being coerced to a keyword.
+            Assert.Contains(
+                "box.Transform = value.Equals(\"auto\", global::System.StringComparison.OrdinalIgnoreCase) ? \"auto\" : value;",
+                generated);
         }
 
         [Fact]
