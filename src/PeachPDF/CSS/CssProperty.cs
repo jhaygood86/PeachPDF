@@ -30,12 +30,20 @@ namespace PeachPDF.CSS
     /// mechanism is intended to eventually back every box property.
     /// <para>
     /// A <c>record</c>, not a plain class: the cascade's copy-on-write comparison (<c>ComputedStyleAreas
-    /// .SetPropertyValue</c>) needs to see that re-parsing the same authored text twice (e.g. the cascade
-    /// defaulting loop re-applying a property's own initial value to a fresh box) produces an <i>equal</i>
-    /// value, not just an equal-looking one — value equality here is what lets that stay a real no-op
-    /// instead of always cloning the area. (Whether <typeparamref name="T"/> itself compares by value
-    /// still depends on T — an enum or record T like <see cref="CssKeywordOrValue{TEnum,TValue}"/> gets a
-    /// real no-op; a plain-class T like <c>GridTemplate</c> falls back to reference equality on Value.)
+    /// .SetPropertyValue</c>) needs to see that re-parsing the <i>same authored text</i> twice (e.g. the
+    /// cascade defaulting loop re-applying a property's own initial value to a fresh box) produces an
+    /// <i>equal</i> value, not just an equal-looking one — that's what lets it stay a real no-op instead of
+    /// always cloning the area. Because a record's synthesized equality compares every instance field —
+    /// including the raw authored text (<c>_cssText</c>), not just <see cref="Value"/> — this is "same
+    /// authored text and same resolved state", not pure semantic equality: two differently-cased or
+    /// differently-whitespaced spellings of the same value (e.g. <c>"AUTO"</c> vs <c>"auto"</c>) do NOT
+    /// compare equal even when they'd resolve to the same <typeparamref name="T"/>. That's sufficient for
+    /// the defaulting-loop no-op (which always re-applies the literal initial-value string), but a future
+    /// caller comparing two independently-authored declarations for semantic equality needs to compare
+    /// <see cref="Value"/> directly instead. Whether <typeparamref name="T"/> itself then compares by value
+    /// depends on T — an enum, or a record/record-struct T like <see cref="CssKeywordOrValue{TEnum,TValue}"/>
+    /// or <c>GridTemplate</c>, gets real structural equality; a plain class T with no equality override
+    /// would fall back to reference equality on <see cref="Value"/>.
     /// </para>
     /// </summary>
     internal sealed record CssProperty<T>

@@ -12,6 +12,15 @@ namespace PeachPDF.CSS
     /// manual stand-in for a real C# union type, which would replace this once the language has one. A
     /// record struct so the outer <see cref="CssProperty{T}"/>'s own record equality sees through to real
     /// value equality here too, instead of falling back to the default (reflection-based) struct equality.
+    /// <para>
+    /// The "exactly one is set" invariant is enforced by <see cref="CssKeywordOrValue{TEnum,TValue}(TEnum?,TValue?)"/>,
+    /// not by the type itself — <c>default(CssKeywordOrValue{TEnum,TValue})</c> (both null) bypasses it
+    /// entirely, and is exactly what <see cref="CssProperty{T}"/>'s <c>Value</c> holds whenever
+    /// <c>IsGlobalValue</c>/<c>IsUnresolved</c> is set instead (see <see cref="CssKeywordOrValueParser.FromCssText{TEnum,TValue}"/>).
+    /// A caller must check <see cref="CssProperty{T}.IsGlobalValue"/>/<see cref="CssProperty{T}.IsUnresolved"/>
+    /// before trusting <see cref="IsKeyword"/>/<see cref="IsValue"/> to mean "the property actually has a
+    /// keyword/value" rather than "neither, because there's no resolved value at all right now".
+    /// </para>
     /// </summary>
     internal readonly record struct CssKeywordOrValue<TEnum, TValue>
         where TEnum : struct, Enum
