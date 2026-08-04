@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -160,6 +161,72 @@ namespace PeachPDF.Tests.Html.Core.Utils
             DomUtils.GetAllLinkBoxes(root, links);
 
             Assert.Contains(links, b => b.HtmlTag?.Name == "a");
+        }
+
+        [Fact]
+        public async Task GetCssBox_LocationInsideBounds_ReturnsABox()
+        {
+            var root = await Render("<div id='outer' style='width:100px;height:50px'><span id='inner'>Text</span></div>");
+            var outer = DomUtils.GetBoxById(root, "outer")!;
+            var point = new RPoint(outer.Bounds.X + 1, outer.Bounds.Y + 1);
+
+            var found = DomUtils.GetCssBox(root, point);
+
+            Assert.NotNull(found);
+        }
+
+        [Fact]
+        public async Task GetCssBox_InvisibleBox_ReturnsNull()
+        {
+            var root = await Render("<div id='hidden' style='visibility:hidden;height:20px'>x</div>");
+            var hidden = DomUtils.GetBoxById(root, "hidden")!;
+            var point = new RPoint(hidden.Bounds.X + 1, hidden.Bounds.Y + 1);
+
+            Assert.Null(DomUtils.GetCssBox(hidden, point));
+        }
+
+        [Fact]
+        public async Task GetLinkBox_LocationOnClickableVisibleLink_ReturnsIt()
+        {
+            var root = await Render("<a id='link' href='#'>Click</a>");
+            var link = DomUtils.GetBoxById(root, "link")!;
+            var word = FindFirstWord(link)!;
+            var point = new RPoint(word.Rectangle.X + word.Rectangle.Width / 2, word.Rectangle.Y + word.Rectangle.Height / 2);
+
+            var found = DomUtils.GetLinkBox(root, point);
+
+            Assert.NotNull(found);
+            Assert.Equal("a", found!.HtmlTag!.Name);
+        }
+
+        [Fact]
+        public async Task GetLinkBox_LocationAwayFromAnyLink_ReturnsNull()
+        {
+            var root = await Render("<a id='link' href='#'>Click</a>");
+
+            Assert.Null(DomUtils.GetLinkBox(root, new RPoint(-1000, -1000)));
+        }
+
+        [Fact]
+        public async Task GetCssBoxWord_LocationOnVisibleWord_ReturnsWord()
+        {
+            var root = await Render("<p id='p'>Hello</p>");
+            var p = DomUtils.GetBoxById(root, "p")!;
+            var word = FindFirstWord(p)!;
+            var point = new RPoint(word.Rectangle.X + word.Rectangle.Width / 2, word.Rectangle.Y + word.Rectangle.Height / 2);
+
+            Assert.NotNull(DomUtils.GetCssBoxWord(root, point));
+        }
+
+        [Fact]
+        public async Task GetCssBoxWord_InvisibleBox_ReturnsNull()
+        {
+            var root = await Render("<p id='p' style='visibility:hidden'>Hello</p>");
+            var p = DomUtils.GetBoxById(root, "p")!;
+            var word = FindFirstWord(p)!;
+            var point = new RPoint(word.Rectangle.X + word.Rectangle.Width / 2, word.Rectangle.Y + word.Rectangle.Height / 2);
+
+            Assert.Null(DomUtils.GetCssBoxWord(p, point));
         }
 
         [Fact]
@@ -349,6 +416,17 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         // --- Helper ---
+
+        private static CssRect? FindFirstWord(CssBox box)
+        {
+            if (box.Words.Count > 0) return box.Words[0];
+            foreach (var child in box.Boxes)
+            {
+                var found = FindFirstWord(child);
+                if (found is not null) return found;
+            }
+            return null;
+        }
 
         private static async Task<CssBox> Render(string bodyHtml)
         {
