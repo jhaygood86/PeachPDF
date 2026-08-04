@@ -1079,8 +1079,9 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static (int Count, double Width) ResolveColumns(CssBox columnsBox, double containerWidth, double gap)
         {
-            var parsedCount = 0;
-            var hasCount = columnsBox.ColumnCount != CssConstants.Auto && int.TryParse(columnsBox.ColumnCount, out parsedCount);
+            var columnCount = columnsBox.ColumnCount.Value;
+            var hasCount = columnCount.IsValue;
+            var parsedCount = columnCount.Value.GetValueOrDefault();
             var hasWidth = columnsBox.ColumnWidth != CssConstants.Auto && CssValueParser.IsValidLength(columnsBox.ColumnWidth);
 
             var specifiedWidth = hasWidth ? CssValueParser.ParseLength(columnsBox.ColumnWidth, containerWidth, columnsBox) : 0;
@@ -1088,6 +1089,8 @@ namespace PeachPDF.Html.Core.Dom
             if (hasCount && hasWidth)
             {
                 // Both given: column-count is a maximum — never more columns than fit at >= column-width.
+                // Validate_ColumnCount already guarantees parsedCount >= 1, so the Math.Max(1, ...) here
+                // only guards maxByWidth's own computation, not parsedCount itself.
                 var maxByWidth = specifiedWidth > 0 ? Math.Max(1, (int)((containerWidth + gap) / (specifiedWidth + gap))) : parsedCount;
                 var count = Math.Max(1, Math.Min(parsedCount, maxByWidth));
                 return (count, Math.Max(0, (containerWidth - gap * (count - 1)) / count));
@@ -1095,6 +1098,8 @@ namespace PeachPDF.Html.Core.Dom
 
             if (hasCount)
             {
+                // parsedCount is already >= 1 here (Validate_ColumnCount enforces it) - Math.Max(1, ...) is
+                // defensive, not load-bearing.
                 var count = Math.Max(1, parsedCount);
                 return (count, Math.Max(0, (containerWidth - gap * (count - 1)) / count));
             }

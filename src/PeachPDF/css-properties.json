@@ -2335,23 +2335,22 @@
     },
     {
       "name": "column-count",
+      "comment": "CssKeywordOrValue<AutoKeyword, int>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. Unlike z-index (this mechanism's pilot, whose <integer> is unconstrained), column-count's <integer> must be >= 1 (CSS Multi-column Layout 1 - 0/negative is invalid); min narrows the keyword-or-value grammar's integer clause the same way plain \"integer\" entries' own min does (see KeywordOrValueGrammar).",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": [
-        "keyword",
-        {
-          "type": "integer",
-          "min": 1
-        }
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "integer",
+        "min": 1
+      },
       "html": {
         "propertyPath": "ColumnCount",
-        "csharpDataType": "string",
-        "area": "MultiColumnArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, int>>",
+        "area": "MultiColumnArea",
+        "getterExpression": "{box}.ColumnCount.ToString()"
       }
     },
     {
