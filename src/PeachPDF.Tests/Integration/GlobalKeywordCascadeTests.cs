@@ -231,9 +231,10 @@ namespace PeachPDF.Tests.Integration
         public async Task Revert_H1FontSizeInAuthorRule_RevertsToUaFontSize()
         {
             // Author sets h1 font-size to 50px, then a later author rule reverts it.
-            // The UA stylesheet defines h1 { font-size: 2em }; PeachPDF eagerly converts em
-            // to points at cascade time (using the parent's ActualFont.Size), so revert restores
-            // the already-converted pt value rather than the original "2em" string.
+            // The UA stylesheet defines h1 { font-size: 2em }; PeachPDF eagerly converts em to points at
+            // cascade time (using the parent's ActualFont.Size, in true CSS points), so revert restores
+            // the already-converted pt value rather than the original "2em" string - 2 * the 11pt "medium"
+            // default the parent resolves to.
             var html = """
                 <!DOCTYPE html><html><head><style>
                   h1 { font-size: 50px; }
@@ -247,7 +248,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("0.3pt", el!.FontSize);
+            Assert.Equal("22pt", el!.FontSize);
         }
 
         [Fact]
@@ -806,8 +807,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Regression_UaStylesheetSetsH1FontSize()
         {
-            // The UA stylesheet defines h1 { font-size: 2em }. PeachPDF eagerly converts em
-            // values to points at cascade time, so the stored value is the converted pt string.
+            // The UA stylesheet defines h1 { font-size: 2em }. PeachPDF eagerly converts em values to
+            // points at cascade time, so the stored value is the converted pt string - 2 * the 11pt
+            // "medium" default the parent resolves to.
             var html = """
                 <!DOCTYPE html><html><body>
                 <h1 id="el">heading</h1>
@@ -818,7 +820,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("0.3pt", el!.FontSize);
+            Assert.Equal("22pt", el!.FontSize);
         }
 
         [Fact]

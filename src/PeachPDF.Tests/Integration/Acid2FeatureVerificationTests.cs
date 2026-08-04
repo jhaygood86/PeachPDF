@@ -1018,9 +1018,10 @@ namespace PeachPDF.Tests.Integration
             var box = FindById(root, "t")!;
 
             // "2em" font-size is eagerly converted to points against the parent's actual font size (see
-            // CssBoxProperties.FontSize); "24px" line-height is a plain length and stays as declared.
+            // CssBox.StyleProperties.cs's FontSize setter); "24px" line-height is a plain length and stays
+            // as declared.
             var expectedPt = 2 * parent.ActualFont.Size;
-            Assert.Equal($"{expectedPt:0.0}pt", box.FontSize);
+            Assert.Equal($"{expectedPt.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt", box.FontSize);
             Assert.Equal("24px", box.LineHeight);
         }
 
