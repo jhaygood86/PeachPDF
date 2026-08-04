@@ -274,10 +274,10 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_ColumnWidth(CssValueParser parser, string value) => " +
-                "Map.AutoKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength(value);",
+                "Map.AutoKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc(value, out _);",
                 generated);
             Assert.Contains(
-                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, global::PeachPDF.CSS.Length>(value, Map.AutoKeywords, global::PeachPDF.CSS.Length.TryParse, AutoKeyword.Auto);",
+                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, global::PeachPDF.CSS.LengthOrCalc>(value, Map.AutoKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);",
                 generated);
         }
 
@@ -685,6 +685,43 @@ namespace PeachPDF.SourceGenerators.Tests
             Assert.Contains(
                 "var newArea = area.SetPropertyValue(area.WordSpacing, resolved, static (a, v) => a with { WordSpacing = v });",
                 generated);
+        }
+
+        [Fact]
+        public void Emits_NoEms_InTheRegistry_NotTheBoxSetter_ForAKeywordOrValueProperty()
+        {
+            // word-spacing/letter-spacing's real shape post-#598-conversion: a keyword-or-value property
+            // that also declares valueComputation "no-ems". The box's own generated setter no longer has a
+            // raw string to run NoEms against (its parameter is the already-parsed typed union), so the
+            // resolution has to happen in the registry's Set_X, against the raw text, before parsing.
+            var json = """
+                {
+                  "properties": [
+                    { "name": "word-spacing", "inherited": true, "initialValue": "normal",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "NormalKeyword", "keywordMap": "Map.NormalKeywords",
+                        "fallback": "NormalKeyword.Normal", "valueType": "length" },
+                      "html": { "propertyPath": "WordSpacing", "csharpDataType": "CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>>",
+                        "area": "TextArea", "valueComputation": "no-ems" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var registry = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+            var styleProperties = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "box.WordSpacing = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, global::PeachPDF.CSS.LengthOrCalc>" +
+                "(box.NoEms(value), Map.NormalKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc, NormalKeyword.Normal);",
+                registry);
+
+            Assert.DoesNotContain("NoEms(value)", styleProperties);
+            Assert.Contains(
+                "var newArea = area.SetPropertyValue(area.WordSpacing, value, static (a, v) => a with { WordSpacing = v });",
+                styleProperties);
         }
 
         [Fact]

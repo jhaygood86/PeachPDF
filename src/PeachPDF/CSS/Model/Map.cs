@@ -279,6 +279,11 @@ namespace PeachPDF.CSS
             {
                 {Keywords.Auto, AutoKeyword.Auto}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, NormalKeyword> NormalKeywords =
+            new Dictionary<string, NormalKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Normal, NormalKeyword.Normal}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, BoxSizingMode> BoxSizingModes =
             new Dictionary<string, BoxSizingMode>(StringComparer.OrdinalIgnoreCase)
             {

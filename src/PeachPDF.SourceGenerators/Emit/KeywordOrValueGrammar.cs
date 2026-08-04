@@ -34,9 +34,19 @@ namespace PeachPDF.SourceGenerators.Emit
         public static Resolved Resolve(PropertyEntry entry, DataTypeSpec dt) => dt.ValueType switch
         {
             "integer" => new Resolved(BuildIntegerValueClause(dt), "int", "int.TryParse"),
+            // LengthOrCalc.TryParse (via CssValueParser.TryParseLengthOrCalc), not the plain
+            // Length.TryParse - a keyword-or-value property's "length" side must accept calc() too (CSS
+            // Values and Units 4 §10.9 - calc() is valid anywhere <length> is), including a calc()
+            // mixing relative units that can't fold to a literal Length at cascade time (a pure-absolute
+            // calc() already has, by Layer A's CalcSerializer, before this ever runs). LengthOrCalc keeps
+            // that text for Layer B's own ParseLength to evaluate lazily against real box context at
+            // consumption time - see LengthOrCalc's doc comment. Validating with the same TryParse that
+            // storage uses keeps the two in lockstep (unlike a broader validator that accepts more than
+            // storage can actually represent, which would let a value pass validation and then silently
+            // fall back to the wrong keyword-side value in FromCssText).
             "length" => new Resolved(
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength(value)",
-                "global::PeachPDF.CSS.Length", "global::PeachPDF.CSS.Length.TryParse"),
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc(value, out _)",
+                "global::PeachPDF.CSS.LengthOrCalc", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc"),
             _ => throw new NotSupportedException(
                 $"\"{entry.Name}\" declares a keyword-or-value cssDataType with valueType \"{dt.ValueType}\", " +
                 "which KeywordOrValueGrammar does not yet implement."),

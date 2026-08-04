@@ -231,6 +231,64 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// Resolves an already-parsed <see cref="Length"/> (e.g. a keyword-or-value cascade property's
+        /// <c>CssKeywordOrValue{TEnum,Length}.Value</c>) to pixels against <paramref name="box"/>'s own
+        /// em/rem/container-relative-unit context — the same box-context extraction the string-based
+        /// <see cref="ParseLength(string,double,CssBox)"/> overload uses, without re-serializing the
+        /// already-typed length back to text just to re-parse it.
+        /// </summary>
+        /// <param name="length">The already-parsed length</param>
+        /// <param name="hundredPercent">Equivalent to 100 percent when length is a percentage</param>
+        /// <param name="box"></param>
+        public static double ParseLength(Length length, double hundredPercent, CssBox box)
+        {
+            var (containerInlinePt, containerBlockPt) = box.GetContainerRelativeUnitBasis();
+
+            return length.ToPixels(box.GetEmHeight(), box.GetRemHeight(), hundredPercent, containerInlinePt, containerBlockPt);
+        }
+
+        /// <summary>
+        /// Resolves a <see cref="LengthOrCalc"/> (a keyword-or-value cascade property's
+        /// <c>CssKeywordOrValue{TEnum,LengthOrCalc}.Value</c>, e.g. <c>word-spacing</c>) to pixels -
+        /// either directly, for the already-resolved <see cref="Length"/> case, or by evaluating the
+        /// stored <c>calc()</c> text against <paramref name="box"/>'s real context, for a relative-unit
+        /// <c>calc()</c> that couldn't fold at cascade time. See <see cref="LengthOrCalc"/>'s own doc
+        /// comment for why this deferred-text case exists.
+        /// </summary>
+        public static double ParseLength(LengthOrCalc value, double hundredPercent, CssBox box) =>
+            value.IsCalc
+                ? ParseLength(value.CalcText!, hundredPercent, box)
+                : ParseLength(value.Length!.Value, hundredPercent, box);
+
+        /// <summary>
+        /// Parses a <c>&lt;length&gt;</c> that may also be a <c>calc()</c> expression needing layout-time
+        /// context to resolve (mixed <c>em</c>/<c>rem</c>/<c>%</c>/<c>cq*</c> units) - the
+        /// <see cref="LengthOrCalc"/>-shaped counterpart to the plain <see cref="Length.TryParse"/> a
+        /// keyword-or-value property's "length" valueType otherwise uses. An absolute-only <c>calc()</c>
+        /// has already folded to a literal length string by the time this runs (Layer A's
+        /// <c>CalcSerializer</c>), so it resolves via the plain <see cref="Length"/> case below exactly
+        /// like any other length; only a genuinely relative-unit <c>calc()</c> takes the deferred-text
+        /// path.
+        /// </summary>
+        public static bool TryParseLengthOrCalc(string value, out LengthOrCalc result)
+        {
+            if (Length.TryParse(value, out var length))
+            {
+                result = new LengthOrCalc(length, null);
+                return true;
+            }
+
+            if (IsCalcFunction(value))
+            {
+                result = new LengthOrCalc(null, value);
+                return true;
+            }
+
+            result = default;
+            return false;
+        }
+
+        /// <summary>
         /// Parses a length. Lengths are followed by an unit identifier (e.g. 10px, 3.1em)
         /// </summary>
         /// <param name="length">Specified length</param>

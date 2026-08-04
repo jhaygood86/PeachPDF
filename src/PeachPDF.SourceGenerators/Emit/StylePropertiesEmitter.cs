@@ -21,6 +21,11 @@ namespace PeachPDF.SourceGenerators.Emit
     /// parent-relative length to points; <c>word-spacing</c>/<c>letter-spacing</c> ("no-ems") and
     /// <c>text-indent</c> ("text-indent") eagerly resolve a plain <c>em</c> length the same way, via the
     /// hand-written <c>NoEms</c>/<c>NoEmsTextIndent</c> helpers this class still keeps on <c>CssBox</c>.
+    /// A <c>keyword-or-value</c>-shaped property declaring <c>valueComputation</c> is the one exception:
+    /// this setter's parameter is already a parsed typed union by the time it runs (there is no raw
+    /// string left for <c>NoEms</c> to act on), so <see cref="RegistryEmitter.BuildHtmlAssignment"/> runs
+    /// the computation itself against the raw authored text, before parsing, and this emitter skips its
+    /// own <c>EmitValueComputation</c> call for that shape entirely (see <see cref="EmitProperty"/>).
     /// </summary>
     internal static class StylePropertiesEmitter
     {
@@ -81,8 +86,15 @@ namespace PeachPDF.SourceGenerators.Emit
             if (invalidates is { Count: > 0 })
                 sb.AppendLine("                var previousStyle = _computedStyle;");
 
+            // A keyword-or-value property (e.g. word-spacing/letter-spacing) is already fully resolved -
+            // its html.valueComputation ran in RegistryEmitter.BuildHtmlAssignment against the raw
+            // authored string, before CssKeywordOrValueParser.FromCssText parsed it into the typed union
+            // this setter actually receives, since a typed union has no string for this class's own
+            // NoEms/NoEmsTextIndent helpers to run against. See RegistryEmitter's matching comment.
+            var isKeywordOrValue = entry.CssDataTypes.Count == 1 && entry.CssDataTypes[0].Kind == DataTypeKind.KeywordOrValue;
+
             var valueExpr = "value";
-            if (html.ValueComputation is not null)
+            if (html.ValueComputation is not null && !isKeywordOrValue)
             {
                 valueExpr = "resolved";
                 EmitValueComputation(sb, html.ValueComputation, entry);

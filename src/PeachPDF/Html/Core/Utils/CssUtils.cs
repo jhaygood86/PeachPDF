@@ -36,12 +36,12 @@ namespace PeachPDF.Html.Core.Utils
         {
             var w = box.ActualFont.GetWhitespaceWidth(g);
 
-            if (!(string.IsNullOrEmpty(box.WordSpacing) || box.WordSpacing == CssConstants.Normal))
+            if (box.WordSpacing.Value is { IsValue: true, Value: { } wordSpacing })
             {
                 // word-spacing is a plain length in the same layout coordinate space as margin/padding/
                 // width/etc.; ParseLength resolves every unit (including spec-correct CSS px) through
                 // the shared Length.ToPixels conversion.
-                w += CssValueParser.ParseLength(box.WordSpacing, 0, box);
+                w += CssValueParser.ParseLength(wordSpacing, 0, box);
             }
 
             return w;

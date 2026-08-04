@@ -1665,8 +1665,8 @@ namespace PeachPDF.Html.Core.Dom
             return defs;
         }
 
-        private double ParseGap(string value, double contentBase) =>
-            CssValueParser.ParseLength(value, contentBase, _gridBox);
+        private double ParseGap(CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>> gap, double contentBase) =>
+            gap.Value is { IsValue: true, Value: { } length } ? CssValueParser.ParseLength(length, contentBase, _gridBox) : 0;
 
         private static string FormatLayoutUnits(double value) =>
             value.ToString("F4", CultureInfo.InvariantCulture) + "pt";

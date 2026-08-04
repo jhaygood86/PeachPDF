@@ -144,18 +144,18 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var (box, parser) = await FindDivBoxAndParser("");
 
-            Assert.Equal("normal", box.FlexColumnGap);
-            Assert.Equal("normal", box.FlexRowGap);
+            Assert.Equal("normal", box.FlexColumnGap.ToString());
+            Assert.Equal("normal", box.FlexRowGap.ToString());
 
             CssUtils.SetPropertyValue(parser, box, "column-gap", "10px");
             CssUtils.SetPropertyValue(parser, box, "row-gap", "1em");
-            Assert.Equal("10px", box.FlexColumnGap);
-            Assert.Equal("1em", box.FlexRowGap);
+            Assert.Equal("10px", box.FlexColumnGap.ToString());
+            Assert.Equal("1em", box.FlexRowGap.ToString());
 
             CssUtils.SetPropertyValue(parser, box, "column-gap", "normal");
             CssUtils.SetPropertyValue(parser, box, "row-gap", "normal");
-            Assert.Equal("normal", box.FlexColumnGap);
-            Assert.Equal("normal", box.FlexRowGap);
+            Assert.Equal("normal", box.FlexColumnGap.ToString());
+            Assert.Equal("normal", box.FlexRowGap.ToString());
         }
 
         [Fact]
@@ -166,8 +166,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
             CssUtils.SetPropertyValue(parser, box, "column-gap", "banana");
             CssUtils.SetPropertyValue(parser, box, "row-gap", "banana");
 
-            Assert.Equal("10px", box.FlexColumnGap);
-            Assert.Equal("10px", box.FlexRowGap);
+            Assert.Equal("10px", box.FlexColumnGap.ToString());
+            Assert.Equal("10px", box.FlexRowGap.ToString());
         }
 
         [Fact]

@@ -1642,40 +1642,42 @@
     },
     {
       "name": "word-spacing",
+      "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. The eager em-to-pt resolution (valueComputation \"no-ems\") that used to run in the CssBox setter now runs in RegistryEmitter.BuildHtmlAssignment against the raw text before FromCssText parses it — see StylePropertiesEmitter's doc comment.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "normal"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "NormalKeyword",
+        "keywordMap": "Map.NormalKeywords",
+        "fallback": "NormalKeyword.Normal",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "WordSpacing",
-        "csharpDataType": "string",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>>",
         "area": "TextArea",
-        "valueComputation": "no-ems"
+        "valueComputation": "no-ems",
+        "getterExpression": "{box}.WordSpacing.ToString()"
       }
     },
     {
       "name": "letter-spacing",
+      "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up). Same no-ems eager em-resolution as word-spacing — see its comment.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "normal"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "NormalKeyword",
+        "keywordMap": "Map.NormalKeywords",
+        "fallback": "NormalKeyword.Normal",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "LetterSpacing",
-        "csharpDataType": "string",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>>",
         "area": "TextArea",
-        "valueComputation": "no-ems"
+        "valueComputation": "no-ems",
+        "getterExpression": "{box}.LetterSpacing.ToString()"
       }
     },
     {
@@ -2148,38 +2150,40 @@
     },
     {
       "name": "row-gap",
+      "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "normal"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "NormalKeyword",
+        "keywordMap": "Map.NormalKeywords",
+        "fallback": "NormalKeyword.Normal",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "FlexRowGap",
-        "csharpDataType": "string",
-        "area": "FlexArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>>",
+        "area": "FlexArea",
+        "getterExpression": "{box}.FlexRowGap.ToString()"
       }
     },
     {
       "name": "column-gap",
+      "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up). See CssLayoutEngineColumns.ResolveColumns for multicol's spec-mandated 'normal' => 1em special case (flex/grid instead resolve 'normal' to 0) — unaffected by this storage change, just a call-site consumption detail to preserve.",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "normal"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "NormalKeyword",
+        "keywordMap": "Map.NormalKeywords",
+        "fallback": "NormalKeyword.Normal",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "FlexColumnGap",
-        "csharpDataType": "string",
-        "area": "FlexArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>>",
+        "area": "FlexArea",
+        "getterExpression": "{box}.FlexColumnGap.ToString()"
       }
     },
     {
