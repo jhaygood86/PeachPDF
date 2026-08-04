@@ -39,7 +39,7 @@ namespace PeachPDF.Tests.Integration
         private const double Margin = 20;
 
         private static CssBox TableOf(CssBox root) =>
-            LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
 
         /// <summary>
         /// Runs the engine with the fragmentainer detached, which is what keeps these fixtures hermetic:
@@ -72,7 +72,7 @@ namespace PeachPDF.Tests.Integration
 
         private static List<CssBox> BodyRowsOf(CssBox table) =>
             LayoutHarness.Descendants(table)
-                .Where(b => b.Display == CssConstants.TableRow)
+                .Where(b => b.Display.Value == DisplayMode.TableRow)
                 .ToList();
 
         private static string RowsTable(int rows) =>
@@ -110,7 +110,7 @@ namespace PeachPDF.Tests.Integration
             internal StoppingCell(CssBox row) : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssConstants.TableCell;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
                 Record = new InlineBreakToken(this, ResumeSlotIndex: 2, ResumePath: [],
                     ResumeWordIndex: 4, CompletedLineCount: 1);
             }
@@ -346,7 +346,7 @@ namespace PeachPDF.Tests.Integration
                 prepare: tree => { root = tree; StopRow(tree, 1); });
 
             var table = TableOf(root!);
-            var group = table.Boxes.First(b => b.Display == CssConstants.TableRowGroup);
+            var group = table.Boxes.First(b => b.Display.Value == DisplayMode.TableRowGroup);
             var rows = BodyRowsOf(table);
 
             Assert.Equal(rows[0].Location.Y, group.Location.Y, 3);
@@ -593,7 +593,7 @@ namespace PeachPDF.Tests.Integration
             internal ThrowingCell(CssBox row) : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssConstants.TableCell;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
             }
 
             protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
@@ -955,7 +955,7 @@ namespace PeachPDF.Tests.Integration
             internal TallCell(CssBox row, double depth) : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssConstants.TableCell;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
                 _depth = depth;
             }
 
@@ -992,14 +992,14 @@ namespace PeachPDF.Tests.Integration
                 : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssConstants.TableCell;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
                 VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Middle, VerticalAlignment.Middle);
                 _stops = stops;
                 _keepsItsContentAfterTheFirstLayout = keepsItsContentAfterTheFirstLayout;
 
                 OverflowingContent = new CssBox(this, null);
                 OverflowingContent.InheritStyle(this, everything: true);
-                OverflowingContent.Display = CssConstants.Block;
+                OverflowingContent.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
             }
 
             /// <summary>The content that flowed past the cell's own box.</summary>

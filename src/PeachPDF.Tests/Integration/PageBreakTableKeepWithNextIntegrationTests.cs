@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -237,7 +238,7 @@ namespace PeachPDF.Tests.Integration
 
             // The <thead> repeats: one header proxy per page the table's body actually spans.
             var headerProxyCount = table.Boxes.OfType<CssProxyBox>()
-                .Count(b => b.Display == CssConstants.TableHeaderGroup);
+                .Count(b => b.Display.Value == DisplayMode.TableHeaderGroup);
             Assert.True(headerProxyCount >= 3,
                 $"Expected the repeating header to appear on at least 3 pages, found {headerProxyCount}");
         }
@@ -296,7 +297,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
-            var table = FindFirst(container.Root!, b => b.Display == "table");
+            var table = FindFirst(container.Root!, b => b.Display.Value == DisplayMode.Table);
             var heading = FindFirst(container.Root!, b => b.HtmlTag?.Name == "h2");
             return (heading, table, container.PageSize.Height);
         }

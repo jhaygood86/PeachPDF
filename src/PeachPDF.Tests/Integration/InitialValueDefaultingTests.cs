@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -84,7 +85,7 @@ namespace PeachPDF.Tests.Integration
             var hr = FindById(root, "rule")!;
 
             Assert.NotNull(hr);
-            Assert.Equal("block", hr.Display);
+            Assert.Equal(DisplayMode.Block, hr.Display.Value);
         }
 
         // ── Structural display: anonymous block boxes ─────────────────────────────
@@ -108,7 +109,7 @@ namespace PeachPDF.Tests.Integration
             var wrap = FindById(root, "wrap")!;
             Assert.NotNull(wrap);
 
-            var anon = wrap.Boxes.FirstOrDefault(b => b.HtmlTag is null && b.Display == "block");
+            var anon = wrap.Boxes.FirstOrDefault(b => b.HtmlTag is null && b.Display.Value == DisplayMode.Block);
             Assert.NotNull(anon);
 
             // Inherited property (color) flows into the anonymous box from its parent...

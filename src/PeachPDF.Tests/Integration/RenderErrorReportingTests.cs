@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
@@ -35,7 +36,7 @@ namespace PeachPDF.Tests.Integration
             internal ThrowingBox(CssBox parent) : base(parent, null)
             {
                 InheritStyle(parent, everything: true);
-                Display = CssConstants.Block;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
             }
 
             protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>

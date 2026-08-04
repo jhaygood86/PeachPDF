@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -39,7 +40,7 @@ namespace PeachPDF.Tests.Integration
         private const double Margin = 20;
 
         private static CssBox TableOf(CssBox root) =>
-            LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
 
         private static List<CssProxyBox> ProxiesOf(CssBox table) =>
             table.Boxes.OfType<CssProxyBox>().ToList();
@@ -180,7 +181,7 @@ namespace PeachPDF.Tests.Integration
             await WithALaidOutTable(RepeatingHeaderTable(3), async (table, container, g) =>
             {
                 var headerRow = table.TableSetup!.Header!.Box.Boxes
-                    .First(b => b.Display == CssConstants.TableRow);
+                    .First(b => b.Display.Value == DisplayMode.TableRow);
 
                 // Replaces a header cell in place rather than being inserted beside it - a row's cells are
                 // its columns, and ParentBox's setter appends.
@@ -205,7 +206,7 @@ namespace PeachPDF.Tests.Integration
             internal ThrowingCell(CssBox row) : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssConstants.TableCell;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
             }
 
             protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
@@ -354,8 +355,8 @@ namespace PeachPDF.Tests.Integration
                     await RunEngine(g, container, table, Continuation(table));
 
                     var firstBodyRow = LayoutHarness.Descendants(table)
-                        .First(b => b.Display == CssConstants.TableRow
-                                    && b.ParentBox?.Display == CssConstants.TableRowGroup);
+                        .First(b => b.Display.Value == DisplayMode.TableRow
+                                    && b.ParentBox?.Display.Value == DisplayMode.TableRowGroup);
 
                     firstRowTops.Add(firstBodyRow.Location.Y);
                 });

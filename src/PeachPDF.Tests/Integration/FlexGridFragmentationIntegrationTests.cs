@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -551,7 +552,7 @@ namespace PeachPDF.Tests.Integration
                 pageHeight: PageHeight);
 
             var a = LayoutHarness.FindById(root, "a");
-            var cell = LayoutHarness.Descendants(root).First(b => b.Display == "table-cell");
+            var cell = LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.TableCell);
             Assert.NotNull(a);
 
             // Wherever the table put the cell, the item is still inside it rather than a page away.

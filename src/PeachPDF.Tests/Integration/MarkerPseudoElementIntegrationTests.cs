@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -45,7 +46,7 @@ namespace PeachPDF.Tests.Integration
             var li = FindById(root, "li")!;
 
             var marker = li.Boxes.Single(b => b.IsMarkerPseudoElement);
-            Assert.Equal("inline", marker.Display, ignoreCase: true);
+            Assert.Equal(DisplayMode.Inline, marker.Display.Value);
         }
 
         [Fact]

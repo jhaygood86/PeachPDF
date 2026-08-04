@@ -688,7 +688,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             return new CssBox(null, null)
             {
-                Display = CssConstants.Block
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block)
             };
         }
 
@@ -712,7 +712,7 @@ namespace PeachPDF.Html.Core.Dom
             ArgumentNullException.ThrowIfNull(parent);
 
             var newBox = CreateBox(parent, tag, before);
-            newBox.Display = CssConstants.Block;
+            newBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
             return newBox;
         }
 

@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -82,11 +83,11 @@ var table = FindTableBox(rootBox);
       Assert.NotNull(table);
 
    // Find the tbody which contains the rows
-  var tbody = table.Boxes.FirstOrDefault(b => b.Display == CssConstants.TableRowGroup);
+  var tbody = table.Boxes.FirstOrDefault(b => b.Display.Value == DisplayMode.TableRowGroup);
           if (tbody == null)
       {
           // If no explicit tbody, rows might be direct children
-     tbody = table.Boxes.FirstOrDefault(b => b.Boxes.Any(child => child.Display == CssConstants.TableRow));
+     tbody = table.Boxes.FirstOrDefault(b => b.Boxes.Any(child => child.Display.Value == DisplayMode.TableRow));
       }
 
    Assert.NotNull(tbody);
@@ -182,14 +183,14 @@ th, td { border: 1px solid black; padding: 8px; }
 
  // Find a header proxy (there should be one at the top)
   var headerProxies = table.Boxes.OfType<CssProxyBox>()
-   .Where(p => p.Display == CssConstants.TableHeaderGroup)
+   .Where(p => p.Display.Value == DisplayMode.TableHeaderGroup)
   .ToList();
 
  // Assert
   Assert.True(headerProxies.Count > 0, "Should have at least one header proxy");
   var firstProxy = headerProxies.OrderBy(p => p.Location.Y).First();
  _output.WriteLine($"First header proxy type: {firstProxy.GetType().Name}, Display: {firstProxy.Display}, Location.Y: {firstProxy.Location.Y}");
-    Assert.Equal(CssConstants.TableHeaderGroup, firstProxy.Display);
+    Assert.Equal(DisplayMode.TableHeaderGroup, firstProxy.Display.Value);
    }
 
         [Fact]
@@ -225,7 +226,7 @@ th, td { border: 1px solid black; padding: 8px; }
           Assert.NotNull(table);
 
      // Footer might be a proxy, so check all boxes
-      var hasFooter = table.Boxes.Any(b => b.Display == CssConstants.TableFooterGroup);
+      var hasFooter = table.Boxes.Any(b => b.Display.Value == DisplayMode.TableFooterGroup);
 
     // Assert
      Assert.True(hasFooter, "Table should have footer");
@@ -267,7 +268,7 @@ var (rootBox, container) = await BuildCssBoxTree(html, pageHeight: 400);
 
         // Check that thead is not in direct children (it's replaced by proxies)
       var directTheadChildren = table.Boxes.Where(b => 
-    b.Display == CssConstants.TableHeaderGroup && b is not CssProxyBox).ToList();
+    b.Display.Value == DisplayMode.TableHeaderGroup && b is not CssProxyBox).ToList();
 
    var proxyBoxes = table.Boxes.OfType<CssProxyBox>().ToList();
 
@@ -366,7 +367,7 @@ var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
          Assert.NotNull(table);
 
    var headerProxies = table.Boxes.OfType<CssProxyBox>()
-   .Where(p => p.Display == CssConstants.TableHeaderGroup)
+   .Where(p => p.Display.Value == DisplayMode.TableHeaderGroup)
         .OrderBy(p => p.Location.Y)
    .ToList();
 
@@ -429,11 +430,11 @@ td { border: 1px solid black; padding: 8px; }
   Assert.NotNull(table);
 
  // Find tbody which contains the row
-   var tbody = table.Boxes.FirstOrDefault(b => b.Display == CssConstants.TableRowGroup);
+   var tbody = table.Boxes.FirstOrDefault(b => b.Display.Value == DisplayMode.TableRowGroup);
       if (tbody == null)
      {
          // If no explicit tbody, look for a box that has rows as children
-   tbody = table.Boxes.FirstOrDefault(b => b.Boxes.Any(child => child.Display == CssConstants.TableRow));
+   tbody = table.Boxes.FirstOrDefault(b => b.Boxes.Any(child => child.Display.Value == DisplayMode.TableRow));
     }
 
 Assert.NotNull(tbody);
@@ -492,11 +493,11 @@ var html = @"
  Assert.NotNull(table);
 
   // Find tbody which contains the row
-   var tbody = table.Boxes.FirstOrDefault(b => b.Display == CssConstants.TableRowGroup);
+   var tbody = table.Boxes.FirstOrDefault(b => b.Display.Value == DisplayMode.TableRowGroup);
   if (tbody == null)
  {
  // If no explicit tbody, look for a box that has rows as children
-   tbody = table.Boxes.FirstOrDefault(b => b.Boxes.Any(child => child.Display == CssConstants.TableRow));
+   tbody = table.Boxes.FirstOrDefault(b => b.Boxes.Any(child => child.Display.Value == DisplayMode.TableRow));
   }
 
 Assert.NotNull(tbody);
@@ -537,8 +538,8 @@ Assert.NotNull(tbody);
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
 
-            var tbody = table!.Boxes.FirstOrDefault(b => b.Display == CssConstants.TableRowGroup)
-                        ?? table.Boxes.FirstOrDefault(b => b.Boxes.Any(c => c.Display == CssConstants.TableRow));
+            var tbody = table!.Boxes.FirstOrDefault(b => b.Display.Value == DisplayMode.TableRowGroup)
+                        ?? table.Boxes.FirstOrDefault(b => b.Boxes.Any(c => c.Display.Value == DisplayMode.TableRow));
             Assert.NotNull(tbody);
             var firstCell = tbody!.Boxes[0].Boxes[0];
             var firstCellWidth = firstCell.ActualRight - firstCell.Location.X;
@@ -565,8 +566,8 @@ Assert.NotNull(tbody);
 
             var (rootBox, _) = await BuildCssBoxTree(html);
             var table = FindTableBox(rootBox)!;
-            var tbody = table.Boxes.Single(b => b.Display == CssConstants.TableRowGroup);
-            var row = tbody.Boxes.Single(b => b.Display == CssConstants.TableRow);
+            var tbody = table.Boxes.Single(b => b.Display.Value == DisplayMode.TableRowGroup);
+            var row = tbody.Boxes.Single(b => b.Display.Value == DisplayMode.TableRow);
 
             Assert.Equal(row.Location.X, tbody.Location.X);
             Assert.Equal(row.Location.Y, tbody.Location.Y);
@@ -589,7 +590,7 @@ Assert.NotNull(tbody);
 
             var (rootBox, _) = await BuildCssBoxTree(html);
             var table = FindTableBox(rootBox)!;
-            var tbodies = table.Boxes.Where(b => b.Display == CssConstants.TableRowGroup).ToList();
+            var tbodies = table.Boxes.Where(b => b.Display.Value == DisplayMode.TableRowGroup).ToList();
 
             Assert.Equal(2, tbodies.Count);
             var realTbody = tbodies.Single(b => b.Boxes.Count > 0);
@@ -619,12 +620,12 @@ Assert.NotNull(tbody);
             // The real <thead>/<tfoot> boxes are removed from the live tree in favor of one
             // CssProxyBox per page (see RemoveHeaderFooterFromTree) - reach the original row via
             // the proxy's SourceBox rather than the proxy's own (paint-time-only) Boxes.
-            var headerProxy = table.Boxes.OfType<CssProxyBox>().Single(b => b.Display == CssConstants.TableHeaderGroup);
-            var headerRow = headerProxy.SourceBox.Boxes.Single(b => b.Display == CssConstants.TableRow);
+            var headerProxy = table.Boxes.OfType<CssProxyBox>().Single(b => b.Display.Value == DisplayMode.TableHeaderGroup);
+            var headerRow = headerProxy.SourceBox.Boxes.Single(b => b.Display.Value == DisplayMode.TableRow);
             AssertRealBounds(headerRow, "thead row");
 
-            var footerProxy = table.Boxes.OfType<CssProxyBox>().Single(b => b.Display == CssConstants.TableFooterGroup);
-            var footerRow = footerProxy.SourceBox.Boxes.Single(b => b.Display == CssConstants.TableRow);
+            var footerProxy = table.Boxes.OfType<CssProxyBox>().Single(b => b.Display.Value == DisplayMode.TableFooterGroup);
+            var footerRow = footerProxy.SourceBox.Boxes.Single(b => b.Display.Value == DisplayMode.TableRow);
             AssertRealBounds(footerRow, "tfoot row");
 
             static void AssertRealBounds(CssBox row, string label)
@@ -657,8 +658,8 @@ Assert.NotNull(tbody);
             var (rootBox, _) = await BuildCssBoxTree(html);
             var table = FindTableBox(rootBox)!;
 
-            var headerProxies = table.Boxes.Count(b => b is CssProxyBox && b.Display == CssConstants.TableHeaderGroup);
-            var footerProxies = table.Boxes.Count(b => b is CssProxyBox && b.Display == CssConstants.TableFooterGroup);
+            var headerProxies = table.Boxes.Count(b => b is CssProxyBox && b.Display.Value == DisplayMode.TableHeaderGroup);
+            var footerProxies = table.Boxes.Count(b => b is CssProxyBox && b.Display.Value == DisplayMode.TableFooterGroup);
 
             Assert.Equal(1, headerProxies);
             Assert.Equal(1, footerProxies);
@@ -816,7 +817,7 @@ using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
   private static CssBox? FindTableBox(CssBox box)
      {
-          if (box.Display == CssConstants.Table)
+          if (box.Display.Value == DisplayMode.Table)
       return box;
 
  foreach (var child in box.Boxes)

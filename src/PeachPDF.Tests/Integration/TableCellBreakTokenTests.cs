@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -42,10 +43,10 @@ namespace PeachPDF.Tests.Integration
             string.Join(" ", Enumerable.Range(0, count).Select(i => $"word{i:0000}"));
 
         private static CssBox TableOf(CssBox root) =>
-            LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
 
         private static List<CssBox> CellsOf(CssBox root) =>
-            LayoutHarness.Descendants(root).Where(b => b.Display == CssConstants.TableCell).ToList();
+            LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.TableCell).ToList();
 
         // ─── A table that paginates loses nothing and duplicates nothing ─────────────────────────
 
@@ -344,7 +345,7 @@ namespace PeachPDF.Tests.Integration
                 pageHeight: PageHeight, margin: Margin);
 
             var tables = LayoutHarness.Descendants(root)
-                .Where(b => b.Display == CssConstants.Table).ToList();
+                .Where(b => b.Display.Value == DisplayMode.Table).ToList();
 
             Assert.Equal(2, tables.Count);
             Assert.All(tables, t => Assert.Null(t.TableContinuation));
@@ -549,7 +550,7 @@ namespace PeachPDF.Tests.Integration
             internal StoppingCell(CssBox row) : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssConstants.TableCell;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
                 Record = new InlineBreakToken(this, ResumeSlotIndex: 1, ResumePath: [],
                     ResumeWordIndex: 0, CompletedLineCount: 1);
             }

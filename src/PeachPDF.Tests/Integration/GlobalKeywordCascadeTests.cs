@@ -145,7 +145,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("inline", el!.Display);
+            Assert.Equal(DisplayMode.Inline, el!.Display.Value);
         }
 
         // ── unset ─────────────────────────────────────────────────────────────

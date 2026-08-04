@@ -1104,7 +1104,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (<c>Style.DisplayPositioning.Float</c> is not <see cref="CssConstants.None"/>) - the value layout
         /// and paint should actually use. <c>Style.DisplayPositioning.Display</c> itself stays the raw
         /// cascaded keyword (what the cascade produced, e.g. for CSS-OM <c>getPropertyValue</c> readback),
-        /// not blockified. Recomputed fresh every call, not cached - a single string switch, same cost class
+        /// not blockified. Recomputed fresh every call, not cached - a single enum switch, same cost class
         /// as <see cref="ActualLineHeight"/>/<see cref="IsPositioned"/> below.
         /// </summary>
         public string ActualDisplay
@@ -1112,24 +1112,24 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 var area = Style.DisplayPositioning;
-                if (area.Float.Value is Floating.None) return area.Display;
+                if (area.Float.Value is Floating.None) return area.Display.ToString();
 
-                return area.Display switch
+                return area.Display.Value switch
                 {
-                    "inline" => "block",
-                    "inline-block" => "block",
-                    "inline-table" => "table",
-                    "table-row" => "block",
-                    "table-row-group" => "block",
-                    "table-column" => "block",
-                    "table-column-group" => "block",
-                    "table-cell" => "block",
-                    "table-caption" => "block",
-                    "table-header-group" => "block",
-                    "table-footer-group" => "block",
-                    "inline-flex" => "flex",
-                    "inline-grid" => "grid",
-                    _ => area.Display
+                    DisplayMode.Inline => CssConstants.Block,
+                    DisplayMode.InlineBlock => CssConstants.Block,
+                    DisplayMode.InlineTable => CssConstants.Table,
+                    DisplayMode.TableRow => CssConstants.Block,
+                    DisplayMode.TableRowGroup => CssConstants.Block,
+                    DisplayMode.TableColumn => CssConstants.Block,
+                    DisplayMode.TableColumnGroup => CssConstants.Block,
+                    DisplayMode.TableCell => CssConstants.Block,
+                    DisplayMode.TableCaption => CssConstants.Block,
+                    DisplayMode.TableHeaderGroup => CssConstants.Block,
+                    DisplayMode.TableFooterGroup => CssConstants.Block,
+                    DisplayMode.InlineFlex => CssConstants.Flex,
+                    DisplayMode.InlineGrid => CssConstants.Grid,
+                    _ => area.Display.ToString()
                 };
             }
         }

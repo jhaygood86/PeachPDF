@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -61,7 +62,7 @@ namespace PeachPDF.Tests.Integration
             internal StallingBox(CssBox parent) : base(parent, null)
             {
                 InheritStyle(parent, everything: true);
-                Display = CssConstants.Block;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
             }
 
             /// <summary>Whether breaking was live on each pass this box was laid out in, in order.</summary>
@@ -113,7 +114,7 @@ namespace PeachPDF.Tests.Integration
             internal AlternatingBox(CssBox parent) : base(parent, null)
             {
                 InheritStyle(parent, everything: true);
-                Display = CssConstants.Block;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
             }
 
             protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
@@ -159,7 +160,7 @@ namespace PeachPDF.Tests.Integration
             internal WalkingBox(CssBox parent) : base(parent, null)
             {
                 InheritStyle(parent, everything: true);
-                Display = CssConstants.Block;
+                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
             }
 
             protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)

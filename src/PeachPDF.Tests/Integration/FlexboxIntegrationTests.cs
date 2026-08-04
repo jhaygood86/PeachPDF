@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -18,7 +19,7 @@ namespace PeachPDF.Tests.Integration
         public async Task DisplayFlex_PropertyApplied_ToBox()
         {
             var box = await FindByTagAsync("<div style='display:flex'></div>", "div");
-            Assert.Equal("flex", box.Display);
+            Assert.Equal(DisplayMode.Flex, box.Display.Value);
         }
 
         [Fact]

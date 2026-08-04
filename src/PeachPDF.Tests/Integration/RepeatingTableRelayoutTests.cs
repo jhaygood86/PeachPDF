@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 
@@ -54,7 +55,7 @@ namespace PeachPDF.Tests.Integration
                 CardWithTable(130), pageHeight: PageHeight, margin: Margin);
 
             var headerGroups = LayoutHarness.Descendants(root)
-                .Count(b => b.Display == "table-header-group");
+                .Count(b => b.Display.Value == DisplayMode.TableHeaderGroup);
 
             // One per page the table spans, and no stale copy left by the run that was abandoned.
             Assert.InRange(headerGroups, 1, 2);

@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -44,10 +45,10 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
 
-            var tbody = table.Boxes.FirstOrDefault(b => b.Display == CssConstants.TableRowGroup);
+            var tbody = table.Boxes.FirstOrDefault(b => b.Display.Value == DisplayMode.TableRowGroup);
             Assert.NotNull(tbody);
 
-            var rows = tbody.Boxes.Where(b => b.Display == CssConstants.TableRow).ToList();
+            var rows = tbody.Boxes.Where(b => b.Display.Value == DisplayMode.TableRow).ToList();
             _output.WriteLine($"Total rows: {rows.Count}");
 
             // Find the first body row that starts on page 2 (Y >= pageHeight)
@@ -101,10 +102,10 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
 
-            var tbody = table.Boxes.FirstOrDefault(b => b.Display == CssConstants.TableRowGroup);
+            var tbody = table.Boxes.FirstOrDefault(b => b.Display.Value == DisplayMode.TableRowGroup);
             Assert.NotNull(tbody);
 
-            var rows = tbody.Boxes.Where(b => b.Display == CssConstants.TableRow).ToList();
+            var rows = tbody.Boxes.Where(b => b.Display.Value == DisplayMode.TableRow).ToList();
             _output.WriteLine($"Total rows: {rows.Count}");
 
             // Check every row whose top is on page 0
@@ -276,10 +277,10 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
 
-            var tbody = table.Boxes.FirstOrDefault(b => b.Display == CssConstants.TableRowGroup);
+            var tbody = table.Boxes.FirstOrDefault(b => b.Display.Value == DisplayMode.TableRowGroup);
             Assert.NotNull(tbody);
 
-            var rows = tbody.Boxes.Where(b => b.Display == CssConstants.TableRow).ToList();
+            var rows = tbody.Boxes.Where(b => b.Display.Value == DisplayMode.TableRow).ToList();
             _output.WriteLine($"Total rows: {rows.Count}");
 
             foreach (var row in rows)
@@ -396,7 +397,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // Find the footer proxy boxes that were injected into the table
             var footerProxies = table.Boxes
                 .OfType<CssProxyBox>()
-                .Where(p => p.Display == CssConstants.TableFooterGroup)
+                .Where(p => p.Display.Value == DisplayMode.TableFooterGroup)
                 .ToList();
 
             _output.WriteLine($"Footer proxies found: {footerProxies.Count}");
@@ -720,7 +721,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         private static CssBox? FindTableBox(CssBox box)
         {
-            if (box.Display == CssConstants.Table)
+            if (box.Display.Value == DisplayMode.Table)
                 return box;
 
             foreach (var child in box.Boxes)

@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -408,7 +409,7 @@ namespace PeachPDF.Tests.Integration
 
             var footer = Assert.Single(
                 TableOf(root).Boxes.OfType<CssProxyBox>(),
-                p => p.Display == CssConstants.TableFooterGroup);
+                p => p.Display.Value == DisplayMode.TableFooterGroup);
 
             var slot = container.SlotStartingAt(footer.Location.Y);
 
@@ -497,7 +498,7 @@ namespace PeachPDF.Tests.Integration
 
             var footer = Assert.Single(
                 TableOf(root).Boxes.OfType<CssProxyBox>(),
-                p => p.Display == CssConstants.TableFooterGroup);
+                p => p.Display.Value == DisplayMode.TableFooterGroup);
 
             var slot = container.SlotStartingAt(footer.Location.Y);
 
@@ -543,7 +544,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         private static CssBox TableOf(CssBox root) =>
-            LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
 
         private static bool RepeatsOf(CssBox root, string group)
         {
@@ -595,11 +596,11 @@ namespace PeachPDF.Tests.Integration
         /// </remarks>
         private static void AssertLaidOutOnce(CssBox root, string group)
         {
-            var display = group == "thead" ? CssConstants.TableHeaderGroup : CssConstants.TableFooterGroup;
+            var display = group == "thead" ? DisplayMode.TableHeaderGroup : DisplayMode.TableFooterGroup;
 
             var proxies = TableOf(root).Boxes
                 .OfType<CssProxyBox>()
-                .Where(p => p.Display == display)
+                .Where(p => p.Display.Value == display)
                 .ToList();
 
             Assert.Single(proxies);

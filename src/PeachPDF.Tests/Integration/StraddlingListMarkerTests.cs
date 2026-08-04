@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -363,7 +364,7 @@ namespace PeachPDF.Tests.Integration
 
         private static List<CssBox> ListItems(CssBox root) =>
             LayoutHarness.Descendants(root)
-                .Where(b => b.Display == CssConstants.ListItem)
+                .Where(b => b.Display.Value == DisplayMode.ListItem)
                 .ToList();
 
         private static string? Id(CssBox box) => box.HtmlTag?.TryGetAttribute("id");

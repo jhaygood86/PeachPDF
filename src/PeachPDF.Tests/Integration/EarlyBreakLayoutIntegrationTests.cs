@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Fragments;
 using System.Collections.Generic;
@@ -306,12 +307,12 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
 
             var table = LayoutHarness.Descendants(LayoutHarness.FindById(root, "head")!)
-                .First(b => b.Display == CssConstants.Table);
+                .First(b => b.Display.Value == DisplayMode.Table);
             var proxies = table.Boxes.OfType<CssProxyBox>().ToList();
 
             Assert.NotEmpty(proxies);
             Assert.Single(proxies.Select(p => p.SourceBox).Distinct());
-            Assert.All(proxies, p => Assert.Equal(CssConstants.TableHeaderGroup, p.SourceBox.Display));
+            Assert.All(proxies, p => Assert.Equal(DisplayMode.TableHeaderGroup, p.SourceBox.Display.Value));
 
             // Every proxy must sit on a page of its own — a stale one left by a discarded layout would
             // duplicate a position.
