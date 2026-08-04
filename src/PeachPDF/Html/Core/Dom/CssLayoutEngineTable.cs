@@ -85,13 +85,13 @@ namespace PeachPDF.Html.Core.Dom
         /// pre-check — which is gated on the *absence* of both groups, so reading repetition here would
         /// send a non-repeating table down a relocation path a table with a <c>&lt;thead&gt;</c> never takes.
         /// </remarks>
-        private bool HeaderIsDetached => _headerBox != null && _headerBox.Display == CssConstants.TableHeaderGroup;
+        private bool HeaderIsDetached => _headerBox != null && _headerBox.DerivedStyle.ActualDisplay == CssConstants.TableHeaderGroup;
 
         /// <summary>
         /// Whether the table has a <c>&lt;tfoot&gt;</c> this engine took out of the child list. See
         /// <see cref="HeaderIsDetached"/>; <see cref="_footerRepeats"/> is the other question.
         /// </summary>
-        private bool FooterIsDetached => _footerBox != null && _footerBox.Display == CssConstants.TableFooterGroup;
+        private bool FooterIsDetached => _footerBox != null && _footerBox.DerivedStyle.ActualDisplay == CssConstants.TableFooterGroup;
 
         /// <summary>
         /// Whether css-tables-3 §6.2 lets the detached <c>&lt;thead&gt;</c> be repeated on every band the
@@ -231,7 +231,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var box in tableBox.Boxes)
             {
-                switch (box.Display)
+                switch (box.DerivedStyle.ActualDisplay)
                 {
                     case CssConstants.TableColumn:
                         columns += GetSpan(box);
@@ -241,7 +241,7 @@ namespace PeachPDF.Html.Core.Dom
                             foreach (var cr in tableBox.Boxes)
                             {
                                 count++;
-                                if (cr.Display == CssConstants.TableRow)
+                                if (cr.DerivedStyle.ActualDisplay == CssConstants.TableRow)
                                     columns = Math.Max(columns, cr.Boxes.Count);
                             }
 
@@ -388,7 +388,7 @@ namespace PeachPDF.Html.Core.Dom
                 // as a row throws on an empty sequence (issue #353, from the other direction).
                 if (box is CssProxyBox) continue;
 
-                switch (box.Display)
+                switch (box.DerivedStyle.ActualDisplay)
                 {
                     case CssConstants.TableCaption:
                         break;
@@ -397,7 +397,7 @@ namespace PeachPDF.Html.Core.Dom
                         break;
                     case CssConstants.TableRowGroup:
                         foreach (CssBox childBox in box.Boxes)
-                            if (childBox.Display == CssConstants.TableRow)
+                            if (childBox.DerivedStyle.ActualDisplay == CssConstants.TableRow)
                                 _bodyRows.Add(childBox);
                         break;
                     case CssConstants.TableHeaderGroup:
@@ -549,7 +549,7 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         if (i >= 20 && !double.IsNaN(_columnWidths[i])) continue; // limit column width check
 
-                        if (i >= row.Boxes.Count || row.Boxes[i].Display != CssConstants.TableCell) continue;
+                        if (i >= row.Boxes.Count || row.Boxes[i].DerivedStyle.ActualDisplay != CssConstants.TableCell) continue;
 
                         var len = CssValueParser.ParseLength(row.Boxes[i].Width, availCellSpace, row.Boxes[i]);
 
@@ -1107,7 +1107,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 foreach (var row in _headerBox.Boxes)
                 {
-                    if (row.Display != CssConstants.TableRow)
+                    if (row.DerivedStyle.ActualDisplay != CssConstants.TableRow)
                         continue;
 
                     headerCursor.CurrentY = headerRowsLayoutY;
@@ -1144,7 +1144,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 foreach (var row in _footerBox.Boxes)
                 {
-                    if (row.Display != CssConstants.TableRow)
+                    if (row.DerivedStyle.ActualDisplay != CssConstants.TableRow)
                         continue;
 
                     footerCursor.CurrentY = footerRowsLayoutY;
@@ -1649,10 +1649,10 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var box in _tableBox.Boxes)
             {
-                if (box.Display != CssConstants.TableRowGroup)
+                if (box.DerivedStyle.ActualDisplay != CssConstants.TableRowGroup)
                     continue;
 
-                var rows = box.Boxes.Where(b => b.Display == CssConstants.TableRow && placed.Contains(b))
+                var rows = box.Boxes.Where(b => b.DerivedStyle.ActualDisplay == CssConstants.TableRow && placed.Contains(b))
                     .ToList();
                 if (rows.Count == 0)
                     continue;
@@ -2063,8 +2063,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var slot = container.SlotStartingAt(proxy.Location.Y);
 
-                if (proxy.Display == CssConstants.TableHeaderGroup) headerBands.Add(slot);
-                else if (proxy.Display == CssConstants.TableFooterGroup) footerBands.Add(slot);
+                if (proxy.DerivedStyle.ActualDisplay == CssConstants.TableHeaderGroup) headerBands.Add(slot);
+                else if (proxy.DerivedStyle.ActualDisplay == CssConstants.TableFooterGroup) footerBands.Add(slot);
             }
 
             foreach (var slot in _bandsARowOverflowedInto.Order())
@@ -2844,7 +2844,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var childBox in box.Boxes)
             {
-                if (childBox.Display == CssConstants.None) continue;
+                if (childBox.DerivedStyle.ActualDisplay == CssConstants.None) continue;
 
                 await childBox.MeasureWordsSize(g);
                 await MeasureWords(childBox, g);

@@ -107,7 +107,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             string? savedDisplay = null;
             if (box.IsInline)
             {
-                savedDisplay = box.Display;
+                savedDisplay = box.DerivedStyle.ActualDisplay;
                 box.Display = CssConstants.Block;
             }
 

@@ -76,7 +76,7 @@ namespace PeachPDF.Html.Core.Paint
 
             try
             {
-                if (box.Display == CssConstants.None || box.Visibility != CssConstants.Visible) return;
+                if (box.DerivedStyle.ActualDisplay == CssConstants.None || box.Visibility != CssConstants.Visible) return;
 
                 // use initial clip to draw blocks with Position = fixed. I.e. ignore page margins
                 if (box.Position == CssConstants.Fixed)
@@ -336,8 +336,8 @@ namespace PeachPDF.Html.Core.Paint
         {
             var box = fragment.Box;
 
-            if (box.Display == CssConstants.None ||
-                (box.Display == CssConstants.TableCell && box.EmptyCells == CssConstants.Hide && box.IsSpaceOrEmpty)) return;
+            if (box.DerivedStyle.ActualDisplay == CssConstants.None ||
+                (box.DerivedStyle.ActualDisplay == CssConstants.TableCell && box.EmptyCells == CssConstants.Hide && box.IsSpaceOrEmpty)) return;
 
             var clipped = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip);
 
@@ -385,7 +385,7 @@ namespace PeachPDF.Html.Core.Paint
                 // intermediate pages (instead of at the rectangle's bottom, which is off-page).
                 // The page clip already constrains the side-border top to MarginTop.
                 var rectForBorders = geometry.DecorationRect;
-                if ((box.Display == CssConstants.Table || box.Display == CssConstants.InlineTable)
+                if ((box.DerivedStyle.ActualDisplay == CssConstants.Table || box.DerivedStyle.ActualDisplay == CssConstants.InlineTable)
                     && box.PageBreakBottoms != null && box.HtmlContainer != null)
                 {
                     // PageBreakBottoms is keyed by pagination slot, which is exactly what the fragment

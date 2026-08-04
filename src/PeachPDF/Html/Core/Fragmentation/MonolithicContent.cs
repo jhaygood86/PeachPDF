@@ -124,7 +124,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         /// <seealso cref="RunsAnEngineOfItsOwn"/>
         internal static bool PaginatesItsOwnContent(CssBox box) =>
-            RunsAnEngineOfItsOwn(box.Display) || box.EstablishesMultiColumnContext;
+            RunsAnEngineOfItsOwn(box.DerivedStyle.ActualDisplay) || box.EstablishesMultiColumnContext;
 
         /// <summary>
         /// The display-value half of <see cref="PaginatesItsOwnContent"/>, which

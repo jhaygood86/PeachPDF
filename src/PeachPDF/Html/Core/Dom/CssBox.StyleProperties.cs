@@ -891,34 +891,14 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        /// <summary>
+        /// The raw cascaded <c>display</c> keyword - not blockified. Layout/paint code that needs the
+        /// used value (CSS 2.1 §9.7 blockification when floated) reads <see cref="DerivedStyle.ActualDisplay"/>
+        /// instead.
+        /// </summary>
         public string Display
         {
-            get
-            {
-                var area = _computedStyle.DisplayPositioning;
-                if (area.Float is not CssConstants.None)
-                {
-                    return area.Display switch
-                    {
-                        "inline" => "block",
-                        "inline-block" => "block",
-                        "inline-table" => "table",
-                        "table-row" => "block",
-                        "table-row-group" => "block",
-                        "table-column" => "block",
-                        "table-column-group" => "block",
-                        "table-cell" => "block",
-                        "table-caption" => "block",
-                        "table-header-group" => "block",
-                        "table-footer-group" => "block",
-                        "inline-flex" => "flex",
-                        "inline-grid" => "grid",
-                        _ => area.Display
-                    };
-                }
-
-                return area.Display;
-            }
+            get => _computedStyle.DisplayPositioning.Display;
             set
             {
                 var area = _computedStyle.DisplayPositioning;

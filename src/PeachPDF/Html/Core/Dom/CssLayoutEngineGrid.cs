@@ -126,7 +126,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var items = _gridBox.Boxes
-                .Where(b => b.Display != CssConstants.None && !b.IsOutOfFlow
+                .Where(b => b.DerivedStyle.ActualDisplay != CssConstants.None && !b.IsOutOfFlow
                             && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
                 .ToList();
 
@@ -355,7 +355,7 @@ namespace PeachPDF.Html.Core.Dom
                 subgridContexts, placementOrigin: _gridBox.Location);
 
             // Inline-grid shrinks to the content extent in the inline axis (like inline-block).
-            if (_gridBox.Display == CssConstants.InlineGrid && !CssValueParser.IsValidLength(_gridBox.Width) && columns.Length > 0)
+            if (_gridBox.DerivedStyle.ActualDisplay == CssConstants.InlineGrid && !CssValueParser.IsValidLength(_gridBox.Width) && columns.Length > 0)
             {
                 var contentRight = columns[^1].Position + columns[^1].Size;
                 _gridBox.ActualRight = contentRight + _gridBox.ActualPaddingRight + _gridBox.ActualBorderRightWidth;
@@ -382,7 +382,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (container is null || !container.HasRealPageGrid || placements.Count == 0
                 || !container.IsFragmenting
-                || _gridBox.Display == CssConstants.InlineGrid)
+                || _gridBox.DerivedStyle.ActualDisplay == CssConstants.InlineGrid)
             {
                 return;
             }
@@ -499,7 +499,7 @@ namespace PeachPDF.Html.Core.Dom
             // The same liveness gate RelocateRowsAcrossFragmentainers uses, for the same reason: outside
             // it this container's own coordinates are provisional, belonging to whatever is measuring it.
             if (container is null || !container.HasRealPageGrid || !container.IsFragmenting
-                || _gridBox.Display == CssConstants.InlineGrid)
+                || _gridBox.DerivedStyle.ActualDisplay == CssConstants.InlineGrid)
             {
                 return;
             }
@@ -1410,7 +1410,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Whether a grid item is a subgrid on at least one axis — a nested grid whose
         /// <c>grid-template-columns</c> and/or <c>grid-template-rows</c> is <c>subgrid</c>.</summary>
         private static bool IsSubgridItem(CssBox box) =>
-            (box.Display == CssConstants.Grid || box.Display == CssConstants.InlineGrid)
+            (box.DerivedStyle.ActualDisplay == CssConstants.Grid || box.DerivedStyle.ActualDisplay == CssConstants.InlineGrid)
             && (ChildColSubgrid(box) || ChildRowSubgrid(box));
 
         private static bool ChildColSubgrid(CssBox box) => box.GridTemplateColumns.Value?.IsSubgrid == true;
@@ -1676,7 +1676,7 @@ namespace PeachPDF.Html.Core.Dom
             string? savedDisplay = null;
             if (box.IsInline)
             {
-                savedDisplay = box.Display;
+                savedDisplay = box.DerivedStyle.ActualDisplay;
                 box.Display = CssConstants.Block;
             }
 

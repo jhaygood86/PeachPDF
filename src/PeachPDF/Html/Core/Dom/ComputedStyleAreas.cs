@@ -229,8 +229,9 @@ namespace PeachPDF.Html.Core.Dom
 
     /// <summary>
     /// CSS Display + Positioned Layout + Overflow properties. Kept together (rather than split further
-    /// by literal spec module) since <c>Display</c>'s used-value getter already reads <c>Float</c>
-    /// directly for CSS2.1 §9.7 blockification. None inherited.
+    /// by literal spec module) since <c>Display</c> and <c>Float</c> are read together for CSS 2.1 §9.7
+    /// blockification (see <see cref="Dom.DerivedStyle.ActualDisplay"/>, which reads both from this area -
+    /// the plain <c>Display</c> field here stays the raw, un-blockified cascaded keyword). None inherited.
     /// </summary>
     internal sealed record DisplayPositioningArea
     {

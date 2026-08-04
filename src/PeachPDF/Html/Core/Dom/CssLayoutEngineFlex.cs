@@ -104,7 +104,7 @@ namespace PeachPDF.Html.Core.Dom
             // Phase 1: collect and order flex items.
             // Anonymous whitespace-only boxes between flex items must be discarded per CSS spec.
             var rawItems = _flexBox.Boxes
-                .Where(b => b.Display != CssConstants.None && !b.IsOutOfFlow
+                .Where(b => b.DerivedStyle.ActualDisplay != CssConstants.None && !b.IsOutOfFlow
                             && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
                 .OrderBy(ParseOrder)
                 .ThenBy(b => _flexBox.Boxes.IndexOf(b))
@@ -270,7 +270,7 @@ namespace PeachPDF.Html.Core.Dom
             // Phase 10b: inline-flex shrinks to content in the main axis (like inline-block).
             // For row direction with auto width, update ActualRight to the actual content extent.
             bool hasExplicitWidth = CssValueParser.IsValidLength(_flexBox.Width);
-            if (_flexBox.Display == CssConstants.InlineFlex && _isRow && !hasExplicitWidth && lines.Count > 0)
+            if (_flexBox.DerivedStyle.ActualDisplay == CssConstants.InlineFlex && _isRow && !hasExplicitWidth && lines.Count > 0)
             {
                 double contentMainEnd = lines.Max(l =>
                     l.Items.Count > 0
@@ -950,7 +950,7 @@ namespace PeachPDF.Html.Core.Dom
             // is the line it is on to decide.
             if (container is null || !container.HasRealPageGrid || lines.Count == 0
                 || !container.IsFragmenting
-                || _flexBox.Display == CssConstants.InlineFlex)
+                || _flexBox.DerivedStyle.ActualDisplay == CssConstants.InlineFlex)
             {
                 return;
             }
@@ -1053,7 +1053,7 @@ namespace PeachPDF.Html.Core.Dom
             // The same liveness gate RelocateLinesAcrossFragmentainers uses, for the same reason: outside
             // it this container's own coordinates are provisional, belonging to whatever is measuring it.
             if (container is null || !container.HasRealPageGrid || !container.IsFragmenting
-                || _flexBox.Display == CssConstants.InlineFlex)
+                || _flexBox.DerivedStyle.ActualDisplay == CssConstants.InlineFlex)
             {
                 return;
             }
@@ -1217,7 +1217,7 @@ namespace PeachPDF.Html.Core.Dom
             // The same liveness gate RelocateLinesAcrossFragmentainers uses, for the same reason: outside
             // it this container's own coordinates are provisional, belonging to whatever is measuring it.
             if (container is null || !container.HasRealPageGrid || !container.IsFragmenting
-                || _flexBox.Display == CssConstants.InlineFlex)
+                || _flexBox.DerivedStyle.ActualDisplay == CssConstants.InlineFlex)
             {
                 return;
             }
@@ -1532,7 +1532,7 @@ namespace PeachPDF.Html.Core.Dom
             string? savedDisplay = null;
             if (box.IsInline)
             {
-                savedDisplay = box.Display;
+                savedDisplay = box.DerivedStyle.ActualDisplay;
                 box.Display  = CssConstants.Block;
             }
 

@@ -855,7 +855,7 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private static void EnsureListItemMarkers(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null)
         {
-            if (box.Display == CssConstants.ListItem && !box.Boxes.Any(b => b.IsMarkerPseudoElement))
+            if (box.DerivedStyle.ActualDisplay == CssConstants.ListItem && !box.Boxes.Any(b => b.IsMarkerPseudoElement))
             {
                 var markerBox = new CssBoxMarker(box);
                 box.Boxes.Remove(markerBox);
@@ -946,7 +946,7 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         private static bool IsFirstLetterScopeBoundary(CssBox box) =>
-            box.Display is CssConstants.Block or CssConstants.Table or CssConstants.TableRow
+            box.DerivedStyle.ActualDisplay is CssConstants.Block or CssConstants.Table or CssConstants.TableRow
                 or CssConstants.TableRowGroup or CssConstants.TableCell or CssConstants.ListItem
                 or CssConstants.Flex or CssConstants.InlineBlock or CssConstants.InlineTable
                 or CssConstants.InlineFlex or CssConstants.Grid or CssConstants.InlineGrid;
@@ -1757,7 +1757,7 @@ namespace PeachPDF.Html.Core.Parse
             for (int i = box.Boxes.Count - 1; i >= 0; i--)
             {
                 var childBox = box.Boxes[i];
-                if (childBox is CssBoxImage or CssBoxSvg && childBox.Display == CssConstants.Block)
+                if (childBox is CssBoxImage or CssBoxSvg && childBox.DerivedStyle.ActualDisplay == CssConstants.Block)
                 {
                     var block = CssBox.CreateBlock(childBox.ParentBox!, null, childBox);
                     childBox.ParentBox = block;
@@ -1856,7 +1856,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the box that has the problem</param>
         private static CssBox? CorrectBlockInsideInlineImp(CssBox box)
         {
-            if (box.Display == CssConstants.Inline)
+            if (box.DerivedStyle.ActualDisplay == CssConstants.Inline)
                 box.Display = CssConstants.Block;
 
             if (box.Boxes.Count > 1 || box.Boxes[0].Boxes.Count > 1)
@@ -1885,7 +1885,7 @@ namespace PeachPDF.Html.Core.Parse
 
                 return tempRightBox;
             }
-            else if (box.Boxes[0].Display == CssConstants.Inline)
+            else if (box.Boxes[0].DerivedStyle.ActualDisplay == CssConstants.Inline)
             {
                 box.Boxes[0].Display = CssConstants.Block;
             }
@@ -2015,7 +2015,7 @@ namespace PeachPDF.Html.Core.Parse
             // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
             // (and restructure) them. See CssBoxSvg / issue #159.
             if (box is CssBoxSvg) return;
-            if (box is { Display: CssConstants.Inline, Position: CssConstants.Absolute })
+            if (box is { DerivedStyle.ActualDisplay: CssConstants.Inline, Position: CssConstants.Absolute })
             {
                 var blockBox = new CssBox(box.ParentBox, null);
                 blockBox.Display = CssConstants.Block;
@@ -2082,7 +2082,7 @@ namespace PeachPDF.Html.Core.Parse
         private static void CorrectAnonymousTablesRemoveIrrelevantBoxes(CssBox box)
         {
             // 1.1 All child boxes of a 'table-column' parent are treated as if they had 'display: none'
-            if (box.Display is CssConstants.TableColumn)
+            if (box.DerivedStyle.ActualDisplay is CssConstants.TableColumn)
             {
                 foreach (var childBox in box.Boxes)
                 {
@@ -2095,7 +2095,7 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             // 1.2 If a child C of a 'table-column-group' parent is not a 'table-column' box, then it is treated as if it had 'display: none'.
-            if (box.ParentBox?.Display is CssConstants.TableColumnGroup && box.Display is not CssConstants.TableColumn)
+            if (box.ParentBox?.DerivedStyle.ActualDisplay is CssConstants.TableColumnGroup && box.DerivedStyle.ActualDisplay is not CssConstants.TableColumn)
             {
 #if DEBUG
                 Console.WriteLine($"dom: set child box {box.Id} to display:none if parent is table-column-group and child is not table-column");
@@ -2111,7 +2111,7 @@ namespace PeachPDF.Html.Core.Parse
         private static void CorrectAnonymousTablesGenerateMissingChildWrappers(CssBox box)
         {
             // 2.1 If a child C of a 'table' or 'inline-table' box is not a proper table child, then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are not proper table children.
-            if (box.ParentBox?.Display is CssConstants.Table)
+            if (box.ParentBox?.DerivedStyle.ActualDisplay is CssConstants.Table)
             {
                 if (!DomUtils.IsProperTableChild(box))
                 {
@@ -2139,14 +2139,14 @@ namespace PeachPDF.Html.Core.Parse
             // 2.2 If a child C of a row group box is not a 'table-row' box, then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are not 'table-row' boxes.
             if (box.ParentBox?.IsTableRowGroupBox ?? false)
             {
-                if (box.Display is not CssConstants.TableRow)
+                if (box.DerivedStyle.ActualDisplay is not CssConstants.TableRow)
                 {
 #if DEBUG
                     Console.WriteLine($"dom: if box {box.Id} is not a table row and parent is a table row group box, then generate table-row around element");
 #endif
 
                     var followingMatchingSiblings =
-                        DomUtils.GetFollowingSiblings(box, sibling => sibling.Display is not CssConstants.TableRow, true)
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is not CssConstants.TableRow, true)
                             .ToList();
 
                     var tableRowBox = new CssBox(box.ParentBox, null);
@@ -2159,9 +2159,9 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             // 2.3 If a child C of a 'table-row' box is not a 'table-cell', then generate an anonymous 'table-cell' box around C and all consecutive siblings of C that are not 'table-cell' boxes.
-            if (box.ParentBox?.Display is CssConstants.TableRow)
+            if (box.ParentBox?.DerivedStyle.ActualDisplay is CssConstants.TableRow)
             {
-                if (box.Display is not CssConstants.TableCell)
+                if (box.DerivedStyle.ActualDisplay is not CssConstants.TableCell)
                 {
 
 #if DEBUG
@@ -2169,7 +2169,7 @@ namespace PeachPDF.Html.Core.Parse
 #endif
 
                     var followingMatchingSiblings =
-                        DomUtils.GetFollowingSiblings(box, sibling => sibling.Display is not CssConstants.TableCell, true)
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is not CssConstants.TableCell, true)
                             .ToList();
 
                     var tableCellBox = new CssBox(box.ParentBox, null);
@@ -2185,12 +2185,12 @@ namespace PeachPDF.Html.Core.Parse
         private static void CorrectAnonymousTablesGenerateMissingParents(CssBox box)
         {
             // 3.1 For each 'table-cell' box C in a sequence of consecutive internal table and 'table-caption' siblings, if C's parent is not a 'table-row' then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are 'table-cell' boxes.
-            if (box.Display is CssConstants.TableCell)
+            if (box.DerivedStyle.ActualDisplay is CssConstants.TableCell)
             {
-                if (box.ParentBox?.Display is not CssConstants.TableRow)
+                if (box.ParentBox?.DerivedStyle.ActualDisplay is not CssConstants.TableRow)
                 {
                     var followingMatchingSiblings =
-                        DomUtils.GetFollowingSiblings(box, sibling => sibling.Display is CssConstants.TableCell, true)
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is CssConstants.TableCell, true)
                             .ToList();
 
                     var tableRowBox = new CssBox(box.ParentBox, null);
@@ -2220,12 +2220,12 @@ namespace PeachPDF.Html.Core.Parse
                 // around cells under a `display:block` `<tr>`, lost their table box and silently dropped all
                 // content. That case only became reachable once author `display` could override table tags.)
                 var parent = box.ParentBox;
-                var parentIsTable = parent?.Display is CssConstants.Table or CssConstants.InlineTable;
+                var parentIsTable = parent?.DerivedStyle.ActualDisplay is CssConstants.Table or CssConstants.InlineTable;
 
-                var isMisparented = parent is null || box.Display switch
+                var isMisparented = parent is null || box.DerivedStyle.ActualDisplay switch
                 {
                     CssConstants.TableRow => !parentIsTable && !parent.IsTableRowGroupBox,
-                    CssConstants.TableColumn => !parentIsTable && parent.Display is not CssConstants.TableColumnGroup,
+                    CssConstants.TableColumn => !parentIsTable && parent.DerivedStyle.ActualDisplay is not CssConstants.TableColumnGroup,
                     _ => !parentIsTable // row group, table-column-group, or table-caption
                 };
 
@@ -2308,7 +2308,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the box to check</param>
         /// <returns>true - an atomic inline-level box with a layout path of its own, false - otherwise</returns>
         private static bool IsAtomicInlineLevel(CssBox box) =>
-            box.Display is CssConstants.InlineFlex;
+            box.DerivedStyle.ActualDisplay is CssConstants.InlineFlex;
 
         /// <summary>
         /// Check if the given box contains inline and block child boxes.

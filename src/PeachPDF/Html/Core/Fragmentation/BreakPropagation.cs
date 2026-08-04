@@ -186,7 +186,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// fragmentainer.
         /// </remarks>
         private static bool IsInFlow(CssBox box) =>
-            box.Display != CssConstants.None
+            box.DerivedStyle.ActualDisplay != CssConstants.None
             && box.Position is not (CssConstants.Absolute or CssConstants.Fixed)
             && !box.IsFloated
             && !CssBox.IsOutsideMarker(box);
