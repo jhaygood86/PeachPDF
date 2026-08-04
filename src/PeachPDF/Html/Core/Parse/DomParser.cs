@@ -35,6 +35,11 @@ namespace PeachPDF.Html.Core.Parse
     /// </summary>
     internal sealed class DomParser
     {
+        /// <summary>The deprecated presentational <c>border</c> HTML attribute always resolves to a solid
+        /// border style - shared to avoid re-parsing the literal at each call site.</summary>
+        private static readonly CssProperty<LineStyle> SolidBorderStyle =
+            CssProperty<LineStyle>.FromValue(CssConstants.Solid, LineStyle.Solid);
+
         /// <summary>
         /// Parser for CSS
         /// </summary>
@@ -1441,7 +1446,7 @@ namespace PeachPDF.Html.Core.Parse
                         break;
                     case HtmlConstants.Border:
                         if (!string.IsNullOrEmpty(value) && value != "0")
-                            box.BorderLeftStyle = box.BorderTopStyle = box.BorderRightStyle = box.BorderBottomStyle = CssConstants.Solid;
+                            box.BorderLeftStyle = box.BorderTopStyle = box.BorderRightStyle = box.BorderBottomStyle = SolidBorderStyle;
                         box.BorderLeftWidth = box.BorderTopWidth = box.BorderRightWidth = box.BorderBottomWidth = TranslateLength(value);
 
                         if (tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
@@ -1451,7 +1456,7 @@ namespace PeachPDF.Html.Core.Parse
                         }
                         else
                         {
-                            box.BorderTopStyle = box.BorderLeftStyle = box.BorderRightStyle = box.BorderBottomStyle = CssConstants.Solid;
+                            box.BorderTopStyle = box.BorderLeftStyle = box.BorderRightStyle = box.BorderBottomStyle = SolidBorderStyle;
                         }
                         break;
                     case HtmlConstants.Bordercolor:
@@ -1609,7 +1614,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             SetForAllCells(table, cell =>
             {
-                cell.BorderLeftStyle = cell.BorderTopStyle = cell.BorderRightStyle = cell.BorderBottomStyle = CssConstants.Solid;
+                cell.BorderLeftStyle = cell.BorderTopStyle = cell.BorderRightStyle = cell.BorderBottomStyle = SolidBorderStyle;
                 cell.BorderLeftWidth = cell.BorderTopWidth = cell.BorderRightWidth = cell.BorderBottomWidth = border;
             });
         }

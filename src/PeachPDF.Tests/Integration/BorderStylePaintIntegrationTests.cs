@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -217,10 +218,10 @@ namespace PeachPDF.Tests.Integration
                 "<div id='b' style='width:40px; height:40px; border-width:4px; border-color:rgb(51,51,51); border-style: none solid'>x</div>"));
             var div = FindById(root, "b")!;
 
-            Assert.Equal(CssConstants.None, div.BorderTopStyle);
-            Assert.Equal(CssConstants.Solid, div.BorderRightStyle);
-            Assert.Equal(CssConstants.None, div.BorderBottomStyle);
-            Assert.Equal(CssConstants.Solid, div.BorderLeftStyle);
+            Assert.Equal(LineStyle.None, div.BorderTopStyle.Value);
+            Assert.Equal(LineStyle.Solid, div.BorderRightStyle.Value);
+            Assert.Equal(LineStyle.None, div.BorderBottomStyle.Value);
+            Assert.Equal(LineStyle.Solid, div.BorderLeftStyle.Value);
 
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, div, g);
@@ -280,6 +281,28 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("1em", div.BorderRightWidth);
             Assert.Equal("1em", div.BorderBottomWidth);
             Assert.Equal("1em", div.BorderLeftWidth);
+        }
+
+        // ─── deprecated presentational `border` HTML attribute always resolves solid ──
+        // DomParser.CascadeApplyStyles' HtmlConstants.Border case: a non-zero `border` attribute forces
+        // every side's style to solid (CssProperty<LineStyle>.FromValue(CssConstants.Solid, LineStyle.Solid)
+        // / the shared SolidBorderStyle constant). Only the plain-element path is covered here -
+        // ApplyTableBorder's TD-cascading path (SetForAllCells) was found, while writing this test, to
+        // already not actually reach the cells regardless of this PR's changes (the same pre-existing gap
+        // affects cellpadding/ApplyTablePadding, which uses the identical SetForAllCells mechanism) - a
+        // pre-existing issue unrelated to the border-style/LineStyle conversion, out of scope here and
+        // tracked separately (issue #636).
+
+        [Fact]
+        public async Task PresentationalBorderAttribute_OnAPlainElement_ForcesSolidOnAllSides()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<div id='b' border='1'>x</div>"));
+            var div = FindById(root, "b")!;
+
+            Assert.Equal(LineStyle.Solid, div.BorderTopStyle.Value);
+            Assert.Equal(LineStyle.Solid, div.BorderRightStyle.Value);
+            Assert.Equal(LineStyle.Solid, div.BorderBottomStyle.Value);
+            Assert.Equal(LineStyle.Solid, div.BorderLeftStyle.Value);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

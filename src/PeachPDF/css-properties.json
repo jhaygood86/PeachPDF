@@ -372,96 +372,68 @@
       "name": "border-bottom-style",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "none",
-        "solid",
-        "hidden",
-        "dotted",
-        "dashed",
-        "double",
-        "groove",
-        "ridge",
-        "inset",
-        "outset"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "LineStyle",
+        "keywordMap": "Map.LineStyles",
+        "fallback": "LineStyle.None"
+      },
       "html": {
         "propertyPath": "BorderBottomStyle",
-        "csharpDataType": "string",
-        "area": "BorderArea"
+        "csharpDataType": "CssProperty<LineStyle>",
+        "area": "BorderArea",
+        "getterExpression": "{box}.BorderBottomStyle.ToString()"
       }
     },
     {
       "name": "border-left-style",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "none",
-        "solid",
-        "hidden",
-        "dotted",
-        "dashed",
-        "double",
-        "groove",
-        "ridge",
-        "inset",
-        "outset"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "LineStyle",
+        "keywordMap": "Map.LineStyles",
+        "fallback": "LineStyle.None"
+      },
       "html": {
         "propertyPath": "BorderLeftStyle",
-        "csharpDataType": "string",
-        "area": "BorderArea"
+        "csharpDataType": "CssProperty<LineStyle>",
+        "area": "BorderArea",
+        "getterExpression": "{box}.BorderLeftStyle.ToString()"
       }
     },
     {
       "name": "border-right-style",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "none",
-        "solid",
-        "hidden",
-        "dotted",
-        "dashed",
-        "double",
-        "groove",
-        "ridge",
-        "inset",
-        "outset"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "LineStyle",
+        "keywordMap": "Map.LineStyles",
+        "fallback": "LineStyle.None"
+      },
       "html": {
         "propertyPath": "BorderRightStyle",
-        "csharpDataType": "string",
-        "area": "BorderArea"
+        "csharpDataType": "CssProperty<LineStyle>",
+        "area": "BorderArea",
+        "getterExpression": "{box}.BorderRightStyle.ToString()"
       }
     },
     {
       "name": "border-top-style",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "none",
-        "solid",
-        "hidden",
-        "dotted",
-        "dashed",
-        "double",
-        "groove",
-        "ridge",
-        "inset",
-        "outset"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "LineStyle",
+        "keywordMap": "Map.LineStyles",
+        "fallback": "LineStyle.None"
+      },
       "html": {
         "propertyPath": "BorderTopStyle",
-        "csharpDataType": "string",
-        "area": "BorderArea"
+        "csharpDataType": "CssProperty<LineStyle>",
+        "area": "BorderArea",
+        "getterExpression": "{box}.BorderTopStyle.ToString()"
       }
     },
     {
@@ -2222,8 +2194,13 @@
       "name": "row-gap",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": ["length", "keyword"],
-      "supportedValues": ["normal"],
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "normal"
+      ],
       "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "FlexRowGap",
@@ -2235,8 +2212,13 @@
       "name": "column-gap",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": ["length", "keyword"],
-      "supportedValues": ["normal"],
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "normal"
+      ],
       "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "FlexColumnGap",
@@ -2502,24 +2484,17 @@
       "name": "column-rule-style",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "none",
-        "solid",
-        "hidden",
-        "dotted",
-        "dashed",
-        "double",
-        "groove",
-        "ridge",
-        "inset",
-        "outset"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "LineStyle",
+        "keywordMap": "Map.LineStyles",
+        "fallback": "LineStyle.None"
+      },
       "html": {
         "propertyPath": "ColumnRuleStyle",
-        "csharpDataType": "string",
-        "area": "MultiColumnArea"
+        "csharpDataType": "CssProperty<LineStyle>",
+        "area": "MultiColumnArea",
+        "getterExpression": "{box}.ColumnRuleStyle.ToString()"
       }
     },
     {

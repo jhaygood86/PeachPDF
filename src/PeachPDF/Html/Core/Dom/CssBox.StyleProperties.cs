@@ -389,7 +389,8 @@ namespace PeachPDF.Html.Core.Dom
         protected void SetAllBorders(string? style = null, string? width = null, string? color = null)
         {
             if (style != null)
-                BorderLeftStyle = BorderTopStyle = BorderRightStyle = BorderBottomStyle = style;
+                BorderLeftStyle = BorderTopStyle = BorderRightStyle = BorderBottomStyle =
+                    CssProperty<LineStyle>.FromCssText(style, Map.LineStyles, LineStyle.None);
             if (width != null)
                 BorderLeftWidth = BorderTopWidth = BorderRightWidth = BorderBottomWidth = width;
             if (color != null)

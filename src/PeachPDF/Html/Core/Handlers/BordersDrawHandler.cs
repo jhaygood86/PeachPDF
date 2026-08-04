@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -58,19 +59,19 @@ namespace PeachPDF.Html.Core.Handlers
         {
             if (rect is not { Width: > 0, Height: > 0 }) return;
 
-            if (hasTopEdge && !(string.IsNullOrEmpty(box.BorderTopStyle) || box.BorderTopStyle == CssConstants.None || box.BorderTopStyle == CssConstants.Hidden) && box.ActualBorderTopWidth > 0)
+            if (hasTopEdge && box.BorderTopStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderTopWidth > 0)
             {
                 DrawBorder(Border.Top, box, g, rect, hasLeftEdge, hasRightEdge, true, hasBottomEdge);
             }
-            if (hasLeftEdge && !(string.IsNullOrEmpty(box.BorderLeftStyle) || box.BorderLeftStyle == CssConstants.None || box.BorderLeftStyle == CssConstants.Hidden) && box.ActualBorderLeftWidth > 0)
+            if (hasLeftEdge && box.BorderLeftStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderLeftWidth > 0)
             {
                 DrawBorder(Border.Left, box, g, rect, true, hasRightEdge, hasTopEdge, hasBottomEdge);
             }
-            if (hasBottomEdge && !(string.IsNullOrEmpty(box.BorderBottomStyle) || box.BorderBottomStyle == CssConstants.None || box.BorderBottomStyle == CssConstants.Hidden) && box.ActualBorderBottomWidth > 0)
+            if (hasBottomEdge && box.BorderBottomStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderBottomWidth > 0)
             {
                 DrawBorder(Border.Bottom, box, g, rect, hasLeftEdge, hasRightEdge, hasTopEdge, true);
             }
-            if (hasRightEdge && !(string.IsNullOrEmpty(box.BorderRightStyle) || box.BorderRightStyle == CssConstants.None || box.BorderRightStyle == CssConstants.Hidden) && box.ActualBorderRightWidth > 0)
+            if (hasRightEdge && box.BorderRightStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderRightWidth > 0)
             {
                 DrawBorder(Border.Right, box, g, rect, hasLeftEdge, true, hasTopEdge, hasBottomEdge);
             }
@@ -129,7 +130,7 @@ namespace PeachPDF.Html.Core.Handlers
             else
             {
                 // non rounded border
-                if (style is CssConstants.Inset or CssConstants.Outset or CssConstants.Solid)
+                if (style is LineStyle.Inset or LineStyle.Outset or LineStyle.Solid)
                 {
                     // Solid (like inset/outset) needs the mitered trapezoid, not a thick straight line
                     // spanning the box's full width/height: CSS2.1 8.5.3 draws each border edge as a
@@ -147,7 +148,7 @@ namespace PeachPDF.Html.Core.Handlers
                     SetInOutsetRectanglePoints(border, box, rect, isLineStart, isLineEnd, isBlockStart, isBlockEnd);
                     g.DrawPolygon(g.GetSolidBrush(color), _borderPts);
                 }
-                else if (style is CssConstants.Double or CssConstants.Groove or CssConstants.Ridge)
+                else if (style is LineStyle.Double or LineStyle.Groove or LineStyle.Ridge)
                 {
                     DrawDoubleOrGrooveRidgeBorder(border, box, g, rect, style, color);
                 }
@@ -244,7 +245,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// (groove/ridge), so this paints the two stripes directly with their own pens instead of
         /// going through <see cref="GetPen"/>.
         /// </summary>
-        private static void DrawDoubleOrGrooveRidgeBorder(Border border, CssBox box, RGraphics g, RRect rect, string style, RColor color)
+        private static void DrawDoubleOrGrooveRidgeBorder(Border border, CssBox box, RGraphics g, RRect rect, LineStyle style, RColor color)
         {
             var width = GetWidth(border, box);
 
@@ -253,7 +254,7 @@ namespace PeachPDF.Html.Core.Handlers
             RColor outerColor;
             RColor innerColor;
 
-            if (style == CssConstants.Double)
+            if (style == LineStyle.Double)
             {
                 outerWidth = innerWidth = Math.Max(1, Math.Floor(width / 3));
                 outerColor = innerColor = color;
@@ -265,8 +266,8 @@ namespace PeachPDF.Html.Core.Handlers
                 // UA-defined - the only spec-relevant property is that groove/ridge are visually
                 // distinct from each other and from solid/double/inset/outset.
                 outerWidth = innerWidth = width / 2;
-                outerColor = style == CssConstants.Groove ? Darken(color) : color;
-                innerColor = style == CssConstants.Groove ? color : Darken(color);
+                outerColor = style == LineStyle.Groove ? Darken(color) : color;
+                innerColor = style == LineStyle.Groove ? color : Darken(color);
             }
 
             var outerPen = g.GetPen(outerColor);
@@ -344,8 +345,8 @@ namespace PeachPDF.Html.Core.Handlers
                     if (rad.TRX > 0 || rad.TRY > 0 || rad.BRX > 0 || rad.BRY > 0)
                     {
                         path = g.GetGraphicsPath();
-                        bool noTop = b.BorderTopStyle == CssConstants.None || b.BorderTopStyle == CssConstants.Hidden;
-                        bool noBottom = b.BorderBottomStyle == CssConstants.None || b.BorderBottomStyle == CssConstants.Hidden;
+                        bool noTop = b.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden;
+                        bool noBottom = b.BorderBottomStyle.Value is LineStyle.None or LineStyle.Hidden;
                         path.Start(r.Right - b.ActualBorderRightWidth / 2 - (noTop ? rad.TRX : 0), r.Top + b.ActualBorderTopWidth / 2 + (noTop ? 0 : rad.TRY));
                         if ((rad.TRX > 0 || rad.TRY > 0) && noTop)
                             path.ArcTo(r.Right - b.ActualBorderLeftWidth / 2, r.Top + b.ActualBorderTopWidth / 2 + rad.TRY, rad.TRX, rad.TRY, RGraphicsPath.Corner.TopRight);
@@ -358,8 +359,8 @@ namespace PeachPDF.Html.Core.Handlers
                     if (rad.TLX > 0 || rad.TLY > 0 || rad.BLX > 0 || rad.BLY > 0)
                     {
                         path = g.GetGraphicsPath();
-                        bool noTop = b.BorderTopStyle == CssConstants.None || b.BorderTopStyle == CssConstants.Hidden;
-                        bool noBottom = b.BorderBottomStyle == CssConstants.None || b.BorderBottomStyle == CssConstants.Hidden;
+                        bool noTop = b.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden;
+                        bool noBottom = b.BorderBottomStyle.Value is LineStyle.None or LineStyle.Hidden;
                         path.Start(r.Left + b.ActualBorderLeftWidth / 2 + (noBottom ? rad.BLX : 0), r.Bottom - b.ActualBorderBottomWidth / 2 - (noBottom ? 0 : rad.BLY));
                         if ((rad.BLX > 0 || rad.BLY > 0) && noBottom)
                             path.ArcTo(r.Left + b.ActualBorderLeftWidth / 2, r.Bottom - b.ActualBorderBottomWidth / 2 - rad.BLY, rad.BLX, rad.BLY, RGraphicsPath.Corner.BottomLeft);
@@ -376,15 +377,15 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Get pen to be used for border draw respecting its style.
         /// </summary>
-        private static RPen GetPen(RGraphics g, string style, RColor color, double width)
+        private static RPen GetPen(RGraphics g, LineStyle style, RColor color, double width)
         {
             var p = g.GetPen(color);
             p.Width = width;
             p.DashStyle = style switch
             {
-                "solid" => RDashStyle.Solid,
-                "dotted" => RDashStyle.Dot,
-                "dashed" => RDashStyle.Dash,
+                LineStyle.Solid => RDashStyle.Solid,
+                LineStyle.Dotted => RDashStyle.Dot,
+                LineStyle.Dashed => RDashStyle.Dash,
                 // double/groove/ridge are handled by DrawDoubleOrGrooveRidgeBorder and never reach
                 // here for non-rounded borders; a rounded border with one of these styles falls back
                 // to a single solid-colored stroke here (GetRoundedBorderPath has no double/groove/
@@ -399,18 +400,18 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Get the border color for the given box border.
         /// </summary>
-        private static RColor GetColor(Border border, CssBox box, string style)
+        private static RColor GetColor(Border border, CssBox box, LineStyle style)
         {
             return border switch
             {
-                Border.Top => style == CssConstants.Inset ? Darken(box.ActualBorderTopColor) : box.ActualBorderTopColor,
-                Border.Right => style == CssConstants.Outset
+                Border.Top => style == LineStyle.Inset ? Darken(box.ActualBorderTopColor) : box.ActualBorderTopColor,
+                Border.Right => style == LineStyle.Outset
                     ? Darken(box.ActualBorderRightColor)
                     : box.ActualBorderRightColor,
-                Border.Bottom => style == CssConstants.Outset
+                Border.Bottom => style == LineStyle.Outset
                     ? Darken(box.ActualBorderBottomColor)
                     : box.ActualBorderBottomColor,
-                Border.Left => style == CssConstants.Inset
+                Border.Left => style == LineStyle.Inset
                     ? Darken(box.ActualBorderLeftColor)
                     : box.ActualBorderLeftColor,
                 _ => throw new ArgumentOutOfRangeException(nameof(border))
@@ -435,14 +436,14 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Get the border style for the given box border.
         /// </summary>
-        private static string GetStyle(Border border, CssBox box)
+        private static LineStyle GetStyle(Border border, CssBox box)
         {
             return border switch
             {
-                Border.Top => box.BorderTopStyle,
-                Border.Right => box.BorderRightStyle,
-                Border.Bottom => box.BorderBottomStyle,
-                Border.Left => box.BorderLeftStyle,
+                Border.Top => box.BorderTopStyle.Value,
+                Border.Right => box.BorderRightStyle.Value,
+                Border.Bottom => box.BorderBottomStyle.Value,
+                Border.Left => box.BorderLeftStyle.Value,
                 _ => throw new ArgumentOutOfRangeException(nameof(border))
             };
         }

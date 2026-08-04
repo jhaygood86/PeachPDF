@@ -568,10 +568,10 @@ namespace PeachPDF.Html.Core.Paint
         {
             var pen = g.GetPen(box.ActualColumnRuleColor);
             pen.Width = box.ActualColumnRuleWidth;
-            pen.DashStyle = box.ColumnRuleStyle switch
+            pen.DashStyle = box.ColumnRuleStyle.Value switch
             {
-                CssConstants.Dashed => RDashStyle.Dash,
-                CssConstants.Dotted => RDashStyle.Dot,
+                LineStyle.Dashed => RDashStyle.Dash,
+                LineStyle.Dotted => RDashStyle.Dot,
                 _ => RDashStyle.Solid,
             };
 

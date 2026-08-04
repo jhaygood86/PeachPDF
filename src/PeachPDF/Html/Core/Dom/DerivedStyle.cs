@@ -47,7 +47,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualBorderTopWidth)) return _actualBorderTopWidth;
 
                 _actualBorderTopWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderTopWidth, Owner);
-                if (string.IsNullOrEmpty(Style.Border.BorderTopStyle) || Style.Border.BorderTopStyle == CssConstants.None)
+                if (Style.Border.BorderTopStyle.Value == LineStyle.None)
                     _actualBorderTopWidth = 0f;
 
                 return _actualBorderTopWidth;
@@ -61,7 +61,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualBorderRightWidth)) return _actualBorderRightWidth;
 
                 _actualBorderRightWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderRightWidth, Owner);
-                if (string.IsNullOrEmpty(Style.Border.BorderRightStyle) || Style.Border.BorderRightStyle == CssConstants.None)
+                if (Style.Border.BorderRightStyle.Value == LineStyle.None)
                     _actualBorderRightWidth = 0f;
 
                 return _actualBorderRightWidth;
@@ -75,7 +75,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualBorderBottomWidth)) return _actualBorderBottomWidth;
 
                 _actualBorderBottomWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderBottomWidth, Owner);
-                if (string.IsNullOrEmpty(Style.Border.BorderBottomStyle) || Style.Border.BorderBottomStyle == CssConstants.None)
+                if (Style.Border.BorderBottomStyle.Value == LineStyle.None)
                     _actualBorderBottomWidth = 0f;
 
                 return _actualBorderBottomWidth;
@@ -89,7 +89,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualBorderLeftWidth)) return _actualBorderLeftWidth;
 
                 _actualBorderLeftWidth = CssValueParser.GetActualBorderWidth(Style.Border.BorderLeftWidth, Owner);
-                if (string.IsNullOrEmpty(Style.Border.BorderLeftStyle) || Style.Border.BorderLeftStyle == CssConstants.None)
+                if (Style.Border.BorderLeftStyle.Value == LineStyle.None)
                     _actualBorderLeftWidth = 0f;
 
                 return _actualBorderLeftWidth;
@@ -104,7 +104,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (!double.IsNaN(_actualColumnRuleWidth)) return _actualColumnRuleWidth;
 
                 _actualColumnRuleWidth = CssValueParser.GetActualBorderWidth(Style.MultiColumn.ColumnRuleWidth, Owner);
-                if (string.IsNullOrEmpty(Style.MultiColumn.ColumnRuleStyle) || Style.MultiColumn.ColumnRuleStyle == CssConstants.None)
+                if (Style.MultiColumn.ColumnRuleStyle.Value == LineStyle.None)
                     _actualColumnRuleWidth = 0f;
 
                 return _actualColumnRuleWidth;
