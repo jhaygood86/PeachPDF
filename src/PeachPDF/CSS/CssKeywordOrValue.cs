@@ -64,9 +64,13 @@ namespace PeachPDF.CSS
             if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
                 return CssProperty<CssKeywordOrValue<TEnum, TValue>>.Unresolved(value);
 
-            if (keywordMap.TryGetValue(value.Trim(), out var keyword))
+            var trimmed = value.Trim();
+            if (keywordMap.TryGetValue(trimmed, out var keyword))
+                // Stored canonicalized (lowercase), not the raw input, mirroring CssProperty<T>.FromCssText's
+                // own reasoning (issue #598) - ToString() must round-trip to the canonical spelling
+                // regardless of how the keyword side of this union was cased.
                 return CssProperty<CssKeywordOrValue<TEnum, TValue>>.FromValue(
-                    value, new CssKeywordOrValue<TEnum, TValue>(keyword, null));
+                    trimmed.ToLowerInvariant(), new CssKeywordOrValue<TEnum, TValue>(keyword, null));
 
             if (tryParseValue(value, out var parsed))
                 return CssProperty<CssKeywordOrValue<TEnum, TValue>>.FromValue(
