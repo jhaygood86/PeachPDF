@@ -46,6 +46,22 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Absolute_InlineGrid_BlockifiesToGrid()
+        {
+            var box = await FindByIdAsync(
+                "<div id='t' style='display:inline-grid; position:absolute'></div>", "t");
+            Assert.Equal(DisplayMode.Grid, box.Display.Value);
+        }
+
+        [Fact]
+        public async Task Fixed_InlineTable_BlockifiesToTable()
+        {
+            var box = await FindByIdAsync(
+                "<div id='t' style='display:inline-table; position:fixed'></div>", "t");
+            Assert.Equal(DisplayMode.Table, box.Display.Value);
+        }
+
+        [Fact]
         public async Task Static_InlineBlock_IsNotBlockified()
         {
             // A static (non-positioned) box keeps its inline-level display.
