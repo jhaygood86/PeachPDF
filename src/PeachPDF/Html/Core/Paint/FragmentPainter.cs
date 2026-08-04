@@ -76,7 +76,7 @@ namespace PeachPDF.Html.Core.Paint
 
             try
             {
-                if (box.DerivedStyle.ActualDisplay == CssConstants.None || box.Visibility != CssConstants.Visible) return;
+                if (box.DerivedStyle.ActualDisplay == CssConstants.None || box.Visibility.Value != Visibility.Visible) return;
 
                 // use initial clip to draw blocks with Position = fixed. I.e. ignore page margins
                 if (box.Position == CssConstants.Fixed)

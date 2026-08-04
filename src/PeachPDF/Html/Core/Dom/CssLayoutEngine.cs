@@ -400,7 +400,7 @@ namespace PeachPDF.Html.Core.Dom
             blockBox.ActualBottom = coordinates.MaxBottom + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
 
             // handle limiting block height when overflow is hidden
-            if (blockBox.Height != CssConstants.Auto && blockBox.Overflow == CssConstants.Hidden && blockBox.ActualBottom - blockBox.Location.Y > blockBox.ActualHeight)
+            if (blockBox.Height != CssConstants.Auto && blockBox.Overflow.Value == Overflow.Hidden && blockBox.ActualBottom - blockBox.Location.Y > blockBox.ActualHeight)
             {
                 blockBox.ActualBottom = blockBox.Location.Y + blockBox.ActualHeight + blockBox.ActualPaddingBottom + blockBox.ActualPaddingTop;
             }
@@ -482,7 +482,7 @@ namespace PeachPDF.Html.Core.Dom
 
         public static void FloatBox(CssBox box)
         {
-            if (box is { Float: CssConstants.None, Clear: CssConstants.None })
+            if (box is { Float.Value: Floating.None, Clear.Value: ClearMode.None })
             {
                 return;
             }
@@ -497,17 +497,17 @@ namespace PeachPDF.Html.Core.Dom
 
             var currentBoxIdx = containingBox.Boxes.IndexOf(box);
 
-            switch (box.Float)
+            switch (box.Float.Value)
             {
-                case CssConstants.Left:
+                case Floating.Left:
                     FloatBoxLeft(box, startX, startY, limitRight);
                     break;
-                case CssConstants.Right:
+                case Floating.Right:
                     FloatBoxRight(box, startX, startY, limitRight);
                     break;
             }
 
-            if (box.Clear is not CssConstants.None)
+            if (box.Clear.Value is not ClearMode.None)
             {
                 ClearBox(box, currentBoxIdx, containingBox);
             }
@@ -1081,14 +1081,14 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var siblingBox = containingBox.Boxes[i];
 
-                clearance = Math.Max(clearance, GetClearance(siblingBox, box.Clear));
+                clearance = Math.Max(clearance, GetClearance(siblingBox, box.Clear.Value));
 
                 if (!siblingBox.IsFloated) continue;
 
-                switch (siblingBox.Float)
+                switch (siblingBox.Float.Value)
                 {
-                    case CssConstants.Left when box.Clear is CssConstants.Right:
-                    case CssConstants.Right when box.Clear is CssConstants.Left:
+                    case Floating.Left when box.Clear.Value is ClearMode.Right:
+                    case Floating.Right when box.Clear.Value is ClearMode.Left:
                         continue;
                 }
 
@@ -1104,7 +1104,7 @@ namespace PeachPDF.Html.Core.Dom
             box.Location = new RPoint(box.ClientLeft, clearance);
         }
 
-        private static double GetClearance(CssBox box, string clearPropValue)
+        private static double GetClearance(CssBox box, ClearMode clearPropValue)
         {
             var clearance = 0d;
 
@@ -1123,10 +1123,10 @@ namespace PeachPDF.Html.Core.Dom
                 // clearPropValue (the CLEARING box's own `clear` value, passed down through the
                 // recursion) - not box.Clear, which is the container being searched and is usually
                 // "none", never filtering anything.
-                switch (childBox.Float)
+                switch (childBox.Float.Value)
                 {
-                    case CssConstants.Left when clearPropValue is CssConstants.Right:
-                    case CssConstants.Right when clearPropValue is CssConstants.Left:
+                    case Floating.Left when clearPropValue is ClearMode.Right:
+                    case Floating.Right when clearPropValue is ClearMode.Left:
                         continue;
                 }
 
@@ -1153,16 +1153,16 @@ namespace PeachPDF.Html.Core.Dom
 
             do
             {
-                var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.Float);
+                var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.Float.Value);
 
                 if (intersectingFloat is null) break;
 
-                switch (intersectingFloat.Float)
+                switch (intersectingFloat.Float.Value)
                 {
-                    case CssConstants.Left:
+                    case Floating.Left:
                         coordinates.Left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight + box.ActualMarginLeft;
                         break;
-                    case CssConstants.Right:
+                    case Floating.Right:
                         coordinates.Right = intersectingFloat.Location.X - intersectingFloat.ActualMarginLeft;
                         break;
                 }
@@ -1198,16 +1198,16 @@ namespace PeachPDF.Html.Core.Dom
 
             do
             {
-                var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.Float);
+                var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.Float.Value);
 
                 if (intersectingFloat is null) break;
 
-                switch (intersectingFloat.Float)
+                switch (intersectingFloat.Float.Value)
                 {
-                    case CssConstants.Left:
+                    case Floating.Left:
                         coordinates.Left = intersectingFloat.ActualRight;
                         break;
-                    case CssConstants.Right:
+                    case Floating.Right:
                         coordinates.Right = intersectingFloat.Location.X;
                         break;
                 }
@@ -1381,7 +1381,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var wrapNoWrapBox = false;
 
-                    if (b.WhiteSpace == CssConstants.NoWrap && coordinates.CurrentX > lineStartX)
+                    if (b.WhiteSpace.Value == Whitespace.NoWrap && coordinates.CurrentX > lineStartX)
                     {
                         var boxRight = coordinates.CurrentX;
 
@@ -1431,9 +1431,9 @@ namespace PeachPDF.Html.Core.Dom
                                 coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak);
                         }
 
-                        var overflows = b.WhiteSpace != CssConstants.NoWrap && b.WhiteSpace != CssConstants.Pre
+                        var overflows = b.WhiteSpace.Value != Whitespace.NoWrap && b.WhiteSpace.Value != Whitespace.Pre
                                          && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight
-                                         && (b.WhiteSpace != CssConstants.PreWrap || !word.IsSpaces);
+                                         && (b.WhiteSpace.Value != Whitespace.PreWrap || !word.IsSpaces);
 
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a
                         // cached candidate break point (from ParseToWords - either an explicit soft
@@ -1992,22 +1992,22 @@ namespace PeachPDF.Html.Core.Dom
             // owning box's own direction - the CSS-OM-visible value (box.TextAlign) stays exactly as
             // authored/defaulted; only this *used*-value resolution is direction-aware.
             var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
-            var textAlign = lineBox.OwnerBox.TextAlign switch
+            var textAlign = lineBox.OwnerBox.TextAlign.Value switch
             {
-                CssConstants.Start => isRtl ? CssConstants.Right : CssConstants.Left,
-                CssConstants.End => isRtl ? CssConstants.Left : CssConstants.Right,
+                HorizontalAlignment.Start => isRtl ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                HorizontalAlignment.End => isRtl ? HorizontalAlignment.Left : HorizontalAlignment.Right,
                 var other => other
             };
 
             switch (textAlign)
             {
-                case CssConstants.Right:
+                case HorizontalAlignment.Right:
                     ApplyRightAlignment(lineBox);
                     break;
-                case CssConstants.Center:
+                case HorizontalAlignment.Center:
                     ApplyCenterAlignment(lineBox);
                     break;
-                case CssConstants.Justify:
+                case HorizontalAlignment.Justify:
                     ApplyJustifyAlignment(lineBox, blockFinished);
                     break;
             }

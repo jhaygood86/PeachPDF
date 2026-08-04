@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -107,7 +108,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             // Assert - Check that styles are inherited
             Assert.Equal(CssConstants.TableHeaderGroup, proxy.Display);
-            Assert.Equal("visible", proxy.Visibility);
+            Assert.Equal(Visibility.Visible, proxy.Visibility.Value);
             _output.WriteLine($"Proxy BackgroundColor: {proxy.BackgroundColor}");
         }
 

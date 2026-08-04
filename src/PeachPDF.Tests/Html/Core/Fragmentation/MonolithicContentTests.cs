@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Utils;
@@ -75,7 +76,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         {
             var box = await BoxOfTag($"{tag} {{ overflow: hidden }}", tag);
 
-            Assert.Equal(CssConstants.Hidden, box.Overflow);
+            Assert.Equal(Overflow.Hidden, box.Overflow.Value);
             Assert.False(MonolithicContent.IsScrollContainer(box));
             Assert.False(MonolithicContent.IsMonolithic(box));
         }

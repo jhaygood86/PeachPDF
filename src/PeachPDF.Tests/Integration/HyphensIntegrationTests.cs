@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -13,21 +14,21 @@ namespace PeachPDF.Tests.Integration
         public async Task Hyphens_DefaultsToManual()
         {
             var box = await FindByIdAsync("<p id='p'>text</p>");
-            Assert.Equal("manual", box.Hyphens);
+            Assert.Equal(Hyphens.Manual, box.Hyphens.Value);
         }
 
         [Fact]
         public async Task Hyphens_ParsesNone()
         {
             var box = await FindByIdAsync("<p id='p' style='hyphens:none'>text</p>");
-            Assert.Equal("none", box.Hyphens);
+            Assert.Equal(Hyphens.None, box.Hyphens.Value);
         }
 
         [Fact]
         public async Task Hyphens_ParsesAuto()
         {
             var box = await FindByIdAsync("<p id='p' style='hyphens:auto'>text</p>");
-            Assert.Equal("auto", box.Hyphens);
+            Assert.Equal(Hyphens.Auto, box.Hyphens.Value);
         }
 
         [Fact]
@@ -36,7 +37,7 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap("<div style='hyphens:none'><p id='p'>text</p></div>");
             var (root, _) = await BuildAndLayout(html);
             var box = FindById(root, "p")!;
-            Assert.Equal("none", box.Hyphens);
+            Assert.Equal(Hyphens.None, box.Hyphens.Value);
         }
 
         [Fact]

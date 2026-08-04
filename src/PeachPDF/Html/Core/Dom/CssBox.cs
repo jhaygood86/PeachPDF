@@ -299,7 +299,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public bool IsBlock => DerivedStyle.ActualDisplay == CssConstants.Block;
 
-        public bool IsFloated => Float is CssConstants.Left or CssConstants.Right;
+        public bool IsFloated => Float.Value is Floating.Left or Floating.Right;
 
         public bool IsOutOfFlow => IsFloated || Position is CssConstants.Absolute or CssConstants.Fixed;
 
@@ -766,8 +766,8 @@ namespace PeachPDF.Html.Core.Dom
 
             var text = ApplyTextTransform(_text!, TextTransform);
             var startIdx = 0;
-            var preserveSpaces = WhiteSpace is CssConstants.Pre or CssConstants.PreWrap;
-            var respectNewLines = preserveSpaces || WhiteSpace == CssConstants.PreLine || IsBrElement;
+            var preserveSpaces = WhiteSpace.Value is Whitespace.Pre or Whitespace.PreWrap;
+            var respectNewLines = preserveSpaces || WhiteSpace.Value == Whitespace.PreLine || IsBrElement;
 
             // Only ever null for text set after CssBidiParagraphResolver.AssignBidiLevels already ran
             // (e.g. DomParser.CorrectLineBreaksBlocks' synthetic "\n" for a standalone <br>) - one level
@@ -808,7 +808,7 @@ namespace PeachPDF.Html.Core.Dom
                         // with a known document language, HyphenationEngine's own suggested positions)
                         // is instead recorded as a candidate on the whole word and consulted only when
                         // CssLayoutEngine.FlowBox actually needs to break the line - see AddWord.
-                        var honorSoftHyphen = Hyphens != CssConstants.None;
+                        var honorSoftHyphen = Hyphens.Value != PeachPDF.CSS.Hyphens.None;
 
                         // Scan by whole codepoint (Rune), not UTF-16 code unit, so an astral character (an
                         // emoji, a CJK Extension-B ideograph, etc.) is never split across its surrogate pair -
@@ -819,7 +819,7 @@ namespace PeachPDF.Html.Core.Dom
                         {
                             Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
                             if (HtmlUtils.IsCollapsibleWhitespace(text[endIdx]) || text[endIdx] == '-'
-                                || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(rune))
+                                || WordBreak.Value == PeachPDF.CSS.WordBreak.BreakAll || CommonUtils.IsAsianCharacter(rune))
                                 break;
                             endIdx += runeLength;
                         }
@@ -827,7 +827,7 @@ namespace PeachPDF.Html.Core.Dom
                         if (endIdx < text.Length)
                         {
                             Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
-                            if (text[endIdx] == '-' || WordBreak == CssConstants.BreakAll || CommonUtils.IsAsianCharacter(rune))
+                            if (text[endIdx] == '-' || WordBreak.Value == PeachPDF.CSS.WordBreak.BreakAll || CommonUtils.IsAsianCharacter(rune))
                                 endIdx += runeLength;
                         }
 
@@ -874,7 +874,7 @@ namespace PeachPDF.Html.Core.Dom
                                 cleanWord = rawWord;
                                 cleanOriginalWord = rawOriginalWord;
 
-                                if (Hyphens == CssConstants.Auto)
+                                if (Hyphens.Value == PeachPDF.CSS.Hyphens.Auto)
                                 {
                                     var language = HtmlContainer?.DocumentLanguage;
                                     if (!string.IsNullOrEmpty(language))
@@ -1171,28 +1171,28 @@ namespace PeachPDF.Html.Core.Dom
         /// input - callers rely on word/whitespace boundary indices computed against the transformed
         /// text remaining valid.
         /// </summary>
-        private static string ApplyTextTransform(string text, string transform)
+        private static string ApplyTextTransform(string text, CssProperty<TextTransform> transform)
         {
             if (string.IsNullOrEmpty(text))
                 return text;
 
-            switch (transform)
+            switch (transform.Value)
             {
-                case CssConstants.Uppercase:
+                case PeachPDF.CSS.TextTransform.Uppercase:
                 {
                     var chars = text.ToCharArray();
                     for (var i = 0; i < chars.Length; i++)
                         chars[i] = char.ToUpperInvariant(chars[i]);
                     return new string(chars);
                 }
-                case CssConstants.Lowercase:
+                case PeachPDF.CSS.TextTransform.Lowercase:
                 {
                     var chars = text.ToCharArray();
                     for (var i = 0; i < chars.Length; i++)
                         chars[i] = char.ToLowerInvariant(chars[i]);
                     return new string(chars);
                 }
-                case CssConstants.Capitalize:
+                case PeachPDF.CSS.TextTransform.Capitalize:
                 {
                     var chars = text.ToCharArray();
                     var atWordStart = true;
@@ -5048,7 +5048,7 @@ namespace PeachPDF.Html.Core.Dom
             double? oldPaddingSum = null;
 
             // not inline (block) boxes start a new line so we need to reset the max sum
-            if (box.DerivedStyle.ActualDisplay != CssConstants.Inline && box.DerivedStyle.ActualDisplay != CssConstants.TableCell && box.WhiteSpace != CssConstants.NoWrap)
+            if (box.DerivedStyle.ActualDisplay != CssConstants.Inline && box.DerivedStyle.ActualDisplay != CssConstants.TableCell && box.WhiteSpace.Value != Whitespace.NoWrap)
             {
                 oldSum = maxSum;
                 maxSum = marginSum;
@@ -5130,7 +5130,7 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         var explicitContentWidth = CssValueParser.ParseLength(childBox.Width, 0, childBox);
                         var childStartsNewLine = childBox.DerivedStyle.ActualDisplay != CssConstants.Inline
-                            && childBox.DerivedStyle.ActualDisplay != CssConstants.TableCell && childBox.WhiteSpace != CssConstants.NoWrap;
+                            && childBox.DerivedStyle.ActualDisplay != CssConstants.TableCell && childBox.WhiteSpace.Value != Whitespace.NoWrap;
                         maxSum = childStartsNewLine
                             ? Math.Max(maxSum, explicitContentWidth)
                             : Math.Max(maxSum, maxSumBeforeChild + explicitContentWidth);
@@ -5364,11 +5364,11 @@ namespace PeachPDF.Html.Core.Dom
             var current = this;
             // Capped defensively (real documents never nest this deep) so a malformed/cyclic box tree
             // degrades to "stop extending the group" instead of hanging or overflowing the stack.
-            while (chainMembers.Count < 1000 && current.Overflow == CssConstants.Visible &&
+            while (chainMembers.Count < 1000 && current.Overflow.Value == PeachPDF.CSS.Overflow.Visible &&
                    current.ActualBorderTopWidth < 0.1 && current.ActualPaddingTop < 0.1)
             {
                 var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsOutOfFlow && b.DerivedStyle.ActualDisplay != CssConstants.None);
-                if (firstInFlowChild == null || firstInFlowChild.Clear != CssConstants.None || firstInFlowChild == current) break;
+                if (firstInFlowChild == null || firstInFlowChild.Clear.Value != ClearMode.None || firstInFlowChild == current) break;
 
                 margins.Fold(firstInFlowChild.ActualMarginTop);
                 chainMembers.Add(firstInFlowChild);
@@ -5487,7 +5487,7 @@ namespace PeachPDF.Html.Core.Dom
             var heightIsAuto = Height == CssConstants.Auto ||
                 (Height.EndsWith('%') && !ContainingBlock.IsHeightCalculated);
             if (!heightIsAuto) return false;
-            if (Overflow != CssConstants.Visible) return false;
+            if (Overflow.Value != PeachPDF.CSS.Overflow.Visible) return false;
             if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;
             if (!(ActualBorderTopWidth < 0.1) || !(ActualBorderBottomWidth < 0.1)) return false;
             // A box with real text content (e.g. an anonymous text-node box) is not empty even when it
@@ -5601,7 +5601,7 @@ namespace PeachPDF.Html.Core.Dom
             if (ParentBox == null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
                 !(_parentBox!.ActualMarginBottom < 0.1) ||
                 !(ActualPaddingBottom < 0.1) || !(ActualBorderBottomWidth < 0.1) ||
-                Overflow != CssConstants.Visible)
+                Overflow.Value != PeachPDF.CSS.Overflow.Visible)
                 return Math.Max(ActualBottom,
                     lastNonFloatingBox.StaticBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
 

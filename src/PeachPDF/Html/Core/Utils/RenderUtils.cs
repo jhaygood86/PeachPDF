@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -62,7 +63,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         private static bool TryPushOverflowClip(RGraphics g, CssBox overflowBox, double originY)
         {
-            if (overflowBox.Overflow != CssConstants.Hidden) return false;
+            if (overflowBox.Overflow.Value != Overflow.Hidden) return false;
 
             var prevClip = g.GetClip();
             var rect = PaddingEdgeOf(overflowBox, overflowBox.Bounds);

@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 
@@ -29,7 +30,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [InlineData(CssConstants.InlineGrid, CssConstants.Grid)]
         public void ActualDisplay_OnAFloatedBox_BlockifiesInlineLevelAndTableInternalValues(string display, string expected)
         {
-            var box = new CssBox(null, null) { Display = display, Float = CssConstants.Left };
+            var box = new CssBox(null, null) { Display = display, Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left) };
 
             Assert.Equal(expected, box.DerivedStyle.ActualDisplay);
         }
@@ -42,7 +43,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [InlineData(CssConstants.None)]
         public void ActualDisplay_OnAFloatedBox_LeavesAlreadyBlockLevelValuesUnchanged(string display)
         {
-            var box = new CssBox(null, null) { Display = display, Float = CssConstants.Left };
+            var box = new CssBox(null, null) { Display = display, Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left) };
 
             Assert.Equal(display, box.DerivedStyle.ActualDisplay);
         }
@@ -50,7 +51,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public void ActualDisplay_OnAnUnfloatedBox_ReturnsTheRawCascadedKeywordUnchanged()
         {
-            var box = new CssBox(null, null) { Display = CssConstants.Inline, Float = CssConstants.None };
+            var box = new CssBox(null, null) { Display = CssConstants.Inline, Float = CssProperty<Floating>.FromValue(CssConstants.None, Floating.None) };
 
             Assert.Equal(CssConstants.Inline, box.DerivedStyle.ActualDisplay);
         }
@@ -58,7 +59,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public void Display_OnAFloatedBox_StaysTheRawCascadedKeyword_NotBlockified()
         {
-            var box = new CssBox(null, null) { Display = CssConstants.Inline, Float = CssConstants.Right };
+            var box = new CssBox(null, null) { Display = CssConstants.Inline, Float = CssProperty<Floating>.FromValue(CssConstants.Right, Floating.Right) };
 
             Assert.Equal(CssConstants.Inline, box.Display);
             Assert.Equal(CssConstants.Block, box.DerivedStyle.ActualDisplay);

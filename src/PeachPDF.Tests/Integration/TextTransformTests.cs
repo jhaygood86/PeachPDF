@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -147,7 +148,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("uppercase", child!.TextTransform);
+            Assert.Equal(TextTransform.Uppercase, child!.TextTransform.Value);
         }
 
         [Fact]
@@ -165,7 +166,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("none", child!.TextTransform);
+            Assert.Equal(TextTransform.None, child!.TextTransform.Value);
         }
 
         [Fact]
@@ -184,7 +185,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("uppercase", child!.TextTransform);
+            Assert.Equal(TextTransform.Uppercase, child!.TextTransform.Value);
         }
 
         // ── helpers ───────────────────────────────────────────────────────────

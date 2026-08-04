@@ -289,7 +289,7 @@ namespace PeachPDF.Html.Core.Utils
         {
             if (box == null) return null;
 
-            if ((visible && box.Visibility != CssConstants.Visible) ||
+            if ((visible && box.Visibility.Value != Visibility.Visible) ||
                 (!box.Bounds.IsEmpty && !box.Bounds.Contains(location))) return null;
 
             foreach (var childBox in box.Boxes)
@@ -314,7 +314,7 @@ namespace PeachPDF.Html.Core.Utils
             {
                 case null:
                     return;
-                case { IsClickable: true, Visibility: CssConstants.Visible }:
+                case { IsClickable: true, Visibility.Value: Visibility.Visible }:
                     linkBoxes.Add(box);
                     break;
             }
@@ -370,7 +370,7 @@ namespace PeachPDF.Html.Core.Utils
             {
                 case null:
                     return null;
-                case { IsClickable: true, Visibility: CssConstants.Visible } when IsInBox(box, location):
+                case { IsClickable: true, Visibility.Value: Visibility.Visible } when IsInBox(box, location):
                     return box;
             }
 
@@ -488,7 +488,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <returns>css word box if exists or null</returns>
         public static CssRect? GetCssBoxWord(CssBox? box, RPoint location)
         {
-            if (box is not { Visibility: CssConstants.Visible }) return null;
+            if (box is not { Visibility.Value: Visibility.Visible }) return null;
 
             if (box.LineBoxes.Count > 0)
             {
@@ -577,7 +577,7 @@ namespace PeachPDF.Html.Core.Utils
             return false;
         }
 
-        public static CssBox? GetFirstIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, string floatProp)
+        public static CssBox? GetFirstIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, Floating floatProp)
         {
             var container = reference.HtmlContainer;
 
@@ -607,7 +607,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="coordinates">The area a float has to intersect to be returned.</param>
         /// <param name="floatProp">Which side's floats to look for.</param>
         /// <param name="boxesVisited">Accumulator, not an input: every box the walk examines is added to it.</param>
-        private static CssBox? FindIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, string floatProp, ref int boxesVisited)
+        private static CssBox? FindIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, Floating floatProp, ref int boxesVisited)
         {
             while (true)
             {
@@ -658,7 +658,7 @@ namespace PeachPDF.Html.Core.Utils
                     Right = coordinates.MaxRight
                 };
 
-                var intersectingFloat = GetFirstIntersectingFloatBox(box, floatCoordinates, CssConstants.Left);
+                var intersectingFloat = GetFirstIntersectingFloatBox(box, floatCoordinates, Floating.Left);
 
                 if (intersectingFloat is null)
                 {
@@ -692,7 +692,7 @@ namespace PeachPDF.Html.Core.Utils
                     Right = left + referenceWidth
                 };
 
-                var intersectingFloat = GetFirstIntersectingFloatBox(box, floatCoordinates, CssConstants.Left);
+                var intersectingFloat = GetFirstIntersectingFloatBox(box, floatCoordinates, Floating.Left);
 
                 if (intersectingFloat is null)
                 {
@@ -981,7 +981,7 @@ namespace PeachPDF.Html.Core.Utils
             return false;
         }
 
-        private static CssBox? GetNextIntersectingFloatBox(CssBox box, CssFloatCoordinates coordinates, string floatProp, ref int boxesVisited)
+        private static CssBox? GetNextIntersectingFloatBox(CssBox box, CssFloatCoordinates coordinates, Floating floatProp, ref int boxesVisited)
         {
             boxesVisited++;
 
@@ -1002,7 +1002,7 @@ namespace PeachPDF.Html.Core.Utils
             return null;
         }
 
-        private static bool IsFloatIntersecting(CssFloatCoordinates coordinates, string floatProp, CssBox targetBox)
+        private static bool IsFloatIntersecting(CssFloatCoordinates coordinates, Floating floatProp, CssBox targetBox)
         {
             if (!targetBox.IsFloated) return false;
 
@@ -1016,8 +1016,8 @@ namespace PeachPDF.Html.Core.Utils
 
             switch (floatProp)
             {
-                case CssConstants.Left when targetRight > currentLeft && targetLeft <= currentLeft:
-                case CssConstants.Right when targetLeft > coordinates.FloatRightStartX + coordinates.MarginLeft + coordinates.ReferenceWidth + coordinates.MarginRight:
+                case Floating.Left when targetRight > currentLeft && targetLeft <= currentLeft:
+                case Floating.Right when targetLeft > coordinates.FloatRightStartX + coordinates.MarginLeft + coordinates.ReferenceWidth + coordinates.MarginRight:
                     return true;
                 default:
                     return false;

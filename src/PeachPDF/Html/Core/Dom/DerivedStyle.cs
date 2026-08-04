@@ -1112,7 +1112,7 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 var area = Style.DisplayPositioning;
-                if (area.Float is CssConstants.None) return area.Display;
+                if (area.Float.Value is Floating.None) return area.Display;
 
                 return area.Display switch
                 {

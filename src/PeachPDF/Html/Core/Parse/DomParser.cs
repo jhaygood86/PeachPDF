@@ -1411,11 +1411,11 @@ namespace PeachPDF.Html.Core.Parse
                             {
                                 case HtmlConstants.Left:
                                     box.VerticalAlign = CssConstants.Top;
-                                    box.Float = CssConstants.Left;
+                                    box.Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left);
                                     break;
                                 case HtmlConstants.Right:
                                     box.VerticalAlign = CssConstants.Top;
-                                    box.Float = CssConstants.Right;
+                                    box.Float = CssProperty<Floating>.FromValue(CssConstants.Right, Floating.Right);
                                     break;
                                 case HtmlConstants.Bottom:
                                     box.VerticalAlign = CssConstants.Baseline;
@@ -1431,7 +1431,7 @@ namespace PeachPDF.Html.Core.Parse
                         else
                         {
                             if (value is HtmlConstants.Left or HtmlConstants.Center or HtmlConstants.Right or HtmlConstants.Justify)
-                                box.TextAlign = value.ToLower();
+                                box.TextAlign = CssProperty<HorizontalAlignment>.FromCssText(value.ToLower(), Map.HorizontalAlignments, HorizontalAlignment.Start);
                             else
                                 box.VerticalAlign = value.ToLower();
 
@@ -1481,7 +1481,7 @@ namespace PeachPDF.Html.Core.Parse
                         box.MarginRight = box.MarginLeft = TranslateLength(value);
                         break;
                     case HtmlConstants.Nowrap:
-                        box.WhiteSpace = CssConstants.NoWrap;
+                        box.WhiteSpace = CssProperty<Whitespace>.FromValue(CssConstants.NoWrap, Whitespace.NoWrap);
                         break;
                     case HtmlConstants.Size:
                         if (tag.Name.Equals(HtmlConstants.Hr, StringComparison.OrdinalIgnoreCase))
@@ -1716,7 +1716,7 @@ namespace PeachPDF.Html.Core.Parse
                     keepBox = keepBox || childBox.IsBrElement;
 
                     // is the box is pre-formatted
-                    keepBox = keepBox || childBox.WhiteSpace == CssConstants.Pre || childBox.WhiteSpace == CssConstants.PreWrap;
+                    keepBox = keepBox || childBox.WhiteSpace.Value == Whitespace.Pre || childBox.WhiteSpace.Value == Whitespace.PreWrap;
 
                     // is the box is only one in the parent
                     keepBox = keepBox || box.Boxes.Count == 1;
