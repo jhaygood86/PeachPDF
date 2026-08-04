@@ -2006,104 +2006,88 @@
       "name": "flex-direction",
       "inherited": false,
       "initialValue": "row",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "row",
-        "row-reverse",
-        "column",
-        "column-reverse"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FlexDirection",
+        "keywordMap": "Map.FlexDirections",
+        "fallback": "FlexDirection.Row"
+      },
       "html": {
         "propertyPath": "FlexDirection",
-        "csharpDataType": "string",
-        "area": "FlexArea"
+        "csharpDataType": "CssProperty<FlexDirection>",
+        "area": "FlexArea",
+        "getterExpression": "{box}.FlexDirection.ToString()"
       }
     },
     {
       "name": "flex-wrap",
       "inherited": false,
       "initialValue": "nowrap",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "nowrap",
-        "wrap",
-        "wrap-reverse"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FlexWrap",
+        "keywordMap": "Map.FlexWraps",
+        "fallback": "FlexWrap.NoWrap"
+      },
       "html": {
         "propertyPath": "FlexWrap",
-        "csharpDataType": "string",
-        "area": "FlexArea"
+        "csharpDataType": "CssProperty<FlexWrap>",
+        "area": "FlexArea",
+        "getterExpression": "{box}.FlexWrap.ToString()"
       }
     },
     {
       "name": "justify-content",
+      "comment": "Map.JustifyContentKeywords is a dedicated cascade-only map, narrower than the legacy CSS-OM Map.JustifyContentOptions (which also accepts start/left/right/stretch) - CssLayoutEngineFlex.ComputeMainOffsets/CssLayoutEngineGrid.PositionTracks don't dispatch those, see .claude/accepted-gaps/justify-content-align-content-narrow-keyword-set.md.",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "normal",
-        "flex-start",
-        "flex-end",
-        "end",
-        "center",
-        "space-between",
-        "space-around",
-        "space-evenly"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "JustifyContent",
+        "keywordMap": "Map.JustifyContentKeywords",
+        "fallback": "JustifyContent.Normal"
+      },
       "html": {
         "propertyPath": "JustifyContent",
-        "csharpDataType": "string",
-        "area": "FlexArea"
+        "csharpDataType": "CssProperty<JustifyContent>",
+        "area": "FlexArea",
+        "getterExpression": "{box}.JustifyContent.ToString()"
       }
     },
     {
       "name": "align-items",
-      "comment": "supportedValues is the union of what CssLayoutEngineFlex's ComputeCrossOffsets and CssLayoutEngineGrid's ResolveSelfAlignment/AlignmentOffset each genuinely distinguish - align-items serves both layout modes and this entry can't tell which one a given box uses.",
+      "comment": "Map.AlignItemKeywords is a dedicated cascade-only map, narrower than the legacy CSS-OM Map.AlignItems (which also accepts self-start) - neither CssLayoutEngineFlex.ComputeCrossOffsets nor CssLayoutEngineGrid.AlignmentOffset distinguish self-start from start today, see .claude/accepted-gaps/align-items-align-self-missing-self-start.md. align-items serves both flex and grid layout modes and this entry can't tell which one a given box uses.",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "flex-start",
-        "flex-end",
-        "start",
-        "end",
-        "self-end",
-        "center",
-        "stretch",
-        "normal",
-        "baseline"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "AlignItem",
+        "keywordMap": "Map.AlignItemKeywords",
+        "fallback": "AlignItem.Normal"
+      },
       "html": {
         "propertyPath": "AlignItems",
-        "csharpDataType": "string",
-        "area": "FlexArea"
+        "csharpDataType": "CssProperty<AlignItem>",
+        "area": "FlexArea",
+        "getterExpression": "{box}.AlignItems.ToString()"
       }
     },
     {
       "name": "align-content",
+      "comment": "Map.AlignContentKeywords is a dedicated cascade-only map, narrower than the legacy CSS-OM Map.AlignContents (which also accepts start/baseline) - CssLayoutEngineFlex.DistributeCrossSpace/CssLayoutEngineGrid.PositionTracks don't dispatch those, see .claude/accepted-gaps/justify-content-align-content-narrow-keyword-set.md.",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "flex-start",
-        "flex-end",
-        "end",
-        "center",
-        "space-between",
-        "space-around",
-        "space-evenly",
-        "stretch",
-        "normal"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "AlignContent",
+        "keywordMap": "Map.AlignContentKeywords",
+        "fallback": "AlignContent.Normal"
+      },
       "html": {
         "propertyPath": "AlignContent",
-        "csharpDataType": "string",
-        "area": "FlexArea"
+        "csharpDataType": "CssProperty<AlignContent>",
+        "area": "FlexArea",
+        "getterExpression": "{box}.AlignContent.ToString()"
       }
     },
     {
@@ -2153,27 +2137,20 @@
     },
     {
       "name": "align-self",
-      "comment": "Same union as align-items, plus 'auto' (defers to the container's align-items, CssLayoutEngineFlex.ComputeCrossOffsets).",
+      "comment": "Same enum/narrow keyword set as align-items (see its own comment), plus 'auto' (Map.AlignSelfKeywords adds it to Map.AlignItemKeywords) - 'auto' defers to the container's align-items, resolved ad hoc at every read site in CssLayoutEngineFlex.ComputeCrossOffsets/CssLayoutEngineGrid.ResolveSelfAlignment rather than a DerivedStyle accessor.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "auto",
-        "flex-start",
-        "flex-end",
-        "start",
-        "end",
-        "self-end",
-        "center",
-        "stretch",
-        "normal",
-        "baseline"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "AlignItem",
+        "keywordMap": "Map.AlignSelfKeywords",
+        "fallback": "AlignItem.Auto"
+      },
       "html": {
         "propertyPath": "AlignSelf",
-        "csharpDataType": "string",
-        "area": "FlexArea"
+        "csharpDataType": "CssProperty<AlignItem>",
+        "area": "FlexArea",
+        "getterExpression": "{box}.AlignSelf.ToString()"
       }
     },
     {
@@ -2299,45 +2276,35 @@
       "name": "justify-items",
       "inherited": false,
       "initialValue": "normal",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "start",
-        "end",
-        "self-end",
-        "center",
-        "stretch",
-        "normal",
-        "left",
-        "right"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "JustifyItem",
+        "keywordMap": "Map.JustifyItemKeywords",
+        "fallback": "JustifyItem.Normal"
+      },
       "html": {
         "propertyPath": "JustifyItems",
-        "csharpDataType": "string",
-        "area": "GridArea"
+        "csharpDataType": "CssProperty<JustifyItem>",
+        "area": "GridArea",
+        "getterExpression": "{box}.JustifyItems.ToString()"
       }
     },
     {
       "name": "justify-self",
+      "comment": "Same enum/keyword set as justify-items, plus 'auto' (Map.JustifySelfKeywords adds it to Map.JustifyItemKeywords) - 'auto' defers to the container's justify-items, resolved ad hoc via CssLayoutEngineGrid.ResolveSelfAlignment (justify-self has no meaning in flex layout).",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "auto",
-        "start",
-        "end",
-        "self-end",
-        "center",
-        "stretch",
-        "normal",
-        "left",
-        "right"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "JustifyItem",
+        "keywordMap": "Map.JustifySelfKeywords",
+        "fallback": "JustifyItem.Auto"
+      },
       "html": {
         "propertyPath": "JustifySelf",
-        "csharpDataType": "string",
-        "area": "GridArea"
+        "csharpDataType": "CssProperty<JustifyItem>",
+        "area": "GridArea",
+        "getterExpression": "{box}.JustifySelf.ToString()"
       }
     },
     {

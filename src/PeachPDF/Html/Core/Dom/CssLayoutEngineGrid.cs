@@ -240,10 +240,10 @@ namespace PeachPDF.Html.Core.Dom
                 var (colMinContent, colMaxContent) =
                     await MeasureColumnIntrinsics(g, placements, colDefs, colCount, contentWidth, columnGap);
 
-                var stretchColumns = IsStretch(_gridBox.JustifyContent);
+                var stretchColumns = IsStretch(_gridBox.JustifyContent.ToString());
                 columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed,
                     colMinContent, colMaxContent, stretchColumns);
-                PositionTracks(columns, _gridBox.ClientLeft, contentWidth, columnGap, _gridBox.JustifyContent);
+                PositionTracks(columns, _gridBox.ClientLeft, contentWidth, columnGap, _gridBox.JustifyContent.ToString());
             }
 
             // ── Row tracks. A subgridded row axis adopts the parent's spanned row sizes; otherwise size the
@@ -292,7 +292,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 var rowContainerSize = hasDefiniteHeight ? _gridBox.ClientBottom - _gridBox.ClientTop
                     : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
-                PositionTracks(rows, _gridBox.ClientTop, rowContainerSize, rowGap, _gridBox.AlignContent);
+                PositionTracks(rows, _gridBox.ClientTop, rowContainerSize, rowGap, _gridBox.AlignContent.ToString());
 
                 // Report mode: this grid is itself a row-subgrid being measured by its parent — hand back the
                 // per-subrow sizes it just computed (one per adopted row) so the parent can grow its tracks.
@@ -309,8 +309,8 @@ namespace PeachPDF.Html.Core.Dom
                 var cellWidth = ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap);
                 var cellY = rows[p.RowStart].Position;
                 var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap);
-                var justify = ResolveSelfAlignment(p.Box.JustifySelf, _gridBox.JustifyItems);
-                var align = ResolveSelfAlignment(p.Box.AlignSelf, _gridBox.AlignItems);
+                var justify = ResolveSelfAlignment(p.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString());
+                var align = ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString());
 
                 var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true);
                 p.Box.SubgridContext = context;
@@ -1321,7 +1321,7 @@ namespace PeachPDF.Html.Core.Dom
         private void AlignRowBaselines(List<Placement> placements)
         {
             var baselineItems = placements.Where(p =>
-                p.RowSpan == 1 && IsBaselineAlign(ResolveSelfAlignment(p.Box.AlignSelf, _gridBox.AlignItems)));
+                p.RowSpan == 1 && IsBaselineAlign(ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString())));
 
             foreach (var row in baselineItems.GroupBy(p => p.RowStart))
             {

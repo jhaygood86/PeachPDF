@@ -1,4 +1,5 @@
 using PeachPDF;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
@@ -514,8 +515,8 @@ namespace PeachPDF.Html.Core.Dom
             var box = item.Box;
 
             // Resolve the item's effective cross-axis alignment (same idiom as ComputeCrossOffsets).
-            var align = box.AlignSelf is "auto" or "" ? _flexBox.AlignItems : box.AlignSelf;
-            if (align is CssConstants.Stretch or "normal") return;
+            var align = box.AlignSelf.Value == AlignItem.Auto ? _flexBox.AlignItems.Value : box.AlignSelf.Value;
+            if (align is AlignItem.Stretch or AlignItem.Normal) return;
 
             // Only auto-width items shrink; a definite width is already the item's cross size.
             if (CssValueParser.IsValidLength(box.Width)) return;
@@ -586,39 +587,39 @@ namespace PeachPDF.Html.Core.Dom
             if (lines.Count == 0) return;
 
             double offset = 0;
-            switch (_flexBox.AlignContent)
+            switch (_flexBox.AlignContent.Value)
             {
-                case CssConstants.FlexEnd:
-                case "end":
+                case AlignContent.FlexEnd:
+                case AlignContent.End:
                     offset = remaining;
                     foreach (var l in lines) { l.CrossOffset = offset; offset += l.CrossSize + crossGap; }
                     break;
-                case CssConstants.Center:
+                case AlignContent.Center:
                     offset = remaining / 2;
                     foreach (var l in lines) { l.CrossOffset = offset; offset += l.CrossSize + crossGap; }
                     break;
-                case CssConstants.SpaceBetween:
+                case AlignContent.SpaceBetween:
                 {
                     double spacing = lines.Count > 1 ? remaining / (lines.Count - 1) : 0;
                     foreach (var l in lines) { l.CrossOffset = offset; offset += l.CrossSize + crossGap + spacing; }
                     break;
                 }
-                case CssConstants.SpaceAround:
+                case AlignContent.SpaceAround:
                 {
                     double spacing = remaining / lines.Count;
                     offset = spacing / 2;
                     foreach (var l in lines) { l.CrossOffset = offset; offset += l.CrossSize + crossGap + spacing; }
                     break;
                 }
-                case CssConstants.SpaceEvenly:
+                case AlignContent.SpaceEvenly:
                 {
                     double spacing = remaining / (lines.Count + 1);
                     offset = spacing;
                     foreach (var l in lines) { l.CrossOffset = offset; offset += l.CrossSize + crossGap + spacing; }
                     break;
                 }
-                case CssConstants.Stretch:
-                case CssConstants.Normal:
+                case AlignContent.Stretch:
+                case AlignContent.Normal:
                 {
                     double extra = lines.Count > 0 ? remaining / lines.Count : 0;
                     foreach (var l in lines)
@@ -688,19 +689,19 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             double startOffset, spacing;
-            switch (_flexBox.JustifyContent)
+            switch (_flexBox.JustifyContent.Value)
             {
-                case CssConstants.FlexEnd:
-                case "end":
+                case JustifyContent.FlexEnd:
+                case JustifyContent.End:
                     startOffset = freeSpace; spacing = 0; break;
-                case CssConstants.Center:
+                case JustifyContent.Center:
                     startOffset = freeSpace / 2; spacing = 0; break;
-                case CssConstants.SpaceBetween:
+                case JustifyContent.SpaceBetween:
                     startOffset = 0; spacing = n > 1 ? freeSpace / (n - 1) : 0; break;
-                case CssConstants.SpaceAround:
+                case JustifyContent.SpaceAround:
                     spacing = n > 0 ? freeSpace / n : 0;
                     startOffset = spacing / 2; break;
-                case CssConstants.SpaceEvenly:
+                case JustifyContent.SpaceEvenly:
                     spacing = n > 0 ? freeSpace / (n + 1) : 0;
                     startOffset = spacing; break;
                 default: // flex-start / normal
@@ -736,8 +737,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 foreach (var item in line.Items)
                 {
-                    var itemAlign = item.Box.AlignSelf is "auto" or "" ? _flexBox.AlignItems : item.Box.AlignSelf;
-                    if (itemAlign != CssConstants.Baseline) continue;
+                    var itemAlign = item.Box.AlignSelf.Value == AlignItem.Auto ? _flexBox.AlignItems.Value : item.Box.AlignSelf.Value;
+                    if (itemAlign != AlignItem.Baseline) continue;
 
                     var offset = BaselineAlignment.GetItemBaselineOffset(item.Box);
                     if (offset is null) continue;
@@ -752,7 +753,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var item in line.Items)
             {
-                var align = item.Box.AlignSelf is "auto" or "" ? _flexBox.AlignItems : item.Box.AlignSelf;
+                var align = item.Box.AlignSelf.Value == AlignItem.Auto ? _flexBox.AlignItems.Value : item.Box.AlignSelf.Value;
                 double crossMarginBefore = _isRow ? item.Box.ActualMarginTop    : item.Box.ActualMarginLeft;
                 double crossMarginAfter  = _isRow ? item.Box.ActualMarginBottom : item.Box.ActualMarginRight;
                 double itemCrossSize = _isRow ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
@@ -776,16 +777,16 @@ namespace PeachPDF.Html.Core.Dom
 
                 switch (align)
                 {
-                    case CssConstants.FlexEnd:
-                    case "end":
+                    case AlignItem.FlexEnd:
+                    case AlignItem.End:
                         item.CrossOffset = flushCrossEnd;
                         break;
-                    case CssConstants.Center:
+                    case AlignItem.Center:
                         item.CrossOffset = (line.CrossSize - itemCrossSize - crossMarginBefore - crossMarginAfter) / 2
                                          + crossMarginBefore;
                         break;
-                    case CssConstants.Stretch:
-                    case "normal":
+                    case AlignItem.Stretch:
+                    case AlignItem.Normal:
                     {
                         bool canStretch = _isRow
                             ? !CssValueParser.IsValidLength(item.Box.Height)
@@ -850,7 +851,7 @@ namespace PeachPDF.Html.Core.Dom
                             : crossMarginBefore;
                         break;
                     }
-                    case CssConstants.Baseline when baselineOffsets != null && baselineOffsets.TryGetValue(item, out var itemBaseline):
+                    case AlignItem.Baseline when baselineOffsets != null && baselineOffsets.TryGetValue(item, out var itemBaseline):
                         // The group's baselines align with each other either way; what the swap changes is
                         // which end of the line the group is flushed against.
                         item.CrossOffset = _isWrapReverse
@@ -1439,13 +1440,13 @@ namespace PeachPDF.Html.Core.Dom
 
         private void ParseFlexDirection()
         {
-            switch (_flexBox.FlexDirection)
+            switch (_flexBox.FlexDirection.Value)
             {
-                case CssConstants.RowReverse:
+                case FlexDirection.RowReverse:
                     _isRow = true;  _isReverse = true;  break;
-                case CssConstants.Column:
+                case FlexDirection.Column:
                     _isRow = false; _isReverse = false; break;
-                case CssConstants.ColumnReverse:
+                case FlexDirection.ColumnReverse:
                     _isRow = false; _isReverse = true;  break;
                 default: // row
                     _isRow = true;  _isReverse = false; break;
@@ -1454,11 +1455,11 @@ namespace PeachPDF.Html.Core.Dom
 
         private void ParseFlexWrap()
         {
-            switch (_flexBox.FlexWrap)
+            switch (_flexBox.FlexWrap.Value)
             {
-                case "wrap":
+                case FlexWrap.Wrap:
                     _isWrap = true;  _isWrapReverse = false; break;
-                case CssConstants.WrapReverse:
+                case FlexWrap.WrapReverse:
                     _isWrap = true;  _isWrapReverse = true;  break;
                 default: // nowrap
                     _isWrap = false; _isWrapReverse = false; break;

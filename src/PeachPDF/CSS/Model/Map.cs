@@ -755,6 +755,96 @@ namespace PeachPDF.CSS
                 { Keywords.Baseline, AlignItem.Baseline },
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
+        // The four maps below back CssBox's cascaded align-items/align-self/justify-content/align-content
+        // storage. They are deliberately narrower than the legacy CSS-OM maps above/JustifyContentOptions -
+        // each matches exactly the keyword set css-properties.json already declared as supported before
+        // the typed-storage conversion (CssLayoutEngineFlex/CssLayoutEngineGrid don't dispatch the extra
+        // keywords the legacy maps carry, e.g. self-start, or align-content: baseline/start - see
+        // .claude/accepted-gaps/), so reusing the broader legacy maps directly would silently widen
+        // accepted values without a corresponding layout-code change.
+        public static readonly FrozenDictionary<string, AlignItem> AlignItemKeywords =
+            new Dictionary<string, AlignItem>(StringComparer.OrdinalIgnoreCase)
+            {
+                { Keywords.FlexStart, AlignItem.FlexStart },
+                { Keywords.FlexEnd, AlignItem.FlexEnd },
+                { Keywords.Start, AlignItem.Start },
+                { Keywords.End, AlignItem.End },
+                { Keywords.SelfEnd, AlignItem.SelfEnd },
+                { Keywords.Center, AlignItem.Center },
+                { Keywords.Stretch, AlignItem.Stretch },
+                { Keywords.Normal, AlignItem.Normal },
+                { Keywords.Baseline, AlignItem.Baseline }
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        public static readonly FrozenDictionary<string, AlignItem> AlignSelfKeywords =
+            new Dictionary<string, AlignItem>(StringComparer.OrdinalIgnoreCase)
+            {
+                { Keywords.Auto, AlignItem.Auto },
+                { Keywords.FlexStart, AlignItem.FlexStart },
+                { Keywords.FlexEnd, AlignItem.FlexEnd },
+                { Keywords.Start, AlignItem.Start },
+                { Keywords.End, AlignItem.End },
+                { Keywords.SelfEnd, AlignItem.SelfEnd },
+                { Keywords.Center, AlignItem.Center },
+                { Keywords.Stretch, AlignItem.Stretch },
+                { Keywords.Normal, AlignItem.Normal },
+                { Keywords.Baseline, AlignItem.Baseline }
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        public static readonly FrozenDictionary<string, JustifyContent> JustifyContentKeywords =
+            new Dictionary<string, JustifyContent>(StringComparer.OrdinalIgnoreCase)
+            {
+                { Keywords.Normal, JustifyContent.Normal },
+                { Keywords.FlexStart, JustifyContent.FlexStart },
+                { Keywords.FlexEnd, JustifyContent.FlexEnd },
+                { Keywords.End, JustifyContent.End },
+                { Keywords.Center, JustifyContent.Center },
+                { Keywords.SpaceBetween, JustifyContent.SpaceBetween },
+                { Keywords.SpaceAround, JustifyContent.SpaceAround },
+                { Keywords.SpaceEvenly, JustifyContent.SpaceEvenly }
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        public static readonly FrozenDictionary<string, AlignContent> AlignContentKeywords =
+            new Dictionary<string, AlignContent>(StringComparer.OrdinalIgnoreCase)
+            {
+                { Keywords.FlexStart, AlignContent.FlexStart },
+                { Keywords.FlexEnd, AlignContent.FlexEnd },
+                { Keywords.End, AlignContent.End },
+                { Keywords.Center, AlignContent.Center },
+                { Keywords.SpaceBetween, AlignContent.SpaceBetween },
+                { Keywords.SpaceAround, AlignContent.SpaceAround },
+                { Keywords.SpaceEvenly, AlignContent.SpaceEvenly },
+                { Keywords.Stretch, AlignContent.Stretch },
+                { Keywords.Normal, AlignContent.Normal }
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        public static readonly FrozenDictionary<string, JustifyItem> JustifyItemKeywords =
+            new Dictionary<string, JustifyItem>(StringComparer.OrdinalIgnoreCase)
+            {
+                { Keywords.Start, JustifyItem.Start },
+                { Keywords.End, JustifyItem.End },
+                { Keywords.SelfEnd, JustifyItem.SelfEnd },
+                { Keywords.Center, JustifyItem.Center },
+                { Keywords.Stretch, JustifyItem.Stretch },
+                { Keywords.Normal, JustifyItem.Normal },
+                { Keywords.Left, JustifyItem.Left },
+                { Keywords.Right, JustifyItem.Right }
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        public static readonly FrozenDictionary<string, JustifyItem> JustifySelfKeywords =
+            new Dictionary<string, JustifyItem>(StringComparer.OrdinalIgnoreCase)
+            {
+                { Keywords.Auto, JustifyItem.Auto },
+                { Keywords.Start, JustifyItem.Start },
+                { Keywords.End, JustifyItem.End },
+                { Keywords.SelfEnd, JustifyItem.SelfEnd },
+                { Keywords.Center, JustifyItem.Center },
+                { Keywords.Stretch, JustifyItem.Stretch },
+                { Keywords.Normal, JustifyItem.Normal },
+                { Keywords.Left, JustifyItem.Left },
+                { Keywords.Right, JustifyItem.Right }
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
         public static readonly FrozenDictionary<string, ContainerType> ContainerTypes =
             new Dictionary<string, ContainerType>(StringComparer.OrdinalIgnoreCase)
             {
