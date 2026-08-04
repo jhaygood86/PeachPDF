@@ -282,6 +282,34 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_KeywordOrValue_Validation_Narrowed_By_Min_For_An_Integer_Or_Auto_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "column-count", "inherited": false, "initialValue": "auto",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "AutoKeyword", "keywordMap": "Map.AutoKeywords",
+                        "fallback": "AutoKeyword.Auto", "valueType": "integer", "min": 1 },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_ColumnCount(CssValueParser parser, string value) => " +
+                "Map.AutoKeywords.ContainsKey(value) || int.TryParse(value, out var parsedInt) && parsedInt >= 1;",
+                generated);
+            Assert.Contains(
+                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, int>(value, Map.AutoKeywords, int.TryParse, AutoKeyword.Auto);",
+                generated);
+        }
+
+        [Fact]
         public void Emits_False_For_An_Unsupported_Property()
         {
             var json = """

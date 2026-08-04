@@ -372,7 +372,10 @@ namespace PeachPDF.SourceGenerators.Model
                         json.TryGetProperty("keywordMap", out var korvKeywordMapValue);
                         json.TryGetProperty("fallback", out var korvFallbackValue);
                         json.TryGetProperty("valueType", out var korvValueTypeValue);
+                        double? korvMin = json.TryGetProperty("min", out var korvMinValue) && korvMinValue.Kind == JsonValueKind.Number ? korvMinValue.NumberValue : null;
+                        double? korvMax = json.TryGetProperty("max", out var korvMaxValue) && korvMaxValue.Kind == JsonValueKind.Number ? korvMaxValue.NumberValue : null;
                         return new DataTypeSpec(DataTypeKind.KeywordOrValue,
+                            min: korvMin, max: korvMax,
                             enumType: korvEnumTypeValue.StringValue, keywordMap: korvKeywordMapValue.StringValue,
                             fallback: korvFallbackValue.StringValue, valueType: korvValueTypeValue.StringValue);
 

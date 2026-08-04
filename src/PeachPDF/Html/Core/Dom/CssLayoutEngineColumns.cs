@@ -1079,8 +1079,9 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static (int Count, double Width) ResolveColumns(CssBox columnsBox, double containerWidth, double gap)
         {
-            var parsedCount = 0;
-            var hasCount = columnsBox.ColumnCount != CssConstants.Auto && int.TryParse(columnsBox.ColumnCount, out parsedCount);
+            var columnCount = columnsBox.ColumnCount.Value;
+            var hasCount = columnCount.IsValue;
+            var parsedCount = columnCount.Value.GetValueOrDefault();
             var hasWidth = columnsBox.ColumnWidth != CssConstants.Auto && CssValueParser.IsValidLength(columnsBox.ColumnWidth);
 
             var specifiedWidth = hasWidth ? CssValueParser.ParseLength(columnsBox.ColumnWidth, containerWidth, columnsBox) : 0;
