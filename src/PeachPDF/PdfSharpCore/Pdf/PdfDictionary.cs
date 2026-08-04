@@ -1586,66 +1586,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             byte[] _value = null!;
 
             /// <summary>
-            /// Gets the value of the stream unfiltered. The stream content is not modified by this operation.
-            /// </summary>
-            public byte[] UnfilteredValue
-            {
-                get
-                {
-                    byte[] bytes = null;
-                    if (_value != null)
-                    {
-                        PdfItem filter = _ownerDictionary.Elements[Keys.Filter];
-                        if (filter != null)
-                        {
-                            var decodeParms = _ownerDictionary.Elements[Keys.DecodeParms];
-                            bytes = Filtering.Decode(_value, filter, decodeParms);
-                            if (bytes == null)
-                            {
-                                string message = String.Format("«Cannot decode filter '{0}'»", filter);
-                                bytes = PdfEncoders.RawEncoding.GetBytes(message);
-                            }
-                        }
-                        else
-                        {
-                            bytes = new byte[_value.Length];
-                            _value.CopyTo(bytes, 0);
-                        }
-                    }
-                    return bytes ?? new byte[0];
-                }
-            }
-
-            /// <summary>
-            /// Tries to unfilter the bytes of the stream. If the stream is filtered and PDFsharp knows the filter
-            /// algorithm, the stream content is replaced by its unfiltered value and the function returns true.
-            /// Otherwise the content remains untouched and the function returns false.
-            /// The function is useful for analyzing existing PDF files.
-            /// </summary>
-            public bool TryUnfilter()
-            {
-                if (_value != null)
-                {
-                    PdfItem filter = _ownerDictionary.Elements[Keys.Filter];
-                    if (filter != null)
-                    {
-                        var decodeParms = _ownerDictionary.Elements[Keys.DecodeParms];
-                        // PDFsharp can only uncompress streams that are compressed with the ZIP or LZH algorithm.
-                        byte[] bytes = Filtering.Decode(_value, filter, decodeParms);
-                        if (bytes != null)
-                        {
-                            _ownerDictionary.Elements.Remove(Keys.Filter);
-                            _ownerDictionary.Elements.Remove(Keys.DecodeParms);
-                            Value = bytes;
-                        }
-                        else
-                            return false;
-                    }
-                }
-                return true;
-            }
-
-            /// <summary>
             /// Compresses the stream with the FlateDecode filter.
             /// If a filter is already defined, the function has no effect.
             /// </summary>
@@ -1670,29 +1610,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
                 if (_value == null)
                     return "«null»";
 
-                string stream;
-                PdfItem filter = _ownerDictionary.Elements[Keys.Filter];
-                if (filter != null)
-                {
-#if true
-                    var decodeParms = _ownerDictionary.Elements[Keys.DecodeParms];
-                    byte[] bytes = Filtering.Decode(_value, filter, decodeParms);
-                    if (bytes != null)
-                        stream = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
-#else
-
-                    if (_owner.Elements.GetString("/Filter") == "/FlateDecode")
-                    {
-                        stream = Filtering.FlateDecode.DecodeToString(_value);
-                    }
-#endif
-                    else
-                        throw new NotImplementedException("Unknown filter");
-                }
-                else
-                    stream = PdfEncoders.RawEncoding.GetString(_value, 0, _value.Length);
-
-                return stream;
+                return PdfEncoders.RawEncoding.GetString(_value, 0, _value.Length);
             }
 
             //internal void WriteObject_(Stream stream)

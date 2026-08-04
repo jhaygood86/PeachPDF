@@ -362,47 +362,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             {
                 if (_contents == null)
                 {
-                    if (true) // || Document.IsImported)
-                    {
-                        PdfItem item = Elements[Keys.Contents];
-                        if (item == null)
-                        {
-                            _contents = new PdfContents(Owner);
-                            //Owner.irefTable.Add(_contents);
-                        }
-                        else
-                        {
-                            if (item is PdfReference)
-                                item = ((PdfReference)item).Value;
-
-                            PdfArray array = item as PdfArray;
-                            if (array != null)
-                            {
-                                // It is already an array of content streams.
-                                if (array.IsIndirect)
-                                {
-                                    // Make it a direct array
-                                    array = array.Clone();
-                                    array.Document = Owner;
-                                }
-                                // TODO 4STLA: Causes Exception "Object type transformation must not be done with direct objects" in "protected PdfObject(PdfObject obj)"
-                                _contents = new PdfContents(array);
-                            }
-                            else
-                            {
-                                // Only one content stream -> create array
-                                _contents = new PdfContents(Owner);
-                                //Owner.irefTable.Add(_contents);
-                                PdfContent content = new PdfContent((PdfDictionary)item);
-                                _contents.Elements.Add(content.Reference);
-                            }
-                        }
-                    }
-                    //else
-                    //{
-                    //  _content = new PdfContent(Document);
-                    //  Document.xrefTable.Add(_content);
-                    //}
+                    _contents = new PdfContents(Owner);
                     Debug.Assert(_contents.Reference == null);
                     Elements[Keys.Contents] = _contents;
                 }

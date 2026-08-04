@@ -27,7 +27,6 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
-using System;
 using System.IO;
 using System.IO.Compression;
 
@@ -64,24 +63,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Filters
             using (var zlib = new ZLibStream(ms, compressionLevel, leaveOpen: true))
                 zlib.Write(data, 0, data.Length);
             return ms.ToArray();
-        }
-
-        /// <summary>
-        /// Decodes the specified data.
-        /// </summary>
-        public override byte[] Decode(byte[] data, FilterParms parms)
-        {
-            if (data.Length == 0) return data;
-
-            var msInput = new MemoryStream(data);
-            var msOutput = new MemoryStream();
-
-            using (var zlib = new ZLibStream(msInput, CompressionMode.Decompress))
-                zlib.CopyTo(msOutput);
-
-            if (parms.DecodeParms != null)
-                return StreamDecoder.Decode(msOutput.ToArray(), parms.DecodeParms);
-            return msOutput.ToArray();
         }
     }
 }
