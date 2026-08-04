@@ -195,6 +195,13 @@ namespace PeachPDF.CSS
                 {Keywords.Hidden, Visibility.Hidden},
                 {Keywords.Collapse, Visibility.Collapse}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, Hyphens> HyphensModes =
+            new Dictionary<string, Hyphens>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.None, Hyphens.None},
+                {Keywords.Manual, Hyphens.Manual},
+                {Keywords.Auto, Hyphens.Auto}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, PlayState> PlayStates =
             new Dictionary<string, PlayState>(StringComparer.OrdinalIgnoreCase)
             {

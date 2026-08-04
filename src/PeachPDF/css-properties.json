@@ -1380,35 +1380,34 @@
       "name": "float",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "left",
-        "right",
-        "none"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "Floating",
+        "keywordMap": "Map.FloatingModes",
+        "fallback": "Floating.None"
+      },
       "html": {
         "propertyPath": "Float",
-        "csharpDataType": "string",
-        "area": "DisplayPositioningArea"
+        "csharpDataType": "CssProperty<Floating>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.Float.ToString()"
       }
     },
     {
       "name": "clear",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "left",
-        "right",
-        "both",
-        "none"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ClearMode",
+        "keywordMap": "Map.ClearModes",
+        "fallback": "ClearMode.None"
+      },
       "html": {
         "propertyPath": "Clear",
-        "csharpDataType": "string",
-        "area": "DisplayPositioningArea"
+        "csharpDataType": "CssProperty<ClearMode>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.Clear.ToString()"
       }
     },
     {
@@ -1435,18 +1434,17 @@
       "comment": "'clip' is intentionally excluded - CssUtilsTests/MonolithicContentTests confirm it isn't (and wasn't, pre-migration) an accepted value, so it never overrides the inherited/initial 'visible' and MonolithicContent.IsScrollContainer sees 'visible', not a stored 'clip'. 'auto'/'scroll' are genuinely used by MonolithicContent.IsScrollContainer (a non-visible overflow makes a box a scroll container, treated as monolithic/unbreakable across pages) even though they don't distinguish real interactive scrolling from 'hidden' - both are meaningful CSS Overflow 3 values for a non-interactive, paginated renderer.",
       "inherited": false,
       "initialValue": "visible",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "visible",
-        "hidden",
-        "scroll",
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "Overflow",
+        "keywordMap": "Map.OverflowModes",
+        "fallback": "Overflow.Visible"
+      },
       "html": {
         "propertyPath": "Overflow",
-        "csharpDataType": "string",
-        "area": "DisplayPositioningArea"
+        "csharpDataType": "CssProperty<Overflow>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.Overflow.ToString()"
       }
     },
     {
@@ -1569,71 +1567,72 @@
       "name": "text-align",
       "inherited": true,
       "initialValue": "start",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "left",
-        "right",
-        "center",
-        "justify",
-        "start",
-        "end"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "HorizontalAlignment",
+        "keywordMap": "Map.HorizontalAlignments",
+        "fallback": "HorizontalAlignment.Start"
+      },
       "html": {
         "propertyPath": "TextAlign",
-        "csharpDataType": "string",
-        "area": "TextArea"
+        "csharpDataType": "CssProperty<HorizontalAlignment>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextAlign.ToString()"
       }
     },
     {
       "name": "text-transform",
+      "comment": "cssDataType's own Map.TextTransforms includes full-width because it's already used elsewhere in the CSS-OM pipeline, even though CssBox.cs's ApplyTextTransform only implements uppercase/lowercase/capitalize - full-width parses and stores but has no distinct effect (see .claude/accepted-gaps/text-transform-full-width-no-effect.md). supportsDataType is the stricter, @supports-only list excluding full-width for exactly that reason, same shape as word-break's keep-all split.",
       "inherited": true,
       "initialValue": "none",
-      "cssDataType": "keyword",
-      "supportedValues": [
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextTransform",
+        "keywordMap": "Map.TextTransforms",
+        "fallback": "TextTransform.None"
+      },
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
         "none",
+        "capitalize",
         "uppercase",
-        "lowercase",
-        "capitalize"
+        "lowercase"
       ],
-      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "TextTransform",
-        "csharpDataType": "string",
-        "area": "TextArea"
+        "csharpDataType": "CssProperty<TextTransform>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextTransform.ToString()"
       }
     },
     {
       "name": "white-space",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "normal",
-        "nowrap",
-        "pre",
-        "pre-wrap",
-        "pre-line"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "Whitespace",
+        "keywordMap": "Map.WhitespaceModes",
+        "fallback": "Whitespace.Normal"
+      },
       "html": {
         "propertyPath": "WhiteSpace",
-        "csharpDataType": "string",
-        "area": "TextArea"
+        "csharpDataType": "CssProperty<Whitespace>",
+        "area": "TextArea",
+        "getterExpression": "{box}.WhiteSpace.ToString()"
       }
     },
     {
       "name": "word-break",
-      "comment": "cssDataType's own supportedValues includes keep-all because Layer A's own WordBreakConverter/Map.WordBreaks parses and stores it as valid CSS (WordBreak.KeepAll), even though CssBox.cs's line-breaking logic only special-cases break-all - keep-all has no distinct effect (see .claude/accepted-gaps/word-break-keep-all-no-effect.md). supportsDataType is the stricter, @supports-only list excluding keep-all for exactly that reason, same shape as break-before's region/avoid-region split.",
+      "comment": "cssDataType's own Map.WordBreaks includes keep-all because Layer A's own WordBreakConverter/Map.WordBreaks parses and stores it as valid CSS (WordBreak.KeepAll), even though CssBox.cs's line-breaking logic only special-cases break-all - keep-all has no distinct effect (see .claude/accepted-gaps/word-break-keep-all-no-effect.md). supportsDataType is the stricter, @supports-only list excluding keep-all for exactly that reason, same shape as break-before's region/avoid-region split.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "normal",
-        "break-all",
-        "keep-all"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "WordBreak",
+        "keywordMap": "Map.WordBreaks",
+        "fallback": "WordBreak.Normal"
+      },
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "normal",
@@ -1641,24 +1640,26 @@
       ],
       "html": {
         "propertyPath": "WordBreak",
-        "csharpDataType": "string",
-        "area": "TextArea"
+        "csharpDataType": "CssProperty<WordBreak>",
+        "area": "TextArea",
+        "getterExpression": "{box}.WordBreak.ToString()"
       }
     },
     {
       "name": "visibility",
       "inherited": true,
       "initialValue": "visible",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "visible",
-        "hidden"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "Visibility",
+        "keywordMap": "Map.Visibilities",
+        "fallback": "Visibility.Visible"
+      },
       "html": {
         "propertyPath": "Visibility",
-        "csharpDataType": "string",
-        "area": "TextArea"
+        "csharpDataType": "CssProperty<Visibility>",
+        "area": "TextArea",
+        "getterExpression": "{box}.Visibility.ToString()"
       }
     },
     {
@@ -1737,17 +1738,17 @@
       "name": "hyphens",
       "inherited": true,
       "initialValue": "manual",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "none",
-        "manual",
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "Hyphens",
+        "keywordMap": "Map.HyphensModes",
+        "fallback": "Hyphens.Manual"
+      },
       "html": {
         "propertyPath": "Hyphens",
-        "csharpDataType": "string",
-        "area": "TextArea"
+        "csharpDataType": "CssProperty<Hyphens>",
+        "area": "TextArea",
+        "getterExpression": "{box}.Hyphens.ToString()"
       }
     },
     {

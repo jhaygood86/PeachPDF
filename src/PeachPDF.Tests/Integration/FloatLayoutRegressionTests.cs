@@ -220,6 +220,89 @@ namespace PeachPDF.Tests.Integration
             Assert.True(document.PageCount > 1, $"expected the document to span pages, got {document.PageCount}");
         }
 
+        [Fact]
+        public async Task FloatLeft_WrapsBelowAFullWidthFloatRightSibling()
+        {
+            // A float:left box that would overlap a previously-placed, full-width float:right sibling
+            // must wrap below it rather than overlapping - exercises FloatBoxLeft's handling of an
+            // *opposite-direction* intersecting float (CssLayoutEngine.FloatBoxLeft's Floating.Right
+            // branch), not just same-direction float avoidance.
+            var html = Wrap(@"
+                <div style='width:200pt;'>
+                    <div id='r' style='float:right; width:200pt; height:50pt;'></div>
+                    <div id='l' style='float:left; width:100pt; height:30pt;'></div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var r = FindById(root, "r")!;
+            var l = FindById(root, "l")!;
+
+            Assert.True(l.Location.Y >= r.ActualBottom,
+                $"float:left box should wrap below the full-width float:right sibling it can't fit beside " +
+                $"(l.Y={l.Location.Y}, r.ActualBottom={r.ActualBottom})");
+        }
+
+        [Fact]
+        public async Task FloatRight_InNarrowerNestedBlock_AvoidsAWiderAncestorFloatRightSibling()
+        {
+            // A float:right box placed inside a narrower, non-floated nested block still avoids an
+            // ancestor float:right sibling that sits past the nested block's own right edge - the search
+            // climbs past the immediate containing block to find it (DomUtils.FindIntersectingFloatBox's
+            // ancestor walk), which is what exercises DomUtils.IsFloatIntersecting's Floating.Right branch
+            // and FloatBoxRight's matching switch case: neither is reachable when the intersecting float
+            // and the box being placed share the same containing block, since a same-container float
+            // can never start past that container's own right edge.
+            var html = Wrap(@"
+                <div style='width:500pt;'>
+                    <div id='outerR' style='float:right; width:50pt; height:80pt;'></div>
+                    <div style='width:200pt;'>
+                        <div id='r' style='float:right; width:100pt; height:30pt;'></div>
+                    </div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var outerR = FindById(root, "outerR")!;
+            var r = FindById(root, "r")!;
+
+            Assert.Equal(outerR.Location.X - outerR.ActualMarginLeft, r.ActualRight, 1);
+        }
+
+        [Fact]
+        public async Task ClearLeft_IgnoresAPrecedingFloatRightSibling()
+        {
+            // clear:left only clears past float:left siblings - a float:right sibling must not push it
+            // down (CssLayoutEngine.ClearBox's "Floating.Right when Clear.Left: continue" skip).
+            var html = Wrap(@"
+                <div style='width:200pt;'>
+                    <div id='r' style='float:right; width:50pt; height:80pt;'></div>
+                    <div id='cleared' style='clear:left; margin:0;'>text</div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var cleared = FindById(root, "cleared")!;
+
+            Assert.True(cleared.Location.Y < 80,
+                $"clear:left must not clear past a float:right sibling, was pushed to Y={cleared.Location.Y}");
+        }
+
+        [Fact]
+        public async Task ClearRight_IgnoresAPrecedingFloatLeftSibling()
+        {
+            // Symmetric case: clear:right ignoring a float:left sibling (ClearBox's
+            // "Floating.Left when Clear.Right: continue" skip).
+            var html = Wrap(@"
+                <div style='width:200pt;'>
+                    <div id='l' style='float:left; width:50pt; height:80pt;'></div>
+                    <div id='cleared' style='clear:right; margin:0;'>text</div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var cleared = FindById(root, "cleared")!;
+
+            Assert.True(cleared.Location.Y < 80,
+                $"clear:right must not clear past a float:left sibling, was pushed to Y={cleared.Location.Y}");
+        }
+
         // ── Helpers ────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

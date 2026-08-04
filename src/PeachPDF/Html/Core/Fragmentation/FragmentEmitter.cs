@@ -1359,7 +1359,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             while (true)
             {
-                if (containingBlock.Overflow == CssConstants.Hidden)
+                if (containingBlock.Overflow.Value == Overflow.Hidden)
                     return IsSelfOrAncestor(root, containingBlock);
 
                 var next = containingBlock.ContainingBlock;
@@ -1861,7 +1861,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             while (true)
             {
-                if (containingBlock.Overflow == CssConstants.Hidden)
+                if (containingBlock.Overflow.Value == Overflow.Hidden)
                     return Localize(PaddingEdgeOf(containingBlock, snapshot), originY);
 
                 var next = containingBlock.ContainingBlock;

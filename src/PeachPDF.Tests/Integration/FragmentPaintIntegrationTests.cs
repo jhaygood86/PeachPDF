@@ -181,6 +181,35 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(recording.DrawStringCalls, c => c.Text.Contains("Visible"));
         }
 
+        [Fact]
+        public async Task VisibilityCollapse_ReservesLayoutSpace_ButPaintsNothing_VisibleSiblingStillPaints()
+        {
+            // PeachPDF doesn't implement table row/column collapse layout (CSS 2.1 §17.6.1), so
+            // visibility:collapse renders identically to visibility:hidden - see
+            // .claude/migration-notes/2026-08-04-visibility-collapse-now-accepted.md.
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div id='collapsed' style='visibility:collapse;height:50pt;background:rgb(10,20,30)'>Collapsed</div>"
+                    + "<div id='visible' style='height:50pt;background:rgb(40,50,60)'>Visible</div>"),
+                pageHeight: 300, margin: 0);
+
+            var collapsed = LayoutHarness.FindById(root, "collapsed")!;
+            var visible = LayoutHarness.FindById(root, "visible")!;
+
+            Assert.Equal(collapsed.ActualBottom, visible.Location.Y, 1);
+
+            var recording = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, recording, 0);
+
+            Assert.DoesNotContain(recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
+                r => r.Color == RColorOf(10, 20, 30));
+            Assert.DoesNotContain(recording.DrawStringCalls, c => c.Text.Contains("Collapsed"));
+
+            Assert.Contains(recording.Log.OfType<TestRecordingGraphics.DrawRectCall>(),
+                r => r.Color == RColorOf(40, 50, 60));
+            Assert.Contains(recording.DrawStringCalls, c => c.Text.Contains("Visible"));
+        }
+
         private static RColor RColorOf(int r, int g, int b) =>
             RColor.FromArgb(r, g, b);
 

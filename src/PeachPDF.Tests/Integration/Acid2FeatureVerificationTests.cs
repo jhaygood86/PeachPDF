@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -1187,7 +1188,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(html);
             var box = FindById(root, "t")!;
 
-            Assert.Equal("left", box.Float);
+            Assert.Equal(Floating.Left, box.Float.Value);
         }
 
         // ─── overflow: hidden on the root <html> in a multi-page document ──────────

@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -80,7 +81,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </para>
         /// </remarks>
         internal static bool IsScrollContainer(CssBox box) =>
-            box.Overflow != CssConstants.Visible && !IsViewportPropagationSource(box);
+            box.Overflow.Value != Overflow.Visible && !IsViewportPropagationSource(box);
 
         private static bool IsViewportPropagationSource(CssBox box)
         {
@@ -91,7 +92,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (!IsNamed(box, "body") || box.ParentBox is not { } parent || !IsRootElement(parent))
                 return false;
 
-            return parent.Overflow == CssConstants.Visible;
+            return parent.Overflow.Value == Overflow.Visible;
         }
 
         private static bool IsRootElement(CssBox box) => box.IsRoot || IsNamed(box, "html");

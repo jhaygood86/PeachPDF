@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore;
@@ -34,7 +35,7 @@ body { margin: 0; }
 </style></head><body><div class='outer'><div class='inner'></div></div></body></html>";
 
             var root = await GetRootBox(html);
-            var outer = FindFirst(root, b => b.HtmlTag?.Name == "div" && b.Overflow == "hidden");
+            var outer = FindFirst(root, b => b.HtmlTag?.Name == "div" && b.Overflow.Value == Overflow.Hidden);
             var inner = FindFirst(outer!, b => b.HtmlTag?.Name == "div" && b != outer);
 
             Assert.NotNull(outer);
@@ -70,7 +71,7 @@ td { padding: 3px; }
             Assert.NotNull(div);
 
             // td has overflow:hidden from the PeachPDF default stylesheet
-            Assert.Equal("hidden", td!.Overflow);
+            Assert.Equal(Overflow.Hidden, td!.Overflow.Value);
 
             var paddingBoxRight = td.ClientRight + td.ActualPaddingRight;
 
@@ -116,7 +117,7 @@ body { margin: 0; }
 </style></head><body><div class='outer'><div class='inner'></div></div></body></html>";
 
             var root = await GetRootBox(html);
-            var outer = FindFirst(root, b => b.HtmlTag?.Name == "div" && b.Overflow == "hidden");
+            var outer = FindFirst(root, b => b.HtmlTag?.Name == "div" && b.Overflow.Value == Overflow.Hidden);
             var inner = FindFirst(outer!, b => b.HtmlTag?.Name == "div" && b != outer);
 
             Assert.NotNull(outer);
