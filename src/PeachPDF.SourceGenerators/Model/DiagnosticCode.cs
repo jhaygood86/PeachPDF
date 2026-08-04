@@ -24,5 +24,6 @@ namespace PeachPDF.SourceGenerators.Model
         UnknownArea = 12,            // PPG012
         UnknownPropertyNameConstant = 13, // PPG013 (not implemented in this pass — reserved)
         InvalidLogicalEntry = 14,    // PPG014
+        PropertyPathAreaConflict = 15, // PPG015
     }
 }

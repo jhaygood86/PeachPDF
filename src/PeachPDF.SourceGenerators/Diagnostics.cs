@@ -54,6 +54,9 @@ namespace PeachPDF.SourceGenerators
         public static readonly DiagnosticDescriptor InvalidLogicalEntry =
             D("PPG014", "Invalid logical-category entry", DiagnosticSeverity.Error);
 
+        public static readonly DiagnosticDescriptor PropertyPathAreaConflict =
+            D("PPG015", "html.propertyPath reused across different html.area values", DiagnosticSeverity.Error);
+
         public static DiagnosticDescriptor For(DiagnosticCode code) => code switch
         {
             DiagnosticCode.JsonMalformed => JsonMalformed,
@@ -69,6 +72,7 @@ namespace PeachPDF.SourceGenerators
             DiagnosticCode.HtmlPropertyPathMismatch => HtmlPropertyPathMismatch,
             DiagnosticCode.UnknownArea => UnknownArea,
             DiagnosticCode.InvalidLogicalEntry => InvalidLogicalEntry,
+            DiagnosticCode.PropertyPathAreaConflict => PropertyPathAreaConflict,
             _ => JsonMalformed,
         };
     }

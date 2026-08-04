@@ -389,6 +389,298 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_ComputedStyleAreas_Field_For_A_Plain_String_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "text-align", "inherited": true, "initialValue": "start", "cssDataType": "cssom",
+                      "html": { "propertyPath": "TextAlign", "csharpDataType": "string", "area": "TextArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "ComputedStyleAreas.g.cs").SourceText.ToString();
+
+            Assert.Contains("internal sealed partial record TextArea", generated);
+            Assert.Contains(
+                "public string TextAlign { get; init; } = CssDefaults.GetInitialValue(\"text-align\")!;",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_ComputedStyleAreas_Field_For_An_EnumKeyword_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "box-sizing", "inherited": false, "initialValue": "content-box",
+                      "cssDataType": { "type": "enum-keyword", "enumType": "BoxSizingMode", "keywordMap": "Map.BoxSizingModes",
+                        "fallback": "BoxSizingMode.ContentBox" },
+                      "html": { "propertyPath": "BoxSizing", "csharpDataType": "CssProperty<BoxSizingMode>", "area": "BoxModelArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "ComputedStyleAreas.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "public CssProperty<BoxSizingMode> BoxSizing { get; init; } = " +
+                "CssProperty<global::PeachPDF.CSS.BoxSizingMode>.FromCssText(CssDefaults.GetInitialValue(\"box-sizing\")!, " +
+                "Map.BoxSizingModes, global::PeachPDF.CSS.BoxSizingMode.ContentBox);",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_ComputedStyleAreas_FromValue_Default_For_A_CssOm_Delegated_CssProperty()
+        {
+            // grid-template-columns/-rows' shape: csharpDataType is CssProperty<T> but cssDataType is
+            // "cssom" (grammar validation and real parsing are delegated to the CSS-OM/customSetter, not
+            // a generator-known FromCssText path) - the initial keyword has no corresponding parsed T, so
+            // only the raw text is set and the parsed half stays a literal null.
+            var json = """
+                {
+                  "properties": [
+                    { "name": "grid-template-columns", "inherited": false, "initialValue": "none", "cssDataType": "cssom",
+                      "html": { "propertyPath": "GridTemplateColumns", "csharpDataType": "CssProperty<GridTemplate>", "area": "GridArea",
+                        "customSetter": "{box}.GridTemplateColumns = GridTemplateValueConverter.FromCssText({value});" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "ComputedStyleAreas.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "public CssProperty<GridTemplate> GridTemplateColumns { get; init; } = " +
+                "CssProperty<GridTemplate>.FromValue(CssDefaults.GetInitialValue(\"grid-template-columns\")!, null);",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_ComputedStyleAreas_No_Default_For_A_NonString_NonCssProperty_Type()
+        {
+            // FontFamily/BackgroundImages/ListStyleImage's shape: csharpDataType is neither "string" nor
+            // a CssProperty<T> wrapper (a plain nullable reference type populated only via a
+            // customSetter), so there is no CssDefaults-derived default the generator can construct -
+            // the field is left with its own implicit default (null).
+            var json = """
+                {
+                  "properties": [
+                    { "name": "list-style-image", "inherited": true, "initialValue": null, "cssDataType": "cssom",
+                      "html": { "propertyPath": "ListStyleImage", "csharpDataType": "CssImage?", "area": "ListArea",
+                        "customSetter": "{box}.ListStyleImage = CssImageParser.FromCssText({value});" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "ComputedStyleAreas.g.cs").SourceText.ToString();
+
+            Assert.Contains("public CssImage? ListStyleImage { get; init; }", generated);
+            Assert.DoesNotContain("ListStyleImage { get; init; } =", generated);
+        }
+
+        [Fact]
+        public void Emits_Exactly_One_Field_And_Property_For_A_Legacy_Alias_Pair_Sharing_A_PropertyPath()
+        {
+            // page-break-after/break-after both declare propertyPath "BreakAfter"/area "BreakArea" - they
+            // must collapse to exactly one ComputedStyleAreas field and one CssBox property, not two.
+            var json = """
+                {
+                  "properties": [
+                    { "name": "break-after", "inherited": false, "initialValue": "auto", "cssDataType": "cssom",
+                      "html": { "propertyPath": "BreakAfter", "csharpDataType": "string", "area": "BreakArea" } },
+                    { "name": "page-break-after", "inherited": false, "initialValue": "auto", "aliasOf": "break-after", "cssDataType": "cssom",
+                      "html": { "propertyPath": "BreakAfter", "csharpDataType": "string", "area": "BreakArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var areas = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "ComputedStyleAreas.g.cs").SourceText.ToString();
+            var styleProperties = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
+
+            Assert.Equal(1, CountOccurrences(areas, "public string BreakAfter { get; init; }"));
+            Assert.Equal(1, CountOccurrences(styleProperties, "public string BreakAfter"));
+        }
+
+        private static int CountOccurrences(string haystack, string needle)
+        {
+            var count = 0;
+            var index = 0;
+            while ((index = haystack.IndexOf(needle, index, System.StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                index += needle.Length;
+            }
+            return count;
+        }
+
+        [Fact]
+        public void Emits_CssBox_StyleProperties_Get_Set_Skeleton_For_A_Plain_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "text-align", "inherited": true, "initialValue": "start", "cssDataType": "cssom",
+                      "html": { "propertyPath": "TextAlign", "csharpDataType": "string", "area": "TextArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
+
+            Assert.Contains("partial class CssBox", generated);
+            Assert.Contains("get => _computedStyle.Text.TextAlign;", generated);
+            Assert.Contains("var area = _computedStyle.Text;", generated);
+            Assert.Contains(
+                "var newArea = area.SetPropertyValue(area.TextAlign, value, static (a, v) => a with { TextAlign = v });",
+                generated);
+            Assert.Contains(
+                "_computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { Text = a });",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_CssBox_StyleProperties_Invalidation_Call_When_Html_Invalidates_Is_Declared()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "border-top-width", "inherited": false, "initialValue": "medium",
+                      "cssDataType": ["length", "keyword"], "supportedValues": ["auto"],
+                      "html": { "propertyPath": "BorderTopWidth", "csharpDataType": "string", "area": "BorderArea",
+                        "invalidates": "InvalidateBorderTopWidth" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
+
+            Assert.Contains("var previousStyle = _computedStyle;", generated);
+            Assert.Contains(
+                "if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopWidth();",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_CssBox_StyleProperties_All_Invalidation_Calls_When_Html_Invalidates_Is_An_Array()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "border-top-width", "inherited": false, "initialValue": "medium",
+                      "cssDataType": ["length", "keyword"], "supportedValues": ["auto"],
+                      "html": { "propertyPath": "BorderTopWidth", "csharpDataType": "string", "area": "BorderArea",
+                        "invalidates": ["InvalidateBorderTopWidth", "InvalidateBorderRadii"] } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderTopWidth();",
+                generated);
+            Assert.Contains(
+                "if (!ReferenceEquals(_computedStyle, previousStyle)) DerivedStyle.InvalidateBorderRadii();",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_FontSize_ValueComputation_For_Html_ValueComputation_FontSize()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "font-size", "inherited": true, "initialValue": "medium", "cssDataType": "cssom",
+                      "html": { "propertyPath": "FontSize", "csharpDataType": "string", "area": "FontArea",
+                        "valueComputation": "font-size" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
+
+            Assert.Contains("var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt);", generated);
+            Assert.Contains(
+                "var newArea = area.SetPropertyValue(area.FontSize, resolved, static (a, v) => a with { FontSize = v });",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_NoEms_ValueComputation_For_Html_ValueComputation_NoEms()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "word-spacing", "inherited": true, "initialValue": "normal",
+                      "cssDataType": ["length", "keyword"], "supportedValues": ["normal"],
+                      "html": { "propertyPath": "WordSpacing", "csharpDataType": "string", "area": "TextArea",
+                        "valueComputation": "no-ems" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
+
+            Assert.Contains("var resolved = NoEms(value);", generated);
+            Assert.Contains(
+                "var newArea = area.SetPropertyValue(area.WordSpacing, resolved, static (a, v) => a with { WordSpacing = v });",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_TextIndent_ValueComputation_For_Html_ValueComputation_TextIndent()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "text-indent", "inherited": true, "initialValue": "0", "cssDataType": "cssom",
+                      "html": { "propertyPath": "TextIndent", "csharpDataType": "string", "area": "TextArea",
+                        "valueComputation": "text-indent" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
+
+            Assert.Contains("var resolved = NoEmsTextIndent(value);", generated);
+        }
+
+        [Fact]
         public void Emits_Nothing_When_There_Is_No_CssPropertiesJson_AdditionalFile()
         {
             var compilation = GeneratorTestHost.BuildCompilation(StubSources.MinimalCssBoxAndSvgElement);

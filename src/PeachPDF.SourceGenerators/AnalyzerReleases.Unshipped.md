@@ -18,3 +18,4 @@ PPG010 | PeachPDF.SourceGenerators | Error | svg.propertyPath does not match Svg
 PPG011 | PeachPDF.SourceGenerators | Error | html.propertyPath does not match CssBox's real shape
 PPG012 | PeachPDF.SourceGenerators | Error | Unknown ComputedStyleAreas record
 PPG014 | PeachPDF.SourceGenerators | Error | Invalid logical-category entry
+PPG015 | PeachPDF.SourceGenerators | Error | html.propertyPath reused across different html.area values

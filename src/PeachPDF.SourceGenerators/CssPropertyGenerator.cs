@@ -63,6 +63,12 @@ namespace PeachPDF.SourceGenerators
 
             var svgSource = RegistryEmitter.EmitSvgRegistry(document.Entries);
             context.AddSource("SvgPropertyRegistry.g.cs", svgSource);
+
+            var areasSource = AreasEmitter.Emit(document.Entries);
+            context.AddSource("ComputedStyleAreas.g.cs", areasSource);
+
+            var stylePropertiesSource = StylePropertiesEmitter.Emit(document.Entries);
+            context.AddSource("CssBox.StyleProperties.g.cs", stylePropertiesSource);
         }
 
         private static bool IsError(DiagnosticCode code) => Diagnostics.For(code).DefaultSeverity == DiagnosticSeverity.Error;

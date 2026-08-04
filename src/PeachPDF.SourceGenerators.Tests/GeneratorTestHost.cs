@@ -57,7 +57,16 @@ namespace PeachPDF.SourceGenerators.Tests
                 "PeachPDF.SourceGenerators.TestAssembly",
                 syntaxTrees,
                 references,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+                // MetadataImportOptions.Public (the default) hides internal members of a referenced
+                // assembly from the symbol model entirely - not just "inaccessible", genuinely absent from
+                // GetMembers(). Many real html.propertyPath targets are internal CssBox members (e.g. the
+                // css-logical-1 scratch fields, CssBox.LogicalProperties.cs), and in the real generator run
+                // this never matters (CssBox and the generator's own emitted code share one compilation, so
+                // there's no cross-assembly metadata-import boundary at all) - but includePeachPdfReference
+                // tests cross that boundary on purpose, so they need Internal here to see the same shape
+                // PPG010/011 actually validate against in production.
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+                    .WithMetadataImportOptions(MetadataImportOptions.Internal));
         }
 
         public static GeneratorDriver CreateDriver(string json, bool trackIncrementalSteps = false)
