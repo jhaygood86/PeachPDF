@@ -116,7 +116,7 @@ namespace PeachPDF.Html.Core.Handlers
 
         static StructureTagClassification ClassifyAnonymous(CssBox box)
         {
-            var tableStructureType = box.Display switch
+            var tableStructureType = box.DerivedStyle.ActualDisplay switch
             {
                 CssConstants.TableRow => "TR",
                 // Anonymous table cells can't be distinguished into header (/TH) vs data (/TD) -

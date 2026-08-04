@@ -71,7 +71,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
         {
-            if (Display == CssConstants.None)
+            if (DerivedStyle.ActualDisplay == CssConstants.None)
                 return ValueTask.CompletedTask;
 
             // The rule has no content to resume into, so the only pass state it carries is a break-before

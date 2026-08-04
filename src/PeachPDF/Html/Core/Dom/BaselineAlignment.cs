@@ -21,7 +21,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var child in box.Boxes)
             {
-                if (child.Display == CssConstants.None || child.IsOutOfFlow) continue;
+                if (child.DerivedStyle.ActualDisplay == CssConstants.None || child.IsOutOfFlow) continue;
 
                 var found = FindFirstLineBox(child);
                 if (found != null) return found;

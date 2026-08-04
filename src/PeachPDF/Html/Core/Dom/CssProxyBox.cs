@@ -94,7 +94,7 @@ namespace PeachPDF.Html.Core.Dom
             _awaitingRefill = false;
 
 #if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: START - Location={Location}, Display={Display}");
+            System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: START - Location={Location}, Display={DerivedStyle.ActualDisplay}");
             System.Console.WriteLine($"  Source already laid out: Location={_sourceBox.Location}, ActualBottom={_sourceBox.ActualBottom}, ActualRight={_sourceBox.ActualRight}");
 #endif
 

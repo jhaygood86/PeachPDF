@@ -209,7 +209,7 @@ namespace PeachPDF.Html.Core.Dom
             // selector (selectors can't match on a computed Display value), so it's applied here
             // directly. An author's own explicit counter-increment targeting list-item on the same
             // element still wins (already captured above, so it's not overwritten below).
-            if (box.Display == CssConstants.ListItem && !incrementValues.ContainsKey(CssConstants.ListItem))
+            if (box.DerivedStyle.ActualDisplay == CssConstants.ListItem && !incrementValues.ContainsKey(CssConstants.ListItem))
             {
                 var currentListItemCounter = box.Counters.GetValueOrDefault(CssConstants.ListItem);
                 incrementValues[CssConstants.ListItem] = currentListItemCounter is { IsReversed: true } ? -1 : 1;
@@ -247,7 +247,7 @@ namespace PeachPDF.Html.Core.Dom
         private static bool WouldIncrementCounter(CssBox box, string counterName)
         {
             if (CounterNameAppears(box.CounterIncrement, counterName)) return true;
-            return counterName == CssConstants.ListItem && box.Display == CssConstants.ListItem;
+            return counterName == CssConstants.ListItem && box.DerivedStyle.ActualDisplay == CssConstants.ListItem;
         }
 
         private static bool CounterNameAppears(string counterPropertyValue, string counterName)
@@ -457,12 +457,12 @@ namespace PeachPDF.Html.Core.Dom
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while (sib.Display == CssConstants.None && index - diff - 1 >= 0)
+            while (sib.DerivedStyle.ActualDisplay == CssConstants.None && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.Display == CssConstants.None ? null : sib;
+            sib = sib.DerivedStyle.ActualDisplay == CssConstants.None ? null : sib;
 
             return sib;
         }

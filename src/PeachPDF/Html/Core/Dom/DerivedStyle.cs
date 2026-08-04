@@ -1071,6 +1071,45 @@ namespace PeachPDF.Html.Core.Dom
 
         #endregion
 
+        #region Display
+
+        /// <summary>
+        /// This box's <c>display</c>, blockified per CSS 2.1 §9.7 when <see cref="Owner"/> is floated
+        /// (<c>Style.DisplayPositioning.Float</c> is not <see cref="CssConstants.None"/>) - the value layout
+        /// and paint should actually use. <c>Style.DisplayPositioning.Display</c> itself stays the raw
+        /// cascaded keyword (what the cascade produced, e.g. for CSS-OM <c>getPropertyValue</c> readback),
+        /// not blockified. Recomputed fresh every call, not cached - a single string switch, same cost class
+        /// as <see cref="ActualLineHeight"/>/<see cref="IsPositioned"/> below.
+        /// </summary>
+        public string ActualDisplay
+        {
+            get
+            {
+                var area = Style.DisplayPositioning;
+                if (area.Float is CssConstants.None) return area.Display;
+
+                return area.Display switch
+                {
+                    "inline" => "block",
+                    "inline-block" => "block",
+                    "inline-table" => "table",
+                    "table-row" => "block",
+                    "table-row-group" => "block",
+                    "table-column" => "block",
+                    "table-column-group" => "block",
+                    "table-cell" => "block",
+                    "table-caption" => "block",
+                    "table-header-group" => "block",
+                    "table-footer-group" => "block",
+                    "inline-flex" => "flex",
+                    "inline-grid" => "grid",
+                    _ => area.Display
+                };
+            }
+        }
+
+        #endregion
+
         #region Position, multi-column
 
         /// <summary>True for a positioned element: <c>position</c> of relative, absolute, fixed, or sticky.</summary>

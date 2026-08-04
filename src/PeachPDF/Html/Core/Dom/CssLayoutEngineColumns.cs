@@ -72,7 +72,7 @@ namespace PeachPDF.Html.Core.Dom
             columnsBox.ActualRight = columnsBox.Location.X + containerWidth + columnsBox.ActualBoxSizeIncludedWidth;
 
             var children = columnsBox.Boxes
-                .Where(b => b.Display != CssConstants.None && !b.IsOutOfFlow
+                .Where(b => b.DerivedStyle.ActualDisplay != CssConstants.None && !b.IsOutOfFlow
                             && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
                 .ToList();
 

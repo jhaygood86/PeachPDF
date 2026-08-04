@@ -292,12 +292,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// is the box "Display" is "Inline", is this is an inline box and not block.
         /// </summary>
-        public bool IsInline => Display is CssConstants.Inline or CssConstants.InlineBlock or CssConstants.InlineTable or CssConstants.InlineFlex or CssConstants.InlineGrid;
+        public bool IsInline => DerivedStyle.ActualDisplay is CssConstants.Inline or CssConstants.InlineBlock or CssConstants.InlineTable or CssConstants.InlineFlex or CssConstants.InlineGrid;
 
         /// <summary>
         /// is the box "Display" is "Block", is this is a block box and not inline.
         /// </summary>
-        public bool IsBlock => Display == CssConstants.Block;
+        public bool IsBlock => DerivedStyle.ActualDisplay == CssConstants.Block;
 
         public bool IsFloated => Float is CssConstants.Left or CssConstants.Right;
 
@@ -343,7 +343,7 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        public virtual bool IsTableRowGroupBox => Display is CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup;
+        public virtual bool IsTableRowGroupBox => DerivedStyle.ActualDisplay is CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup;
 
         /// <summary>
         /// Maps page number → last row bottom Y on that page. Set by CssLayoutEngineTable when rows break across pages.
@@ -401,7 +401,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal List<(double X, double Top, double Bottom)>? ColumnRuleSegments { get; set; }
 
-        public virtual bool IsTableCell => Display is CssConstants.TableCell;
+        public virtual bool IsTableCell => DerivedStyle.ActualDisplay is CssConstants.TableCell;
 
         /// <summary>
         /// Gets the containing block-box of this box. (The nearest parent box with display=block)
@@ -417,11 +417,11 @@ namespace PeachPDF.Html.Core.Dom
 
                 var box = ParentBox;
                 while (!box.IsBlock &&
-                       box.Display != CssConstants.ListItem &&
-                       box.Display != CssConstants.Table &&
-                       box.Display != CssConstants.TableCell &&
-                       box.Display != CssConstants.Flex &&
-                       box.Display != CssConstants.InlineFlex &&
+                       box.DerivedStyle.ActualDisplay != CssConstants.ListItem &&
+                       box.DerivedStyle.ActualDisplay != CssConstants.Table &&
+                       box.DerivedStyle.ActualDisplay != CssConstants.TableCell &&
+                       box.DerivedStyle.ActualDisplay != CssConstants.Flex &&
+                       box.DerivedStyle.ActualDisplay != CssConstants.InlineFlex &&
                        box.ParentBox != null)
                 {
                     box = box.ParentBox;
@@ -1849,7 +1849,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var childBox in Boxes)
             {
-                if (childBox.IsOutOfFlow && childBox.Display != CssConstants.None)
+                if (childBox.IsOutOfFlow && childBox.DerivedStyle.ActualDisplay != CssConstants.None)
                 {
                     await LayoutBlockChild(g, childBox);
                 }
@@ -2143,7 +2143,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private void TakeBackTheMarkerOfAnItemThisPassKeptNothingOf()
         {
-            if (Display != CssConstants.ListItem) return;
+            if (DerivedStyle.ActualDisplay != CssConstants.ListItem) return;
 
             if (OutsideMarkerChild is not { } marker) return;
 
@@ -2197,7 +2197,7 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var childBox in box.Boxes)
             {
                 if (ReferenceEquals(childBox, excluded)) continue;
-                if (childBox.Display == CssConstants.None || childBox.IsOutOfFlow) continue;
+                if (childBox.DerivedStyle.ActualDisplay == CssConstants.None || childBox.IsOutOfFlow) continue;
 
                 if (childBox.PlacesItselfAsBlockBox && childBox.ActualBottom > childBox.Location.Y) return true;
 
@@ -2227,7 +2227,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private async ValueTask LayoutOutsideMarker(RGraphics g)
         {
-            if (Display != CssConstants.ListItem) return;
+            if (DerivedStyle.ActualDisplay != CssConstants.ListItem) return;
 
             foreach (var childBox in Boxes)
             {
@@ -2372,7 +2372,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private async ValueTask PerformLayoutPrologue(RGraphics g)
         {
-            if (Display != CssConstants.None)
+            if (DerivedStyle.ActualDisplay != CssConstants.None)
             {
                 RectanglesReset();
                 await MeasureWordsSize(g);
@@ -2504,7 +2504,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         internal bool PlacesItselfAsBlockBox =>
             IsBlock
-            || Display is CssConstants.ListItem or CssConstants.Table or CssConstants.InlineTable
+            || DerivedStyle.ActualDisplay is CssConstants.ListItem or CssConstants.Table or CssConstants.InlineTable
                        or CssConstants.TableCell or CssConstants.Flex or CssConstants.InlineFlex
                        or CssConstants.Grid or CssConstants.InlineGrid;
 
@@ -2519,7 +2519,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // The engines MonolithicContent.RunsAnEngineOfItsOwn names, in the same order; this branch
                 // needs to know *which* one, which is why it cannot ask the combined predicate.
-                if (Display is CssConstants.Flex or CssConstants.InlineFlex)
+                if (DerivedStyle.ActualDisplay is CssConstants.Flex or CssConstants.InlineFlex)
                 {
                     // The record travels into the engine so a resumed pass can re-enter exactly the items
                     // that did not finish their own content last time (CssLayoutEngineFlex's commit pass),
@@ -2528,7 +2528,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (PendingBreakToken is not null) return;
                 }
-                else if (Display is CssConstants.Grid or CssConstants.InlineGrid)
+                else if (DerivedStyle.ActualDisplay is CssConstants.Grid or CssConstants.InlineGrid)
                 {
                     // The record travels into the engine so a resumed pass can re-enter exactly the row
                     // (and that row's items) that did not finish their own content last time
@@ -2538,7 +2538,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (PendingBreakToken is not null) return;
                 }
-                else if (Display is CssConstants.Table or CssConstants.InlineTable)
+                else if (DerivedStyle.ActualDisplay is CssConstants.Table or CssConstants.InlineTable)
                 {
                     // The record travels into the engine so it can tell a resumed pass from a fresh layout
                     // of the same box - the once-per-table half of its work is destructive when repeated
@@ -2680,7 +2680,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private bool PaginatedItsOwnContentWithoutBreaking() =>
             !IsOutOfFlow
-            && Display is CssConstants.Table or CssConstants.InlineTable
+            && DerivedStyle.ActualDisplay is CssConstants.Table or CssConstants.InlineTable
             && HtmlContainer is { IsFragmenting: true }
             && PageBreakBottoms is not { Count: > 0 };
 
@@ -3118,7 +3118,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (i > start
                         && childBox.PlacesItselfAsBlockBox
                         && !childBox.IsOutOfFlow
-                        && childBox.Display != CssConstants.None
+                        && childBox.DerivedStyle.ActualDisplay != CssConstants.None
                         && HtmlContainer is { IsFragmenting: true }
                         && HtmlContainer.CurrentFragmentainer is { HasOwnBand: true } columnBand
                         && childBox.ActualBottom > columnBand.BandBottom)
@@ -3160,7 +3160,7 @@ namespace PeachPDF.Html.Core.Dom
                     // (no break of its own to take, but a bottom past the page it started on) leaving the
                     // cursor stale for whatever follows it.
                     if (!childBox.IsOutOfFlow
-                        && childBox.Display != CssConstants.None
+                        && childBox.DerivedStyle.ActualDisplay != CssConstants.None
                         && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: false })
                     {
                         HtmlContainer.CurrentFragmentainer.StepOverTo(HtmlContainer.SlotEndingAt(childBox.ActualBottom));
@@ -3572,7 +3572,7 @@ namespace PeachPDF.Html.Core.Dom
         private void ResumeInTheNextFragmentainer()
         {
             if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true } fragmentainer) return;
-            if (Display is CssConstants.TableCell || Position is not (CssConstants.Static or CssConstants.Relative))
+            if (DerivedStyle.ActualDisplay is CssConstants.TableCell || Position is not (CssConstants.Static or CssConstants.Relative))
                 return;
 
             // Moving Location is the whole translation: ActualRight and ActualBottom are derived from it
@@ -3713,7 +3713,7 @@ namespace PeachPDF.Html.Core.Dom
         private async ValueTask ResolveOwnInlineSize(RGraphics g, double blockTop)
         {
             // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid
-            if (Display != CssConstants.TableCell && Display != CssConstants.Table && Display != CssConstants.Flex && Display != CssConstants.InlineFlex && Display != CssConstants.Grid && Display != CssConstants.InlineGrid)
+            if (DerivedStyle.ActualDisplay != CssConstants.TableCell && DerivedStyle.ActualDisplay != CssConstants.Table && DerivedStyle.ActualDisplay != CssConstants.Flex && DerivedStyle.ActualDisplay != CssConstants.InlineFlex && DerivedStyle.ActualDisplay != CssConstants.Grid && DerivedStyle.ActualDisplay != CssConstants.InlineGrid)
             {
                 var width = await CssLayoutEngine.GetBoxWidth(g, this, blockTop);
                 ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
@@ -3924,7 +3924,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private BlockChildOffset? ResolveBlockChildOffset(CssBox child)
         {
-            if (child.Display != CssConstants.TableCell)
+            if (child.DerivedStyle.ActualDisplay != CssConstants.TableCell)
             {
                 if (child.Position is CssConstants.Static or CssConstants.Relative)
                 {
@@ -4197,7 +4197,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private void CommitBlockChildOffset(CssBox child, BlockChildOffset offset)
         {
-            if (child.Display != CssConstants.TableCell)
+            if (child.DerivedStyle.ActualDisplay != CssConstants.TableCell)
             {
                 if (offset.PositionedInBlockFlow)
                 {
@@ -4954,7 +4954,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 foreach (CssBox childBox in box.Boxes)
                 {
-                    if (childBox.Display == CssConstants.None) continue;
+                    if (childBox.DerivedStyle.ActualDisplay == CssConstants.None) continue;
                     GetMinimumWidth_LongestWord(childBox, ref maxWidth, ref maxWidthWord);
                 }
             }
@@ -5048,7 +5048,7 @@ namespace PeachPDF.Html.Core.Dom
             double? oldPaddingSum = null;
 
             // not inline (block) boxes start a new line so we need to reset the max sum
-            if (box.Display != CssConstants.Inline && box.Display != CssConstants.TableCell && box.WhiteSpace != CssConstants.NoWrap)
+            if (box.DerivedStyle.ActualDisplay != CssConstants.Inline && box.DerivedStyle.ActualDisplay != CssConstants.TableCell && box.WhiteSpace != CssConstants.NoWrap)
             {
                 oldSum = maxSum;
                 maxSum = marginSum;
@@ -5061,7 +5061,7 @@ namespace PeachPDF.Html.Core.Dom
 
 
             // for tables the padding also contains the spacing between cells
-            if (box.Display == CssConstants.Table)
+            if (box.DerivedStyle.ActualDisplay == CssConstants.Table)
                 paddingSum += CssLayoutEngineTable.GetTableSpacing(box);
 
             if (box.Words.Count > 0)
@@ -5082,7 +5082,7 @@ namespace PeachPDF.Html.Core.Dom
                 // recursively on all the child boxes
                 foreach (var childBox in box.Boxes)
                 {
-                    if (childBox.Display == CssConstants.None) continue;
+                    if (childBox.DerivedStyle.ActualDisplay == CssConstants.None) continue;
 
                     marginSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
 
@@ -5126,11 +5126,11 @@ namespace PeachPDF.Html.Core.Dom
                     // explicit 10em/90pt) summed to 308 (128+90+90) instead of correctly taking the
                     // widest single line (~128).
                     if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%')
-                        && !(childBox.Display == CssConstants.Inline && childBox.Words.Count == 0))
+                        && !(childBox.DerivedStyle.ActualDisplay == CssConstants.Inline && childBox.Words.Count == 0))
                     {
                         var explicitContentWidth = CssValueParser.ParseLength(childBox.Width, 0, childBox);
-                        var childStartsNewLine = childBox.Display != CssConstants.Inline
-                            && childBox.Display != CssConstants.TableCell && childBox.WhiteSpace != CssConstants.NoWrap;
+                        var childStartsNewLine = childBox.DerivedStyle.ActualDisplay != CssConstants.Inline
+                            && childBox.DerivedStyle.ActualDisplay != CssConstants.TableCell && childBox.WhiteSpace != CssConstants.NoWrap;
                         maxSum = childStartsNewLine
                             ? Math.Max(maxSum, explicitContentWidth)
                             : Math.Max(maxSum, maxSumBeforeChild + explicitContentWidth);
@@ -5367,7 +5367,7 @@ namespace PeachPDF.Html.Core.Dom
             while (chainMembers.Count < 1000 && current.Overflow == CssConstants.Visible &&
                    current.ActualBorderTopWidth < 0.1 && current.ActualPaddingTop < 0.1)
             {
-                var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsOutOfFlow && b.Display != CssConstants.None);
+                var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsOutOfFlow && b.DerivedStyle.ActualDisplay != CssConstants.None);
                 if (firstInFlowChild == null || firstInFlowChild.Clear != CssConstants.None || firstInFlowChild == current) break;
 
                 margins.Fold(firstInFlowChild.ActualMarginTop);
@@ -5461,7 +5461,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var childBox in Boxes)
             {
-                if (childBox.IsOutOfFlow || childBox.Display == CssConstants.None) continue;
+                if (childBox.IsOutOfFlow || childBox.DerivedStyle.ActualDisplay == CssConstants.None) continue;
                 childBox.FoldSelfCollapsingMargins(ref margins, depth + 1);
             }
         }
@@ -5478,7 +5478,7 @@ namespace PeachPDF.Html.Core.Dom
             // Capped defensively (real documents never nest this deep) so a malformed/cyclic box tree
             // degrades to "not self-collapsing" instead of a stack overflow.
             if (depth > 500) return false;
-            if (Display == CssConstants.None) return false;
+            if (DerivedStyle.ActualDisplay == CssConstants.None) return false;
             if (IsOutOfFlow) return false;
             // A percentage height against an indefinite (not-yet-height-calculated) containing block
             // resolves to auto (CSS2.1 §10.5, the same rule ApplyHeight already applies) - Acid2's own
@@ -5499,7 +5499,7 @@ namespace PeachPDF.Html.Core.Dom
                  CssValueParser.ParseLength(MinHeight, ContainingBlock.Size.Height, this) <= 0);
             if (!minHeightZero) return false;
 
-            var inFlowChildren = Boxes.Where(b => !b.IsOutOfFlow && b.Display != CssConstants.None && b != this).ToList();
+            var inFlowChildren = Boxes.Where(b => !b.IsOutOfFlow && b.DerivedStyle.ActualDisplay != CssConstants.None && b != this).ToList();
             return inFlowChildren.Count == 0 || inFlowChildren.All(b => b.IsMarginCollapseThrough(depth + 1));
         }
 
@@ -5969,13 +5969,13 @@ namespace PeachPDF.Html.Core.Dom
             {
                 return $"{(ParentBox == null ? "Root: " : string.Empty)}{tag} Block {FontSize}, Children:{Boxes.Count}";
             }
-            else if (Display == CssConstants.None)
+            else if (DerivedStyle.ActualDisplay == CssConstants.None)
             {
                 return $"{(ParentBox == null ? "Root: " : string.Empty)}{tag} None";
             }
             else
             {
-                return $"{(ParentBox == null ? "Root: " : string.Empty)}{tag} {Display}: {Text}";
+                return $"{(ParentBox == null ? "Root: " : string.Empty)}{tag} {DerivedStyle.ActualDisplay}: {Text}";
             }
         }
 
