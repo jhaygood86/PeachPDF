@@ -188,6 +188,26 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(TextTransform.Uppercase, child!.TextTransform.Value);
         }
 
+        [Fact]
+        public async Task FullWidth_ParsesAndStores_ButLeavesTextUnchanged()
+        {
+            // See .claude/accepted-gaps/text-transform-full-width-no-effect.md: full-width is a valid,
+            // stored keyword (Map.TextTransforms includes it) but CssBox.ApplyTextTransform doesn't
+            // implement the half-width-to-full-width mapping, so it's currently a rendering no-op.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="el" style="text-transform: full-width">Hello World</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal(TextTransform.FullWidth, el!.TextTransform.Value);
+            Assert.Equal("Hello", FindFirstWord(el)!.Text);
+        }
+
         // ── helpers ───────────────────────────────────────────────────────────
 
         private static async Task<CssBox> BuildBoxTree(string html)

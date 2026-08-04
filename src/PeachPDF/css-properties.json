@@ -1582,6 +1582,7 @@
     },
     {
       "name": "text-transform",
+      "comment": "cssDataType's own Map.TextTransforms includes full-width because it's already used elsewhere in the CSS-OM pipeline, even though CssBox.cs's ApplyTextTransform only implements uppercase/lowercase/capitalize - full-width parses and stores but has no distinct effect (see .claude/accepted-gaps/text-transform-full-width-no-effect.md). supportsDataType is the stricter, @supports-only list excluding full-width for exactly that reason, same shape as word-break's keep-all split.",
       "inherited": true,
       "initialValue": "none",
       "cssDataType": {
@@ -1590,6 +1591,13 @@
         "keywordMap": "Map.TextTransforms",
         "fallback": "TextTransform.None"
       },
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "none",
+        "capitalize",
+        "uppercase",
+        "lowercase"
+      ],
       "html": {
         "propertyPath": "TextTransform",
         "csharpDataType": "CssProperty<TextTransform>",
