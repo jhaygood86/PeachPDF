@@ -1531,7 +1531,7 @@
     },
     {
       "name": "vertical-align",
-      "comment": "CSS 2.1 also accepts a <percentage>/<length> value form (see .claude/accepted-gaps/vertical-align-percentage-length-unsupported.md) - out of scope here, this conversion preserves the pre-existing keyword-only cascade behavior. PeachBaselineMiddle (the deprecated img align=middle sentinel, see CssConstants.PeachBaselineMiddle) is never produced by this keyword grammar - DomParser assigns it directly via CssProperty<VerticalAlignment>.FromValue, same as Float's img align handling.",
+      "comment": "CSS 2.1 also accepts a <percentage>/<length> value form (see .claude/accepted-gaps/vertical-align-no-length-percentage-support.md) - out of scope here, this conversion preserves the pre-existing keyword-only cascade behavior. PeachBaselineMiddle (the deprecated img align=middle sentinel, see CssConstants.PeachBaselineMiddle) is never produced by this keyword grammar - DomParser assigns it directly via CssProperty<VerticalAlignment>.FromValue, same as Float's img align handling.",
       "inherited": false,
       "initialValue": "baseline",
       "cssDataType": {

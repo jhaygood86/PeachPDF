@@ -149,7 +149,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task PercentageValue_IsRejectedAtTheCascade_AndFallsBackToBaseline()
         {
-            // See .claude/accepted-gaps/vertical-align-percentage-length-unsupported.md: CSS 2.1
+            // See .claude/accepted-gaps/vertical-align-no-length-percentage-support.md: CSS 2.1
             // §10.8.1 also accepts a <percentage>/<length> value, but PeachPDF's cascade-time keyword
             // grammar only recognizes the 8 standard keywords - an authored percentage/length is
             // silently rejected and the property stays at its initial "baseline".
