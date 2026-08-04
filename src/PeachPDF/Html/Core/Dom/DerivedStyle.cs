@@ -1147,7 +1147,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public bool EstablishesMultiColumnContext =>
             Style.MultiColumn.ColumnCount.Value is { IsValue: true } ||
-            (!string.IsNullOrEmpty(Style.MultiColumn.ColumnWidth) && Style.MultiColumn.ColumnWidth != CssConstants.Auto);
+            Style.MultiColumn.ColumnWidth.Value is { IsValue: true };
 
         #endregion
     }

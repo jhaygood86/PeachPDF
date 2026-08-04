@@ -2359,20 +2359,21 @@
     },
     {
       "name": "column-width",
+      "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. Reuses word-spacing/letter-spacing/row-gap/column-gap's LengthOrCalc value side so a relative-unit calc() still evaluates lazily at consumption time instead of being rejected.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": [
-        "keyword",
-        "length"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "ColumnWidth",
-        "csharpDataType": "string",
-        "area": "MultiColumnArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>>",
+        "area": "MultiColumnArea",
+        "getterExpression": "{box}.ColumnWidth.ToString()"
       }
     },
     {
