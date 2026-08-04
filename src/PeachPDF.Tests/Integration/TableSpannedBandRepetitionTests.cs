@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -84,10 +85,10 @@ namespace PeachPDF.Tests.Integration
         {
             var (root, container) = await Paginate(TallRowTableWith(group));
 
-            var display = group == "thead" ? CssConstants.TableHeaderGroup : CssConstants.TableFooterGroup;
+            var display = group == "thead" ? DisplayMode.TableHeaderGroup : DisplayMode.TableFooterGroup;
 
             var proxies = TableOf(root).Boxes.OfType<CssProxyBox>()
-                .Where(p => p.Display == display)
+                .Where(p => p.Display.Value == display)
                 .ToList();
 
             Assert.Equal(container.FragmentTree!.Fragmentainers.Count, proxies.Count);
@@ -192,9 +193,9 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await Paginate(
                 TallRowTableWith(group, groupStyle: "break-inside: auto"));
 
-            var display = group == "thead" ? CssConstants.TableHeaderGroup : CssConstants.TableFooterGroup;
+            var display = group == "thead" ? DisplayMode.TableHeaderGroup : DisplayMode.TableFooterGroup;
 
-            Assert.Single(TableOf(root).Boxes.OfType<CssProxyBox>(), p => p.Display == display);
+            Assert.Single(TableOf(root).Boxes.OfType<CssProxyBox>(), p => p.Display.Value == display);
 
             // And the row is not sliced for room that is never taken. Stated as the absence of a
             // confinement rather than by comparing the row's bottom against the same table without a
@@ -218,7 +219,7 @@ namespace PeachPDF.Tests.Integration
                 + $"<tbody>{rows}</tbody></table>");
 
             var proxies = TableOf(root).Boxes.OfType<CssProxyBox>()
-                .Where(p => p.Display == CssConstants.TableHeaderGroup)
+                .Where(p => p.Display.Value == DisplayMode.TableHeaderGroup)
                 .ToList();
 
             // One per page, and no page twice - which is what a duplicate from step 5b would look like.
@@ -256,10 +257,10 @@ namespace PeachPDF.Tests.Integration
                 + "<tr><td><div style='height:700pt;background:#ddd'></div></td></tr>"
                 + "<tr><td>word9999</td></tr></tbody></table>");
 
-            var display = group == "thead" ? CssConstants.TableHeaderGroup : CssConstants.TableFooterGroup;
+            var display = group == "thead" ? DisplayMode.TableHeaderGroup : DisplayMode.TableFooterGroup;
 
             var proxies = TableOf(root).Boxes.OfType<CssProxyBox>()
-                .Where(p => p.Display == display)
+                .Where(p => p.Display.Value == display)
                 .ToList();
 
             var bands = proxies.Select(p => container.SlotStartingAt(p.Location.Y)).ToList();
@@ -412,7 +413,7 @@ namespace PeachPDF.Tests.Integration
             var wrap = LayoutHarness.FindById(root, "wrap")!;
             var row = LayoutHarness.FindById(root, "tall")!.ParentBox!.ParentBox!;
 
-            Assert.Equal(CssConstants.TableRow, row.Display);
+            Assert.Equal(DisplayMode.TableRow, row.Display.Value);
 
             var displacedFragments = container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root)
@@ -446,7 +447,7 @@ namespace PeachPDF.Tests.Integration
                 LayoutHarness.Wrap(TallRowTableWith("thead")));
 
             Assert.Single(TableOf(root).Boxes.OfType<CssProxyBox>(),
-                p => p.Display == CssConstants.TableHeaderGroup);
+                p => p.Display.Value == DisplayMode.TableHeaderGroup);
 
             Assert.All(RowFragmentsOf(container), fragment => Assert.Null(fragment.Fragment.OverflowClip));
         }
@@ -465,13 +466,13 @@ namespace PeachPDF.Tests.Integration
         }
 
         private static CssBox TableOf(CssBox root) =>
-            LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
 
         /// <summary>The body row holding the over-tall block — the first one in every fixture here.</summary>
         private static CssBox TallRowOf(CssBox root) =>
-            LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.TableRow
+            LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.TableRow
                                                        && b.Boxes.Count > 0
-                                                       && b.Boxes[0].Display == CssConstants.TableCell
+                                                       && b.Boxes[0].Display.Value == DisplayMode.TableCell
                                                        && b.Boxes[0].Words.Count == 0);
 
         /// <summary>
@@ -516,7 +517,7 @@ namespace PeachPDF.Tests.Integration
         private static List<(int Slot, BoxFragment Fragment)> RowFragmentsOf(HtmlContainerInt container) =>
             container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root)
-                    .Where(b => b.Box.Display == CssConstants.TableRow
+                    .Where(b => b.Box.Display.Value == DisplayMode.TableRow
                                 && b.Box.Boxes.Count > 0
                                 && b.Box.Boxes[0].Words.Count == 0)
                     .Select(b => (f.SlotIndex, b)))

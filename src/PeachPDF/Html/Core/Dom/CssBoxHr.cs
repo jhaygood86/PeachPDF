@@ -32,7 +32,7 @@ namespace PeachPDF.Html.Core.Dom
         public CssBoxHr(CssBox? parent, HtmlTag tag)
             : base(parent, tag)
         {
-            Display = CssConstants.Block;
+            Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
         }
 
         /// <summary>

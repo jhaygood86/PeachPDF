@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore;
@@ -206,7 +207,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
-            var table = FindFirst(container.Root!, b => b.Display == "table");
+            var table = FindFirst(container.Root!, b => b.Display.Value == DisplayMode.Table);
             var heading = FindFirst(container.Root!, b => b.HtmlTag?.Name == "h2");
             Assert.NotNull(table);
             Assert.NotNull(heading);
@@ -301,7 +302,7 @@ namespace PeachPDF.Tests.Integration
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
-            var table = FindFirst(container.Root!, b => b.Display == "table");
+            var table = FindFirst(container.Root!, b => b.Display.Value == DisplayMode.Table);
             return (table, container.PageSize.Height);
         }
 

@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
                 "text-align: center; font-weight: bold; z-index: 5;");
 
             Assert.Equal(box.Color, CssUtils.GetPropertyValue(box, "color"));
-            Assert.Equal(box.Display, CssUtils.GetPropertyValue(box, "display"));
+            Assert.Equal(box.Display.ToString(), CssUtils.GetPropertyValue(box, "display"));
             Assert.Equal(box.Position.ToString(), CssUtils.GetPropertyValue(box, "position"));
             Assert.Equal(box.Overflow.ToString(), CssUtils.GetPropertyValue(box, "overflow"));
             Assert.Equal(box.TextAlign.ToString(), CssUtils.GetPropertyValue(box, "text-align"));

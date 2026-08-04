@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -150,7 +151,7 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var root = await BuildAndLayoutAsync(html);
-            var table = FindFirst(root, b => b.Display == "table");
+            var table = FindFirst(root, b => b.Display.Value == DisplayMode.Table);
             var img = FindById(root, "target");
 
             Assert.NotNull(img);
@@ -210,7 +211,7 @@ namespace PeachPDF.Tests.Integration
         private static async Task<(CssBox? svg, CssBox? table)> GetTargetSvgAndTable(string html)
         {
             var root = await BuildAndLayoutAsync(html);
-            var table = FindFirst(root, b => b.Display == "table");
+            var table = FindFirst(root, b => b.Display.Value == DisplayMode.Table);
             var svg = FindById(root, "target");
             return (svg, table);
         }

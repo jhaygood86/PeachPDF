@@ -1317,33 +1317,17 @@
       "name": "display",
       "inherited": false,
       "initialValue": "inline",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "block",
-        "inline",
-        "inline-block",
-        "none",
-        "flex",
-        "inline-flex",
-        "grid",
-        "inline-grid",
-        "table",
-        "inline-table",
-        "table-row",
-        "table-cell",
-        "table-header-group",
-        "table-footer-group",
-        "table-row-group",
-        "table-column",
-        "table-column-group",
-        "table-caption",
-        "list-item"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "DisplayMode",
+        "keywordMap": "Map.DisplayModes",
+        "fallback": "DisplayMode.Inline"
+      },
       "html": {
         "propertyPath": "Display",
-        "csharpDataType": "string",
-        "area": "DisplayPositioningArea"
+        "csharpDataType": "CssProperty<DisplayMode>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.Display.ToString()"
       }
     },
     {

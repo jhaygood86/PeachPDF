@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -484,7 +485,7 @@ using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
         private CssBox? FindTableBox(CssBox root)
         {
-            if (root.Display == CssConstants.Table)
+            if (root.Display.Value == DisplayMode.Table)
                 return root;
 
             foreach (var child in root.Boxes)
@@ -502,7 +503,7 @@ using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
             var tables = new List<CssBox>();
             void Collect(CssBox box)
             {
-                if (box.Display == CssConstants.Table)
+                if (box.Display.Value == DisplayMode.Table)
                     tables.Add(box);
                 foreach (var child in box.Boxes)
                     Collect(child);
@@ -513,7 +514,7 @@ using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
         private CssBox? FindBoxByDisplay(CssBox root, string display)
         {
-            if (root.Display == display)
+            if (root.Display.ToString() == display)
                 return root;
 
             foreach (var child in root.Boxes)
@@ -532,7 +533,7 @@ using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
   
     void FindProxies(CssBox box)
   {
-  if (box is CssProxyBox proxy && proxy.Display == display)
+  if (box is CssProxyBox proxy && proxy.Display.ToString() == display)
     {
        proxies.Add(proxy);
        }
@@ -562,11 +563,11 @@ using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
 
             void CollectBodyRows(CssBox box, List<CssBox> rows)
             {
-                if (box.Display == CssConstants.TableRow)
+                if (box.Display.Value == DisplayMode.TableRow)
                 {
                     var parent = box.ParentBox;
-                    if (parent?.Display != CssConstants.TableHeaderGroup &&
-             parent?.Display != CssConstants.TableFooterGroup)
+                    if (parent?.Display.Value != DisplayMode.TableHeaderGroup &&
+             parent?.Display.Value != DisplayMode.TableFooterGroup)
                     {
                         rows.Add(box);
                     }

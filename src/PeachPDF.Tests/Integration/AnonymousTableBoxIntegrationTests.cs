@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -40,7 +41,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Single(ul.Boxes);
 
             var row = ul.Boxes[0];
-            Assert.Equal(CssConstants.TableRow, row.Display);
+            Assert.Equal(DisplayMode.TableRow, row.Display.Value);
             Assert.Equal(4, row.Boxes.Count);
 
             var first = FindByClass(root, "first")!;
@@ -54,18 +55,18 @@ namespace PeachPDF.Tests.Integration
 
             // Non-cell children each get their own anonymous table-cell wrapper as a direct row child.
             Assert.NotSame(row, second.ParentBox);
-            Assert.Equal(CssConstants.TableCell, second.ParentBox!.Display);
+            Assert.Equal(DisplayMode.TableCell, second.ParentBox!.Display.Value);
             Assert.Same(row, second.ParentBox!.ParentBox);
             Assert.Single(second.ParentBox!.Boxes);
 
             Assert.NotSame(row, fourth.ParentBox);
-            Assert.Equal(CssConstants.TableCell, fourth.ParentBox!.Display);
+            Assert.Equal(DisplayMode.TableCell, fourth.ParentBox!.Display.Value);
             Assert.Same(row, fourth.ParentBox!.ParentBox);
             Assert.Single(fourth.ParentBox!.Boxes);
 
             // The nested display:table on "second" establishes its own table, unaffected by the
             // anonymous-cell wrapper around it.
-            Assert.Equal(CssConstants.Table, second.Display);
+            Assert.Equal(DisplayMode.Table, second.Display.Value);
 
             // Row order must match document order.
             Assert.Equal(
@@ -103,11 +104,11 @@ namespace PeachPDF.Tests.Integration
             // usual inline-content-needs-a-block-wrapper mechanism, unrelated to the table rules under
             // test here), not "a"/"b" as its direct children.
             var anonRow = rowGroup.Boxes[0];
-            Assert.Equal(CssConstants.TableRow, anonRow.Display);
+            Assert.Equal(DisplayMode.TableRow, anonRow.Display.Value);
             Assert.Single(anonRow.Boxes);
 
             var anonCell = anonRow.Boxes[0];
-            Assert.Equal(CssConstants.TableCell, anonCell.Display);
+            Assert.Equal(DisplayMode.TableCell, anonCell.Display.Value);
 
             var a = FindByClass(root, "a")!;
             var b = FindByClass(root, "b")!;
@@ -153,14 +154,14 @@ namespace PeachPDF.Tests.Integration
 
             // 3.1: both cells share one anonymous table-row.
             var anonRow = cell1.ParentBox!;
-            Assert.Equal(CssConstants.TableRow, anonRow.Display);
+            Assert.Equal(DisplayMode.TableRow, anonRow.Display.Value);
             Assert.Same(anonRow, cell2.ParentBox);
 
             // 3.2: the anonymous row is wrapped in an anonymous table (the table formatting context the
             // stray cells require per CSS2.1 §17.2.1) — without it the row would render outside any table.
             var anonTable = anonRow.ParentBox!;
             Assert.Null(anonTable.HtmlTag);
-            Assert.Equal(CssConstants.Table, anonTable.Display);
+            Assert.Equal(DisplayMode.Table, anonTable.Display.Value);
 
             // The synthesized table must sit between "before" and "after" in document order, not after
             // "after" (which is what a naive append-at-the-end would produce).

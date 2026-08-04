@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -25,7 +26,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await FindByIdAsync(
                 "<span id='t' style='position:absolute'>x</span>", "t");
-            Assert.Equal("block", box.Display);
+            Assert.Equal(DisplayMode.Block, box.Display.Value);
         }
 
         [Fact]
@@ -33,7 +34,7 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await FindByIdAsync(
                 "<div id='t' style='display:inline-block; position:fixed'>x</div>", "t");
-            Assert.Equal("block", box.Display);
+            Assert.Equal(DisplayMode.Block, box.Display.Value);
         }
 
         [Fact]
@@ -41,7 +42,23 @@ namespace PeachPDF.Tests.Integration
         {
             var box = await FindByIdAsync(
                 "<div id='t' style='display:inline-flex; position:absolute'></div>", "t");
-            Assert.Equal("flex", box.Display);
+            Assert.Equal(DisplayMode.Flex, box.Display.Value);
+        }
+
+        [Fact]
+        public async Task Absolute_InlineGrid_BlockifiesToGrid()
+        {
+            var box = await FindByIdAsync(
+                "<div id='t' style='display:inline-grid; position:absolute'></div>", "t");
+            Assert.Equal(DisplayMode.Grid, box.Display.Value);
+        }
+
+        [Fact]
+        public async Task Fixed_InlineTable_BlockifiesToTable()
+        {
+            var box = await FindByIdAsync(
+                "<div id='t' style='display:inline-table; position:fixed'></div>", "t");
+            Assert.Equal(DisplayMode.Table, box.Display.Value);
         }
 
         [Fact]
@@ -50,7 +67,7 @@ namespace PeachPDF.Tests.Integration
             // A static (non-positioned) box keeps its inline-level display.
             var box = await FindByIdAsync(
                 "<div id='t' style='display:inline-block'>x</div>", "t");
-            Assert.Equal("inline-block", box.Display);
+            Assert.Equal(DisplayMode.InlineBlock, box.Display.Value);
         }
 
         // ─── Out-of-flow child of a flex container (fix 8a) ──────────────────────

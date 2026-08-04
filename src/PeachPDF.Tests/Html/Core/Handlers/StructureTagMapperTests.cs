@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
@@ -25,7 +26,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         {
             // Shouldn't be reachable via real CSS (the property's Converter only accepts the fixed
             // keyword set), but Classify defends against it anyway rather than emitting a bogus /S.
-            var box = new CssBox(null, new HtmlTag("div", false)) { PdfTagType = "not-a-real-value", Display = CssConstants.Block };
+            var box = new CssBox(null, new HtmlTag("div", false)) { PdfTagType = "not-a-real-value", Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block) };
 
             var classification = StructureTagMapper.Classify(box);
 
@@ -116,7 +117,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         {
             // <cite> has no default-stylesheet -peachpdf-pdf-tag-type rule, so it stays "auto" and
             // falls through to the plain block/inline fallback.
-            var box = new CssBox(null, new HtmlTag("cite", false)) { PdfTagType = CssConstants.Auto, Display = display };
+            var box = new CssBox(null, new HtmlTag("cite", false)) { PdfTagType = CssConstants.Auto, Display = CssProperty<DisplayMode>.FromCssText(display, Map.DisplayModes, DisplayMode.Inline) };
 
             var classification = StructureTagMapper.Classify(box);
 
@@ -134,7 +135,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             // Anonymous boxes (HtmlTag == null) synthesized by CorrectAnonymousTables to complete
             // a table model have no source element for -peachpdf-pdf-tag-type to be set on - this
             // is the one place table substructure tagging is still Display-driven, not CSS-driven.
-            var box = new CssBox(null, null) { PdfTagType = CssConstants.Auto, Display = display };
+            var box = new CssBox(null, null) { PdfTagType = CssConstants.Auto, Display = CssProperty<DisplayMode>.FromCssText(display, Map.DisplayModes, DisplayMode.Inline) };
 
             var classification = StructureTagMapper.Classify(box);
 
@@ -145,7 +146,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         [Fact]
         public void Classify_AnonymousNonTableBoxWithNoWords_IsFullyTransparent()
         {
-            var box = new CssBox(null, null) { PdfTagType = CssConstants.Auto, Display = CssConstants.Block };
+            var box = new CssBox(null, null) { PdfTagType = CssConstants.Auto, Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block) };
 
             var classification = StructureTagMapper.Classify(box);
 

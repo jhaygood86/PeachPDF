@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -30,7 +31,7 @@ namespace PeachPDF.Tests.Integration
             var html = BuildManyRowTableHtml(rowCount: 80);
             var (rootBox, container) = await BuildContainer(html, RawPageHeight, MarginTopIn, MarginBottomIn);
 
-            var table = FindFirst(rootBox, b => b.Display == CssConstants.Table);
+            var table = FindFirst(rootBox, b => b.Display.Value == DisplayMode.Table);
             Assert.NotNull(table);
             var rows = FindAllRows(table!);
             Assert.True(rows.Count > 10, "test setup should produce enough rows to span multiple pages");
@@ -59,7 +60,7 @@ namespace PeachPDF.Tests.Integration
             var html = BuildManyRowTableHtml(rowCount: 80);
             var (rootBox, container) = await BuildContainer(html, RawPageHeight, marginTop: 0, marginBottom: 0);
 
-            var table = FindFirst(rootBox, b => b.Display == CssConstants.Table);
+            var table = FindFirst(rootBox, b => b.Display.Value == DisplayMode.Table);
             Assert.NotNull(table);
             var rows = FindAllRows(table!);
 
@@ -214,7 +215,7 @@ namespace PeachPDF.Tests.Integration
 
         private static void CollectRows(CssBox box, List<CssBox> rows)
         {
-            if (box.Display == CssConstants.TableRow) rows.Add(box);
+            if (box.Display.Value == DisplayMode.TableRow) rows.Add(box);
             foreach (var child in box.Boxes) CollectRows(child, rows);
         }
 

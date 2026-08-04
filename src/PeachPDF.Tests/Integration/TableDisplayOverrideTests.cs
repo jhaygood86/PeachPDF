@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -36,7 +37,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.Equal(display, FindByClass(root, "t")!.Display);
+            Assert.Equal(display, FindByClass(root, "t")!.Display.ToString());
         }
 
         [Fact]
@@ -48,7 +49,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.Equal(CssConstants.Flex, FindByClass(root, "c")!.Display);
+            Assert.Equal(DisplayMode.Flex, FindByClass(root, "c")!.Display.Value);
         }
 
         [Fact]
@@ -68,10 +69,10 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.Equal(CssConstants.Block, FindByClass(root, "x")!.Display);
-            Assert.Equal(CssConstants.Block, FindByClass(root, "r")!.Display);
-            Assert.Equal(CssConstants.Block, FindByClass(root, "d")!.Display);
-            Assert.Equal(CssConstants.Block, FindByClass(root, "h")!.Display);
+            Assert.Equal(DisplayMode.Block, FindByClass(root, "x")!.Display.Value);
+            Assert.Equal(DisplayMode.Block, FindByClass(root, "r")!.Display.Value);
+            Assert.Equal(DisplayMode.Block, FindByClass(root, "d")!.Display.Value);
+            Assert.Equal(DisplayMode.Block, FindByClass(root, "h")!.Display.Value);
         }
 
         [Fact]
@@ -85,9 +86,9 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.Equal(CssConstants.Table, FindByClass(root, "t")!.Display);
-            Assert.Equal(CssConstants.TableRow, FindByClass(root, "r")!.Display);
-            Assert.Equal(CssConstants.TableCell, FindByClass(root, "d")!.Display);
+            Assert.Equal(DisplayMode.Table, FindByClass(root, "t")!.Display.Value);
+            Assert.Equal(DisplayMode.TableRow, FindByClass(root, "r")!.Display.Value);
+            Assert.Equal(DisplayMode.TableCell, FindByClass(root, "d")!.Display.Value);
         }
 
         // --- Partial overrides: only a subset of the table's elements is reset (the common, natural case,
@@ -109,7 +110,7 @@ namespace PeachPDF.Tests.Integration
             // The proper table child under the non-table parent must have been re-wrapped in a synthesized
             // (tag-less) anonymous table box so the table formatting context — and the content — is preserved.
             Assert.Contains(EnumerateBoxes(root),
-                b => b.HtmlTag is null && b.Display is CssConstants.Table or CssConstants.InlineTable);
+                b => b.HtmlTag is null && b.Display.Value is DisplayMode.Table or DisplayMode.InlineTable);
         }
 
         [Fact]
@@ -129,7 +130,7 @@ namespace PeachPDF.Tests.Integration
             var a = FindByClass(root, "a")!;
             var b = FindByClass(root, "b")!;
 
-            Assert.Equal(CssConstants.Flex, FindByClass(root, "row")!.Display);
+            Assert.Equal(DisplayMode.Flex, FindByClass(root, "row")!.Display.Value);
             Assert.True(b.Location.X > a.Location.X,
                 $"flex items should lay out left-to-right, but a.X={a.Location.X} b.X={b.Location.X}");
             Assert.Equal(a.Location.Y, b.Location.Y, 3);

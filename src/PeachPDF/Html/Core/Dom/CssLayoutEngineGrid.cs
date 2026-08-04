@@ -1673,11 +1673,11 @@ namespace PeachPDF.Html.Core.Dom
 
         private static async ValueTask PerformLayoutBlockified(RGraphics g, CssBox box)
         {
-            string? savedDisplay = null;
+            CssProperty<DisplayMode>? savedDisplay = null;
             if (box.IsInline)
             {
-                savedDisplay = box.DerivedStyle.ActualDisplay;
-                box.Display = CssConstants.Block;
+                savedDisplay = box.Display;
+                box.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
             }
 
             var container = box.HtmlContainer;
@@ -1701,7 +1701,7 @@ namespace PeachPDF.Html.Core.Dom
                     container.SuppressWordPageBreaks = previousSuppress;
             }
 
-            if (savedDisplay != null)
+            if (savedDisplay is not null)
                 box.Display = savedDisplay;
         }
     }

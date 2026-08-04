@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.True(proxyBoxes.Count > 0, "Should create at least one proxy box");
             foreach (var proxy in proxyBoxes)
             {
-                Assert.Equal(CssConstants.TableHeaderGroup, proxy.Display);
+                Assert.Equal(DisplayMode.TableHeaderGroup, proxy.Display.Value);
                 _output.WriteLine($"Proxy Display: {proxy.Display}");
             }
         }
@@ -107,7 +107,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var proxy = proxyBoxes[0];
 
             // Assert - Check that styles are inherited
-            Assert.Equal(CssConstants.TableHeaderGroup, proxy.Display);
+            Assert.Equal(DisplayMode.TableHeaderGroup, proxy.Display.Value);
             Assert.Equal(Visibility.Visible, proxy.Visibility.Value);
             _output.WriteLine($"Proxy BackgroundColor: {proxy.BackgroundColor}");
         }
@@ -249,7 +249,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.NotNull(table);
 
             var allProxies = table.Boxes.OfType<CssProxyBox>().ToList();
-    var footerProxies = allProxies.Where(p => p.Display == CssConstants.TableFooterGroup).ToList();
+    var footerProxies = allProxies.Where(p => p.Display.Value == DisplayMode.TableFooterGroup).ToList();
 
          _output.WriteLine($"Total proxies: {allProxies.Count}");
             _output.WriteLine($"Footer proxies: {footerProxies.Count}");
@@ -434,7 +434,7 @@ await container.SetHtml(html, null);
 
         private static CssBox? FindTableBox(CssBox box)
         {
-       if (box.Display == CssConstants.Table)
+       if (box.Display.Value == DisplayMode.Table)
              return box;
 
   foreach (var child in box.Boxes)

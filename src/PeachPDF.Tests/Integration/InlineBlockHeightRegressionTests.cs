@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -170,7 +171,7 @@ namespace PeachPDF.Tests.Integration
 
             var host = FindBoxByClass(rootBox, "host");
             Assert.NotNull(host);
-            var pseudo = FindFirst(host!, b => b.Display == "inline-block");
+            var pseudo = FindFirst(host!, b => b.Display.Value == DisplayMode.InlineBlock);
             Assert.NotNull(pseudo);
 
             var rect = Assert.Single(pseudo!.Rectangles).Value;

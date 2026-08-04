@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -39,7 +40,7 @@ namespace PeachPDF.Tests.Integration
             string html)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: 0);
-            var table = LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            var table = LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
             return (table, container, root);
         }
 

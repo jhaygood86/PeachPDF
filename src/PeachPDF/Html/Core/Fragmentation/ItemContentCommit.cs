@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -104,16 +105,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         private static async ValueTask LayoutBlockifiedAtFinalPosition(RGraphics g, CssBox box)
         {
-            string? savedDisplay = null;
+            CssProperty<DisplayMode>? savedDisplay = null;
             if (box.IsInline)
             {
-                savedDisplay = box.DerivedStyle.ActualDisplay;
-                box.Display = CssConstants.Block;
+                savedDisplay = box.Display;
+                box.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
             }
 
             await box.LayoutContentAtItsAssignedPosition(g);
 
-            if (savedDisplay != null)
+            if (savedDisplay is not null)
                 box.Display = savedDisplay;
         }
 

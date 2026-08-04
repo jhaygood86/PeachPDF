@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -42,10 +43,10 @@ namespace PeachPDF.Tests.Integration
             </table>");
 
         private static List<CssBox> RowsOf(CssBox root) =>
-            LayoutHarness.Descendants(root).Where(b => b.Display == CssConstants.TableRow).ToList();
+            LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.TableRow).ToList();
 
         private static CssBox TableOf(CssBox root) =>
-            LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
 
         /// <summary>
         /// A row taller than a page band is left where it is — moving it could only recreate the straddle

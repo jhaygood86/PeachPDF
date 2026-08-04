@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -112,7 +113,7 @@ namespace PeachPDF.Tests.Integration
             var rowGeometry = await LayoutHarness.LayoutRepeatedlyAsync(
                 LayoutHarness.Wrap(body), passes: 3,
                 (root, _) => string.Join("|", LayoutHarness.Descendants(root)
-                    .Where(b => b.Display == "table-row")
+                    .Where(b => b.Display.Value == DisplayMode.TableRow)
                     .Select(b => string.Format(CultureInfo.InvariantCulture,
                         "({0:F3},{1:F3})", b.Location.X, b.Location.Y))),
                 pageHeight: 400);
@@ -156,7 +157,7 @@ namespace PeachPDF.Tests.Integration
             var counts = await LayoutHarness.LayoutRepeatedlyAsync(
                 LayoutHarness.Wrap(body), passes: 3,
                 (root, _) => LayoutHarness.Descendants(root)
-                    .Count(b => b.Display == "table-header-group" && b is not CssProxyBox),
+                    .Count(b => b.Display.Value == DisplayMode.TableHeaderGroup && b is not CssProxyBox),
                 pageHeight: 400);
 
             // Both directions of getting the restore wrong show up here: none means a second run found

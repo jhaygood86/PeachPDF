@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -125,7 +126,7 @@ namespace PeachPDF.Tests.Integration
             LayoutHarness.Descendants(root).First(b => b.HtmlTag?.TryGetAttribute("id") == "span");
 
         private static List<CssBox> RowsOf(CssBox root) =>
-            LayoutHarness.Descendants(root).Where(b => b.Display == CssConstants.TableRow).ToList();
+            LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.TableRow).ToList();
 
         /// <summary>
         /// The row that ends a <c>rowspan</c> is carried onto the next band whole, like any other row. It
@@ -173,7 +174,7 @@ namespace PeachPDF.Tests.Integration
                 EndingRowWouldStraddle(), pageHeight: PageHeight, margin: Margin);
 
             var cell = SpanningCell(root);
-            var table = LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            var table = LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
             var cellSlot = container.SlotStartingAt(cell.Location.Y);
 
             Assert.Equal(0, cellSlot);
@@ -407,7 +408,7 @@ namespace PeachPDF.Tests.Integration
                 pageHeight: PageHeight, margin: Margin);
 
             var cell = SpanningCell(root);
-            var table = LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            var table = LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
             var rows = RowsOf(root);
 
             // The fixture only asserts anything if the cell really does outreach the row that opened it.
@@ -671,7 +672,7 @@ namespace PeachPDF.Tests.Integration
                 + $"{rows[2].ActualBottom:F1} - it should have closed several bands earlier instead");
 
             // And the table's own slice-bottom record for that band follows the content, not cellSlot's.
-            var table = LayoutHarness.Descendants(root).First(b => b.Display == CssConstants.Table);
+            var table = LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
             Assert.NotNull(table.PageBreakBottoms);
             Assert.True(table.PageBreakBottoms!.TryGetValue(contentSlot, out var recorded));
             Assert.True(recorded >= contentBottom - 0.01,

@@ -787,12 +787,16 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (box.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)) return;
 
-            box.Display = box.Display switch
+            box.Display = box.Display.Value switch
             {
-                CssConstants.Inline or CssConstants.InlineBlock => CssConstants.Block,
-                CssConstants.InlineFlex => CssConstants.Flex,
-                CssConstants.InlineGrid => CssConstants.Grid,
-                CssConstants.InlineTable => CssConstants.Table,
+                DisplayMode.Inline or DisplayMode.InlineBlock =>
+                    CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block),
+                DisplayMode.InlineFlex =>
+                    CssProperty<DisplayMode>.FromValue(CssConstants.Flex, DisplayMode.Flex),
+                DisplayMode.InlineGrid =>
+                    CssProperty<DisplayMode>.FromValue(CssConstants.Grid, DisplayMode.Grid),
+                DisplayMode.InlineTable =>
+                    CssProperty<DisplayMode>.FromValue(CssConstants.Table, DisplayMode.Table),
                 _ => box.Display
             };
         }
@@ -1766,7 +1770,7 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     var block = CssBox.CreateBlock(childBox.ParentBox!, null, childBox);
                     childBox.ParentBox = block;
-                    childBox.Display = CssConstants.Inline;
+                    childBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Inline, DisplayMode.Inline);
                 }
                 else
                 {
@@ -1862,7 +1866,7 @@ namespace PeachPDF.Html.Core.Parse
         private static CssBox? CorrectBlockInsideInlineImp(CssBox box)
         {
             if (box.DerivedStyle.ActualDisplay == CssConstants.Inline)
-                box.Display = CssConstants.Block;
+                box.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
 
             if (box.Boxes.Count > 1 || box.Boxes[0].Boxes.Count > 1)
             {
@@ -1892,7 +1896,7 @@ namespace PeachPDF.Html.Core.Parse
             }
             else if (box.Boxes[0].DerivedStyle.ActualDisplay == CssConstants.Inline)
             {
-                box.Boxes[0].Display = CssConstants.Block;
+                box.Boxes[0].Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
             }
 
             return null;
@@ -1955,7 +1959,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 splitBox.SetBeforeBox(parentBox.Boxes[1]);
                 if (splitBox.HtmlTag is { Name: "br" } && (leftbox != null || leftBlock.Boxes.Count > 1))
-                    splitBox.Display = CssConstants.Inline;
+                    splitBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Inline, DisplayMode.Inline);
             }
         }
 
@@ -2023,7 +2027,7 @@ namespace PeachPDF.Html.Core.Parse
             if (box is { DerivedStyle.ActualDisplay: CssConstants.Inline, Position.Value: PositionMode.Absolute })
             {
                 var blockBox = new CssBox(box.ParentBox, null);
-                blockBox.Display = CssConstants.Block;
+                blockBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
                 blockBox.Position = CssProperty<PositionMode>.FromValue(CssConstants.Absolute, PositionMode.Absolute);
                 blockBox.Left = box.Left;
                 blockBox.Top = box.Top;
@@ -2095,7 +2099,7 @@ namespace PeachPDF.Html.Core.Parse
                     Console.WriteLine($"dom: set child box {childBox.Id} of table-column parent {box.Id} to display: none");
 #endif
 
-                    childBox.Display = CssConstants.None;
+                    childBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.None, DisplayMode.None);
                 }
             }
 
@@ -2106,7 +2110,7 @@ namespace PeachPDF.Html.Core.Parse
                 Console.WriteLine($"dom: set child box {box.Id} to display:none if parent is table-column-group and child is not table-column");
 #endif
 
-                box.Display = CssConstants.None;
+                box.Display = CssProperty<DisplayMode>.FromValue(CssConstants.None, DisplayMode.None);
             }
 
             // 1.3 This is handled via CorrectTextBoxes above
@@ -2133,7 +2137,7 @@ namespace PeachPDF.Html.Core.Parse
                     // takes C's place in document/column order instead of drifting to the end once C
                     // itself is reparented into it below.
                     var tableRowBox = new CssBox(box.ParentBox, null);
-                    tableRowBox.Display = CssConstants.TableRow;
+                    tableRowBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableRow, DisplayMode.TableRow);
                     tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
 
@@ -2155,7 +2159,7 @@ namespace PeachPDF.Html.Core.Parse
                             .ToList();
 
                     var tableRowBox = new CssBox(box.ParentBox, null);
-                    tableRowBox.Display = CssConstants.TableRow;
+                    tableRowBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableRow, DisplayMode.TableRow);
                     tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
 
@@ -2178,7 +2182,7 @@ namespace PeachPDF.Html.Core.Parse
                             .ToList();
 
                     var tableCellBox = new CssBox(box.ParentBox, null);
-                    tableCellBox.Display = CssConstants.TableCell;
+                    tableCellBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
                     tableCellBox.SetBeforeBox(box);
                     box.ParentBox = tableCellBox;
 
@@ -2199,7 +2203,7 @@ namespace PeachPDF.Html.Core.Parse
                             .ToList();
 
                     var tableRowBox = new CssBox(box.ParentBox, null);
-                    tableRowBox.Display = CssConstants.TableRow;
+                    tableRowBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableRow, DisplayMode.TableRow);
                     tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
 
@@ -2237,14 +2241,16 @@ namespace PeachPDF.Html.Core.Parse
                 if (isMisparented)
                 {
                     var originalParent = box.ParentBox;
-                    var parentDisplay = originalParent is null || originalParent.IsBlock ? CssConstants.Table : CssConstants.InlineTable;
+                    var isBlockTable = originalParent is null || originalParent.IsBlock;
+                    var parentDisplay = isBlockTable ? CssConstants.Table : CssConstants.InlineTable;
+                    var parentDisplayMode = isBlockTable ? DisplayMode.Table : DisplayMode.InlineTable;
 
                     var followingMatchingSiblings =
                         DomUtils.GetFollowingSiblings(box, DomUtils.IsProperTableChild, true)
                             .ToList();
 
                     var tableBox = new CssBox(originalParent, null);
-                    tableBox.Display = parentDisplay;
+                    tableBox.Display = CssProperty<DisplayMode>.FromValue(parentDisplay, parentDisplayMode);
 
                     // Position the synthesized table at the child's original index in the grandparent (the
                     // constructor only appends it) — same as the SetBeforeBox in rules 2.1/2.3/3.1 — so it
