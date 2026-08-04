@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
@@ -112,7 +113,7 @@ namespace PeachPDF.Html.Core.Paint
         // entire subtree instead of interleaved correctly within ".eyes" itself.
         private static bool IsLocalOrderingScope(CssBox box) =>
             box.IsRoot || DomUtils.IsStackingContextBox(box) ||
-            box.Position is CssConstants.Absolute or CssConstants.Relative or CssConstants.Fixed or CssConstants.Sticky;
+            box.Position.Value is PositionMode.Absolute or PositionMode.Relative or PositionMode.Fixed or PositionMode.Sticky;
 
         // Tunnels through plain wrapper boxes looking for content that needs to compete at `box`'s own
         // local ordering scope. Two categories of content are hoisted here, with different stopping

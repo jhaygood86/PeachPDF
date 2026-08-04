@@ -1139,7 +1139,7 @@ namespace PeachPDF.Html.Core.Dom
         #region Position, multi-column
 
         /// <summary>True for a positioned element: <c>position</c> of relative, absolute, fixed, or sticky.</summary>
-        public bool IsPositioned => Style.DisplayPositioning.Position is CssConstants.Relative or CssConstants.Absolute or CssConstants.Fixed or CssConstants.Sticky;
+        public bool IsPositioned => Style.DisplayPositioning.Position.Value is PositionMode.Relative or PositionMode.Absolute or PositionMode.Fixed or PositionMode.Sticky;
 
         /// <summary>
         /// Whether this box establishes a CSS multi-column formatting context, per spec: <c>column-width</c>

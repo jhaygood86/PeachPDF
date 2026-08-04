@@ -301,7 +301,7 @@ namespace PeachPDF.Html.Core.Dom
 
         public bool IsFloated => Float.Value is Floating.Left or Floating.Right;
 
-        public bool IsOutOfFlow => IsFloated || Position is CssConstants.Absolute or CssConstants.Fixed;
+        public bool IsOutOfFlow => IsFloated || Position.Value is PositionMode.Absolute or PositionMode.Fixed;
 
         /// <summary>
         /// Is the css box clickable (by default only an "a" element with an href is clickable) - per
@@ -323,7 +323,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             get
             {
-                if (Position == CssConstants.Fixed)
+                if (Position.Value == PositionMode.Fixed)
                     return true;
 
                 if (this.ParentBox == null)
@@ -335,7 +335,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     parent = parent.ParentBox;
 
-                    if (parent.Position == CssConstants.Fixed)
+                    if (parent.Position.Value == PositionMode.Fixed)
                         return true;
                 }
 
@@ -3572,7 +3572,7 @@ namespace PeachPDF.Html.Core.Dom
         private void ResumeInTheNextFragmentainer()
         {
             if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true } fragmentainer) return;
-            if (DerivedStyle.ActualDisplay is CssConstants.TableCell || Position is not (CssConstants.Static or CssConstants.Relative))
+            if (DerivedStyle.ActualDisplay is CssConstants.TableCell || Position.Value is not (PositionMode.Static or PositionMode.Relative))
                 return;
 
             // Moving Location is the whole translation: ActualRight and ActualBottom are derived from it
@@ -3926,7 +3926,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (child.DerivedStyle.ActualDisplay != CssConstants.TableCell)
             {
-                if (child.Position is CssConstants.Static or CssConstants.Relative)
+                if (child.Position.Value is PositionMode.Static or PositionMode.Relative)
                 {
                     var prevSibling = PreviousInFlowSibling(child);
 
@@ -4221,7 +4221,7 @@ namespace PeachPDF.Html.Core.Dom
                     CssLayoutEngine.FloatBox(child);
                 }
 
-                if (child.Position is CssConstants.Relative)
+                if (child.Position.Value is PositionMode.Relative)
                 {
                     // CSS 2.1 §9.4.3: for each axis, the "near" offset (left/top) wins when set; if
                     // it's auto and the "far" offset (right/bottom) isn't, the far offset applies
@@ -4248,7 +4248,7 @@ namespace PeachPDF.Html.Core.Dom
                     child.ActualBottom = child.Location.Y;
                 }
 
-                if (child.Position is CssConstants.Absolute)
+                if (child.Position.Value is PositionMode.Absolute)
                 {
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(child);
 
@@ -4270,7 +4270,7 @@ namespace PeachPDF.Html.Core.Dom
                     child.Location = new RPoint(left, top);
                 }
 
-                if (child.Position is CssConstants.Fixed)
+                if (child.Position.Value is PositionMode.Fixed)
                 {
                     // Like every other positioning scheme (see the Absolute branch above, fixed for
                     // the same omission), the box's own margin still applies on top of the left/top
@@ -4368,7 +4368,7 @@ namespace PeachPDF.Html.Core.Dom
             // box has no run. Deliberately left as-is rather than converted or deleted: proving it dead is
             // not the same as proving it unnecessary, and #545 is where that is decided.
             if (!_keepWithNextRetried
-                && Position is CssConstants.Static or CssConstants.Relative && !IsFloated
+                && Position.Value is PositionMode.Static or PositionMode.Relative && !IsFloated
                 && LineBoxes.Count > 0 && LineBoxes[0].Words.Count > 0
                 && HtmlContainer!.PageSize.Height > 0
                 && !PositionAssignedByEngine)
@@ -4532,7 +4532,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            if (Position is CssConstants.Absolute)
+            if (Position.Value is PositionMode.Absolute)
             {
                 if (Left is CssConstants.Auto && Right is not CssConstants.Auto)
                 {
@@ -5722,7 +5722,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="OffsetTop(double, CssBox)"/> overload for why.
         /// </summary>
         private bool EscapesTranslationOf(CssBox translationRoot) =>
-            Position is CssConstants.Absolute or CssConstants.Fixed
+            Position.Value is PositionMode.Absolute or PositionMode.Fixed
             && !DomUtils.IsSelfOrDescendantOf(DomUtils.GetNearestPositionedAncestor(this), translationRoot);
 
         /// <summary>

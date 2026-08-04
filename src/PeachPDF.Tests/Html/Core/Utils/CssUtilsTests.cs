@@ -22,7 +22,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             Assert.Equal(box.Color, CssUtils.GetPropertyValue(box, "color"));
             Assert.Equal(box.Display, CssUtils.GetPropertyValue(box, "display"));
-            Assert.Equal(box.Position, CssUtils.GetPropertyValue(box, "position"));
+            Assert.Equal(box.Position.ToString(), CssUtils.GetPropertyValue(box, "position"));
             Assert.Equal(box.Overflow.ToString(), CssUtils.GetPropertyValue(box, "overflow"));
             Assert.Equal(box.TextAlign.ToString(), CssUtils.GetPropertyValue(box, "text-align"));
             Assert.Equal(box.FontWeight, CssUtils.GetPropertyValue(box, "font-weight"));

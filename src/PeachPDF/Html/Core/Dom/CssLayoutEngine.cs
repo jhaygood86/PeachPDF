@@ -771,12 +771,12 @@ namespace PeachPDF.Html.Core.Dom
                 width = CssValueParser.ParseLength(box.Width, PercentageBase(box).Size.Width, box);
             }
 
-            if (box is { Width: CssConstants.Auto, Position: not CssConstants.Absolute })
+            if (box is { Width: CssConstants.Auto, Position.Value: not PositionMode.Absolute })
             {
                 width -= box.ActualBoxSizeIncludedWidth;
             }
 
-            if (box is { Width: CssConstants.Auto, Position: CssConstants.Absolute })
+            if (box is { Width: CssConstants.Auto, Position.Value: PositionMode.Absolute })
             {
                 var absCb = PercentageBase(box);
                 if (box.Left != CssConstants.Auto && box.Right != CssConstants.Auto)
@@ -829,7 +829,7 @@ namespace PeachPDF.Html.Core.Dom
         /// itself positioned. For every other box the two are the same.
         /// </summary>
         private static CssBox PercentageBase(CssBox box) =>
-            box.Position is CssConstants.Absolute ? DomUtils.GetNearestPositionedAncestor(box) : box.ContainingBlock;
+            box.Position.Value is PositionMode.Absolute ? DomUtils.GetNearestPositionedAncestor(box) : box.ContainingBlock;
 
         public static double? GetBoxHeight(CssBox box)
         {
@@ -878,7 +878,7 @@ namespace PeachPDF.Html.Core.Dom
                     height = CssValueParser.ParseLength(box.Height, heightCb.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
                 }
             }
-            else if (box.Position is CssConstants.Absolute
+            else if (box.Position.Value is PositionMode.Absolute
                      && box.Top != CssConstants.Auto && box.Bottom != CssConstants.Auto
                      && heightCb.IsHeightCalculated)
             {
@@ -1322,8 +1322,8 @@ namespace PeachPDF.Html.Core.Dom
                 var childStartOrdinal = coordinates.WordOrdinal;
                 var childOpensHere = childStartOrdinal >= coordinates.ResumeOrdinal;
 
-                var leftSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft : 0;
-                var rightSpacing = (b.Position != CssConstants.Absolute && b.Position != CssConstants.Fixed) ? b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight : 0;
+                var leftSpacing = (b.Position.Value != PositionMode.Absolute && b.Position.Value != PositionMode.Fixed) ? b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft : 0;
+                var rightSpacing = (b.Position.Value != PositionMode.Absolute && b.Position.Value != PositionMode.Fixed) ? b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight : 0;
 
                 // Room for the border and padding a `box-decoration-break: clone` ancestor re-inserts at each
                 // line break (css-break-3 §6.2), which the wrap decision has to leave for the fragment it
@@ -1598,7 +1598,7 @@ namespace PeachPDF.Html.Core.Dom
                         coordinates.MaxRight = Math.Max(coordinates.MaxRight, word.Right);
                         coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, word.Bottom);
 
-                        if (b.Position != CssConstants.Absolute) continue;
+                        if (b.Position.Value != PositionMode.Absolute) continue;
 
                         word.Left += box.ActualMarginLeft;
                         word.Top += box.ActualMarginTop;
@@ -1893,7 +1893,7 @@ namespace PeachPDF.Html.Core.Dom
             var maxWordBottom = OffsetFlowedWords(b, topInset, breakPages);
 
             if (maxWordBottom > double.MinValue
-                && b.Position is not (CssConstants.Absolute or CssConstants.Fixed))
+                && b.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed))
             {
                 coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, maxWordBottom + bottomInset);
             }

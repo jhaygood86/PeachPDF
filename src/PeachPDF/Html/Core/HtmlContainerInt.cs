@@ -1009,7 +1009,7 @@ namespace PeachPDF.Html.Core
                 var child = box.Boxes[i];
 
                 if (child.DerivedStyle.ActualDisplay == CssConstants.None
-                    || child.Position is CssConstants.Absolute or CssConstants.Fixed
+                    || child.Position.Value is PositionMode.Absolute or PositionMode.Fixed
                     || child.IsFloated)
                 {
                     continue;
