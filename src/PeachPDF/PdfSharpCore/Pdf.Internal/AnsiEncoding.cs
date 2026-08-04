@@ -98,53 +98,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
         }
 
         /// <summary>
-        /// Indicates whether the specified Unicode character is available in the ANSI code page 1252.
-        /// </summary>
-        public static bool IsAnsi1252Char(char ch)
-        {
-            if (ch < '\u0080' || (ch >= '\u00A0' && ch <= '\u00FF'))
-                return true;
-
-            switch (ch)
-            {
-                case '\u20AC':
-                case '\u0081':
-                case '\u201A':
-                case '\u0192':
-                case '\u201E':
-                case '\u2026':
-                case '\u2020':
-                case '\u2021':
-                case '\u02C6':
-                case '\u2030':
-                case '\u0160':
-                case '\u2039':
-                case '\u0152':
-                case '\u008D':
-                case '\u017D':
-                case '\u008F':
-                case '\u0090':
-                case '\u2018':
-                case '\u2019':
-                case '\u201C':
-                case '\u201D':
-                case '\u2022':
-                case '\u2013':
-                case '\u2014':
-                case '\u02DC':
-                case '\u2122':
-                case '\u0161':
-                case '\u203A':
-                case '\u0153':
-                case '\u009D':
-                case '\u017E':
-                case '\u0178':
-                    return true;
-            }
-            return false;
-        }
-
-        /// <summary>
         /// Maps Unicode to ANSI code page 1252.
         /// </summary>
         public static char UnicodeToAnsi(char ch)
