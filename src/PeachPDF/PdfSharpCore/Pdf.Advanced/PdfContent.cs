@@ -39,8 +39,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
     /// <summary>
     /// Represents the content of a page. PDFsharp supports only one content stream per page.
-    /// If an imported page has an array of content streams, the streams are concatenated to
-    /// one single stream.
     /// </summary>
     internal sealed class PdfContent : PdfDictionary
     {
@@ -61,17 +59,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="PdfContent"/> class.
-        /// </summary>
-        /// <param name="dict">The dict.</param>
-        public PdfContent(PdfDictionary dict) // HACK PdfContent
-            : base(dict)
-        {
-            // A PdfContent dictionary is always unfiltered.
-            Decode();
-        }
-
-        /// <summary>
         /// Sets a value indicating whether the content is compressed with the ZIP algorithm.
         /// </summary>
         public bool Compressed
@@ -87,29 +74,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                         Stream.Value = bytes;
                         Elements.SetInteger(PdfStream.Keys.Length, Stream.Length);
                         Elements.SetName(PdfStream.Keys.Filter, "/FlateDecode");
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Unfilters the stream.
-        /// </summary>
-        void Decode()
-        {
-            if (Stream != null && Stream.Value != null)
-            {
-                PdfItem item = Elements[PdfStream.Keys.Filter];
-                if (item != null)
-                {
-                    var decodeParms = Elements[PdfStream.Keys.DecodeParms];
-                    byte[] bytes = Filtering.Decode(Stream.Value, item, decodeParms);
-                    if (bytes != null)
-                    {
-                        Stream.Value = bytes;
-                        Elements.Remove(PdfStream.Keys.Filter);
-                        Elements.Remove(PdfStream.Keys.DecodeParms);
-                        Elements.SetInteger(PdfStream.Keys.Length, Stream.Length);
                     }
                 }
             }

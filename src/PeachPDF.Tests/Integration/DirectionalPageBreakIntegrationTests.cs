@@ -536,7 +536,7 @@ namespace PeachPDF.Tests.Integration
                 foreach (var item in contents.Elements)
                 {
                     if (item is PdfReference { Value: PdfDictionary { Stream: { } stream } })
-                        builder.Append(Encoding.Latin1.GetString(stream.UnfilteredValue));
+                        builder.Append(Encoding.Latin1.GetString(stream.Value));
                 }
 
                 streams[i] = builder.ToString();

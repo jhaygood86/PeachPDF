@@ -50,25 +50,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             : base(document)
         { }
 
-        internal PdfContents(PdfArray array)
-            : base(array)
-        {
-            int count = Elements.Count;
-            for (int idx = 0; idx < count; idx++)
-            {
-                // Convert the references from PdfDictionary to PdfContent
-                PdfItem item = Elements[idx];
-                PdfReference iref = item as PdfReference;
-                if (iref != null && iref.Value is PdfDictionary)
-                {
-                    // The following line is correct!
-                    new PdfContent((PdfDictionary)iref.Value);
-                }
-                else
-                    throw new InvalidOperationException("Unexpected item in a content stream array.");
-            }
-        }
-
         /// <summary>
         /// Appends a new content stream and returns it.
         /// </summary>
@@ -96,30 +77,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Owner._irefTable.Add(content);
             Debug.Assert(content.Reference != null);
             Elements.Insert(0, content.Reference);
-            return content;
-        }
-
-        /// <summary>
-        /// Creates a single content stream with the bytes from the array of the content streams.
-        /// This operation does not modify any of the content streams in this array.
-        /// </summary>
-        public PdfContent CreateSingleContent()
-        {
-            byte[] bytes = new byte[0];
-            byte[] bytes1;
-            byte[] bytes2;
-            foreach (PdfItem iref in Elements)
-            {
-                PdfDictionary cont = (PdfDictionary)((PdfReference)iref).Value;
-                bytes1 = bytes;
-                bytes2 = cont.Stream.UnfilteredValue;
-                bytes = new byte[bytes1.Length + bytes2.Length + 1];
-                bytes1.CopyTo(bytes, 0);
-                bytes[bytes1.Length] = (byte)'\n';
-                bytes2.CopyTo(bytes, bytes1.Length + 1);
-            }
-            PdfContent content = new PdfContent(Owner);
-            content.Stream = new PdfDictionary.PdfStream(bytes, content);
             return content;
         }
 
