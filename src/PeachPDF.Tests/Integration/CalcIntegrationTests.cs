@@ -83,14 +83,15 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(parent);
             Assert.NotNull(child);
-            // CssBoxProperties.ActualFont.Size is the resolved font size further divided by
-            // PixelsPerPoint (a pre-existing, calc()-unrelated font-metric convention), and that same
-            // already-divided parent.ActualFont.Size is exactly what calc()'s "em" unit multiplies
-            // against here - matching plain (non-calc) em resolution's own emFactor at this call site.
-            // Deriving the expected value from the actually-measured parent size (rather than a
-            // hardcoded constant) keeps this test correct regardless of that convention, while still
-            // proving both the em and px terms resolve correctly.
-            var expected = (parent!.ActualFont.Size + 4 * (72.0 / 96.0)) / 72.0;
+            // CssBox.ActualFont.Size is the resolved font size further divided by PixelsPerPoint (a
+            // pre-existing, calc()-unrelated font-metric convention) - undo that once to get parent's font
+            // size in true CSS points (what calc()'s "em" unit multiplies against), add the 4px term
+            // (converted to points), then redivide by PixelsPerPoint to land in the same space
+            // child.ActualFont.Size reports in. Deriving the expected value from the actually-measured
+            // parent size (rather than a hardcoded constant) keeps this test correct regardless of that
+            // convention, while still proving both the em and px terms resolve correctly.
+            var parentSizePt = parent!.ActualFont.Size * 72.0;
+            var expected = (parentSizePt + 4 * (72.0 / 96.0)) / 72.0;
             Assert.Equal(expected, child!.ActualFont.Size, 8);
         }
 
@@ -108,8 +109,10 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(child);
             // GetRemHeight() walks up to the outermost box (the container's root, not <html>) and reads
-            // its ActualFont.Size - that's what calc()'s "rem" unit multiplies against.
-            var expected = (root.ActualFont.Size + 4 * (72.0 / 96.0)) / 72.0;
+            // its ActualFont.Size - that's what calc()'s "rem" unit multiplies against, in true CSS points
+            // (undoing the same PixelsPerPoint division the em test above undoes for parent.ActualFont.Size).
+            var rootSizePt = root.ActualFont.Size * 72.0;
+            var expected = (rootSizePt + 4 * (72.0 / 96.0)) / 72.0;
             Assert.Equal(expected, child!.ActualFont.Size, 8);
         }
 

@@ -1,3 +1,4 @@
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -890,8 +891,23 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (parentBox is not null)
                 {
-                    parentSize = parentBox.ActualFont.Size;
-                    remSize = GetRemHeight();
+                    // parentBox.ActualFont.Size (like GetRemHeight()'s own ActualFont.Size read below) is
+                    // in the adapter's device-scaled font-measurement space - CreateFontInt divides a
+                    // requested size by PixelsPerPoint once to get there. FontSizeResolver.Resolve expects
+                    // its parentSize/remSize inputs in true CSS points (the same space Style.Font.FontSize
+                    // itself is authored in), so the device scaling has to be undone here before handing
+                    // it in - otherwise a relative font-size (em/%/smaller/larger) resolves against a
+                    // reference that's already off by PixelsPerPoint, then gets divided by PixelsPerPoint
+                    // again when its own font is created, compounding into a value that's wrong by roughly
+                    // PixelsPerPoint² instead of exactly right. PixelsPerPoint is usually 1.0 (so this was
+                    // invisible) but a non-default PixelsPerInch, or ShrinkToFit/ScaleToPageSize, both
+                    // legitimately move it away from 1.0 - verified directly by generating PDFs at a
+                    // non-default PixelsPerInch and confirming the stored/computed font size lands on the
+                    // spec-correct value (see FontSizeInheritanceIntegrationTests.cs, and this fix's own
+                    // commit message for the reasoning).
+                    var pixelsPerPoint = (Owner.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                    parentSize = parentBox.ActualFont.Size * pixelsPerPoint;
+                    remSize = GetRemHeight() * pixelsPerPoint;
                 }
                 else
                 {
@@ -918,6 +934,16 @@ namespace PeachPDF.Html.Core.Dom
                 return _actualFont!;
             }
         }
+
+        /// <summary>
+        /// This box's resolved <c>font-size</c>, in the same units as <see cref="ActualFont"/>'s own
+        /// <c>Size</c> - a thin accessor kept alongside it for symmetry with the rest of this class's
+        /// naming, not an independent computation. <see cref="CssBox.FontSize"/> is safe to read as a plain
+        /// cascaded value everywhere else (the CSS-OM, tests asserting the authored value) because every
+        /// parent-relative form is eagerly resolved to an absolute point value in its setter - see that
+        /// setter's own doc comment.
+        /// </summary>
+        public double ActualFontSize => ActualFont.Size;
 
         private int? _actualNumericWeight;
 

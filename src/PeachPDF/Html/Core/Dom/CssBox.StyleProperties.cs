@@ -1,3 +1,4 @@
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -5,6 +6,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Text;
+using System;
 using System.Collections.Generic;
 using PeachPDF;
 
@@ -1239,18 +1241,41 @@ namespace PeachPDF.Html.Core.Dom
             set
             {
                 // calc()-family text is resolved directly by ActualFont's own ParseLength call later
-                // (including any em/rem terms it contains) - leave it untouched here. A plain "Nem" is
-                // the only case needing eager conversion at this point (to points, using the parent's
-                // already-resolved font size); everything else - keywords like "medium"/"larger", or any
-                // other single-unit length - is left as-is for ActualFont's own resolution later.
+                // (including any em/rem terms it contains) - leave it untouched here; rem is likewise left
+                // lazy, since it resolves against a single, non-chained reference (the root's font size) and
+                // so can't compound across generations the way a parent-relative value can. Every other
+                // parent-relative form - a plain "Nem"/"Nex", a plain percentage, or the smaller/larger
+                // keywords - needs eager conversion to an absolute point value here, using the parent's
+                // already-resolved font size: InheritStyle adopts the whole Font area from parent to child
+                // *by reference*, so whatever sits in FontSize at that moment is what every non-overriding
+                // descendant, at any depth, ends up with. Eager resolution is what makes that safe - by the
+                // time a value is inherited, it's already absolute, so copying it down any number of
+                // generations is idempotent. Left lazy (as raw text, for ActualFont's own resolution later),
+                // a parent-relative value would be indistinguishable from a value merely copied down
+                // unchanged, and both would resolve against their own immediate parent - compounding the
+                // multiplier once per non-overriding generation instead of applying it once. Absolute-size
+                // keywords (medium/small/large/x-small/...) and any other single-unit absolute length are
+                // left as-is too: they don't depend on the parent at all, so there's nothing to compound.
                 string resolved;
-                if (!CssValueParser.IsCalcFunction(value) &&
-                    CssValueParser.GetCssTokens(value) is [UnitToken unitToken] &&
-                    Length.GetUnit(unitToken.Unit) == Length.Unit.Em &&
-                    ParentBox is { } parent)
+                var trimmed = value.Trim();
+                if (!CssValueParser.IsCalcFunction(value) && ParentBox is { } parent &&
+                    (CssValueParser.GetCssTokens(value) is [UnitToken unitToken] &&
+                        Length.GetUnit(unitToken.Unit) is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Percent
+                     || trimmed.Equals(CssConstants.Smaller, StringComparison.OrdinalIgnoreCase)
+                     || trimmed.Equals(CssConstants.Larger, StringComparison.OrdinalIgnoreCase)))
                 {
-                    var points = unitToken.Value * parent.ActualFont.Size;
-                    resolved = $"{points.ToString("0.0", System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
+                    // parent.ActualFont.Size is in the adapter's device-scaled font-measurement space
+                    // (CreateFontInt divides a requested size by PixelsPerPoint once to get there) - undo
+                    // that scaling before using it as a true-CSS-points reference, the same correction
+                    // DerivedStyle.ActualFont's own parentSize/remSize inputs need and for the same reason
+                    // (see its doc comment). PixelsPerPoint is usually 1.0 (so this was invisible) but a
+                    // non-default PixelsPerInch, or ShrinkToFit/ScaleToPageSize, both legitimately move it
+                    // away from 1.0.
+                    var pixelsPerPoint = (HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                    var parentSizePt = parent.ActualFont.Size * pixelsPerPoint;
+
+                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt);
+                    resolved = $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
                 }
                 else
                 {
