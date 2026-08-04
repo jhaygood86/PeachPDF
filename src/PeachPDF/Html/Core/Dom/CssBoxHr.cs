@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Parse;
@@ -124,7 +125,7 @@ namespace PeachPDF.Html.Core.Dom
             }
             if (height <= 2 && ActualBorderTopWidth < 1 && ActualBorderBottomWidth < 1)
             {
-                BorderTopStyle = BorderBottomStyle = CssConstants.Solid;
+                BorderTopStyle = BorderBottomStyle = CssProperty<LineStyle>.FromValue(CssConstants.Solid, LineStyle.Solid);
                 BorderTopWidth = "1px";
                 BorderBottomWidth = "1px";
             }

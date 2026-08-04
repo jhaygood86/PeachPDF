@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Html.Core.Dom
@@ -152,12 +153,13 @@ namespace PeachPDF.Html.Core.Dom
 
         private void ApplyBorderStyle(PhysicalSide side, string value)
         {
+            var parsed = CssProperty<LineStyle>.FromCssText(value, Map.LineStyles, LineStyle.None);
             switch (side)
             {
-                case PhysicalSide.Top: BorderTopStyle = value; break;
-                case PhysicalSide.Right: BorderRightStyle = value; break;
-                case PhysicalSide.Bottom: BorderBottomStyle = value; break;
-                default: BorderLeftStyle = value; break;
+                case PhysicalSide.Top: BorderTopStyle = parsed; break;
+                case PhysicalSide.Right: BorderRightStyle = parsed; break;
+                case PhysicalSide.Bottom: BorderBottomStyle = parsed; break;
+                default: BorderLeftStyle = parsed; break;
             }
         }
 
