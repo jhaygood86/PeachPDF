@@ -116,12 +116,12 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while ((sib.DerivedStyle.ActualDisplay == CssConstants.None || sib.Position == CssConstants.Absolute || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib)) && index - diff - 1 >= 0)
+            while ((sib.DerivedStyle.ActualDisplay == CssConstants.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib)) && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == CssConstants.None || sib.Position == CssConstants.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) ? null : sib;
+            sib = sib.DerivedStyle.ActualDisplay == CssConstants.None || sib.Position.Value == PositionMode.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) ? null : sib;
 
             return sib;
         }
@@ -256,7 +256,7 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = conBlock.Boxes[index - diff];
 
-            while ((sib.DerivedStyle.ActualDisplay == CssConstants.None || sib.Position == CssConstants.Absolute || sib.Position == CssConstants.Fixed) && index - diff - 1 >= 0)
+            while ((sib.DerivedStyle.ActualDisplay == CssConstants.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed) && index - diff - 1 >= 0)
             {
                 sib = conBlock.Boxes[index - ++diff];
             }
@@ -905,12 +905,12 @@ namespace PeachPDF.Html.Core.Utils
                 return true;
             }
 
-            if (box.Position is CssConstants.Absolute or CssConstants.Relative && box.ZIndex.Value is { IsValue: true })
+            if (box.Position.Value is PositionMode.Absolute or PositionMode.Relative && box.ZIndex.Value is { IsValue: true })
             {
                 return true;
             }
 
-            if (box.Position is CssConstants.Fixed or CssConstants.Sticky)
+            if (box.Position.Value is PositionMode.Fixed or PositionMode.Sticky)
             {
                 return true;
             }

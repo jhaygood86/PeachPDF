@@ -1414,19 +1414,17 @@
       "name": "position",
       "inherited": false,
       "initialValue": "static",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "static",
-        "relative",
-        "absolute",
-        "fixed",
-        "sticky"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "PositionMode",
+        "keywordMap": "Map.PositionModes",
+        "fallback": "PositionMode.Static"
+      },
       "html": {
         "propertyPath": "Position",
-        "csharpDataType": "string",
-        "area": "DisplayPositioningArea"
+        "csharpDataType": "CssProperty<PositionMode>",
+        "area": "DisplayPositioningArea",
+        "getterExpression": "{box}.Position.ToString()"
       }
     },
     {

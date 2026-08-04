@@ -1,6 +1,7 @@
 using PeachPDF.Text;
 using PeachPDF;
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
@@ -324,7 +325,7 @@ namespace PeachPDF.Tests.Integration
             // position:relative; bottom:-1em; }" (no "top" declared) previously never moved at all.
             var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var smile = FindByClass(root, "smile")!;
-            var smileDiv = smile.Boxes.FirstOrDefault(b => b.Position == "relative");
+            var smileDiv = smile.Boxes.FirstOrDefault(b => b.Position.Value == PositionMode.Relative);
 
             Assert.NotNull(smileDiv);
             // With top:auto and bottom:-1em, the used top offset is +1em (CSS2.1 §9.4.3's sign-flip
@@ -766,7 +767,7 @@ namespace PeachPDF.Tests.Integration
             var mouthBar = smile.Boxes[0];
 
             // Fixture sanity: the relative offset itself must still be applied visually.
-            Assert.Equal(CssConstants.Relative, mouthBar.Position);
+            Assert.Equal(PositionMode.Relative, mouthBar.Position.Value);
             Assert.True(mouthBar.RelativeOffsetY > 0, "bottom: -1em should shift the bar downward");
 
             // Visible top of the mouth bar == visible bottom of the nose block.

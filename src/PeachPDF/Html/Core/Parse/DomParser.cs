@@ -785,7 +785,7 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private static void BlockifyPositionedBox(CssBox box)
         {
-            if (box.Position is not (CssConstants.Absolute or CssConstants.Fixed)) return;
+            if (box.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)) return;
 
             box.Display = box.Display switch
             {
@@ -2020,11 +2020,11 @@ namespace PeachPDF.Html.Core.Parse
             // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
             // (and restructure) them. See CssBoxSvg / issue #159.
             if (box is CssBoxSvg) return;
-            if (box is { DerivedStyle.ActualDisplay: CssConstants.Inline, Position: CssConstants.Absolute })
+            if (box is { DerivedStyle.ActualDisplay: CssConstants.Inline, Position.Value: PositionMode.Absolute })
             {
                 var blockBox = new CssBox(box.ParentBox, null);
                 blockBox.Display = CssConstants.Block;
-                blockBox.Position = CssConstants.Absolute;
+                blockBox.Position = CssProperty<PositionMode>.FromValue(CssConstants.Absolute, PositionMode.Absolute);
                 blockBox.Left = box.Left;
                 blockBox.Top = box.Top;
                 blockBox.Bottom = box.Bottom;
@@ -2033,7 +2033,7 @@ namespace PeachPDF.Html.Core.Parse
                 blockBox.Height = box.Height;
                 blockBox.TextAlign = box.TextAlign;
 
-                box.Position = CssConstants.Static;
+                box.Position = CssProperty<PositionMode>.FromValue(CssConstants.Static, PositionMode.Static);
                 box.ParentBox = blockBox;
             }
 

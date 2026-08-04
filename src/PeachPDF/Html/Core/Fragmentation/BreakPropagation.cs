@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 
@@ -187,7 +188,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private static bool IsInFlow(CssBox box) =>
             box.DerivedStyle.ActualDisplay != CssConstants.None
-            && box.Position is not (CssConstants.Absolute or CssConstants.Fixed)
+            && box.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)
             && !box.IsFloated
             && !CssBox.IsOutsideMarker(box);
     }

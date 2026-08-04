@@ -79,7 +79,7 @@ namespace PeachPDF.Html.Core.Paint
                 if (box.DerivedStyle.ActualDisplay == CssConstants.None || box.Visibility.Value != Visibility.Visible) return;
 
                 // use initial clip to draw blocks with Position = fixed. I.e. ignore page margins
-                if (box.Position == CssConstants.Fixed)
+                if (box.Position.Value == PositionMode.Fixed)
                 {
                     g.SuspendClipping();
                 }
@@ -138,7 +138,7 @@ namespace PeachPDF.Html.Core.Paint
                 }
 
                 // Restore clips
-                if (box.Position == CssConstants.Fixed)
+                if (box.Position.Value == PositionMode.Fixed)
                 {
                     g.ResumeClipping();
                 }
@@ -458,7 +458,7 @@ namespace PeachPDF.Html.Core.Paint
                 // this stacking context's own direct children).
                 foreach (var p in layerBoxes)
                 {
-                    if (!StackingOrder.ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
+                    if (!StackingOrder.ActsAsInline(p.Box) && p.Box.Position.Value != PositionMode.Absolute && p.Box is { IsFixed: false, IsFloated: false })
                         PaintStackingParticipant(g, p);
                 }
 
@@ -470,13 +470,13 @@ namespace PeachPDF.Html.Core.Paint
 
                 foreach (var p in layerBoxes)
                 {
-                    if (StackingOrder.ActsAsInline(p.Box) && p.Box.Position != CssConstants.Absolute && p.Box is { IsFixed: false, IsFloated: false })
+                    if (StackingOrder.ActsAsInline(p.Box) && p.Box.Position.Value != PositionMode.Absolute && p.Box is { IsFixed: false, IsFloated: false })
                         PaintStackingParticipant(g, p);
                 }
 
                 foreach (var p in layerBoxes)
                 {
-                    if (p.Box.Position == CssConstants.Absolute)
+                    if (p.Box.Position.Value == PositionMode.Absolute)
                         PaintStackingParticipant(g, p);
                 }
 
