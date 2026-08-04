@@ -1531,24 +1531,20 @@
     },
     {
       "name": "vertical-align",
+      "comment": "CSS 2.1 also accepts a <percentage>/<length> value form (see .claude/accepted-gaps/vertical-align-no-length-percentage-support.md) - out of scope here, this conversion preserves the pre-existing keyword-only cascade behavior. PeachBaselineMiddle (the deprecated img align=middle sentinel, see CssConstants.PeachBaselineMiddle) is never produced by this keyword grammar - DomParser assigns it directly via CssProperty<VerticalAlignment>.FromValue, same as Float's img align handling.",
       "inherited": false,
       "initialValue": "baseline",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "baseline",
-        "sub",
-        "super",
-        "top",
-        "bottom",
-        "middle",
-        "text-top",
-        "text-bottom"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "VerticalAlignment",
+        "keywordMap": "Map.VerticalAlignments",
+        "fallback": "VerticalAlignment.Baseline"
+      },
       "html": {
         "propertyPath": "VerticalAlign",
-        "csharpDataType": "string",
-        "area": "TextArea"
+        "csharpDataType": "CssProperty<VerticalAlignment>",
+        "area": "TextArea",
+        "getterExpression": "{box}.VerticalAlign.ToString()"
       }
     },
     {

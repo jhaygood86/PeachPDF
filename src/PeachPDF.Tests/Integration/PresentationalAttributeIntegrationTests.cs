@@ -78,6 +78,69 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(Whitespace.NoWrap, td.WhiteSpace.Value);
         }
 
+        [Fact]
+        public async Task ImgAlignLeft_SetsVerticalAlignTop()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<img id='i' align='left' src='x.png' width='10' height='10'>"));
+            var img = FindById(root, "i")!;
+
+            Assert.Equal(VerticalAlignment.Top, img.VerticalAlign.Value);
+        }
+
+        [Fact]
+        public async Task ImgAlignTop_SetsVerticalAlignTop()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<img id='i' align='top' src='x.png' width='10' height='10'>"));
+            var img = FindById(root, "i")!;
+
+            Assert.Equal(VerticalAlignment.Top, img.VerticalAlign.Value);
+        }
+
+        [Fact]
+        public async Task ImgAlignBottom_SetsVerticalAlignBaseline()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<img id='i' align='bottom' src='x.png' width='10' height='10'>"));
+            var img = FindById(root, "i")!;
+
+            Assert.Equal(VerticalAlignment.Baseline, img.VerticalAlign.Value);
+        }
+
+        [Fact]
+        public async Task ImgAlignMiddle_SetsVerticalAlignToThePeachBaselineMiddleSentinel()
+        {
+            // -peachpdf-baseline-middle (same idea as -webkit-baseline-middle) is a PeachPDF-internal
+            // sentinel, never produced by parsing authored CSS text - see
+            // CssConstants.PeachBaselineMiddle and VerticalAlignment.PeachBaselineMiddle. It has no
+            // distinct inline-layout effect (CssLayoutEngine.ApplyVerticalAlignment's switch falls
+            // through to the baseline default), matching this attribute's pre-existing behavior.
+            var (root, _) = await BuildAndLayout(Wrap("<img id='i' align='middle' src='x.png' width='10' height='10'>"));
+            var img = FindById(root, "i")!;
+
+            Assert.Equal(VerticalAlignment.PeachBaselineMiddle, img.VerticalAlign.Value);
+        }
+
+        [Fact]
+        public async Task ValignAttribute_OnATableCell_SetsVerticalAlign()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<table><tr><td id='d' valign='top'>x</td></tr></table>"));
+            var td = FindById(root, "d")!;
+
+            Assert.Equal(VerticalAlignment.Top, td.VerticalAlign.Value);
+        }
+
+        [Fact]
+        public async Task AlignAttribute_OnNonImgElement_WithAVerticalAlignKeyword_SetsVerticalAlign()
+        {
+            // The generic `align` attribute on a non-img element only maps to text-align for its four
+            // horizontal keywords (left/center/right/justify) - anything else (e.g. a vertical-align
+            // keyword, historically seen in the wild on table cells) falls through to the same
+            // unvalidated-string-turned-typed path `valign` uses.
+            var (root, _) = await BuildAndLayout(Wrap("<div id='d' align='middle'>x</div>"));
+            var div = FindById(root, "d")!;
+
+            Assert.Equal(VerticalAlignment.Middle, div.VerticalAlign.Value);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
