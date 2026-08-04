@@ -231,6 +231,23 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// Resolves an already-parsed <see cref="Length"/> (e.g. a keyword-or-value cascade property's
+        /// <c>CssKeywordOrValue{TEnum,Length}.Value</c>) to pixels against <paramref name="box"/>'s own
+        /// em/rem/container-relative-unit context — the same box-context extraction the string-based
+        /// <see cref="ParseLength(string,double,CssBox)"/> overload uses, without re-serializing the
+        /// already-typed length back to text just to re-parse it.
+        /// </summary>
+        /// <param name="length">The already-parsed length</param>
+        /// <param name="hundredPercent">Equivalent to 100 percent when length is a percentage</param>
+        /// <param name="box"></param>
+        public static double ParseLength(Length length, double hundredPercent, CssBox box)
+        {
+            var (containerInlinePt, containerBlockPt) = box.GetContainerRelativeUnitBasis();
+
+            return length.ToPixels(box.GetEmHeight(), box.GetRemHeight(), hundredPercent, containerInlinePt, containerBlockPt);
+        }
+
+        /// <summary>
         /// Parses a length. Lengths are followed by an unit identifier (e.g. 10px, 3.1em)
         /// </summary>
         /// <param name="length">Specified length</param>

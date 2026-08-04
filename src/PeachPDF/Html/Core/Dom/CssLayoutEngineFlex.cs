@@ -1505,14 +1505,13 @@ namespace PeachPDF.Html.Core.Dom
         // column-gap = between items in a row direction (main axis gap for row flex)
         // row-gap    = between items in a column direction (main axis gap for column flex)
         private double ParseMainGap(double mainSize) =>
-            CssValueParser.ParseLength(
-                _isRow ? _flexBox.FlexColumnGap : _flexBox.FlexRowGap,
-                mainSize, _flexBox);
+            ParseGap(_isRow ? _flexBox.FlexColumnGap : _flexBox.FlexRowGap, mainSize);
 
         private double ParseCrossGap(double mainSize) =>
-            CssValueParser.ParseLength(
-                _isRow ? _flexBox.FlexRowGap : _flexBox.FlexColumnGap,
-                mainSize, _flexBox);
+            ParseGap(_isRow ? _flexBox.FlexRowGap : _flexBox.FlexColumnGap, mainSize);
+
+        private double ParseGap(CssProperty<CssKeywordOrValue<NormalKeyword, Length>> gap, double contentBase) =>
+            gap.Value is { IsValue: true, Value: { } length } ? CssValueParser.ParseLength(length, contentBase, _flexBox) : 0;
 
         // ─── Layout helpers ───────────────────────────────────────────────────────
 

@@ -632,7 +632,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("2px", child!.LetterSpacing);
+            Assert.Equal("2px", child!.LetterSpacing.ToString());
         }
 
         [Fact]
@@ -650,7 +650,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("3px", child!.WordSpacing);
+            Assert.Equal("3px", child!.WordSpacing.ToString());
         }
 
         [Fact]

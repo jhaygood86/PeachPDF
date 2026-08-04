@@ -347,7 +347,16 @@ namespace PeachPDF.Html.Core.Dom
         #region Non-cascaded helpers
 
         /// <summary>Ensures that the specified length is converted to pixels if necessary.</summary>
-        protected string NoEms(string length)
+        /// <remarks>
+        /// Internal, not protected: for a <c>keyword-or-value</c>-shaped property (<c>word-spacing</c>/
+        /// <c>letter-spacing</c>), <c>RegistryEmitter.BuildHtmlAssignment</c> calls this on the raw
+        /// authored text *before* <c>CssKeywordOrValueParser.FromCssText</c> parses it, from the
+        /// generated <c>CssPropertyRegistry</c> class (a same-assembly, but unrelated, type) - see the
+        /// source generator's <c>StylePropertiesEmitter</c> doc comment for why the resolution has to
+        /// happen there rather than in this box's own generated property setter once the setter's
+        /// parameter is a typed union instead of a string.
+        /// </remarks>
+        internal string NoEms(string length)
         {
             var len = new CssLength(length);
             if (len.Unit == CssUnit.Ems)

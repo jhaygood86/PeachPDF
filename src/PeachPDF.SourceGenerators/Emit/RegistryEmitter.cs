@@ -145,10 +145,23 @@ namespace PeachPDF.SourceGenerators.Emit
             {
                 var dt = entry.CssDataTypes[0];
                 var resolved = KeywordOrValueGrammar.Resolve(entry, dt);
+                // A keyword-or-value property's html.valueComputation (e.g. word-spacing/letter-spacing's
+                // "no-ems") must run on the raw authored text *before* FromCssText parses it - the box's
+                // own generated property setter (StylePropertiesEmitter) no longer sees a string to run it
+                // against once the property is typed, so this is the one place left with both the raw
+                // string and a CssBox in scope. See StylePropertiesEmitter's doc comment.
+                var rawValueExpr = html.ValueComputation switch
+                {
+                    null => "value",
+                    "no-ems" => "box.NoEms(value)",
+                    _ => throw new NotSupportedException(
+                        $"\"{entry.Name}\" declares a keyword-or-value cssDataType with html.valueComputation " +
+                        $"\"{html.ValueComputation}\", which RegistryEmitter does not implement."),
+                };
                 // Explicit type arguments: a method-group argument (int.TryParse) doesn't drive generic
                 // inference for TValue the way a concrete delegate instance would.
                 return $"box.{html.PropertyPath} = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<{dt.EnumType}, {resolved.CSharpType}>" +
-                       $"(value, {dt.KeywordMap}, {resolved.TryParseMethod}, {dt.Fallback});";
+                       $"({rawValueExpr}, {dt.KeywordMap}, {resolved.TryParseMethod}, {dt.Fallback});";
             }
 
             // A case-insensitively-matched keyword (plain "keyword", or the keyword side of a union like

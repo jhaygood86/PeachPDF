@@ -34,8 +34,20 @@ namespace PeachPDF.SourceGenerators.Emit
         public static Resolved Resolve(PropertyEntry entry, DataTypeSpec dt) => dt.ValueType switch
         {
             "integer" => new Resolved(BuildIntegerValueClause(dt), "int", "int.TryParse"),
+            // Deliberately validates via Length.TryParse itself, NOT the broader
+            // CssValueParser.IsValidLength (which also accepts calc()) - Length.TryParse can't parse a
+            // calc() expression needing layout-time context (mixed em/rem/% units; a pure-absolute
+            // calc() has already folded to a literal length by the time Layer A hands this text down, so
+            // it still passes), and CssKeywordOrValueParser.FromCssText has no third "unresolved, retry
+            // at layout time" state the way plain CssProperty<T> has for var() - the value side of this
+            // union is only ever Keyword or a concrete TValue. Validating with the broader clause would
+            // let an unparseable relative calc() pass validation and then silently fall back to the
+            // keyword side in FromCssText (the wrong value, not what was authored) instead of being
+            // correctly rejected as an invalid declaration (CSS Syntax 3 error recovery - the previous/
+            // inherited/initial value stays in effect, same as any other invalid value already handled
+            // by this generator).
             "length" => new Resolved(
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength(value)",
+                "global::PeachPDF.CSS.Length.TryParse(value, out _)",
                 "global::PeachPDF.CSS.Length", "global::PeachPDF.CSS.Length.TryParse"),
             _ => throw new NotSupportedException(
                 $"\"{entry.Name}\" declares a keyword-or-value cssDataType with valueType \"{dt.ValueType}\", " +

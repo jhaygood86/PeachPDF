@@ -208,6 +208,35 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task WordSpacing_MixedUnitCalc_DeclarationIsRejected_InheritsParentsValue()
+        {
+            // word-spacing is CssKeywordOrValue<NormalKeyword, Length>-backed: the value side can only
+            // ever be a concrete, already-resolved Length, not "text to evaluate once layout context is
+            // known." A calc() expression built entirely from absolute units still folds to a literal
+            // length before it ever reaches here (see the sibling test above), but one mixing em/rem/%
+            // with other units can't fold at cascade time - Length.TryParse can't parse "calc(...)" text
+            // at all, so the property's own validator (Length.TryParse-based, not the broader
+            // CssValueParser.IsValidLength used elsewhere) correctly rejects it as an invalid declaration
+            // (CSS Syntax 3 error recovery) rather than silently substituting the wrong value. Confirmed
+            // via a real cascade: the child inherits the parent's word-spacing exactly like any other
+            // invalid declaration on an inherited property would.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div style="word-spacing: 5px">
+                <div id="el" style="word-spacing: calc(1em + 2px)">hello world</div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal("5px", el!.WordSpacing.ToString());
+            Assert.True(el.WordSpacing.Value is { IsValue: true, Value.Value: 5f });
+        }
+
+        [Fact]
         public async Task Width_Min_PicksSmaller()
         {
             var root = await BuildBoxTree(WidthHtml("min(150pt, 100pt)"));
@@ -335,8 +364,8 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("15px", el!.FlexRowGap);
-            Assert.Equal("20px", el.FlexColumnGap);
+            Assert.Equal("15px", el!.FlexRowGap.ToString());
+            Assert.Equal("20px", el.FlexColumnGap.ToString());
         }
 
         // ── helpers ───────────────────────────────────────────────────────────

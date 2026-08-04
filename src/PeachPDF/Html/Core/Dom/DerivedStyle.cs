@@ -532,9 +532,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (!double.IsNaN(ActualLetterSpacing)) return;
 
-            _actualLetterSpacing = Style.Text.LetterSpacing == CssConstants.Normal
-                ? 0
-                : CssValueParser.ParseLength(Style.Text.LetterSpacing, 1, Owner);
+            _actualLetterSpacing = Style.Text.LetterSpacing.Value is { IsValue: true, Value: { } letterSpacing }
+                ? CssValueParser.ParseLength(letterSpacing, 1, Owner)
+                : 0;
         }
 
         /// <summary>The length/percentage component of <c>text-indent</c>, resolved to layout units. Which
