@@ -480,7 +480,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("normal", el!.JustifyItems);
+            Assert.Equal(JustifyItem.Normal, el!.JustifyItems.Value);
         }
 
         [Fact]

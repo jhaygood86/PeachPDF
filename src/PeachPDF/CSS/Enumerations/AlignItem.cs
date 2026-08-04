@@ -12,6 +12,13 @@ namespace PeachPDF.CSS
         FlexEnd,
         SelfStart,
         SelfEnd,
-        Baseline
+        Baseline,
+
+        /// <summary>
+        /// <c>align-self</c> only - defers to the container's <c>align-items</c> (CSS Box Alignment 3
+        /// §5.3). Not a valid <c>align-items</c> value; never produced by <c>Map.AlignItemKeywords</c>,
+        /// only by <c>Map.AlignSelfKeywords</c>.
+        /// </summary>
+        Auto
     }
 }
