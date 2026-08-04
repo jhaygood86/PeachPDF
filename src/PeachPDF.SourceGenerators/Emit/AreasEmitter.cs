@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -112,8 +113,8 @@ namespace PeachPDF.SourceGenerators.Emit
             // Its initial keyword ("none") has no corresponding parsed T, so - matching the hand-written
             // precedent this mirrors - the parsed half stays a literal null; only the raw text is set.
             if (html.CsharpDataType is { } csharpType &&
-                csharpType.StartsWith("CssProperty<", System.StringComparison.Ordinal) &&
-                csharpType.EndsWith(">", System.StringComparison.Ordinal))
+                csharpType.StartsWith("CssProperty<", StringComparison.Ordinal) &&
+                csharpType.EndsWith(">", StringComparison.Ordinal))
             {
                 return $"{csharpType}.FromValue({initialValueExpr}, null)";
             }

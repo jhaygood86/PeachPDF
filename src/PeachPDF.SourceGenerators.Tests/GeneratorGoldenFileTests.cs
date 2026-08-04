@@ -492,6 +492,45 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_Exactly_One_Field_And_Property_For_A_Legacy_Alias_Pair_Sharing_A_PropertyPath()
+        {
+            // page-break-after/break-after both declare propertyPath "BreakAfter"/area "BreakArea" - they
+            // must collapse to exactly one ComputedStyleAreas field and one CssBox property, not two.
+            var json = """
+                {
+                  "properties": [
+                    { "name": "break-after", "inherited": false, "initialValue": "auto", "cssDataType": "cssom",
+                      "html": { "propertyPath": "BreakAfter", "csharpDataType": "string", "area": "BreakArea" } },
+                    { "name": "page-break-after", "inherited": false, "initialValue": "auto", "aliasOf": "break-after", "cssDataType": "cssom",
+                      "html": { "propertyPath": "BreakAfter", "csharpDataType": "string", "area": "BreakArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var areas = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "ComputedStyleAreas.g.cs").SourceText.ToString();
+            var styleProperties = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
+
+            Assert.Equal(1, CountOccurrences(areas, "public string BreakAfter { get; init; }"));
+            Assert.Equal(1, CountOccurrences(styleProperties, "public string BreakAfter"));
+        }
+
+        private static int CountOccurrences(string haystack, string needle)
+        {
+            var count = 0;
+            var index = 0;
+            while ((index = haystack.IndexOf(needle, index, System.StringComparison.Ordinal)) >= 0)
+            {
+                count++;
+                index += needle.Length;
+            }
+            return count;
+        }
+
+        [Fact]
         public void Emits_CssBox_StyleProperties_Get_Set_Skeleton_For_A_Plain_Property()
         {
             var json = """

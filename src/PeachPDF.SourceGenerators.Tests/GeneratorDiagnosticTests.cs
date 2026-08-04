@@ -346,6 +346,48 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void PPG015_Fires_When_The_Same_PropertyPath_Declares_Two_Different_Areas()
+        {
+            // AreasEmitter/StylePropertiesEmitter both dedupe by propertyPath, so two unrelated entries
+            // that accidentally reuse the same propertyPath under different areas would silently bind the
+            // generated CssBox property to only whichever entry is seen first - this is the only place
+            // left that can catch the mistake, since PPG010/011 skip every area-backed entry now.
+            var json = """
+                {
+                  "properties": [
+                    { "name": "border-top-width", "inherited": false, "initialValue": "medium", "cssDataType": "cssom",
+                      "html": { "propertyPath": "Shared", "csharpDataType": "string", "area": "BorderArea" } },
+                    { "name": "opacity", "inherited": false, "initialValue": "1", "cssDataType": "cssom",
+                      "html": { "propertyPath": "Shared", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG015", IdsOf(result));
+        }
+
+        [Fact]
+        public void PPG015_Does_Not_Fire_For_A_Legacy_Alias_Pair_Sharing_The_Same_Area()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "break-after", "inherited": false, "initialValue": "auto", "cssDataType": "cssom",
+                      "html": { "propertyPath": "BreakAfter", "csharpDataType": "string", "area": "BreakArea" } },
+                    { "name": "page-break-after", "inherited": false, "initialValue": "auto", "aliasOf": "break-after", "cssDataType": "cssom",
+                      "html": { "propertyPath": "BreakAfter", "csharpDataType": "string", "area": "BreakArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.DoesNotContain("PPG015", IdsOf(result));
+        }
+
+        [Fact]
         public void A_Fully_Valid_Document_Produces_No_Diagnostics()
         {
             var json = """

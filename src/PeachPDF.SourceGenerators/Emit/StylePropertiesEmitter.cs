@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -106,7 +107,7 @@ namespace PeachPDF.SourceGenerators.Emit
         /// <see cref="ComputedStyle"/>'s field name for it (<c>"BoxModelArea"</c> → <c>"BoxModel"</c>) -
         /// the convention every one of the 16 area records follows.</summary>
         private static string AreaFieldName(string area) =>
-            area.EndsWith("Area", System.StringComparison.Ordinal) ? area.Substring(0, area.Length - "Area".Length) : area;
+            area.EndsWith("Area", StringComparison.Ordinal) ? area.Substring(0, area.Length - "Area".Length) : area;
 
         private static void EmitValueComputation(StringBuilder sb, string valueComputation, PropertyEntry entry)
         {
@@ -122,7 +123,7 @@ namespace PeachPDF.SourceGenerators.Emit
                     sb.AppendLine("                var resolved = NoEmsTextIndent(value);");
                     break;
                 default:
-                    throw new System.NotSupportedException(
+                    throw new NotSupportedException(
                         $"\"{entry.Name}\" declares html.valueComputation \"{valueComputation}\", which StylePropertiesEmitter does not implement.");
             }
         }
