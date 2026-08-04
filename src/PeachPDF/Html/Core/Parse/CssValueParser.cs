@@ -274,13 +274,13 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (Length.TryParse(value, out var length))
             {
-                result = new LengthOrCalc { Length = length };
+                result = new LengthOrCalc(length, null);
                 return true;
             }
 
             if (IsCalcFunction(value))
             {
-                result = new LengthOrCalc { CalcText = value };
+                result = new LengthOrCalc(null, value);
                 return true;
             }
 

@@ -1,3 +1,5 @@
+using System;
+
 namespace PeachPDF.CSS
 {
     /// <summary>
@@ -12,9 +14,24 @@ namespace PeachPDF.CSS
     /// context). Mirrors <c>GridTrackSize</c>'s identical "keep calc's reconstructed text, Layer B
     /// evaluates it" pattern for grid track sizes (see <c>GridTrackListGrammar</c>'s
     /// <c>IsLengthPercentageCalc</c> handling) - the same trick, ported to this union's value side.
+    /// <para>
+    /// The "exactly one is set" invariant is enforced by the constructor, mirroring
+    /// <see cref="CssKeywordOrValue{TEnum,TValue}"/> - <c>default(LengthOrCalc)</c> (both null) bypasses it
+    /// the same way, but the only construction site, <c>CssValueParser.TryParseLengthOrCalc</c>
+    /// (namespace <c>PeachPDF.Html.Core.Parse</c>), always goes through this constructor.
+    /// </para>
     /// </summary>
     internal readonly record struct LengthOrCalc
     {
+        public LengthOrCalc(Length? length, string? calcText)
+        {
+            if (length is null == calcText is null)
+                throw new ArgumentException("Exactly one of length or calcText must be provided.");
+
+            Length = length;
+            CalcText = calcText;
+        }
+
         public Length? Length { get; init; }
         public string? CalcText { get; init; }
 
