@@ -459,16 +459,16 @@ namespace PeachPDF.Html.Core.Dom
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(cell);
 
-            if (cell.VerticalAlign is CssConstants.Top or CssConstants.Baseline)
+            if (cell.VerticalAlign.Value is VerticalAlignment.Top or VerticalAlignment.Baseline)
                 return 0d;
 
             var cellBottom = cell.ClientBottom;
             var bottom = CssBox.GetMaximumBottom(cell, 0f);
 
-            var dist = cell.VerticalAlign switch
+            var dist = cell.VerticalAlign.Value switch
             {
-                CssConstants.Bottom => cellBottom - bottom,
-                CssConstants.Middle => (cellBottom - bottom) / 2,
+                VerticalAlignment.Bottom => cellBottom - bottom,
+                VerticalAlignment.Middle => (cellBottom - bottom) / 2,
                 _ => 0d
             };
 
@@ -2204,26 +2204,26 @@ namespace PeachPDF.Html.Core.Dom
                 var effectiveVerticalAlign = firstLineVerticalAlign ?? styledBoxForVerticalAlign.VerticalAlign;
 
                 //Important notes on http://www.w3.org/TR/CSS21/tables.html#height-layout
-                switch (effectiveVerticalAlign)
+                switch (effectiveVerticalAlign.Value)
                 {
-                    case CssConstants.Sub:
+                    case VerticalAlignment.Sub:
                         lineBox.SetBaseLine(box, baseline + rect.Height * .5f);
                         break;
-                    case CssConstants.Super:
+                    case VerticalAlignment.Super:
                         lineBox.SetBaseLine(box, baseline - rect.Height * .2f);
                         break;
-                    case CssConstants.Top:
+                    case VerticalAlignment.Top:
                         OffsetBoxWithinLine(lineBox, box, lineTop - rect.Top);
                         break;
-                    case CssConstants.Bottom:
+                    case VerticalAlignment.Bottom:
                         OffsetBoxWithinLine(lineBox, box, lineBottom - rect.Bottom);
                         break;
-                    case CssConstants.Middle:
+                    case VerticalAlignment.Middle:
                         var lineMiddleTop = lineTop + (lineBottom - lineTop - rect.Height) / 2;
                         OffsetBoxWithinLine(lineBox, box, lineMiddleTop - rect.Top);
                         break;
-                    case CssConstants.TextTop:
-                    case CssConstants.TextBottom:
+                    case VerticalAlignment.TextTop:
+                    case VerticalAlignment.TextBottom:
                         // Align with the top/bottom of the parent's font box, per CSS1 §5.6.11 - not
                         // the line's own extents (that's top/bottom above), so this references the
                         // parent element's own ActualFont rather than lineTop/lineBottom. Reuses the
@@ -2231,13 +2231,15 @@ namespace PeachPDF.Html.Core.Dom
                         var styledBox = styledBoxForVerticalAlign;
                         var referenceFont = (styledBox.ParentBox ?? styledBox).ActualFont;
                         var fontTop = baseline - referenceFont.Ascent;
-                        var target = effectiveVerticalAlign == CssConstants.TextTop
+                        var target = effectiveVerticalAlign.Value == VerticalAlignment.TextTop
                             ? fontTop
                             : fontTop + referenceFont.Height - rect.Height;
                         OffsetBoxWithinLine(lineBox, box, target - rect.Top);
                         break;
                     default:
-                        //case: baseline
+                        // baseline, and PeachBaselineMiddle (the deprecated img align=middle sentinel -
+                        // see CssConstants.PeachBaselineMiddle - has no distinct inline-layout effect,
+                        // matching its pre-existing behavior before this typed-storage conversion).
                         lineBox.SetBaseLine(box, baseline);
                         break;
                 }

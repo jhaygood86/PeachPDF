@@ -1410,21 +1410,21 @@ namespace PeachPDF.Html.Core.Parse
                             switch (value)
                             {
                                 case HtmlConstants.Left:
-                                    box.VerticalAlign = CssConstants.Top;
+                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
                                     box.Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left);
                                     break;
                                 case HtmlConstants.Right:
-                                    box.VerticalAlign = CssConstants.Top;
+                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
                                     box.Float = CssProperty<Floating>.FromValue(CssConstants.Right, Floating.Right);
                                     break;
                                 case HtmlConstants.Bottom:
-                                    box.VerticalAlign = CssConstants.Baseline;
+                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Baseline, VerticalAlignment.Baseline);
                                     break;
                                 case HtmlConstants.Middle:
-                                    box.VerticalAlign = CssConstants.PeachBaselineMiddle;
+                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.PeachBaselineMiddle, VerticalAlignment.PeachBaselineMiddle);
                                     break;
                                 case HtmlConstants.Top:
-                                    box.VerticalAlign = CssConstants.Top;
+                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
                                     break;
                             }
                         }
@@ -1433,7 +1433,7 @@ namespace PeachPDF.Html.Core.Parse
                             if (value is HtmlConstants.Left or HtmlConstants.Center or HtmlConstants.Right or HtmlConstants.Justify)
                                 box.TextAlign = CssProperty<HorizontalAlignment>.FromCssText(value.ToLower(), Map.HorizontalAlignments, HorizontalAlignment.Start);
                             else
-                                box.VerticalAlign = value.ToLower();
+                                box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);
 
                         }
 
@@ -1490,7 +1490,7 @@ namespace PeachPDF.Html.Core.Parse
                             box.FontSize = value;
                         break;
                     case HtmlConstants.Valign:
-                        box.VerticalAlign = value.ToLower();
+                        box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);
                         break;
                     case HtmlConstants.Vspace:
                         box.MarginTop = box.MarginBottom = TranslateLength(value);

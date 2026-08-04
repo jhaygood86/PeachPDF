@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -112,6 +113,51 @@ namespace PeachPDF.Tests.Integration
             var yLarge = CssBox.FirstWordOccurence(FindById(rootLarge, "v")!, pLarge.LineBoxes[0])!.Top;
 
             Assert.NotEqual(ySmall, yLarge);
+        }
+
+        [Fact]
+        public async Task Bottom_OnATableCell_PushesShortContentLowerThanTopAligned()
+        {
+            // CssLayoutEngine.ApplyCellVerticalAlignment's table-specific alignment algorithm (distinct
+            // from the inline ApplyVerticalAlignment exercised by the other tests in this file) - a
+            // short cell in a taller row must be pushed all the way to the row's bottom under
+            // vertical-align:bottom, unlike vertical-align:top where it stays put.
+            // "v"'s own height is left auto (an explicit height would make GetMaximumBottom clamp to
+            // the cell's own already-row-equalized bottom, leaving no room for the alignment to move
+            // its content within) - the tall sibling alone is what stretches the shared row.
+            var htmlTop = Wrap(
+                "<table><tr>"
+                + "<td style='height:100pt'>Tall</td>"
+                + "<td id='v' style='vertical-align:top'>Short</td>"
+                + "</tr></table>");
+            var htmlBottom = Wrap(
+                "<table><tr>"
+                + "<td style='height:100pt'>Tall</td>"
+                + "<td id='v' style='vertical-align:bottom'>Short</td>"
+                + "</tr></table>");
+
+            var (rootTop, _) = await BuildAndLayout(htmlTop);
+            var (rootBottom, _) = await BuildAndLayout(htmlBottom);
+
+            var topY = CssBox.FirstWordOccurence(FindById(rootTop, "v")!, FindById(rootTop, "v")!.LineBoxes[0])!.Top;
+            var bottomY = CssBox.FirstWordOccurence(FindById(rootBottom, "v")!, FindById(rootBottom, "v")!.LineBoxes[0])!.Top;
+
+            Assert.True(bottomY > topY,
+                $"vertical-align:bottom ({bottomY}) should push the cell's content lower than vertical-align:top ({topY})");
+        }
+
+        [Fact]
+        public async Task PercentageValue_IsRejectedAtTheCascade_AndFallsBackToBaseline()
+        {
+            // See .claude/accepted-gaps/vertical-align-percentage-length-unsupported.md: CSS 2.1
+            // §10.8.1 also accepts a <percentage>/<length> value, but PeachPDF's cascade-time keyword
+            // grammar only recognizes the 8 standard keywords - an authored percentage/length is
+            // silently rejected and the property stays at its initial "baseline".
+            var html = Wrap("<p id='p' style='font-size:16pt'><span id='v' style='vertical-align:25%'>x</span></p>");
+            var (root, _) = await BuildAndLayout(html);
+            var v = FindById(root, "v")!;
+
+            Assert.Equal(VerticalAlignment.Baseline, v.VerticalAlign.Value);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

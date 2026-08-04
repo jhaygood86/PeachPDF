@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
@@ -567,7 +568,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("baseline", child!.VerticalAlign);
+            Assert.Equal(VerticalAlignment.Baseline, child!.VerticalAlign.Value);
         }
 
         [Fact]
@@ -587,7 +588,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("middle", child!.VerticalAlign);
+            Assert.Equal(VerticalAlignment.Middle, child!.VerticalAlign.Value);
         }
 
         [Fact]
@@ -607,7 +608,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("baseline", child!.VerticalAlign);
+            Assert.Equal(VerticalAlignment.Baseline, child!.VerticalAlign.Value);
         }
 
         // ── regression: letter-spacing/word-spacing/font-palette are genuinely inherited, ──

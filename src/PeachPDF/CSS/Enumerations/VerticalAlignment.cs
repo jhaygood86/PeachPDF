@@ -9,6 +9,13 @@ namespace PeachPDF.CSS
         TextBottom,
         Middle,
         Top,
-        Bottom
+        Bottom,
+
+        /// <summary>
+        /// PeachPDF-internal sentinel for the deprecated <c>&lt;img align="middle"&gt;</c> HTML attribute
+        /// (same idea as <c>-webkit-baseline-middle</c>) - not a CSS keyword, never produced by parsing
+        /// authored CSS text. <see cref="PeachPDF.Html.Core.Utils.CssConstants.PeachBaselineMiddle"/>.
+        /// </summary>
+        PeachBaselineMiddle
     }
 }

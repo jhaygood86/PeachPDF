@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
@@ -992,7 +993,7 @@ namespace PeachPDF.Tests.Integration
             {
                 InheritStyle(row, everything: true);
                 Display = CssConstants.TableCell;
-                VerticalAlign = CssConstants.Middle;
+                VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Middle, VerticalAlignment.Middle);
                 _stops = stops;
                 _keepsItsContentAfterTheFirstLayout = keepsItsContentAfterTheFirstLayout;
 
