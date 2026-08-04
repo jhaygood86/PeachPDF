@@ -274,10 +274,10 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_ColumnWidth(CssValueParser parser, string value) => " +
-                "Map.AutoKeywords.ContainsKey(value) || global::PeachPDF.CSS.Length.TryParse(value, out _);",
+                "Map.AutoKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc(value, out _);",
                 generated);
             Assert.Contains(
-                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, global::PeachPDF.CSS.Length>(value, Map.AutoKeywords, global::PeachPDF.CSS.Length.TryParse, AutoKeyword.Auto);",
+                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<AutoKeyword, global::PeachPDF.CSS.LengthOrCalc>(value, Map.AutoKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);",
                 generated);
         }
 
@@ -700,7 +700,7 @@ namespace PeachPDF.SourceGenerators.Tests
                     { "name": "word-spacing", "inherited": true, "initialValue": "normal",
                       "cssDataType": { "type": "keyword-or-value", "enumType": "NormalKeyword", "keywordMap": "Map.NormalKeywords",
                         "fallback": "NormalKeyword.Normal", "valueType": "length" },
-                      "html": { "propertyPath": "WordSpacing", "csharpDataType": "CssProperty<CssKeywordOrValue<NormalKeyword, Length>>",
+                      "html": { "propertyPath": "WordSpacing", "csharpDataType": "CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>>",
                         "area": "TextArea", "valueComputation": "no-ems" } }
                   ]
                 }
@@ -714,8 +714,8 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
 
             Assert.Contains(
-                "box.WordSpacing = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, global::PeachPDF.CSS.Length>" +
-                "(box.NoEms(value), Map.NormalKeywords, global::PeachPDF.CSS.Length.TryParse, NormalKeyword.Normal);",
+                "box.WordSpacing = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, global::PeachPDF.CSS.LengthOrCalc>" +
+                "(box.NoEms(value), Map.NormalKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc, NormalKeyword.Normal);",
                 registry);
 
             Assert.DoesNotContain("NoEms(value)", styleProperties);

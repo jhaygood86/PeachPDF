@@ -3,6 +3,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -208,32 +209,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task WordSpacing_MixedUnitCalc_DeclarationIsRejected_InheritsParentsValue()
+        public async Task WordSpacing_MixedUnitCalc_EvaluatesAgainstTheBoxsOwnFontSize()
         {
-            // word-spacing is CssKeywordOrValue<NormalKeyword, Length>-backed: the value side can only
-            // ever be a concrete, already-resolved Length, not "text to evaluate once layout context is
-            // known." A calc() expression built entirely from absolute units still folds to a literal
-            // length before it ever reaches here (see the sibling test above), but one mixing em/rem/%
-            // with other units can't fold at cascade time - Length.TryParse can't parse "calc(...)" text
-            // at all, so the property's own validator (Length.TryParse-based, not the broader
-            // CssValueParser.IsValidLength used elsewhere) correctly rejects it as an invalid declaration
-            // (CSS Syntax 3 error recovery) rather than silently substituting the wrong value. Confirmed
-            // via a real cascade: the child inherits the parent's word-spacing exactly like any other
-            // invalid declaration on an inherited property would.
-            var html = """
-                <!DOCTYPE html><html><body>
-                <div style="word-spacing: 5px">
-                <div id="el" style="word-spacing: calc(1em + 2px)">hello world</div>
-                </div>
-                </body></html>
-                """;
+            // word-spacing is CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed: an absolute-only
+            // calc() (see the sibling test above) still folds to a literal length before it ever reaches
+            // the property registry, but one mixing em/rem/%/cq* units can't fold without layout context
+            // - Length.TryParse alone can't represent that. LengthOrCalc keeps the calc()'s own text for
+            // exactly this case (mirroring GridTrackSize's identical trick for grid track sizes), and
+            // CssValueParser.ParseLength evaluates it lazily at consumption time against the box's real
+            // em/rem/container context - so a relative-unit calc() here resolves exactly like it did
+            // before this property was converted to typed storage, not silently to "normal".
+            var (calcRoot, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='el' style='font-size:20px; word-spacing: calc(1em + 2px)'>hello world</div>"));
+            var (absoluteRoot, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='el' style='font-size:20px; word-spacing: 22px'>hello world</div>"));
 
-            var root = await BuildBoxTree(html);
-            var el = FindById(root, "el");
+            var calcEl = LayoutHarness.FindById(calcRoot, "el");
+            var absoluteEl = LayoutHarness.FindById(absoluteRoot, "el");
 
-            Assert.NotNull(el);
-            Assert.Equal("5px", el!.WordSpacing.ToString());
-            Assert.True(el.WordSpacing.Value is { IsValue: true, Value.Value: 5f });
+            Assert.NotNull(calcEl);
+            Assert.NotNull(absoluteEl);
+            Assert.True(calcEl!.WordSpacing.Value is { IsValue: true, Value: { IsCalc: true } });
+            Assert.Equal(absoluteEl!.ActualWordSpacing, calcEl.ActualWordSpacing, 2);
         }
 
         [Fact]
@@ -366,6 +363,33 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(el);
             Assert.Equal("15px", el!.FlexRowGap.ToString());
             Assert.Equal("20px", el.FlexColumnGap.ToString());
+        }
+
+        [Fact]
+        public async Task ColumnGap_MixedUnitCalc_LaysOutIdenticallyToTheEquivalentAbsoluteLength()
+        {
+            // Same LengthOrCalc deferred-evaluation path as word-spacing's sibling test above, exercised
+            // for row-gap/column-gap: a relative-unit calc() can't fold to a literal Length at cascade
+            // time, so it's kept as text and evaluated lazily by CssLayoutEngineGrid.ParseGap against the
+            // grid box's own real context - proven here by laying out two equal-width tracks either side
+            // of the gap and confirming the second track starts at the same X as it would with the
+            // equivalent absolute gap.
+            var (calcRoot, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='el' style='display:grid; grid-template-columns:50pt 50pt; font-size:20px; column-gap: calc(1em + 2px)'>" +
+                "<div id='a'></div><div id='b'></div></div>"));
+            var (absoluteRoot, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='el' style='display:grid; grid-template-columns:50pt 50pt; font-size:20px; column-gap: 22px'>" +
+                "<div id='a'></div><div id='b'></div></div>"));
+
+            var calcEl = LayoutHarness.FindById(calcRoot, "el");
+            var calcB = LayoutHarness.FindById(calcRoot, "b");
+            var absoluteB = LayoutHarness.FindById(absoluteRoot, "b");
+
+            Assert.NotNull(calcEl);
+            Assert.NotNull(calcB);
+            Assert.NotNull(absoluteB);
+            Assert.True(calcEl!.FlexColumnGap.Value is { IsValue: true, Value: { IsCalc: true } });
+            Assert.Equal(absoluteB!.Location.X, calcB!.Location.X, 2);
         }
 
         // ── helpers ───────────────────────────────────────────────────────────

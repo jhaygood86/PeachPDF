@@ -1510,7 +1510,7 @@ namespace PeachPDF.Html.Core.Dom
         private double ParseCrossGap(double mainSize) =>
             ParseGap(_isRow ? _flexBox.FlexRowGap : _flexBox.FlexColumnGap, mainSize);
 
-        private double ParseGap(CssProperty<CssKeywordOrValue<NormalKeyword, Length>> gap, double contentBase) =>
+        private double ParseGap(CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>> gap, double contentBase) =>
             gap.Value is { IsValue: true, Value: { } length } ? CssValueParser.ParseLength(length, contentBase, _flexBox) : 0;
 
         // ─── Layout helpers ───────────────────────────────────────────────────────

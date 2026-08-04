@@ -8,8 +8,9 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Direct typed-storage assertions for the "normal | length" group (<c>word-spacing</c>,
     /// <c>letter-spacing</c>, <c>row-gap</c>, <c>column-gap</c>) - each now backed by
-    /// <c>CssProperty&lt;CssKeywordOrValue&lt;NormalKeyword, Length&gt;&gt;</c>, the second grammar shape
-    /// through the keyword-or-value mechanism after <c>z-index</c>/<c>column-count</c>'s integer-or-auto.
+    /// <c>CssProperty&lt;CssKeywordOrValue&lt;NormalKeyword, LengthOrCalc&gt;&gt;</c>, the second grammar
+    /// shape through the keyword-or-value mechanism after <c>z-index</c>/<c>column-count</c>'s
+    /// integer-or-auto.
     /// Complements the existing layout-geometry tests (<c>LetterWordSpacingLayoutIntegrationTests</c>,
     /// <c>FlexboxIntegrationTests</c>, <c>GridLayoutIntegrationTests</c>, <c>MulticolLayoutIntegrationTests</c>),
     /// which exercise these properties indirectly through their effect on measured/laid-out positions
@@ -28,7 +29,7 @@ namespace PeachPDF.Tests.Integration
         public async Task WordSpacing_LengthValue_StoresParsedLength()
         {
             var box = await GetBoxAsync("<div id='el' style='word-spacing:4px'></div>");
-            Assert.True(box.WordSpacing.Value is { IsValue: true, Value.Value: 4f });
+            Assert.True(box.WordSpacing.Value is { IsValue: true, Value: { Length: { Value: 4f } } });
         }
 
         [Fact]
@@ -45,8 +46,8 @@ namespace PeachPDF.Tests.Integration
             // compound if a descendant with a different font-size ever read it, since TextArea inherits
             // by reference (see CssBox.NoEms's own doc comment).
             var box = await GetBoxAsync("<div id='el' style='font-size:20px; letter-spacing:1em'></div>");
-            Assert.True(box.LetterSpacing.Value is { IsValue: true } value);
-            Assert.Equal(Length.Unit.Pt, box.LetterSpacing.Value.Value!.Value.Type);
+            Assert.True(box.LetterSpacing.Value is { IsValue: true, Value: { IsCalc: false } });
+            Assert.Equal(Length.Unit.Pt, box.LetterSpacing.Value.Value!.Value.Length!.Value.Type);
         }
 
         [Fact]
@@ -60,7 +61,7 @@ namespace PeachPDF.Tests.Integration
         public async Task RowGap_LengthValue_StoresParsedLength()
         {
             var box = await GetBoxAsync("<div id='el' style='display:grid; row-gap:8px'></div>");
-            Assert.True(box.FlexRowGap.Value is { IsValue: true, Value.Value: 8f });
+            Assert.True(box.FlexRowGap.Value is { IsValue: true, Value: { Length: { Value: 8f } } });
         }
 
         [Fact]
@@ -74,7 +75,7 @@ namespace PeachPDF.Tests.Integration
         public async Task ColumnGap_LengthValue_StoresParsedLength()
         {
             var box = await GetBoxAsync("<div id='el' style='display:grid; column-gap:6px'></div>");
-            Assert.True(box.FlexColumnGap.Value is { IsValue: true, Value.Value: 6f });
+            Assert.True(box.FlexColumnGap.Value is { IsValue: true, Value: { Length: { Value: 6f } } });
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
