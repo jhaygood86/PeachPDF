@@ -374,6 +374,8 @@ namespace PeachPDF.SourceGenerators.Model
             var customValidator = GetOptionalString(htmlJson, "customValidator");
             var customSetter = GetOptionalString(htmlJson, "customSetter");
             var snapshot = !htmlJson.TryGetProperty("snapshot", out var snapshotValue) ? hasGetter : snapshotValue.Kind != JsonValueKind.False;
+            var invalidates = GetOptionalStringList(name, htmlJson, "invalidates", json, diagnostics);
+            var valueComputation = GetOptionalString(htmlJson, "valueComputation");
 
             var isUnsupported = dataTypes.Count == 1 && dataTypes[0].Kind == DataTypeKind.Unsupported;
             if (!isUnsupported && propertyPath is null && customSetter is null)
@@ -389,7 +391,8 @@ namespace PeachPDF.SourceGenerators.Model
 
             if (customSetter is not null) CheckCustomCodeHasNoReturn(name, "html.customSetter", customSetter, json, diagnostics);
 
-            return new HtmlBinding(propertyPath, csharpDataType, area, hasGetter, getterExpression, customValidator, customSetter, snapshot);
+            return new HtmlBinding(propertyPath, csharpDataType, area, hasGetter, getterExpression, customValidator,
+                customSetter, snapshot, invalidates, valueComputation);
         }
 
         private static SvgBinding? ParseSvgBinding(string name, JsonValue json, List<DataTypeSpec> dataTypes, List<ModelDiagnostic> diagnostics)
@@ -462,6 +465,37 @@ namespace PeachPDF.SourceGenerators.Model
 
         private static string? GetOptionalString(JsonValue json, string property) =>
             json.TryGetProperty(property, out var value) && value.IsString ? value.StringValue : null;
+
+        /// <summary>Reads a field that's either a single string or an array of strings - e.g.
+        /// <c>html.invalidates</c>. Absent/null returns null; a malformed shape (non-string array item,
+        /// or a value that's neither a string nor an array) reports PPG001 and returns null.</summary>
+        private static IReadOnlyList<string>? GetOptionalStringList(string name, JsonValue json, string property,
+            JsonValue entryJson, List<ModelDiagnostic> diagnostics)
+        {
+            if (!json.TryGetProperty(property, out var value) || value.IsNull) return null;
+
+            if (value.IsString) return new[] { value.StringValue! };
+
+            if (value.IsArray)
+            {
+                var items = new List<string>(value.ArrayItems.Count);
+                foreach (var item in value.ArrayItems)
+                {
+                    if (!item.IsString)
+                    {
+                        diagnostics.Add(Error(DiagnosticCode.JsonMalformed,
+                            $"\"{name}\".html.{property} array items must all be strings.", entryJson));
+                        return null;
+                    }
+                    items.Add(item.StringValue!);
+                }
+                return items;
+            }
+
+            diagnostics.Add(Error(DiagnosticCode.JsonMalformed,
+                $"\"{name}\".html.{property} must be a string or an array of strings.", entryJson));
+            return null;
+        }
 
         private static ModelDiagnostic Error(DiagnosticCode code, string message, JsonValue at) =>
             new(code, message, at.Line, at.Column);

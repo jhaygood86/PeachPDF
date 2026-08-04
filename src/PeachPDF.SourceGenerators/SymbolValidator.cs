@@ -7,7 +7,13 @@ namespace PeachPDF.SourceGenerators
     /// PPG010/PPG011: checks each entry's declared <c>propertyPath</c>/<c>csharpDataType</c> against
     /// the real shape of <c>CssBox</c>/<c>SvgElement</c> captured in a <see cref="TargetTypeModel"/> —
     /// the diagnostics that make the JSON provably in sync with the C# it targets, rather than merely
-    /// intended to be (see <see cref="CssPropertyGenerator"/>'s remarks).
+    /// intended to be (see <see cref="CssPropertyGenerator"/>'s remarks). An <c>html</c> entry with
+    /// <c>area</c> set is skipped: that property's <c>CssBox</c> member is itself emitted by
+    /// <c>StylePropertiesEmitter</c> from this same JSON, in this same generator run, so there is no
+    /// pre-existing symbol to check it against — <see cref="TargetTypeModel"/> only sees the compilation
+    /// as it stood before this generator's own output is added. Its shape is correct by construction
+    /// (both emitters read the identical <c>propertyPath</c>/<c>csharpDataType</c> fields) rather than by
+    /// symbol cross-check.
     /// </summary>
     internal static class SymbolValidator
     {
@@ -17,7 +23,7 @@ namespace PeachPDF.SourceGenerators
 
             foreach (var entry in entries)
             {
-                if (entry.Html?.PropertyPath is { } htmlPath)
+                if (entry.Html is { PropertyPath: { } htmlPath, Area: null })
                 {
                     if (!targets.CssBoxFound)
                     {

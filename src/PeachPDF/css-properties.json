@@ -17,6 +17,7 @@
       "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "BorderBottomWidth",
+        "invalidates": "InvalidateBorderBottomWidth",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -30,6 +31,7 @@
       "supportsDataType": "transform",
       "html": {
         "propertyPath": "Transform",
+        "invalidates": "InvalidateTransform",
         "csharpDataType": "string",
         "area": "VisualEffectsArea"
       }
@@ -323,6 +325,7 @@
       "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "BorderLeftWidth",
+        "invalidates": "InvalidateBorderLeftWidth",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -341,6 +344,7 @@
       "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "BorderRightWidth",
+        "invalidates": "InvalidateBorderRightWidth",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -359,6 +363,7 @@
       "keywordComparison": "invariant-ignore-case",
       "html": {
         "propertyPath": "BorderTopWidth",
+        "invalidates": "InvalidateBorderTopWidth",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -469,6 +474,7 @@
       ],
       "html": {
         "propertyPath": "BorderBottomColor",
+        "invalidates": "InvalidateBorderBottomColor",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -483,6 +489,7 @@
       ],
       "html": {
         "propertyPath": "BorderLeftColor",
+        "invalidates": "InvalidateBorderLeftColor",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -497,6 +504,7 @@
       ],
       "html": {
         "propertyPath": "BorderRightColor",
+        "invalidates": "InvalidateBorderRightColor",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -511,6 +519,7 @@
       ],
       "html": {
         "propertyPath": "BorderTopColor",
+        "invalidates": "InvalidateBorderTopColor",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -522,6 +531,7 @@
       "cssDataType": "cssom",
       "html": {
         "propertyPath": "BorderTopLeftRadius",
+        "invalidates": "InvalidateBorderTopLeftRadius",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -533,6 +543,7 @@
       "cssDataType": "cssom",
       "html": {
         "propertyPath": "BorderTopRightRadius",
+        "invalidates": "InvalidateBorderTopRightRadius",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -544,6 +555,7 @@
       "cssDataType": "cssom",
       "html": {
         "propertyPath": "BorderBottomRightRadius",
+        "invalidates": "InvalidateBorderBottomRightRadius",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -555,6 +567,7 @@
       "cssDataType": "cssom",
       "html": {
         "propertyPath": "BorderBottomLeftRadius",
+        "invalidates": "InvalidateBorderBottomLeftRadius",
         "csharpDataType": "string",
         "area": "BorderArea"
       }
@@ -577,6 +590,7 @@
       "cssDataType": "cssom",
       "html": {
         "propertyPath": "TransformOrigin",
+        "invalidates": "InvalidateTransform",
         "csharpDataType": "string",
         "area": "VisualEffectsArea"
       }
@@ -611,6 +625,7 @@
       "cssDataType": "number",
       "html": {
         "propertyPath": "Opacity",
+        "invalidates": "InvalidateOpacity",
         "csharpDataType": "string",
         "area": "VisualEffectsArea",
         "customValidator": "{value}.EndsWith('%') ? double.TryParse({value}[..^1], global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _) : double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)"
@@ -779,6 +794,7 @@
       "cssDataType": "length",
       "html": {
         "propertyPath": "PaddingBottom",
+        "invalidates": "InvalidatePaddingBottom",
         "csharpDataType": "string",
         "area": "BoxModelArea"
       }
@@ -790,6 +806,7 @@
       "cssDataType": "length",
       "html": {
         "propertyPath": "PaddingLeft",
+        "invalidates": "InvalidatePaddingLeft",
         "csharpDataType": "string",
         "area": "BoxModelArea"
       }
@@ -801,6 +818,7 @@
       "cssDataType": "length",
       "html": {
         "propertyPath": "PaddingRight",
+        "invalidates": "InvalidatePaddingRight",
         "csharpDataType": "string",
         "area": "BoxModelArea"
       }
@@ -812,6 +830,7 @@
       "cssDataType": "length",
       "html": {
         "propertyPath": "PaddingTop",
+        "invalidates": "InvalidatePaddingTop",
         "csharpDataType": "string",
         "area": "BoxModelArea"
       }
@@ -1302,6 +1321,7 @@
       ],
       "html": {
         "propertyPath": "Color",
+        "invalidates": "InvalidateColor",
         "csharpDataType": "string",
         "area": "TextArea"
       }
@@ -1569,7 +1589,8 @@
       "html": {
         "propertyPath": "TextIndent",
         "csharpDataType": "string",
-        "area": "TextArea"
+        "area": "TextArea",
+        "valueComputation": "text-indent"
       }
     },
     {
@@ -1683,7 +1704,8 @@
       "html": {
         "propertyPath": "WordSpacing",
         "csharpDataType": "string",
-        "area": "TextArea"
+        "area": "TextArea",
+        "valueComputation": "no-ems"
       }
     },
     {
@@ -1701,7 +1723,8 @@
       "html": {
         "propertyPath": "LetterSpacing",
         "csharpDataType": "string",
-        "area": "TextArea"
+        "area": "TextArea",
+        "valueComputation": "no-ems"
       }
     },
     {
@@ -1816,7 +1839,8 @@
       "html": {
         "propertyPath": "FontSize",
         "csharpDataType": "string",
-        "area": "FontArea"
+        "area": "FontArea",
+        "valueComputation": "font-size"
       }
     },
     {
@@ -1939,6 +1963,7 @@
       "cssDataType": "cssom",
       "html": {
         "propertyPath": "FontPalette",
+        "invalidates": "InvalidateFontPalette",
         "csharpDataType": "string",
         "area": "FontArea"
       }
