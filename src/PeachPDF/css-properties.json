@@ -1501,22 +1501,21 @@
     },
     {
       "name": "line-height",
-      "comment": "A unitless multiplier value (e.g. 'line-height: 1.5') is not modeled here and reports unsupported - IsValidLength requires a unit or a bare zero, matching ParseLength's own length-only reading at DerivedStyle.ActualLineHeight. customValidator deliberately excludes 'auto' - CSS Inline Layout 3's grammar is 'normal | <number> | <length-percentage>', auto was never part of it; DerivedStyle.ActualLineHeight has no special case for it and would silently collapse line height to 0 if it were accepted (a pre-existing quirk carried over from the old IsValidLengthProperty helper written for width/height-style 'auto' properties, not spec-derived).",
+      "comment": "CssKeywordOrValue<NormalKeyword, LengthOrUnitless>-backed (issue #598's follow-up) - the tenth and final keyword-or-value batch. Fixes a real pre-existing bug along the way: a bare unitless multiplier (e.g. 'line-height: 1.5') previously validated but silently collapsed ActualLineHeight to 0 (the old string-based ParseLength had no case for a number with no unit token); LengthOrUnitless's Unitless side now resolves it correctly (CSS2.1 §10.8.1: the number times the element's own font size). 'auto' is deliberately not in supportedValues - CSS Inline Layout 3's grammar is 'normal | <number> | <length-percentage>', auto was never part of it.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "normal"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "NormalKeyword",
+        "keywordMap": "Map.NormalKeywords",
+        "fallback": "NormalKeyword.Normal",
+        "valueType": "length-or-unitless"
+      },
       "html": {
         "propertyPath": "LineHeight",
-        "csharpDataType": "string",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrUnitless>>",
         "area": "TextArea",
-        "customValidator": "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength({value}) || {value} == \"normal\" || double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)"
+        "getterExpression": "{box}.LineHeight.ToString()"
       }
     },
     {

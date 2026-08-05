@@ -289,6 +289,48 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// Resolves a <see cref="LengthOrUnitless"/> (<c>line-height</c>'s
+        /// <c>CssKeywordOrValue{NormalKeyword,LengthOrUnitless}.Value</c>) to pixels - either through the
+        /// same <see cref="LengthOrCalc"/> resolution every other keyword-or-value length property uses,
+        /// or, for a bare unitless multiplier, by scaling <paramref name="box"/>'s own font size (CSS2.1
+        /// §10.8.1: "the used value of the property is this number multiplied by the element's font
+        /// size" - <paramref name="box"/>'s own, not an ancestor's, which is what makes storing the raw
+        /// multiplier and recomputing per box, rather than resolving once at cascade time, the correct
+        /// inheritance behavior here).
+        /// </summary>
+        public static double ParseLength(LengthOrUnitless value, double hundredPercent, CssBox box) =>
+            value.IsUnitless
+                ? value.Unitless!.Value * box.GetEmHeight()
+                : ParseLength(value.LengthOrCalc!.Value, hundredPercent, box);
+
+        /// <summary>
+        /// Parses <c>line-height</c>'s non-keyword grammar - a <c>&lt;length-percentage&gt;</c> (itself
+        /// possibly a deferred-calc, via <see cref="TryParseLengthOrCalc"/>) or a bare unitless multiplier
+        /// number. A bare-number <c>calc()</c> (e.g. <c>calc(1 + 0.5)</c>) has already folded to a literal
+        /// numeric string by Layer A's <c>CalcSerializer</c> (<c>CalcCategory.Number</c> always folds, unlike
+        /// <c>CalcCategory.LengthPercentage</c>) before this runs, so it's indistinguishable from - and
+        /// handled by - the plain <see cref="double.TryParse(string,NumberStyles,IFormatProvider,out double)"/>
+        /// fallback below.
+        /// </summary>
+        public static bool TryParseLengthOrUnitless(string value, out LengthOrUnitless result)
+        {
+            if (TryParseLengthOrCalc(value, out var lengthOrCalc))
+            {
+                result = new LengthOrUnitless(lengthOrCalc, null);
+                return true;
+            }
+
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var unitless))
+            {
+                result = new LengthOrUnitless(null, unitless);
+                return true;
+            }
+
+            result = default;
+            return false;
+        }
+
+        /// <summary>
         /// Parses a length. Lengths are followed by an unit identifier (e.g. 10px, 3.1em)
         /// </summary>
         /// <param name="length">Specified length</param>

@@ -4,9 +4,10 @@ using PeachPDF.SourceGenerators.Model;
 namespace PeachPDF.SourceGenerators.Emit
 {
     /// <summary>
-    /// The single place a <c>DataTypeKind.KeywordOrValue</c> entry's <c>valueType</c> ("integer"/"length")
-    /// maps to real C# — the value-side validation clause, the storage type, and the <c>TryParse</c>-shaped
-    /// parser to hand to <see cref="global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText{TEnum,TValue}"/>.
+    /// The single place a <c>DataTypeKind.KeywordOrValue</c> entry's <c>valueType</c>
+    /// ("integer"/"length"/"length-or-unitless") maps to real C# — the value-side validation clause, the
+    /// storage type, and the <c>TryParse</c>-shaped parser to hand to
+    /// <see cref="global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText{TEnum,TValue}"/>.
     /// <see cref="ValidatorExpressionBuilder"/> and <see cref="RegistryEmitter"/> both consult this rather
     /// than each declaring (and separately guarding) their own copy of the valueType switch. An entry's
     /// optional <see cref="DataTypeSpec.Min"/>/<see cref="DataTypeSpec.Max"/> — the same JSON <c>min</c>/
@@ -47,6 +48,13 @@ namespace PeachPDF.SourceGenerators.Emit
             "length" => new Resolved(
                 "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc(value, out _)",
                 "global::PeachPDF.CSS.LengthOrCalc", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc"),
+            // line-height's own non-keyword grammar (<length-percentage> | <number>) - a superset of
+            // "length" that also accepts a bare unitless multiplier (CSS Inline Layout 3 §4). See
+            // LengthOrUnitless's own doc comment for why the unitless side needs no separate deferred-calc
+            // case the way the length side does.
+            "length-or-unitless" => new Resolved(
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless(value, out _)",
+                "global::PeachPDF.CSS.LengthOrUnitless", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless"),
             _ => throw new NotSupportedException(
                 $"\"{entry.Name}\" declares a keyword-or-value cssDataType with valueType \"{dt.ValueType}\", " +
                 "which KeywordOrValueGrammar does not yet implement."),

@@ -282,6 +282,34 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_KeywordOrValue_Validation_And_Storage_For_A_Length_Or_Unitless_Or_Normal_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "line-height", "inherited": true, "initialValue": "normal",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "NormalKeyword", "keywordMap": "Map.NormalKeywords",
+                        "fallback": "NormalKeyword.Normal", "valueType": "length-or-unitless" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_LineHeight(CssValueParser parser, string value) => " +
+                "Map.NormalKeywords.ContainsKey(value) || global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless(value, out _);",
+                generated);
+            Assert.Contains(
+                "box.Transform = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<NormalKeyword, global::PeachPDF.CSS.LengthOrUnitless>(value, Map.NormalKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless, NormalKeyword.Normal);",
+                generated);
+        }
+
+        [Fact]
         public void Emits_KeywordOrValue_Validation_Narrowed_By_Min_For_An_Integer_Or_Auto_Property()
         {
             var json = """
