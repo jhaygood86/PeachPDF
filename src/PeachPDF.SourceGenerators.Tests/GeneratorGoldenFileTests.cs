@@ -639,27 +639,44 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
-        public void Emits_FontSize_ValueComputation_For_Html_ValueComputation_FontSize()
+        public void Emits_FontSizeValueComputation_InTheRegistry_NotTheBoxSetter_ForAKeywordOrValueProperty()
         {
+            // font-size's real shape post-#598-conversion: a keyword-or-value property that also declares
+            // valueComputation "font-size". Like word-spacing/letter-spacing's "no-ems", the box's own
+            // generated setter no longer has a raw string to run the eager em/ex/percent/smaller/larger
+            // resolution against (its parameter is the already-parsed typed union), so the resolution has
+            // to happen in the registry's Set_X, against the raw text, before parsing - via the
+            // hand-written CssBox.ResolveFontSizeValueComputation rather than a generator-emitted switch
+            // (font-size's resolution is data-dependent on ParentBox/HtmlContainer, unlike NoEms's pure
+            // string transform, so it stays a real method rather than inlined C#).
             var json = """
                 {
                   "properties": [
-                    { "name": "font-size", "inherited": true, "initialValue": "medium", "cssDataType": "cssom",
-                      "html": { "propertyPath": "FontSize", "csharpDataType": "string", "area": "FontArea",
-                        "valueComputation": "font-size" } }
+                    { "name": "font-size", "inherited": true, "initialValue": "medium",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "FontSizeKeyword", "keywordMap": "Map.FontSizeKeywords",
+                        "fallback": "FontSizeKeyword.Medium", "valueType": "length" },
+                      "html": { "propertyPath": "FontSize", "csharpDataType": "CssProperty<CssKeywordOrValue<FontSizeKeyword, LengthOrCalc>>",
+                        "area": "FontArea", "valueComputation": "font-size" } }
                   ]
                 }
                 """;
 
             var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
 
-            var generated = result.Results.Single().GeneratedSources
+            var registry = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+            var styleProperties = result.Results.Single().GeneratedSources
                 .Single(s => s.HintName == "CssBox.StyleProperties.g.cs").SourceText.ToString();
 
-            Assert.Contains("var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt);", generated);
             Assert.Contains(
-                "var newArea = area.SetPropertyValue(area.FontSize, resolved, static (a, v) => a with { FontSize = v });",
-                generated);
+                "box.FontSize = global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText<FontSizeKeyword, global::PeachPDF.CSS.LengthOrCalc>" +
+                "(box.ResolveFontSizeValueComputation(value), Map.FontSizeKeywords, global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);",
+                registry);
+
+            Assert.DoesNotContain("ResolveFontSizeValueComputation(value)", styleProperties);
+            Assert.Contains(
+                "var newArea = area.SetPropertyValue(area.FontSize, value, static (a, v) => a with { FontSize = v });",
+                styleProperties);
         }
 
         [Fact]

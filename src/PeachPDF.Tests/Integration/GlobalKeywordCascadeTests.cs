@@ -109,7 +109,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("medium", el!.FontSize);
+            Assert.Equal("medium", el!.FontSize.ToString());
         }
 
         [Fact]
@@ -249,7 +249,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("22pt", el!.FontSize);
+            Assert.Equal("22pt", el!.FontSize.ToString());
         }
 
         [Fact]
@@ -802,7 +802,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("10px", el!.FontSize);
+            Assert.Equal("10px", el!.FontSize.ToString());
         }
 
         [Fact]
@@ -821,7 +821,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("22pt", el!.FontSize);
+            Assert.Equal("22pt", el!.FontSize.ToString());
         }
 
         [Fact]

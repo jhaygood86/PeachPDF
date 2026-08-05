@@ -1492,7 +1492,8 @@ namespace PeachPDF.Html.Core.Parse
                         if (tag.Name.Equals(HtmlConstants.Hr, StringComparison.OrdinalIgnoreCase))
                             box.Height = TranslateLength(value);
                         else if (tag.Name.Equals(HtmlConstants.Font, StringComparison.OrdinalIgnoreCase))
-                            box.FontSize = value;
+                            box.FontSize = CssKeywordOrValueParser.FromCssText<FontSizeKeyword, LengthOrCalc>(
+                                value, Map.FontSizeKeywords, CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);
                         break;
                     case HtmlConstants.Valign:
                         box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);

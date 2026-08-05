@@ -74,10 +74,11 @@ namespace PeachPDF.Tests.Html.Core.Dom
             box.Color = "rgb(1, 2, 3)";
             var afterFirstWrite = box.ComputedStyle;
 
-            box.FontSize = "14pt";
+            box.FontSize = CssKeywordOrValueParser.FromCssText<FontSizeKeyword, LengthOrCalc>(
+                "14pt", Map.FontSizeKeywords, CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);
 
             Assert.Equal("rgb(1, 2, 3)", box.Color);
-            Assert.Equal("14pt", box.FontSize);
+            Assert.Equal("14pt", box.FontSize.ToString());
             // Both values must have landed on the box's own instance - this isn't asserting object
             // identity of afterFirstWrite (a second `with` necessarily produces a new record), only that
             // the first write's value survived the second write untouched.

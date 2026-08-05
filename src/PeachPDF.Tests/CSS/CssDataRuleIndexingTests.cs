@@ -191,7 +191,7 @@ public class CssDataRuleIndexingTests
         // lookup than the UA rule's own tag bucket, but the same bucket *kind*) must still win.
         var html = Html("h1 { font-size: 10px; }", "<h1>heading</h1>");
         var box = await FindBoxByTag(html, "h1");
-        Assert.Equal("10px", box.FontSize);
+        Assert.Equal("10px", box.FontSize.ToString());
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

@@ -17,15 +17,16 @@ namespace PeachPDF.SourceGenerators.Emit
     /// read/write through the area's copy-on-write plumbing (<see cref="ComputedStyleCow"/>), plus an
     /// optional invalidation call afterward (<c>html.invalidates</c>). The handful of properties whose
     /// *stored* value differs from what's handed to their setter declare <c>html.valueComputation</c>:
-    /// <c>font-size</c> ("font-size", see <see cref="EmitFontSizeValueComputation"/>) eagerly resolves a
-    /// parent-relative length to points; <c>word-spacing</c>/<c>letter-spacing</c> ("no-ems") and
-    /// <c>text-indent</c> ("text-indent") eagerly resolve a plain <c>em</c> length the same way, via the
-    /// hand-written <c>NoEms</c>/<c>NoEmsTextIndent</c> helpers this class still keeps on <c>CssBox</c>.
-    /// A <c>keyword-or-value</c>-shaped property declaring <c>valueComputation</c> is the one exception:
-    /// this setter's parameter is already a parsed typed union by the time it runs (there is no raw
-    /// string left for <c>NoEms</c> to act on), so <see cref="RegistryEmitter.BuildHtmlAssignment"/> runs
-    /// the computation itself against the raw authored text, before parsing, and this emitter skips its
-    /// own <c>EmitValueComputation</c> call for that shape entirely (see <see cref="EmitProperty"/>).
+    /// <c>text-indent</c> ("text-indent", still a plain string-typed property) eagerly resolves a plain
+    /// <c>em</c> length to points via this class's own hand-written <c>NoEmsTextIndent</c> helper, emitted
+    /// by <see cref="EmitValueComputation"/> below. Every keyword-or-value-shaped property declaring
+    /// <c>valueComputation</c> instead (<c>word-spacing</c>/<c>letter-spacing</c>'s "no-ems", <c>font-size
+    /// </c>'s "font-size") is the one exception: that setter's parameter is already a parsed typed union
+    /// by the time it runs - there is no raw string left for this class's own computation to act on, so
+    /// <see cref="RegistryEmitter.BuildHtmlAssignment"/> runs the computation itself (via <c>box.NoEms</c>/
+    /// <c>box.ResolveFontSizeValueComputation</c>) against the raw authored text, before parsing, and this
+    /// emitter skips its own <c>EmitValueComputation</c> call entirely for that shape (see
+    /// <see cref="EmitProperty"/>).
     /// </summary>
     internal static class StylePropertiesEmitter
     {
@@ -125,9 +126,6 @@ namespace PeachPDF.SourceGenerators.Emit
         {
             switch (valueComputation)
             {
-                case "font-size":
-                    EmitFontSizeValueComputation(sb);
-                    break;
                 case "no-ems":
                     sb.AppendLine("                var resolved = NoEms(value);");
                     break;
@@ -138,41 +136,6 @@ namespace PeachPDF.SourceGenerators.Emit
                     throw new NotSupportedException(
                         $"\"{entry.Name}\" declares html.valueComputation \"{valueComputation}\", which StylePropertiesEmitter does not implement.");
             }
-        }
-
-        /// <summary>
-        /// <c>font-size</c>'s eager em/ex/percent/smaller/larger-to-absolute-points resolution - fixed,
-        /// generator-owned C#, not derived from JSON data (there is exactly one property that needs this
-        /// shape today). <c>calc()</c> and <c>rem</c> stay lazy, resolved later by
-        /// <see cref="DerivedStyle.ActualFont"/>: <c>calc()</c> needs real layout-time container-query
-        /// information not available at cascade time, and <c>rem</c> resolves against a single, non-chained
-        /// reference so it can't compound across generations regardless of when it resolves. Every other
-        /// parent-relative form needs eager conversion here because <c>InheritStyle</c> adopts the whole
-        /// <c>Font</c> area from parent to child *by reference* - see the hand-written property this
-        /// mirrors (<c>CssBox.StyleProperties.cs</c>'s <c>FontSize</c>, before the storage-generator PR)
-        /// for the full reasoning.
-        /// </summary>
-        private static void EmitFontSizeValueComputation(StringBuilder sb)
-        {
-            sb.AppendLine("                string resolved;");
-            sb.AppendLine("                var trimmed = value.Trim();");
-            sb.AppendLine("                if (!CssValueParser.IsCalcFunction(value) && ParentBox is { } parent &&");
-            sb.AppendLine("                    (CssValueParser.GetCssTokens(value) is [UnitToken unitToken] &&");
-            sb.AppendLine("                        Length.GetUnit(unitToken.Unit) is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Percent");
-            sb.AppendLine("                     || trimmed.Equals(CssConstants.Smaller, StringComparison.OrdinalIgnoreCase)");
-            sb.AppendLine("                     || trimmed.Equals(CssConstants.Larger, StringComparison.OrdinalIgnoreCase)))");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    var pixelsPerPoint = (HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;");
-            sb.AppendLine("                    var parentSizePt = parent.ActualFont.Size * pixelsPerPoint;");
-            sb.AppendLine();
-            sb.AppendLine("                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt);");
-            sb.AppendLine("                    resolved = $\"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt\";");
-            sb.AppendLine("                }");
-            sb.AppendLine("                else");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    resolved = value;");
-            sb.AppendLine("                }");
-            sb.AppendLine();
         }
     }
 }

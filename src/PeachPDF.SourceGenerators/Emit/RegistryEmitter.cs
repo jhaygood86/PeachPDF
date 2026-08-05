@@ -154,6 +154,7 @@ namespace PeachPDF.SourceGenerators.Emit
                 {
                     null => "value",
                     "no-ems" => "box.NoEms(value)",
+                    "font-size" => "box.ResolveFontSizeValueComputation(value)",
                     _ => throw new NotSupportedException(
                         $"\"{entry.Name}\" declares a keyword-or-value cssDataType with html.valueComputation " +
                         $"\"{html.ValueComputation}\", which RegistryEmitter does not implement."),
