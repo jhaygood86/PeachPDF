@@ -1778,30 +1778,22 @@
     },
     {
       "name": "font-size",
-      "comment": "supportedValues deliberately excludes CSS Fonts 4's xxx-large - FontSizeResolver.Resolve's switch has no case for it, so an accepted 'font-size: xxx-large' would fall through to CssValueParser.ParseLength (which can't parse the bare keyword), Math.Max(0, ...)-clamp to 0, and silently render invisible text rather than being rejected.",
+      "comment": "CssKeywordOrValue<FontSizeKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. supportedValues (via FontSizeKeyword/Map.FontSizeKeywords) deliberately excludes CSS Fonts 4's xxx-large - FontSizeResolver.Resolve's switch has no case for it, so an accepted 'font-size: xxx-large' would fall through to the length/calc() value path (which can't parse the bare keyword), Math.Max(0, ...)-clamp to 0, and silently render invisible text rather than being rejected. RegistryEmitter.BuildHtmlAssignment runs CssBox.ResolveFontSizeValueComputation(value) (the html.valueComputation \"font-size\" case) against the raw authored text before FromCssText parses it - see that method's own doc comment for the eager em/ex/percent/smaller/larger-to-points resolution it performs (calc() and rem stay lazy, resolved later by FontSizeResolver.Resolve/DerivedStyle.ActualFont via LengthOrCalc's deferred-calc mechanism).",
       "inherited": true,
       "initialValue": "medium",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "xx-small",
-        "x-small",
-        "small",
-        "medium",
-        "large",
-        "x-large",
-        "xx-large",
-        "smaller",
-        "larger"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "FontSizeKeyword",
+        "keywordMap": "Map.FontSizeKeywords",
+        "fallback": "FontSizeKeyword.Medium",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "FontSize",
-        "csharpDataType": "string",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<FontSizeKeyword, LengthOrCalc>>",
         "area": "FontArea",
-        "valueComputation": "font-size"
+        "valueComputation": "font-size",
+        "getterExpression": "{box}.FontSize.ToString()"
       }
     },
     {

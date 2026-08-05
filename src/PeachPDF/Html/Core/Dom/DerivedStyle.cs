@@ -877,9 +877,15 @@ namespace PeachPDF.Html.Core.Dom
                     Owner.FontFamily = CssConstants.DefaultFont;
                 }
 
-                if (string.IsNullOrEmpty(Style.Font.FontSize))
+                // Defensive: FontArea's own default already seeds FontSize to "medium" (a real Keyword),
+                // so this is unreachable via any box built from ComputedStyle.Default in the normal way -
+                // kept as a fail-safe for a box whose ComputedStyle was otherwise assembled without going
+                // through that default, mirroring the FontFamily check just above.
+                if (Style.Font.FontSize.Value is { IsKeyword: false, IsValue: false })
                 {
-                    Owner.FontSize = CssConstants.FontSize.ToString(CultureInfo.InvariantCulture) + "pt";
+                    Owner.FontSize = CssKeywordOrValueParser.FromCssText<FontSizeKeyword, LengthOrCalc>(
+                        CssConstants.FontSize.ToString(CultureInfo.InvariantCulture) + "pt",
+                        Map.FontSizeKeywords, CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);
                 }
 
                 var st = GetActualFontStyleFlags();
@@ -920,7 +926,7 @@ namespace PeachPDF.Html.Core.Dom
                 // Correct only for a box whose ActualFont happens to first be read post-layout - see
                 // .claude/accepted-gaps/font-size-container-relative-units-resolve-to-zero-for-text-content.md.
                 var (containerInlinePt, containerBlockPt) = Owner.GetContainerRelativeUnitBasis();
-                var fsize = FontSizeResolver.Resolve(Style.Font.FontSize, parentSize, remSize,
+                var fsize = FontSizeResolver.Resolve(Style.Font.FontSize.Value, parentSize, remSize,
                     containerInlinePt, containerBlockPt);
 
                 _actualFont = Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
