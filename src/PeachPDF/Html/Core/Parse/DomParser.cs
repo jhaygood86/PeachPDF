@@ -1551,14 +1551,9 @@ namespace PeachPDF.Html.Core.Parse
         private static void TranslateSize(HtmlTag tag, CssBox box, string value)
         {
             if (tag.Name.Equals(HtmlConstants.Hr, StringComparison.OrdinalIgnoreCase))
-                TranslateHrSize(box, value);
+                box.Height = TranslateLength(value);
             else if (tag.Name.Equals(HtmlConstants.Font, StringComparison.OrdinalIgnoreCase))
                 TranslateFontSize(box, value);
-        }
-
-        private static void TranslateHrSize(CssBox box, string value)
-        {
-            box.Height = TranslateLength(value);
         }
 
         private static void TranslateFontSize(CssBox box, string value)

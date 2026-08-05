@@ -5,6 +5,8 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration
@@ -164,7 +166,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task BorderAttribute_OnTable_SetsSolidBorderAndAttemptsCellCascade()
+        public async Task BorderAttribute_OnTable_SetsSolidBorderOnTheTableItself()
         {
             // Exercises TranslateBorder's tag.Name == "table" branch, which (attempts to) cascade a 1px
             // solid border onto every cell via ApplyTableBorder/SetForAllCells - which has the same
@@ -295,11 +297,21 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task FaceAttribute_WithResolvableFont_SetsFontFamily()
         {
-            var (root, _) = await BuildAndLayout(Wrap($"<font id='f' face='{CssConstants.DefaultFont}'>x</font>"));
+            // Deliberately NOT CssConstants.DefaultFont: DerivedStyle lazily resolves a null/empty
+            // FontFamily to the default font once layout runs (see the "unresolvable" test below), so
+            // asserting the default font here wouldn't distinguish "GetFontFamilyByName actually
+            // resolved this" from "resolution was skipped entirely and the fallback papered over it".
+            // Picking an installed family that ISN'T the platform default keeps this test meaningful
+            // across the CI matrix (Windows/macOS/Linux each resolve a different default).
+            var adapter = new PdfSharpAdapter();
+            var alternativeFont = CssConstants.GetInstalledFontFamilyNames()
+                .First(f => !f.Equals(CssConstants.DefaultFont, StringComparison.OrdinalIgnoreCase) && adapter.IsFontExists(f));
+
+            var (root, _) = await BuildAndLayout(Wrap($"<font id='f' face='{alternativeFont}'>x</font>"));
             var font = FindById(root, "f")!;
 
-            Assert.Equal(CssConstants.DefaultFont, font.FontFamily);
-            Assert.Equal(CssConstants.DefaultFont, font.FontFamilyList);
+            Assert.Equal(alternativeFont, font.FontFamily);
+            Assert.Equal(alternativeFont, font.FontFamilyList);
         }
 
         [Fact]
