@@ -120,6 +120,10 @@ namespace PeachPDF.Tests.Integration
         [InlineData("expanded", 7)]
         [InlineData("ultra-condensed", 1)]
         [InlineData("ultra-expanded", 9)]
+        [InlineData("extra-condensed", 2)]
+        [InlineData("semi-condensed", 4)]
+        [InlineData("semi-expanded", 6)]
+        [InlineData("extra-expanded", 8)]
         public async Task FontStretch_ResolvesToExpectedNumericScale(string keyword, int expected)
         {
             var html = $"""
@@ -132,7 +136,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal(keyword, el!.FontStretch);
+            Assert.Equal(keyword, el!.FontStretch.ToString());
             Assert.Equal(expected, el.ActualStretch);
         }
 
@@ -149,7 +153,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("condensed", el!.FontStretch);
+            Assert.Equal("condensed", el!.FontStretch.ToString());
             Assert.Equal(3, el.ActualStretch);
         }
 
@@ -160,7 +164,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("normal", el!.FontStretch);
+            Assert.Equal("normal", el!.FontStretch.ToString());
             Assert.Equal(5, el.ActualStretch);
         }
 

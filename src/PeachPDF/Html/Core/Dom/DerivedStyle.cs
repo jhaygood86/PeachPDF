@@ -988,7 +988,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (_actualStretch is { } cached) return cached;
 
-                var resolved = FontStretchResolver.Resolve(Style.Font.FontStretch);
+                var resolved = FontStretchResolver.Resolve(Style.Font.FontStretch.Value);
                 _actualStretch = resolved;
                 return resolved;
             }
