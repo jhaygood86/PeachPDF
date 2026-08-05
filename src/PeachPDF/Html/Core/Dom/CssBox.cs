@@ -4191,6 +4191,37 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// CSS 2.1 §9.4.3's near/far offset resolution for one axis: the near offset (<c>left</c>/<c>top</c>)
+        /// wins when set; if it's <c>auto</c> and the far offset (<c>right</c>/<c>bottom</c>) isn't, the far
+        /// offset applies with its sign flipped; if both are <c>auto</c>, the offset is 0.
+        /// </summary>
+        private static double ResolveNearFarOffset(
+            CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>> near,
+            CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>> far,
+            double basis, CssBox box)
+        {
+            var nearValue = near.Value;
+            var farValue = far.Value;
+
+            if (nearValue.IsValue || !farValue.IsValue)
+            {
+                return nearValue.Value is { } n ? CssValueParser.ParseLength(n, basis, box) : 0;
+            }
+
+            return -CssValueParser.ParseLength(farValue.Value!.Value, basis, box);
+        }
+
+        /// <summary>
+        /// Resolves a <c>left</c>/<c>top</c>/<c>right</c>/<c>bottom</c> offset for the absolute/fixed
+        /// positioning branches below, where the counterpart edge is never consulted (unlike the
+        /// relative-positioning near/far resolution in <see cref="ResolveNearFarOffset"/>) - an <c>auto</c>
+        /// offset simply contributes 0.
+        /// </summary>
+        private static double ResolveOffsetOrZero(
+            CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>> offset, double basis, CssBox box) =>
+            offset.Value.Value is { } value ? CssValueParser.ParseLength(value, basis, box) : 0;
+
+        /// <summary>
         /// Writes the offset <see cref="ResolveBlockChildOffset"/> decided on, positions
         /// <paramref name="child"/> under whichever positioning scheme it uses, and registers the used page
         /// name it lands on.
@@ -4241,12 +4272,8 @@ namespace PeachPDF.Html.Core.Dom
                     // StaticBottom recovers by backing RelativeOffsetY out again. Acid2's
                     // ".smile div { position: relative; bottom: -1em }" is exactly this: the mouth
                     // bar paints 1em lower, but ".chin"'s position must not move with it.
-                    var offsetX = child.Left is not CssConstants.Auto || child.Right is CssConstants.Auto
-                        ? CssValueParser.ParseLength(child.Left, child.ActualWidth, child)
-                        : -CssValueParser.ParseLength(child.Right, child.ActualWidth, child);
-                    var offsetY = child.Top is not CssConstants.Auto || child.Bottom is CssConstants.Auto
-                        ? CssValueParser.ParseLength(child.Top, child.ActualHeight, child)
-                        : -CssValueParser.ParseLength(child.Bottom, child.ActualHeight, child);
+                    var offsetX = ResolveNearFarOffset(child.Left, child.Right, child.ActualWidth, child);
+                    var offsetY = ResolveNearFarOffset(child.Top, child.Bottom, child.ActualHeight, child);
 
                     child.RelativeOffsetX = offsetX;
                     child.RelativeOffsetY = offsetY;
@@ -4268,10 +4295,10 @@ namespace PeachPDF.Html.Core.Dom
                     // ".picture" (which has a 1em border) exercises both of these: the missing
                     // margin alone lands the box ~36px/60px off, on top of the next sibling.
                     var left = nearestPositionedAncestor.ClientLeft + child.ActualMarginLeft +
-                               CssValueParser.ParseLength(child.Left, nearestPositionedAncestor.ActualWidth, child);
+                               ResolveOffsetOrZero(child.Left, nearestPositionedAncestor.ActualWidth, child);
 
                     var top = nearestPositionedAncestor.ClientTop + child.ActualMarginTop +
-                              CssValueParser.ParseLength(child.Top, nearestPositionedAncestor.ActualHeight, child);
+                              ResolveOffsetOrZero(child.Top, nearestPositionedAncestor.ActualHeight, child);
 
                     child.Location = new RPoint(left, top);
                 }
@@ -4288,8 +4315,8 @@ namespace PeachPDF.Html.Core.Dom
                     // (CSS2.1 §10.1: the initial containing block), not ScrollOffset (a scroll
                     // position, not a size) - not exercised by this fixture (uses em, not %) but
                     // wrong regardless.
-                    var left = child.ActualMarginLeft + CssValueParser.ParseLength(child.Left, child.HtmlContainer!.PageSize.Width, child);
-                    var top = child.ActualMarginTop + CssValueParser.ParseLength(child.Top, child.HtmlContainer!.PageSize.Height, child);
+                    var left = child.ActualMarginLeft + ResolveOffsetOrZero(child.Left, child.HtmlContainer!.PageSize.Width, child);
+                    var top = child.ActualMarginTop + ResolveOffsetOrZero(child.Top, child.HtmlContainer!.PageSize.Height, child);
                     child.Location = new RPoint(left, top);
                 }
             }
@@ -4540,11 +4567,11 @@ namespace PeachPDF.Html.Core.Dom
 
             if (Position.Value is PositionMode.Absolute)
             {
-                if (Left is CssConstants.Auto && Right is not CssConstants.Auto)
+                if (Left.Value.IsKeyword && Right.Value.IsValue)
                 {
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
 
-                    var right = CssValueParser.ParseLength(Right, nearestPositionedAncestor.ActualWidth, this);
+                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, nearestPositionedAncestor.ActualWidth, this);
                     var actualRight = nearestPositionedAncestor.ClientRight + nearestPositionedAncestor.ActualPaddingRight - right;
 
                     var delta = actualRight - ActualRight;
@@ -4557,11 +4584,11 @@ namespace PeachPDF.Html.Core.Dom
                 // this method), but `bottom` was never read anywhere, so a box relying on `bottom` with
                 // `top: auto` silently stayed at the containing block's top edge instead of being placed
                 // relative to its bottom edge.
-                if (Top is CssConstants.Auto && Bottom is not CssConstants.Auto)
+                if (Top.Value.IsKeyword && Bottom.Value.IsValue)
                 {
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
 
-                    var bottom = CssValueParser.ParseLength(Bottom, nearestPositionedAncestor.ActualHeight, this);
+                    var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, nearestPositionedAncestor.ActualHeight, this);
 
                     // Unlike ActualRight/ActualWidth (resolved for every box, including this ancestor,
                     // before its children are laid out - see the GetBoxWidth call earlier in this
