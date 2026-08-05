@@ -781,14 +781,14 @@ namespace PeachPDF.Html.Core.Dom
             if (box is { Width: CssConstants.Auto, Position.Value: PositionMode.Absolute })
             {
                 var absCb = PercentageBase(box);
-                if (box.Left != CssConstants.Auto && box.Right != CssConstants.Auto)
+                if (box.Left.Value.IsValue && box.Right.Value.IsValue)
                 {
                     // CSS 2.1 §10.3.7: an absolutely-positioned box with auto width but both `left` and
                     // `right` set fills the space between them in the containing block (rather than shrinking
                     // to fit its content). This is what sizes a Charts.css area/line `td::before` (auto width,
                     // `inset: 0`) to cover its cell.
-                    var left = CssValueParser.ParseLength(box.Left, absCb.Size.Width, box);
-                    var right = CssValueParser.ParseLength(box.Right, absCb.Size.Width, box);
+                    var left = CssValueParser.ParseLength(box.Left.Value.Value!.Value, absCb.Size.Width, box);
+                    var right = CssValueParser.ParseLength(box.Right.Value.Value!.Value, absCb.Size.Width, box);
                     // An over-constrained fill (left + right wider than the containing block) clamps to 0, per
                     // CSS 2.1 §10.3.7 (a used width is never negative).
                     width = Math.Max(0, absCb.Size.Width - left - right - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
@@ -881,15 +881,15 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
             else if (box.Position.Value is PositionMode.Absolute
-                     && box.Top != CssConstants.Auto && box.Bottom != CssConstants.Auto
+                     && box.Top.Value.IsValue && box.Bottom.Value.IsValue
                      && heightCb.IsHeightCalculated)
             {
                 // CSS 2.1 §10.6.4: an absolutely-positioned box with auto height but both `top` and `bottom`
                 // set fills the space between them in the containing block. The counterpart of the §10.3.7
                 // width rule above; sizes a Charts.css area/line `td::before` (auto height, `inset: 0`) to
                 // its cell's height.
-                var top = CssValueParser.ParseLength(box.Top, heightCb.Size.Height, box);
-                var bottom = CssValueParser.ParseLength(box.Bottom, heightCb.Size.Height, box);
+                var top = CssValueParser.ParseLength(box.Top.Value.Value!.Value, heightCb.Size.Height, box);
+                var bottom = CssValueParser.ParseLength(box.Bottom.Value.Value!.Value, heightCb.Size.Height, box);
                 // Over-constrained fill clamps to 0 (a used height is never negative), per CSS 2.1 §10.6.4.
                 height = Math.Max(0, heightCb.Size.Height - top - bottom - box.ActualMarginTop - box.ActualMarginBottom);
             }

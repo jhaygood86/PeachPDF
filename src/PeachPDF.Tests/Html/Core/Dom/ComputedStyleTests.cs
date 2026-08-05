@@ -197,13 +197,19 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // §9.4.3 says a relatively/absolutely positioned box's offsets should carry over here, same as
             // Left/Top/Width/Height already did. Unifying storage onto ComputedStyle.Bottom/.Right (see
             // CssBox.StyleProperties.cs's InheritStyle) fixes this for real; this test locks the fix in.
-            var source = new CssBox(null, null) { Bottom = "13px", Right = "17px" };
+            var source = new CssBox(null, null)
+            {
+                Bottom = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
+                    "13px", Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto),
+                Right = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
+                    "17px", Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto)
+            };
             var clone = new CssBox(null, null);
 
             clone.InheritStyle(source, everything: true);
 
-            Assert.Equal("13px", clone.Bottom);
-            Assert.Equal("17px", clone.Right);
+            Assert.Equal("13px", clone.Bottom.ToString());
+            Assert.Equal("17px", clone.Right.ToString());
         }
 
         [Fact]

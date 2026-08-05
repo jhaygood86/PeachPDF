@@ -134,12 +134,14 @@ namespace PeachPDF.Html.Core.Dom
 
         private void ApplyInset(PhysicalSide side, string value)
         {
+            var parsed = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
+                value, Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
             switch (side)
             {
-                case PhysicalSide.Top: Top = value; break;
-                case PhysicalSide.Right: Right = value; break;
-                case PhysicalSide.Bottom: Bottom = value; break;
-                default: Left = value; break;
+                case PhysicalSide.Top: Top = parsed; break;
+                case PhysicalSide.Right: Right = parsed; break;
+                case PhysicalSide.Bottom: Bottom = parsed; break;
+                default: Left = parsed; break;
             }
         }
 

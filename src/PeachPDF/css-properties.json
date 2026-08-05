@@ -813,74 +813,78 @@
     },
     {
       "name": "left",
+      "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "Left",
-        "csharpDataType": "string",
-        "area": "BoxModelArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>>",
+        "area": "BoxModelArea",
+        "getterExpression": "{box}.Left.ToString()"
       }
     },
     {
       "name": "top",
+      "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "Top",
-        "csharpDataType": "string",
-        "area": "BoxModelArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>>",
+        "area": "BoxModelArea",
+        "getterExpression": "{box}.Top.ToString()"
       }
     },
     {
       "name": "right",
+      "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "Right",
-        "csharpDataType": "string",
-        "area": "BoxModelArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>>",
+        "area": "BoxModelArea",
+        "getterExpression": "{box}.Right.ToString()"
       }
     },
     {
       "name": "bottom",
+      "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "Bottom",
-        "csharpDataType": "string",
-        "area": "BoxModelArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>>",
+        "area": "BoxModelArea",
+        "getterExpression": "{box}.Bottom.ToString()"
       }
     },
     {
