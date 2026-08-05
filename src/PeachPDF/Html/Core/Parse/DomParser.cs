@@ -700,7 +700,7 @@ namespace PeachPDF.Html.Core.Parse
 
             if (box.HtmlTag != null)
             {
-                TranslateAttributes(box.HtmlTag, box);
+                TranslateAttributes(box.HtmlTag, box, valueParser);
             }
 
             // 5. Inline normal; revert target is the author-normal-applied state (unchanged from
@@ -1393,11 +1393,14 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
-        /// 
+        /// Translates deprecated HTML presentational attributes (e.g. <c>align</c>, <c>bgcolor</c>,
+        /// <c>border</c>) directly into their equivalent typed <see cref="CssBox"/> properties, bypassing
+        /// the CSS cascade, per legacy HTML rendering conventions.
         /// </summary>
-        /// <param name="tag"></param>
-        /// <param name="box"></param>
-        private static void TranslateAttributes(HtmlTag tag, CssBox box)
+        /// <param name="tag">The source element whose attributes are translated.</param>
+        /// <param name="box">The box receiving the translated presentational values.</param>
+        /// <param name="valueParser">Used to resolve <c>face</c> against installed font families via <see cref="CssValueParser.GetFontFamilyByName"/>.</param>
+        private static void TranslateAttributes(HtmlTag tag, CssBox box, CssValueParser valueParser)
         {
             if (!tag.HasAttributes()) return;
 
@@ -1409,38 +1412,7 @@ namespace PeachPDF.Html.Core.Parse
                 switch (att)
                 {
                     case HtmlConstants.Align:
-                        if (tag.Name.Equals(HtmlConstants.Img, StringComparison.OrdinalIgnoreCase))
-                        {
-                            switch (value)
-                            {
-                                case HtmlConstants.Left:
-                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
-                                    box.Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left);
-                                    break;
-                                case HtmlConstants.Right:
-                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
-                                    box.Float = CssProperty<Floating>.FromValue(CssConstants.Right, Floating.Right);
-                                    break;
-                                case HtmlConstants.Bottom:
-                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Baseline, VerticalAlignment.Baseline);
-                                    break;
-                                case HtmlConstants.Middle:
-                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.PeachBaselineMiddle, VerticalAlignment.PeachBaselineMiddle);
-                                    break;
-                                case HtmlConstants.Top:
-                                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
-                                    break;
-                            }
-                        }
-                        else
-                        {
-                            if (value is HtmlConstants.Left or HtmlConstants.Center or HtmlConstants.Right or HtmlConstants.Justify)
-                                box.TextAlign = CssProperty<HorizontalAlignment>.FromCssText(value.ToLower(), Map.HorizontalAlignments, HorizontalAlignment.Start);
-                            else
-                                box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);
-
-                        }
-
+                        TranslateAlign(tag, box, value);
                         break;
                     case HtmlConstants.Background:
                         box.BackgroundImages = [new CssImage.Url(value.ToLower())];
@@ -1449,19 +1421,7 @@ namespace PeachPDF.Html.Core.Parse
                         box.BackgroundColor = value.ToLower();
                         break;
                     case HtmlConstants.Border:
-                        if (!string.IsNullOrEmpty(value) && value != "0")
-                            box.BorderLeftStyle = box.BorderTopStyle = box.BorderRightStyle = box.BorderBottomStyle = SolidBorderStyle;
-                        box.BorderLeftWidth = box.BorderTopWidth = box.BorderRightWidth = box.BorderBottomWidth = TranslateLength(value);
-
-                        if (tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
-                        {
-                            if (value != "0")
-                                ApplyTableBorder(box, "1px");
-                        }
-                        else
-                        {
-                            box.BorderTopStyle = box.BorderLeftStyle = box.BorderRightStyle = box.BorderBottomStyle = SolidBorderStyle;
-                        }
+                        TranslateBorder(tag, box, value);
                         break;
                     case HtmlConstants.Bordercolor:
                         box.BorderLeftColor = box.BorderTopColor = box.BorderRightColor = box.BorderBottomColor = value.ToLower();
@@ -1476,8 +1436,8 @@ namespace PeachPDF.Html.Core.Parse
                         box.Color = value.ToLower();
                         break;
                     case HtmlConstants.Face:
-                        //box.FontFamily = _cssParser.ParseFontFamily(value);
-                        throw new NotImplementedException();
+                        TranslateFace(box, valueParser, value);
+                        break;
                     case HtmlConstants.Height:
                         box.Height = TranslateLength(value);
                         break;
@@ -1489,27 +1449,7 @@ namespace PeachPDF.Html.Core.Parse
                         box.WhiteSpace = CssProperty<Whitespace>.FromValue(CssConstants.NoWrap, Whitespace.NoWrap);
                         break;
                     case HtmlConstants.Size:
-                        if (tag.Name.Equals(HtmlConstants.Hr, StringComparison.OrdinalIgnoreCase))
-                            box.Height = TranslateLength(value);
-                        else if (tag.Name.Equals(HtmlConstants.Font, StringComparison.OrdinalIgnoreCase))
-                        {
-                            // HTML's legacy <font size> is a "1"-"7" (or "+N"/"-N" relative) scale, never
-                            // a CSS keyword or length - there is no translation table for it here, so a
-                            // real-world value never validates against either side of FontSize's grammar.
-                            // FromCssText's own fallback always assigns *something* (unlike a raw string
-                            // assignment, which just held the unrecognized text for later, equally-inert,
-                            // downstream failure), so skip the assignment entirely when the value doesn't
-                            // validate - leaving whatever the cascade already produced in place, per how
-                            // browsers generally treat an unrecognized presentational-attribute value
-                            // (same convention as the valign/align attribute's own accepted gap, issue
-                            // #642) - rather than silently forcing every <font size="N"> to "medium".
-                            var trimmed = value.Trim();
-                            if (Map.FontSizeKeywords.ContainsKey(trimmed) || CssValueParser.TryParseLengthOrCalc(trimmed, out _))
-                            {
-                                box.FontSize = CssKeywordOrValueParser.FromCssText<FontSizeKeyword, LengthOrCalc>(
-                                    value, Map.FontSizeKeywords, CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);
-                            }
-                        }
+                        TranslateSize(tag, box, value);
                         break;
                     case HtmlConstants.Valign:
                         box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);
@@ -1522,6 +1462,117 @@ namespace PeachPDF.Html.Core.Parse
                         box.Width = TranslateLength(value);
                         break;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Translates the <c>align</c> attribute - an <c>img</c> maps it to float/vertical-align, any
+        /// other element maps it to text-align (or falls back to the same vertical-align keyword
+        /// mapping <c>valign</c> uses, for a horizontally-invalid value historically seen in the wild).
+        /// </summary>
+        private static void TranslateAlign(HtmlTag tag, CssBox box, string value)
+        {
+            if (tag.Name.Equals(HtmlConstants.Img, StringComparison.OrdinalIgnoreCase))
+                TranslateImgAlign(box, value);
+            else
+                TranslateGenericAlign(box, value);
+        }
+
+        private static void TranslateImgAlign(CssBox box, string value)
+        {
+            switch (value)
+            {
+                case HtmlConstants.Left:
+                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
+                    box.Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left);
+                    break;
+                case HtmlConstants.Right:
+                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
+                    box.Float = CssProperty<Floating>.FromValue(CssConstants.Right, Floating.Right);
+                    break;
+                case HtmlConstants.Bottom:
+                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Baseline, VerticalAlignment.Baseline);
+                    break;
+                case HtmlConstants.Middle:
+                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.PeachBaselineMiddle, VerticalAlignment.PeachBaselineMiddle);
+                    break;
+                case HtmlConstants.Top:
+                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
+                    break;
+            }
+        }
+
+        private static void TranslateGenericAlign(CssBox box, string value)
+        {
+            if (value is HtmlConstants.Left or HtmlConstants.Center or HtmlConstants.Right or HtmlConstants.Justify)
+                box.TextAlign = CssProperty<HorizontalAlignment>.FromCssText(value.ToLower(), Map.HorizontalAlignments, HorizontalAlignment.Start);
+            else
+                box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);
+        }
+
+        /// <summary>
+        /// Translates the <c>border</c> attribute: sets the border width (and, unless "0", a solid
+        /// style) on the element itself, additionally cascading a 1px solid border to every cell when
+        /// the element is a <c>table</c>.
+        /// </summary>
+        private static void TranslateBorder(HtmlTag tag, CssBox box, string value)
+        {
+            if (!string.IsNullOrEmpty(value) && value != "0")
+                box.BorderLeftStyle = box.BorderTopStyle = box.BorderRightStyle = box.BorderBottomStyle = SolidBorderStyle;
+            box.BorderLeftWidth = box.BorderTopWidth = box.BorderRightWidth = box.BorderBottomWidth = TranslateLength(value);
+
+            if (tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
+            {
+                if (value != "0")
+                    ApplyTableBorder(box, "1px");
+            }
+            else
+            {
+                box.BorderTopStyle = box.BorderLeftStyle = box.BorderRightStyle = box.BorderBottomStyle = SolidBorderStyle;
+            }
+        }
+
+        /// <summary>
+        /// Translates the legacy <c>face</c> attribute (e.g. <c>&lt;font face="Arial, sans-serif"&gt;</c>)
+        /// into the same <see cref="CssBox.FontFamily"/>/<see cref="CssBox.FontFamilyList"/> multi-field
+        /// write the CSS <c>font-family</c> property's own custom setter performs, resolving against
+        /// installed fonts via <see cref="CssValueParser.GetFontFamilyByName"/>.
+        /// </summary>
+        private static void TranslateFace(CssBox box, CssValueParser valueParser, string value)
+        {
+            box.FontFamily = valueParser.GetFontFamilyByName(value);
+            box.FontFamilyList = value;
+        }
+
+        /// <summary>
+        /// Translates the <c>size</c> attribute - meaning differs by element: an <c>hr</c>'s <c>size</c>
+        /// is its height, a <c>font</c>'s <c>size</c> is its legacy 1-7 (or relative) font-size scale.
+        /// </summary>
+        private static void TranslateSize(HtmlTag tag, CssBox box, string value)
+        {
+            if (tag.Name.Equals(HtmlConstants.Hr, StringComparison.OrdinalIgnoreCase))
+                box.Height = TranslateLength(value);
+            else if (tag.Name.Equals(HtmlConstants.Font, StringComparison.OrdinalIgnoreCase))
+                TranslateFontSize(box, value);
+        }
+
+        private static void TranslateFontSize(CssBox box, string value)
+        {
+            // HTML's legacy <font size> is a "1"-"7" (or "+N"/"-N" relative) scale, never
+            // a CSS keyword or length - there is no translation table for it here, so a
+            // real-world value never validates against either side of FontSize's grammar.
+            // FromCssText's own fallback always assigns *something* (unlike a raw string
+            // assignment, which just held the unrecognized text for later, equally-inert,
+            // downstream failure), so skip the assignment entirely when the value doesn't
+            // validate - leaving whatever the cascade already produced in place, per how
+            // browsers generally treat an unrecognized presentational-attribute value
+            // (same convention as the valign/align attribute's own accepted gap, issue
+            // #642) - rather than silently forcing every <font size="N"> to "medium".
+            var trimmed = value.Trim();
+            if (Map.FontSizeKeywords.ContainsKey(trimmed) || CssValueParser.TryParseLengthOrCalc(trimmed, out _))
+            {
+                box.FontSize = CssKeywordOrValueParser.FromCssText<FontSizeKeyword, LengthOrCalc>(
+                    value, Map.FontSizeKeywords, CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);
             }
         }
 
