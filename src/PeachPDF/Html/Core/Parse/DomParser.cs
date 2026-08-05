@@ -1482,7 +1482,8 @@ namespace PeachPDF.Html.Core.Parse
                         box.Height = TranslateLength(value);
                         break;
                     case HtmlConstants.Hspace:
-                        box.MarginRight = box.MarginLeft = TranslateLength(value);
+                        box.MarginRight = box.MarginLeft = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
+                            TranslateLength(value), Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
                         break;
                     case HtmlConstants.Nowrap:
                         box.WhiteSpace = CssProperty<Whitespace>.FromValue(CssConstants.NoWrap, Whitespace.NoWrap);
@@ -1497,7 +1498,8 @@ namespace PeachPDF.Html.Core.Parse
                         box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);
                         break;
                     case HtmlConstants.Vspace:
-                        box.MarginTop = box.MarginBottom = TranslateLength(value);
+                        box.MarginTop = box.MarginBottom = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
+                            TranslateLength(value), Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
                         break;
                     case HtmlConstants.Width:
                         box.Width = TranslateLength(value);

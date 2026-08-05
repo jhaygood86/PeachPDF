@@ -515,12 +515,13 @@ namespace PeachPDF.Html.Core.Dom
 
         public static double GetActualMarginLeft(CssBox box, double? boxWidth = null)
         {
-            if (box.MarginLeft is not CssConstants.Auto)
+            var marginLeft = box.MarginLeft.Value;
+            if (marginLeft.IsValue)
             {
-                return CssValueParser.ParseLength(box.MarginLeft, box.ContainingBlock.Size.Width, box);
+                return CssValueParser.ParseLength(marginLeft.Value!.Value, box.ContainingBlock.Size.Width, box);
             }
 
-            if (box.MarginRight is not CssConstants.Auto) return 0;
+            if (box.MarginRight.Value.IsValue) return 0;
 
             if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != CssConstants.TableCaption)
             {
@@ -545,12 +546,13 @@ namespace PeachPDF.Html.Core.Dom
 
         public static double GetActualMarginRight(CssBox box, double? boxWidth = null)
         {
-            if (box.MarginRight is not CssConstants.Auto)
+            var marginRight = box.MarginRight.Value;
+            if (marginRight.IsValue)
             {
-                return CssValueParser.ParseLength(box.MarginRight, box.ContainingBlock.Size.Width, box);
+                return CssValueParser.ParseLength(marginRight.Value!.Value, box.ContainingBlock.Size.Width, box);
             }
 
-            if (box.MarginLeft is not CssConstants.Auto) return 0;
+            if (box.MarginLeft.Value.IsValue) return 0;
 
             if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != CssConstants.TableCaption)
             {

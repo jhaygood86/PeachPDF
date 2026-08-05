@@ -1475,10 +1475,10 @@ namespace PeachPDF.Html.Core.Dom
             _isRow ? box.ActualMarginRight : box.ActualMarginBottom;
 
         private bool IsMainMarginBeforeAuto(CssBox box) =>
-            (_isRow ? box.MarginLeft : box.MarginTop) == CssConstants.Auto;
+            (_isRow ? box.MarginLeft : box.MarginTop).Value.IsKeyword;
 
         private bool IsMainMarginAfterAuto(CssBox box) =>
-            (_isRow ? box.MarginRight : box.MarginBottom) == CssConstants.Auto;
+            (_isRow ? box.MarginRight : box.MarginBottom).Value.IsKeyword;
 
         private double MainPaddingBorder(CssBox box) =>
             _isRow
