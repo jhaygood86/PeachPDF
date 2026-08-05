@@ -125,6 +125,20 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(36d, box!.ActualLineHeight, 2);
         }
 
+        [Fact]
+        public async Task RelativeUnitCalc_ActualLineHeight_EvaluatesLazilyAgainstTheBoxsOwnContext()
+        {
+            // calc(1em + 4px) on a 20pt font-size box: 1em -> 20pt (the box's own font size, the same
+            // emFactor GetEmHeight() would supply), 4px -> 3pt (PointsPerPx), for 23pt total.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='t' style='font-size:20pt;line-height:calc(1em + 4px)'>x</div>"));
+
+            var box = LayoutHarness.FindById(root, "t");
+
+            Assert.NotNull(box);
+            Assert.Equal(23d, box!.ActualLineHeight, 2);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<PeachPDF.Html.Core.Dom.CssBox> GetLineHeightBoxAsync(string authored)

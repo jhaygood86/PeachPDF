@@ -51,7 +51,8 @@ namespace PeachPDF.SourceGenerators.Model
         public string? KeywordMap { get; }
         public string? Fallback { get; }
 
-        // "keyword-or-value" — the non-keyword side's grammar/C# type ("integer" or "length")
+        // "keyword-or-value" — the non-keyword side's grammar/C# type ("integer", "length", or
+        // "length-or-unitless")
         public string? ValueType { get; }
 
         public DataTypeSpec(DataTypeKind kind, double? min = null, double? max = null,
