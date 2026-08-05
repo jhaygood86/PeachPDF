@@ -123,43 +123,27 @@ namespace PeachPDF.CSS
             return null;
         }
 
-        public static Rule CreateRule(this StylesheetParser parser, RuleType type)
-        {
-            switch (type)
+        // RuleType.Unknown/RegionStyle/FontFeatureValues/CounterStyle have no Rule subtype and fall
+        // through to the null default, same as before this was a lookup.
+        private static readonly FrozenDictionary<RuleType, Func<StylesheetParser, Rule>> RuleFactories =
+            new Dictionary<RuleType, Func<StylesheetParser, Rule>>
             {
-                case RuleType.Charset:
-                    return new CharsetRule(parser);
-                case RuleType.Document:
-                    return new DocumentRule(parser);
-                case RuleType.FontFace:
-                    return new FontFaceRule(parser);
-                case RuleType.Import:
-                    return new ImportRule(parser);
-                case RuleType.Keyframe:
-                    return new KeyframeRule(parser);
-                case RuleType.Keyframes:
-                    return new KeyframesRule(parser);
-                case RuleType.Media:
-                    return new MediaRule(parser);
-                case RuleType.Container:
-                    return new ContainerRule(parser);
-                case RuleType.Namespace:
-                    return new NamespaceRule(parser);
-                case RuleType.Page:
-                    return new PageRule(parser);
-                case RuleType.Style:
-                    return new StyleRule(parser);
-                case RuleType.Supports:
-                    return new SupportsRule(parser);
-                case RuleType.Viewport:
-                    return new ViewportRule(parser);
-                //case RuleType.Unknown:
-                //case RuleType.RegionStyle:
-                //case RuleType.FontFeatureValues:
-                //case RuleType.CounterStyle:
-                default:
-                    return null;
-            }
-        }
+                [RuleType.Charset] = parser => new CharsetRule(parser),
+                [RuleType.Document] = parser => new DocumentRule(parser),
+                [RuleType.FontFace] = parser => new FontFaceRule(parser),
+                [RuleType.Import] = parser => new ImportRule(parser),
+                [RuleType.Keyframe] = parser => new KeyframeRule(parser),
+                [RuleType.Keyframes] = parser => new KeyframesRule(parser),
+                [RuleType.Media] = parser => new MediaRule(parser),
+                [RuleType.Container] = parser => new ContainerRule(parser),
+                [RuleType.Namespace] = parser => new NamespaceRule(parser),
+                [RuleType.Page] = parser => new PageRule(parser),
+                [RuleType.Style] = parser => new StyleRule(parser),
+                [RuleType.Supports] = parser => new SupportsRule(parser),
+                [RuleType.Viewport] = parser => new ViewportRule(parser),
+            }.ToFrozenDictionary();
+
+        public static Rule CreateRule(this StylesheetParser parser, RuleType type) =>
+            RuleFactories.TryGetValue(type, out var factory) ? factory(parser) : null;
     }
 }

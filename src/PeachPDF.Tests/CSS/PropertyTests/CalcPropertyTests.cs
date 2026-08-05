@@ -288,6 +288,27 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.Equal("scale(2)", concrete.Value);
         }
 
+        [Fact]
+        public void Transform_ScaleCalcArithmeticOperators_FoldsToPlainNumber()
+        {
+            // Exercises CalcTypeChecker.FoldBinaryNumber's -, *, and / arms (+ is already covered by
+            // Transform_ScaleCalc_Legal above), plus FoldUnaryNumber's negation.
+            Assert.Equal("scale(1)", ((TransformProperty)ParseDeclaration("transform: scale(calc(3 - 2))")).Value);
+            Assert.Equal("scale(6)", ((TransformProperty)ParseDeclaration("transform: scale(calc(2 * 3))")).Value);
+            Assert.Equal("scale(3)", ((TransformProperty)ParseDeclaration("transform: scale(calc(6 / 2))")).Value);
+            Assert.Equal("scale(-2)", ((TransformProperty)ParseDeclaration("transform: scale(calc(-2))")).Value);
+        }
+
+        [Fact]
+        public void Transform_ScaleCalcMinMaxClamp_FoldsToPlainNumber()
+        {
+            // Exercises CalcTypeChecker.FoldCallNumber: min()/max()/clamp() nested inside a Number-
+            // category calc() expression, not just the plain-arithmetic case above.
+            Assert.Equal("scale(2)", ((TransformProperty)ParseDeclaration("transform: scale(calc(min(2, 3)))")).Value);
+            Assert.Equal("scale(3)", ((TransformProperty)ParseDeclaration("transform: scale(calc(max(2, 3)))")).Value);
+            Assert.Equal("scale(2)", ((TransformProperty)ParseDeclaration("transform: scale(calc(clamp(1, 2, 3)))")).Value);
+        }
+
         // ── angle calc() (rotate/skew, gradient direction, hsl hue) ──────────────────────
 
         [Fact]
@@ -317,6 +338,40 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             var property = ParseDeclaration("background-image: linear-gradient(calc(45deg + 45deg), red, blue)");
             Assert.True(property.HasValue);
             Assert.StartsWith("linear-gradient(90deg,", property.Value);
+        }
+
+        [Fact]
+        public void Transform_RotateCalcUnaryNegation_FoldsToDegrees()
+        {
+            // Exercises CalcSerializer.FoldUnaryAngle.
+            var property = ParseDeclaration("transform: rotate(calc(-(45deg)))");
+            Assert.IsType<TransformProperty>(property);
+            var concrete = (TransformProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("rotate(-45deg)", concrete.Value);
+        }
+
+        [Fact]
+        public void Transform_RotateCalcNumberTimesAngle_FoldsToDegrees()
+        {
+            // Exercises CalcSerializer.FoldMultiplicativeAngle's right-hand-is-angle branch (the sibling
+            // "angle * number" form goes through the left-hand branch, already covered by the plain
+            // arithmetic scale/rotate tests above).
+            var property = ParseDeclaration("transform: rotate(calc(2 * 45deg))");
+            Assert.IsType<TransformProperty>(property);
+            var concrete = (TransformProperty)property;
+            Assert.True(concrete.HasValue);
+            Assert.Equal("rotate(90deg)", concrete.Value);
+        }
+
+        [Fact]
+        public void Transform_RotateCalcMinMaxClamp_FoldsToDegrees()
+        {
+            // Exercises CalcSerializer.FoldCallAngle: min()/max()/clamp() nested inside an Angle-
+            // category calc() expression, not just the plain-arithmetic case above.
+            Assert.Equal("rotate(45deg)", ((TransformProperty)ParseDeclaration("transform: rotate(calc(min(45deg, 90deg)))")).Value);
+            Assert.Equal("rotate(90deg)", ((TransformProperty)ParseDeclaration("transform: rotate(calc(max(45deg, 90deg)))")).Value);
+            Assert.Equal("rotate(45deg)", ((TransformProperty)ParseDeclaration("transform: rotate(calc(clamp(0deg, 45deg, 90deg)))")).Value);
         }
 
         [Fact]

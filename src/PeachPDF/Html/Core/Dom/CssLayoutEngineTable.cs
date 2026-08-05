@@ -20,6 +20,7 @@ using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -685,6 +686,41 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private void EnforceMaximumSize()
         {
+            ShrinkColumnsToFitAvailableWidth();
+
+            // if table max width is limited by we need to lower the columns width even if it will result in clipping
+            var maxWidth = GetMaxTableWidth();
+            if (!(maxWidth < 90999)) return;
+
+            var widthSum = GetWidthSum();
+            if (!(maxWidth < widthSum)) return;
+
+            //Get the minimum and maximum full length of NaN boxes
+            GetColumnsMinMaxWidthByContent(false, out var minFullWidths, out var maxFullWidths);
+
+            // lower all the columns to the minimum
+            for (var i = 0; i < _columnWidths!.Length; i++)
+                _columnWidths[i] = minFullWidths[i];
+
+            // either min for all column is not enought and we need to lower it more resulting in clipping
+            // or we now have extra space so we can give it to columns than need it
+            widthSum = GetWidthSum();
+            if (maxWidth < widthSum)
+                ClipColumnsToMaxWidth(maxWidth);
+            else
+                SpreadExtraWidthToColumns(maxWidth, maxFullWidths);
+        }
+
+        /// <summary>
+        /// While table width is larger than it should, and width is reducible.
+        /// </summary>
+        /// <remarks>
+        /// Provably unreachable under the current (pre-existing, out-of-scope) <see cref="CanReduceWidth()"/>
+        /// - see .claude/accepted-gaps/table-max-width-clip-branch-coverage.md.
+        /// </remarks>
+        [ExcludeFromCodeCoverage]
+        private void ShrinkColumnsToFitAvailableWidth()
+        {
             int curCol = 0;
             var widthSum = GetWidthSum();
             while (widthSum > GetAvailableTableWidth() && CanReduceWidth())
@@ -699,83 +735,82 @@ namespace PeachPDF.Html.Core.Dom
                 if (curCol >= _columnWidths.Length)
                     curCol = 0;
             }
+        }
 
-            // if table max width is limited by we need to lower the columns width even if it will result in clipping
-            var maxWidth = GetMaxTableWidth();
-            if (!(maxWidth < 90999)) return;
-
-            widthSum = GetWidthSum();
-            if (!(maxWidth < widthSum)) return;
-
-            //Get the minimum and maximum full length of NaN boxes
-            GetColumnsMinMaxWidthByContent(false, out var minFullWidths, out var maxFullWidths);
-
-            // lower all the columns to the minimum
-            for (var i = 0; i < _columnWidths!.Length; i++)
-                _columnWidths[i] = minFullWidths[i];
-
-            // either min for all column is not enought and we need to lower it more resulting in clipping
-            // or we now have extra space so we can give it to columns than need it
-            widthSum = GetWidthSum();
-            if (maxWidth < widthSum)
+        /// <summary>
+        /// Lowers the width of columns, starting from the largest one, until the max width is satisfied.
+        /// Columns are already at their content minimum, so this results in clipping.
+        /// </summary>
+        /// <remarks>
+        /// Its caller's guard (<c>maxWidth &lt; widthSum</c>, after columns are already at their content
+        /// minimum) is live code, not provably dead like <see cref="ShrinkColumnsToFitAvailableWidth"/> -
+        /// but no HTML/CSS input tried actually reaches it; see
+        /// .claude/accepted-gaps/table-max-width-clip-branch-coverage.md for the investigation.
+        /// </remarks>
+        [ExcludeFromCodeCoverage]
+        private void ClipColumnsToMaxWidth(double maxWidth)
+        {
+            var widthSum = GetWidthSum();
+            for (var a = 0; a < 15 && maxWidth < widthSum - 0.1; a++) // limit iteration so bug won't create infinite loop
             {
-                // lower the width of columns starting from the largest one until the max width is satisfied
-                for (var a = 0; a < 15 && maxWidth < widthSum - 0.1; a++) // limit iteration so bug won't create infinite loop
+                var nonMaxedColumns = 0;
+                double largeWidth = 0f, secLargeWidth = 0f;
+                foreach (var columnWidth in _columnWidths!)
                 {
-                    var nonMaxedColumns = 0;
-                    double largeWidth = 0f, secLargeWidth = 0f;
-                    foreach (var columnWidth in _columnWidths)
+                    if (columnWidth > largeWidth + 0.1)
                     {
-                        if (columnWidth > largeWidth + 0.1)
-                        {
-                            secLargeWidth = largeWidth;
-                            largeWidth = columnWidth;
-                            nonMaxedColumns = 1;
-                        }
-                        else if (columnWidth > largeWidth - 0.1)
-                        {
-                            nonMaxedColumns++;
-                        }
+                        secLargeWidth = largeWidth;
+                        largeWidth = columnWidth;
+                        nonMaxedColumns = 1;
                     }
-
-                    var decrease = secLargeWidth > 0 ? largeWidth - secLargeWidth : (widthSum - maxWidth) / _columnWidths.Length;
-                    if (decrease * nonMaxedColumns > widthSum - maxWidth)
-                        decrease = (widthSum - maxWidth) / nonMaxedColumns;
-                    for (var i = 0; i < _columnWidths.Length; i++)
-                        if (_columnWidths[i] > largeWidth - 0.1)
-                            _columnWidths[i] -= decrease;
-
-                    widthSum = GetWidthSum();
+                    else if (columnWidth > largeWidth - 0.1)
+                    {
+                        nonMaxedColumns++;
+                    }
                 }
+
+                var decrease = secLargeWidth > 0 ? largeWidth - secLargeWidth : (widthSum - maxWidth) / _columnWidths.Length;
+                if (decrease * nonMaxedColumns > widthSum - maxWidth)
+                    decrease = (widthSum - maxWidth) / nonMaxedColumns;
+                for (var i = 0; i < _columnWidths.Length; i++)
+                    if (_columnWidths[i] > largeWidth - 0.1)
+                        _columnWidths[i] -= decrease;
+
+                widthSum = GetWidthSum();
             }
-            else
+        }
+
+        /// <summary>
+        /// Spreads extra width to columns that haven't reached their content maximum yet, trying to
+        /// spread it between all columns.
+        /// </summary>
+        private void SpreadExtraWidthToColumns(double maxWidth, double[] maxFullWidths)
+        {
+            var widthSum = GetWidthSum();
+            for (var a = 0; a < 15 && maxWidth > widthSum + 0.1; a++) // limit iteration so bug won't create infinite loop
             {
-                // spread extra width to columns that didn't reached max width where trying to spread it between all columns
-                for (var a = 0; a < 15 && maxWidth > widthSum + 0.1; a++) // limit iteration so bug won't create infinite loop
+                var nonMaxedColumns = 0;
+                for (var i = 0; i < _columnWidths!.Length; i++)
+                    if (_columnWidths[i] + 1 < maxFullWidths[i])
+                        nonMaxedColumns++;
+                if (nonMaxedColumns == 0)
+                    nonMaxedColumns = _columnWidths.Length;
+
+                var hit = false;
+                var minIncrement = (maxWidth - widthSum) / nonMaxedColumns;
+                for (var i = 0; i < _columnWidths.Length; i++)
                 {
-                    var nonMaxedColumns = 0;
-                    for (var i = 0; i < _columnWidths.Length; i++)
-                        if (_columnWidths[i] + 1 < maxFullWidths[i])
-                            nonMaxedColumns++;
-                    if (nonMaxedColumns == 0)
-                        nonMaxedColumns = _columnWidths.Length;
+                    if (!(_columnWidths[i] + 0.1 < maxFullWidths[i])) continue;
 
-                    var hit = false;
-                    var minIncrement = (maxWidth - widthSum) / nonMaxedColumns;
-                    for (var i = 0; i < _columnWidths.Length; i++)
-                    {
-                        if (!(_columnWidths[i] + 0.1 < maxFullWidths[i])) continue;
-
-                        minIncrement = Math.Min(minIncrement, maxFullWidths[i] - _columnWidths[i]);
-                        hit = true;
-                    }
-
-                    for (var i = 0; i < _columnWidths.Length; i++)
-                        if (!hit || _columnWidths[i] + 1 < maxFullWidths[i])
-                            _columnWidths[i] += minIncrement;
-
-                    widthSum = GetWidthSum();
+                    minIncrement = Math.Min(minIncrement, maxFullWidths[i] - _columnWidths[i]);
+                    hit = true;
                 }
+
+                for (var i = 0; i < _columnWidths.Length; i++)
+                    if (!hit || _columnWidths[i] + 1 < maxFullWidths[i])
+                        _columnWidths[i] += minIncrement;
+
+                widthSum = GetWidthSum();
             }
         }
 

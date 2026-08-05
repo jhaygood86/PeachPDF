@@ -613,87 +613,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// </summary>
         internal bool TransparencyUsed;
 
-        /// <summary>
-        /// Inherit values from parent node.
-        /// </summary>
-        internal static void InheritValues(PdfDictionary page, InheritedValues values)
-        {
-            // HACK: I'M ABSOLUTELY NOT SURE WHETHER THIS CODE COVERS ALL CASES.
-            if (values.Resources != null)
-            {
-                PdfDictionary resources;
-                PdfItem res = page.Elements[InheritablePageKeys.Resources];
-                if (res is PdfReference)
-                {
-                    resources = (PdfDictionary)((PdfReference)res).Value.Clone();
-                    resources.Document = page.Owner;
-                }
-                else
-                    resources = (PdfDictionary)res;
-
-                if (resources == null)
-                {
-                    resources = values.Resources.Clone();
-                    resources.Document = page.Owner;
-                    page.Elements.Add(InheritablePageKeys.Resources, resources);
-                }
-                else
-                {
-                    foreach (PdfName name in values.Resources.Elements.KeyNames)
-                    {
-                        if (!resources.Elements.ContainsKey(name.Value))
-                        {
-                            PdfItem item = values.Resources.Elements[name];
-                            if (item is PdfObject)
-                                item = item.Clone();
-                            resources.Elements.Add(name.ToString(), item);
-                        }
-                    }
-                }
-            }
-
-            if (values.MediaBox != null && page.Elements[InheritablePageKeys.MediaBox] == null)
-                page.Elements[InheritablePageKeys.MediaBox] = values.MediaBox;
-
-            if (values.CropBox != null && page.Elements[InheritablePageKeys.CropBox] == null)
-                page.Elements[InheritablePageKeys.CropBox] = values.CropBox;
-
-            if (values.Rotate != null && page.Elements[InheritablePageKeys.Rotate] == null)
-                page.Elements[InheritablePageKeys.Rotate] = values.Rotate;
-        }
-
-        /// <summary>
-        /// Add all inheritable values from the specified page to the specified values structure.
-        /// </summary>
-        internal static void InheritValues(PdfDictionary page, ref InheritedValues values)
-        {
-            PdfItem item = page.Elements[InheritablePageKeys.Resources];
-            if (item != null)
-            {
-                PdfReference reference = item as PdfReference;
-                if (reference != null)
-                    values.Resources = (PdfDictionary)(reference.Value);
-                else
-                    values.Resources = (PdfDictionary)item;
-            }
-
-            item = page.Elements[InheritablePageKeys.MediaBox];
-            if (item != null)
-                values.MediaBox = new PdfRectangle(item);
-
-            item = page.Elements[InheritablePageKeys.CropBox];
-            if (item != null)
-                values.CropBox = new PdfRectangle(item);
-
-            item = page.Elements[InheritablePageKeys.Rotate];
-            if (item != null)
-            {
-                if (item is PdfReference)
-                    item = ((PdfReference)item).Value;
-                values.Rotate = (PdfInteger)item;
-            }
-        }
-
         internal override void PrepareForSave()
         {
             if (_trimMargins.AreSet)
@@ -976,17 +895,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             /// </summary>
             [KeyInfo(KeyType.Integer | KeyType.Optional)]
             public const string Rotate = "/Rotate";
-        }
-
-        /// <summary>
-        /// Values inherited from a parent in the parent chain of a page tree.
-        /// </summary>
-        internal struct InheritedValues
-        {
-            public PdfDictionary Resources;
-            public PdfRectangle MediaBox;
-            public PdfRectangle CropBox;
-            public PdfInteger Rotate;
         }
     }
 }

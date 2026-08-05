@@ -67,37 +67,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Internal
             }
         }
 
-        public void DetachDocument(PdfDocument.DocumentHandle handle)
-        {
-            if (handle.IsAlive)
-            {
-                foreach (string path in _importedDocuments.Keys)
-                {
-                    if (_importedDocuments[path] == handle)
-                    {
-                        _importedDocuments.Remove(path);
-                        break;
-                    }
-                }
-            }
-
-            // Clean table
-            bool itemRemoved = true;
-            while (itemRemoved)
-            {
-                itemRemoved = false;
-                foreach (string path in _importedDocuments.Keys)
-                {
-                    if (!_importedDocuments[path].IsAlive)
-                    {
-                        _importedDocuments.Remove(path);
-                        itemRemoved = true;
-                        break;
-                    }
-                }
-            }
-        }
-
         /// <summary>
         /// Maps path to document handle.
         /// </summary>

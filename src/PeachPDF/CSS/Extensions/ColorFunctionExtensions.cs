@@ -1,6 +1,7 @@
 #nullable disable
 
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -288,20 +289,23 @@ namespace PeachPDF.CSS
 
         private static byte Clamp01Byte(float alpha) => (byte)Math.Round(Math.Clamp(alpha, 0f, 1f) * 255);
 
-        private static ColorSpaceMath.Space MapSpace(string name) => name switch
+        static readonly FrozenDictionary<string, ColorSpaceMath.Space> SpacesByName = new Dictionary<string, ColorSpaceMath.Space>
         {
-            "srgb-linear" => ColorSpaceMath.Space.SrgbLinear,
-            "display-p3" => ColorSpaceMath.Space.DisplayP3,
-            "lab" => ColorSpaceMath.Space.Lab,
-            "oklab" => ColorSpaceMath.Space.Oklab,
-            "xyz" or "xyz-d65" => ColorSpaceMath.Space.XyzD65,
-            "xyz-d50" => ColorSpaceMath.Space.XyzD50,
-            "hsl" => ColorSpaceMath.Space.Hsl,
-            "hwb" => ColorSpaceMath.Space.Hwb,
-            "lch" => ColorSpaceMath.Space.Lch,
-            "oklch" => ColorSpaceMath.Space.Oklch,
-            _ => ColorSpaceMath.Space.Srgb
-        };
+            ["srgb-linear"] = ColorSpaceMath.Space.SrgbLinear,
+            ["display-p3"] = ColorSpaceMath.Space.DisplayP3,
+            ["lab"] = ColorSpaceMath.Space.Lab,
+            ["oklab"] = ColorSpaceMath.Space.Oklab,
+            ["xyz"] = ColorSpaceMath.Space.XyzD65,
+            ["xyz-d65"] = ColorSpaceMath.Space.XyzD65,
+            ["xyz-d50"] = ColorSpaceMath.Space.XyzD50,
+            ["hsl"] = ColorSpaceMath.Space.Hsl,
+            ["hwb"] = ColorSpaceMath.Space.Hwb,
+            ["lch"] = ColorSpaceMath.Space.Lch,
+            ["oklch"] = ColorSpaceMath.Space.Oklch,
+        }.ToFrozenDictionary();
+
+        private static ColorSpaceMath.Space MapSpace(string name) =>
+            SpacesByName.GetValueOrDefault(name, ColorSpaceMath.Space.Srgb);
 
         private static ColorSpaceMath.HueMethod MapHue(List<string> idents, int startIndex)
         {

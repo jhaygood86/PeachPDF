@@ -52,6 +52,148 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void RelativeUrl_QueryOnly_ResolvesAgainstBasePathKeepingScheme()
+        {
+            // Exercises Url.RelativeState's '?' branch (ParseQuery).
+            var baseUrl = new Url("http://example.com/dir/page.html");
+            var relative = new Url(baseUrl, "?a=1");
+
+            Assert.False(relative.IsInvalid);
+            Assert.Equal("dir/page.html", relative.Path);
+            Assert.Equal("a=1", relative.Query);
+        }
+
+        [Fact]
+        public void RelativeUrl_FragmentOnly_ResolvesAgainstBasePathKeepingScheme()
+        {
+            // Exercises Url.RelativeState's '#' branch (ParseFragment).
+            var baseUrl = new Url("http://example.com/dir/page.html");
+            var relative = new Url(baseUrl, "#section");
+
+            Assert.False(relative.IsInvalid);
+            Assert.Equal("dir/page.html", relative.Path);
+            Assert.Equal("section", relative.Fragment);
+        }
+
+        [Fact]
+        public void RelativeUrl_SingleSlashPath_ReplacesEntirePath()
+        {
+            // Exercises Url.RelativeSlashState's non-double-slash fallback (ParsePath(input, index - 1)):
+            // a single leading '/' with no scheme change is an absolute-path reference, not a new authority.
+            var baseUrl = new Url("http://example.com/dir/page.html");
+            var relative = new Url(baseUrl, "/other/path");
+
+            Assert.False(relative.IsInvalid);
+            Assert.Equal("example.com", relative.HostName);
+            Assert.Equal("other/path", relative.Path);
+        }
+
+        [Fact]
+        public void RelativeUrl_DoubleSlash_ParsesNewAuthority()
+        {
+            // Exercises Url.RelativeSlashState's double-slash branch (IgnoreSlashesState/ParseAuthority):
+            // "//host/path" replaces the authority, keeping the base's scheme.
+            var baseUrl = new Url("http://example.com/dir/page.html");
+            var relative = new Url(baseUrl, "//other.example.org/new/path");
+
+            Assert.False(relative.IsInvalid);
+            Assert.Equal("http", relative.Scheme);
+            Assert.Equal("other.example.org", relative.HostName);
+            Assert.Equal("new/path", relative.Path);
+        }
+
+        [Fact]
+        public void RelativeUrl_TrailingSlashOnly_ParsesAsEmptyPath()
+        {
+            // Exercises Url.RelativeSlashState's "index == input.Length - 1" early ParsePath branch.
+            var baseUrl = new Url("http://example.com/dir/page.html");
+            var relative = new Url(baseUrl, "/");
+
+            Assert.False(relative.IsInvalid);
+            Assert.Equal("example.com", relative.HostName);
+        }
+
+        [Fact]
+        public void FileUrl_DoubleSlashRelative_ParsesNewFileHost()
+        {
+            // Exercises Url.RelativeSlashState's file-scheme double-slash branch (ParseFileHost).
+            var baseUrl = new Url("file:///c:/dir/page.html");
+            var relative = new Url(baseUrl, "//otherhost/share/file.txt");
+
+            Assert.False(relative.IsInvalid);
+            Assert.Equal("file", relative.Scheme);
+            Assert.Equal("otherhost", relative.HostName);
+        }
+
+        [Fact]
+        public void FileUrl_DoubleSlashDriveLetter_ParsesAsPathNotHost()
+        {
+            // Exercises Url.IsWindowsDriveLetter's true branch inside ParseFileHost: "file://d:/x" has a
+            // drive letter, not a real host, immediately after the double slash.
+            var baseUrl = new Url("file:///c:/dir/page.html");
+            var relative = new Url(baseUrl, "//d:/other/file.txt");
+
+            Assert.False(relative.IsInvalid);
+            Assert.Equal("file", relative.Scheme);
+        }
+
+        [Fact]
+        public void Host_UppercaseLetters_AreLowercased()
+        {
+            // Exercises Url.AppendDefaultHostChar's lowercase-conversion branch.
+            var url = new Url("http://EXAMPLE.COM/path");
+
+            Assert.Equal("example.com", url.HostName);
+        }
+
+        [Fact]
+        public void Host_ValidPercentEncodedByte_IsDecoded()
+        {
+            // Exercises Url.AppendPercentEncodedHostChar's valid-hex branch.
+            var url = new Url("http://ex%61mple.com/path");
+
+            Assert.Equal("example.com", url.HostName);
+        }
+
+        [Fact]
+        public void Host_InvalidPercentEscape_IsKeptLiteral()
+        {
+            // Exercises Url.AppendPercentEncodedHostChar's non-hex fallback branch.
+            var url = new Url("http://ex%zzample.com/path");
+
+            Assert.Contains("%", url.HostName);
+        }
+
+        [Fact]
+        public void Host_FullwidthPunycodeMappedCharacter_IsNormalized()
+        {
+            // Exercises Url.AppendDefaultHostChar's Symbols.Punycode lookup branch: a fullwidth ideographic
+            // full stop (U+FF0E) is one of the handful of characters Symbols.Punycode maps directly.
+            var url = new Url("http://example．com/path");
+
+            Assert.Equal("example.com", url.HostName);
+        }
+
+        [Fact]
+        public void Host_HyphenatedLabel_IsPreserved()
+        {
+            // Exercises Url.AppendDefaultHostChar's IsAlphanumericAscii-false/hyphen-kept branch.
+            var url = new Url("http://my-example.com/path");
+
+            Assert.Equal("my-example.com", url.HostName);
+        }
+
+        [Fact]
+        public void Host_IPv6Literal_IsPreservedVerbatim()
+        {
+            // Exercises SanatizeHost's bracketed-IPv6-literal fast path (returns the substring as-is,
+            // never reaching the per-character sanitizer at all).
+            var url = new Url("http://[::1]:8080/path");
+
+            Assert.Equal("[::1]", url.HostName);
+        }
+
+        [Fact]
         public void CopyConstructor_CopiesAllComponents()
         {
             var original = new Url("http://user:pass@example.com:8080/path?query#frag");

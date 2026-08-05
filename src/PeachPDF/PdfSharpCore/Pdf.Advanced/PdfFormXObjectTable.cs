@@ -82,22 +82,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Gets the imported object table.
         /// </summary>
-        public PdfImportedObjectTable GetImportedObjectTable(PdfPage page)
-        {
-            // Is the external PDF file from which is imported already known for the current document?
-            Selector selector = new Selector(page);
-            PdfImportedObjectTable importedObjectTable;
-            if (!_forms.TryGetValue(selector, out importedObjectTable))
-            {
-                importedObjectTable = new PdfImportedObjectTable(Owner, page.Owner);
-                _forms[selector] = importedObjectTable;
-            }
-            return importedObjectTable;
-        }
-
-        /// <summary>
-        /// Gets the imported object table.
-        /// </summary>
         public PdfImportedObjectTable GetImportedObjectTable(PdfDocument document)
         {
             if (document == null)
@@ -113,39 +97,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 _forms[selector] = importedObjectTable;
             }
             return importedObjectTable;
-        }
-
-        public void DetachDocument(PdfDocument.DocumentHandle handle)
-        {
-            if (handle.IsAlive)
-            {
-                foreach (Selector selector in _forms.Keys)
-                {
-                    PdfImportedObjectTable table = _forms[selector];
-                    if (table.ExternalDocument != null && table.ExternalDocument.Handle == handle)
-                    {
-                        _forms.Remove(selector);
-                        break;
-                    }
-                }
-            }
-
-            // Clean table
-            bool itemRemoved = true;
-            while (itemRemoved)
-            {
-                itemRemoved = false;
-                foreach (Selector selector in _forms.Keys)
-                {
-                    PdfImportedObjectTable table = _forms[selector];
-                    if (table.ExternalDocument == null)
-                    {
-                        _forms.Remove(selector);
-                        itemRemoved = true;
-                        break;
-                    }
-                }
-            }
         }
 
         /// <summary>
@@ -165,16 +116,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             {
                 // HACK: just use full path to identify
                 _path = form._path.ToLowerInvariant();
-            }
-
-            /// <summary>
-            /// Initializes a new instance of FormSelector from a PdfPage.
-            /// </summary>
-            public Selector(PdfPage page)
-            {
-                PdfDocument owner = page.Owner;
-                _path = "*" + owner.Guid.ToString("B");
-                _path = _path.ToLowerInvariant();
             }
 
             public Selector(PdfDocument document)

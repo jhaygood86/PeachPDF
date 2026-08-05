@@ -435,9 +435,12 @@ namespace PeachPDF.Html.Core.Utils
                     num = num * (hex ? 16 : 10) + CommonUtils.ToDigit(str[endIdx++], hex);
                 endIdx += (endIdx < str.Length && str[endIdx] == ';') ? 1 : 0;
 
-                string repl = string.Empty;
-                if (num >= 0 && num <= 0x10ffff && !(num >= 0xd800 && num <= 0xdfff))
-                    repl = char.ConvertFromUtf32((int)num);
+                // https://html.spec.whatwg.org/dev/parsing.html#numeric-character-reference-end-state:
+                // a null, out-of-range, or surrogate code point is a parse error that resolves to
+                // U+FFFD REPLACEMENT CHARACTER, not to nothing.
+                string repl = num == 0 || num > 0x10ffff || (num >= 0xd800 && num <= 0xdfff)
+                    ? "�"
+                    : char.ConvertFromUtf32((int)num);
 
                 str = str.Remove(idx, endIdx - idx);
                 str = str.Insert(idx, repl);

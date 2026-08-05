@@ -165,41 +165,38 @@ namespace PeachPDF.Html.Core.Dom
             return GetNamedStringValue(cssBox, stringName, keyword);
         }
 
-        private static string? GetNamedStringValue(CssBox cssBox, string name, string keyword)
+        private static string? GetNamedStringValue(CssBox cssBox, string name, string keyword) =>
+            cssBox.HtmlContainer != null
+                ? GetNamedStringValueFromDocument(cssBox.HtmlContainer, name, keyword)
+                : GetNamedStringValueFromTree(cssBox, name, keyword);
+
+        /// <summary>Document-level named strings, tracked on the HTML container as they're assigned during layout.</summary>
+        private static string GetNamedStringValueFromDocument(HtmlContainerInt container, string name, string keyword)
         {
-            // Get document-level named strings from the HTML container
-            if (cssBox.HtmlContainer != null)
+            NamedString? firstMatch = null;
+            NamedString? lastMatch = null;
+
+            foreach (var namedString in container.NamedStrings)
             {
-                var documentStrings = cssBox.HtmlContainer.NamedStrings;
+                if (namedString.Name != name) continue;
 
-                // Filter to only this named string
-                NamedString? firstMatch = null;
-                NamedString? lastMatch = null;
-
-                foreach (var namedString in documentStrings)
-                {
-                    if (namedString.Name == name)
-                    {
-                        if (firstMatch == null)
-                        {
-                            firstMatch = namedString;
-                        }
-                        lastMatch = namedString;
-                    }
-                }
-
-                // Apply keyword logic
-                return keyword switch
-                {
-                    "first" => firstMatch?.Value ?? string.Empty,
-                    "start" => firstMatch?.Value ?? string.Empty, // TODO: Implement proper start logic (first on page)
-                    "last" => lastMatch?.Value ?? string.Empty,
-                    "first-except" => string.Empty, // TODO: Implement proper first-except logic
-                    _ => firstMatch?.Value ?? string.Empty
-                };
+                firstMatch ??= namedString;
+                lastMatch = namedString;
             }
 
-            // Fallback to tree-based search if no container
+            return keyword switch
+            {
+                "first" => firstMatch?.Value ?? string.Empty,
+                "start" => firstMatch?.Value ?? string.Empty, // TODO: Implement proper start logic (first on page)
+                "last" => lastMatch?.Value ?? string.Empty,
+                "first-except" => string.Empty, // TODO: Implement proper first-except logic
+                _ => firstMatch?.Value ?? string.Empty
+            };
+        }
+
+        /// <summary>Fallback tree-based search, used when the box has no HTML container to consult.</summary>
+        private static string GetNamedStringValueFromTree(CssBox cssBox, string name, string keyword)
+        {
             var box = cssBox;
             NamedString? nearestAssignment = null;
             NamedString? farthestAssignment = null;
@@ -208,10 +205,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (box.NamedStrings.TryGetValue(name, out var namedString))
                 {
-                    if (nearestAssignment == null)
-                    {
-                        nearestAssignment = namedString;
-                    }
+                    nearestAssignment ??= namedString;
                     farthestAssignment = namedString;
                 }
                 box = box.ParentBox;

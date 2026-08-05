@@ -712,6 +712,79 @@ Assert.NotNull(tbody);
             Assert.Equal(expectedX, table.Location.X, precision: 3);
         }
 
+        [Fact]
+        public async Task TableLayout_MaxWidthNarrowerThanExplicitWidth_RespectsMaxWidth()
+        {
+            // Regression coverage for max-width being respected on a table whose explicit width would
+            // otherwise be far wider - see .claude/accepted-gaps/table-max-width-clip-branch-coverage.md
+            // for why this doesn't directly exercise CssLayoutEngineTable.ClipColumnsToMaxWidth itself.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { width: 1000pt; max-width: 200pt; border-collapse: collapse; }
+        td { border: 1px solid black; padding: 4pt; white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <table>
+        <tr>
+            <td>AAAAAAAAAAAAAAAAAAAA</td>
+            <td>BBBBBBBBBBBBBBBBBBBB</td>
+            <td>CCCCCCCCCCCCCCCCCCCC</td>
+        </tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+
+            Assert.NotNull(table);
+            var tableWidth = table!.ActualRight - table.Location.X;
+            _output.WriteLine($"Table width with width:1000pt max-width:200pt and nowrap content: {tableWidth}");
+
+            // Clipped down to max-width (200pt) - nowhere near the 1000pt explicit width.
+            Assert.Equal(200, tableWidth, precision: 3);
+        }
+
+        [Fact]
+        public async Task TableLayout_MaxWidthWiderThanMinimum_SpreadsExtraWidthToColumns()
+        {
+            // Exercises CssLayoutEngineTable.SpreadExtraWidthToColumns: an explicit width far wider than
+            // max-width sizes the columns wide first, wrappable content lets them shrink to a minimum
+            // well below max-width, and the remaining room (up to max-width) is spread back across them.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { width: 1000pt; max-width: 400pt; border-collapse: collapse; }
+        td { border: 1px solid black; padding: 4pt; }
+    </style>
+</head>
+<body>
+    <table>
+        <tr>
+            <td>Some reasonably long wrappable cell content that can reflow across several lines</td>
+        </tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+
+            Assert.NotNull(table);
+            var tableWidth = table!.ActualRight - table.Location.X;
+            _output.WriteLine($"Table width with width:1000pt max-width:400pt and wrappable content: {tableWidth}");
+
+            // Spread back up to max-width (400pt) - nowhere near the 1000pt explicit width, and not left
+            // stuck at the wrapped-content minimum either.
+            Assert.Equal(400, tableWidth, precision: 3);
+        }
+
         #endregion
 
         #region Border-collapse Tests

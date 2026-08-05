@@ -693,18 +693,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         }
 
         /// <summary>
-        /// Adds the specified page to this document. If the page is from an external document,
-        /// it is imported to this document. In this case the returned page is not the same
-        /// object as the specified one.
-        /// </summary>
-        public PdfPage AddPage(PdfPage page, AnnotationCopyingType annotationCopying = AnnotationCopyingType.ShallowCopy)
-        {
-            if (!CanModify)
-                throw new InvalidOperationException(PSSR.CannotModify);
-            return Catalog.Pages.Add(page, annotationCopying);
-        }
-
-        /// <summary>
         /// Creates a new page and inserts it in this document at the specified position.
         /// </summary>
         public PdfPage InsertPage(int index)
@@ -712,18 +700,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
             if (!CanModify)
                 throw new InvalidOperationException(PSSR.CannotModify);
             return Catalog.Pages.Insert(index);
-        }
-
-        /// <summary>
-        /// Inserts the specified page in this document. If the page is from an external document,
-        /// it is imported to this document. In this case the returned page is not the same
-        /// object as the specified one.
-        /// </summary>
-        public PdfPage InsertPage(int index, PdfPage page, AnnotationCopyingType annotationCopying = AnnotationCopyingType.ShallowCopy)
-        {
-            if (!CanModify)
-                throw new InvalidOperationException(PSSR.CannotModify);
-            return Catalog.Pages.Insert(index, page, annotationCopying);
         }
 
         public void AddNamedDestination(string destinationName, int destinationPage, PdfNamedDestinationParameters parameters)
@@ -811,23 +787,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
         internal Stream _outStream = null!;
 
         internal DateTime _creation;
-
-        /// <summary>
-        /// Occurs when the specified document is not used anymore for importing content.
-        /// </summary>
-        internal void OnExternalDocumentFinalized(PdfDocument.DocumentHandle handle)
-        {
-            if (tls != null)
-            {
-                //PdfDocument[] documents = tls.Documents;
-                tls.DetachDocument(handle);
-            }
-
-            if (_formTable != null)
-                _formTable.DetachDocument(handle);
-        }
-
-        //internal static GlobalObjectTable Gob = new GlobalObjectTable();
 
         /// <summary>
         /// Gets the ThreadLocalStorage object. It is used for caching objects that should created

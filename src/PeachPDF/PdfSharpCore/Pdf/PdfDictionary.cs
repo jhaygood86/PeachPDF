@@ -895,108 +895,93 @@ namespace PeachPDF.PdfSharpCore.Pdf
             /// </summary>
             public PdfItem GetValue(string key, VCF options)
             {
-                PdfObject obj;
-                PdfDictionary dict;
-                PdfArray array;
-                PdfReference iref;
                 PdfItem value = this[key];
+
                 if (value == null)
+                    return options == VCF.None ? null : CreateMissingValue(key, options);
+
+                if (value is PdfReference iref)
+                    return ResolveIndirectValue(key, iref);
+
+                // The value exists and can be returned as-is unless it needs object-type coercion.
+                if (value is PdfDictionary dict)
+                    return CoerceDictionary(key, dict);
+
+                if (value is PdfArray array)
+                    return CoerceArray(key, array);
+
+                return value;
+            }
+
+            /// <summary>
+            /// Creates and stores the value for a key that has no value yet, per GetValue's options.
+            /// </summary>
+            PdfItem CreateMissingValue(string key, VCF options)
+            {
+                Type type = GetValueType(key) ?? throw new NotImplementedException("Cannot create value for key: " + key);
+
+                Debug.Assert(typeof(PdfItem).IsAssignableFrom(type), "Type not allowed.");
+
+                PdfObject obj = typeof(PdfDictionary).IsAssignableFrom(type) ? CreateDictionary(type, null)
+                    : typeof(PdfArray).IsAssignableFrom(type) ? CreateArray(type, null)
+                    : throw new NotImplementedException("Type other than array or dictionary.");
+
+                if (options == VCF.CreateIndirect)
                 {
-                    if (options != VCF.None)
-                    {
-                        Type type = GetValueType(key);
-                        if (type != null)
-                        {
-                            Debug.Assert(typeof(PdfItem).IsAssignableFrom(type), "Type not allowed.");
-                            if (typeof(PdfDictionary).IsAssignableFrom(type))
-                            {
-                                value = obj = CreateDictionary(type, null);
-                            }
-                            else if (typeof(PdfArray).IsAssignableFrom(type))
-                            {
-                                value = obj = CreateArray(type, null);
-                            }
-                            else
-                                throw new NotImplementedException("Type other than array or dictionary.");
-                            if (options == VCF.CreateIndirect)
-                            {
-                                _ownerDictionary.Owner._irefTable.Add(obj);
-                                this[key] = obj.Reference;
-                            }
-                            else
-                                this[key] = obj;
-                        }
-                        else
-                            throw new NotImplementedException("Cannot create value for key: " + key);
-                    }
+                    _ownerDictionary.Owner._irefTable.Add(obj);
+                    this[key] = obj.Reference;
                 }
                 else
+                    this[key] = obj;
+
+                return obj;
+            }
+
+            /// <summary>
+            /// Resolves an indirect reference value, coercing it to the key's declared type if necessary.
+            /// </summary>
+            PdfItem ResolveIndirectValue(string key, PdfReference iref)
+            {
+                // If we come here PDF file is corrupted.
+                PdfItem value = iref.Value ?? throw new InvalidOperationException("Indirect reference without value.");
+
+                Type type = GetValueType(key);
+                Debug.Assert(type != null, "No value type specified in meta information. Please send this file to PDFsharp support.");
+
+                if (type == null || type == value.GetType())
+                    return value;
+
+                if (typeof(PdfDictionary).IsAssignableFrom(type))
                 {
-                    // The value exists and can be returned. But for imported documents check for necessary
-                    // object type transformation.
-                    if ((iref = value as PdfReference) != null)
-                    {
-                        // Case: value is an indirect reference.
-                        value = iref.Value;
-                        if (value == null)
-                        {
-                            // If we come here PDF file is corrupted.
-                            throw new InvalidOperationException("Indirect reference without value.");
-                        }
-
-                        if (true) // || _owner.Document.IsImported)
-                        {
-                            Type type = GetValueType(key);
-                            Debug.Assert(type != null, "No value type specified in meta information. Please send this file to PDFsharp support.");
-
-                            if (type != null && type != value.GetType())
-                            {
-                                if (typeof(PdfDictionary).IsAssignableFrom(type))
-                                {
-                                    Debug.Assert(value is PdfDictionary, "Bug in PeachPDF.PdfSharpCore. Please send this file to PDFsharp support.");
-                                    value = CreateDictionary(type, (PdfDictionary)value);
-                                }
-                                else if (typeof(PdfArray).IsAssignableFrom(type))
-                                {
-                                    Debug.Assert(value is PdfArray, "Bug in PeachPDF.PdfSharpCore. Please send this file to PDFsharp support.");
-                                    value = CreateArray(type, (PdfArray)value);
-                                }
-                                else
-                                    throw new NotImplementedException("Type other than array or dictionary.");
-                            }
-                        }
-                        return value;
-                    }
-
-                    // Transformation is only possible after PDF import.
-                    if (true) // || _owner.Document.IsImported)
-                    {
-                        // Case: value is a direct object
-                        if ((dict = value as PdfDictionary) != null)
-                        {
-                            Debug.Assert(!dict.IsIndirect);
-
-                            Type type = GetValueType(key);
-                            Debug.Assert(type != null, "No value type specified in meta information. Please send this file to PDFsharp support.");
-                            if (dict.GetType() != type)
-                                dict = CreateDictionary(type, dict);
-                            return dict;
-                        }
-
-                        if ((array = value as PdfArray) != null)
-                        {
-                            Debug.Assert(!array.IsIndirect);
-
-                            Type type = GetValueType(key);
-                            // This is more complicated. If type is null do nothing
-                            //Debug.Assert(type != null, "No value type specified in meta information. Please send this file to PDFsharp support.");
-                            if (type != null && type != array.GetType())
-                                array = CreateArray(type, array);
-                            return array;
-                        }
-                    }
+                    Debug.Assert(value is PdfDictionary, "Bug in PeachPDF.PdfSharpCore. Please send this file to PDFsharp support.");
+                    return CreateDictionary(type, (PdfDictionary)value);
                 }
-                return value;
+
+                if (typeof(PdfArray).IsAssignableFrom(type))
+                {
+                    Debug.Assert(value is PdfArray, "Bug in PeachPDF.PdfSharpCore. Please send this file to PDFsharp support.");
+                    return CreateArray(type, (PdfArray)value);
+                }
+
+                throw new NotImplementedException("Type other than array or dictionary.");
+            }
+
+            PdfDictionary CoerceDictionary(string key, PdfDictionary dict)
+            {
+                Debug.Assert(!dict.IsIndirect);
+
+                Type type = GetValueType(key);
+                Debug.Assert(type != null, "No value type specified in meta information. Please send this file to PDFsharp support.");
+                return dict.GetType() != type ? CreateDictionary(type, dict) : dict;
+            }
+
+            PdfArray CoerceArray(string key, PdfArray array)
+            {
+                Debug.Assert(!array.IsIndirect);
+
+                // This is more complicated. If type is null do nothing.
+                Type type = GetValueType(key);
+                return type != null && type != array.GetType() ? CreateArray(type, array) : array;
             }
 
             /// <summary>

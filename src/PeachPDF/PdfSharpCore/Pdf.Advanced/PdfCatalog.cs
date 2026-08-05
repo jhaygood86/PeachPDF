@@ -29,7 +29,6 @@
 
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using PeachPDF.PdfSharpCore.Pdf.Structure;
-using System;
 
 namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
@@ -54,23 +53,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         { }
 
         /// <summary>
-        /// Get or sets the version of the PDF specification to which the document conforms.
+        /// Gets the version of the PDF specification to which the document conforms.
         /// </summary>
-        public string Version
-        {
-            get => _version;
-            set
-            {
-                _version = value switch
-                {
-                    "1.0" or "1.1" or "1.2" => throw new InvalidOperationException("Unsupported PDF version."),
-                    "1.3" or "1.4" => value,
-                    "1.5" or "1.6" => throw new InvalidOperationException("Unsupported PDF version."),
-                    _ => throw new ArgumentException("Invalid version.")
-                };
-            }
-        }
-        string _version = "1.3";
+        public string Version => _version;
+        readonly string _version = "1.3";
 
         /// <summary>
         /// Gets the pages collection of this document.
@@ -79,12 +65,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             get
             {
-                if (_pages == null)
-                {
-                    _pages = (PdfPages)Elements.GetValue(Keys.Pages, VCF.CreateIndirect);
-                    if (Owner.IsImported)
-                        _pages.FlattenPageTree();
-                }
+                _pages ??= (PdfPages)Elements.GetValue(Keys.Pages, VCF.CreateIndirect);
                 return _pages;
             }
         }

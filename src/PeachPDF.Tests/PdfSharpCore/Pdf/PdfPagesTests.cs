@@ -149,5 +149,16 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
 
             Assert.Throws<ArgumentNullException>(() => doc.Pages.Insert(0, null!));
         }
+
+        [Fact]
+        public void Insert_PageOwnedByAnotherDocument_Throws()
+        {
+            var sourceDoc = new PdfDocument();
+            var foreignPage = sourceDoc.Pages.Add();
+
+            var targetDoc = new PdfDocument();
+
+            Assert.Throws<InvalidOperationException>(() => targetDoc.Pages.Insert(0, foreignPage));
+        }
     }
 }

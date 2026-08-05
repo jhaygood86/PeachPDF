@@ -29,6 +29,8 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
+using System.Collections.Frozen;
+using System.Collections.Generic;
 using PeachPDF;
 
 namespace PeachPDF.PdfSharpCore
@@ -38,81 +40,62 @@ namespace PeachPDF.PdfSharpCore
     /// </summary>
     internal static class PageSizeConverter
     {
+        // The international definitions are:
+        //   1 inch == 25.4 mm
+        //   1 inch == 72 point
+        // Source http://www.din-formate.de/reihe-a-din-groessen-mm-pixel-dpi.html for the ISO sizes.
+        static readonly FrozenDictionary<PageSize, XSize> Sizes = new Dictionary<PageSize, XSize>
+        {
+            [PageSize.A0] = new XSize(2384, 3370),
+            [PageSize.A1] = new XSize(1684, 2384),
+            [PageSize.A2] = new XSize(1191, 1684),
+            [PageSize.A3] = new XSize(842, 1191),
+            [PageSize.A4] = new XSize(595, 842),
+            [PageSize.A5] = new XSize(420, 595),
+            [PageSize.A6] = new XSize(298, 420),
+            [PageSize.RA0] = new XSize(2438, 3458),
+            [PageSize.RA1] = new XSize(1729, 2438),
+            [PageSize.RA2] = new XSize(1219, 1729),
+            [PageSize.RA3] = new XSize(865, 1219),
+            [PageSize.RA4] = new XSize(609, 865),
+            [PageSize.RA5] = new XSize(433, 609),
+            [PageSize.B0] = new XSize(2835, 4008),
+            [PageSize.B1] = new XSize(2004, 2835),
+            [PageSize.B2] = new XSize(1417, 2004),
+            [PageSize.B3] = new XSize(1001, 1417),
+            [PageSize.B4] = new XSize(709, 1001),
+            [PageSize.B5] = new XSize(499, 709),
+            // The non-ISO sizes ...
+            [PageSize.Quarto] = new XSize(576, 720), // 8 x 10 inch
+            [PageSize.Foolscap] = new XSize(576, 936), // 8 x 13 inch
+            [PageSize.Executive] = new XSize(540, 720), // 7.5 x 10 inch
+            [PageSize.GovernmentLetter] = new XSize(576, 756), // 8 x 10.5 inch
+            [PageSize.Letter] = new XSize(612, 792), // 8.5 x 11 inch
+            [PageSize.Legal] = new XSize(612, 1008), // 8.5 x 14 inch
+            [PageSize.Ledger] = new XSize(1224, 792), // 17 x 11 inch
+            [PageSize.Tabloid] = new XSize(792, 1224), // 11 x 17 inch
+            [PageSize.Post] = new XSize(1126, 1386), // 15.5 x 19.25 inch
+            [PageSize.Crown] = new XSize(1440, 1080), // 20 x 15 inch
+            [PageSize.LargePost] = new XSize(1188, 1512), // 16.5 x 21 inch
+            [PageSize.Demy] = new XSize(1260, 1584), // 17.5 x 22 inch
+            [PageSize.Medium] = new XSize(1296, 1656), // 18 x 23 inch
+            [PageSize.Royal] = new XSize(1440, 1800), // 20 x 25 inch
+            [PageSize.Elephant] = new XSize(1565, 2016), // 23 x 28 inch
+            [PageSize.DoubleDemy] = new XSize(1692, 2520), // 23.5 x 35 inch
+            [PageSize.QuadDemy] = new XSize(2520, 3240), // 35 x 45 inch
+            [PageSize.STMT] = new XSize(396, 612), // 5.5 x 8.5 inch
+            [PageSize.Folio] = new XSize(612, 936), // 8.5 x 13 inch
+            [PageSize.Statement] = new XSize(396, 612), // 5.5 x 8.5 inch
+            [PageSize.Size10x14] = new XSize(720, 1008), // 10 x 14 inch
+        }.ToFrozenDictionary();
+
         /// <summary>
         /// Converts the specified page size enumeration to a pair of values in point.
         /// </summary>
         public static XSize ToSize(PageSize value, int dpi = 72)
         {
-            // The international definitions are:
-            //   1 inch == 25.4 mm
-            //   1 inch == 72 point
-            var size = value switch
-            {
-                // Source http://www.din-formate.de/reihe-a-din-groessen-mm-pixel-dpi.html
-                PageSize.A0 => new XSize(2384, 3370),
-                PageSize.A1 => new XSize(1684, 2384),
-                PageSize.A2 => new XSize(1191, 1684),
-                PageSize.A3 => new XSize(842, 1191),
-                PageSize.A4 => new XSize(595, 842),
-                PageSize.A5 => new XSize(420, 595),
-                PageSize.A6 => new XSize(298, 420),
-                PageSize.RA0 => new XSize(2438, 3458),
-                PageSize.RA1 => new XSize(1729, 2438),
-                PageSize.RA2 => new XSize(1219, 1729),
-                PageSize.RA3 => new XSize(865, 1219),
-                PageSize.RA4 => new XSize(609, 865),
-                PageSize.RA5 => new XSize(433, 609),
-                PageSize.B0 => new XSize(2835, 4008),
-                PageSize.B1 => new XSize(2004, 2835),
-                PageSize.B2 => new XSize(1417, 2004),
-                PageSize.B3 => new XSize(1001, 1417),
-                PageSize.B4 => new XSize(709, 1001),
-                PageSize.B5 => new XSize(499, 709),
-                // The non-ISO sizes ...
-                PageSize.Quarto => // 8 x 10 inch�
-                    new XSize(576, 720),
-                PageSize.Foolscap => // 8 x 13 inch�
-                    new XSize(576, 936),
-                PageSize.Executive => // 7.5 x 10 inch�
-                    new XSize(540, 720),
-                PageSize.GovernmentLetter => // 8 x 10.5 inch�
-                    new XSize(576, 756),
-                PageSize.Letter => // 8.5 x 11 inch�
-                    new XSize(612, 792),
-                PageSize.Legal => // 8.5 x 14 inch�
-                    new XSize(612, 1008),
-                PageSize.Ledger => // 17 x 11 inch�
-                    new XSize(1224, 792),
-                PageSize.Tabloid => // 11 x 17 inch�
-                    new XSize(792, 1224),
-                PageSize.Post => // 15.5 x 19.25 inch�
-                    new XSize(1126, 1386),
-                PageSize.Crown => // 20 x 15 inch�
-                    new XSize(1440, 1080),
-                PageSize.LargePost => // 16.5 x 21 inch�
-                    new XSize(1188, 1512),
-                PageSize.Demy => // 17.5 x 22 inch�
-                    new XSize(1260, 1584),
-                PageSize.Medium => // 18 x 23 inch�
-                    new XSize(1296, 1656),
-                PageSize.Royal => // 20 x 25 inch�
-                    new XSize(1440, 1800),
-                PageSize.Elephant => // 23 x 28 inch�
-                    new XSize(1565, 2016),
-                PageSize.DoubleDemy => // 23.5 x 35 inch�
-                    new XSize(1692, 2520),
-                PageSize.QuadDemy => // 35 x 45 inch�
-                    new XSize(2520, 3240),
-                PageSize.STMT => // 5.5 x 8.5 inch�
-                    new XSize(396, 612),
-                PageSize.Folio => // 8.5 x 13 inch�
-                    new XSize(612, 936),
-                PageSize.Statement => // 5.5 x 8.5 inch�
-                    new XSize(396, 612),
-                PageSize.Size10x14 => // 10 x 14 inch�
-                    new XSize(720, 1008),
-                _ => throw new ArgumentException("Invalid PageSize.", "value")
-            };
+            if (!Sizes.TryGetValue(value, out var size))
+                throw new ArgumentException("Invalid PageSize.", nameof(value));
 
             var ratio = dpi / 72.0;
 

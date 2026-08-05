@@ -903,7 +903,41 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         void AppendPartialArc(double x, double y, double width, double height, double startAngle, double sweepAngle, PathStart pathStart, XMatrix matrix)
         {
-            // Normalize the angles
+            var (α, β, smallAngle, clockwise) = NormalizeArcAngles(startAngle, sweepAngle);
+
+            int startQuadrant = Quadrant(α, true, clockwise);
+            int endQuadrant = Quadrant(β, false, clockwise);
+
+            if (startQuadrant == endQuadrant && smallAngle)
+            {
+                AppendPartialArcQuadrant(x, y, width, height, α, β, pathStart, matrix);
+                return;
+            }
+
+            int currentQuadrant = startQuadrant;
+            bool firstLoop = true;
+            do
+            {
+                AppendArcQuadrantSegment(x, y, width, height, α, β, pathStart, matrix,
+                    currentQuadrant, startQuadrant, endQuadrant, firstLoop, clockwise);
+
+                // Don't stop immediately if arc is greater than 270 degrees
+                if (currentQuadrant == endQuadrant && smallAngle)
+                    break;
+
+                smallAngle = true;
+                currentQuadrant = NextQuadrant(currentQuadrant, clockwise);
+                firstLoop = false;
+            } while (true);
+        }
+
+        /// <summary>
+        /// Normalizes the start/sweep angles of AppendPartialArc into a start angle α, an end angle β
+        /// (both 0..360), whether the arc spans at most 90° (so a single quadrant may suffice), and
+        /// whether it sweeps clockwise.
+        /// </summary>
+        static (double alpha, double beta, bool smallAngle, bool clockwise) NormalizeArcAngles(double startAngle, double sweepAngle)
+        {
             double α = startAngle;
             if (α < 0)
                 α = α + (1 + Math.Floor((Math.Abs(α) / 360))) * 360;
@@ -911,11 +945,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 α = α - Math.Floor(α / 360) * 360;
             Debug.Assert(α >= 0 && α <= 360);
 
-            double β = sweepAngle;
-            if (β < -360)
-                β = -360;
-            else if (β > 360)
-                β = 360;
+            double β = Math.Clamp(sweepAngle, -360, 360);
 
             if (α == 0 && β < 0)
                 α = 360;
@@ -930,48 +960,39 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 β = β + (1 + Math.Floor((Math.Abs(β) / 360))) * 360;
 
             bool clockwise = sweepAngle > 0;
-            int startQuadrant = Quadrant(α, true, clockwise);
-            int endQuadrant = Quadrant(β, false, clockwise);
 
-            if (startQuadrant == endQuadrant && smallAngle)
-                AppendPartialArcQuadrant(x, y, width, height, α, β, pathStart, matrix);
+            return (α, β, smallAngle, clockwise);
+        }
+
+        /// <summary>
+        /// Appends the Bézier curve(s) for the current quadrant of AppendPartialArc's do/while loop.
+        /// </summary>
+        void AppendArcQuadrantSegment(double x, double y, double width, double height, double α, double β, PathStart pathStart, XMatrix matrix,
+            int currentQuadrant, int startQuadrant, int endQuadrant, bool firstLoop, bool clockwise)
+        {
+            if (currentQuadrant == startQuadrant && firstLoop)
+            {
+                double ξ = currentQuadrant * 90 + (clockwise ? 90 : 0);
+                AppendPartialArcQuadrant(x, y, width, height, α, ξ, pathStart, matrix);
+            }
+            else if (currentQuadrant == endQuadrant)
+            {
+                double ξ = currentQuadrant * 90 + (clockwise ? 0 : 90);
+                AppendPartialArcQuadrant(x, y, width, height, ξ, β, PathStart.Ignore1st, matrix);
+            }
             else
             {
-                int currentQuadrant = startQuadrant;
-                bool firstLoop = true;
-                do
-                {
-                    if (currentQuadrant == startQuadrant && firstLoop)
-                    {
-                        double ξ = currentQuadrant * 90 + (clockwise ? 90 : 0);
-                        AppendPartialArcQuadrant(x, y, width, height, α, ξ, pathStart, matrix);
-                    }
-                    else if (currentQuadrant == endQuadrant)
-                    {
-                        double ξ = currentQuadrant * 90 + (clockwise ? 0 : 90);
-                        AppendPartialArcQuadrant(x, y, width, height, ξ, β, PathStart.Ignore1st, matrix);
-                    }
-                    else
-                    {
-                        double ξ1 = currentQuadrant * 90 + (clockwise ? 0 : 90);
-                        double ξ2 = currentQuadrant * 90 + (clockwise ? 90 : 0);
-                        AppendPartialArcQuadrant(x, y, width, height, ξ1, ξ2, PathStart.Ignore1st, matrix);
-                    }
-
-                    // Don't stop immediately if arc is greater than 270 degrees
-                    if (currentQuadrant == endQuadrant && smallAngle)
-                        break;
-
-                    smallAngle = true;
-
-                    if (clockwise)
-                        currentQuadrant = currentQuadrant == 3 ? 0 : currentQuadrant + 1;
-                    else
-                        currentQuadrant = currentQuadrant == 0 ? 3 : currentQuadrant - 1;
-
-                    firstLoop = false;
-                } while (true);
+                double ξ1 = currentQuadrant * 90 + (clockwise ? 0 : 90);
+                double ξ2 = currentQuadrant * 90 + (clockwise ? 90 : 0);
+                AppendPartialArcQuadrant(x, y, width, height, ξ1, ξ2, PathStart.Ignore1st, matrix);
             }
+        }
+
+        static int NextQuadrant(int currentQuadrant, bool clockwise)
+        {
+            if (clockwise)
+                return currentQuadrant == 3 ? 0 : currentQuadrant + 1;
+            return currentQuadrant == 0 ? 3 : currentQuadrant - 1;
         }
 
         /// <summary>
@@ -1332,120 +1353,92 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         void BeginPage()
         {
-            if (_gfxState.Level == GraphicsStackLevelInitial)
+            if (_gfxState.Level != GraphicsStackLevelInitial)
+                return;
+
+            // TODO: Is PageOriging and PageScale (== Viewport) useful? Or just public DefaultViewMatrix (like Presentation Manager has had)
+            // May be a BeginContainer(windows, viewport) is useful for userer that are not familar with maxtrix transformations.
+
+            // Flip page horizontally and mirror text.
+
+            // PDF uses a standard right-handed Cartesian coordinate system with the y axis directed up
+            // and the rotation counterclockwise. Windows uses the opposite convertion with y axis
+            // directed down and rotation clockwise. When I started with PDFsharp I flipped pages horizontally
+            // and then mirrored text to compensate the effect that the fipping turns text upside down.
+            // I found this technique during analysis of PDF documents generated with PDFlib. Unfortunately
+            // this technique leads to several problems with programms that compose or view PDF documents
+            // generated with PeachPDF.PdfSharpCore.
+            // In PDFsharp 1.4 I implement a revised technique that does not need text mirroring any more.
+
+            DefaultViewMatrix = new XMatrix();
+            if (_gfx.PageDirection == XPageDirection.Downwards)
+                BeginPageDownwards();
+            else
+                BeginPageUpwards();
+        }
+
+        void BeginPageDownwards()
+        {
+            // Take TrimBox into account.
+            PageHeightPt = Size.Height;
+            XPoint trimOffset = new XPoint();
+            if (_page != null && _page.TrimMargins.AreSet)
             {
-                // TODO: Is PageOriging and PageScale (== Viewport) useful? Or just public DefaultViewMatrix (like Presentation Manager has had)
-                // May be a BeginContainer(windows, viewport) is useful for userer that are not familar with maxtrix transformations.
-
-                // Flip page horizontally and mirror text.
-
-                // PDF uses a standard right-handed Cartesian coordinate system with the y axis directed up
-                // and the rotation counterclockwise. Windows uses the opposite convertion with y axis
-                // directed down and rotation clockwise. When I started with PDFsharp I flipped pages horizontally
-                // and then mirrored text to compensate the effect that the fipping turns text upside down.
-                // I found this technique during analysis of PDF documents generated with PDFlib. Unfortunately
-                // this technique leads to several problems with programms that compose or view PDF documents
-                // generated with PeachPDF.PdfSharpCore.
-                // In PDFsharp 1.4 I implement a revised technique that does not need text mirroring any more.
-
-                DefaultViewMatrix = new XMatrix();
-                if (_gfx.PageDirection == XPageDirection.Downwards)
-                {
-                    // Take TrimBox into account.
-                    PageHeightPt = Size.Height;
-                    XPoint trimOffset = new XPoint();
-                    if (_page != null && _page.TrimMargins.AreSet)
-                    {
-                        PageHeightPt += _page.TrimMargins.Top.Point + _page.TrimMargins.Bottom.Point;
-                        trimOffset = new XPoint(_page.TrimMargins.Left.Point, _page.TrimMargins.Top.Point);
-                    }
-
-                    // Scale with page units.
-                    switch (_gfx.PageUnit)
-                    {
-                        case XGraphicsUnit.Point:
-                            // Factor is 1.
-                            // DefaultViewMatrix.ScalePrepend(XUnit.PointFactor);
-                            break;
-
-                        case XGraphicsUnit.Presentation:
-                            DefaultViewMatrix.ScalePrepend(XUnit.PresentationFactor);
-                            break;
-
-                        case XGraphicsUnit.Inch:
-                            DefaultViewMatrix.ScalePrepend(XUnit.InchFactor);
-                            break;
-
-                        case XGraphicsUnit.Millimeter:
-                            DefaultViewMatrix.ScalePrepend(XUnit.MillimeterFactor);
-                            break;
-
-                        case XGraphicsUnit.Centimeter:
-                            DefaultViewMatrix.ScalePrepend(XUnit.CentimeterFactor);
-                            break;
-                    }
-
-                    if (trimOffset != new XPoint())
-                    {
-                        Debug.Assert(_gfx.PageUnit == XGraphicsUnit.Point, "With TrimMargins set the page units must be Point. Ohter cases nyi.");
-                        DefaultViewMatrix.TranslatePrepend(trimOffset.X, -trimOffset.Y);
-                    }
-
-                    // Save initial graphic state.
-                    SaveState();
-
-                    // Set default page transformation, if any.
-                    if (!DefaultViewMatrix.IsIdentity)
-                    {
-                        Debug.Assert(_gfxState.RealizedCtm.IsIdentity);
-                        //_gfxState.RealizedCtm = DefaultViewMatrix;
-                        const string format = Config.SignificantFigures7;
-                        double[] cm = DefaultViewMatrix.GetElements();
-                        AppendFormatArgs("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm ",
-                                     cm[0], cm[1], cm[2], cm[3], cm[4], cm[5]);
-                    }
-
-                    // Set page transformation
-                    //double[] cm = DefaultViewMatrix.GetElements();
-                    //AppendFormat("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm ",
-                    //  cm[0], cm[1], cm[2], cm[3], cm[4], cm[5]);
-                }
-                else
-                {
-                    // Scale with page units.
-                    switch (_gfx.PageUnit)
-                    {
-                        case XGraphicsUnit.Point:
-                            // Factor is 1.
-                            // DefaultViewMatrix.ScalePrepend(XUnit.PointFactor);
-                            break;
-
-                        case XGraphicsUnit.Presentation:
-                            DefaultViewMatrix.ScalePrepend(XUnit.PresentationFactor);
-                            break;
-
-                        case XGraphicsUnit.Inch:
-                            DefaultViewMatrix.ScalePrepend(XUnit.InchFactor);
-                            break;
-
-                        case XGraphicsUnit.Millimeter:
-                            DefaultViewMatrix.ScalePrepend(XUnit.MillimeterFactor);
-                            break;
-
-                        case XGraphicsUnit.Centimeter:
-                            DefaultViewMatrix.ScalePrepend(XUnit.CentimeterFactor);
-                            break;
-                    }
-
-                    // Save initial graphic state.
-                    SaveState();
-                    // Set page transformation.
-                    const string format = Config.SignificantFigures7;
-                    double[] cm = DefaultViewMatrix.GetElements();
-                    AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm ",
-                        cm[0], cm[1], cm[2], cm[3], cm[4], cm[5]);
-                }
+                PageHeightPt += _page.TrimMargins.Top.Point + _page.TrimMargins.Bottom.Point;
+                trimOffset = new XPoint(_page.TrimMargins.Left.Point, _page.TrimMargins.Top.Point);
             }
+
+            ApplyPageUnitScale();
+
+            if (trimOffset != new XPoint())
+            {
+                Debug.Assert(_gfx.PageUnit == XGraphicsUnit.Point, "With TrimMargins set the page units must be Point. Ohter cases nyi.");
+                DefaultViewMatrix.TranslatePrepend(trimOffset.X, -trimOffset.Y);
+            }
+
+            // Save initial graphic state.
+            SaveState();
+
+            // Set default page transformation, if any.
+            if (!DefaultViewMatrix.IsIdentity)
+            {
+                Debug.Assert(_gfxState.RealizedCtm.IsIdentity);
+                const string format = Config.SignificantFigures7;
+                double[] cm = DefaultViewMatrix.GetElements();
+                AppendFormatArgs("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm ",
+                             cm[0], cm[1], cm[2], cm[3], cm[4], cm[5]);
+            }
+        }
+
+        void BeginPageUpwards()
+        {
+            ApplyPageUnitScale();
+
+            // Save initial graphic state.
+            SaveState();
+            // Set page transformation.
+            const string format = Config.SignificantFigures7;
+            double[] cm = DefaultViewMatrix.GetElements();
+            AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm ",
+                cm[0], cm[1], cm[2], cm[3], cm[4], cm[5]);
+        }
+
+        /// <summary>
+        /// Scales DefaultViewMatrix from the current XGraphics page unit to points, in place.
+        /// </summary>
+        void ApplyPageUnitScale()
+        {
+            double factor = _gfx.PageUnit switch
+            {
+                XGraphicsUnit.Presentation => XUnit.PresentationFactor,
+                XGraphicsUnit.Inch => XUnit.InchFactor,
+                XGraphicsUnit.Millimeter => XUnit.MillimeterFactor,
+                XGraphicsUnit.Centimeter => XUnit.CentimeterFactor,
+                _ => 1.0, // XGraphicsUnit.Point - factor is 1.
+            };
+
+            if (factor != 1.0)
+                DefaultViewMatrix.ScalePrepend(factor);
         }
 
         /// <summary>
