@@ -1229,6 +1229,212 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// FlowBox's per-entry setup, before it walks box's children.
+        /// </summary>
+        private static bool PrepareFlowBoxEntry(CssBox box, CssBox blockBox, CssLineBoxCoordinates coordinates, int startOrdinal)
+        {
+            var opensHere = startOrdinal >= coordinates.ResumeOrdinal;
+
+            // Only a box actually opening here may claim the current line as its first: §6.2 gives a
+            // sliced box its leading border and padding once, at its true start, and
+            // CssLineBox.UpdateRectangle reads this to decide which line gets them. A box whose own
+            // first word is the resume word does open here - the line it was entered on in the earlier
+            // pass is the one CreateLineBoxes discarded.
+            if (opensHere) box.FirstHostingLineBox = coordinates.Line;
+
+            // Inline elements (e.g. <b>/<span>) never get their own PerformLayoutImp call - that only
+            // happens for block children (CssBox.PerformLayoutImp's childBox.PerformLayout loop), which
+            // is exactly the path skipped when a block's children are ContainsInlinesOnly and flowed
+            // here instead. FlowBox's own entry/exit (this method and FinalizeFlowBoxExit below) is the
+            // one place that visits every inline box, in DOM order, exactly once - so it's where
+            // string-set and named-page registration (normally done near the top/bottom of
+            // PerformLayoutImp) have to happen for inline boxes. blockBox itself is excluded since its
+            // own PerformLayoutImp already handles it correctly before CreateLineBoxes is even called.
+            // Gated on opensHere for the same reason FirstHostingLineBox is above: a pass resuming this
+            // box's flow into a later fragmentainer re-enters it from the top (its already-placed words
+            // are only skipped by ordinal further down), so without this guard a resumed pass would
+            // re-run ApplyStringSet using *this* pass's fresh coordinates - overwriting the box's true
+            // position (set when it actually opened) with wherever the resumed fragmentainer happens to
+            // start. string-set fires exactly once per box per opening, mirroring a block box's own
+            // once-per-_prologueDone guarantee.
+            if (opensHere && box != blockBox && !string.IsNullOrEmpty(box.StringSet) && box.StringSet != CssConstants.None)
+            {
+                // Unlike a block box's PerformLayoutPrologue, nothing else withdraws this box's previous
+                // registration before FlowBox re-opens it (a multicol measurement pass, a re-banding
+                // re-layout, or a column-fill retry all re-run this) - so without unregistering first, a
+                // stale entry from an earlier pass survives as an orphan, still eligible to match some
+                // page's Y window in MarginBoxRenderer.ResolveNamedString.
+                if (box.NamedStrings.Count > 0)
+                {
+                    box.HtmlContainer?.UnregisterNamedStrings(box.NamedStrings.Values);
+                    box.NamedStrings.Clear();
+                }
+
+                CssNamedStringEngine.ApplyStringSet(box);
+            }
+
+            return opensHere;
+        }
+
+        /// <summary>
+        /// FlowBox's per-exit bookkeeping, once box's content (if any, this pass) has actually been
+        /// placed and coordinates reflects where it landed.
+        /// </summary>
+        private static void FinalizeFlowBoxExit(CssBox box, CssBox blockBox, CssLineBoxCoordinates coordinates, bool opensHere, int startOrdinal, double startX, double startY)
+        {
+            // handle height setting: the flowed content came out shorter than the box's own
+            // ActualHeight (e.g. an inline-block button whose vertical padding exceeds its one
+            // small-font text line), so extend MaxBottom to cover the box's full height from
+            // where it started. This must be startY-anchored: the old
+            // `MaxBottom = ActualHeight - (MaxBottom - startY)` form assigned the deficit as an
+            // ABSOLUTE document Y (a tiny value near the page top), dragging MaxBottom above
+            // startY - when such a box was a block's last/only inline content, the block's
+            // resulting ActualBottom landed above its own top (negative height), and paint-time
+            // visibility culling then dropped the block's whole subtree (buttons styled like the
+            // showcase's themeable-card "Learn More" were never painted at all).
+            //
+            // Restricted to non-plain-inline boxes: per CSS2.1 §10.8.1, the vertical padding/
+            // border of a non-replaced `display: inline` box does not influence line box height
+            // at all (it paints, overflowing the line, without taking vertical space) - only an
+            // atomic inline-level box (inline-block/inline-table) contributes its full box
+            // height to the line it sits on, which is what ActualHeight approximates here (a
+            // plain inline's ActualHeight is just its own padding+border, since it never gets a
+            // Size of its own - extending the flow by that would grow the containing block in
+            // violation of §10.8.1).
+            //
+            // Like the width branch below, this compares an advance measured in this pass against the
+            // box's whole height, so it only means anything for a box this pass both opened and
+            // finished. For one it merely walked through the deficit is the box's entire height, which
+            // it would then add to the flow all over again.
+            if (opensHere && box.DerivedStyle.ActualDisplay is not CssConstants.Inline && coordinates.MaxBottom - startY < box.ActualHeight)
+            {
+                coordinates.MaxBottom = startY + box.ActualHeight;
+            }
+
+            // handle width setting
+            //
+            // Only for a box this pass both opened and finished. Whether a box's content came out
+            // narrower than its declared width is a question about the whole box, and `CurrentX - startX`
+            // only measures it when the whole box went through this pass: a box the pass merely walked
+            // through has a delta of zero (its words are skipped, and its spacing is suppressed above),
+            // and one that began pages ago has a delta covering only the part that landed here. Either
+            // way the branch fires spuriously - registering a rectangle at this page's coordinates for a
+            // box whose real extent is elsewhere, which AssignRectanglesToBoxes then merges into the
+            // box's own rectangle for the line. A box that opens here but breaks again never reaches
+            // this point, since FlowBox returns as soon as the break is recorded.
+            if (opensHere && box.IsInline && 0 <= coordinates.CurrentX - startX && coordinates.CurrentX - startX < box.ActualWidth)
+            {
+                // hack for actual width handling
+                coordinates.CurrentX += box.ActualWidth - (coordinates.CurrentX - startX);
+                coordinates.Line.Rectangles.Add(box, new RRect(startX, startY, box.ActualWidth, box.ActualHeight));
+            }
+
+            // handle box that is only a whitespace
+            if (opensHere && box.Text is { Length: > 0 } && string.IsNullOrWhiteSpace(box.Text) && !box.IsImage && box.IsInline && box.Boxes.Count == 0 && box.Words.Count == 0)
+            {
+                coordinates.CurrentX += box.ActualWordSpacing;
+            }
+
+            // Finalize what was captured at entry, now that this box's content has actually been placed
+            // and coordinates.CurrentY reflects where it landed - mirrors CssBox.PerformLayoutImp's own
+            // late-stage Y-correction/named-page registration (done there once Location is final), which
+            // a plain inline box never gets a Location for in the first place. Gated on opensHere for the
+            // same reason as the entry-side guard in PrepareFlowBoxEntry: a pass merely resuming this
+            // box's already-placed content into a later fragmentainer must not re-stamp its
+            // NamedStrings/named-page Y to wherever *this* pass's cursor happens to sit (typically the
+            // resumed fragmentainer's own top, since the walk hasn't advanced past already-placed words
+            // yet) - that both discards the box's true position from when it actually opened and, for
+            // named-page, would corrupt ActivePageName for content after it.
+            if (opensHere && box != blockBox)
+            {
+                if (box.NamedStrings.Count > 0)
+                {
+                    foreach (var namedString in box.NamedStrings.Values)
+                    {
+                        namedString.Y = coordinates.CurrentY;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(box.PageName) && box.PageName != "auto")
+                {
+                    // Same re-entry hazard as the string-set guard in PrepareFlowBoxEntry: without
+                    // withdrawing a stale registration first, a re-banding re-layout or column-fill retry
+                    // leaves an orphaned NamedPageElement behind, corrupting ActivePageName for whatever
+                    // comes after it.
+                    if (box.RegisteredNamedPageElement is { } stalePageElement)
+                    {
+                        box.HtmlContainer?.UnregisterNamedPageElement(stalePageElement);
+                    }
+
+                    box.RegisteredNamedPageElement = box.HtmlContainer?.RegisterNamedPageElement(box.PageName, coordinates.CurrentY);
+                }
+            }
+
+            // The mirror of the entry guard: a box this pass placed nothing for closed in an earlier
+            // fragmentainer, and its last hosting line is the one it closed on there. Nothing reads a
+            // clobbered value today - BubbleRectangles never reaches such a box on this page's lines,
+            // and earlier lines are not re-finalized - but that is a property of two other methods, not
+            // an invariant of this pair, and #336's whole difficulty was that one half of it could not
+            // be trusted.
+            if (coordinates.PlacedSince(startOrdinal)) box.LastHostingLineBox = coordinates.Line;
+        }
+
+        /// <summary>
+        /// Treats an inline-flex child as an atomic inline element: positions it, runs flex layout over
+        /// its children, applies its own string-set/named-page-name, then advances the cursor by its
+        /// outer size and registers it in the line so its border/background paints.
+        /// </summary>
+        private static async ValueTask FlowInlineFlexChild(RGraphics g, CssBox b, CssLineBoxCoordinates coordinates)
+        {
+            // coordinates.CurrentX is already past the left margin+border+padding (leftSpacing was added
+            // by the caller), so Location.X sits at the border-left edge (after margin).
+            b.Location = new RPoint(
+                coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
+                coordinates.CurrentY);
+            b.ActualBottom = b.Location.Y;
+            b.FirstHostingLineBox = coordinates.Line;
+            b.LastHostingLineBox = coordinates.Line;
+
+            // Unlike a plain inline box, b.Location is already final here, so string-set/named-page can
+            // be applied and finalized together rather than split across entry/exit like plain inlines.
+            if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != CssConstants.None)
+            {
+                if (b.NamedStrings.Count > 0)
+                {
+                    b.HtmlContainer?.UnregisterNamedStrings(b.NamedStrings.Values);
+                    b.NamedStrings.Clear();
+                }
+
+                CssNamedStringEngine.ApplyStringSet(b);
+                foreach (var namedString in b.NamedStrings.Values)
+                {
+                    namedString.Y = b.Location.Y;
+                }
+            }
+
+            if (!string.IsNullOrEmpty(b.PageName) && b.PageName != "auto")
+            {
+                if (b.RegisteredNamedPageElement is { } staleFlexPageElement)
+                {
+                    b.HtmlContainer?.UnregisterNamedPageElement(staleFlexPageElement);
+                }
+
+                b.RegisteredNamedPageElement = b.HtmlContainer?.RegisterNamedPageElement(b.PageName, b.Location.Y);
+            }
+
+            await CssLayoutEngineFlex.PerformLayout(g, b);
+
+            // Advance to content-right so that the outer rightSpacing addition lands correctly.
+            coordinates.CurrentX = b.ClientRight;
+            coordinates.MaxRight = Math.Max(coordinates.MaxRight, b.Location.X + b.ActualBoxSizingWidth);
+            coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, b.Location.Y + b.ActualBoxSizingHeight);
+
+            // Register the box in the parent line so its border/background is painted.
+            coordinates.Line.Rectangles[b] = new RRect(
+                b.Location.X, b.Location.Y, b.ActualBoxSizingWidth, b.ActualBoxSizingHeight);
+        }
+
+        /// <summary>
         /// Recursively flows the content of the box using the inline model
         /// </summary>
         /// <param name="g">Device Info</param>
@@ -1262,45 +1468,7 @@ namespace PeachPDF.Html.Core.Dom
             // ordinal below. Read before any of them are visited, this names the ordinal of the box's
             // own first word, so it says whether this pass is the one opening the box.
             var startOrdinal = coordinates.WordOrdinal;
-            var opensHere = startOrdinal >= coordinates.ResumeOrdinal;
-
-            // Only a box actually opening here may claim the current line as its first: §6.2 gives a
-            // sliced box its leading border and padding once, at its true start, and
-            // CssLineBox.UpdateRectangle reads this to decide which line gets them. A box whose own
-            // first word is the resume word does open here - the line it was entered on in the earlier
-            // pass is the one CreateLineBoxes discarded.
-            if (opensHere) box.FirstHostingLineBox = coordinates.Line;
-
-            // Inline elements (e.g. <b>/<span>) never get their own PerformLayoutImp call - that only
-            // happens for block children (CssBox.PerformLayoutImp's childBox.PerformLayout loop), which
-            // is exactly the path skipped when a block's children are ContainsInlinesOnly and flowed
-            // here instead. FlowBox's own entry/exit (this line and LastHostingLineBox below) is the one
-            // place that visits every inline box, in DOM order, exactly once - so it's where string-set
-            // and named-page registration (normally done near the top/bottom of PerformLayoutImp) have to
-            // happen for inline boxes. blockBox itself is excluded since its own PerformLayoutImp already
-            // handles it correctly before CreateLineBoxes is even called.
-            // Gated on opensHere for the same reason FirstHostingLineBox is above: a pass resuming this
-            // box's flow into a later fragmentainer re-enters it from the top (its already-placed words
-            // are only skipped by ordinal further down), so without this guard a resumed pass would
-            // re-run ApplyStringSet using *this* pass's fresh coordinates - overwriting the box's true
-            // position (set when it actually opened) with wherever the resumed fragmentainer happens to
-            // start. string-set fires exactly once per box per opening, mirroring a block box's own
-            // once-per-_prologueDone guarantee.
-            if (opensHere && box != blockBox && !string.IsNullOrEmpty(box.StringSet) && box.StringSet != CssConstants.None)
-            {
-                // Unlike a block box's PerformLayoutPrologue, nothing else withdraws this box's previous
-                // registration before FlowBox re-opens it (a multicol measurement pass, a re-banding
-                // re-layout, or a column-fill retry all re-run this) - so without unregistering first, a
-                // stale entry from an earlier pass survives as an orphan, still eligible to match some
-                // page's Y window in MarginBoxRenderer.ResolveNamedString.
-                if (box.NamedStrings.Count > 0)
-                {
-                    box.HtmlContainer?.UnregisterNamedStrings(box.NamedStrings.Values);
-                    box.NamedStrings.Clear();
-                }
-
-                CssNamedStringEngine.ApplyStringSet(box);
-            }
+            var opensHere = PrepareFlowBoxEntry(box, blockBox, coordinates, startOrdinal);
 
             var boxes = box.Boxes;
 
@@ -1638,57 +1806,7 @@ namespace PeachPDF.Html.Core.Dom
                     // ordinals have to mean the same thing on every pass for any of these guards to work.
                     if (!childOpensHere) continue;
 
-                    // Treat inline-flex as an atomic inline element: run flex layout then advance the
-                    // cursor by the box's outer size.  coordinates.CurrentX is already past the left
-                    // margin+border+padding (leftSpacing was added above), so Location.X sits at the
-                    // border-left edge (after margin).
-                    b.Location = new RPoint(
-                        coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
-                        coordinates.CurrentY);
-                    b.ActualBottom = b.Location.Y;
-                    b.FirstHostingLineBox = coordinates.Line;
-                    b.LastHostingLineBox  = coordinates.Line;
-
-                    // Unlike a plain inline box, b.Location is already final here, so string-set/named-page
-                    // can be applied and finalized together rather than split across entry/exit like the
-                    // FlowBox recursion case above.
-                    if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != CssConstants.None)
-                    {
-                        // Same re-entry hazard as the plain-inline FlowBox path above: withdraw whatever
-                        // this box registered on an earlier pass before registering again.
-                        if (b.NamedStrings.Count > 0)
-                        {
-                            b.HtmlContainer?.UnregisterNamedStrings(b.NamedStrings.Values);
-                            b.NamedStrings.Clear();
-                        }
-
-                        CssNamedStringEngine.ApplyStringSet(b);
-                        foreach (var namedString in b.NamedStrings.Values)
-                        {
-                            namedString.Y = b.Location.Y;
-                        }
-                    }
-
-                    if (!string.IsNullOrEmpty(b.PageName) && b.PageName != "auto")
-                    {
-                        if (b.RegisteredNamedPageElement is { } staleFlexPageElement)
-                        {
-                            b.HtmlContainer?.UnregisterNamedPageElement(staleFlexPageElement);
-                        }
-
-                        b.RegisteredNamedPageElement = b.HtmlContainer?.RegisterNamedPageElement(b.PageName, b.Location.Y);
-                    }
-
-                    await CssLayoutEngineFlex.PerformLayout(g, b);
-
-                    // Advance to content-right so that the outer rightSpacing addition lands correctly.
-                    coordinates.CurrentX = b.ClientRight;
-                    coordinates.MaxRight  = Math.Max(coordinates.MaxRight,  b.Location.X + b.ActualBoxSizingWidth);
-                    coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, b.Location.Y + b.ActualBoxSizingHeight);
-
-                    // Register the box in the parent line so its border/background is painted.
-                    coordinates.Line.Rectangles[b] = new RRect(
-                        b.Location.X, b.Location.Y, b.ActualBoxSizingWidth, b.ActualBoxSizingHeight);
+                    await FlowInlineFlexChild(g, b, coordinates);
                 }
                 else
                 {
@@ -1713,100 +1831,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            // handle height setting: the flowed content came out shorter than the box's own
-            // ActualHeight (e.g. an inline-block button whose vertical padding exceeds its one
-            // small-font text line), so extend MaxBottom to cover the box's full height from
-            // where it started. This must be startY-anchored: the old
-            // `MaxBottom = ActualHeight - (MaxBottom - startY)` form assigned the deficit as an
-            // ABSOLUTE document Y (a tiny value near the page top), dragging MaxBottom above
-            // startY - when such a box was a block's last/only inline content, the block's
-            // resulting ActualBottom landed above its own top (negative height), and paint-time
-            // visibility culling then dropped the block's whole subtree (buttons styled like the
-            // showcase's themeable-card "Learn More" were never painted at all).
-            //
-            // Restricted to non-plain-inline boxes: per CSS2.1 §10.8.1, the vertical padding/
-            // border of a non-replaced `display: inline` box does not influence line box height
-            // at all (it paints, overflowing the line, without taking vertical space) - only an
-            // atomic inline-level box (inline-block/inline-table) contributes its full box
-            // height to the line it sits on, which is what ActualHeight approximates here (a
-            // plain inline's ActualHeight is just its own padding+border, since it never gets a
-            // Size of its own - extending the flow by that would grow the containing block in
-            // violation of §10.8.1).
-            //
-            // Like the width branch below, this compares an advance measured in this pass against the
-            // box's whole height, so it only means anything for a box this pass both opened and
-            // finished. For one it merely walked through the deficit is the box's entire height, which
-            // it would then add to the flow all over again.
-            if (opensHere && box.DerivedStyle.ActualDisplay is not CssConstants.Inline && coordinates.MaxBottom - startY < box.ActualHeight)
-            {
-                coordinates.MaxBottom = startY + box.ActualHeight;
-            }
-
-            // handle width setting
-            //
-            // Only for a box this pass both opened and finished. Whether a box's content came out
-            // narrower than its declared width is a question about the whole box, and `CurrentX - startX`
-            // only measures it when the whole box went through this pass: a box the pass merely walked
-            // through has a delta of zero (its words are skipped, and its spacing is suppressed above),
-            // and one that began pages ago has a delta covering only the part that landed here. Either
-            // way the branch fires spuriously - registering a rectangle at this page's coordinates for a
-            // box whose real extent is elsewhere, which AssignRectanglesToBoxes then merges into the
-            // box's own rectangle for the line. A box that opens here but breaks again never reaches
-            // this point, since FlowBox returns as soon as the break is recorded.
-            if (opensHere && box.IsInline && 0 <= coordinates.CurrentX - startX && coordinates.CurrentX - startX < box.ActualWidth)
-            {
-                // hack for actual width handling
-                coordinates.CurrentX += box.ActualWidth - (coordinates.CurrentX - startX);
-                coordinates.Line.Rectangles.Add(box, new RRect(startX, startY, box.ActualWidth, box.ActualHeight));
-            }
-
-            // handle box that is only a whitespace
-            if (opensHere && box.Text is { Length: > 0 } && string.IsNullOrWhiteSpace(box.Text) && !box.IsImage && box.IsInline && box.Boxes.Count == 0 && box.Words.Count == 0)
-            {
-                coordinates.CurrentX += box.ActualWordSpacing;
-            }
-
-            // Finalize what was captured at entry, now that this box's content has actually been placed
-            // and coordinates.CurrentY reflects where it landed - mirrors CssBox.PerformLayoutImp's own
-            // late-stage Y-correction/named-page registration (done there once Location is final), which
-            // a plain inline box never gets a Location for in the first place. Gated on opensHere for the
-            // same reason as the entry-side guard above: a pass merely resuming this box's already-placed
-            // content into a later fragmentainer must not re-stamp its NamedStrings/named-page Y to
-            // wherever *this* pass's cursor happens to sit (typically the resumed fragmentainer's own
-            // top, since the walk hasn't advanced past already-placed words yet) - that both discards the
-            // box's true position from when it actually opened and, for named-page, would corrupt
-            // ActivePageName for content after it.
-            if (opensHere && box != blockBox)
-            {
-                if (box.NamedStrings.Count > 0)
-                {
-                    foreach (var namedString in box.NamedStrings.Values)
-                    {
-                        namedString.Y = coordinates.CurrentY;
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(box.PageName) && box.PageName != "auto")
-                {
-                    // Same re-entry hazard as the string-set guard above: without withdrawing a stale
-                    // registration first, a re-banding re-layout or column-fill retry leaves an orphaned
-                    // NamedPageElement behind, corrupting ActivePageName for whatever comes after it.
-                    if (box.RegisteredNamedPageElement is { } stalePageElement)
-                    {
-                        box.HtmlContainer?.UnregisterNamedPageElement(stalePageElement);
-                    }
-
-                    box.RegisteredNamedPageElement = box.HtmlContainer?.RegisterNamedPageElement(box.PageName, coordinates.CurrentY);
-                }
-            }
-
-            // The mirror of the entry guard: a box this pass placed nothing for closed in an earlier
-            // fragmentainer, and its last hosting line is the one it closed on there. Nothing reads a
-            // clobbered value today - BubbleRectangles never reaches such a box on this page's lines,
-            // and earlier lines are not re-finalized - but that is a property of two other methods, not
-            // an invariant of this pair, and #336's whole difficulty was that one half of it could not
-            // be trusted.
-            if (coordinates.PlacedSince(startOrdinal)) box.LastHostingLineBox = coordinates.Line;
+            FinalizeFlowBoxExit(box, blockBox, coordinates, opensHere, startOrdinal, startX, startY);
         }
 
         /// <summary>

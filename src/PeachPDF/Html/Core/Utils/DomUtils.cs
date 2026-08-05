@@ -445,34 +445,54 @@ namespace PeachPDF.Html.Core.Utils
         /// <returns>css word box if exists or null</returns>
         public static CssLineBox? GetCssLineBox(CssBox? box, RPoint location)
         {
-            CssLineBox? line = null;
-            if (box != null)
+            if (box == null) return null;
+
+            var line = FindOwnLineBoxAtOrAboveY(box, location, out var found);
+
+            // A rectangle already past location.Y within this box's own line boxes means the search is
+            // done - matches the pre-extraction behavior where that case returned from this method
+            // directly, short-circuiting the box.Boxes recursion below (a child's line box must never
+            // overwrite an already-resolved own-box result).
+            if (found) return line;
+
+            foreach (var childBox in box.Boxes)
             {
-                if (box.LineBoxes.Count > 0)
+                line = GetCssLineBox(childBox, location) ?? line;
+            }
+
+            return line;
+        }
+
+        /// <summary>
+        /// Searches only box's own line boxes (not its children's) for the lowest one starting at or
+        /// above location.Y - the nearest line from the top, per GetCssLineBox's doc comment.
+        /// </summary>
+        /// <param name="box">the box whose own line boxes are searched</param>
+        /// <param name="location">the location to find the box at</param>
+        /// <param name="found">set true when a rectangle past location.Y was found, meaning the search
+        /// concluded within this box's own line boxes and must not fall through to its children.</param>
+        private static CssLineBox? FindOwnLineBoxAtOrAboveY(CssBox box, RPoint location, out bool found)
+        {
+            found = false;
+
+            if (box.LineBoxes.Count == 0) return null;
+            if (box.HtmlTag is { Name: "td" } && !box.Bounds.Contains(location)) return null;
+
+            CssLineBox? line = null;
+            foreach (var lineBox in box.LineBoxes)
+            {
+                foreach (var rect in lineBox.Rectangles)
                 {
-                    if (box.HtmlTag is not { Name: "td" } || box.Bounds.Contains(location))
+                    if (rect.Value.Top <= location.Y)
                     {
-                        foreach (var lineBox in box.LineBoxes)
-                        {
-                            foreach (var rect in lineBox.Rectangles)
-                            {
-                                if (rect.Value.Top <= location.Y)
-                                {
-                                    line = lineBox;
-                                }
-
-                                if (rect.Value.Top > location.Y)
-                                {
-                                    return line;
-                                }
-                            }
-                        }
+                        line = lineBox;
                     }
-                }
 
-                foreach (var childBox in box.Boxes)
-                {
-                    line = GetCssLineBox(childBox, location) ?? line;
+                    if (rect.Value.Top > location.Y)
+                    {
+                        found = true;
+                        return line;
+                    }
                 }
             }
 

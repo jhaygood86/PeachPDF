@@ -33,6 +33,7 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -169,6 +170,27 @@ namespace PeachPDF.Fonts.OpenType
             get { return FontSource == null; }
         }
 
+        // AddTable's per-tag field assignment, keyed by DirectoryEntry.Tag. A tag with no entry here
+        // (e.g. GDEF/GPOS/kern) is recorded in TableDictionary but has no dedicated typed field.
+        static readonly FrozenDictionary<string, Action<OpenTypeFontface, OpenTypeFontTable>> TableAssigners =
+            new Dictionary<string, Action<OpenTypeFontface, OpenTypeFontTable>>
+            {
+                [TableTagNames.CMap] = (f, t) => f.cmap = t as CMapTable,
+                [TableTagNames.Cvt] = (f, t) => f.cvt = t as ControlValueTable,
+                [TableTagNames.Fpgm] = (f, t) => f.fpgm = t as FontProgram,
+                [TableTagNames.MaxP] = (f, t) => f.maxp = t as MaximumProfileTable,
+                [TableTagNames.Name] = (f, t) => f.name = t as NameTable,
+                [TableTagNames.Head] = (f, t) => f.head = t as FontHeaderTable,
+                [TableTagNames.HHea] = (f, t) => f.hhea = t as HorizontalHeaderTable,
+                [TableTagNames.HMtx] = (f, t) => f.hmtx = t as HorizontalMetricsTable,
+                [TableTagNames.OS2] = (f, t) => f.os2 = t as OS2Table,
+                [TableTagNames.Post] = (f, t) => f.post = t as PostScriptTable,
+                [TableTagNames.Glyf] = (f, t) => f.glyf = t as GlyphDataTable,
+                [TableTagNames.Loca] = (f, t) => f.loca = t as IndexToLocationTable,
+                [TableTagNames.GSUB] = (f, t) => f.gsub = t as GlyphSubstitutionTable,
+                [TableTagNames.Prep] = (f, t) => f.prep = t as ControlValueProgram,
+            }.ToFrozenDictionary();
+
         /// <summary>
         /// Adds the specified table to this font image.
         /// </summary>
@@ -177,8 +199,7 @@ namespace PeachPDF.Fonts.OpenType
             if (!CanWrite)
                 throw new InvalidOperationException("Font image cannot be modified.");
 
-            if (fontTable == null)
-                throw new ArgumentNullException("fontTable");
+            ArgumentNullException.ThrowIfNull(fontTable);
 
             if (fontTable._fontData == null)
             {
@@ -191,68 +212,10 @@ namespace PeachPDF.Fonts.OpenType
                 fontTable = new IRefFontTable(this, fontTable);
             }
 
-            //Debug.Assert(fontTable.FontData == null);
-            //fontTable.fontData = this;
-
             TableDictionary[fontTable.DirectoryEntry.Tag] = fontTable.DirectoryEntry;
-            switch (fontTable.DirectoryEntry.Tag)
-            {
-                case TableTagNames.CMap:
-                    cmap = fontTable as CMapTable;
-                    break;
 
-                case TableTagNames.Cvt:
-                    cvt = fontTable as ControlValueTable;
-                    break;
-
-                case TableTagNames.Fpgm:
-                    fpgm = fontTable as FontProgram;
-                    break;
-
-                case TableTagNames.MaxP:
-                    maxp = fontTable as MaximumProfileTable;
-                    break;
-
-                case TableTagNames.Name:
-                    name = fontTable as NameTable;
-                    break;
-
-                case TableTagNames.Head:
-                    head = fontTable as FontHeaderTable;
-                    break;
-
-                case TableTagNames.HHea:
-                    hhea = fontTable as HorizontalHeaderTable;
-                    break;
-
-                case TableTagNames.HMtx:
-                    hmtx = fontTable as HorizontalMetricsTable;
-                    break;
-
-                case TableTagNames.OS2:
-                    os2 = fontTable as OS2Table;
-                    break;
-
-                case TableTagNames.Post:
-                    post = fontTable as PostScriptTable;
-                    break;
-
-                case TableTagNames.Glyf:
-                    glyf = fontTable as GlyphDataTable;
-                    break;
-
-                case TableTagNames.Loca:
-                    loca = fontTable as IndexToLocationTable;
-                    break;
-
-                case TableTagNames.GSUB:
-                    gsub = fontTable as GlyphSubstitutionTable;
-                    break;
-
-                case TableTagNames.Prep:
-                    prep = fontTable as ControlValueProgram;
-                    break;
-            }
+            if (TableAssigners.TryGetValue(fontTable.DirectoryEntry.Tag, out var assign))
+                assign(this, fontTable);
         }
 
         /// <summary>

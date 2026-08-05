@@ -163,6 +163,92 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         }
 
         [Fact]
+        public void DrawArc_SweepGreaterThan90Degrees_TraversesMultipleQuadrants()
+        {
+            // A single-quadrant arc (<=90 degrees, e.g. a border-radius corner) takes
+            // AppendPartialArc's smallAngle fast path and returns immediately. A wider sweep exercises
+            // the do/while loop that walks multiple quadrants (AppendArcQuadrantSegment/NextQuadrant).
+            var (document, page) = NewPage();
+            using (var gfx = XGraphics.FromPdfPage(page))
+            {
+                var pen = new XPen(XColors.Black, 1);
+                gfx.DrawArc(pen, 10, 10, 40, 40, 30, 270);
+            }
+
+            using var stream = new MemoryStream();
+            document.Save(stream);
+            Assert.True(stream.Length > 0);
+        }
+
+        [Fact]
+        public void DrawArc_NegativeSweepGreaterThan90Degrees_TraversesMultipleQuadrantsCounterclockwise()
+        {
+            var (document, page) = NewPage();
+            using (var gfx = XGraphics.FromPdfPage(page))
+            {
+                var pen = new XPen(XColors.Black, 1);
+                gfx.DrawArc(pen, 10, 10, 40, 40, 30, -270);
+            }
+
+            using var stream = new MemoryStream();
+            document.Save(stream);
+            Assert.True(stream.Length > 0);
+        }
+
+        [Fact]
+        public void FromPdfPage_UpwardsDirection_DrawsSuccessfully()
+        {
+            var (document, page) = NewPage();
+            // XPageDirection.Upwards is marked obsolete ("not implemented - yagni") but the constructor
+            // accepts it without validation (only the PageDirection property setter rejects it after
+            // construction) - covers XGraphicsPdfRenderer.BeginPageUpwards, which is otherwise dead.
+#pragma warning disable CS0618
+            using (var gfx = XGraphics.FromPdfPage(page, XPageDirection.Upwards))
+#pragma warning restore CS0618
+            {
+                gfx.DrawLine(XPens.Black, 0, 0, 10, 10);
+            }
+
+            using var stream = new MemoryStream();
+            document.Save(stream);
+            Assert.True(stream.Length > 0);
+        }
+
+        [Theory]
+        [InlineData((int)XGraphicsUnit.Inch)]
+        [InlineData((int)XGraphicsUnit.Millimeter)]
+        [InlineData((int)XGraphicsUnit.Centimeter)]
+        [InlineData((int)XGraphicsUnit.Presentation)]
+        public void FromPdfPage_NonPointPageUnit_ScalesPageTransform(int unitValue)
+        {
+            var (document, page) = NewPage();
+            using (var gfx = XGraphics.FromPdfPage(page, (XGraphicsUnit)unitValue))
+            {
+                gfx.DrawLine(XPens.Black, 0, 0, 1, 1);
+            }
+
+            using var stream = new MemoryStream();
+            document.Save(stream);
+            Assert.True(stream.Length > 0);
+        }
+
+        [Fact]
+        public void FromPdfPage_WithTrimMargins_OffsetsPageTransform()
+        {
+            var (document, page) = NewPage();
+            page.TrimMargins.All = 5;
+
+            using (var gfx = XGraphics.FromPdfPage(page))
+            {
+                gfx.DrawLine(XPens.Black, 0, 0, 10, 10);
+            }
+
+            using var stream = new MemoryStream();
+            document.Save(stream);
+            Assert.True(stream.Length > 0);
+        }
+
+        [Fact]
         public void DrawEverything_ProducesNonEmptySavedDocument()
         {
             var (document, page) = NewPage();

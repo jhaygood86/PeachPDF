@@ -30,6 +30,7 @@
 #nullable disable warnings
 
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -102,82 +103,65 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return (_keyType & KeyType.MustNotBeIndirect) == 0; }
         }
 
+        // These types are not yet used/implemented.
+        static readonly FrozenSet<KeyType> NotYetImplementedKeyTypes = new HashSet<KeyType>
+        {
+            KeyType.NumberTree,
+            KeyType.NameOrArray,
+            KeyType.ArrayOrDictionary,
+            KeyType.StreamOrArray,
+        }.ToFrozenSet();
+
         /// <summary>
         /// Returns the type of the object to be created as value for the described key.
         /// </summary>
         [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
         public Type GetValueType()
         {
-            Type type = _objectType;
-            if (type == null)
+            if (_objectType != null)
+                return _objectType;
+
+            // If we have no ObjectType specified, use the KeyType enumeration.
+            KeyType keyType = _keyType & KeyType.TypeMask;
+
+            // Each arm below returns typeof(...) directly (rather than through a lookup table) so the
+            // trim/AOT analyzer can keep tracking DynamicallyAccessedMembers through to the constructors
+            // PdfDictionary.CreateDictionary/CreateArray reflect on - a FrozenDictionary<KeyType, Type>
+            // lookup severs that flow (IL2068) since TryGetValue's out Type carries no annotation.
+            Type? type = keyType switch
             {
-                // If we have no ObjectType specified, use the KeyType enumeration.
-                switch (_keyType & KeyType.TypeMask)
-                {
-                    case KeyType.Name:
-                        type = typeof(PdfName);
-                        break;
+                KeyType.Name => typeof(PdfName),
+                KeyType.String => typeof(PdfString),
+                KeyType.Boolean => typeof(PdfBoolean),
+                KeyType.Integer => typeof(PdfInteger),
+                KeyType.Real => typeof(PdfReal),
+                KeyType.Date => typeof(PdfDate),
+                KeyType.Rectangle => typeof(PdfRectangle),
+                KeyType.Array => typeof(PdfArray),
+                KeyType.Dictionary or KeyType.Stream => typeof(PdfDictionary),
+                _ => null
+            };
+            if (type != null)
+                return type;
 
-                    case KeyType.String:
-                        type = typeof(PdfString);
-                        break;
+            if (NotYetImplementedKeyTypes.Contains(keyType))
+                throw new NotImplementedException($"KeyType.{keyType}");
 
-                    case KeyType.Boolean:
-                        type = typeof(PdfBoolean);
-                        break;
+            if (keyType == KeyType.ArrayOrNameOrString)
+                return null; // HACK: Make PdfOutline work
 
-                    case KeyType.Integer:
-                        type = typeof(PdfInteger);
-                        break;
+            return ReportInvalidKeyType();
+        }
 
-                    case KeyType.Real:
-                        type = typeof(PdfReal);
-                        break;
-
-                    case KeyType.Date:
-                        type = typeof(PdfDate);
-                        break;
-
-                    case KeyType.Rectangle:
-                        type = typeof(PdfRectangle);
-                        break;
-
-                    case KeyType.Array:
-                        type = typeof(PdfArray);
-                        break;
-
-                    case KeyType.Dictionary:
-                        type = typeof(PdfDictionary);
-                        break;
-
-                    case KeyType.Stream:
-                        type = typeof(PdfDictionary);
-                        break;
-
-                    // The following types are not yet used
-
-                    case KeyType.NumberTree:
-                        throw new NotImplementedException("KeyType.NumberTree");
-
-                    case KeyType.NameOrArray:
-                        throw new NotImplementedException("KeyType.NameOrArray");
-
-                    case KeyType.ArrayOrDictionary:
-                        throw new NotImplementedException("KeyType.ArrayOrDictionary");
-
-                    case KeyType.StreamOrArray:
-                        throw new NotImplementedException("KeyType.StreamOrArray");
-
-                    case KeyType.ArrayOrNameOrString:
-                        return null; // HACK: Make PdfOutline work
-                                     //throw new NotImplementedException("KeyType.ArrayOrNameOrString");
-
-                    default:
-                        Debug.Assert(false, "Invalid KeyType: " + _keyType);
-                        break;
-                }
-            }
-            return type;
+        // No caller passes a KeyType this doesn't recognize - excluded because a test driving it would
+        // have to call Debug.Assert(false), which xUnit's default trace listener turns into a test
+        // failure rather than letting it be asserted against.
+        [ExcludeFromCodeCoverage]
+        [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors)]
+        private Type ReportInvalidKeyType()
+        {
+            Debug.Assert(false, "Invalid KeyType: " + _keyType);
+            return null;
         }
     }
 

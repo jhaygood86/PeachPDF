@@ -298,6 +298,67 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal("Part I - Chapter 1", box.Text);
         }
 
+        [Fact]
+        public void ApplyContent_WithStringFunctionUnknownKeyword_FallsBackToFirst()
+        {
+            // Exercises GetNamedStringValueFromDocument's switch default arm (an unrecognized keyword
+            // falls back to "first", same as no keyword at all).
+            var container = CreateContainer();
+            var box = CreateBox(container);
+            box.Content = "string(chapter, not-a-real-keyword)";
+
+            container.RegisterNamedString(new NamedString("chapter", "Introduction"));
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("Introduction", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_WithStringFunctionAndNoContainer_FallsBackToTreeWalk()
+        {
+            // Exercises CssContentEngine.GetNamedStringValueFromTree: a box with no HtmlContainer (so
+            // GetNamedStringValue can't consult the document-level NamedStrings) still resolves
+            // string(name) by walking its own NamedStrings, set directly here the way
+            // CssNamedStringEngine.ApplyStringSet would populate it during layout.
+            var box = CreateBox();
+            box.Content = "string(chapter)";
+            box.NamedStrings["chapter"] = new NamedString("chapter", "Introduction");
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("Introduction", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_WithStringFunctionLastKeywordAndNoContainer_WalksAncestorChain()
+        {
+            // The tree-walk fallback's "last" keyword returns the *nearest* ancestor assignment (the
+            // parent, since it's found first walking up), not the farthest - opposite of "first".
+            var parentTag = new HtmlTag("div", false, new Dictionary<string, string>());
+            var parent = new CssBox(null, parentTag);
+            parent.NamedStrings["chapter"] = new NamedString("chapter", "Parent Chapter");
+
+            var childTag = new HtmlTag("span", false, new Dictionary<string, string>());
+            var child = new CssBox(parent, childTag);
+            child.Content = "string(chapter, last)";
+
+            CssContentEngine.ApplyContent(child);
+
+            Assert.Equal("Parent Chapter", child.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_WithStringFunctionAndNoContainerOrAssignment_ReturnsEmpty()
+        {
+            var box = CreateBox();
+            box.Content = "string(chapter)";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal(string.Empty, box.Text);
+        }
+
         private CssBox CreateBox()
         {
             var tag = new HtmlTag("div", false, new Dictionary<string, string>());

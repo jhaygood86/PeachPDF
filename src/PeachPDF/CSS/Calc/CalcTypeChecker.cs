@@ -87,57 +87,54 @@ namespace PeachPDF.CSS
         }
 
         /// <summary>Folds a pure-Number subtree to a concrete value; null if it isn't purely numeric.</summary>
-        public static double? FoldNumber(CalcNode node)
+        public static double? FoldNumber(CalcNode node) => node switch
         {
-            switch (node)
+            NumberCalcNode number => number.Value,
+            UnaryCalcNode unary => FoldUnaryNumber(unary),
+            BinaryCalcNode binary => FoldBinaryNumber(binary),
+            CallCalcNode call => FoldCallNumber(call),
+            // Dimension/Percentage leaves are never purely numeric.
+            _ => null,
+        };
+
+        private static double? FoldUnaryNumber(UnaryCalcNode unary)
+        {
+            var value = FoldNumber(unary.Operand);
+            return value is null ? null : unary.Negative ? -value.Value : value.Value;
+        }
+
+        private static double? FoldBinaryNumber(BinaryCalcNode binary)
+        {
+            var left = FoldNumber(binary.Left);
+            var right = FoldNumber(binary.Right);
+            if (left is null || right is null) return null;
+
+            return binary.Operator switch
             {
-                case NumberCalcNode number:
-                    return number.Value;
+                '+' => left.Value + right.Value,
+                '-' => left.Value - right.Value,
+                '*' => left.Value * right.Value,
+                '/' => right.Value != 0d ? left.Value / right.Value : null,
+                _ => null
+            };
+        }
 
-                case UnaryCalcNode unary:
-                {
-                    var value = FoldNumber(unary.Operand);
-                    return value is null ? null : unary.Negative ? -value.Value : value.Value;
-                }
-
-                case BinaryCalcNode binary:
-                {
-                    var left = FoldNumber(binary.Left);
-                    var right = FoldNumber(binary.Right);
-                    if (left is null || right is null) return null;
-
-                    return binary.Operator switch
-                    {
-                        '+' => left.Value + right.Value,
-                        '-' => left.Value - right.Value,
-                        '*' => left.Value * right.Value,
-                        '/' => right.Value != 0d ? left.Value / right.Value : null,
-                        _ => null
-                    };
-                }
-
-                case CallCalcNode call:
-                {
-                    var values = new List<double>(call.Arguments.Count);
-                    foreach (var argument in call.Arguments)
-                    {
-                        var value = FoldNumber(argument);
-                        if (value is null) return null;
-                        values.Add(value.Value);
-                    }
-
-                    if (call.Name.Isi(FunctionNames.Min)) return values.Min();
-                    if (call.Name.Isi(FunctionNames.Max)) return values.Max();
-                    if (call.Name.Isi(FunctionNames.Clamp) && values.Count == 3)
-                        return values[0] > values[2] ? values[2] : Math.Clamp(values[1], values[0], values[2]);
-
-                    return null;
-                }
-
-                default:
-                    // Dimension/Percentage leaves are never purely numeric.
-                    return null;
+        private static double? FoldCallNumber(CallCalcNode call)
+        {
+            var values = new List<double>(call.Arguments.Count);
+            foreach (var argument in call.Arguments)
+            {
+                var value = FoldNumber(argument);
+                if (value is null) return null;
+                values.Add(value.Value);
             }
+
+            if (call.Name.Isi(FunctionNames.Min)) return values.Min();
+            if (call.Name.Isi(FunctionNames.Max)) return values.Max();
+            if (call.Name.Isi(FunctionNames.Clamp) && values.Count == 3)
+                return values[0] > values[2] ? values[2] : Math.Clamp(values[1], values[0], values[2]);
+
+            return null;
         }
 
         private static CalcCategory? Combine(CalcCategory? left, CalcCategory? right)

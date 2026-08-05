@@ -53,6 +53,72 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal(url, token.Data);
         }
 
+        // Exercises Lexer.UrlBad, the CSS Syntax bad-url-token recovery state: consume and discard
+        // characters until the url()'s matching close-paren (or an earlier ';'/unmatched '}') so the
+        // tokenizer resynchronizes rather than getting stuck on malformed input.
+        [Fact]
+        public void CssParserUrlBad_UnexpectedQuoteInUnquotedUrl_RecoversAtClosingParen()
+        {
+            var teststring = "url(bad\"value) next";
+            var tokenizer = new Lexer(new TextSource(teststring));
+
+            var urlToken = tokenizer.Get();
+            Assert.Equal(TokenType.Url, urlToken.Type);
+
+            Assert.Equal(TokenType.Whitespace, tokenizer.Get().Type);
+
+            var nextToken = tokenizer.Get();
+            Assert.Equal(TokenType.Ident, nextToken.Type);
+            Assert.Equal("next", nextToken.Data);
+        }
+
+        [Fact]
+        public void CssParserUrlBad_LineBreakInsideQuotedUrl_RecoversAtClosingParen()
+        {
+            var teststring = "url(\"unterminated\nstring\") next";
+            var tokenizer = new Lexer(new TextSource(teststring));
+
+            var urlToken = tokenizer.Get();
+            Assert.Equal(TokenType.Url, urlToken.Type);
+
+            Assert.Equal(TokenType.Whitespace, tokenizer.Get().Type);
+
+            var nextToken = tokenizer.Get();
+            Assert.Equal(TokenType.Ident, nextToken.Type);
+            Assert.Equal("next", nextToken.Data);
+        }
+
+        [Fact]
+        public void CssParserUrlBad_SemicolonInsideBadUrl_StopsAtSemicolon()
+        {
+            var teststring = "url(bad\"value; next";
+            var tokenizer = new Lexer(new TextSource(teststring));
+
+            var urlToken = tokenizer.Get();
+            Assert.Equal(TokenType.Url, urlToken.Type);
+
+            var nextToken = tokenizer.Get();
+            Assert.Equal(TokenType.Semicolon, nextToken.Type);
+        }
+
+        [Fact]
+        public void CssParserUrlBad_NestedParenInsideBadUrl_RequiresMatchingCloseParen()
+        {
+            // The stray '(' bumps UrlBad's paren-depth counter, so the first ')' just closes the
+            // nested paren rather than ending the url() - only the second ')' does.
+            var teststring = "url(bad\"va(lue)) next";
+            var tokenizer = new Lexer(new TextSource(teststring));
+
+            var urlToken = tokenizer.Get();
+            Assert.Equal(TokenType.Url, urlToken.Type);
+
+            Assert.Equal(TokenType.Whitespace, tokenizer.Get().Type);
+
+            var nextToken = tokenizer.Get();
+            Assert.Equal(TokenType.Ident, nextToken.Type);
+            Assert.Equal("next", nextToken.Data);
+        }
+
         // In a value context, '#' begins a <hash-token> (CSS Syntax §4.3.4): an all-hex name is a color
         // literal, any other name stays an id hash-token (e.g. the '#id' inside element()). Previously a
         // non-hex hash was truncated at the first non-hex char into an empty color + a stray ident.

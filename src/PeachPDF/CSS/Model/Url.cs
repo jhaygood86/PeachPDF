@@ -1,6 +1,7 @@
 #nullable disable
 
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Text;
 
@@ -370,52 +371,61 @@ namespace PeachPDF.CSS
         {
             _relative = true;
 
-            if (index != input.Length)
+            if (index == input.Length) return true;
+
+            switch (input[index])
             {
-                switch (input[index])
-                {
-                    case Symbols.QuestionMark:
-                        return ParseQuery(input, index + 1);
+                case Symbols.QuestionMark:
+                    return ParseQuery(input, index + 1);
 
-                    case Symbols.Num:
-                        return ParseFragment(input, index + 1);
+                case Symbols.Num:
+                    return ParseFragment(input, index + 1);
 
-                    case Symbols.Solidus:
-                    case Symbols.ReverseSolidus:
-                        if (index == input.Length - 1) return ParsePath(input, index);
-
-                        var c = input[++index];
-
-                        if (c.IsOneOf(Symbols.Solidus, Symbols.ReverseSolidus))
-                            return _scheme.Is(ProtocolNames.File)
-                                ? ParseFileHost(input, index + 1)
-                                : IgnoreSlashesState(input, index + 1);
-
-                        if (!_scheme.Is(ProtocolNames.File)) return ParsePath(input, index - 1);
-
-                        _host = string.Empty;
-                        _port = string.Empty;
-
-                        return ParsePath(input, index - 1);
-                }
-
-                if (input[index].IsLetter() &&
-                    _scheme.Is(ProtocolNames.File) &&
-                    index + 1 < input.Length &&
-                    input[index + 1].IsOneOf(Symbols.Colon, Symbols.Solidus) &&
-                    (index + 2 == input.Length || input[index + 2].IsOneOf(Symbols.Solidus, Symbols.ReverseSolidus,
-                        Symbols.Num, Symbols.QuestionMark)))
-                {
-                    _host = string.Empty;
-                    _path = string.Empty;
-                    _port = string.Empty;
-                }
-
-                return ParsePath(input, index);
+                case Symbols.Solidus:
+                case Symbols.ReverseSolidus:
+                    return RelativeSlashState(input, index);
             }
 
-            return true;
+            if (IsFileSchemeDriveLetter(input, index))
+            {
+                _host = string.Empty;
+                _path = string.Empty;
+                _port = string.Empty;
+            }
+
+            return ParsePath(input, index);
         }
+
+        private bool RelativeSlashState(string input, int index)
+        {
+            if (index == input.Length - 1) return ParsePath(input, index);
+
+            var c = input[++index];
+
+            if (c.IsOneOf(Symbols.Solidus, Symbols.ReverseSolidus))
+                return _scheme.Is(ProtocolNames.File)
+                    ? ParseFileHost(input, index + 1)
+                    : IgnoreSlashesState(input, index + 1);
+
+            if (!_scheme.Is(ProtocolNames.File)) return ParsePath(input, index - 1);
+
+            _host = string.Empty;
+            _port = string.Empty;
+
+            return ParsePath(input, index - 1);
+        }
+
+        /// <summary>
+        /// Whether input[index] starts a file-scheme Windows drive letter (e.g. "C:" or "C|"), which
+        /// resets any host/path/port already parsed from an authority that turns out to be a drive letter.
+        /// </summary>
+        private bool IsFileSchemeDriveLetter(string input, int index) =>
+            input[index].IsLetter() &&
+            _scheme.Is(ProtocolNames.File) &&
+            index + 1 < input.Length &&
+            input[index + 1].IsOneOf(Symbols.Colon, Symbols.Solidus) &&
+            (index + 2 == input.Length || input[index + 2].IsOneOf(Symbols.Solidus, Symbols.ReverseSolidus,
+                Symbols.Num, Symbols.QuestionMark));
 
         private bool IgnoreSlashesState(string input, int index)
         {
@@ -493,6 +503,19 @@ namespace PeachPDF.CSS
             var start = index;
             _path = string.Empty;
 
+            index = ScanUntilPathTerminator(input, index);
+
+            var length = index - start;
+
+            if (IsWindowsDriveLetter(input, index, length))
+                return ParsePath(input, index - 2);
+            if (length != 0) _host = SanatizeHost(input, start, length);
+
+            return ParsePath(input, index);
+        }
+
+        private static int ScanUntilPathTerminator(string input, int index)
+        {
             while (index < input.Length)
             {
                 var c = input[index];
@@ -506,16 +529,14 @@ namespace PeachPDF.CSS
                 index++;
             }
 
-            var length = index - start;
-
-            if (length == 2 &&
-                input[index - 2].IsLetter() &&
-                (input[index - 1] == Symbols.Pipe || input[index - 1] == Symbols.Colon))
-                return ParsePath(input, index - 2);
-            if (length != 0) _host = SanatizeHost(input, start, length);
-
-            return ParsePath(input, index);
+            return index;
         }
+
+        /// <summary>Whether input[index-2..index) is a Windows drive letter like "C:" or "C|".</summary>
+        private static bool IsWindowsDriveLetter(string input, int index, int length) =>
+            length == 2 &&
+            input[index - 2].IsLetter() &&
+            (input[index - 1] == Symbols.Pipe || input[index - 1] == Symbols.Colon);
 
         private bool ParseHostName(string input, int index, bool onlyHost = false, bool onlyPort = false)
         {
@@ -774,6 +795,14 @@ namespace PeachPDF.CSS
             return length - 1;
         }
 
+        // U+0000, U+0009, U+000A, U+000D, U+0020, "#", "%", "/", ":", "?", "@", "[", "\", and "]"
+        private static readonly FrozenSet<char> IgnoredHostChars = new HashSet<char>
+        {
+            Symbols.Null, Symbols.Tab, Symbols.Space, Symbols.LineFeed, Symbols.CarriageReturn,
+            Symbols.Num, Symbols.Solidus, Symbols.Colon, Symbols.QuestionMark, Symbols.At,
+            Symbols.SquareBracketOpen, Symbols.SquareBracketClose, Symbols.ReverseSolidus,
+        }.ToFrozenSet();
+
         private static string SanatizeHost(string hostName, int start, int length)
         {
             if (length > 1 && hostName[start] == Symbols.SquareBracketOpen &&
@@ -785,66 +814,69 @@ namespace PeachPDF.CSS
             var n = start + length;
 
             for (var i = start; i < n; i++)
-                switch (hostName[i])
-                {
-                    // U+0000, U+0009, U+000A, U+000D, U+0020, "#", "%", "/", ":", "?", "@", "[", "\", and "]"
-                    case Symbols.Null:
-                    case Symbols.Tab:
-                    case Symbols.Space:
-                    case Symbols.LineFeed:
-                    case Symbols.CarriageReturn:
-                    case Symbols.Num:
-                    case Symbols.Solidus:
-                    case Symbols.Colon:
-                    case Symbols.QuestionMark:
-                    case Symbols.At:
-                    case Symbols.SquareBracketOpen:
-                    case Symbols.SquareBracketClose:
-                    case Symbols.ReverseSolidus:
-                        break;
-                    case Symbols.Dot:
-                        chars[count++] = (byte)hostName[i];
-                        break;
-                    case Symbols.Percent:
-                        if (i + 2 < n && hostName[i + 1].IsHex() && hostName[i + 2].IsHex())
-                        {
-                            var weight = hostName[i + 1].FromHex() * 16 + hostName[i + 2].FromHex();
-                            chars[count++] = (byte)weight;
-                            i += 2;
-                        }
-                        else
-                        {
-                            chars[count++] = (byte)Symbols.Percent;
-                        }
-
-                        break;
-                    default:
-
-                        if (Symbols.Punycode.TryGetValue(hostName[i], out var chr))
-                        {
-                            chars[count++] = (byte)chr;
-                        }
-                        else if (hostName[i].IsAlphanumericAscii() == false)
-                        {
-                            var l = i + 1 < n && char.IsSurrogatePair(hostName, i) ? 2 : 1;
-
-                            if (l == 1 && hostName[i] != Symbols.Minus && !char.IsLetterOrDigit(hostName[i])) break;
-
-                            var bytes = TextEncoding.Utf8.GetBytes(hostName.Substring(i, l));
-
-                            foreach (var byteVal in bytes) chars[count++] = byteVal;
-
-                            i += l - 1;
-                        }
-                        else
-                        {
-                            chars[count++] = (byte)char.ToLowerInvariant(hostName[i]);
-                        }
-
-                        break;
-                }
+                count = AppendSanitizedHostChar(hostName, ref i, n, chars, count);
 
             return TextEncoding.Utf8.GetString(chars, 0, count);
+        }
+
+        private static int AppendSanitizedHostChar(string hostName, ref int i, int n, byte[] chars, int count)
+        {
+            var c = hostName[i];
+
+            if (IgnoredHostChars.Contains(c))
+                return count;
+
+            if (c == Symbols.Dot)
+            {
+                chars[count++] = (byte)c;
+                return count;
+            }
+
+            if (c == Symbols.Percent)
+                return AppendPercentEncodedHostChar(hostName, ref i, n, chars, count);
+
+            return AppendDefaultHostChar(hostName, ref i, n, chars, count);
+        }
+
+        private static int AppendPercentEncodedHostChar(string hostName, ref int i, int n, byte[] chars, int count)
+        {
+            if (i + 2 < n && hostName[i + 1].IsHex() && hostName[i + 2].IsHex())
+            {
+                var weight = hostName[i + 1].FromHex() * 16 + hostName[i + 2].FromHex();
+                chars[count++] = (byte)weight;
+                i += 2;
+            }
+            else
+            {
+                chars[count++] = (byte)Symbols.Percent;
+            }
+
+            return count;
+        }
+
+        private static int AppendDefaultHostChar(string hostName, ref int i, int n, byte[] chars, int count)
+        {
+            if (Symbols.Punycode.TryGetValue(hostName[i], out var chr))
+            {
+                chars[count++] = (byte)chr;
+                return count;
+            }
+
+            if (!hostName[i].IsAlphanumericAscii())
+            {
+                var l = i + 1 < n && char.IsSurrogatePair(hostName, i) ? 2 : 1;
+
+                if (l == 1 && hostName[i] != Symbols.Minus && !char.IsLetterOrDigit(hostName[i]))
+                    return count;
+
+                var bytes = TextEncoding.Utf8.GetBytes(hostName.Substring(i, l));
+                foreach (var byteVal in bytes) chars[count++] = byteVal;
+                i += l - 1;
+                return count;
+            }
+
+            chars[count++] = (byte)char.ToLowerInvariant(hostName[i]);
+            return count;
         }
 
         private static string SanatizePort(string port, int start, int length)

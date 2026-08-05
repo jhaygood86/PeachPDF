@@ -41,75 +41,74 @@ namespace PeachPDF.CSS
         }
 
         /// <summary>Folds an Angle-category subtree to radians; always succeeds for a validated tree.</summary>
-        private static double? FoldAngle(CalcNode node)
+        private static double? FoldAngle(CalcNode node) => node switch
         {
-            switch (node)
+            AngleCalcNode angle => new Angle((float)angle.Value, angle.Unit).ToRadian(),
+            UnaryCalcNode unary => FoldUnaryAngle(unary),
+            BinaryCalcNode { Operator: '+' or '-' } binary => FoldAdditiveAngle(binary),
+            BinaryCalcNode { Operator: '*' } binary => FoldMultiplicativeAngle(binary),
+            BinaryCalcNode { Operator: '/' } binary => FoldDivisionAngle(binary),
+            CallCalcNode call => FoldCallAngle(call),
+            _ => null,
+        };
+
+        private static double? FoldUnaryAngle(UnaryCalcNode unary)
+        {
+            var value = FoldAngle(unary.Operand);
+            return value is null ? null : unary.Negative ? -value.Value : value.Value;
+        }
+
+        private static double? FoldAdditiveAngle(BinaryCalcNode binary)
+        {
+            var left = FoldAngle(binary.Left);
+            var right = FoldAngle(binary.Right);
+            if (left is null || right is null) return null;
+            return binary.Operator == '+' ? left.Value + right.Value : left.Value - right.Value;
+        }
+
+        private static double? FoldMultiplicativeAngle(BinaryCalcNode binary)
+        {
+            var leftAngle = FoldAngle(binary.Left);
+            if (leftAngle is not null)
             {
-                case AngleCalcNode angle:
-                    return new Angle((float)angle.Value, angle.Unit).ToRadian();
-
-                case UnaryCalcNode unary:
-                {
-                    var value = FoldAngle(unary.Operand);
-                    return value is null ? null : unary.Negative ? -value.Value : value.Value;
-                }
-
-                case BinaryCalcNode { Operator: '+' or '-' } binary:
-                {
-                    var left = FoldAngle(binary.Left);
-                    var right = FoldAngle(binary.Right);
-                    if (left is null || right is null) return null;
-                    return binary.Operator == '+' ? left.Value + right.Value : left.Value - right.Value;
-                }
-
-                case BinaryCalcNode { Operator: '*' } binary:
-                {
-                    var leftAngle = FoldAngle(binary.Left);
-                    if (leftAngle is not null)
-                    {
-                        var scalar = CalcTypeChecker.FoldNumber(binary.Right);
-                        return scalar is null ? null : leftAngle.Value * scalar.Value;
-                    }
-
-                    var rightAngle = FoldAngle(binary.Right);
-                    if (rightAngle is not null)
-                    {
-                        var scalar = CalcTypeChecker.FoldNumber(binary.Left);
-                        return scalar is null ? null : rightAngle.Value * scalar.Value;
-                    }
-
-                    return null;
-                }
-
-                case BinaryCalcNode { Operator: '/' } binary:
-                {
-                    var left = FoldAngle(binary.Left);
-                    if (left is null) return null;
-                    var divisor = CalcTypeChecker.FoldNumber(binary.Right);
-                    return divisor is null or 0d ? null : left.Value / divisor.Value;
-                }
-
-                case CallCalcNode call:
-                {
-                    var values = new List<double>(call.Arguments.Count);
-                    foreach (var argument in call.Arguments)
-                    {
-                        var value = FoldAngle(argument);
-                        if (value is null) return null;
-                        values.Add(value.Value);
-                    }
-
-                    if (call.Name.Isi(FunctionNames.Min)) return Min(values);
-                    if (call.Name.Isi(FunctionNames.Max)) return Max(values);
-                    if (call.Name.Isi(FunctionNames.Clamp) && values.Count == 3)
-                        return values[0] > values[2] ? values[2] : System.Math.Clamp(values[1], values[0], values[2]);
-
-                    return null;
-                }
-
-                default:
-                    return null;
+                var scalar = CalcTypeChecker.FoldNumber(binary.Right);
+                return scalar is null ? null : leftAngle.Value * scalar.Value;
             }
+
+            var rightAngle = FoldAngle(binary.Right);
+            if (rightAngle is not null)
+            {
+                var scalar = CalcTypeChecker.FoldNumber(binary.Left);
+                return scalar is null ? null : rightAngle.Value * scalar.Value;
+            }
+
+            return null;
+        }
+
+        private static double? FoldDivisionAngle(BinaryCalcNode binary)
+        {
+            var left = FoldAngle(binary.Left);
+            if (left is null) return null;
+            var divisor = CalcTypeChecker.FoldNumber(binary.Right);
+            return divisor is null or 0d ? null : left.Value / divisor.Value;
+        }
+
+        private static double? FoldCallAngle(CallCalcNode call)
+        {
+            var values = new List<double>(call.Arguments.Count);
+            foreach (var argument in call.Arguments)
+            {
+                var value = FoldAngle(argument);
+                if (value is null) return null;
+                values.Add(value.Value);
+            }
+
+            if (call.Name.Isi(FunctionNames.Min)) return Min(values);
+            if (call.Name.Isi(FunctionNames.Max)) return Max(values);
+            if (call.Name.Isi(FunctionNames.Clamp) && values.Count == 3)
+                return values[0] > values[2] ? values[2] : System.Math.Clamp(values[1], values[0], values[2]);
+
+            return null;
         }
 
         private static string SerializeExpression(CalcNode node)

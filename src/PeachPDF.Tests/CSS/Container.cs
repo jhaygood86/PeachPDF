@@ -98,6 +98,24 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("@container (min-width: 45ch) { li span { color: rgb(255, 0, 0); font-size: 2rem !important } }", rule2.ToCss());
             Assert.Equal("@container (min-width: 70ch) { li span { color: rgb(0, 0, 255); font-size: 3rem !important } }", rule3.ToCss());
         }
+
+        [Fact]
+        public void ContainerShorthand_BothLonghandsSet_ComposesShorthandValue()
+        {
+            // Exercises ContainerShorthandConverter.Construct: setting both container-name and
+            // container-type individually must let the "container" shorthand serialize their combination.
+            var style = ParseDeclarations("container-name: sidebar; container-type: inline-size;");
+
+            Assert.Equal("sidebar / inline-size", style["container"]);
+        }
+
+        [Fact]
+        public void ContainerShorthand_OnlyOneLonghandSet_ShorthandIsEmpty()
+        {
+            var style = ParseDeclarations("container-name: sidebar;");
+
+            Assert.Equal(string.Empty, style["container"]);
+        }
     }
 }
 

@@ -1896,20 +1896,6 @@ namespace PeachPDF.Html.Core.Parse
             return val;
         }
 
-        private static double ParseDoubleAtIndex(string str, ref int startIdx)
-        {
-            int len = 0;
-            while (startIdx < str.Length && char.IsWhiteSpace(str, startIdx))
-                startIdx++;
-            while (startIdx + len < str.Length && (char.IsDigit(str, startIdx + len) || str[startIdx + len] == '.'))
-                len++;
-            if (len < 1) { startIdx++; return -1d; }
-            if (!double.TryParse(str.Substring(startIdx, len), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double val))
-                val = -1d;
-            startIdx = startIdx + len + 1;
-            return val;
-        }
-
         /// <summary>
         /// Parse the given decimal number string to positive int value.
         /// Assume given substring is not empty and all indexes are valid!<br/>

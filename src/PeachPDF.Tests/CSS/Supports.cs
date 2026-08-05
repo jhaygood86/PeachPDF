@@ -43,6 +43,28 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void SupportsBreakAfterPageRule()
+        {
+            var source = @"@supports (break-after: page) { }";
+            var sheet = ParseStyleSheet(source);
+            Assert.Equal(1, sheet.Rules.Length);
+            Assert.IsType<SupportsRule>(sheet.Rules[0]);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
+        [Fact]
+        public void SupportsBreakAfterInvalidValueRule()
+        {
+            var source = @"@supports (break-after: not-a-real-value) { }";
+            var sheet = ParseStyleSheet(source);
+            Assert.Equal(1, sheet.Rules.Length);
+            Assert.IsType<SupportsRule>(sheet.Rules[0]);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.False(supports.Condition.Check());
+        }
+
+        [Fact]
         public void SupportsNotUnsupportedDeclarationRule()
         {
             var source = @"@supports (not (background-transparency: half)) { }";
