@@ -186,7 +186,7 @@ public class DocumentTreePseudoClassTests
 
         var box = await Box(html, "deep");
         Assert.Equal(Blue, box.Color);
-        Assert.Equal("bold", box.FontWeight);
+        Assert.Equal("bold", box.FontWeight.ToString());
     }
 
     [Fact]

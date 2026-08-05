@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(box.Position.ToString(), CssUtils.GetPropertyValue(box, "position"));
             Assert.Equal(box.Overflow.ToString(), CssUtils.GetPropertyValue(box, "overflow"));
             Assert.Equal(box.TextAlign.ToString(), CssUtils.GetPropertyValue(box, "text-align"));
-            Assert.Equal(box.FontWeight, CssUtils.GetPropertyValue(box, "font-weight"));
+            Assert.Equal(box.FontWeight.ToString(), CssUtils.GetPropertyValue(box, "font-weight"));
             Assert.Equal(box.ZIndex.ToString(), CssUtils.GetPropertyValue(box, "z-index"));
         }
 

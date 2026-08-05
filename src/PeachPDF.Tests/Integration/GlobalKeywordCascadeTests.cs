@@ -697,7 +697,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(el);
             Assert.Equal("black", el!.Color);
             Assert.Equal("rgb(255, 255, 0)", el.BackgroundColor);
-            Assert.Equal("bold", el.FontWeight);
+            Assert.Equal("bold", el.FontWeight.ToString());
         }
 
         [Fact]
