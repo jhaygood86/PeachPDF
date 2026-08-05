@@ -290,18 +290,20 @@ namespace PeachPDF.Html.Core.Dom
             // since auto-width block boxes fill the entire containing block instead of their intrinsic size).
             // A percentage flex-basis against an indefinite main axis resolves to nothing per spec
             // (§4.5), so it must fall through to auto/content-based sizing rather than resolving to 0.
-            bool isIndefinitePercentageBasis = mainSizeIndefinite && box.FlexBasis.EndsWith('%');
+            var flexBasis = box.FlexBasis.Value;
+            var isIndefinitePercentageBasis = mainSizeIndefinite &&
+                flexBasis.Value is { IsCalc: false, Length: { Type: Length.Unit.Percent } };
             double hypothetical;
-            if (box.FlexBasis is not ("auto" or "content" or "") && !isIndefinitePercentageBasis)
+            if (flexBasis.IsValue && !isIndefinitePercentageBasis)
             {
                 // CSS flex-basis = content size; hypothetical = outer size = content + padding + border
-                hypothetical = CssValueParser.ParseLength(box.FlexBasis, mainSize, box) + MainPaddingBorder(box);
+                hypothetical = CssValueParser.ParseLength(flexBasis.Value!.Value, mainSize, box) + MainPaddingBorder(box);
             }
-            else if (box.FlexBasis != "content" && _isRow && CssValueParser.IsValidLength(box.Width))
+            else if (flexBasis.Keyword is not FlexBasisKeyword.Content && _isRow && CssValueParser.IsValidLength(box.Width))
             {
                 hypothetical = CssValueParser.ParseLength(box.Width, mainSize, box) + MainPaddingBorder(box);
             }
-            else if (box.FlexBasis != "content" && !_isRow && CssValueParser.IsValidLength(box.Height))
+            else if (flexBasis.Keyword is not FlexBasisKeyword.Content && !_isRow && CssValueParser.IsValidLength(box.Height))
             {
                 hypothetical = CssValueParser.ParseLength(box.Height, mainSize, box) + MainPaddingBorder(box);
             }

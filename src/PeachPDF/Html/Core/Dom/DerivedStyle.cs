@@ -962,7 +962,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (_actualNumericWeight is { } cached) return cached;
 
                 var parentWeight = Owner.ParentBox is { } parent ? parent.ActualNumericWeight : 400;
-                var resolved = FontWeightResolver.Resolve(Style.Font.FontWeight, parentWeight);
+                var resolved = FontWeightResolver.Resolve(Style.Font.FontWeight.Value, parentWeight);
                 _actualNumericWeight = resolved;
                 return resolved;
             }
