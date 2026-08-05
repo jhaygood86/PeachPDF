@@ -2,6 +2,8 @@ using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using System.Threading.Tasks;
 
@@ -139,6 +141,180 @@ namespace PeachPDF.Tests.Integration
             var div = FindById(root, "d")!;
 
             Assert.Equal(VerticalAlignment.Middle, div.VerticalAlign.Value);
+        }
+
+        [Fact]
+        public async Task BackgroundAttribute_SetsBackgroundImage()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<div id='d' background='x.png'>x</div>"));
+            var div = FindById(root, "d")!;
+
+            var layer = Assert.Single(div.BackgroundImages!);
+            var urlImage = Assert.IsType<CssImage.Url>(layer);
+            Assert.Equal("x.png", urlImage.Href);
+        }
+
+        [Fact]
+        public async Task BgcolorAttribute_SetsBackgroundColor()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<div id='d' bgcolor='red'>x</div>"));
+            var div = FindById(root, "d")!;
+
+            Assert.Equal("red", div.BackgroundColor);
+        }
+
+        [Fact]
+        public async Task BorderAttribute_OnTable_SetsSolidBorderAndAttemptsCellCascade()
+        {
+            // Exercises TranslateBorder's tag.Name == "table" branch, which (attempts to) cascade a 1px
+            // solid border onto every cell via ApplyTableBorder/SetForAllCells - which has the same
+            // pre-existing #636 gap as CellpaddingAttribute_DoesNotYetReachTableCells above and
+            // PresentationalBorderAttribute_OnAPlainElement_ForcesSolidOnAllSides's comment in
+            // BorderStylePaintIntegrationTests, so only the table's own border is asserted here.
+            var (root, _) = await BuildAndLayout(Wrap("<table id='t' border='1'><tr><td>x</td></tr></table>"));
+            var table = FindById(root, "t")!;
+
+            Assert.Equal(LineStyle.Solid, table.BorderTopStyle.Value);
+            Assert.Equal("1px", table.BorderTopWidth);
+        }
+
+        [Fact]
+        public async Task BordercolorAttribute_SetsAllBorderColors()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<div id='d' bordercolor='red'>x</div>"));
+            var div = FindById(root, "d")!;
+
+            Assert.Equal("red", div.BorderLeftColor);
+            Assert.Equal("red", div.BorderTopColor);
+            Assert.Equal("red", div.BorderRightColor);
+            Assert.Equal("red", div.BorderBottomColor);
+        }
+
+        [Fact]
+        public async Task CellspacingAttribute_SetsBorderSpacing()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<table id='t' cellspacing='5'><tr><td>x</td></tr></table>"));
+            var table = FindById(root, "t")!;
+
+            Assert.Equal("5px", table.BorderSpacing);
+        }
+
+        [Fact]
+        public async Task CellpaddingAttribute_DoesNotYetReachTableCells()
+        {
+            // ApplyTablePadding's TD-cascading path (SetForAllCells) has the same pre-existing gap as
+            // ApplyTableBorder's (see PresentationalBorderAttribute_OnAPlainElement_ForcesSolidOnAllSides's
+            // comment in BorderStylePaintIntegrationTests): it doesn't traverse the anonymous
+            // table-row-group box CSS inserts around a bare <tr>, so cellpadding never actually reaches
+            // the cell today - tracked separately as issue #636, out of scope here. This documents the
+            // current (pre-existing) behavior rather than silently leaving the `cellpadding` switch-case
+            // uncovered.
+            var (root, _) = await BuildAndLayout(Wrap("<table id='t' cellpadding='5'><tr><td id='c'>x</td></tr></table>"));
+            var cell = FindById(root, "c")!;
+
+            Assert.Equal("0", cell.PaddingLeft);
+        }
+
+        [Fact]
+        public async Task ColorAttribute_SetsColor()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<div id='d' color='blue'>x</div>"));
+            var div = FindById(root, "d")!;
+
+            Assert.Equal("blue", div.Color);
+        }
+
+        [Fact]
+        public async Task HeightAttribute_SetsHeight()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<div id='d' height='50'>x</div>"));
+            var div = FindById(root, "d")!;
+
+            Assert.Equal("50px", div.Height);
+        }
+
+        [Fact]
+        public async Task HspaceAttribute_SetsLeftAndRightMargin()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<img id='i' hspace='10' src='x.png' width='10' height='10'>"));
+            var img = FindById(root, "i")!;
+
+            Assert.Equal("10px", img.MarginLeft.ToString());
+            Assert.Equal("10px", img.MarginRight.ToString());
+        }
+
+        [Fact]
+        public async Task VspaceAttribute_SetsTopAndBottomMargin()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<img id='i' vspace='10' src='x.png' width='10' height='10'>"));
+            var img = FindById(root, "i")!;
+
+            Assert.Equal("10px", img.MarginTop.ToString());
+            Assert.Equal("10px", img.MarginBottom.ToString());
+        }
+
+        [Fact]
+        public async Task WidthAttribute_SetsWidth()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<div id='d' width='50'>x</div>"));
+            var div = FindById(root, "d")!;
+
+            Assert.Equal("50px", div.Width);
+        }
+
+        [Fact]
+        public async Task SizeAttribute_OnHr_SetsHeight()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<hr id='h' size='3'>"));
+            var hr = FindById(root, "h")!;
+
+            Assert.Equal("3px", hr.Height);
+        }
+
+        [Fact]
+        public async Task SizeAttribute_OnFont_WithValidValue_SetsFontSize()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<font id='f' size='large'>x</font>"));
+            var font = FindById(root, "f")!;
+
+            Assert.Equal("large", font.FontSize.ToString());
+        }
+
+        [Fact]
+        public async Task SizeAttribute_OnFont_WithInvalidValue_LeavesFontSizeUnchanged()
+        {
+            // A bare legacy HTML size scale value ("+2", or "1"-"7") matches neither a CSS font-size
+            // keyword nor a valid length, so it must be left alone rather than forced to "medium" -
+            // see the comment on TranslateFontSize (issue #642's accepted-gap convention).
+            var (root, _) = await BuildAndLayout(Wrap("<font id='f' size='+2'>x</font>"));
+            var font = FindById(root, "f")!;
+
+            Assert.Equal("medium", font.FontSize.ToString());
+        }
+
+        [Fact]
+        public async Task FaceAttribute_WithResolvableFont_SetsFontFamily()
+        {
+            var (root, _) = await BuildAndLayout(Wrap($"<font id='f' face='{CssConstants.DefaultFont}'>x</font>"));
+            var font = FindById(root, "f")!;
+
+            Assert.Equal(CssConstants.DefaultFont, font.FontFamily);
+            Assert.Equal(CssConstants.DefaultFont, font.FontFamilyList);
+        }
+
+        [Fact]
+        public async Task FaceAttribute_WithUnresolvableFont_FallsBackToDefaultFontButKeepsRawList()
+        {
+            // GetFontFamilyByName returns null when no candidate resolves (see
+            // CssValueParserFontFamilyTests), but DerivedStyle lazily resolves a null/empty FontFamily to
+            // CssConstants.DefaultFont once layout runs (the same fallback CSS's own unresolvable
+            // font-family gets) - FontFamilyList is untouched by that fallback, so it still holds the raw
+            // attribute text.
+            var (root, _) = await BuildAndLayout(Wrap("<font id='f' face='__DefinitelyNotARealFontFamily__'>x</font>"));
+            var font = FindById(root, "f")!;
+
+            Assert.Equal(CssConstants.DefaultFont, font.FontFamily);
+            Assert.Equal("__DefinitelyNotARealFontFamily__", font.FontFamilyList);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
