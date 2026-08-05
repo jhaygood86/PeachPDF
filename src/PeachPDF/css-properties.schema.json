@@ -138,7 +138,7 @@
             "enumType": { "type": "string" },
             "keywordMap": { "type": "string" },
             "fallback": { "type": "string" },
-            "valueType": { "type": "string", "enum": ["integer", "length"], "description": "The non-keyword side's grammar and TValue — must match a TryParse-shaped parser (int.TryParse, Length.TryParse) RegistryEmitter knows how to call." },
+            "valueType": { "type": "string", "enum": ["integer", "length", "length-or-unitless"], "description": "The non-keyword side's grammar and TValue — must match a TryParse-shaped parser (int.TryParse, Length.TryParse, CssValueParser.TryParseLengthOrUnitless) RegistryEmitter knows how to call." },
             "min": { "type": "number", "description": "Narrows an \"integer\" valueType's validation clause — same field/meaning as the plain \"integer\" DataTypeKind's own \"min\" (e.g. column-count's <integer> must be >= 1) — see KeywordOrValueGrammar." },
             "max": { "type": "number", "description": "Narrows an \"integer\" valueType's validation clause — same field/meaning as the plain \"integer\" DataTypeKind's own \"max\" — see KeywordOrValueGrammar." }
           }

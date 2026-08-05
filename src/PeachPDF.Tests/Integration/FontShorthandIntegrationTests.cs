@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("italic", el!.FontStyle);
             Assert.Equal("bold", el.FontWeight.ToString());
             Assert.Equal("16px", el.FontSize.ToString());
-            Assert.Equal("1.4", el.LineHeight);
+            Assert.Equal("1.4", el.LineHeight.ToString());
             Assert.Contains("Arial", el.FontFamily);
         }
 
@@ -45,7 +45,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(el);
             Assert.Equal("bold", el!.FontWeight.ToString());
             Assert.Equal("16px", el.FontSize.ToString());
-            Assert.Equal("1.4", el.LineHeight);
+            Assert.Equal("1.4", el.LineHeight.ToString());
             Assert.Contains("Arial", el.FontFamily);
             Assert.DoesNotContain("+", el.FontFamily);
             Assert.DoesNotContain("calc", el.FontFamily);
@@ -66,7 +66,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(el);
             Assert.Equal("bold", el!.FontWeight.ToString());
             Assert.Equal("16px", el.FontSize.ToString());
-            Assert.Equal("1.4", el.LineHeight);
+            Assert.Equal("1.4", el.LineHeight.ToString());
             Assert.Contains("Arial", el.FontFamily);
         }
 

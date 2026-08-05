@@ -1023,7 +1023,7 @@ namespace PeachPDF.Tests.Integration
             // as declared.
             var expectedPt = 2 * parent.ActualFont.Size;
             Assert.Equal($"{expectedPt.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt", box.FontSize.ToString());
-            Assert.Equal("24px", box.LineHeight);
+            Assert.Equal("24px", box.LineHeight.ToString());
         }
 
         // ─── vertical-align: bottom on an inline REPLACED element (not text) ───────

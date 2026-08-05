@@ -1097,9 +1097,9 @@ namespace PeachPDF.Html.Core.Dom
         #region Line-height
 
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
-        public double ActualLineHeight => Style.Text.LineHeight is CssConstants.Normal
-            ? 1.2 * GetEmHeight()
-            : CssValueParser.ParseLength(Style.Text.LineHeight, Owner.Size.Height, Owner);
+        public double ActualLineHeight => Style.Text.LineHeight.Value.Value is { } lineHeight
+            ? CssValueParser.ParseLength(lineHeight, Owner.Size.Height, Owner)
+            : 1.2 * GetEmHeight();
 
         #endregion
 
