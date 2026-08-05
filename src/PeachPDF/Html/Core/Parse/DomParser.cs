@@ -1492,8 +1492,24 @@ namespace PeachPDF.Html.Core.Parse
                         if (tag.Name.Equals(HtmlConstants.Hr, StringComparison.OrdinalIgnoreCase))
                             box.Height = TranslateLength(value);
                         else if (tag.Name.Equals(HtmlConstants.Font, StringComparison.OrdinalIgnoreCase))
-                            box.FontSize = CssKeywordOrValueParser.FromCssText<FontSizeKeyword, LengthOrCalc>(
-                                value, Map.FontSizeKeywords, CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);
+                        {
+                            // HTML's legacy <font size> is a "1"-"7" (or "+N"/"-N" relative) scale, never
+                            // a CSS keyword or length - there is no translation table for it here, so a
+                            // real-world value never validates against either side of FontSize's grammar.
+                            // FromCssText's own fallback always assigns *something* (unlike a raw string
+                            // assignment, which just held the unrecognized text for later, equally-inert,
+                            // downstream failure), so skip the assignment entirely when the value doesn't
+                            // validate - leaving whatever the cascade already produced in place, per how
+                            // browsers generally treat an unrecognized presentational-attribute value
+                            // (same convention as the valign/align attribute's own accepted gap, issue
+                            // #642) - rather than silently forcing every <font size="N"> to "medium".
+                            var trimmed = value.Trim();
+                            if (Map.FontSizeKeywords.ContainsKey(trimmed) || CssValueParser.TryParseLengthOrCalc(trimmed, out _))
+                            {
+                                box.FontSize = CssKeywordOrValueParser.FromCssText<FontSizeKeyword, LengthOrCalc>(
+                                    value, Map.FontSizeKeywords, CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);
+                            }
+                        }
                         break;
                     case HtmlConstants.Valign:
                         box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);

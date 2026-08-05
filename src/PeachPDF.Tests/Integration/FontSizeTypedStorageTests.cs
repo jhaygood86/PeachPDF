@@ -151,6 +151,22 @@ namespace PeachPDF.Tests.Integration
             Assert.True(box!.FontSize.Value is { IsKeyword: true, Keyword: FontSizeKeyword.Large });
         }
 
+        [Fact]
+        public async Task LegacyFontSizeAttribute_UnrecognizedNumericScale_LeavesTheInheritedValueInPlace()
+        {
+            // HTML's legacy <font size> is really a "1"-"7"/relative scale, never a CSS keyword or length
+            // - there's no translation table for it, so a real-world numeric value never validates. The
+            // attribute must be treated as absent (leaving the cascade's own value, "large" here, in
+            // place) rather than forcing every such element to "medium" regardless of the requested size.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='font-size:large'><font id='t' size='3'>x</font></div>"));
+
+            var box = LayoutHarness.FindById(root, "t");
+
+            Assert.NotNull(box);
+            Assert.True(box!.FontSize.Value is { IsKeyword: true, Keyword: FontSizeKeyword.Large });
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<PeachPDF.Html.Core.Dom.CssBox> GetFontSizeBoxAsync(string authored)
