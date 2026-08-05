@@ -1882,25 +1882,20 @@
     },
     {
       "name": "font-stretch",
+      "comment": "CssProperty<FontStretch>-backed (issue #598's follow-up: typed enum storage instead of a raw string) - reuses the pre-existing FontStretch enum/Map.FontStretches map, already used by FontStretchResolver/the legacy CSS-OM layer.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "keyword",
-      "supportedValues": [
-        "normal",
-        "ultra-condensed",
-        "extra-condensed",
-        "condensed",
-        "semi-condensed",
-        "semi-expanded",
-        "expanded",
-        "extra-expanded",
-        "ultra-expanded"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "FontStretch",
+        "keywordMap": "Map.FontStretches",
+        "fallback": "FontStretch.Normal"
+      },
       "html": {
         "propertyPath": "FontStretch",
-        "csharpDataType": "string",
-        "area": "FontArea"
+        "csharpDataType": "CssProperty<FontStretch>",
+        "area": "FontArea",
+        "getterExpression": "{box}.FontStretch.ToString()"
       }
     },
     {
