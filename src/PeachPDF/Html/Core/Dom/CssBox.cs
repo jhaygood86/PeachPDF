@@ -515,7 +515,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the actual top's Margin
         /// </summary>
-        public double ActualMarginTop => CssValueParser.ParseLength(MarginTop, ContainingBlock.Size.Width, this);
+        public double ActualMarginTop =>
+            MarginTop.Value is { IsValue: true, Value: { } marginTop }
+                ? CssValueParser.ParseLength(marginTop, ContainingBlock.Size.Width, this)
+                : 0;
 
         /// <summary>
         /// Gets the actual Margin on the left
@@ -525,7 +528,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the actual Margin of the bottom
         /// </summary>
-        public double ActualMarginBottom => CssValueParser.ParseLength(MarginBottom, ContainingBlock.Size.Width, this);
+        public double ActualMarginBottom =>
+            MarginBottom.Value is { IsValue: true, Value: { } marginBottom }
+                ? CssValueParser.ParseLength(marginBottom, ContainingBlock.Size.Width, this)
+                : 0;
 
         /// <summary>
         /// Gets the actual Margin on the right

@@ -53,7 +53,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("30px", child!.MarginTop);
+            Assert.Equal("30px", child!.MarginTop.ToString());
         }
 
         [Fact]
@@ -128,7 +128,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("0", el!.MarginTop);
+            Assert.Equal("0", el!.MarginTop.ToString());
         }
 
         [Fact]
@@ -185,7 +185,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("0", el!.MarginTop);
+            Assert.Equal("0", el!.MarginTop.ToString());
         }
 
         [Fact]
@@ -291,7 +291,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("0", el!.MarginTop);
+            Assert.Equal("0", el!.MarginTop.ToString());
         }
 
         // ── revert-layer ──────────────────────────────────────────────────────
@@ -742,7 +742,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(el);
             Assert.Equal("rgb(0, 0, 255)", el!.Color);
-            Assert.Equal("12px", el.MarginTop);
+            Assert.Equal("12px", el.MarginTop.ToString());
             Assert.Equal("rgb(255, 255, 0)", el.BackgroundColor);
         }
 
@@ -926,7 +926,7 @@ namespace PeachPDF.Tests.Integration
             var body = FindById(root, "b");
 
             Assert.NotNull(body);
-            Assert.Equal("8px", body!.MarginTop);
+            Assert.Equal("8px", body!.MarginTop.ToString());
         }
 
         // ── helpers ───────────────────────────────────────────────────────────

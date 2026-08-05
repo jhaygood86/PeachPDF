@@ -338,7 +338,7 @@ namespace PeachPDF.Html.Core.Dom
             // Once per table, for the same reason the whole-table pre-checks below are: the offset is
             // derived from the containing block rather than from where the table currently is, so a
             // continuation adding it again would center an already-centered table a second time.
-            if (!_continuesAPreviousPass && _tableBox.MarginLeft is CssConstants.Auto)
+            if (!_continuesAPreviousPass && _tableBox.MarginLeft.Value.IsKeyword)
             {
                 _tableBox.Location = _tableBox.Location with
                 {

@@ -1,4 +1,5 @@
 using PeachPDF.CSS;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Html.Core.Dom
@@ -109,12 +110,14 @@ namespace PeachPDF.Html.Core.Dom
 
         private void ApplyMargin(PhysicalSide side, string value)
         {
+            var parsed = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
+                value, Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
             switch (side)
             {
-                case PhysicalSide.Top: MarginTop = value; break;
-                case PhysicalSide.Right: MarginRight = value; break;
-                case PhysicalSide.Bottom: MarginBottom = value; break;
-                default: MarginLeft = value; break;
+                case PhysicalSide.Top: MarginTop = parsed; break;
+                case PhysicalSide.Right: MarginRight = parsed; break;
+                case PhysicalSide.Bottom: MarginBottom = parsed; break;
+                default: MarginLeft = parsed; break;
             }
         }
 

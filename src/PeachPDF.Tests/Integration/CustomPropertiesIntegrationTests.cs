@@ -90,7 +90,7 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("10px", el!.MarginTop);
+            Assert.Equal("10px", el!.MarginTop.ToString());
         }
 
         [Fact]
@@ -126,7 +126,7 @@ namespace PeachPDF.Tests.Integration
             var child = FindById(root, "child");
 
             Assert.NotNull(child);
-            Assert.Equal("0", child!.MarginTop);
+            Assert.Equal("0", child!.MarginTop.ToString());
         }
 
         [Fact]
@@ -142,10 +142,10 @@ namespace PeachPDF.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal("10px", el!.MarginTop);
-            Assert.Equal("10px", el.MarginBottom);
-            Assert.Equal("20px", el.MarginLeft);
-            Assert.Equal("20px", el.MarginRight);
+            Assert.Equal("10px", el!.MarginTop.ToString());
+            Assert.Equal("10px", el.MarginBottom.ToString());
+            Assert.Equal("20px", el.MarginLeft.ToString());
+            Assert.Equal("20px", el.MarginRight.ToString());
         }
 
         [Fact]

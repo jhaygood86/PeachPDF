@@ -689,74 +689,78 @@
     },
     {
       "name": "margin-bottom",
+      "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "MarginBottom",
-        "csharpDataType": "string",
-        "area": "BoxModelArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>>",
+        "area": "BoxModelArea",
+        "getterExpression": "{box}.MarginBottom.ToString()"
       }
     },
     {
       "name": "margin-left",
+      "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "MarginLeft",
-        "csharpDataType": "string",
-        "area": "BoxModelArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>>",
+        "area": "BoxModelArea",
+        "getterExpression": "{box}.MarginLeft.ToString()"
       }
     },
     {
       "name": "margin-right",
+      "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "MarginRight",
-        "csharpDataType": "string",
-        "area": "BoxModelArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>>",
+        "area": "BoxModelArea",
+        "getterExpression": "{box}.MarginRight.ToString()"
       }
     },
     {
       "name": "margin-top",
+      "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
       "initialValue": "0",
-      "cssDataType": [
-        "length",
-        "keyword"
-      ],
-      "supportedValues": [
-        "auto"
-      ],
-      "keywordComparison": "ordinal-ignore-case",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "AutoKeyword",
+        "keywordMap": "Map.AutoKeywords",
+        "fallback": "AutoKeyword.Auto",
+        "valueType": "length"
+      },
       "html": {
         "propertyPath": "MarginTop",
-        "csharpDataType": "string",
-        "area": "BoxModelArea"
+        "csharpDataType": "CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>>",
+        "area": "BoxModelArea",
+        "getterExpression": "{box}.MarginTop.ToString()"
       }
     },
     {

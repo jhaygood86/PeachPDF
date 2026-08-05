@@ -37,7 +37,7 @@ public class UnmatchableSelectorRegistrationTests
             "<p id='p'>text</p>");
         var box = await Box(html, "p");
         Assert.Equal("rgb(0, 0, 255)", box.Color);
-        Assert.Equal("8pt", box.MarginTop);
+        Assert.Equal("8pt", box.MarginTop.ToString());
     }
 
     [Theory]
