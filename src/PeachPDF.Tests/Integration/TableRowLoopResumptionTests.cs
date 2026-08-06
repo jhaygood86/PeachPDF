@@ -993,7 +993,8 @@ namespace PeachPDF.Tests.Integration
             {
                 InheritStyle(row, everything: true);
                 Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
-                VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Middle, VerticalAlignment.Middle);
+                VerticalAlign = CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue(
+                    CssConstants.Middle, new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Middle, null));
                 _stops = stops;
                 _keepsItsContentAfterTheFirstLayout = keepsItsContentAfterTheFirstLayout;
 
@@ -1258,6 +1259,50 @@ namespace PeachPDF.Tests.Integration
                 Assert.True(Math.Abs(after[0] - before[0]) > 1,
                     "the run honoured a record naming a row on a table that had settled nothing");
             });
+        }
+
+        // ─── A rowspan cell "finished" at its opening row still closes at its ending row ─────────
+
+        /// <summary>
+        /// A rowspan cell a resumed pass marks "finished" at its own opening row still closes at the row
+        /// that ends its span, later in the same pass — the stale-finished guard must not skip it there.
+        /// </summary>
+        /// <remarks>
+        /// Regression for <see href="https://github.com/jhaygood86/PeachPDF/issues/593">issue #593</see>:
+        /// <c>TableRowCursor._carriedFinished</c> is seeded once, when a resumed pass re-enters the row
+        /// that opened a rowspan, and is never cleared for the rest of that pass — so
+        /// <c>FinishedOnAnEarlierPass</c> keeps answering true for that cell all the way through the row
+        /// that should actually close it, and <c>CloseSpanningCell</c> is never entered for it at all.
+        /// </remarks>
+        [Fact]
+        public async Task ARowspanCellMarkedFinishedAtItsOpeningRow_StillClosesAtTheRowThatEndsItsSpan()
+        {
+            await WithALaidOutTable(
+                "<table style='width:150pt;font-size:10pt'>"
+                + "<tr><td id='span' rowspan='3'>short</td><td>sibling</td></tr>"
+                + "<tr><td>row1</td></tr>"
+                + "<tr><td>row2</td></tr></table>",
+                async (table, container, g) =>
+                {
+                    var span = LayoutHarness.FindById(table, "span")!;
+
+                    // A value CloseSpanningCell would never produce naturally, so a pass that skips the
+                    // cell (the stale-guard bug) is distinguishable from one that actually re-closes it.
+                    span.ActualBottom = span.Location.Y;
+
+                    // A cell an earlier pass marked finished skips LayoutBodyRow's own per-cell layout
+                    // entirely (the FinishedOnAnEarlierPass branch `continue`s before ever re-registering
+                    // a rowspan into RowSpannedBoxes), so - exactly like a real multi-page continuation -
+                    // this resumed pass has to be handed the row-2 entry itself rather than rebuild it.
+                    var token = new TableBreakToken(table, ResumeSlotIndex: 1, ResumeRowIndex: 0, MaxRight: 0,
+                        UnfinishedCells: [], FinishedCells: [span],
+                        RowSpannedBoxes: new Dictionary<int, IReadOnlyList<CssBox>> { [2] = [span] });
+
+                    await RunEngine(g, container, table, token);
+
+                    var endingRow = BodyRowsOf(table)[2];
+                    Assert.Equal(endingRow.ActualBottom, span.ActualBottom, 3);
+                });
         }
 
         private static TableBreakToken Continuation(

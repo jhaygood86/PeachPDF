@@ -459,13 +459,18 @@ namespace PeachPDF.Html.Core.Dom
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(cell);
 
-            if (cell.VerticalAlign.Value is VerticalAlignment.Top or VerticalAlignment.Baseline)
+            // CSS 2.1 §17.5.3: a table cell's vertical-align only recognizes this keyword subset - a
+            // length/percentage (issue #603's own grammar addition) has no meaning here and falls to the
+            // same no-op default as sub/super/text-top/text-bottom/PeachBaselineMiddle already do.
+            var cellKeyword = cell.VerticalAlign.Value.Keyword;
+
+            if (cellKeyword is VerticalAlignment.Top or VerticalAlignment.Baseline)
                 return 0d;
 
             var cellBottom = cell.ClientBottom;
             var bottom = CssBox.GetMaximumBottom(cell, 0f);
 
-            var dist = cell.VerticalAlign.Value switch
+            var dist = cellKeyword switch
             {
                 VerticalAlignment.Bottom => cellBottom - bottom,
                 VerticalAlignment.Middle => (cellBottom - bottom) / 2,
@@ -2230,8 +2235,19 @@ namespace PeachPDF.Html.Core.Dom
                     styledBoxForVerticalAlign = styledBoxForVerticalAlign.ParentBox;
                 var effectiveVerticalAlign = firstLineVerticalAlign ?? styledBoxForVerticalAlign.VerticalAlign;
 
+                // A length/percentage (CSS 2.1 §10.8.1, issue #603) raises (positive) or lowers
+                // (negative) the box by this distance from its own baseline - a percentage resolves
+                // against the styled box's own line-height, mirroring sub/super's own baseline-relative
+                // offset below rather than any of the line-extent-relative cases.
+                if (effectiveVerticalAlign.Value is { IsValue: true, Value: { } lengthOrCalc })
+                {
+                    var offset = CssValueParser.ParseLength(lengthOrCalc, styledBoxForVerticalAlign.ActualLineHeight, styledBoxForVerticalAlign);
+                    lineBox.SetBaseLine(box, baseline - offset);
+                    continue;
+                }
+
                 //Important notes on http://www.w3.org/TR/CSS21/tables.html#height-layout
-                switch (effectiveVerticalAlign.Value)
+                switch (effectiveVerticalAlign.Value.Keyword)
                 {
                     case VerticalAlignment.Sub:
                         lineBox.SetBaseLine(box, baseline + rect.Height * .5f);
@@ -2258,7 +2274,7 @@ namespace PeachPDF.Html.Core.Dom
                         var styledBox = styledBoxForVerticalAlign;
                         var referenceFont = (styledBox.ParentBox ?? styledBox).ActualFont;
                         var fontTop = baseline - referenceFont.Ascent;
-                        var target = effectiveVerticalAlign.Value == VerticalAlignment.TextTop
+                        var target = effectiveVerticalAlign.Value.Keyword == VerticalAlignment.TextTop
                             ? fontTop
                             : fontTop + referenceFont.Height - rect.Height;
                         OffsetBoxWithinLine(lineBox, box, target - rect.Top);
@@ -2386,8 +2402,24 @@ namespace PeachPDF.Html.Core.Dom
             if (line.Words.Count == 0)
                 return;
 
+            // text-indent's line-start side is physical-left under LTR, where the flow-time CurrentX
+            // offset (CreateLineBoxes/FlowBox) already starts every word `indent` further right - so the
+            // ragged slack this function centers (`diff` below) already excludes the indent, and halving
+            // it evenly keeps the full indent as a fixed left-side offset while only splitting the actual
+            // leftover space (verified empirically: a 40pt indent measures as a full 40pt leftGap-minus-
+            // rightGap difference with no change here). Physical-right under RTL is different: FlowBox
+            // reserves RTL's indent by narrowing the *wrap boundary*, not by moving the start position, so
+            // nothing here excludes it from `diff` on its own - insetting the flush target by `indent`,
+            // mirroring ApplyRightAlignment's/ApplyJustifyAlignment's identical `isRtl` handling, is what
+            // moves it onto the line-start (physical right) side instead of splitting it away to nothing
+            // (issue #623).
+            var isFirstLine = line.Equals(line.OwnerBox.LineBoxes[0]);
+            var indent = GetLineTextIndent(line.OwnerBox, isFirstLine, line.FollowsForcedBreak);
+            var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
+
             var lastWord = line.Words[^1];
-            var right = line.OwnerBox.ActualRight - line.OwnerBox.ActualPaddingRight - line.OwnerBox.ActualBorderRightWidth;
+            var right = line.OwnerBox.ActualRight - line.OwnerBox.ActualPaddingRight - line.OwnerBox.ActualBorderRightWidth
+                        - (isRtl ? indent : 0);
             var diff = right - lastWord.Right - lastWord.OwnerBox.ActualBorderRightWidth - lastWord.OwnerBox.ActualPaddingRight;
             diff /= 2;
 

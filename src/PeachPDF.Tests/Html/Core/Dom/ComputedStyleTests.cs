@@ -271,12 +271,12 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // the otherwise-100%-inherited Text area - InheritStyle must explicitly restore it after the
             // area's whole-by-reference adoption, or a child would silently pick up the parent's declared
             // alignment instead of resolving to the initial "baseline" (issue #530).
-            var parent = new CssBox(null, null) { VerticalAlign = CssProperty<VerticalAlignment>.FromValue("middle", VerticalAlignment.Middle) };
+            var parent = new CssBox(null, null) { VerticalAlign = CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue("middle", new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Middle, null)) };
             var child = new CssBox(parent, null);
 
             child.InheritStyle();
 
-            Assert.Equal(VerticalAlignment.Baseline, child.VerticalAlign.Value);
+            Assert.Equal(VerticalAlignment.Baseline, child.VerticalAlign.Value.Keyword);
         }
 
         [Fact]
@@ -287,12 +287,12 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // element's own resolved vertical-align, exactly like unicode-bidi/box-sizing - this is the
             // `everything: true` path deliberately skipping the restore-to-pre-inherit-value correction
             // the normal path applies.
-            var source = new CssBox(null, null) { VerticalAlign = CssProperty<VerticalAlignment>.FromValue("middle", VerticalAlignment.Middle) };
+            var source = new CssBox(null, null) { VerticalAlign = CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue("middle", new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Middle, null)) };
             var clone = new CssBox(null, null);
 
             clone.InheritStyle(source, everything: true);
 
-            Assert.Equal(VerticalAlignment.Middle, clone.VerticalAlign.Value);
+            Assert.Equal(VerticalAlignment.Middle, clone.VerticalAlign.Value.Keyword);
         }
 
         // ── regression: DomParser.CascadeApplyStyles's fast-path skip of the defaulting loop ──

@@ -517,6 +517,16 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("justify-self", "right", "right")]
         [InlineData("justify-self", "left", "left")]
         [InlineData("word-break", "keep-all", "keep-all")]
+        // Issues #644/#645: the full CSS Box Alignment 3 keyword sets, previously narrower than what
+        // CssLayoutEngineFlex/CssLayoutEngineGrid actually dispatch.
+        [InlineData("align-items", "self-start", "self-start")]
+        [InlineData("align-self", "self-start", "self-start")]
+        [InlineData("justify-content", "start", "start")]
+        [InlineData("justify-content", "left", "left")]
+        [InlineData("justify-content", "right", "right")]
+        [InlineData("justify-content", "stretch", "stretch")]
+        [InlineData("align-content", "start", "start")]
+        [InlineData("align-content", "baseline", "baseline")]
         public async Task Cascade_PreviouslyDroppedKeyword_NowStored(string property, string value, string expected)
         {
             var (box, _) = await FindDivBoxAndParser($"{property}: {value};");

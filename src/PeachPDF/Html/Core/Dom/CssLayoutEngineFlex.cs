@@ -632,7 +632,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     break;
                 }
-                default: // flex-start
+                default: // flex-start / start / baseline (its content-distribution fallback is start, CSS Box Alignment 3 §8.3)
                     foreach (var l in lines) { l.CrossOffset = offset; offset += l.CrossSize + crossGap; }
                     break;
             }
@@ -696,6 +696,15 @@ namespace PeachPDF.Html.Core.Dom
                 case JustifyContent.FlexEnd:
                 case JustifyContent.End:
                     startOffset = freeSpace; spacing = 0; break;
+                // `left`/`right` are physical keywords (CSS Box Alignment 3 §8.3), unlike flow-relative
+                // `start`/`end`/`flex-start`/`flex-end` above: they must NOT flip with row-reverse (the
+                // way AssignLocations' `_isReverse` already flips flow-relative offsets for those), and
+                // they fall back to `start` when the main axis isn't parallel to the physical
+                // left/right axis (`flex-direction: column`/`column-reverse`) - issue #645.
+                case JustifyContent.Right:
+                    startOffset = _isRow && !_isReverse ? freeSpace : 0; spacing = 0; break;
+                case JustifyContent.Left:
+                    startOffset = _isRow && _isReverse ? freeSpace : 0; spacing = 0; break;
                 case JustifyContent.Center:
                     startOffset = freeSpace / 2; spacing = 0; break;
                 case JustifyContent.SpaceBetween:
@@ -706,7 +715,7 @@ namespace PeachPDF.Html.Core.Dom
                 case JustifyContent.SpaceEvenly:
                     spacing = n > 0 ? freeSpace / (n + 1) : 0;
                     startOffset = spacing; break;
-                default: // flex-start / normal
+                default: // flex-start / start / normal / stretch (no main-axis growth effect here)
                     startOffset = 0; spacing = 0; break;
             }
 
@@ -781,6 +790,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     case AlignItem.FlexEnd:
                     case AlignItem.End:
+                    case AlignItem.SelfEnd:
                         item.CrossOffset = flushCrossEnd;
                         break;
                     case AlignItem.Center:
@@ -860,7 +870,7 @@ namespace PeachPDF.Html.Core.Dom
                             ? line.CrossSize - maxBaselineTail - itemBaseline
                             : crossMarginBefore + (maxBaseline - itemBaseline);
                         break;
-                    default: // flex-start / start / baseline fallback (column-direction, or no discoverable baseline)
+                    default: // flex-start / start / self-start / baseline fallback (column-direction, or no discoverable baseline)
                         item.CrossOffset = flushCrossStart;
                         break;
                 }

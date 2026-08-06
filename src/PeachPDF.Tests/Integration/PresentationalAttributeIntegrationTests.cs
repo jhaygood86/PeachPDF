@@ -88,7 +88,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<img id='i' align='left' src='x.png' width='10' height='10'>"));
             var img = FindById(root, "i")!;
 
-            Assert.Equal(VerticalAlignment.Top, img.VerticalAlign.Value);
+            Assert.Equal(VerticalAlignment.Top, img.VerticalAlign.Value.Keyword);
         }
 
         [Fact]
@@ -97,7 +97,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<img id='i' align='top' src='x.png' width='10' height='10'>"));
             var img = FindById(root, "i")!;
 
-            Assert.Equal(VerticalAlignment.Top, img.VerticalAlign.Value);
+            Assert.Equal(VerticalAlignment.Top, img.VerticalAlign.Value.Keyword);
         }
 
         [Fact]
@@ -106,7 +106,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<img id='i' align='bottom' src='x.png' width='10' height='10'>"));
             var img = FindById(root, "i")!;
 
-            Assert.Equal(VerticalAlignment.Baseline, img.VerticalAlign.Value);
+            Assert.Equal(VerticalAlignment.Baseline, img.VerticalAlign.Value.Keyword);
         }
 
         [Fact]
@@ -120,7 +120,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<img id='i' align='middle' src='x.png' width='10' height='10'>"));
             var img = FindById(root, "i")!;
 
-            Assert.Equal(VerticalAlignment.PeachBaselineMiddle, img.VerticalAlign.Value);
+            Assert.Equal(VerticalAlignment.PeachBaselineMiddle, img.VerticalAlign.Value.Keyword);
         }
 
         [Fact]
@@ -129,7 +129,7 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<table><tr><td id='d' valign='top'>x</td></tr></table>"));
             var td = FindById(root, "d")!;
 
-            Assert.Equal(VerticalAlignment.Top, td.VerticalAlign.Value);
+            Assert.Equal(VerticalAlignment.Top, td.VerticalAlign.Value.Keyword);
         }
 
         [Fact]
@@ -142,7 +142,42 @@ namespace PeachPDF.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<div id='d' align='middle'>x</div>"));
             var div = FindById(root, "d")!;
 
-            Assert.Equal(VerticalAlignment.Middle, div.VerticalAlign.Value);
+            Assert.Equal(VerticalAlignment.Middle, div.VerticalAlign.Value.Keyword);
+        }
+
+        [Fact]
+        public async Task ValignAttribute_WithAnUnrecognizedValue_LeavesTheCascadedValueInPlace()
+        {
+            // Regression for issue #642: an unrecognized valign value used to force baseline
+            // unconditionally (CssProperty<T>.FromCssText's own fallback), overwriting whatever the CSS
+            // cascade had already produced - here, the UA default stylesheet's `td, th { vertical-align:
+            // inherit }` from a `middle`-declaring <tr> (CssDefaults.cs).
+            var (root, _) = await BuildAndLayout(Wrap("<table><tr><td id='d' valign='bogus'>x</td></tr></table>"));
+            var td = FindById(root, "d")!;
+
+            Assert.Equal(VerticalAlignment.Middle, td.VerticalAlign.Value.Keyword);
+        }
+
+        [Fact]
+        public async Task ValignAttribute_WithAnUnrecognizedValue_DoesNotOverrideAnAuthoredStylesheetRule()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>#d { vertical-align: top; }</style>" +
+                "<table><tr><td id='d' valign='bogus'>x</td></tr></table>"));
+            var td = FindById(root, "d")!;
+
+            Assert.Equal(VerticalAlignment.Top, td.VerticalAlign.Value.Keyword);
+        }
+
+        [Fact]
+        public async Task AlignAttribute_Uppercase_StillMapsToTextAlign()
+        {
+            // Legacy markup commonly authors align="LEFT"/"CENTER" etc. - a case-sensitive comparison
+            // used to miss these and fall into the vertical-align branch instead (issue #642).
+            var (root, _) = await BuildAndLayout(Wrap("<div id='d' align='LEFT'>x</div>"));
+            var div = FindById(root, "d")!;
+
+            Assert.Equal(HorizontalAlignment.Left, div.TextAlign.Value);
         }
 
         [Fact]

@@ -202,6 +202,115 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(items[2].ActualRight, container.ClientRight - 1, container.ClientRight + 1);
         }
 
+        [Fact]
+        public async Task JustifyContent_Right_PacksAtEnd()
+        {
+            // Regression for issue #645: `right` used to be rejected at the cascade (falling back to
+            // `normal`, i.e. packed at the start) instead of dispatching like `flex-end`.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; width:300pt; justify-content:right;'>
+                    <div id='item' style='width:100pt; height:20pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.ActualRight, container.ClientRight - 2, container.ClientRight + 2);
+        }
+
+        [Fact]
+        public async Task JustifyContent_Right_IsPhysical_DoesNotFlipUnderRowReverse()
+        {
+            // CSS Box Alignment 3 §8.3: `left`/`right` are physical keywords, unlike the flow-relative
+            // `start`/`end`/`flex-start`/`flex-end` - under row-reverse (whose flow-start is the
+            // physical right edge), `right` must still mean the physical right edge, not flip to the
+            // physical left the way `flex-end` does.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-direction:row-reverse; width:300pt; justify-content:right;'>
+                    <div id='item' style='width:100pt; height:20pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.ActualRight, container.ClientRight - 2, container.ClientRight + 2);
+        }
+
+        [Fact]
+        public async Task JustifyContent_Right_FallsBackToStart_WhenTheMainAxisIsVertical()
+        {
+            // CSS Box Alignment 3 §8.3: `left`/`right` fall back to `start` when the property's axis
+            // isn't parallel to the physical left/right axis - a column flex container's main axis is
+            // vertical, so `justify-content:right` behaves as `start` (packs at the top) rather than
+            // flushing to either the cross-end or main-end edge.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-direction:column; height:300pt; justify-content:right;'>
+                    <div id='item' style='width:50pt; height:100pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.Location.Y, container.ClientTop - 1, container.ClientTop + 1);
+        }
+
+        [Fact]
+        public async Task JustifyContent_Left_IsPhysical_DoesNotFlipUnderRowReverse()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-direction:row-reverse; width:300pt; justify-content:left;'>
+                    <div id='item' style='width:100pt; height:20pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.Location.X, container.ClientLeft - 2, container.ClientLeft + 2);
+        }
+
+        [Fact]
+        public async Task JustifyContent_Start_PacksAtStart()
+        {
+            // Regression for issue #645: `start` used to be rejected at the cascade entirely.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; width:300pt; justify-content:start;'>
+                    <div id='item' style='width:100pt; height:20pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.Location.X, container.ClientLeft - 1, container.ClientLeft + 1);
+        }
+
+        // ─── align-content ──────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task AlignContent_Start_PacksLinesAtCrossStart()
+        {
+            // Regression for issue #645: `start` used to be rejected at the cascade entirely.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-wrap:wrap; width:60pt; height:200pt; align-content:start;'>
+                    <div class='item' style='width:50pt; height:20pt; flex-shrink:0;'></div>
+                    <div class='item' style='width:50pt; height:20pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var items = FindAllByClass(root, "item");
+            Assert.InRange(items[0].Location.Y, container.ClientTop - 1, container.ClientTop + 1);
+        }
+
+        [Fact]
+        public async Task AlignContent_Baseline_FallsBackToStart()
+        {
+            // Regression for issue #645: `baseline` used to be rejected at the cascade entirely. Its
+            // content-distribution fallback alignment is `start` (CSS Box Alignment 3 §8.3).
+            var html = Wrap(@"
+                <div id='container' style='display:flex; flex-wrap:wrap; width:60pt; height:200pt; align-content:baseline;'>
+                    <div class='item' style='width:50pt; height:20pt; flex-shrink:0;'></div>
+                    <div class='item' style='width:50pt; height:20pt; flex-shrink:0;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var items = FindAllByClass(root, "item");
+            Assert.InRange(items[0].Location.Y, container.ClientTop - 1, container.ClientTop + 1);
+        }
+
         // ─── align-items ─────────────────────────────────────────────────────────
 
         [Fact]
@@ -255,6 +364,37 @@ namespace PeachPDF.Tests.Integration
             var html = Wrap(@"
                 <div id='container' style='display:flex; height:100pt; align-items:flex-start;'>
                     <div id='item' style='width:50pt; height:20pt; align-self:flex-end;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            double expectedY = container.ClientTop + 100 - 20;
+            Assert.InRange(item.Location.Y, expectedY - 2, expectedY + 2);
+        }
+
+        [Fact]
+        public async Task AlignItems_SelfStart_PacksAtCrossStart()
+        {
+            // Regression for issue #644: `self-start` used to be rejected at the cascade entirely.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; height:100pt; align-items:self-start;'>
+                    <div id='item' style='width:50pt; height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var item = FindById(root, "item")!;
+            Assert.InRange(item.Location.Y, container.ClientTop - 1, container.ClientTop + 1);
+        }
+
+        [Fact]
+        public async Task AlignSelf_SelfEnd_PacksAtCrossEnd()
+        {
+            // Regression for issue #644: `self-end` was already accepted at the cascade, but
+            // CssLayoutEngineFlex.ComputeCrossOffsets had no dispatch case for it and silently
+            // mis-treated it as `flex-start` (cross-start) instead of the cross-end edge it names.
+            var html = Wrap(@"
+                <div id='container' style='display:flex; height:100pt; align-items:flex-start;'>
+                    <div id='item' style='width:50pt; height:20pt; align-self:self-end;'></div>
                 </div>");
             var (root, _) = await BuildAndLayout(html);
             var container = FindById(root, "container")!;

@@ -467,6 +467,39 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task JustifyContentRight_PacksTracksAtEnd()
+        {
+            // Regression for issue #645: `right` used to be rejected at the cascade (falling back to
+            // `normal`, i.e. packed at the start) - CssLayoutEngineGrid.PositionTracks already had a
+            // dispatch case for it, so accepting the keyword at the cascade is all this needed.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; justify-content:right; width:300pt; grid-template-columns:100pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            Assert.Equal(container.ClientRight - 100, a.Location.X, 1.5);
+        }
+
+        [Fact]
+        public async Task JustifyContentStretch_StretchesAutoColumnsToFillTheContainer()
+        {
+            // Regression for issue #645: `stretch` used to be rejected at the cascade, so
+            // CssLayoutEngineGrid's `IsStretch(_gridBox.JustifyContent)`-gated column-stretch branch in
+            // SizeColumnTracks could never fire - accepting the keyword activates it.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; justify-content:stretch; width:300pt; grid-template-columns:auto;'>
+                    <div id='a' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            Assert.Equal(container.ClientLeft, a.Location.X, 1.5);
+            Assert.Equal(container.ClientRight - container.ClientLeft, a.ActualBoxSizingWidth, 1.5);
+        }
+
+        [Fact]
         public async Task PlaceItemsCenter_AppliesToBothAxes()
         {
             var html = Wrap(@"
@@ -1258,6 +1291,40 @@ namespace PeachPDF.Tests.Integration
             var big = FindById(root, "big")!;
             var small = FindById(root, "small")!;
             Assert.Equal(big.Location.Y, small.Location.Y, 1.0);
+        }
+
+        [Fact]
+        public async Task Gap1_AlignItemsBaseline_GrowsTheRowToFitTheBaselineGroupsFullExtent()
+        {
+            // Regression for issue #280: AlignRowBaselines shifts a baseline-aligned item down within
+            // its already-sized row, but the row itself has to grow to the group's max-ascent +
+            // max-descent (CSS Box Alignment 3 §9.3) first, or an item whose descent is disproportionate
+            // to its own natural height overflows the row after the shift.
+            //
+            // 'a' has a large padding-bottom (large descent, ordinary ascent) and 'b' has a large
+            // padding-top (large ascent, ordinary descent) - the same two items' natural heights (64pt
+            // each) individually already fit their own ascent+descent, but max-ascent (from 'b') +
+            // max-descent (from 'a') exceeds either one alone, so only a row that actually grew can hold
+            // 'a' after it shifts down to share 'b's baseline.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:400pt; align-items:baseline;
+                     grid-template-columns:1fr 1fr;'>
+                    <div id='a' style='font:20pt Arial; padding-bottom:40pt;'>Ag</div>
+                    <div id='b' style='font:20pt Arial; padding-top:40pt;'>Ag</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            // Neither item's own bottom edge may fall past the row/container the grid sized for them.
+            Assert.True(a.ActualBottom <= container.ActualBottom + 0.5,
+                $"'a' (bottom={a.ActualBottom}) overflows the container (bottom={container.ActualBottom})");
+            Assert.True(b.ActualBottom <= container.ActualBottom + 0.5,
+                $"'b' (bottom={b.ActualBottom}) overflows the container (bottom={container.ActualBottom})");
+            // 'a' was actually shifted down to share 'b's baseline, not left where it started.
+            Assert.True(a.Location.Y > container.ClientTop + 0.5,
+                $"'a' (Y={a.Location.Y}) should have shifted down from the row top ({container.ClientTop})");
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

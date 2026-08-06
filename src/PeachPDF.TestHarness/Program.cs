@@ -2320,8 +2320,10 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
 
     FSection("2 — justify-content (row, 240px container)",
         FContainer("flex-start", "justify-content:flex-start;width:240px;gap:4px;",   FItems3("width:50px;")) +
+        FContainer("start",      "justify-content:start;width:240px;gap:4px;",         FItems3("width:50px;")) +
         FContainer("center",     "justify-content:center;width:240px;gap:4px;",        FItems3("width:50px;")) +
         FContainer("flex-end",   "justify-content:flex-end;width:240px;gap:4px;",      FItems3("width:50px;")) +
+        FContainer("right",      "justify-content:right;width:240px;gap:4px;",         FItems3("width:50px;")) +
         FContainer("space-between","justify-content:space-between;width:240px;",       FItems3("width:50px;")) +
         FContainer("space-around", "justify-content:space-around;width:240px;",        FItems3("width:50px;")) +
         FContainer("space-evenly", "justify-content:space-evenly;width:240px;",        FItems3("width:50px;"))
@@ -2329,8 +2331,10 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
 
     FSection("3 — align-items (row, 80px container height)",
         FContainer("flex-start", "align-items:flex-start;height:80px;gap:4px;",  FItems3("width:50px;height:28px;")) +
+        FContainer("self-start", "align-items:self-start;height:80px;gap:4px;",  FItems3("width:50px;height:28px;")) +
         FContainer("center",     "align-items:center;height:80px;gap:4px;",       FItems3("width:50px;height:28px;")) +
         FContainer("flex-end",   "align-items:flex-end;height:80px;gap:4px;",     FItems3("width:50px;height:28px;")) +
+        FContainer("self-end",   "align-items:self-end;height:80px;gap:4px;",     FItems3("width:50px;height:28px;")) +
         FContainer("stretch",    "align-items:stretch;height:80px;gap:4px;",      FItems3("width:50px;")) +
         FContainer("baseline (varying font sizes)", "align-items:baseline;gap:4px;",
             FItem("A", "#e74c3c", "font-size:8pt;width:50px;") +
@@ -2399,15 +2403,20 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
         FContainer("wrap, height:120px, align-content unset (stretches)", "flex-wrap:wrap;width:200px;height:120px;gap:4px;",
             FItems3("width:90px;height:24px;")) +
         FContainer("wrap, height:120px, align-content:flex-start", "flex-wrap:wrap;align-content:flex-start;width:200px;height:120px;gap:4px;",
+            FItems3("width:90px;height:24px;")) +
+        FContainer("wrap, height:120px, align-content:start", "flex-wrap:wrap;align-content:start;width:200px;height:120px;gap:4px;",
+            FItems3("width:90px;height:24px;")) +
+        FContainer("wrap, height:120px, align-content:baseline (falls back to start)", "flex-wrap:wrap;align-content:baseline;width:200px;height:120px;gap:4px;",
             FItems3("width:90px;height:24px;"))
     ) +
 
     FSection("7 — align-self (overrides align-items)",
-        FContainer("align-items:flex-start, item B → flex-end",
+        FContainer("align-items:flex-start, item B → flex-end, item D → self-end",
             "align-items:flex-start;height:80px;gap:4px;",
             FItem("A start", "#e74c3c", "width:50px;height:28px;") +
             FItem("B end", "#3498db", "width:50px;height:28px;align-self:flex-end;") +
-            FItem("C center", "#27ae60", "width:50px;height:28px;align-self:center;"))
+            FItem("C center", "#27ae60", "width:50px;height:28px;align-self:center;") +
+            FItem("D self-end", "#8e44ad", "width:50px;height:28px;align-self:self-end;"))
     ) +
 
     FSection("7b — column cross-axis alignment (align-items / align-self)",
@@ -2520,7 +2529,7 @@ var flexHtml = "<!DOCTYPE html><html><head>" + FlexCss + "</head><body>" +
     "</body></html>";
 
 await SaveShowcaseAsync("flexbox", "Layout", "Flexbox",
-    "Flexbox layout: direction, wrapping, justification, alignment, gaps, flexible item sizing, and replaced elements (img/svg) as flex items.",
+    "Flexbox layout: direction, wrapping, justification (including start/right and self-start/self-end), alignment, gaps, flexible item sizing, and replaced elements (img/svg) as flex items.",
     flexHtml, pdfConfig);
 
 // ─── CSS Custom Properties (var()) showcase ─────────────────────────────────
@@ -4438,10 +4447,18 @@ var verticalAlignHtml = "<!DOCTYPE html><html><head>" + VerticalAlignCss + "</he
         VerticalAlignSwatch("text-bottom", "text-bottom")
     ) +
 
+    "<h2>Length and percentage (CSS 2.1 §10.8.1): raises/lowers from the box's own baseline</h2>" +
+    Row(
+        VerticalAlignSwatch("length, +8pt (raised)", "8pt"),
+        VerticalAlignSwatch("length, -8pt (lowered)", "-8pt"),
+        VerticalAlignSwatch("percentage, 50% (of the span's own line-height)", "50%"),
+        VerticalAlignSwatch("percentage, -50%", "-50%")
+    ) +
+
     "</body></html>";
 
 await SaveShowcaseAsync("vertical_align", "Typography & Text", "Vertical Align",
-    "vertical-align behaviors for inline content, from baseline and middle to explicit offsets.",
+    "vertical-align behaviors for inline content, from baseline and middle to explicit offsets, including its length and percentage forms.",
     verticalAlignHtml, pdfConfig);
 
 // --- letter-spacing / word-spacing showcase ---
@@ -4572,6 +4589,7 @@ const string TextIndentCss = """
     .hanging { text-indent: 2em hanging }
     .eachline { text-indent: 2em each-line }
     .both { text-indent: 2em hanging each-line }
+    .centered { text-indent: 2em; text-align: center }
     </style>
     """;
 
@@ -4591,10 +4609,13 @@ var textIndentHtml = "<!DOCTYPE html><html><head>" + TextIndentCss + "</head><bo
     "<h2>hanging each-line together (only soft-wrap continuations are indented)</h2>" +
     "<p class=\"both\">Roses are red,<br>Violets are blue,<br>This line is long enough that it wraps onto a continuation line which is indented,<br>And so, dear reader, are you.</p>" +
 
+    "<h2>text-align: center (the indent's own line-start reservation, not split away by centering)</h2>" +
+    "<p class=\"centered\">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
-    "text-indent's plain, hanging, and each-line forms (CSS Text 3), including their combination.",
+    "text-indent's plain, hanging, and each-line forms (CSS Text 3), including their combination and interaction with text-align: center.",
     textIndentHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---

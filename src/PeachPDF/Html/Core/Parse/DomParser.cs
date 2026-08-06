@@ -1452,7 +1452,16 @@ namespace PeachPDF.Html.Core.Parse
                         TranslateSize(tag, box, value);
                         break;
                     case HtmlConstants.Valign:
-                        box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);
+                        // An unrecognized value must leave the box's already-cascaded vertical-align alone
+                        // (issue #642) rather than forcing baseline - CssKeywordOrValueParser.FromCssText
+                        // always assigns something (its own fallback branch), so it can't express "don't
+                        // touch it"; the membership check has to happen here instead. valign's own grammar
+                        // (HTML4 §11.3.2) is keyword-only, so a length/percentage never legitimately
+                        // reaches here either - TryParseLengthOrCalc is only consulted after the keyword
+                        // map misses, same as every other keyword-or-value attribute translation.
+                        if (Map.VerticalAlignments.ContainsKey(value.Trim()))
+                            box.VerticalAlign = CssKeywordOrValueParser.FromCssText<VerticalAlignment, LengthOrCalc>(
+                                value, Map.VerticalAlignments, CssValueParser.TryParseLengthOrCalc, VerticalAlignment.Baseline);
                         break;
                     case HtmlConstants.Vspace:
                         box.MarginTop = box.MarginBottom = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
@@ -1478,36 +1487,53 @@ namespace PeachPDF.Html.Core.Parse
                 TranslateGenericAlign(box, value);
         }
 
+        /// <summary>Builds a purely-keyword <c>vertical-align</c> value - the shape every presentational
+        /// attribute translation needs, since none of them ever produce a length/percentage.</summary>
+        private static CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>> VerticalAlignKeyword(
+            string cssText, VerticalAlignment keyword) =>
+            CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue(
+                cssText, new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(keyword, null));
+
         private static void TranslateImgAlign(CssBox box, string value)
         {
             switch (value)
             {
                 case HtmlConstants.Left:
-                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
+                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.Top, VerticalAlignment.Top);
                     box.Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left);
                     break;
                 case HtmlConstants.Right:
-                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
+                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.Top, VerticalAlignment.Top);
                     box.Float = CssProperty<Floating>.FromValue(CssConstants.Right, Floating.Right);
                     break;
                 case HtmlConstants.Bottom:
-                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Baseline, VerticalAlignment.Baseline);
+                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.Baseline, VerticalAlignment.Baseline);
                     break;
                 case HtmlConstants.Middle:
-                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.PeachBaselineMiddle, VerticalAlignment.PeachBaselineMiddle);
+                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.PeachBaselineMiddle, VerticalAlignment.PeachBaselineMiddle);
                     break;
                 case HtmlConstants.Top:
-                    box.VerticalAlign = CssProperty<VerticalAlignment>.FromValue(CssConstants.Top, VerticalAlignment.Top);
+                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.Top, VerticalAlignment.Top);
                     break;
             }
         }
 
         private static void TranslateGenericAlign(CssBox box, string value)
         {
-            if (value is HtmlConstants.Left or HtmlConstants.Center or HtmlConstants.Right or HtmlConstants.Justify)
-                box.TextAlign = CssProperty<HorizontalAlignment>.FromCssText(value.ToLower(), Map.HorizontalAlignments, HorizontalAlignment.Start);
-            else
-                box.VerticalAlign = CssProperty<VerticalAlignment>.FromCssText(value, Map.VerticalAlignments, VerticalAlignment.Baseline);
+            // Compare case-insensitively - legacy markup commonly authors align="LEFT"/"CENTER" etc., and a
+            // case-sensitive miss here used to fall into the vertical-align branch below and clobber it.
+            var trimmed = value.Trim();
+            if (trimmed.Equals(HtmlConstants.Left, StringComparison.OrdinalIgnoreCase)
+                || trimmed.Equals(HtmlConstants.Center, StringComparison.OrdinalIgnoreCase)
+                || trimmed.Equals(HtmlConstants.Right, StringComparison.OrdinalIgnoreCase)
+                || trimmed.Equals(HtmlConstants.Justify, StringComparison.OrdinalIgnoreCase))
+                box.TextAlign = CssProperty<HorizontalAlignment>.FromCssText(trimmed.ToLower(), Map.HorizontalAlignments, HorizontalAlignment.Start);
+            // An unrecognized value must leave the box's already-cascaded vertical-align alone (issue #642)
+            // rather than forcing baseline - see the Valign case's own comment above for why the membership
+            // check has to happen here instead of relying on FromCssText's fallback.
+            else if (Map.VerticalAlignments.ContainsKey(trimmed))
+                box.VerticalAlign = CssKeywordOrValueParser.FromCssText<VerticalAlignment, LengthOrCalc>(
+                    trimmed, Map.VerticalAlignments, CssValueParser.TryParseLengthOrCalc, VerticalAlignment.Baseline);
         }
 
         /// <summary>

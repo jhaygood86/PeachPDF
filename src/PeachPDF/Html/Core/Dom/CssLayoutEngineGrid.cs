@@ -270,12 +270,26 @@ namespace PeachPDF.Html.Core.Dom
                 // parent tracks; skip them in the normal item-height passes.
                 var normalItems = placements.Where(p => !IsSubgridItem(p.Box)).ToList();
 
-                // Single-row items size their auto row directly.
+                // Single-row items size their auto row directly. A baseline-aligned item also contributes its
+                // ascent/descent to the row's baseline group extent (CSS Box Alignment 3 §9.3) — grown here,
+                // before PositionTracks fixes every row's final Position below, so AlignRowBaselines' later
+                // within-row shift never needs a second, cascading re-position pass (issue #280).
+                var baselineExtents = new Dictionary<int, (double MaxAscent, double MaxDescent)>();
                 foreach (var p in normalItems.Where(p => p.RowSpan == 1 && !IsFixed(rows[p.RowStart].Def)))
                 {
                     var natural = await MeasureItemHeight(g, p.Box, ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap));
                     rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, natural);
+
+                    if (IsBaselineAlign(ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString()))
+                        && BaselineAlignment.GetItemBaselineOffset(p.Box) is { } ascent)
+                    {
+                        var descent = natural - ascent;
+                        var (curAscent, curDescent) = baselineExtents.GetValueOrDefault(p.RowStart, (0.0, 0.0));
+                        baselineExtents[p.RowStart] = (Math.Max(curAscent, ascent), Math.Max(curDescent, descent));
+                    }
                 }
+                foreach (var (rowIndex, (maxAscent, maxDescent)) in baselineExtents)
+                    rows[rowIndex].Size = Math.Max(rows[rowIndex].Size, maxAscent + maxDescent);
 
                 // Row-spanning items grow the last auto row they cover if their content exceeds the spanned rows.
                 foreach (var p in normalItems.Where(p => p.RowSpan > 1))
@@ -1313,10 +1327,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>align-self</c> is <c>baseline</c> (they were placed start-aligned by <see cref="PlaceItemInCell"/>,
         /// since <see cref="AlignmentOffset"/> maps baseline to start). Each baseline item is shifted down by
         /// the difference between the row's maximum baseline offset and its own, so every baseline item in the
-        /// row rests on a common baseline. Items with no discoverable baseline stay start-aligned.
-        /// Accepted gap (#280): this shifts within the already-sized row but does not grow the row to the
-        /// baseline group's max-ascent + max-descent, so an item with a disproportionately large descent
-        /// below its baseline could overflow — standard text with a normal line-height always fits.
+        /// row rests on a common baseline. Items with no discoverable baseline stay start-aligned. The row
+        /// itself was already grown to the baseline group's max-ascent + max-descent during row sizing (see
+        /// the <c>baselineExtents</c> pass above <see cref="PositionTracks"/>'s row call), so this shift never
+        /// overflows the row (issue #280).
         /// </summary>
         private void AlignRowBaselines(List<Placement> placements)
         {
