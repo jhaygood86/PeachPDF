@@ -472,15 +472,28 @@ namespace PeachPDF.Html.Core.Dom
                         if (_bodyRows.Count <= i) continue;
 
                         var columnCount = 0;
+                        var inserted = false;
                         for (var j = 0; j < _bodyRows[i].Boxes.Count; j++)
                         {
                             if (columnCount == realColumnIndex)
                             {
                                 _bodyRows[i].Boxes.Insert(columnCount, new CssSpacingBox(_tableBox, ref cell, currentRow));
+                                inserted = true;
                                 break;
                             }
                             columnCount++;
                             realColumnIndex -= GetColSpan(_bodyRows[i].Boxes[j]) - 1;
+                        }
+
+                        // The loop above only ever compares columnCount against a later row's *existing*
+                        // cells, so a rowspan whose column sits at or past that row's last cell (the
+                        // common case: a rowspan in the table's last column) never matches inside the
+                        // loop and falls through here with no placeholder inserted at all - the row's
+                        // column count then silently undercounts and CalculateCountAndWidth's tally
+                        // (below) misses this row's contribution to it (issue #522).
+                        if (!inserted && columnCount == realColumnIndex)
+                        {
+                            _bodyRows[i].Boxes.Add(new CssSpacingBox(_tableBox, ref cell, currentRow));
                         }
                     }
                 }
@@ -2496,8 +2509,14 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // Nothing of this cell belongs to this fragmentainer, so neither does its geometry: giving
                 // it this fragment's bottom and re-aligning against that would drag the content an earlier
-                // pass emitted down onto this page.
-                if (cursor.FinishedOnAnEarlierPass(cell)) continue;
+                // pass emitted down onto this page. Exempted when the cell is ending its span on *this*
+                // row (boxesThatEndOnRow): TableRowCursor._carriedFinished is seeded once, when a resumed
+                // pass re-enters this cell's *opening* row, and is never cleared for the rest of that
+                // pass - so a cell finished trivially (by its own content, or by an unrelated sibling
+                // whose own resumption re-ran the whole row) on that earlier row still reads as finished
+                // here, several rows later, on the one row that actually has to close it. Without the
+                // exemption CloseSpanningCell is never entered for it at all (issue #593).
+                if (cursor.FinishedOnAnEarlierPass(cell) && !(boxesThatEndOnRow?.Contains(cell) ?? false)) continue;
 
                 if (cell is CssSpacingBox spacer)
                 {
@@ -2517,7 +2536,12 @@ namespace PeachPDF.Html.Core.Dom
                     // stale match and skipped closing the cell's box entirely for the rest of the pass -
                     // measured as CloseSpanningCell never once entered for a cell whose own content took
                     // more than one resumption pass to finish (issue #521's exact shape).
-                    CloseSpanningCell(g, cell, cursor, rowMaxBottom);
+                    //
+                    // skipFinishedGuard: true - the guard above already exempted this cell from the same
+                    // stale FinishedOnAnEarlierPass question for the same reason (issue #593); asking it
+                    // again inside CloseSpanningCell would just re-apply the stale answer and silently
+                    // no-op the close instead of skipping it, which is worse.
+                    CloseSpanningCell(g, cell, cursor, rowMaxBottom, skipFinishedGuard: true);
                 }
                 else if (stoppedCells.Contains(cell) || cursor.ResumedFromAnEarlierPass(cell))
                 {
@@ -2642,7 +2666,16 @@ namespace PeachPDF.Html.Core.Dom
         /// content-based bottom <see cref="LayoutBodyRow"/>'s own pre-pass computed for this same cell, if
         /// its content reaches into this same band
         /// </param>
-        private void CloseSpanningCell(RGraphics g, CssBox cell, TableRowCursor cursor, double rowMaxBottom)
+        /// <param name="skipFinishedGuard">
+        /// true when the caller already asked (and answered) the same <c>FinishedOnAnEarlierPass</c>
+        /// question for this exact call - the <c>boxesThatEndOnRow</c> dispatch arm, whose own outer guard
+        /// exempts a cell ending its span on this row from that stale check (issue #593). The
+        /// <c>CssSpacingBox</c> arm never sets this: its outer guard tests the spacer box, not the cell it
+        /// stands in for, so this internal check is the only thing protecting that route from a genuinely
+        /// finished cell's geometry.
+        /// </param>
+        private void CloseSpanningCell(RGraphics g, CssBox cell, TableRowCursor cursor, double rowMaxBottom,
+            bool skipFinishedGuard = false)
         {
             // The same cell arrives twice on a row that reaches it both as a CssSpacingBox's ExtendedBox
             // and through RowSpannedBoxes, and the alignment below composes rather than settling, so it may
@@ -2654,8 +2687,9 @@ namespace PeachPDF.Html.Core.Dom
 
             // Nothing of a cell an earlier pass finished belongs to this fragmentainer, so neither does
             // its geometry. The loop's own guard above tests the CssSpacingBox, not the cell it stands in
-            // for, so that route reaches here with a finished cell.
-            if (cursor.FinishedOnAnEarlierPass(cell)) return;
+            // for, so that route reaches here with a finished cell - unless skipFinishedGuard says the
+            // caller already settled this question for a cell ending its span on the current row.
+            if (!skipFinishedGuard && cursor.FinishedOnAnEarlierPass(cell)) return;
 
             var previousBottom = cell.ActualBottom;
             var bottom = rowMaxBottom;

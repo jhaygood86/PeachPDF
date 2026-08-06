@@ -147,31 +147,65 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task PercentageValue_IsRejectedAtTheCascade_AndFallsBackToBaseline()
+        public async Task Length_PositiveValue_RaisesTheBoxAboveBaseline()
         {
-            // See .claude/accepted-gaps/vertical-align-no-length-percentage-support.md: CSS 2.1
-            // §10.8.1 also accepts a <percentage>/<length> value, but PeachPDF's cascade-time keyword
-            // grammar only recognizes the 8 standard keywords - an authored percentage/length is
-            // silently rejected and the property stays at its initial "baseline".
-            var html = Wrap("<p id='p' style='font-size:16pt'><span id='v' style='vertical-align:25%'>x</span></p>");
-            var (root, _) = await BuildAndLayout(html);
-            var v = FindById(root, "v")!;
+            // CSS 2.1 §10.8.1: a positive length raises the box by that distance from its own baseline
+            // (issue #603).
+            var baselineY = await GetAlignedTopAsync("baseline");
+            var raisedY = await GetAlignedTopAsync("5pt");
 
-            Assert.Equal(VerticalAlignment.Baseline, v.VerticalAlign.Value);
+            Assert.True(raisedY < baselineY, $"raised={raisedY} baseline={baselineY}");
+        }
+
+        [Fact]
+        public async Task Length_NegativeValue_LowersTheBoxBelowBaseline()
+        {
+            var baselineY = await GetAlignedTopAsync("baseline");
+            var loweredY = await GetAlignedTopAsync("-5pt");
+
+            Assert.True(loweredY > baselineY, $"lowered={loweredY} baseline={baselineY}");
+        }
+
+        [Fact]
+        public async Task Percentage_PositiveValue_RaisesTheBoxAboveBaseline()
+        {
+            var baselineY = await GetAlignedTopAsync("baseline");
+            var raisedY = await GetAlignedTopAsync("50%");
+
+            Assert.True(raisedY < baselineY, $"raised={raisedY} baseline={baselineY}");
+        }
+
+        [Fact]
+        public async Task Percentage_ResolvesAgainstTheBoxsOwnLineHeight()
+        {
+            // A percentage is a fraction of the box's own line-height (CSS 2.1 §10.8.1) - doubling the
+            // line-height (everything else unchanged) must double the raise relative to that
+            // line-height's own baseline, proving the percentage is actually resolved against it rather
+            // than treated as some other fixed reference (e.g. font-size).
+            var baseline20 = await GetAlignedTopAsync("baseline", lineHeight: "20pt");
+            var percent20 = await GetAlignedTopAsync("50%", lineHeight: "20pt");
+            var baseline40 = await GetAlignedTopAsync("baseline", lineHeight: "40pt");
+            var percent40 = await GetAlignedTopAsync("50%", lineHeight: "40pt");
+
+            var raise20 = baseline20 - percent20;
+            var raise40 = baseline40 - percent40;
+
+            Assert.Equal(raise20 * 2, raise40, 1);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static async Task<double> GetAlignedTopAsync(string verticalAlign)
+        private static async Task<double> GetAlignedTopAsync(string verticalAlign, string? lineHeight = null)
         {
             // "v" is deliberately smaller than its parent's own font (10pt vs 16pt) - text-top/
             // text-bottom align with the *parent's* font box, and if the aligned box were taller than
             // that reference box, "top" and "bottom" alignment can legitimately cross over (the excess
             // height sticks out on both ends), which isn't representative of how text-top/text-bottom
             // are normally used (e.g. a small badge/icon sized close to or smaller than surrounding text).
+            var lineHeightDecl = lineHeight is null ? "" : $"; line-height:{lineHeight}";
             var html = Wrap(
                 "<p id='p' style='font-size:16pt'><span style='font-size:60pt'>TALL</span> " +
-                $"<span id='v' style='vertical-align:{verticalAlign}; font-size:10pt'>small</span></p>");
+                $"<span id='v' style='vertical-align:{verticalAlign}; font-size:10pt{lineHeightDecl}'>small</span></p>");
             var (root, _) = await BuildAndLayout(html);
             var p = FindById(root, "p")!;
             var v = FindById(root, "v")!;

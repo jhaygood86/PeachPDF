@@ -1520,18 +1520,19 @@
     },
     {
       "name": "vertical-align",
-      "comment": "CSS 2.1 also accepts a <percentage>/<length> value form (see .claude/accepted-gaps/vertical-align-no-length-percentage-support.md) - out of scope here, this conversion preserves the pre-existing keyword-only cascade behavior. PeachBaselineMiddle (the deprecated img align=middle sentinel, see CssConstants.PeachBaselineMiddle) is never produced by this keyword grammar - DomParser assigns it directly via CssProperty<VerticalAlignment>.FromValue, same as Float's img align handling.",
+      "comment": "CSS 2.1 §10.8.1 also accepts a <percentage>/<length> value form, offsetting the box from its own baseline (issue #603) - the value side reuses word-spacing/line-height's LengthOrCalc plumbing (valueType \"length\" already covers percentages via CssValueParser.IsValidLength/ValueExtensions.ToDistance, no separate percentage data type needed). PeachBaselineMiddle (the deprecated img align=middle sentinel, see CssConstants.PeachBaselineMiddle) is never produced by this grammar - DomParser assigns it directly via CssKeywordOrValueParser's keyword side, same as Float's img align handling.",
       "inherited": false,
       "initialValue": "baseline",
       "cssDataType": {
-        "type": "enum-keyword",
+        "type": "keyword-or-value",
         "enumType": "VerticalAlignment",
         "keywordMap": "Map.VerticalAlignments",
-        "fallback": "VerticalAlignment.Baseline"
+        "fallback": "VerticalAlignment.Baseline",
+        "valueType": "length"
       },
       "html": {
         "propertyPath": "VerticalAlign",
-        "csharpDataType": "CssProperty<VerticalAlignment>",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>",
         "area": "TextArea",
         "getterExpression": "{box}.VerticalAlign.ToString()"
       }
@@ -2011,7 +2012,7 @@
     },
     {
       "name": "justify-content",
-      "comment": "Map.JustifyContentKeywords is a dedicated cascade-only map, narrower than the legacy CSS-OM Map.JustifyContentOptions (which also accepts start/left/right/stretch) - CssLayoutEngineFlex.ComputeMainOffsets/CssLayoutEngineGrid.PositionTracks don't dispatch those, see .claude/accepted-gaps/justify-content-align-content-narrow-keyword-set.md.",
+      "comment": "Map.JustifyContentKeywords carries the full CSS Box Alignment 3 <content-distribution>/<content-position> grammar - CssLayoutEngineFlex.ComputeMainOffsets and CssLayoutEngineGrid.PositionTracks dispatch every keyword here (issue #645).",
       "inherited": false,
       "initialValue": "normal",
       "cssDataType": {
@@ -2029,7 +2030,7 @@
     },
     {
       "name": "align-items",
-      "comment": "Map.AlignItemKeywords is a dedicated cascade-only map, narrower than the legacy CSS-OM Map.AlignItems (which also accepts self-start) - neither CssLayoutEngineFlex.ComputeCrossOffsets nor CssLayoutEngineGrid.AlignmentOffset distinguish self-start from start today, see .claude/accepted-gaps/align-items-align-self-missing-self-start.md. align-items serves both flex and grid layout modes and this entry can't tell which one a given box uses.",
+      "comment": "Map.AlignItemKeywords carries the full <self-position> grammar including self-start (issue #644) - CssLayoutEngineFlex.ComputeCrossOffsets and CssLayoutEngineGrid.AlignmentOffset both dispatch it. align-items serves both flex and grid layout modes and this entry can't tell which one a given box uses.",
       "inherited": false,
       "initialValue": "normal",
       "cssDataType": {
@@ -2047,7 +2048,7 @@
     },
     {
       "name": "align-content",
-      "comment": "Map.AlignContentKeywords is a dedicated cascade-only map, narrower than the legacy CSS-OM Map.AlignContents (which also accepts start/baseline) - CssLayoutEngineFlex.DistributeCrossSpace/CssLayoutEngineGrid.PositionTracks don't dispatch those, see .claude/accepted-gaps/justify-content-align-content-narrow-keyword-set.md.",
+      "comment": "Map.AlignContentKeywords carries the full CSS Box Alignment 3 <content-distribution>/<content-position> grammar including start/baseline (issue #645) - CssLayoutEngineFlex.DistributeCrossSpace and CssLayoutEngineGrid.PositionTracks both fall back to their existing start-packing default for start/baseline, which is spec-correct (baseline's content-distribution fallback alignment is start, CSS Box Alignment 3 §8.3).",
       "inherited": false,
       "initialValue": "normal",
       "cssDataType": {
@@ -2110,7 +2111,7 @@
     },
     {
       "name": "align-self",
-      "comment": "Same enum/narrow keyword set as align-items (see its own comment), plus 'auto' (Map.AlignSelfKeywords adds it to Map.AlignItemKeywords) - 'auto' defers to the container's align-items, resolved ad hoc at every read site in CssLayoutEngineFlex.ComputeCrossOffsets/CssLayoutEngineGrid.ResolveSelfAlignment rather than a DerivedStyle accessor.",
+      "comment": "Same enum/keyword set as align-items (see its own comment), plus 'auto' (Map.AlignSelfKeywords adds it to Map.AlignItemKeywords) - 'auto' defers to the container's align-items, resolved ad hoc at every read site in CssLayoutEngineFlex.ComputeCrossOffsets/CssLayoutEngineGrid.ResolveSelfAlignment rather than a DerivedStyle accessor.",
       "inherited": false,
       "initialValue": "auto",
       "cssDataType": {

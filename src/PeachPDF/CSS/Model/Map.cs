@@ -788,12 +788,9 @@ namespace PeachPDF.CSS
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         // The four maps below back CssBox's cascaded align-items/align-self/justify-content/align-content
-        // storage. They are deliberately narrower than the legacy CSS-OM maps above/JustifyContentOptions -
-        // each matches exactly the keyword set css-properties.json already declared as supported before
-        // the typed-storage conversion (CssLayoutEngineFlex/CssLayoutEngineGrid don't dispatch the extra
-        // keywords the legacy maps carry, e.g. self-start, or align-content: baseline/start - see
-        // .claude/accepted-gaps/), so reusing the broader legacy maps directly would silently widen
-        // accepted values without a corresponding layout-code change.
+        // storage. CssLayoutEngineFlex/CssLayoutEngineGrid dispatch every keyword listed here - see
+        // CssLayoutEngineFlex.ComputeMainOffsets/DistributeCrossSpace/ComputeCrossOffsets and
+        // CssLayoutEngineGrid.PositionTracks/AlignmentOffset (issues #644/#645).
         public static readonly FrozenDictionary<string, AlignItem> AlignItemKeywords =
             new Dictionary<string, AlignItem>(StringComparer.OrdinalIgnoreCase)
             {
@@ -801,6 +798,7 @@ namespace PeachPDF.CSS
                 { Keywords.FlexEnd, AlignItem.FlexEnd },
                 { Keywords.Start, AlignItem.Start },
                 { Keywords.End, AlignItem.End },
+                { Keywords.SelfStart, AlignItem.SelfStart },
                 { Keywords.SelfEnd, AlignItem.SelfEnd },
                 { Keywords.Center, AlignItem.Center },
                 { Keywords.Stretch, AlignItem.Stretch },
@@ -816,6 +814,7 @@ namespace PeachPDF.CSS
                 { Keywords.FlexEnd, AlignItem.FlexEnd },
                 { Keywords.Start, AlignItem.Start },
                 { Keywords.End, AlignItem.End },
+                { Keywords.SelfStart, AlignItem.SelfStart },
                 { Keywords.SelfEnd, AlignItem.SelfEnd },
                 { Keywords.Center, AlignItem.Center },
                 { Keywords.Stretch, AlignItem.Stretch },
@@ -829,11 +828,15 @@ namespace PeachPDF.CSS
                 { Keywords.Normal, JustifyContent.Normal },
                 { Keywords.FlexStart, JustifyContent.FlexStart },
                 { Keywords.FlexEnd, JustifyContent.FlexEnd },
+                { Keywords.Start, JustifyContent.Start },
                 { Keywords.End, JustifyContent.End },
+                { Keywords.Left, JustifyContent.Left },
+                { Keywords.Right, JustifyContent.Right },
                 { Keywords.Center, JustifyContent.Center },
                 { Keywords.SpaceBetween, JustifyContent.SpaceBetween },
                 { Keywords.SpaceAround, JustifyContent.SpaceAround },
-                { Keywords.SpaceEvenly, JustifyContent.SpaceEvenly }
+                { Keywords.SpaceEvenly, JustifyContent.SpaceEvenly },
+                { Keywords.Stretch, JustifyContent.Stretch }
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         public static readonly FrozenDictionary<string, AlignContent> AlignContentKeywords =
@@ -841,12 +844,14 @@ namespace PeachPDF.CSS
             {
                 { Keywords.FlexStart, AlignContent.FlexStart },
                 { Keywords.FlexEnd, AlignContent.FlexEnd },
+                { Keywords.Start, AlignContent.Start },
                 { Keywords.End, AlignContent.End },
                 { Keywords.Center, AlignContent.Center },
                 { Keywords.SpaceBetween, AlignContent.SpaceBetween },
                 { Keywords.SpaceAround, AlignContent.SpaceAround },
                 { Keywords.SpaceEvenly, AlignContent.SpaceEvenly },
                 { Keywords.Stretch, AlignContent.Stretch },
+                { Keywords.Baseline, AlignContent.Baseline },
                 { Keywords.Normal, AlignContent.Normal }
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 

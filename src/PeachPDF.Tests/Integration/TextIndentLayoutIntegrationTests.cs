@@ -170,6 +170,48 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Center_ReservesTheFullIndentOnTheLineStartSide_ThenCentersTheRemainder()
+        {
+            // Regression for issue #623 - the line's own words already start `indent` further right than
+            // the client edge (the flow-time CurrentX offset), so the leftover slack ApplyCenterAlignment
+            // splits evenly (`diff`) already excludes the indent; the difference between the two final
+            // gaps is exactly the indent, not half of it.
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<p id='p' style='margin:0;font-size:10pt;width:150pt;text-align:center;text-indent:40pt'>" +
+                    "Short text</p>"));
+
+            var p = LayoutHarness.FindById(root, "p")!;
+            Assert.Single(p.LineBoxes);
+            var line = p.LineBoxes[0];
+            var leftGap = line.Words.Min(w => w.Left) - p.ClientLeft;
+            var rightGap = p.ClientRight - line.Words.Max(w => w.Right);
+
+            Assert.Equal(40, leftGap - rightGap, 2);
+        }
+
+        [Fact]
+        public async Task Rtl_Center_ReservesTheFullIndentOnTheLineStartSide_ThenCentersTheRemainder()
+        {
+            // RTL's line-start side is the physical right (CSS Text 3 §3) - before this fix,
+            // ApplyCenterAlignment didn't inset its flush target for RTL at all (unlike
+            // ApplyRightAlignment/ApplyJustifyAlignment), so the indent was centered away to nothing
+            // instead of landing on the physical right.
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<p id='p' dir='rtl' style='margin:0;font-size:10pt;width:150pt;direction:rtl;text-align:center;text-indent:40pt'>" +
+                    "مرحبا بكم</p>"));
+
+            var p = LayoutHarness.FindById(root, "p")!;
+            Assert.Single(p.LineBoxes);
+            var line = p.LineBoxes[0];
+            var leftGap = line.Words.Min(w => w.Left) - p.ClientLeft;
+            var rightGap = p.ClientRight - line.Words.Max(w => w.Right);
+
+            Assert.Equal(40, rightGap - leftGap, 2);
+        }
+
+        [Fact]
         public async Task EachLine_StillIndentsAResumedLineThatFollowsAForcedBreakInTheSource()
         {
             // Every line in this paragraph follows a <br> - there is one between every pair of "LineN"

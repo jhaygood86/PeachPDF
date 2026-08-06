@@ -685,20 +685,19 @@ namespace PeachPDF.Tests.Integration
         /// stuck at its own bare content bottom.
         /// </summary>
         /// <remarks>
-        /// <c>InsertEmptyBoxes</c> only creates a <see cref="CssSpacingBox"/> placeholder for a span by
-        /// walking the later row's <i>existing</i> cells, so a span in the last column gets no placeholder
-        /// anywhere in the tree (<see href="https://github.com/jhaygood86/PeachPDF/issues/522">issue
-        /// #522</see>) - the row that ends the span reaches the cell only through
-        /// <c>TableRowCursor.RowSpannedBoxes</c>, never through a <c>CssSpacingBox</c>. Every other fixture
-        /// in this file spans a non-last column, so all of them reach <c>CloseSpanningCell</c> down the
-        /// <c>CssSpacingBox</c> arm regardless of how the vertical-alignment loop's dispatch is ordered -
-        /// which is exactly why a real regression there (<c>CloseSpanningCell</c> never being entered at
-        /// all for a cell that needed more than one resumption pass, because
-        /// <c>TableRowCursor.ResumedFromAnEarlierPass</c> matched a stale carried record from the cell's own
-        /// opening row) passed every one of them unmodified. This fixture's last-column placement is what
-        /// actually exercises the <c>RowSpannedBoxes</c>-only arm - confirmed by reverting just the
-        /// vertical-alignment loop's dispatch order and watching this fail (<c>cell.ActualBottom</c> stuck
-        /// at its own ~293pt content bottom rather than the ending row's ~309pt).
+        /// Before <see href="https://github.com/jhaygood86/PeachPDF/issues/522">issue #522</see> was fixed,
+        /// <c>InsertEmptyBoxes</c> only created a <see cref="CssSpacingBox"/> placeholder for a span by
+        /// walking the later row's <i>existing</i> cells, so a span in the last column got no placeholder
+        /// anywhere in the tree and reached the row that ends it only through
+        /// <c>TableRowCursor.RowSpannedBoxes</c>, never through a <c>CssSpacingBox</c> - the shape that
+        /// originally made this fixture useful, since every other fixture in this file spans a non-last
+        /// column and so reaches <c>CloseSpanningCell</c> down the ordinary <c>CssSpacingBox</c> arm
+        /// regardless of how the vertical-alignment loop's dispatch is ordered. #522's fix makes
+        /// <c>InsertEmptyBoxes</c> append a placeholder when a rowspan's column sits at or past a later
+        /// row's last existing cell, so this fixture now gets a real <c>CssSpacingBox</c> too and reaches
+        /// <c>CloseSpanningCell</c> down that arm like the others - the assertion below still pins the same
+        /// correct closing bottom, just via the ordinary dispatch path rather than the
+        /// <c>RowSpannedBoxes</c>-only fallback.
         /// </remarks>
         [Fact]
         public async Task ASpanningCellInTheLastColumn_StillClosesAfterMultipleResumptionPasses()
@@ -727,6 +726,40 @@ namespace PeachPDF.Tests.Integration
             // closes at its own bare content bottom instead - well above the ending row's own bottom.
             var expected = Math.Max(rows[2].ActualBottom, contentBottom);
             Assert.Equal(expected, cell.ActualBottom, 0.01);
+        }
+
+        /// <summary>
+        /// A rowspan in the table's last column gets a real <see cref="CssSpacingBox"/> placeholder in
+        /// every row it spans, not just the ones whose columns already had a cell in them.
+        /// </summary>
+        /// <remarks>
+        /// Regression for <see href="https://github.com/jhaygood86/PeachPDF/issues/522">issue #522</see>:
+        /// <c>InsertEmptyBoxes</c>'s inner loop only ever compared its running column count against a later
+        /// row's <i>existing</i> cells, so a rowspan whose column sat at or past the last of those cells -
+        /// the last column, here - fell through with no placeholder inserted at all.
+        /// </remarks>
+        [Fact]
+        public async Task ASpanningCellInTheLastColumn_GetsASpacerInEveryRowItSpans()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<table style='width:150pt'>"
+                    + "<tr><td>a</td><td rowspan='3'>span</td></tr>"
+                    + "<tr><td>b</td></tr>"
+                    + "<tr><td>c</td></tr></table>"));
+
+            var rows = RowsOf(root);
+            Assert.Equal(3, rows.Count);
+
+            // The opening row holds the real cell, not a spacer.
+            Assert.DoesNotContain(rows[0].Boxes, b => b is CssSpacingBox);
+            // Both later rows the span covers must each carry a placeholder for it.
+            Assert.Contains(rows[1].Boxes, b => b is CssSpacingBox);
+            Assert.Contains(rows[2].Boxes, b => b is CssSpacingBox);
+
+            // With the placeholder now present in every row, every row reports the table's real column
+            // count (2) rather than undercounting the rows the rowspan's own column was missing from.
+            Assert.All(rows, row => Assert.Equal(2, row.Boxes.Count));
         }
 
         /// <summary>
