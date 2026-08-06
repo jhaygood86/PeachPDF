@@ -6809,7 +6809,7 @@ var visibilityCollapseHtml = """
     h1 { font-size: 14pt; margin: 0 0 0.3em }
     h2 { font-size: 11pt; margin: 1.2em 0 0.4em }
     p.intro { color: #6b7280; font-size: 9pt; margin: 0 0 0.6em; max-width: 34em }
-    table { border-collapse: separate; border-spacing: 0; margin-bottom: 0.6em }
+    table { border-collapse: separate; border-spacing: 4pt 0; margin-bottom: 0.6em }
     td, th { border: 0.75pt solid #94a3b8; padding: 4pt 8pt; text-align: left }
     th { background: #eef2ff }
     tr.collapsed, col.collapsed { visibility: collapse }

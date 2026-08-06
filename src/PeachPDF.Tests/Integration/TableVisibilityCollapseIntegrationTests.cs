@@ -242,6 +242,49 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task CollapsedColumn_WithBorderSpacing_LeavesNoResidualGap()
+        {
+            // Regression guard: a collapsed column must not leave one border-spacing unit behind
+            // (its own two boundary gaps must merge into the single gap a genuinely-absent column
+            // would leave), which only shows once border-spacing is non-zero - the default UA
+            // stylesheet sets `border-spacing: 2px` on every table, so this is the common case.
+            var (experiment, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <table class="t" style="border-spacing:5px; width:300px">
+                  <colgroup>
+                    <col style="width:100px">
+                    <col style="width:100px; visibility:collapse">
+                    <col style="width:100px">
+                  </colgroup>
+                  <tr>
+                    <td class="a">A</td>
+                    <td>B</td>
+                    <td class="c">C</td>
+                  </tr>
+                </table>
+                </body></html>
+                """);
+
+            var (control, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <table class="t" style="border-spacing:5px; width:205px">
+                  <colgroup>
+                    <col style="width:100px">
+                    <col style="width:100px">
+                  </colgroup>
+                  <tr>
+                    <td class="a">A</td>
+                    <td class="c">C</td>
+                  </tr>
+                </table>
+                </body></html>
+                """);
+
+            AssertSameLocation(FindByClass(control, "c")!, FindByClass(experiment, "c")!);
+            Assert.Equal(FindByClass(control, "t")!.ActualRight, FindByClass(experiment, "t")!.ActualRight, 3);
+        }
+
+        [Fact]
         public async Task CollapsedColumnGroup_CollapsesEveryColumnInsideIt()
         {
             var (experiment, _) = await BuildAndLayout("""

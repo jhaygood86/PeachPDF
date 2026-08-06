@@ -14,9 +14,10 @@ so a collapsed table row/column still reserved its layout space.
 (or every row inside a `<thead>`/`<tbody>`/`<tfoot>` marked `collapse` — `visibility` is inherited, so
 the group's value already reaches its rows without special-casing the group) is removed from the row
 loop entirely, taking no height, with the rows after it shifting up to fill the gap. A `<col>`/
-`<colgroup>` marked `collapse` has its column's width zeroed after the rest of the table's width
-algorithm has run, so the columns after it shift left and the table itself shrinks by that column's
-width. A document that relied on a collapsed row/column still reserving its space (the previous,
+`<colgroup>` marked `collapse` has its column's width *and* its own `border-spacing` slot zeroed
+after the rest of the table's width algorithm has run, so the columns after it shift left with no
+residual gap and the table itself shrinks by exactly that column's width. A document that relied on
+a collapsed row/column still reserving its space (the previous,
 `hidden`-equivalent behavior) will now see that space reclaimed instead — matching every mainstream
 browser's table layout.
 
