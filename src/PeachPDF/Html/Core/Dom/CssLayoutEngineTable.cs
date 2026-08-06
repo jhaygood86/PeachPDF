@@ -325,6 +325,12 @@ namespace PeachPDF.Html.Core.Dom
             // While table width is larger than it should, and width is reducible
             EnforceMinimumSize();
 
+            // A collapsed <col>/<colgroup> (CSS 2.1 §17.6.1) must not compete for space with the
+            // rest of the table, so this runs last - after every other step that could size a
+            // column up from its content has already run - and nothing after it may spread width
+            // back into a column this zeroes.
+            CollapseColumnWidths();
+
             // CssBox.PerformLayoutImp's Static/Relative branch already positioned this box at
             // ClientLeft + ActualMarginLeft before dispatching here (ActualMarginLeft calls
             // GetActualMarginLeft with boxWidth: null). For a fixed (non-auto) margin-left that
@@ -394,11 +400,13 @@ namespace PeachPDF.Html.Core.Dom
                     case CssConstants.TableCaption:
                         break;
                     case CssConstants.TableRow:
-                        _bodyRows.Add(box);
+                        if (!IsRowCollapsed(box))
+                            _bodyRows.Add(box);
                         break;
                     case CssConstants.TableRowGroup:
                         foreach (CssBox childBox in box.Boxes)
-                            if (childBox.DerivedStyle.ActualDisplay == CssConstants.TableRow)
+                            if (childBox.DerivedStyle.ActualDisplay == CssConstants.TableRow
+                                && !IsRowCollapsed(childBox))
                                 _bodyRows.Add(childBox);
                         break;
                     case CssConstants.TableHeaderGroup:
@@ -442,13 +450,26 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             if (_headerBox != null)
-                _allRows.AddRange(_headerBox.Boxes);
+                _allRows.AddRange(_headerBox.Boxes.Where(r => !IsRowCollapsed(r)));
 
             _allRows.AddRange(_bodyRows);
 
             if (_footerBox != null)
-                _allRows.AddRange(_footerBox.Boxes);
+                _allRows.AddRange(_footerBox.Boxes.Where(r => !IsRowCollapsed(r)));
         }
+
+        /// <summary>
+        /// Whether <paramref name="row"/> is a table row (or a row inside a collapsed row group -
+        /// <c>visibility</c> is an inherited property, so a <c>&lt;tbody&gt;</c>/<c>&lt;thead&gt;</c>/
+        /// <c>&lt;tfoot&gt;</c> marked <c>collapse</c> already gives every row inside it the same
+        /// computed value without this engine having to walk up to the group itself) that CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/tables.html#dynamic-effects">§17.6.1</see> removes
+        /// from the table's rendering entirely - as if it had <c>display: none</c>, so it takes no
+        /// layout space and the rows after it shift up to fill the gap. Distinct from
+        /// <c>visibility: hidden</c>, which this engine still lays out normally (its space stays
+        /// reserved) and only <see cref="PeachPDF.Html.Core.Paint.FragmentPainter"/> skips painting.
+        /// </summary>
+        private static bool IsRowCollapsed(CssBox row) => row.Visibility.Value == Visibility.Collapse;
 
         /// <summary>
         /// Insert EmptyBoxes for vertical cell spanning.
@@ -862,6 +883,36 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Zeroes the width of every column whose originating <c>&lt;col&gt;</c>/<c>&lt;colgroup&gt;</c>
+        /// is <c>visibility: collapse</c> (CSS 2.1 <see href="https://www.w3.org/TR/CSS21/tables.html#dynamic-effects">§17.6.1</see>),
+        /// so it takes no width and the table shrinks by that column rather than reserving space for
+        /// it. Only a column with an explicit <c>&lt;col&gt;</c>/<c>&lt;colgroup&gt;</c> can be
+        /// collapsed this way - a table with no column elements has no box to read the value from,
+        /// so <see cref="_columns"/> is empty and this is a no-op.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately last in the width-determination pipeline: every earlier step
+        /// (<see cref="DetermineMissingColumnWidths"/>, <see cref="EnforceMaximumSize"/>,
+        /// <see cref="EnforceMinimumSize"/>) can size a column up from its own content or spread
+        /// spare width into it, and none of them know about collapse - so the only way to guarantee
+        /// a collapsed column stays at zero is to zero it after all of them have run. A cell that
+        /// spans out of a collapsed column into visible ones still gets the visible columns' full
+        /// width via <see cref="GetCellWidth"/>, which simply sums <see cref="_columnWidths"/> across
+        /// the span - the collapsed entry contributes zero automatically, with no separate case
+        /// needed for the cell itself.
+        /// </remarks>
+        private void CollapseColumnWidths()
+        {
+            if (_columnWidths is null) return;
+
+            for (var i = 0; i < _columnWidths.Length && i < _columns.Count; i++)
+            {
+                if (_columns[i].Visibility.Value == Visibility.Collapse)
+                    _columnWidths[i] = 0;
+            }
+        }
+
+        /// <summary>
         /// Remove header and footer from document tree for proxy-based repetition
         /// </summary>
         private void RemoveHeaderFooterFromTree()
@@ -1157,6 +1208,8 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (row.DerivedStyle.ActualDisplay != CssConstants.TableRow)
                         continue;
+                    if (IsRowCollapsed(row))
+                        continue;
 
                     headerCursor.CurrentY = headerRowsLayoutY;
                     headerCursor.MaxBottom = headerRowsLayoutY;
@@ -1193,6 +1246,8 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var row in _footerBox.Boxes)
                 {
                     if (row.DerivedStyle.ActualDisplay != CssConstants.TableRow)
+                        continue;
+                    if (IsRowCollapsed(row))
                         continue;
 
                     footerCursor.CurrentY = footerRowsLayoutY;
