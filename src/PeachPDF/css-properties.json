@@ -1864,7 +1864,7 @@
     },
     {
       "name": "font-weight",
-      "comment": "CssKeywordOrValue<FontWeightKeyword, int>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. CSS Fonts 4's <number> form is validated as a plain integer (FontWeightResolver/FontResolver.PickNearestWeight use int.TryParse, not a fractional number) - no 1-1000 range is enforced by that parse itself, so the integer clause is left unbounded rather than asserting a range this codebase doesn't actually check.",
+      "comment": "CssKeywordOrValue<FontWeightKeyword, int>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. CSS Fonts 4's <number> form is validated as a plain integer in [1,1000] (min/max below), not a fractional number — matches ValueExtensions.IsWeight's own range on the Layer A CSS-OM side (issue #655).",
       "inherited": true,
       "initialValue": "normal",
       "cssDataType": {
@@ -1872,7 +1872,9 @@
         "enumType": "FontWeightKeyword",
         "keywordMap": "Map.FontWeightKeywords",
         "fallback": "FontWeightKeyword.Normal",
-        "valueType": "integer"
+        "valueType": "integer",
+        "min": 1,
+        "max": 1000
       },
       "html": {
         "propertyPath": "FontWeight",
