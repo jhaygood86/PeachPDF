@@ -58,12 +58,6 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task FontWeight_NumericValue_StoresParsedInteger()
         {
-            // A multiple of 100: the Layer A CSS-OM's own FontWeightProperty/WeightIntegerConverter
-            // (ValueExtensions.IsWeight) restricts inline-style parsing to the legacy 100-900-by-100 set
-            // before the value ever reaches CssUtils.SetPropertyValue - a pre-existing, unrelated
-            // asymmetry with the generated registry's own deliberately-unconstrained integer clause (see
-            // the font-weight JSON entry's comment). Using a value both paths accept keeps this test about
-            // the typed-storage conversion, not that separate gap.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div id='t' style='font-weight:600'></div>"));
 
@@ -71,6 +65,22 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(box);
             Assert.True(box!.FontWeight.Value is { IsValue: true, Value: 600 });
+        }
+
+        [Fact]
+        public async Task FontWeight_NonHundredIntegerValue_StoresParsedInteger()
+        {
+            // CSS Fonts 4's font-weight grammar is normal | bold | <number [1,1000]> - any integer in
+            // that range, not just multiples of 100 (issue #655). Layer A CSS-OM inline-style parsing
+            // (ValueExtensions.IsWeight) used to reject anything but the legacy 100-900-by-100 set,
+            // dropping the whole declaration before it reached CssUtils.SetPropertyValue.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='t' style='font-weight:550'></div>"));
+
+            var box = LayoutHarness.FindById(root, "t");
+
+            Assert.NotNull(box);
+            Assert.True(box!.FontWeight.Value is { IsValue: true, Value: 550 });
         }
 
         [Fact]

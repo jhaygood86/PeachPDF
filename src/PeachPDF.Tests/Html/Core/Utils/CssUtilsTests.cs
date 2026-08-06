@@ -223,6 +223,28 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task SetPropertyValue_FontWeight_NonHundredInteger_IsAccepted()
+        {
+            // CSS Fonts 4's font-weight grammar is normal | bold | <number [1,1000]> - any integer in
+            // that range, not just multiples of 100 (issue #655).
+            var (box, parser) = await FindDivBoxAndParser("font-weight: normal;");
+
+            CssUtils.SetPropertyValue(parser, box, "font-weight", "550");
+
+            Assert.True(box.FontWeight.Value is { IsValue: true, Value: 550 });
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_FontWeight_OutOfRangeInteger_IsIgnored()
+        {
+            var (box, parser) = await FindDivBoxAndParser("font-weight: 400;");
+
+            CssUtils.SetPropertyValue(parser, box, "font-weight", "1001");
+
+            Assert.True(box.FontWeight.Value is { IsValue: true, Value: 400 });
+        }
+
+        [Fact]
         public async Task ApplyCurrentColor_ReplacesCurrentColorWithColorValue()
         {
             var (box, parser) = await FindDivBoxAndParser("color: rgb(10, 20, 30); border-top-color: currentColor;");

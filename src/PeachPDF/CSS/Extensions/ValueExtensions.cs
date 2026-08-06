@@ -10,9 +10,8 @@ namespace PeachPDF.CSS
     {
         private static bool IsWeight(int value)
         {
-            return value == 100 || value == 200 || value == 300 || value == 400 ||
-                   value == 500 || value == 600 || value == 700 || value == 800 ||
-                   value == 900;
+            // CSS Fonts Level 4 font-weight grammar: <number [1,1000]>.
+            return value is >= 1 and <= 1000;
         }
 
         public static Token OnlyOrDefault(this IEnumerable<Token> value)

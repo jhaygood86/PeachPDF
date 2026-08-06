@@ -791,6 +791,48 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void CssFontWeight550Legal()
+        {
+            // CSS Fonts 4's font-weight grammar is normal | bold | <number [1,1000]> - any integer in
+            // that range, not just multiples of 100 (issue #655).
+            var snippet = "font-weight : 550 ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-weight", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<FontWeightProperty>(property);
+            var concrete = (FontWeightProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("550", concrete.Value);
+        }
+
+        [Fact]
+        public void CssFontWeightOutOfRangeIllegal()
+        {
+            var snippet = "font-weight : 1001 ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-weight", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<FontWeightProperty>(property);
+            var concrete = (FontWeightProperty)property;
+            Assert.True(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void CssFontWeightZeroIllegal()
+        {
+            var snippet = "font-weight : 0 ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("font-weight", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<FontWeightProperty>(property);
+            var concrete = (FontWeightProperty)property;
+            Assert.True(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
         public void CssFontStretchNormalUppercaseImportantLegal()
         {
             var snippet = "font-stretch : NORMAL !important";
