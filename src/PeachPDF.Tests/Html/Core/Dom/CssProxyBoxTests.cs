@@ -404,6 +404,53 @@ thead { display: table-header-group; }
        _output.WriteLine($"Proxies created for first thead: {proxyBoxes.Count}");
         }
 
+        [Fact]
+        public async Task TableWithMultipleTfootElements_OnlyFirstBecomesRepeatingFooter()
+        {
+            // Arrange - the CssConstants.TableFooterGroup mirror of
+            // TableWithMultipleTheadElements_OnlyFirstBecomesRepeatingHeader above: a second
+            // <tfoot> has nowhere to detach to (the first already took _footerBox), so
+            // AssignBoxKinds adds it to _bodyRows as a single row-like entry instead.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+      @page { size: A4; margin: 20mm; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid black; padding: 8px; }
+      tfoot { display: table-footer-group; }
+    </style>
+</head>
+<body>
+    <table>
+        <tbody>
+        " + string.Join("", Enumerable.Range(1, 20).Select(i =>
+                $"<tr><td>Row {i}</td></tr>")) + @"
+        </tbody>
+        <tfoot>
+            <tr><td>First Footer</td></tr>
+        </tfoot>
+        <tfoot>
+            <tr><td>Second Footer (should be treated as body)</td></tr>
+        </tfoot>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+
+            // Act
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var proxyBoxes = table.Boxes.OfType<CssProxyBox>().ToList();
+
+            // Assert - Should create proxies for repeating the first tfoot
+            Assert.True(proxyBoxes.Count > 0);
+            _output.WriteLine($"Proxies created for first tfoot: {proxyBoxes.Count}");
+        }
+
         #endregion
 
         #region Helper Methods

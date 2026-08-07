@@ -52,6 +52,15 @@ namespace PeachPDF.Html.Core.Dom
         private readonly List<CssBox> _bodyRows = [];
 
         /// <summary>
+        /// For each row kept in <see cref="_bodyRows"/>, its ordinal position among the table's rows in
+        /// source order - counting <c>visibility: collapse</c> rows that <see cref="AssignBoxKinds"/>
+        /// left out of <see cref="_bodyRows"/> (CSS 2.1 §17.6.1) too. A cell's <c>rowspan</c> counts rows
+        /// of that original grid, not of the shorter filtered list, so mapping a span onto
+        /// <see cref="_bodyRows"/> needs both numbers - see <see cref="GetEffectiveEndRowIndex"/>.
+        /// </summary>
+        private readonly List<int> _bodyRowOriginalIndices = [];
+
+        /// <summary>
         /// collection of all columns boxes
         /// </summary>
         private readonly List<CssBox> _columns = [];
@@ -389,6 +398,11 @@ namespace PeachPDF.Html.Core.Dom
                     (_footerBox, _footerIndex, _footerHeight, _footerRepeats) = footer;
             }
 
+            // Counts every row of the table's own grid in source order, collapsed ones included - the
+            // original-index half of the pair InsertEmptyBoxes/LayoutBodyRow need to map a rowspan onto
+            // _bodyRows correctly (see _bodyRowOriginalIndices).
+            var originalRowIndex = 0;
+
             foreach (var box in _tableBox.Boxes)
             {
                 // A proxy standing in for a detached group is this engine's own output rather than
@@ -404,25 +418,44 @@ namespace PeachPDF.Html.Core.Dom
                         break;
                     case CssConstants.TableRow:
                         if (!IsRowCollapsed(box))
+                        {
                             _bodyRows.Add(box);
+                            _bodyRowOriginalIndices.Add(originalRowIndex);
+                        }
+                        originalRowIndex++;
                         break;
                     case CssConstants.TableRowGroup:
                         foreach (CssBox childBox in box.Boxes)
-                            if (childBox.DerivedStyle.ActualDisplay == CssConstants.TableRow
-                                && !IsRowCollapsed(childBox))
+                        {
+                            if (childBox.DerivedStyle.ActualDisplay != CssConstants.TableRow) continue;
+
+                            if (!IsRowCollapsed(childBox))
+                            {
                                 _bodyRows.Add(childBox);
+                                _bodyRowOriginalIndices.Add(originalRowIndex);
+                            }
+                            originalRowIndex++;
+                        }
                         break;
                     case CssConstants.TableHeaderGroup:
                         if (_headerBox != null)
+                        {
                             _bodyRows.Add(box);
+                            _bodyRowOriginalIndices.Add(originalRowIndex);
+                        }
                         else
                             _headerBox = box;
+                        originalRowIndex++;
                         break;
                     case CssConstants.TableFooterGroup:
                         if (_footerBox != null)
+                        {
                             _bodyRows.Add(box);
+                            _bodyRowOriginalIndices.Add(originalRowIndex);
+                        }
                         else
                             _footerBox = box;
+                        originalRowIndex++;
                         break;
                     case CssConstants.TableColumn:
                         for (int i = 0; i < GetSpan(box); i++)
@@ -481,27 +514,26 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (_tableBox._tableFixed) return;
 
-            var currentRow = 0;
-
-            foreach (var row in _bodyRows)
+            for (var currentRow = 0; currentRow < _bodyRows.Count; currentRow++)
             {
+                var row = _bodyRows[currentRow];
+
                 for (var k = 0; k < row.Boxes.Count; k++)
                 {
                     var cell = row.Boxes[k];
                     var rowSpan = GetRowSpan(cell);
                     var realColumnIndex = GetCellRealColumnIndex(row, cell); //Real column of the cell
+                    var endRowIndex = GetEffectiveEndRowIndex(currentRow, rowSpan);
 
-                    for (var i = currentRow + 1; i < currentRow + rowSpan; i++)
+                    for (var i = currentRow + 1; i <= endRowIndex; i++)
                     {
-                        if (_bodyRows.Count <= i) continue;
-
                         var columnCount = 0;
                         var inserted = false;
                         for (var j = 0; j < _bodyRows[i].Boxes.Count; j++)
                         {
                             if (columnCount == realColumnIndex)
                             {
-                                _bodyRows[i].Boxes.Insert(columnCount, new CssSpacingBox(_tableBox, ref cell, currentRow));
+                                _bodyRows[i].Boxes.Insert(columnCount, new CssSpacingBox(_tableBox, ref cell, currentRow, endRowIndex));
                                 inserted = true;
                                 break;
                             }
@@ -517,15 +549,44 @@ namespace PeachPDF.Html.Core.Dom
                         // (below) misses this row's contribution to it (issue #522).
                         if (!inserted && columnCount == realColumnIndex)
                         {
-                            _bodyRows[i].Boxes.Add(new CssSpacingBox(_tableBox, ref cell, currentRow));
+                            _bodyRows[i].Boxes.Add(new CssSpacingBox(_tableBox, ref cell, currentRow, endRowIndex));
                         }
                     }
                 }
-
-                currentRow++;
             }
 
             _tableBox._tableFixed = true;
+        }
+
+        /// <summary>
+        /// Maps a cell's <c>rowspan</c> - a count of rows in the table's own row grid, collapsed ones
+        /// included - to the index of the last row in <see cref="_bodyRows"/> it actually reaches once
+        /// <c>visibility: collapse</c> rows (CSS 2.1 §17.6.1) are excluded from that list. Walking the
+        /// same number of steps through the shorter filtered list instead, as a raw
+        /// <c>currentRow + rowSpan - 1</c> would, lands a span that opens before a collapsed row and
+        /// extends into or past it one row too far for every collapsed row it crosses (issue #665).
+        /// </summary>
+        /// <param name="startRowIndex">
+        /// the cell's own row, as an index into <see cref="_bodyRows"/> - or <c>-1</c>, the
+        /// <see cref="TableRowCursor.RowIndex"/> sentinel for a <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>
+        /// group being measured on its own cursor, whose rows are not in <see cref="_bodyRows"/> at all.
+        /// </param>
+        /// <param name="rowSpan">the cell's raw <c>rowspan</c> value</param>
+        private int GetEffectiveEndRowIndex(int startRowIndex, int rowSpan)
+        {
+            // A header/footer measurement row has nothing here to map collapsed rows against - fall
+            // back to the raw span arithmetic CssSpacingBox used before this mapping existed, which is
+            // also correct whenever rowSpan is 1 or startRowIndex is otherwise out of range.
+            if (startRowIndex < 0 || rowSpan <= 1 || startRowIndex >= _bodyRowOriginalIndices.Count)
+                return startRowIndex + rowSpan - 1;
+
+            var targetOriginalIndex = _bodyRowOriginalIndices[startRowIndex] + rowSpan - 1;
+
+            var endRowIndex = startRowIndex;
+            for (var i = startRowIndex + 1; i < _bodyRows.Count && _bodyRowOriginalIndices[i] <= targetOriginalIndex; i++)
+                endRowIndex = i;
+
+            return endRowIndex;
         }
 
         /// <summary>
@@ -951,7 +1012,7 @@ namespace PeachPDF.Html.Core.Dom
         /// leaves no trailing border-spacing slot after, matching <see cref="GetWidthSum"/> leaving
         /// the same slot out of the table's own width. False (a spacing slot is still owed) for a
         /// cell that spans out of a collapsed column into a visible one, or past the last known
-        /// column - the former is this narrower fix's own documented remaining gap, and the latter
+        /// column - the former is issue #667's own documented remaining gap, and the latter
         /// cannot be a collapsed column because <see cref="IsColumnCollapsed"/> is false past
         /// <see cref="_columns"/>.
         /// </summary>
@@ -2468,7 +2529,8 @@ namespace PeachPDF.Html.Core.Dom
                 // A cell occupying only collapsed column(s) contributes no border-spacing slot of its
                 // own either - GetWidthSum leaves the same slot out of the table's own width, and a
                 // cell straddling a collapsed and a visible column (colspan) still gets one, which is
-                // this narrower fix's known remaining gap (see the accepted-gaps note on this change).
+                // issue #667's own known remaining gap (see .claude/accepted-gaps/
+                // visibility-collapse-table-straddling-column-cell.md).
                 var spacingAfterCell = CellOccupiesOnlyCollapsedColumns(columnIndex, GetColSpan(cell))
                     ? 0
                     : GetHorizontalSpacing();
@@ -2569,7 +2631,10 @@ namespace PeachPDF.Html.Core.Dom
                             break;
                         case > 1:
                             {
-                                var endRow = rowIndex + rowSpan - 1;
+                                // Same mapping InsertEmptyBoxes' placeholders use (GetEffectiveEndRowIndex),
+                                // so a span crossing a collapsed row closes on the same row here as the
+                                // CssSpacingBox that stands in for it there (issue #665).
+                                var endRow = GetEffectiveEndRowIndex(rowIndex, rowSpan);
                                 if (!rowSpannedBoxes.TryGetValue(endRow, out var rowSpannedBoxesForRow))
                                 {
                                     rowSpannedBoxesForRow = [];
@@ -3130,8 +3195,19 @@ namespace PeachPDF.Html.Core.Dom
                 for (var i = 0; i < row.Boxes.Count; i++)
                 {
                     var cell = row.Boxes[i];
-                    var col = GetCellRealColumnIndex(row, cell);
-                    col = _columnWidths.Length > col ? col : _columnWidths.Length - 1;
+                    var realCol = GetCellRealColumnIndex(row, cell);
+                    var colSpan = GetColSpan(cell);
+
+                    // A cell that lands entirely inside collapsed column(s) is itself invisible (CSS 2.1
+                    // §17.6.1), so its content must not push those columns' width up before
+                    // CollapseColumnWidths zeroes them - left in, EnforceMinimumSize's colspan-neighbor
+                    // adjustment would narrow the *next* column to compensate for a width the collapsed
+                    // column never actually needs (issue #665). A cell straddling a collapsed and a
+                    // visible column still contributes normally - excluding it too would misjudge the
+                    // visible column it also occupies (issue #667's own accepted, narrower gap).
+                    if (CellOccupiesOnlyCollapsedColumns(realCol, colSpan)) continue;
+
+                    var col = _columnWidths.Length > realCol ? realCol : _columnWidths.Length - 1;
 
                     if ((onlyNans && !double.IsNaN(_columnWidths[col])) || i >= row.Boxes.Count) continue;
                     cell.GetMinMaxWidth(out var minWidth, out var maxWidth);
@@ -3148,7 +3224,6 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     maxWidth = Math.Max(maxWidth, minWidth);
 
-                    var colSpan = GetColSpan(cell);
                     minWidth /= colSpan;
                     maxWidth /= colSpan;
 
@@ -3263,6 +3338,12 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var colspan = GetColSpan(cell);
                     var col = GetCellRealColumnIndex(row, cell);
+
+                    // See the matching skip in GetColumnsMinMaxWidthByContent (issue #665): a cell
+                    // confined to collapsed column(s) must not size those columns up from its own
+                    // (invisible) content.
+                    if (CellOccupiesOnlyCollapsedColumns(col, colspan)) continue;
+
                     var affectColumn = Math.Min(col + colspan, _columnMinWidths.Length) - 1;
                     var spannedWidth = GetSpannedMinWidth(row, col, colspan) + (colspan - 1) * GetHorizontalSpacing();
 
