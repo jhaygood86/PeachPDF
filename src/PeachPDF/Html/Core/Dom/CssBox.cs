@@ -3578,7 +3578,7 @@ namespace PeachPDF.Html.Core.Dom
         private void ResumeInTheNextFragmentainer()
         {
             if (HtmlContainer?.CurrentFragmentainer is not { HasOwnBand: true } fragmentainer) return;
-            if (DerivedStyle.ActualDisplay is CssConstants.TableCell || Position.Value is not (PositionMode.Static or PositionMode.Relative))
+            if (DerivedStyle.ActualDisplay is CssConstants.TableCell || Position.Value is not (PositionMode.Static or PositionMode.Relative or PositionMode.Sticky))
                 return;
 
             // Moving Location is the whole translation: ActualRight and ActualBottom are derived from it
@@ -3932,7 +3932,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (child.DerivedStyle.ActualDisplay != CssConstants.TableCell)
             {
-                if (child.Position.Value is PositionMode.Static or PositionMode.Relative)
+                if (child.Position.Value is PositionMode.Static or PositionMode.Relative or PositionMode.Sticky)
                 {
                     var prevSibling = PreviousInFlowSibling(child);
 
@@ -4401,7 +4401,7 @@ namespace PeachPDF.Html.Core.Dom
             // box has no run. Deliberately left as-is rather than converted or deleted: proving it dead is
             // not the same as proving it unnecessary, and #545 is where that is decided.
             if (!_keepWithNextRetried
-                && Position.Value is PositionMode.Static or PositionMode.Relative && !IsFloated
+                && Position.Value is PositionMode.Static or PositionMode.Relative or PositionMode.Sticky && !IsFloated
                 && LineBoxes.Count > 0 && LineBoxes[0].Words.Count > 0
                 && HtmlContainer!.PageSize.Height > 0
                 && !PositionAssignedByEngine)
