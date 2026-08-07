@@ -78,6 +78,41 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task RowspanCrossingCollapsedRow_DoesNotMisalignLaterRow()
+        {
+            // Issue #665's first gap: a rowspan cell opening before a collapsed row and extending
+            // into/past it must not have its CssSpacingBox placeholder land in the wrong row.
+            // "Span" has rowspan="3" over source rows 1-3, of which source row 2 is collapsed -
+            // so it visually covers only two rendered rows (this row and "R3C2"'s), and the
+            // unrelated row after the span ("After1"/"After2") must keep its own two cells in
+            // their own two columns rather than being pushed over by a placeholder that leaked
+            // into it.
+            var (experiment, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <table style="border-spacing:0">
+                  <tr><td rowspan="3" style="height:60px">Span</td><td style="height:20px">R1C2</td></tr>
+                  <tr style="visibility:collapse"><td style="height:20px">R2C2</td></tr>
+                  <tr><td style="height:20px">R3C2</td></tr>
+                  <tr><td class="after1" style="height:20px">After1</td><td class="after2" style="height:20px">After2</td></tr>
+                </table>
+                </body></html>
+                """);
+
+            var (control, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <table style="border-spacing:0">
+                  <tr><td rowspan="2" style="height:60px">Span</td><td style="height:20px">R1C2</td></tr>
+                  <tr><td style="height:20px">R3C2</td></tr>
+                  <tr><td class="after1" style="height:20px">After1</td><td class="after2" style="height:20px">After2</td></tr>
+                </table>
+                </body></html>
+                """);
+
+            AssertSameLocation(FindByClass(control, "after1")!, FindByClass(experiment, "after1")!);
+            AssertSameLocation(FindByClass(control, "after2")!, FindByClass(experiment, "after2")!);
+        }
+
+        [Fact]
         public async Task CollapsedRowGroup_CollapsesEveryRowInsideIt()
         {
             // visibility is an inherited property, so visibility:collapse on the <tbody> itself must
@@ -239,6 +274,59 @@ namespace PeachPDF.Tests.Integration
             var experimentTable = FindByClass(experiment, "t")!;
             var controlTable = FindByClass(control, "t")!;
             Assert.Equal(controlTable.ActualRight, experimentTable.ActualRight, 3);
+        }
+
+        [Fact]
+        public async Task CollapsedColumn_WideContentDoesNotStarveNextColumn()
+        {
+            // Issue #665's second gap: an auto-width table's content-based column sizing
+            // (CssLayoutEngineTable.DetermineMissingColumnWidths' auto-width branch) spreads
+            // whatever width is left over, after every column's own content-based minimum is
+            // subtracted, toward each column's own max-content width. A collapsed column's own
+            // (invisible) unbreakable content must not count against that leftover - left unfixed,
+            // its huge min-content width would eat the table's available width and leave the
+            // column after it too little to reach its own max-content width, forcing it to wrap
+            // when it otherwise would not have to.
+            var (experiment, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <div style="width:100px">
+                <table class="t" style="border-spacing:0">
+                  <colgroup>
+                    <col style="width:50px">
+                    <col style="visibility:collapse">
+                    <col>
+                  </colgroup>
+                  <tr>
+                    <td class="a">A</td>
+                    <td style="white-space:nowrap">ThisIsOneVeryLongUnbreakableWordFarWiderThanOneHundredPixels</td>
+                    <td class="c">CC CC</td>
+                  </tr>
+                </table>
+                </div>
+                </body></html>
+                """);
+
+            var (control, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <div style="width:100px">
+                <table class="t" style="border-spacing:0">
+                  <colgroup>
+                    <col style="width:50px">
+                    <col>
+                  </colgroup>
+                  <tr>
+                    <td class="a">A</td>
+                    <td class="c">CC CC</td>
+                  </tr>
+                </table>
+                </div>
+                </body></html>
+                """);
+
+            var experimentC = FindByClass(experiment, "c")!;
+            var controlC = FindByClass(control, "c")!;
+            AssertSameLocation(controlC, experimentC);
+            Assert.Equal(controlC.ActualWidth, experimentC.ActualWidth, 3);
         }
 
         [Fact]

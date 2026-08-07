@@ -9,14 +9,19 @@ namespace PeachPDF.Html.Core.Dom
     /// </summary>
     internal sealed class CssSpacingBox : CssBox
     {
-        public CssSpacingBox(CssBox tableBox, ref CssBox extendedBox, int startRow)
+        // endRow is passed in rather than re-derived from extendedBox's rowspan attribute here: a span
+        // that crosses a visibility:collapse row (CSS 2.1 §17.6.1) reaches fewer of _bodyRows's own,
+        // already-filtered rows than its raw rowspan count would suggest, and
+        // CssLayoutEngineTable.GetEffectiveEndRowIndex is the one place that mapping is done - see its
+        // remarks for why (issue #665).
+        public CssSpacingBox(CssBox tableBox, ref CssBox extendedBox, int startRow, int endRow)
             : base(tableBox, new HtmlTag("none", false, new Dictionary<string, string> { { "colspan", "1" } }))
         {
             ExtendedBox = extendedBox;
             Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
 
             StartRow = startRow;
-            EndRow = startRow + int.Parse(extendedBox.GetAttribute("rowspan", "1")) - 1;
+            EndRow = endRow;
         }
 
         public CssBox ExtendedBox { get; }
