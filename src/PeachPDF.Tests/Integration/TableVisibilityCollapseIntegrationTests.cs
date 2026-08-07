@@ -412,6 +412,127 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(controlA.ActualWidth, experimentA.ActualWidth, 3);
         }
 
+        [Fact]
+        public async Task ColspanCell_StraddlingVisibleThenCollapsedColumn_NoResidualBorderSpacing()
+        {
+            // Issue #667: a colspan cell spanning a visible column followed by a collapsed one is
+            // neither of CellOccupiesOnlyCollapsedColumns' two binary cases. Its own trailing edge
+            // lands on the collapsed column, so - like a cell confined entirely to collapsed
+            // column(s) - the border-spacing slot after it must be omitted too.
+            var (experiment, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <table class="t" style="border-spacing:5px; width:305px">
+                  <colgroup>
+                    <col style="width:100px">
+                    <col style="width:100px; visibility:collapse">
+                    <col style="width:100px">
+                  </colgroup>
+                  <tr>
+                    <td class="a" colspan="2">AB</td>
+                    <td class="c">C</td>
+                  </tr>
+                </table>
+                </body></html>
+                """);
+
+            var (control, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <table class="t" style="border-spacing:5px; width:205px">
+                  <colgroup>
+                    <col style="width:100px">
+                    <col style="width:100px">
+                  </colgroup>
+                  <tr>
+                    <td class="a">A</td>
+                    <td class="c">C</td>
+                  </tr>
+                </table>
+                </body></html>
+                """);
+
+            AssertSameLocation(FindByClass(control, "c")!, FindByClass(experiment, "c")!);
+        }
+
+        [Fact]
+        public async Task ColspanCell_StraddlingCollapsedThenVisibleColumn_NoExtraInteriorSpacing()
+        {
+            // Issue #667's mirror case: a colspan cell spanning a collapsed column followed by a
+            // visible one. The boundary strictly between the cell's own two spanned columns must be
+            // omitted (it falls immediately after the collapsed one), so the cell's own rendered
+            // width must not include a border-spacing unit for it.
+            var (experiment, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <table class="t" style="border-spacing:5px; width:305px">
+                  <colgroup>
+                    <col style="width:100px; visibility:collapse">
+                    <col style="width:100px">
+                    <col style="width:100px">
+                  </colgroup>
+                  <tr>
+                    <td class="a" colspan="2">AB</td>
+                    <td class="c">C</td>
+                  </tr>
+                </table>
+                </body></html>
+                """);
+
+            var (control, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <table class="t" style="border-spacing:5px; width:205px">
+                  <colgroup>
+                    <col style="width:100px">
+                    <col style="width:100px">
+                  </colgroup>
+                  <tr>
+                    <td class="a">A</td>
+                    <td class="c">C</td>
+                  </tr>
+                </table>
+                </body></html>
+                """);
+
+            AssertSameLocation(FindByClass(control, "c")!, FindByClass(experiment, "c")!);
+        }
+
+        [Fact]
+        public async Task ColspanCell_StraddlingCollapsedColumn_ContentDoesNotShareWidthWithIt()
+        {
+            // Issue #667: GetColumnsMinMaxWidthByContent divided a straddling cell's content-based
+            // min-width evenly across every column its colspan reaches, including a collapsed one
+            // that will never carry any of it - understating the sole visible column's fair share and
+            // letting it come out narrower than it would with no collapsed column involved at all.
+            var (experiment, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <div style="width:80px">
+                <table class="t" style="border-spacing:0">
+                  <colgroup>
+                    <col style="visibility:collapse">
+                    <col>
+                  </colgroup>
+                  <tr><td class="a" colspan="2" style="white-space:nowrap">ThisIsOneVeryLongUnbreakableWordFarWiderThanEightyPixels</td></tr>
+                </table>
+                </div>
+                </body></html>
+                """);
+
+            var (control, _) = await BuildAndLayout("""
+                <!DOCTYPE html><html><body>
+                <div style="width:80px">
+                <table class="t" style="border-spacing:0">
+                  <colgroup>
+                    <col>
+                  </colgroup>
+                  <tr><td class="a" style="white-space:nowrap">ThisIsOneVeryLongUnbreakableWordFarWiderThanEightyPixels</td></tr>
+                </table>
+                </div>
+                </body></html>
+                """);
+
+            var experimentA = FindByClass(experiment, "a")!;
+            var controlA = FindByClass(control, "a")!;
+            Assert.Equal(controlA.ActualWidth, experimentA.ActualWidth, 3);
+        }
+
         private static void AssertSameLocation(CssBox expected, CssBox actual)
         {
             Assert.Equal(expected.Location.X, actual.Location.X, 3);
