@@ -6798,6 +6798,63 @@ await SaveShowcaseAsync("bidi_text", "Text &amp; Fonts", "Bidirectional Text (di
     "embedding, and bracket mirroring in real Hebrew text.",
     bidiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// visibility: collapse on table rows/row-groups/columns/column-groups (CSS 2.1 §17.6.1): unlike
+// visibility: hidden, which only skips painting and still reserves the element's layout space, a
+// collapsed table row/column is removed from the table's geometry entirely - the rows/columns after
+// it shift up/left to fill the gap, as if it had display: none.
+var visibilityCollapseHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a5 landscape; margin: 12mm }
+    body { font: 10pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 14pt; margin: 0 0 0.3em }
+    h2 { font-size: 11pt; margin: 1.2em 0 0.4em }
+    p.intro { color: #6b7280; font-size: 9pt; margin: 0 0 0.6em; max-width: 34em }
+    table { border-collapse: separate; border-spacing: 4pt 0; margin-bottom: 0.6em }
+    td, th { border: 0.75pt solid #94a3b8; padding: 4pt 8pt; text-align: left }
+    th { background: #eef2ff }
+    tr.collapsed, col.collapsed { visibility: collapse }
+    tr.hidden { visibility: hidden }
+    </style></head><body>
+    <h1>visibility: collapse on Table Rows and Columns</h1>
+    <p class="intro">A collapsed row/column takes no layout space at all - the content around it
+    closes the gap, exactly as if it had <code>display: none</code>. This is distinct from
+    <code>visibility: hidden</code>, which keeps reserving the element's space and only omits
+    painting it.</p>
+
+    <h2>Row collapse (row 2 has <code>visibility: collapse</code>)</h2>
+    <table>
+    <tr><th>Row</th><th>Status</th></tr>
+    <tr><td>Row 1</td><td>Visible</td></tr>
+    <tr class="collapsed"><td>Row 2</td><td>Collapsed - not rendered, and its space is reclaimed</td></tr>
+    <tr><td>Row 3</td><td>Follows immediately after Row 1</td></tr>
+    </table>
+
+    <h2>Compare with <code>visibility: hidden</code> (row 2's space stays reserved)</h2>
+    <table>
+    <tr><th>Row</th><th>Status</th></tr>
+    <tr><td>Row 1</td><td>Visible</td></tr>
+    <tr class="hidden"><td>Row 2</td><td>Hidden - not painted, but still reserves its space</td></tr>
+    <tr><td>Row 3</td><td>A visible gap remains where Row 2 was</td></tr>
+    </table>
+
+    <h2>Column collapse (middle column has <code>visibility: collapse</code>)</h2>
+    <table>
+    <colgroup>
+    <col style="width:120pt">
+    <col class="collapsed" style="width:120pt">
+    <col style="width:120pt">
+    </colgroup>
+    <tr><th>Column A</th><th>Column B</th><th>Column C</th></tr>
+    <tr><td>Visible</td><td>Collapsed</td><td>Follows Column A directly</td></tr>
+    </table>
+    </body></html>
+    """;
+await SaveShowcaseAsync("table_visibility_collapse", "Layout", "Table Row/Column Collapse",
+    "visibility: collapse on table rows, row-groups, columns, and column-groups (CSS 2.1 §17.6.1): "
+    + "the collapsed row/column takes no layout space and its neighbors shift in to close the gap, "
+    + "unlike visibility: hidden which still reserves the space.",
+    visibilityCollapseHtml, pdfConfig);
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

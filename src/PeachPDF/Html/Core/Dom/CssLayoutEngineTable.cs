@@ -69,6 +69,9 @@ namespace PeachPDF.Html.Core.Dom
 
         private double[]? _columnMinWidths;
 
+        /// <summary>Cache for <see cref="CollapsedColumnCount"/>.</summary>
+        private int? _collapsedColumnCount;
+
         // Header/Footer repetition fields
         private double _headerHeight;
         private double _footerHeight;
@@ -325,6 +328,12 @@ namespace PeachPDF.Html.Core.Dom
             // While table width is larger than it should, and width is reducible
             EnforceMinimumSize();
 
+            // A collapsed <col>/<colgroup> (CSS 2.1 §17.6.1) must not compete for space with the
+            // rest of the table, so this runs last - after every other step that could size a
+            // column up from its content has already run - and nothing after it may spread width
+            // back into a column this zeroes.
+            CollapseColumnWidths();
+
             // CssBox.PerformLayoutImp's Static/Relative branch already positioned this box at
             // ClientLeft + ActualMarginLeft before dispatching here (ActualMarginLeft calls
             // GetActualMarginLeft with boxWidth: null). For a fixed (non-auto) margin-left that
@@ -394,11 +403,13 @@ namespace PeachPDF.Html.Core.Dom
                     case CssConstants.TableCaption:
                         break;
                     case CssConstants.TableRow:
-                        _bodyRows.Add(box);
+                        if (!IsRowCollapsed(box))
+                            _bodyRows.Add(box);
                         break;
                     case CssConstants.TableRowGroup:
                         foreach (CssBox childBox in box.Boxes)
-                            if (childBox.DerivedStyle.ActualDisplay == CssConstants.TableRow)
+                            if (childBox.DerivedStyle.ActualDisplay == CssConstants.TableRow
+                                && !IsRowCollapsed(childBox))
                                 _bodyRows.Add(childBox);
                         break;
                     case CssConstants.TableHeaderGroup:
@@ -442,13 +453,26 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             if (_headerBox != null)
-                _allRows.AddRange(_headerBox.Boxes);
+                _allRows.AddRange(_headerBox.Boxes.Where(r => !IsRowCollapsed(r)));
 
             _allRows.AddRange(_bodyRows);
 
             if (_footerBox != null)
-                _allRows.AddRange(_footerBox.Boxes);
+                _allRows.AddRange(_footerBox.Boxes.Where(r => !IsRowCollapsed(r)));
         }
+
+        /// <summary>
+        /// Whether <paramref name="row"/> is a table row (or a row inside a collapsed row group -
+        /// <c>visibility</c> is an inherited property, so a <c>&lt;tbody&gt;</c>/<c>&lt;thead&gt;</c>/
+        /// <c>&lt;tfoot&gt;</c> marked <c>collapse</c> already gives every row inside it the same
+        /// computed value without this engine having to walk up to the group itself) that CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/tables.html#dynamic-effects">§17.6.1</see> removes
+        /// from the table's rendering entirely - as if it had <c>display: none</c>, so it takes no
+        /// layout space and the rows after it shift up to fill the gap. Distinct from
+        /// <c>visibility: hidden</c>, which this engine still lays out normally (its space stays
+        /// reserved) and only <see cref="PeachPDF.Html.Core.Paint.FragmentPainter"/> skips painting.
+        /// </summary>
+        private static bool IsRowCollapsed(CssBox row) => row.Visibility.Value == Visibility.Collapse;
 
         /// <summary>
         /// Insert EmptyBoxes for vertical cell spanning.
@@ -862,6 +886,86 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Zeroes the width of every column whose originating <c>&lt;col&gt;</c>/<c>&lt;colgroup&gt;</c>
+        /// is <c>visibility: collapse</c> (CSS 2.1 <see href="https://www.w3.org/TR/CSS21/tables.html#dynamic-effects">§17.6.1</see>),
+        /// so it takes no width and the table shrinks by that column rather than reserving space for
+        /// it. Only a column with an explicit <c>&lt;col&gt;</c>/<c>&lt;colgroup&gt;</c> can be
+        /// collapsed this way - a table with no column elements has no box to read the value from,
+        /// so <see cref="_columns"/> is empty and this is a no-op.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately last in the width-determination pipeline: every earlier step
+        /// (<see cref="DetermineMissingColumnWidths"/>, <see cref="EnforceMaximumSize"/>,
+        /// <see cref="EnforceMinimumSize"/>) can size a column up from its own content or spread
+        /// spare width into it, and none of them know about collapse - so the only way to guarantee
+        /// a collapsed column stays at zero is to zero it after all of them have run. A cell that
+        /// spans out of a collapsed column into visible ones still gets the visible columns' full
+        /// width via <see cref="GetCellWidth"/>, which simply sums <see cref="_columnWidths"/> across
+        /// the span - the collapsed entry contributes zero automatically, with no separate case
+        /// needed for the cell itself.
+        /// </remarks>
+        private void CollapseColumnWidths()
+        {
+            if (_columnWidths is null) return;
+
+            for (var i = 0; i < _columnWidths.Length; i++)
+            {
+                if (IsColumnCollapsed(i))
+                    _columnWidths[i] = 0;
+            }
+        }
+
+        /// <summary>
+        /// Whether column <paramref name="columnIndex"/>'s originating <c>&lt;col&gt;</c>/
+        /// <c>&lt;colgroup&gt;</c> is <c>visibility: collapse</c>. False for an index past
+        /// <see cref="_columns"/> - a table with no column elements (the common case) has no box to
+        /// read the value from, so no column of it can ever be collapsed this way.
+        /// </summary>
+        private bool IsColumnCollapsed(int columnIndex) =>
+            columnIndex < _columns.Count && _columns[columnIndex].Visibility.Value == Visibility.Collapse;
+
+        /// <summary>
+        /// How many columns <see cref="IsColumnCollapsed"/> answers true for, cached because
+        /// <see cref="GetWidthSum"/> - which needs this count to leave out the collapsed columns'
+        /// own border-spacing slot - runs many times over a single layout (every iteration of
+        /// <see cref="ShrinkColumnsToFitAvailableWidth"/>, <see cref="ClipColumnsToMaxWidth"/>, and
+        /// <see cref="SpreadExtraWidthToColumns"/>), and <see cref="_columns"/> never changes after
+        /// <see cref="AssignBoxKinds"/> has run.
+        /// </summary>
+        private int CollapsedColumnCount()
+        {
+            if (_collapsedColumnCount is { } cached) return cached;
+
+            var count = 0;
+            for (var i = 0; i < _columnWidths!.Length; i++)
+            {
+                if (IsColumnCollapsed(i)) count++;
+            }
+
+            return (_collapsedColumnCount = count).Value;
+        }
+
+        /// <summary>
+        /// Whether every column a cell spans, starting at <paramref name="columnIndex"/> for
+        /// <paramref name="colspan"/> columns, is collapsed - the case <see cref="LayoutBodyRow"/>
+        /// leaves no trailing border-spacing slot after, matching <see cref="GetWidthSum"/> leaving
+        /// the same slot out of the table's own width. False (a spacing slot is still owed) for a
+        /// cell that spans out of a collapsed column into a visible one, or past the last known
+        /// column - the former is this narrower fix's own documented remaining gap, and the latter
+        /// cannot be a collapsed column because <see cref="IsColumnCollapsed"/> is false past
+        /// <see cref="_columns"/>.
+        /// </summary>
+        private bool CellOccupiesOnlyCollapsedColumns(int columnIndex, int colspan)
+        {
+            for (var i = columnIndex; i < columnIndex + colspan; i++)
+            {
+                if (!IsColumnCollapsed(i)) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Remove header and footer from document tree for proxy-based repetition
         /// </summary>
         private void RemoveHeaderFooterFromTree()
@@ -1157,6 +1261,8 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (row.DerivedStyle.ActualDisplay != CssConstants.TableRow)
                         continue;
+                    if (IsRowCollapsed(row))
+                        continue;
 
                     headerCursor.CurrentY = headerRowsLayoutY;
                     headerCursor.MaxBottom = headerRowsLayoutY;
@@ -1193,6 +1299,8 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var row in _footerBox.Boxes)
                 {
                     if (row.DerivedStyle.ActualDisplay != CssConstants.TableRow)
+                        continue;
+                    if (IsRowCollapsed(row))
                         continue;
 
                     footerCursor.CurrentY = footerRowsLayoutY;
@@ -2357,6 +2465,14 @@ namespace PeachPDF.Html.Core.Dom
                 var columnIndex = GetCellRealColumnIndex(row, cell);
                 var width = GetCellWidth(columnIndex, cell);
 
+                // A cell occupying only collapsed column(s) contributes no border-spacing slot of its
+                // own either - GetWidthSum leaves the same slot out of the table's own width, and a
+                // cell straddling a collapsed and a visible column (colspan) still gets one, which is
+                // this narrower fix's known remaining gap (see the accepted-gaps note on this change).
+                var spacingAfterCell = CellOccupiesOnlyCollapsedColumns(columnIndex, GetColSpan(cell))
+                    ? 0
+                    : GetHorizontalSpacing();
+
                 // A cell an earlier pass finished has its whole content in the fragment that pass emitted,
                 // so this one places nothing for it: not its position, not its content, not its alignment.
                 // Only the column cursor moves on, which is what keeps the cells beside it in their
@@ -2378,7 +2494,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     rowMaxRight = Math.Max(rowMaxRight, currentX + width);
                     currentColumn++;
-                    currentX += width + GetHorizontalSpacing();
+                    currentX += width + spacingAfterCell;
                     continue;
                 }
 
@@ -2467,7 +2583,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 rowMaxRight = Math.Max(rowMaxRight, cell.ActualRight);
                 currentColumn++;
-                currentX = cell.ActualRight + GetHorizontalSpacing();
+                currentX = cell.ActualRight + spacingAfterCell;
             }
 
             // Vertical alignment
@@ -3106,8 +3222,13 @@ namespace PeachPDF.Html.Core.Dom
                     f += t;
             }
 
-            //Take cell-spacing
-            f += GetHorizontalSpacing() * (_columnWidths.Length + 1);
+            // Take cell-spacing - one border-spacing slot per column boundary (columnCount + 1 of
+            // them), minus one slot for every collapsed column: a collapsed column contributes
+            // neither its own width (already zeroed by CollapseColumnWidths) nor a border-spacing
+            // slot of its own, matching LayoutBodyRow's cursor advance not spacing past it either.
+            // Without this a table with a collapsed column measured one border-spacing unit wider
+            // than a table genuinely built with one fewer column.
+            f += GetHorizontalSpacing() * (_columnWidths.Length + 1 - CollapsedColumnCount());
 
             //Take table borders
             f += _tableBox.ActualBorderLeftWidth + _tableBox.ActualBorderRightWidth;
