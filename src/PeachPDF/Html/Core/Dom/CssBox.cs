@@ -1216,8 +1216,52 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     return new string(chars);
                 }
+                case PeachPDF.CSS.TextTransform.FullWidth:
+                {
+                    var chars = text.ToCharArray();
+                    for (var i = 0; i < chars.Length; i++)
+                        chars[i] = ToFullWidth(chars[i]);
+                    return new string(chars);
+                }
                 default:
                     return text;
+            }
+        }
+
+        /// <summary>
+        /// Maps a single character to its fullwidth compatibility form per Unicode's &lt;wide&gt;
+        /// decomposition mapping (used by CSS Text Module Level 3's <c>text-transform: full-width</c>).
+        /// ASCII 0x21-0x7E map to U+FF01-FF5E (offset by U+FEE0), space maps to the ideographic space
+        /// U+3000, and a handful of Latin-1 currency/symbol characters map to their own fullwidth forms
+        /// in the U+FFE0-FFE6 range. Characters with no fullwidth form are returned unchanged. Does not
+        /// implement the spec's &lt;narrow&gt;-tagged half (halfwidth katakana/Hangul jamo/symbol forms
+        /// converting the other direction) - see
+        /// .claude/accepted-gaps/text-transform-full-width-halfwidth-cjk-forms.md.
+        /// </summary>
+        private static char ToFullWidth(char c)
+        {
+            switch (c)
+            {
+                case ' ':
+                    return '　';
+                case >= '!' and <= '~':
+                    return (char)(c + 0xfee0);
+                case '¢':
+                    return '￠';
+                case '£':
+                    return '￡';
+                case '¬':
+                    return '￢';
+                case '¯':
+                    return '￣';
+                case '¦':
+                    return '￤';
+                case '¥':
+                    return '￥';
+                case '₩':
+                    return '￦';
+                default:
+                    return c;
             }
         }
 

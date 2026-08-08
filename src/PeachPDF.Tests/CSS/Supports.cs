@@ -244,17 +244,15 @@ namespace PeachPDF.Tests.CSS
             Assert.False(supports.Condition.Check());
         }
 
-        // text-transform's cssDataType includes 'full-width' (Map.TextTransforms parses and stores it),
-        // but its supportsDataType override excludes it - CssBox.cs's ApplyTextTransform only implements
-        // uppercase/lowercase/capitalize, so 'full-width' has no distinct effect and @supports must say
-        // no. Same shape as word-break's keep-all above.
+        // CssBox.cs's ApplyTextTransform implements 'full-width' (converts characters to their Unicode
+        // fullwidth compatibility form), so @supports must say yes.
         [Fact]
-        public void SupportsTextTransformFullWidthRule_NotGenuinelyEnforced()
+        public void SupportsTextTransformFullWidthRule()
         {
             var source = @"@supports (text-transform: full-width) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.False(supports.Condition.Check());
+            Assert.True(supports.Condition.Check());
         }
 
         [Fact]
