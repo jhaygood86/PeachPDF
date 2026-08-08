@@ -136,7 +136,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("row-gap")]
         public void ColumnRowGap_InitialValueIsNormal(string name)
         {
-            Assert.Equal(CssConstants.Normal, CssDefaults.GetInitialValue(name));
+            Assert.Equal(Keywords.Normal, CssDefaults.GetInitialValue(name));
         }
 
         [Fact]
@@ -461,7 +461,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var (box, _) = await FindDivBoxAndParser("");
 
             Assert.Contains(name, CssUtils.SnapshotProperties(box).Keys);
-            Assert.Equal(CssConstants.Auto, CssDefaults.GetInitialValue(name));
+            Assert.Equal(Keywords.Auto, CssDefaults.GetInitialValue(name));
         }
 
         [Fact]
@@ -470,7 +470,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var (box, _) = await FindDivBoxAndParser("");
 
             Assert.Contains("page", CssUtils.SnapshotProperties(box).Keys);
-            Assert.Equal(CssConstants.Auto, CssDefaults.GetInitialValue("page"));
+            Assert.Equal(Keywords.Auto, CssDefaults.GetInitialValue("page"));
         }
 
         // Regression test for the registry-driven SnapshotPropertyNames fix (CSS Cascade 5 §6.3): "page"
@@ -500,7 +500,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             var (box, _) = await FindDivBoxAndParser("");
 
             Assert.Contains("box-decoration-break", CssUtils.SnapshotProperties(box).Keys);
-            Assert.Equal(CssConstants.Slice, CssDefaults.GetInitialValue("box-decoration-break"));
+            Assert.Equal(Keywords.Slice, CssDefaults.GetInitialValue("box-decoration-break"));
         }
 
         // End-to-end through the real cascade (not the CssUtils setter directly): a css-break-3 §3.1 value
@@ -576,7 +576,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var (box, _) = await FindDivBoxAndParser("page-break-before: always;");
 
-            Assert.Equal(CssConstants.Page, box.BreakBefore);
+            Assert.Equal(Keywords.Page, box.BreakBefore);
         }
 
         // The CSS-wide keywords have to work on the legacy spelling too - this is what the known-name and
@@ -592,7 +592,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var (box, _) = await FindDivBoxAndParser($"break-before: page; page-break-before: {keyword};");
 
-            Assert.Equal(CssConstants.Auto, box.BreakBefore);
+            Assert.Equal(Keywords.Auto, box.BreakBefore);
         }
 
         [Theory]
@@ -602,7 +602,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var (box, _) = await FindDivBoxAndParser($"{modernName}: avoid; {legacyName}: initial;");
 
-            Assert.Equal(CssConstants.Auto, CssUtils.GetPropertyValue(box, modernName));
+            Assert.Equal(Keywords.Auto, CssUtils.GetPropertyValue(box, modernName));
         }
 
         // The false side of each validation guard: an invalid value must be ignored, leaving the prior value.

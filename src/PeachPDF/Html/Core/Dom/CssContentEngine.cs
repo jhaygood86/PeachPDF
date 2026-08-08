@@ -12,7 +12,7 @@ namespace PeachPDF.Html.Core.Dom
     {
         public static void ApplyContent(CssBox cssBox)
         {
-            if (cssBox.Content is CssConstants.None or CssConstants.Normal)
+            if (cssBox.Content is Keywords.None or Keywords.Normal)
             {
                 return;
             }
@@ -44,7 +44,7 @@ namespace PeachPDF.Html.Core.Dom
                     case StringToken stringToken:
                         contentText.Append(stringToken.Data);
                         break;
-                    case FunctionToken { Data: CssConstants.Counter } functionToken:
+                    case FunctionToken { Data: FunctionNames.Counter } functionToken:
                         {
                             AppendCounter(contentText, cssBox, functionToken);
                             break;
@@ -129,7 +129,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var style = arguments.Length > 1 && arguments[1] is KeywordToken styleToken
                 ? styleToken.Data
-                : CssConstants.Decimal;
+                : Keywords.Decimal;
 
             sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
         }
@@ -274,7 +274,7 @@ namespace PeachPDF.Html.Core.Dom
 
             // Extract the content value by evaluating the content property
             // This is similar to ApplyContent but returns the result instead of setting Text
-            if (pseudoElement.Content is CssConstants.None or CssConstants.Normal)
+            if (pseudoElement.Content is Keywords.None or Keywords.Normal)
             {
                 return null;
             }
@@ -289,7 +289,7 @@ namespace PeachPDF.Html.Core.Dom
                     case StringToken stringToken:
                         contentText.Append(stringToken.Data);
                         break;
-                    case FunctionToken { Data: CssConstants.Counter } functionToken:
+                    case FunctionToken { Data: FunctionNames.Counter } functionToken:
                         {
                             AppendCounter(contentText, pseudoElement, functionToken);
                             break;

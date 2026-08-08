@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
@@ -113,9 +114,9 @@ namespace PeachPDF.Tests.Integration
             var child = LayoutHarness.FindById(root, "child");
             Assert.NotNull(child);
 
-            Assert.Equal(CssConstants.Auto, child!.BreakInside);
-            Assert.Equal(CssConstants.Auto, child.BreakBefore);
-            Assert.Equal(CssConstants.Auto, child.BreakAfter);
+            Assert.Equal(Keywords.Auto, child!.BreakInside);
+            Assert.Equal(Keywords.Auto, child.BreakBefore);
+            Assert.Equal(Keywords.Auto, child.BreakAfter);
         }
 
         // A generated-content box is a real child of the element, not a duplicate of it, and it is created
@@ -137,9 +138,9 @@ namespace PeachPDF.Tests.Integration
             var before = LayoutHarness.Descendants(target!).FirstOrDefault(b => b.IsBeforePseudoElement);
             Assert.NotNull(before);
 
-            Assert.Equal(CssConstants.Auto, before!.BreakInside);
-            Assert.Equal(CssConstants.Auto, before.BreakBefore);
-            Assert.Equal(CssConstants.Auto, before.BreakAfter);
+            Assert.Equal(Keywords.Auto, before!.BreakInside);
+            Assert.Equal(Keywords.Auto, before.BreakBefore);
+            Assert.Equal(Keywords.Auto, before.BreakAfter);
         }
 
         // And the element itself really does hold the values the two negative tests above are checking are
@@ -154,9 +155,9 @@ namespace PeachPDF.Tests.Integration
             var target = LayoutHarness.FindById(root, "target");
             Assert.NotNull(target);
 
-            Assert.Equal(CssConstants.Avoid, target!.BreakInside);
-            Assert.Equal(CssConstants.Page, target.BreakBefore);
-            Assert.Equal(CssConstants.Avoid, target.BreakAfter);
+            Assert.Equal(Keywords.Avoid, target!.BreakInside);
+            Assert.Equal(Keywords.Page, target.BreakBefore);
+            Assert.Equal(Keywords.Avoid, target.BreakAfter);
         }
     }
 }

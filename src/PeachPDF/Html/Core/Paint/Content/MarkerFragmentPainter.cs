@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -54,8 +55,8 @@ namespace PeachPDF.Html.Core.Paint.Content
                 // height box, matching today's list-style-image rendering; an author content:url(...)
                 // override (owned) matches ::before/::after's own top-left content-image alignment.
                 positionList: box.OwnsContentImage ? "0% 0%" : "center",
-                sizeList: CssConstants.Auto, repeatList: "no-repeat",
-                attachmentList: CssConstants.Scroll, viewportRect: rect, box: box,
+                sizeList: Keywords.Auto, repeatList: "no-repeat",
+                attachmentList: Keywords.Scroll, viewportRect: rect, box: box,
                 drawBrush: brush =>
                 {
                     g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);
@@ -65,7 +66,7 @@ namespace PeachPDF.Html.Core.Paint.Content
 
         private static void PaintShape(RGraphics g, CssBoxMarker box, RRect rect)
         {
-            if (box.MarkerShape == CssConstants.Square)
+            if (box.MarkerShape == Keywords.Square)
             {
                 using var squareBrush = g.GetSolidBrush(box.ActualColor);
                 g.DrawRectangle(squareBrush, rect.X, rect.Y, rect.Width, rect.Height);
@@ -76,7 +77,7 @@ namespace PeachPDF.Html.Core.Paint.Content
             var ry = rect.Height / 2;
             using var path = RenderUtils.GetRoundRect(g, rect, rx, ry, rx, ry, rx, ry, rx, ry);
 
-            if (box.MarkerShape == CssConstants.Disc)
+            if (box.MarkerShape == Keywords.Disc)
             {
                 using var brush = g.GetSolidBrush(box.ActualColor);
                 g.DrawPath(brush, path);

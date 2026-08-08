@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 
@@ -64,8 +65,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="CssUtils"/> rewrites it to <c>page</c> on the way in.
         /// </remarks>
         internal static bool IsForcedPageBreak(string? value) =>
-            value is CssConstants.Page or CssConstants.Left or CssConstants.Right
-                  or CssConstants.Recto or CssConstants.Verso;
+            value is Keywords.Page or Keywords.Left or Keywords.Right
+                  or Keywords.Recto or Keywords.Verso;
 
         /// <summary>
         /// Whether <paramref name="value"/> forces a break in <paramref name="context"/> (§3.1).
@@ -84,7 +85,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal static bool IsForcedBreak(string? value, FragmentationContext context) =>
             IsForcedPageBreak(value)
-            || (context is FragmentationContext.Column && value is CssConstants.Column);
+            || (context is FragmentationContext.Column && value is Keywords.Column);
 
         /// <summary>
         /// The side <paramref name="value"/> demands on its own, or <see cref="PageSide.Any"/>.
@@ -95,8 +96,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal static PageSide SideOf(string? value) => value switch
         {
-            CssConstants.Left or CssConstants.Verso => PageSide.Left,
-            CssConstants.Right or CssConstants.Recto => PageSide.Right,
+            Keywords.Left or Keywords.Verso => PageSide.Left,
+            Keywords.Right or Keywords.Recto => PageSide.Right,
             _ => PageSide.Any
         };
 
@@ -129,8 +130,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         internal static bool AvoidsBreak(string? value, FragmentationContext context) => context switch
         {
-            FragmentationContext.Column => value is CssConstants.Avoid or CssConstants.AvoidColumn,
-            _ => value is CssConstants.Avoid or CssConstants.AvoidPage
+            FragmentationContext.Column => value is Keywords.Avoid or Keywords.AvoidColumn,
+            _ => value is Keywords.Avoid or Keywords.AvoidPage
         };
 
         /// <summary>

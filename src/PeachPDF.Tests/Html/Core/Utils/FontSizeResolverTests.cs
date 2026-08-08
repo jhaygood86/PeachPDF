@@ -20,11 +20,11 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("large", 2)]
         [InlineData("x-large", 3)]
         [InlineData("xx-large", 4)]
-        public void AbsoluteKeyword_ResolvesRelativeToCssConstantsFontSize(string keyword, double offset)
+        public void AbsoluteKeyword_ResolvesRelativeToDefaultFontResolverFontSize(string keyword, double offset)
         {
             var result = FontSizeResolver.Resolve(keyword, parentSize: 999, remSize: 999);
 
-            Assert.Equal(CssConstants.FontSize + offset, result);
+            Assert.Equal(DefaultFontResolver.FontSize + offset, result);
         }
 
         [Fact]

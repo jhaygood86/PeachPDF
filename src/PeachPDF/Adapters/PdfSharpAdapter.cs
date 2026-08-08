@@ -62,12 +62,12 @@ namespace PeachPDF.Adapters
             }
 
             // "Arial" itself isn't installed on most Linux distros; fall back to whatever
-            // metrically-compatible substitute CssConstants.DefaultFont already resolved to
+            // metrically-compatible substitute DefaultFontResolver.DefaultFont already resolved to
             // (e.g. Liberation Sans) so explicit `font-family: Arial` behaves the same as
             // the platform's implicit default font.
             if (!IsFontExists("Arial"))
             {
-                AddFontFamilyMapping("Arial", CssConstants.DefaultFont);
+                AddFontFamilyMapping("Arial", DefaultFontResolver.DefaultFont);
             }
 
             var isAndroid = OperatingSystem.IsAndroid();
@@ -93,17 +93,17 @@ namespace PeachPDF.Adapters
                 // via FontResolver.ResolveTypeface's own "give the caller SOMETHING" last resort.
                 if (!IsFontExists(target))
                 {
-                    target = CssConstants.DefaultFont;
+                    target = DefaultFontResolver.DefaultFont;
                 }
 
                 AddFontFamilyMapping(generic, target);
             }
 
             // Chromium's system-ui resolves to Segoe UI on Windows - an exact match for
-            // CssConstants.DefaultFont there. On macOS/Linux/Android this is a pragmatic approximation
+            // DefaultFontResolver.DefaultFont there. On macOS/Linux/Android this is a pragmatic approximation
             // (real native system-UI-font detection, e.g. macOS's private San Francisco font, is out of
             // scope - see docs).
-            AddFontFamilyMapping("system-ui", CssConstants.DefaultFont);
+            AddFontFamilyMapping("system-ui", DefaultFontResolver.DefaultFont);
         }
 
         public RNetworkLoader NetworkLoader { get; set; } = new DataUriNetworkLoader();
@@ -190,7 +190,7 @@ namespace PeachPDF.Adapters
 
             AddFontFamily(new FontFamilyAdapter(new XFontFamily(fontFamilyName)));
 
-            AdoptDefaultFontIfMissing(CssConstants.DefaultFont, fontFamilyName, IsFontExists(CssConstants.DefaultFont));
+            AdoptDefaultFontIfMissing(DefaultFontResolver.DefaultFont, fontFamilyName, IsFontExists(DefaultFontResolver.DefaultFont));
 
             convertedStream.Seek(0, SeekOrigin.Begin);
 
@@ -198,7 +198,7 @@ namespace PeachPDF.Adapters
         }
 
         /// <summary>
-        /// Points <see cref="CssConstants.DefaultFont"/> at <paramref name="registeredFamily"/> when nothing
+        /// Points <see cref="DefaultFontResolver.DefaultFont"/> at <paramref name="registeredFamily"/> when nothing
         /// currently resolves it. On a host with no discoverable system fonts (browser/WebAssembly) the
         /// default names a family that nothing satisfies until the caller registers one - and it is the
         /// engine's last resort, so <c>DerivedStyle.ActualFont</c> throws outright rather than rendering
@@ -211,12 +211,12 @@ namespace PeachPDF.Adapters
         /// registered families before the mapping table.
         /// </para>
         /// </summary>
-        /// <param name="defaultFontFamily">The engine's default font, i.e. <see cref="CssConstants.DefaultFont"/>.</param>
+        /// <param name="defaultFontFamily">The engine's default font, i.e. <see cref="DefaultFontResolver.DefaultFont"/>.</param>
         /// <param name="registeredFamily">The family just registered.</param>
         /// <param name="defaultFontExists">
         /// Whether <paramref name="defaultFontFamily"/> already resolves. Both it and the family name are
-        /// passed in rather than read from <see cref="CssConstants"/> here - mirroring
-        /// <see cref="CssConstants.DetermineDefaultFont"/>'s own precedent - so the rule stays unit-testable
+        /// passed in rather than read from <see cref="DefaultFontResolver"/> here - mirroring
+        /// <see cref="DefaultFontResolver.DetermineDefaultFont"/>'s own precedent - so the rule stays unit-testable
         /// on a host whose default font genuinely is installed, which is every desktop CI runner.
         /// </param>
         internal void AdoptDefaultFontIfMissing(string defaultFontFamily, string registeredFamily, bool defaultFontExists)

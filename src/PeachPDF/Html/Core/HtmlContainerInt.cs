@@ -1008,7 +1008,7 @@ namespace PeachPDF.Html.Core
             {
                 var child = box.Boxes[i];
 
-                if (child.DerivedStyle.ActualDisplay == CssConstants.None
+                if (child.DerivedStyle.ActualDisplay == Keywords.None
                     || child.Position.Value is PositionMode.Absolute or PositionMode.Fixed
                     || child.IsFloated)
                 {
@@ -1733,7 +1733,7 @@ namespace PeachPDF.Html.Core
         {
             foreach (var childBox in box.Boxes)
             {
-                if (childBox.IsPseudoElement && !string.IsNullOrEmpty(childBox.Content) && childBox.Content != CssConstants.None && childBox.Content != CssConstants.Normal)
+                if (childBox.IsPseudoElement && !string.IsNullOrEmpty(childBox.Content) && childBox.Content != Keywords.None && childBox.Content != Keywords.Normal)
                 {
                     // Check if content contains string() function
                     if (childBox.Content.Contains("string("))

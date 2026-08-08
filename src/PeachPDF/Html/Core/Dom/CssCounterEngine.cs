@@ -27,7 +27,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public static string FormatCounterValue(int number, string style)
         {
-            if (style.Equals(CssConstants.DecimalLeadingZero, StringComparison.OrdinalIgnoreCase))
+            if (style.Equals(Keywords.DecimalLeadingZero, StringComparison.OrdinalIgnoreCase))
             {
                 return number.ToString("00", CultureInfo.InvariantCulture);
             }
@@ -53,26 +53,26 @@ namespace PeachPDF.Html.Core.Dom
         /// and an unknown one isn't wrongly promoted to alpha - unknown styles must fall back to decimal.
         /// </summary>
         private static bool IsAlphabeticCounterStyle(string style) =>
-            style.Equals(CssConstants.LowerGreek, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.LowerRoman, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.UpperRoman, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.Armenian, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.Georgian, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.Hebrew, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.Hiragana, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.HiraganaIroha, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.Katakana, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.KatakanaIroha, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.LowerAlpha, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.LowerLatin, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.UpperAlpha, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(CssConstants.UpperLatin, StringComparison.OrdinalIgnoreCase);
+            style.Equals(Keywords.LowerGreek, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.LowerRoman, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.UpperRoman, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.Armenian, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.Georgian, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.Hebrew, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.Hiragana, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.HiraganaIroha, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.Katakana, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.KatakanaIroha, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.LowerAlpha, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.LowerLatin, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.UpperAlpha, StringComparison.OrdinalIgnoreCase) ||
+            style.Equals(Keywords.UpperLatin, StringComparison.OrdinalIgnoreCase);
 
         private static void ApplyCounterResets(CssBox box)
         {
             var counterReset = GetEffectiveCounterReset(box);
 
-            if (counterReset is CssConstants.None) return;
+            if (counterReset is Keywords.None) return;
 
             var valueParts = counterReset.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
@@ -133,7 +133,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             var counterSet = GetEffectiveCounterSet(box);
 
-            if (counterSet is CssConstants.None) return;
+            if (counterSet is Keywords.None) return;
 
             var valueParts = counterSet.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
@@ -179,7 +179,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             Dictionary<string, int> incrementValues = [];
 
-            if (box.CounterIncrement is not CssConstants.None)
+            if (box.CounterIncrement is not Keywords.None)
             {
                 var valueParts = box.CounterIncrement.Split(' ');
 
@@ -209,10 +209,10 @@ namespace PeachPDF.Html.Core.Dom
             // selector (selectors can't match on a computed Display value), so it's applied here
             // directly. An author's own explicit counter-increment targeting list-item on the same
             // element still wins (already captured above, so it's not overwritten below).
-            if (box.DerivedStyle.ActualDisplay == CssConstants.ListItem && !incrementValues.ContainsKey(CssConstants.ListItem))
+            if (box.DerivedStyle.ActualDisplay == Keywords.ListItem && !incrementValues.ContainsKey(Keywords.ListItem))
             {
-                var currentListItemCounter = box.Counters.GetValueOrDefault(CssConstants.ListItem);
-                incrementValues[CssConstants.ListItem] = currentListItemCounter is { IsReversed: true } ? -1 : 1;
+                var currentListItemCounter = box.Counters.GetValueOrDefault(Keywords.ListItem);
+                incrementValues[Keywords.ListItem] = currentListItemCounter is { IsReversed: true } ? -1 : 1;
             }
 
             foreach (var incrementEntry in incrementValues)
@@ -247,12 +247,12 @@ namespace PeachPDF.Html.Core.Dom
         private static bool WouldIncrementCounter(CssBox box, string counterName)
         {
             if (CounterNameAppears(box.CounterIncrement, counterName)) return true;
-            return counterName == CssConstants.ListItem && box.DerivedStyle.ActualDisplay == CssConstants.ListItem;
+            return counterName == Keywords.ListItem && box.DerivedStyle.ActualDisplay == Keywords.ListItem;
         }
 
         private static bool CounterNameAppears(string counterPropertyValue, string counterName)
         {
-            if (counterPropertyValue is CssConstants.None) return false;
+            if (counterPropertyValue is Keywords.None) return false;
 
             foreach (var valuePart in counterPropertyValue.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
@@ -313,7 +313,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.HtmlTag is not null &&
                 box.HtmlTag.Name.Equals("ol", StringComparison.OrdinalIgnoreCase) &&
-                counterReset.Trim().Equals(CssConstants.ListItem, StringComparison.OrdinalIgnoreCase))
+                counterReset.Trim().Equals(Keywords.ListItem, StringComparison.OrdinalIgnoreCase))
             {
                 var hasStart = int.TryParse(box.GetAttribute("start"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var startValue);
                 // "reversed" is an HTML boolean attribute - its mere presence means true, regardless
@@ -325,13 +325,13 @@ namespace PeachPDF.Html.Core.Dom
                 if (isReversed)
                 {
                     return hasStart
-                        ? $"reversed({CssConstants.ListItem}) {startValue + 1}"
-                        : $"reversed({CssConstants.ListItem})";
+                        ? $"reversed({Keywords.ListItem}) {startValue + 1}"
+                        : $"reversed({Keywords.ListItem})";
                 }
 
                 if (hasStart)
                 {
-                    return $"{CssConstants.ListItem} {startValue - 1}";
+                    return $"{Keywords.ListItem} {startValue - 1}";
                 }
             }
 
@@ -349,10 +349,10 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.HtmlTag is not null &&
                 box.HtmlTag.Name.Equals("li", StringComparison.OrdinalIgnoreCase) &&
-                counterSet is CssConstants.None &&
+                counterSet is Keywords.None &&
                 int.TryParse(box.GetAttribute("value"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
             {
-                return $"{CssConstants.ListItem} {value}";
+                return $"{Keywords.ListItem} {value}";
             }
 
             return counterSet;
@@ -457,12 +457,12 @@ namespace PeachPDF.Html.Core.Dom
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while (sib.DerivedStyle.ActualDisplay == CssConstants.None && index - diff - 1 >= 0)
+            while (sib.DerivedStyle.ActualDisplay == Keywords.None && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == CssConstants.None ? null : sib;
+            sib = sib.DerivedStyle.ActualDisplay == Keywords.None ? null : sib;
 
             return sib;
         }

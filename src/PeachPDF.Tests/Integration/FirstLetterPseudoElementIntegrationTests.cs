@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
@@ -82,7 +83,7 @@ namespace PeachPDF.Tests.Integration
             // Both rules (from two separate cascade phases matching the same box) actually applied to
             // the one synthesized box, rather than only the first ever taking effect.
             Assert.Equal("rgb(255, 0, 0)", firstLetterBoxes[0].Color);
-            Assert.Equal(CssConstants.Bold, firstLetterBoxes[0].FontWeight.ToString());
+            Assert.Equal(Keywords.Bold, firstLetterBoxes[0].FontWeight.ToString());
         }
 
         [Fact]

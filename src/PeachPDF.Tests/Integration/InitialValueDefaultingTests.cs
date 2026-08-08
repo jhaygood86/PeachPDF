@@ -35,8 +35,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("inline", CssDefaults.GetInitialValue("display"));
             Assert.Equal("static", CssDefaults.GetInitialValue("position"));
             Assert.Equal("black", CssDefaults.GetInitialValue("color"));
-            Assert.Equal(CssConstants.Transparent, CssDefaults.GetInitialValue("background-color"));
-            Assert.Equal(CssConstants.ContentBox, CssDefaults.GetInitialValue("box-sizing"));
+            Assert.Equal(Keywords.Transparent, CssDefaults.GetInitialValue("background-color"));
+            Assert.Equal(Keywords.ContentBox, CssDefaults.GetInitialValue("box-sizing"));
             Assert.Equal("baseline", CssDefaults.GetInitialValue("vertical-align"));
         }
 
@@ -46,7 +46,7 @@ namespace PeachPDF.Tests.Integration
             // The initial font-family is UA-defined (CSS Fonts 4 §2.2). PeachPDF's is the platform-resolved
             // default font — the same value an unset family falls back to at font realization — NOT the
             // literal "serif" the legacy seed store used to carry.
-            Assert.Equal(CssConstants.DefaultFont, CssDefaults.GetInitialValue("font-family"));
+            Assert.Equal(DefaultFontResolver.DefaultFont, CssDefaults.GetInitialValue("font-family"));
             Assert.NotEqual("serif", CssDefaults.GetInitialValue("font-family"));
         }
 
@@ -116,7 +116,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("rgb(255, 0, 0)", anon!.Color);
             // ...while a non-inherited property takes its store initial, not the parent's — here border-top
             // has no author value, so it is the initial 'none', proving the anon box was defaulted, not skipped.
-            Assert.Equal(CssConstants.None, CssUtils.GetPropertyValue(anon, "border-top-style"));
+            Assert.Equal(Keywords.None, CssUtils.GetPropertyValue(anon, "border-top-style"));
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────

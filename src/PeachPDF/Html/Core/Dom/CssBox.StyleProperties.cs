@@ -389,8 +389,8 @@ namespace PeachPDF.Html.Core.Dom
                 return value; // a global keyword (initial/inherit/...) or an already-invalid value - left untouched, as NoEms does
 
             List<string> parts = [NoEms(length.Text)];
-            if (hasHanging) parts.Add(CssConstants.Hanging);
-            if (hasEachLine) parts.Add(CssConstants.EachLine);
+            if (hasHanging) parts.Add(Keywords.Hanging);
+            if (hasEachLine) parts.Add(Keywords.EachLine);
 
             return string.Join(' ', parts);
         }
@@ -422,8 +422,8 @@ namespace PeachPDF.Html.Core.Dom
             if (!CssValueParser.IsCalcFunction(value) && ParentBox is { } parent &&
                 (CssValueParser.GetCssTokens(value) is [UnitToken unitToken] &&
                     Length.GetUnit(unitToken.Unit) is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Ch or Length.Unit.Percent
-                 || trimmed.Equals(CssConstants.Smaller, StringComparison.OrdinalIgnoreCase)
-                 || trimmed.Equals(CssConstants.Larger, StringComparison.OrdinalIgnoreCase)))
+                 || trimmed.Equals(Keywords.Smaller, StringComparison.OrdinalIgnoreCase)
+                 || trimmed.Equals(Keywords.Larger, StringComparison.OrdinalIgnoreCase)))
             {
                 var pixelsPerPoint = (HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
                 var parentSizePt = parent.ActualFont.Size * pixelsPerPoint;

@@ -56,7 +56,7 @@ Assert.NotNull(tableBox);
        Assert.True(tableBox.ActualBottom > 0);
 
   // With proxy system, thead is replaced by proxy boxes
-       var headerProxies = FindProxyBoxesByDisplay(tableBox, CssConstants.TableHeaderGroup);
+       var headerProxies = FindProxyBoxesByDisplay(tableBox, Keywords.TableHeaderGroup);
     Assert.NotEmpty(headerProxies);
             
  // For single page table, should have at least one header proxy
@@ -111,7 +111,7 @@ Assert.NotNull(tableBox);
  $"Table height ({tableBox.ActualBottom}) should exceed page height ({pageHeight})");
 
    // Verify header proxies exist (one per page)
-    var headerProxies = FindProxyBoxesByDisplay(tableBox, CssConstants.TableHeaderGroup);
+    var headerProxies = FindProxyBoxesByDisplay(tableBox, Keywords.TableHeaderGroup);
          Assert.NotEmpty(headerProxies);
   Assert.True(headerProxies.Count >= 2,
     $"Multi-page table should have at least 2 header proxies, but has {headerProxies.Count}");
@@ -182,7 +182,7 @@ Assert.NotNull(tableBox);
  Assert.True(tableBox.ActualBottom > pageHeight);
 
    // Verify header proxies exist
-   var headerProxies = FindProxyBoxesByDisplay(tableBox, CssConstants.TableHeaderGroup);
+   var headerProxies = FindProxyBoxesByDisplay(tableBox, Keywords.TableHeaderGroup);
             Assert.NotEmpty(headerProxies);
 Assert.True(headerProxies.Count >= 2, 
         $"Multi-page table with colspan should have at least 2 header proxies, but has {headerProxies.Count}");
@@ -245,7 +245,7 @@ Assert.True(headerProxies.Count >= 2,
             Assert.True(tableBox.ActualBottom > pageHeight);
 
    // Verify header proxies exist
-       var headerProxies = FindProxyBoxesByDisplay(tableBox, CssConstants.TableHeaderGroup);
+       var headerProxies = FindProxyBoxesByDisplay(tableBox, Keywords.TableHeaderGroup);
    Assert.NotEmpty(headerProxies);
 Assert.True(headerProxies.Count >= 2, 
  $"Multi-page table with rowspan should have at least 2 header proxies, but has {headerProxies.Count}");
@@ -305,7 +305,7 @@ var pageSpan = CalculateTablePageSpan(tableBox, pageHeight, marginTop);
             Assert.True(tableBox.ActualBottom > pageHeight);
 
             // With the proxy system, tfoot is replaced by proxy boxes - same as thead.
-            var footerProxies = FindProxyBoxesByDisplay(tableBox, CssConstants.TableFooterGroup);
+            var footerProxies = FindProxyBoxesByDisplay(tableBox, Keywords.TableFooterGroup);
             Assert.NotEmpty(footerProxies);
             Assert.True(footerProxies.Count >= 2,
                 $"Multi-page table with footer should have at least 2 footer proxies, but has {footerProxies.Count}");
@@ -393,7 +393,7 @@ Assert.NotNull(tableBox);
 Assert.True(tableBox.ActualBottom > pageHeight);
 
         // Verify header proxies exist
-    var headerProxies = FindProxyBoxesByDisplay(tableBox, CssConstants.TableHeaderGroup);
+    var headerProxies = FindProxyBoxesByDisplay(tableBox, Keywords.TableHeaderGroup);
   Assert.NotEmpty(headerProxies);
  Assert.True(headerProxies.Count >= 2,
         $"Multi-page complex table should have at least 2 header proxies, but has {headerProxies.Count}");
@@ -441,8 +441,8 @@ Assert.True(tableBox.ActualBottom > pageHeight);
             var table2 = tablBoxes[1];
 
             // Each table should have header proxies
-            var table1Proxies = FindProxyBoxesByDisplay(table1, CssConstants.TableHeaderGroup);
-            var table2Proxies = FindProxyBoxesByDisplay(table2, CssConstants.TableHeaderGroup);
+            var table1Proxies = FindProxyBoxesByDisplay(table1, Keywords.TableHeaderGroup);
+            var table2Proxies = FindProxyBoxesByDisplay(table2, Keywords.TableHeaderGroup);
 
             Assert.NotEmpty(table1Proxies);
             Assert.NotEmpty(table2Proxies);

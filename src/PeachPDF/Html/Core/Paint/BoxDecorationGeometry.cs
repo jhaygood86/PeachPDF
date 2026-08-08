@@ -154,7 +154,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>Whether the box declares a shadow that would actually be drawn.</summary>
         internal static bool HasBoxShadow(CssBox box) =>
             !string.IsNullOrEmpty(box.BoxShadow) &&
-            !string.Equals(box.BoxShadow, CssConstants.None, StringComparison.OrdinalIgnoreCase);
+            !string.Equals(box.BoxShadow, Keywords.None, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Whether <c>background-clip</c> is anything other than its plain initial value. Deliberately not
@@ -163,6 +163,6 @@ namespace PeachPDF.Html.Core.Paint
         /// cost of getting it wrong is a mis-inset background.
         /// </summary>
         private static bool IsNonDefaultBackgroundClip(string value) =>
-            !string.IsNullOrEmpty(value) && !string.Equals(value, CssConstants.BorderBox, StringComparison.Ordinal);
+            !string.IsNullOrEmpty(value) && !string.Equals(value, Keywords.BorderBox, StringComparison.Ordinal);
     }
 }

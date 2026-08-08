@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Integration
             internal RecordingBox(CssBox parent) : base(parent, null)
             {
                 InheritStyle(parent, everything: true);
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
                 Height = "30pt";
 
                 // Not empty, so an engine that skips whitespace-only anonymous children (flex, grid and
@@ -65,7 +65,7 @@ namespace PeachPDF.Tests.Integration
         {
             internal ThrowingBox(CssBox? parent) : base(parent, null)
             {
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
             }
 
             protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>

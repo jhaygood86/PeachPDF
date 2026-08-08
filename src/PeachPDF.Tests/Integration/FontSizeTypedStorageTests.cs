@@ -128,7 +128,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData("xx-large", 11d + 4)]
         public async Task AbsoluteKeyword_ActualFontSize_ResolvesToTheSpecFixedOffset(string keyword, double expected)
         {
-            // Every keyword offsets the CSS initial font-size (CssConstants.FontSize, 11) by a fixed
+            // Every keyword offsets the CSS initial font-size (DefaultFontResolver.FontSize, 11) by a fixed
             // amount - not parent-relative, so this must hold regardless of what a parent's own font-size
             // is. Reads ActualFontSize (not just the stored .Value) to prove FontSizeResolver.Resolve's
             // typed keyword-side switch, not just parsing, is correct.

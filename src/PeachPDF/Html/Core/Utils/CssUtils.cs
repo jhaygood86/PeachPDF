@@ -139,13 +139,13 @@ namespace PeachPDF.Html.Core.Utils
                 "column-rule-color"
             ];
 
-            var colorValue = GetPropertyValue(box, "color") ?? CssConstants.Initial;
+            var colorValue = GetPropertyValue(box, "color") ?? Keywords.Initial;
 
             foreach (var propertyName in colorProperties)
             {
                 var value = GetPropertyValue(box, propertyName);
 
-                if (value is not null && value.Equals(CssConstants.CurrentColor, StringComparison.OrdinalIgnoreCase))
+                if (value is not null && value.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase))
                 {
                     SetPropertyValue(valueParser, box, propertyName, colorValue);
                 }

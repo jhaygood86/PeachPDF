@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -60,34 +61,34 @@ namespace PeachPDF.Html.Core.Dom
             //TODO: Units behave different in paper and in screen!
             switch (u)
             {
-                case CssConstants.Em:
+                case UnitNames.Em:
                     Unit = CssUnit.Ems;
                     IsRelative = true;
                     break;
-                case CssConstants.Ex:
+                case UnitNames.Ex:
                     Unit = CssUnit.Ex;
                     IsRelative = true;
                     break;
-                case CssConstants.Px:
+                case UnitNames.Px:
                     Unit = CssUnit.Pixels;
                     IsRelative = true;
                     break;
-                case CssConstants.Mm:
+                case UnitNames.Mm:
                     Unit = CssUnit.Milimeters;
                     break;
-                case CssConstants.Cm:
+                case UnitNames.Cm:
                     Unit = CssUnit.Centimeters;
                     break;
-                case CssConstants.In:
+                case UnitNames.In:
                     Unit = CssUnit.Inches;
                     break;
-                case CssConstants.Pt:
+                case UnitNames.Pt:
                     Unit = CssUnit.Points;
                     break;
-                case CssConstants.Pc:
+                case UnitNames.Pc:
                     Unit = CssUnit.Picas;
                     break;
-                case CssConstants.Rem:
+                case UnitNames.Rem:
                     Unit = CssUnit.Rem;
                     IsRelative = true;
                     break;

@@ -89,15 +89,15 @@
         "propertyPath": "BreakAfter",
         "csharpDataType": "string",
         "area": "BreakArea",
-        "customSetter": "{box}.BreakAfter = {value} is CssConstants.Always ? CssConstants.Page : {value};"
+        "customSetter": "{box}.BreakAfter = {value} is Keywords.Always ? Keywords.Page : {value};"
       }
     },
     {
       "name": "font-family",
-      "comment": "Multi-field write: the resolved family (FontFamily) and the raw authored list (FontFamilyList) both come from one declaration. The initial value is UA/platform-defined (CssConstants.DefaultFont is computed per-platform at runtime), hence an {expression} rather than a string literal.",
+      "comment": "Multi-field write: the resolved family (FontFamily) and the raw authored list (FontFamilyList) both come from one declaration. The initial value is UA/platform-defined (DefaultFontResolver.DefaultFont is computed per-platform at runtime), hence an {expression} rather than a string literal.",
       "inherited": true,
       "initialValue": {
-        "expression": "CssConstants.DefaultFont"
+        "expression": "DefaultFontResolver.DefaultFont"
       },
       "cssDataType": "cssom",
       "html": {
@@ -1113,7 +1113,7 @@
         "propertyPath": "BreakBefore",
         "csharpDataType": "string",
         "area": "BreakArea",
-        "customSetter": "{box}.BreakBefore = {value} is CssConstants.Always ? CssConstants.Page : {value};"
+        "customSetter": "{box}.BreakBefore = {value} is Keywords.Always ? Keywords.Page : {value};"
       }
     },
     {
@@ -1520,7 +1520,7 @@
     },
     {
       "name": "vertical-align",
-      "comment": "CSS 2.1 §10.8.1 also accepts a <percentage>/<length> value form, offsetting the box from its own baseline (issue #603) - the value side reuses word-spacing/line-height's LengthOrCalc plumbing (valueType \"length\" already covers percentages via CssValueParser.IsValidLength/ValueExtensions.ToDistance, no separate percentage data type needed). PeachBaselineMiddle (the deprecated img align=middle sentinel, see CssConstants.PeachBaselineMiddle) is never produced by this grammar - DomParser assigns it directly via CssKeywordOrValueParser's keyword side, same as Float's img align handling.",
+      "comment": "CSS 2.1 §10.8.1 also accepts a <percentage>/<length> value form, offsetting the box from its own baseline (issue #603) - the value side reuses word-spacing/line-height's LengthOrCalc plumbing (valueType \"length\" already covers percentages via CssValueParser.IsValidLength/ValueExtensions.ToDistance, no separate percentage data type needed). PeachBaselineMiddle (the deprecated img align=middle sentinel, see Keywords.PeachBaselineMiddle) is never produced by this grammar - DomParser assigns it directly via CssKeywordOrValueParser's keyword side, same as Float's img align handling.",
       "inherited": false,
       "initialValue": "baseline",
       "cssDataType": {

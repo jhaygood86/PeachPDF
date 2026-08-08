@@ -116,12 +116,12 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while ((sib.DerivedStyle.ActualDisplay == CssConstants.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib)) && index - diff - 1 >= 0)
+            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib)) && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == CssConstants.None || sib.Position.Value == PositionMode.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) ? null : sib;
+            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) ? null : sib;
 
             return sib;
         }
@@ -245,7 +245,7 @@ namespace PeachPDF.Html.Core.Utils
         {
             var conBlock = b;
             var index = conBlock.ParentBox!.Boxes.IndexOf(conBlock);
-            while (conBlock.ParentBox != null && index < 1 && conBlock.DerivedStyle.ActualDisplay != CssConstants.Block && conBlock.DerivedStyle.ActualDisplay != CssConstants.Table && conBlock.DerivedStyle.ActualDisplay != CssConstants.TableCell && conBlock.DerivedStyle.ActualDisplay != CssConstants.ListItem)
+            while (conBlock.ParentBox != null && index < 1 && conBlock.DerivedStyle.ActualDisplay != Keywords.Block && conBlock.DerivedStyle.ActualDisplay != Keywords.Table && conBlock.DerivedStyle.ActualDisplay != Keywords.TableCell && conBlock.DerivedStyle.ActualDisplay != Keywords.ListItem)
             {
                 conBlock = conBlock.ParentBox;
                 index = conBlock.ParentBox != null ? conBlock.ParentBox.Boxes.IndexOf(conBlock) : -1;
@@ -256,12 +256,12 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = conBlock.Boxes[index - diff];
 
-            while ((sib.DerivedStyle.ActualDisplay == CssConstants.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed) && index - diff - 1 >= 0)
+            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed) && index - diff - 1 >= 0)
             {
                 sib = conBlock.Boxes[index - ++diff];
             }
 
-            return sib.DerivedStyle.ActualDisplay == CssConstants.None ? null : sib;
+            return sib.DerivedStyle.ActualDisplay == Keywords.None ? null : sib;
         }
 
         /// <summary>
@@ -939,7 +939,7 @@ namespace PeachPDF.Html.Core.Utils
             // `position` value of its own (CSS Flexible Box Layout §z-order), unlike a plain block/
             // inline child, which needs position:relative/absolute for z-index to have any effect at all.
             if (box.ZIndex.Value is { IsValue: true } &&
-                box.ParentBox?.DerivedStyle.ActualDisplay is CssConstants.Flex or CssConstants.InlineFlex)
+                box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex)
             {
                 return true;
             }
@@ -963,9 +963,9 @@ namespace PeachPDF.Html.Core.Utils
 
         public static bool IsProperTableChild(CssBox box)
         {
-            return box.IsTableRowGroupBox || box.DerivedStyle.ActualDisplay is CssConstants.TableRow ||
-                   box.DerivedStyle.ActualDisplay is CssConstants.TableColumn || box.DerivedStyle.ActualDisplay is CssConstants.TableColumnGroup ||
-                   box.DerivedStyle.ActualDisplay is CssConstants.TableCaption;
+            return box.IsTableRowGroupBox || box.DerivedStyle.ActualDisplay is Keywords.TableRow ||
+                   box.DerivedStyle.ActualDisplay is Keywords.TableColumn || box.DerivedStyle.ActualDisplay is Keywords.TableColumnGroup ||
+                   box.DerivedStyle.ActualDisplay is Keywords.TableCaption;
         }
 
         /// <summary>

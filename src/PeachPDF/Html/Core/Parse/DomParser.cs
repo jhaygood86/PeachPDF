@@ -38,7 +38,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>The deprecated presentational <c>border</c> HTML attribute always resolves to a solid
         /// border style - shared to avoid re-parsing the literal at each call site.</summary>
         private static readonly CssProperty<LineStyle> SolidBorderStyle =
-            CssProperty<LineStyle>.FromValue(CssConstants.Solid, LineStyle.Solid);
+            CssProperty<LineStyle>.FromValue(Keywords.Solid, LineStyle.Solid);
 
         /// <summary>
         /// Parser for CSS
@@ -806,13 +806,13 @@ namespace PeachPDF.Html.Core.Parse
             box.Display = box.Display.Value switch
             {
                 DisplayMode.Inline or DisplayMode.InlineBlock =>
-                    CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block),
+                    CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
                 DisplayMode.InlineFlex =>
-                    CssProperty<DisplayMode>.FromValue(CssConstants.Flex, DisplayMode.Flex),
+                    CssProperty<DisplayMode>.FromValue(Keywords.Flex, DisplayMode.Flex),
                 DisplayMode.InlineGrid =>
-                    CssProperty<DisplayMode>.FromValue(CssConstants.Grid, DisplayMode.Grid),
+                    CssProperty<DisplayMode>.FromValue(Keywords.Grid, DisplayMode.Grid),
                 DisplayMode.InlineTable =>
-                    CssProperty<DisplayMode>.FromValue(CssConstants.Table, DisplayMode.Table),
+                    CssProperty<DisplayMode>.FromValue(Keywords.Table, DisplayMode.Table),
                 _ => box.Display
             };
         }
@@ -880,7 +880,7 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private static void EnsureListItemMarkers(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null)
         {
-            if (box.DerivedStyle.ActualDisplay == CssConstants.ListItem && !box.Boxes.Any(b => b.IsMarkerPseudoElement))
+            if (box.DerivedStyle.ActualDisplay == Keywords.ListItem && !box.Boxes.Any(b => b.IsMarkerPseudoElement))
             {
                 var markerBox = new CssBoxMarker(box);
                 box.Boxes.Remove(markerBox);
@@ -971,10 +971,10 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         private static bool IsFirstLetterScopeBoundary(CssBox box) =>
-            box.DerivedStyle.ActualDisplay is CssConstants.Block or CssConstants.Table or CssConstants.TableRow
-                or CssConstants.TableRowGroup or CssConstants.TableCell or CssConstants.ListItem
-                or CssConstants.Flex or CssConstants.InlineBlock or CssConstants.InlineTable
-                or CssConstants.InlineFlex or CssConstants.Grid or CssConstants.InlineGrid;
+            box.DerivedStyle.ActualDisplay is Keywords.Block or Keywords.Table or Keywords.TableRow
+                or Keywords.TableRowGroup or Keywords.TableCell or Keywords.ListItem
+                or Keywords.Flex or Keywords.InlineBlock or Keywords.InlineTable
+                or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid;
 
         /// <summary>
         /// Splits <paramref name="textBox"/>'s text at the CSS1 §1.2 "first letter" boundary (skipping
@@ -1115,7 +1115,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 foreach (var prop in rule.Style)
                 {
-                    if (prop.Value is CssConstants.Revert or CssConstants.RevertLayer)
+                    if (prop.Value is Keywords.Revert or Keywords.RevertLayer)
                         return true;
                 }
             }
@@ -1136,7 +1136,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 foreach (var prop in layered.Rule.Style)
                 {
-                    if (prop.Value is CssConstants.RevertLayer)
+                    if (prop.Value is Keywords.RevertLayer)
                         return true;
                 }
             }
@@ -1190,21 +1190,21 @@ namespace PeachPDF.Html.Core.Parse
 
                 var value = prop.Value switch
                 {
-                    CssConstants.Inherit when box.ParentBox != null
+                    Keywords.Inherit when box.ParentBox != null
                         => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
-                    CssConstants.Inherit
+                    Keywords.Inherit
                         => CssDefaults.GetInitialValue(prop.Name),
-                    CssConstants.Initial
+                    Keywords.Initial
                         => CssDefaults.GetInitialValue(prop.Name),
-                    CssConstants.Unset when CssDefaults.InheritedProperties.Contains(prop.Name) && box.ParentBox != null
+                    Keywords.Unset when CssDefaults.InheritedProperties.Contains(prop.Name) && box.ParentBox != null
                         => CssUtils.GetPropertyValue(box.ParentBox, prop.Name),
-                    CssConstants.Unset
+                    Keywords.Unset
                         => CssDefaults.GetInitialValue(prop.Name),
-                    CssConstants.Revert
+                    Keywords.Revert
                         => revertTarget is not null && revertTarget.TryGetValue(prop.Name, out var rv)
                             ? rv
                             : CssDefaults.GetInitialValue(prop.Name),
-                    CssConstants.RevertLayer
+                    Keywords.RevertLayer
                         => revertLayerTarget is not null && revertLayerTarget.TryGetValue(prop.Name, out var rvl)
                             ? rvl
                             : CssDefaults.GetInitialValue(prop.Name),
@@ -1254,27 +1254,27 @@ namespace PeachPDF.Html.Core.Parse
         {
             var rawValue = prop.Value switch
             {
-                CssConstants.Inherit // explicit inherit always takes the parent's value
+                Keywords.Inherit // explicit inherit always takes the parent's value
                     => box.ParentBox?.CustomProperties != null &&
                        box.ParentBox.CustomProperties.TryGetValue(prop.Name, out var pv)
                         ? pv
                         : null,
                 // unset = inherit if the property inherits (the default, and every unregistered custom
                 // property), else initial (=> absent here, then resolved to its initial-value via @property).
-                CssConstants.Unset
+                Keywords.Unset
                     => CustomPropertyInherits(box, prop.Name) &&
                        box.ParentBox?.CustomProperties != null &&
                        box.ParentBox.CustomProperties.TryGetValue(prop.Name, out var uv)
                         ? uv
                         : null,
-                CssConstants.Initial
+                Keywords.Initial
                     => null, // guaranteed-invalid value => property becomes absent
-                CssConstants.Revert
+                Keywords.Revert
                     => customPropertyRevertTarget != null &&
                        customPropertyRevertTarget.TryGetValue(prop.Name, out var rv)
                         ? rv
                         : null,
-                CssConstants.RevertLayer
+                Keywords.RevertLayer
                     => customPropertyRevertLayerTarget != null &&
                        customPropertyRevertLayerTarget.TryGetValue(prop.Name, out var rvl)
                         ? rvl
@@ -1365,7 +1365,7 @@ namespace PeachPDF.Html.Core.Parse
                     // value - AssignCssBlock's switch resolves that sentinel for the non-var() path, but
                     // this var()-resolution path calls SetPropertyValue directly, bypassing that switch,
                     // so it must resolve the sentinel itself here (same as an explicit HasValue:false).
-                    var longhandValue = longhand.HasValue && longhand.Value != CssConstants.Initial
+                    var longhandValue = longhand.HasValue && longhand.Value != Keywords.Initial
                         ? longhand.Value
                         : CssDefaults.GetInitialValue(longhand.Name);
                     if (longhandValue is not null)
@@ -1462,7 +1462,7 @@ namespace PeachPDF.Html.Core.Parse
                             TranslateLength(value), Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
                         break;
                     case HtmlConstants.Nowrap:
-                        box.WhiteSpace = CssProperty<Whitespace>.FromValue(CssConstants.NoWrap, Whitespace.NoWrap);
+                        box.WhiteSpace = CssProperty<Whitespace>.FromValue(Keywords.Nowrap, Whitespace.NoWrap);
                         break;
                     case HtmlConstants.Size:
                         TranslateSize(tag, box, value);
@@ -1515,21 +1515,21 @@ namespace PeachPDF.Html.Core.Parse
             switch (value)
             {
                 case HtmlConstants.Left:
-                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.Top, VerticalAlignment.Top);
-                    box.Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left);
+                    box.VerticalAlign = VerticalAlignKeyword(Keywords.Top, VerticalAlignment.Top);
+                    box.Float = CssProperty<Floating>.FromValue(Keywords.Left, Floating.Left);
                     break;
                 case HtmlConstants.Right:
-                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.Top, VerticalAlignment.Top);
-                    box.Float = CssProperty<Floating>.FromValue(CssConstants.Right, Floating.Right);
+                    box.VerticalAlign = VerticalAlignKeyword(Keywords.Top, VerticalAlignment.Top);
+                    box.Float = CssProperty<Floating>.FromValue(Keywords.Right, Floating.Right);
                     break;
                 case HtmlConstants.Bottom:
-                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.Baseline, VerticalAlignment.Baseline);
+                    box.VerticalAlign = VerticalAlignKeyword(Keywords.Baseline, VerticalAlignment.Baseline);
                     break;
                 case HtmlConstants.Middle:
-                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.PeachBaselineMiddle, VerticalAlignment.PeachBaselineMiddle);
+                    box.VerticalAlign = VerticalAlignKeyword(Keywords.PeachBaselineMiddle, VerticalAlignment.PeachBaselineMiddle);
                     break;
                 case HtmlConstants.Top:
-                    box.VerticalAlign = VerticalAlignKeyword(CssConstants.Top, VerticalAlignment.Top);
+                    box.VerticalAlign = VerticalAlignKeyword(Keywords.Top, VerticalAlignment.Top);
                     break;
             }
         }
@@ -1629,7 +1629,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (box.HtmlTag is { } tag && NeedsAutoDirectionalityResolution(tag))
             {
-                tag.SetAttribute(HtmlConstants.Dir, FindFirstStrongDirection(box) ?? CssConstants.Ltr);
+                tag.SetAttribute(HtmlConstants.Dir, FindFirstStrongDirection(box) ?? Keywords.Ltr);
             }
 
             foreach (var child in box.Boxes)
@@ -1653,14 +1653,14 @@ namespace PeachPDF.Html.Core.Parse
             if (dirAttr.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)) return true;
 
             return isBdi
-                && !dirAttr.Equals(CssConstants.Ltr, StringComparison.OrdinalIgnoreCase)
-                && !dirAttr.Equals(CssConstants.Rtl, StringComparison.OrdinalIgnoreCase);
+                && !dirAttr.Equals(Keywords.Ltr, StringComparison.OrdinalIgnoreCase)
+                && !dirAttr.Equals(Keywords.Rtl, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
         /// The HTML Standard's first-strong-character algorithm: walks <paramref name="element"/>'s
         /// descendant text in tree order looking for the first character with a strong <see cref="BidiClass"/>
-        /// (<c>L</c>, or <c>R</c>/<c>AL</c>), returning <see cref="CssConstants.Ltr"/>/<see cref="CssConstants.Rtl"/>
+        /// (<c>L</c>, or <c>R</c>/<c>AL</c>), returning <see cref="Keywords.Ltr"/>/<see cref="Keywords.Rtl"/>
         /// respectively, or null if none is found (the element's directionality then defaults to ltr).
         /// Does not descend into a nested element that carries its own <c>dir</c> attribute (that element
         /// is its own directionality scope) or a nested &lt;bdi&gt; (always its own isolated scope, dir
@@ -1695,8 +1695,8 @@ namespace PeachPDF.Html.Core.Parse
                 foreach (var rune in text.EnumerateRunes())
                 {
                     var bidiClass = BidiClassTable.Of(rune);
-                    if (bidiClass == BidiClass.L) return CssConstants.Ltr;
-                    if (bidiClass is BidiClass.R or BidiClass.AL) return CssConstants.Rtl;
+                    if (bidiClass == BidiClass.L) return Keywords.Ltr;
+                    if (bidiClass is BidiClass.R or BidiClass.AL) return Keywords.Rtl;
                 }
             }
 
@@ -1803,7 +1803,7 @@ namespace PeachPDF.Html.Core.Parse
                 // Acid2's own "#eyes-c" - a plain empty block meant to paint bottom-most per Appendix E -
                 // into painting in the wrong stacking pass entirely).
                 if ((childBox.IsBeforePseudoElement || childBox.IsAfterPseudoElement)
-                    && childBox.Content is CssConstants.None or CssConstants.Normal
+                    && childBox.Content is Keywords.None or Keywords.Normal
                     && childBox.ContentImage is null)
                 {
                     box.Boxes.RemoveAt(i);
@@ -1878,11 +1878,11 @@ namespace PeachPDF.Html.Core.Parse
             for (int i = box.Boxes.Count - 1; i >= 0; i--)
             {
                 var childBox = box.Boxes[i];
-                if (childBox is CssBoxImage or CssBoxSvg && childBox.DerivedStyle.ActualDisplay == CssConstants.Block)
+                if (childBox is CssBoxImage or CssBoxSvg && childBox.DerivedStyle.ActualDisplay == Keywords.Block)
                 {
                     var block = CssBox.CreateBlock(childBox.ParentBox!, null, childBox);
                     childBox.ParentBox = block;
-                    childBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Inline, DisplayMode.Inline);
+                    childBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.Inline, DisplayMode.Inline);
                 }
                 else
                 {
@@ -1977,8 +1977,8 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the box that has the problem</param>
         private static CssBox? CorrectBlockInsideInlineImp(CssBox box)
         {
-            if (box.DerivedStyle.ActualDisplay == CssConstants.Inline)
-                box.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
+            if (box.DerivedStyle.ActualDisplay == Keywords.Inline)
+                box.Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
 
             if (box.Boxes.Count > 1 || box.Boxes[0].Boxes.Count > 1)
             {
@@ -2006,9 +2006,9 @@ namespace PeachPDF.Html.Core.Parse
 
                 return tempRightBox;
             }
-            else if (box.Boxes[0].DerivedStyle.ActualDisplay == CssConstants.Inline)
+            else if (box.Boxes[0].DerivedStyle.ActualDisplay == Keywords.Inline)
             {
-                box.Boxes[0].Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
+                box.Boxes[0].Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
             }
 
             return null;
@@ -2071,7 +2071,7 @@ namespace PeachPDF.Html.Core.Parse
             {
                 splitBox.SetBeforeBox(parentBox.Boxes[1]);
                 if (splitBox.HtmlTag is { Name: "br" } && (leftbox != null || leftBlock.Boxes.Count > 1))
-                    splitBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Inline, DisplayMode.Inline);
+                    splitBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.Inline, DisplayMode.Inline);
             }
         }
 
@@ -2136,11 +2136,11 @@ namespace PeachPDF.Html.Core.Parse
             // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
             // (and restructure) them. See CssBoxSvg / issue #159.
             if (box is CssBoxSvg) return;
-            if (box is { DerivedStyle.ActualDisplay: CssConstants.Inline, Position.Value: PositionMode.Absolute })
+            if (box is { DerivedStyle.ActualDisplay: Keywords.Inline, Position.Value: PositionMode.Absolute })
             {
                 var blockBox = new CssBox(box.ParentBox, null);
-                blockBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
-                blockBox.Position = CssProperty<PositionMode>.FromValue(CssConstants.Absolute, PositionMode.Absolute);
+                blockBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
+                blockBox.Position = CssProperty<PositionMode>.FromValue(Keywords.Absolute, PositionMode.Absolute);
                 blockBox.Left = box.Left;
                 blockBox.Top = box.Top;
                 blockBox.Bottom = box.Bottom;
@@ -2149,7 +2149,7 @@ namespace PeachPDF.Html.Core.Parse
                 blockBox.Height = box.Height;
                 blockBox.TextAlign = box.TextAlign;
 
-                box.Position = CssProperty<PositionMode>.FromValue(CssConstants.Static, PositionMode.Static);
+                box.Position = CssProperty<PositionMode>.FromValue(Keywords.Static, PositionMode.Static);
                 box.ParentBox = blockBox;
             }
 
@@ -2203,7 +2203,7 @@ namespace PeachPDF.Html.Core.Parse
         private static void CorrectAnonymousTablesRemoveIrrelevantBoxes(CssBox box)
         {
             // 1.1 All child boxes of a 'table-column' parent are treated as if they had 'display: none'
-            if (box.DerivedStyle.ActualDisplay is CssConstants.TableColumn)
+            if (box.DerivedStyle.ActualDisplay is Keywords.TableColumn)
             {
                 foreach (var childBox in box.Boxes)
                 {
@@ -2211,18 +2211,18 @@ namespace PeachPDF.Html.Core.Parse
                     Console.WriteLine($"dom: set child box {childBox.Id} of table-column parent {box.Id} to display: none");
 #endif
 
-                    childBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.None, DisplayMode.None);
+                    childBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
                 }
             }
 
             // 1.2 If a child C of a 'table-column-group' parent is not a 'table-column' box, then it is treated as if it had 'display: none'.
-            if (box.ParentBox?.DerivedStyle.ActualDisplay is CssConstants.TableColumnGroup && box.DerivedStyle.ActualDisplay is not CssConstants.TableColumn)
+            if (box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.TableColumnGroup && box.DerivedStyle.ActualDisplay is not Keywords.TableColumn)
             {
 #if DEBUG
                 Console.WriteLine($"dom: set child box {box.Id} to display:none if parent is table-column-group and child is not table-column");
 #endif
 
-                box.Display = CssProperty<DisplayMode>.FromValue(CssConstants.None, DisplayMode.None);
+                box.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
             }
 
             // 1.3 This is handled via CorrectTextBoxes above
@@ -2232,7 +2232,7 @@ namespace PeachPDF.Html.Core.Parse
         private static void CorrectAnonymousTablesGenerateMissingChildWrappers(CssBox box)
         {
             // 2.1 If a child C of a 'table' or 'inline-table' box is not a proper table child, then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are not proper table children.
-            if (box.ParentBox?.DerivedStyle.ActualDisplay is CssConstants.Table)
+            if (box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Table)
             {
                 if (!DomUtils.IsProperTableChild(box))
                 {
@@ -2249,7 +2249,7 @@ namespace PeachPDF.Html.Core.Parse
                     // takes C's place in document/column order instead of drifting to the end once C
                     // itself is reparented into it below.
                     var tableRowBox = new CssBox(box.ParentBox, null);
-                    tableRowBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableRow, DisplayMode.TableRow);
+                    tableRowBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.TableRow, DisplayMode.TableRow);
                     tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
 
@@ -2260,18 +2260,18 @@ namespace PeachPDF.Html.Core.Parse
             // 2.2 If a child C of a row group box is not a 'table-row' box, then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are not 'table-row' boxes.
             if (box.ParentBox?.IsTableRowGroupBox ?? false)
             {
-                if (box.DerivedStyle.ActualDisplay is not CssConstants.TableRow)
+                if (box.DerivedStyle.ActualDisplay is not Keywords.TableRow)
                 {
 #if DEBUG
                     Console.WriteLine($"dom: if box {box.Id} is not a table row and parent is a table row group box, then generate table-row around element");
 #endif
 
                     var followingMatchingSiblings =
-                        DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is not CssConstants.TableRow, true)
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is not Keywords.TableRow, true)
                             .ToList();
 
                     var tableRowBox = new CssBox(box.ParentBox, null);
-                    tableRowBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableRow, DisplayMode.TableRow);
+                    tableRowBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.TableRow, DisplayMode.TableRow);
                     tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
 
@@ -2280,9 +2280,9 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             // 2.3 If a child C of a 'table-row' box is not a 'table-cell', then generate an anonymous 'table-cell' box around C and all consecutive siblings of C that are not 'table-cell' boxes.
-            if (box.ParentBox?.DerivedStyle.ActualDisplay is CssConstants.TableRow)
+            if (box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.TableRow)
             {
-                if (box.DerivedStyle.ActualDisplay is not CssConstants.TableCell)
+                if (box.DerivedStyle.ActualDisplay is not Keywords.TableCell)
                 {
 
 #if DEBUG
@@ -2290,11 +2290,11 @@ namespace PeachPDF.Html.Core.Parse
 #endif
 
                     var followingMatchingSiblings =
-                        DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is not CssConstants.TableCell, true)
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is not Keywords.TableCell, true)
                             .ToList();
 
                     var tableCellBox = new CssBox(box.ParentBox, null);
-                    tableCellBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
+                    tableCellBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
                     tableCellBox.SetBeforeBox(box);
                     box.ParentBox = tableCellBox;
 
@@ -2306,16 +2306,16 @@ namespace PeachPDF.Html.Core.Parse
         private static void CorrectAnonymousTablesGenerateMissingParents(CssBox box)
         {
             // 3.1 For each 'table-cell' box C in a sequence of consecutive internal table and 'table-caption' siblings, if C's parent is not a 'table-row' then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are 'table-cell' boxes.
-            if (box.DerivedStyle.ActualDisplay is CssConstants.TableCell)
+            if (box.DerivedStyle.ActualDisplay is Keywords.TableCell)
             {
-                if (box.ParentBox?.DerivedStyle.ActualDisplay is not CssConstants.TableRow)
+                if (box.ParentBox?.DerivedStyle.ActualDisplay is not Keywords.TableRow)
                 {
                     var followingMatchingSiblings =
-                        DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is CssConstants.TableCell, true)
+                        DomUtils.GetFollowingSiblings(box, sibling => sibling.DerivedStyle.ActualDisplay is Keywords.TableCell, true)
                             .ToList();
 
                     var tableRowBox = new CssBox(box.ParentBox, null);
-                    tableRowBox.Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableRow, DisplayMode.TableRow);
+                    tableRowBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.TableRow, DisplayMode.TableRow);
                     tableRowBox.SetBeforeBox(box);
                     box.ParentBox = tableRowBox;
 
@@ -2341,12 +2341,12 @@ namespace PeachPDF.Html.Core.Parse
                 // around cells under a `display:block` `<tr>`, lost their table box and silently dropped all
                 // content. That case only became reachable once author `display` could override table tags.)
                 var parent = box.ParentBox;
-                var parentIsTable = parent?.DerivedStyle.ActualDisplay is CssConstants.Table or CssConstants.InlineTable;
+                var parentIsTable = parent?.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable;
 
                 var isMisparented = parent is null || box.DerivedStyle.ActualDisplay switch
                 {
-                    CssConstants.TableRow => !parentIsTable && !parent.IsTableRowGroupBox,
-                    CssConstants.TableColumn => !parentIsTable && parent.DerivedStyle.ActualDisplay is not CssConstants.TableColumnGroup,
+                    Keywords.TableRow => !parentIsTable && !parent.IsTableRowGroupBox,
+                    Keywords.TableColumn => !parentIsTable && parent.DerivedStyle.ActualDisplay is not Keywords.TableColumnGroup,
                     _ => !parentIsTable // row group, table-column-group, or table-caption
                 };
 
@@ -2354,7 +2354,7 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     var originalParent = box.ParentBox;
                     var isBlockTable = originalParent is null || originalParent.IsBlock;
-                    var parentDisplay = isBlockTable ? CssConstants.Table : CssConstants.InlineTable;
+                    var parentDisplay = isBlockTable ? Keywords.Table : Keywords.InlineTable;
                     var parentDisplayMode = isBlockTable ? DisplayMode.Table : DisplayMode.InlineTable;
 
                     var followingMatchingSiblings =
@@ -2431,7 +2431,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the box to check</param>
         /// <returns>true - an atomic inline-level box with a layout path of its own, false - otherwise</returns>
         private static bool IsAtomicInlineLevel(CssBox box) =>
-            box.DerivedStyle.ActualDisplay is CssConstants.InlineFlex;
+            box.DerivedStyle.ActualDisplay is Keywords.InlineFlex;
 
         /// <summary>
         /// Check if the given box contains inline and block child boxes.

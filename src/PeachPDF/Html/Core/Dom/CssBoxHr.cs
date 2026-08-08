@@ -32,7 +32,7 @@ namespace PeachPDF.Html.Core.Dom
         public CssBoxHr(CssBox? parent, HtmlTag tag)
             : base(parent, tag)
         {
-            Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
+            Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
         }
 
         /// <summary>
@@ -72,7 +72,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild)
         {
-            if (DerivedStyle.ActualDisplay == CssConstants.None)
+            if (DerivedStyle.ActualDisplay == Keywords.None)
                 return ValueTask.CompletedTask;
 
             // The rule has no content to resume into, so the only pass state it carries is a break-before
@@ -97,7 +97,7 @@ namespace PeachPDF.Html.Core.Dom
                            - ActualMarginLeft - ActualMarginRight - ActualBorderLeftWidth - ActualBorderRightWidth;
 
             //Check width if not auto
-            if (Width != CssConstants.Auto && !string.IsNullOrEmpty(Width))
+            if (Width != Keywords.Auto && !string.IsNullOrEmpty(Width))
             {
                 width = CssValueParser.ParseLength(Width, width, this);
             }
@@ -125,7 +125,7 @@ namespace PeachPDF.Html.Core.Dom
             }
             if (height <= 2 && ActualBorderTopWidth < 1 && ActualBorderBottomWidth < 1)
             {
-                BorderTopStyle = BorderBottomStyle = CssProperty<LineStyle>.FromValue(CssConstants.Solid, LineStyle.Solid);
+                BorderTopStyle = BorderBottomStyle = CssProperty<LineStyle>.FromValue(Keywords.Solid, LineStyle.Solid);
                 BorderTopWidth = "1px";
                 BorderBottomWidth = "1px";
             }

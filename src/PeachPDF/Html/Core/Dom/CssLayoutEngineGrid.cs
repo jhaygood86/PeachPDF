@@ -126,7 +126,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var items = _gridBox.Boxes
-                .Where(b => b.DerivedStyle.ActualDisplay != CssConstants.None && !b.IsOutOfFlow
+                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsOutOfFlow
                             && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
                 .ToList();
 
@@ -176,16 +176,16 @@ namespace PeachPDF.Html.Core.Dom
             var autoColDefs = ExpandTrackSizes(_gridBox.GridAutoColumns);
             var autoRowDefs = ExpandTrackSizes(_gridBox.GridAutoRows);
 
-            var flow = _gridBox.GridAutoFlow ?? CssConstants.Row;
-            var isColumnFlow = flow.IndexOf(CssConstants.Column, StringComparison.OrdinalIgnoreCase) >= 0;
-            var isDense = flow.IndexOf(CssConstants.Dense, StringComparison.OrdinalIgnoreCase) >= 0;
+            var flow = _gridBox.GridAutoFlow ?? Keywords.Row;
+            var isColumnFlow = flow.IndexOf(Keywords.Column, StringComparison.OrdinalIgnoreCase) >= 0;
+            var isDense = flow.IndexOf(Keywords.Dense, StringComparison.OrdinalIgnoreCase) >= 0;
 
             // Per-axis named-line tables: [name] from the templates, plus name-start/name-end lines each
             // grid-template-areas area contributes.
             var colLineNames = BuildLineNames(colTemplate);
             var rowLineNames = BuildLineNames(rowTemplate);
 
-            var areas = string.IsNullOrEmpty(_gridBox.GridTemplateAreas) || _gridBox.GridTemplateAreas.Isi(CssConstants.None)
+            var areas = string.IsNullOrEmpty(_gridBox.GridTemplateAreas) || _gridBox.GridTemplateAreas.Isi(Keywords.None)
                 ? null
                 : GridTemplateAreasGrammar.TryParse(CssValueParser.GetCssTokens(_gridBox.GridTemplateAreas));
             if (areas is not null)
@@ -369,7 +369,7 @@ namespace PeachPDF.Html.Core.Dom
                 subgridContexts, placementOrigin: _gridBox.Location);
 
             // Inline-grid shrinks to the content extent in the inline axis (like inline-block).
-            if (_gridBox.DerivedStyle.ActualDisplay == CssConstants.InlineGrid && !CssValueParser.IsValidLength(_gridBox.Width) && columns.Length > 0)
+            if (_gridBox.DerivedStyle.ActualDisplay == Keywords.InlineGrid && !CssValueParser.IsValidLength(_gridBox.Width) && columns.Length > 0)
             {
                 var contentRight = columns[^1].Position + columns[^1].Size;
                 _gridBox.ActualRight = contentRight + _gridBox.ActualPaddingRight + _gridBox.ActualBorderRightWidth;
@@ -396,7 +396,7 @@ namespace PeachPDF.Html.Core.Dom
 
             if (container is null || !container.HasRealPageGrid || placements.Count == 0
                 || !container.IsFragmenting
-                || _gridBox.DerivedStyle.ActualDisplay == CssConstants.InlineGrid)
+                || _gridBox.DerivedStyle.ActualDisplay == Keywords.InlineGrid)
             {
                 return;
             }
@@ -513,7 +513,7 @@ namespace PeachPDF.Html.Core.Dom
             // The same liveness gate RelocateRowsAcrossFragmentainers uses, for the same reason: outside
             // it this container's own coordinates are provisional, belonging to whatever is measuring it.
             if (container is null || !container.HasRealPageGrid || !container.IsFragmenting
-                || _gridBox.DerivedStyle.ActualDisplay == CssConstants.InlineGrid)
+                || _gridBox.DerivedStyle.ActualDisplay == Keywords.InlineGrid)
             {
                 return;
             }
@@ -1260,8 +1260,8 @@ namespace PeachPDF.Html.Core.Dom
         private async ValueTask PlaceItemInCell(RGraphics g, CssBox box, double cellX, double cellY,
             double cellWidth, double cellHeight, string justify, string align)
         {
-            var autoWidth = box.Width == CssConstants.Auto;
-            var autoHeight = box.Height == CssConstants.Auto;
+            var autoWidth = box.Width == Keywords.Auto;
+            var autoHeight = box.Height == Keywords.Auto;
             var stretchWidth = IsStretch(justify) && autoWidth;
             var stretchHeight = IsStretch(align) && autoHeight;
 
@@ -1306,21 +1306,21 @@ namespace PeachPDF.Html.Core.Dom
         private static string ResolveSelfAlignment(string self, string items)
         {
             var value = self;
-            if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.Auto) || value.Isi(CssConstants.Normal))
+            if (string.IsNullOrEmpty(value) || value.Isi(Keywords.Auto) || value.Isi(Keywords.Normal))
                 value = items;
-            if (string.IsNullOrEmpty(value) || value.Isi(CssConstants.Normal) || value.Isi(CssConstants.Auto))
-                value = CssConstants.Stretch;
+            if (string.IsNullOrEmpty(value) || value.Isi(Keywords.Normal) || value.Isi(Keywords.Auto))
+                value = Keywords.Stretch;
             return value;
         }
 
         private static bool IsStretch(string value) =>
-            value.Isi(CssConstants.Stretch) || value.Isi(CssConstants.Normal);
+            value.Isi(Keywords.Stretch) || value.Isi(Keywords.Normal);
 
         /// <summary>Whether a used alignment value is a baseline alignment (<c>baseline</c> /
         /// <c>first baseline</c> / <c>last baseline</c> — all treated as first-baseline here).</summary>
         private static bool IsBaselineAlign(string value) =>
             !string.IsNullOrEmpty(value)
-            && value.IndexOf(CssConstants.Baseline, StringComparison.OrdinalIgnoreCase) >= 0;
+            && value.IndexOf(Keywords.Baseline, StringComparison.OrdinalIgnoreCase) >= 0;
 
         /// <summary>
         /// Aligns the first baselines of the single-row items in each row whose used <c>align-items</c>/
@@ -1366,8 +1366,8 @@ namespace PeachPDF.Html.Core.Dom
         {
             var free = cellSize - itemSize;
             if (free <= 0) return 0;
-            if (value.Isi(CssConstants.Center)) return free / 2;
-            if (value.Isi(CssConstants.End) || value.Isi(CssConstants.FlexEnd) || value.Isi("self-end") || value.Isi("right"))
+            if (value.Isi(Keywords.Center)) return free / 2;
+            if (value.Isi(Keywords.End) || value.Isi(Keywords.FlexEnd) || value.Isi("self-end") || value.Isi("right"))
                 return free;
             return 0; // start / flex-start / self-start / left / stretch / baseline
         }
@@ -1393,11 +1393,11 @@ namespace PeachPDF.Html.Core.Dom
 
             if (free > 0.01 && gapCount >= 0)
             {
-                if (value.Isi(CssConstants.Center)) offset = free / 2;
-                else if (value.Isi(CssConstants.End) || value.Isi(CssConstants.FlexEnd) || value.Isi("right")) offset = free;
-                else if (value.Isi(CssConstants.SpaceBetween) && gapCount > 0) between = gap + free / gapCount;
-                else if (value.Isi(CssConstants.SpaceAround)) { between = gap + free / (gapCount + 1); offset = free / (gapCount + 1) / 2; }
-                else if (value.Isi(CssConstants.SpaceEvenly)) { between = gap + free / (gapCount + 2); offset = free / (gapCount + 2); }
+                if (value.Isi(Keywords.Center)) offset = free / 2;
+                else if (value.Isi(Keywords.End) || value.Isi(Keywords.FlexEnd) || value.Isi("right")) offset = free;
+                else if (value.Isi(Keywords.SpaceBetween) && gapCount > 0) between = gap + free / gapCount;
+                else if (value.Isi(Keywords.SpaceAround)) { between = gap + free / (gapCount + 1); offset = free / (gapCount + 1) / 2; }
+                else if (value.Isi(Keywords.SpaceEvenly)) { between = gap + free / (gapCount + 2); offset = free / (gapCount + 2); }
             }
 
             var pos = start + offset;
@@ -1424,7 +1424,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Whether a grid item is a subgrid on at least one axis — a nested grid whose
         /// <c>grid-template-columns</c> and/or <c>grid-template-rows</c> is <c>subgrid</c>.</summary>
         private static bool IsSubgridItem(CssBox box) =>
-            (box.DerivedStyle.ActualDisplay == CssConstants.Grid || box.DerivedStyle.ActualDisplay == CssConstants.InlineGrid)
+            (box.DerivedStyle.ActualDisplay == Keywords.Grid || box.DerivedStyle.ActualDisplay == Keywords.InlineGrid)
             && (ChildColSubgrid(box) || ChildRowSubgrid(box));
 
         private static bool ChildColSubgrid(CssBox box) => box.GridTemplateColumns.Value?.IsSubgrid == true;
@@ -1691,7 +1691,7 @@ namespace PeachPDF.Html.Core.Dom
             if (box.IsInline)
             {
                 savedDisplay = box.Display;
-                box.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
+                box.Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
             }
 
             var container = box.HtmlContainer;

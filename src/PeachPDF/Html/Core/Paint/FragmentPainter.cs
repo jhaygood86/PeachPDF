@@ -76,7 +76,7 @@ namespace PeachPDF.Html.Core.Paint
 
             try
             {
-                if (box.DerivedStyle.ActualDisplay == CssConstants.None || box.Visibility.Value != Visibility.Visible) return;
+                if (box.DerivedStyle.ActualDisplay == Keywords.None || box.Visibility.Value != Visibility.Visible) return;
 
                 // use initial clip to draw blocks with Position = fixed. I.e. ignore page margins
                 if (box.Position.Value == PositionMode.Fixed)
@@ -111,7 +111,7 @@ namespace PeachPDF.Html.Core.Paint
                     // system, which any `transform` then maps). The reference box is the border-box (the
                     // default) of the whole box, for the same reason as the transform pivot above.
                     var clipped = false;
-                    if (box.ClipPath != CssConstants.None && !string.IsNullOrEmpty(box.ClipPath))
+                    if (box.ClipPath != Keywords.None && !string.IsNullOrEmpty(box.ClipPath))
                     {
                         if (CssClipPathResolver.TryBuildClipPath(g, box.ClipPath, fragment.WholeBoxRect, box, out var clipGeometry, out _)
                             && clipGeometry is not null)
@@ -336,8 +336,8 @@ namespace PeachPDF.Html.Core.Paint
         {
             var box = fragment.Box;
 
-            if (box.DerivedStyle.ActualDisplay == CssConstants.None ||
-                (box.DerivedStyle.ActualDisplay == CssConstants.TableCell && box.EmptyCells == CssConstants.Hide && box.IsSpaceOrEmpty)) return;
+            if (box.DerivedStyle.ActualDisplay == Keywords.None ||
+                (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells == Keywords.Hide && box.IsSpaceOrEmpty)) return;
 
             var clipped = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip);
 
@@ -385,7 +385,7 @@ namespace PeachPDF.Html.Core.Paint
                 // intermediate pages (instead of at the rectangle's bottom, which is off-page).
                 // The page clip already constrains the side-border top to MarginTop.
                 var rectForBorders = geometry.DecorationRect;
-                if ((box.DerivedStyle.ActualDisplay == CssConstants.Table || box.DerivedStyle.ActualDisplay == CssConstants.InlineTable)
+                if ((box.DerivedStyle.ActualDisplay == Keywords.Table || box.DerivedStyle.ActualDisplay == Keywords.InlineTable)
                     && box.PageBreakBottoms != null && box.HtmlContainer != null)
                 {
                     // PageBreakBottoms is keyed by pagination slot, which is exactly what the fragment

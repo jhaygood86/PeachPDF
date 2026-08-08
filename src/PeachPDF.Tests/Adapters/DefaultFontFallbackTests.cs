@@ -7,10 +7,10 @@ namespace PeachPDF.Tests.Adapters
     /// <summary>
     /// A host with no discoverable system fonts - browser/WebAssembly, where
     /// <c>FontResolver.DiscoverSupportedFonts</c> deliberately returns nothing - cannot satisfy
-    /// <c>CssConstants.DefaultFont</c> from the platform, so the engine's last-resort font has to be adopted
+    /// <c>DefaultFontResolver.DefaultFont</c> from the platform, so the engine's last-resort font has to be adopted
     /// from whatever the application registers instead. These pin that rule.
     /// <para>
-    /// They use a synthetic default-font name rather than the real <c>CssConstants.DefaultFont</c>, because
+    /// They use a synthetic default-font name rather than the real <c>DefaultFontResolver.DefaultFont</c>, because
     /// on every desktop CI runner the real one <i>is</i> installed - the branch under test would never be
     /// reached, and the assertions would hold whether or not the code did anything.
     /// </para>

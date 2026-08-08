@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
@@ -205,11 +206,11 @@ namespace PeachPDF.Svg
                         //    already map both "inherit" and null to the inherited value.
                         var trimmed = property.Value.Trim();
                         string? resolved;
-                        if (trimmed.Equals(CssConstants.Revert, StringComparison.OrdinalIgnoreCase)
-                            || trimmed.Equals(CssConstants.RevertLayer, StringComparison.OrdinalIgnoreCase)
-                            || trimmed.Equals(CssConstants.Unset, StringComparison.OrdinalIgnoreCase))
+                        if (trimmed.Equals(Keywords.Revert, StringComparison.OrdinalIgnoreCase)
+                            || trimmed.Equals(Keywords.RevertLayer, StringComparison.OrdinalIgnoreCase)
+                            || trimmed.Equals(Keywords.Unset, StringComparison.OrdinalIgnoreCase))
                             resolved = null;
-                        else if (trimmed.Equals(CssConstants.Initial, StringComparison.OrdinalIgnoreCase))
+                        else if (trimmed.Equals(Keywords.Initial, StringComparison.OrdinalIgnoreCase))
                             resolved = SvgPropertyRegistry.GetInitialValue(property.Name);
                         else
                             resolved = CssVarResolver.Resolve(node, property.Value, varContext);

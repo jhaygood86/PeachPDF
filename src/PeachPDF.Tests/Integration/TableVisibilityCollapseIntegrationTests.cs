@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Integration
         public async Task CollapsedRow_DirectTableChild_TakesNoSpace()
         {
             // <tr> as a direct child of <table> (no row group) - CssLayoutEngineTable.AssignBoxKinds'
-            // CssConstants.TableRow branch.
+            // Keywords.TableRow branch.
             var (experiment, _) = await BuildAndLayout("""
                 <!DOCTYPE html><html><body>
                 <table style="border-spacing:0">
@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task CollapsedRow_InsideRowGroup_TakesNoSpace()
         {
-            // A <tr> inside a <tbody> - the CssConstants.TableRowGroup branch.
+            // A <tr> inside a <tbody> - the Keywords.TableRowGroup branch.
             var (experiment, _) = await BuildAndLayout("""
                 <!DOCTYPE html><html><body>
                 <table style="border-spacing:0">

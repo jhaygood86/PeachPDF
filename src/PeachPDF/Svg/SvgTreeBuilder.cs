@@ -52,7 +52,7 @@ namespace PeachPDF.Svg
         /// The root element's used <c>font-size</c> (the value <c>rem</c> font-sizes resolve against),
         /// captured once in <see cref="BuildDocument"/>. Defaults to the UA initial font size until then.
         /// </summary>
-        private double _rootFontSize = Html.Core.Utils.CssConstants.FontSize;
+        private double _rootFontSize = Html.Core.Utils.DefaultFontResolver.FontSize;
 
 
         /// <summary>
@@ -150,7 +150,7 @@ namespace PeachPDF.Svg
         /// </summary>
         private readonly record struct FontContext(string Family, double Size, bool Bold, bool Italic)
         {
-            public static readonly FontContext Default = new(Html.Core.Utils.CssConstants.DefaultFont, Html.Core.Utils.CssConstants.FontSize, false, false);
+            public static readonly FontContext Default = new(Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false);
         }
 
         /// <param name="root">The root node to build from.</param>
@@ -1144,7 +1144,7 @@ namespace PeachPDF.Svg
             if (runFont.Italic) fontStyle |= RFontStyle.Italic;
 
             run.Font = _adapter.GetFont(runFont.Family, runFont.Size, fontStyle)
-                       ?? _adapter.GetFont(Html.Core.Utils.CssConstants.DefaultFont, runFont.Size, fontStyle);
+                       ?? _adapter.GetFont(Html.Core.Utils.DefaultFontResolver.DefaultFont, runFont.Size, fontStyle);
 
             var childFontContext = runFont;
 

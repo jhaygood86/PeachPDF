@@ -16,9 +16,9 @@ namespace PeachPDF.Tests.Html.Core.Parse
         {
             var parser = new CssValueParser(new PdfSharpAdapter());
 
-            var result = parser.GetFontFamilyByName(CssConstants.DefaultFont);
+            var result = parser.GetFontFamilyByName(DefaultFontResolver.DefaultFont);
 
-            Assert.Equal(CssConstants.DefaultFont, result);
+            Assert.Equal(DefaultFontResolver.DefaultFont, result);
         }
 
         [Fact]

@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Tests.Html.Core.Utils
@@ -9,15 +10,15 @@ namespace PeachPDF.Tests.Html.Core.Utils
     public class FontStretchResolverTests
     {
         [Theory]
-        [InlineData(CssConstants.UltraCondensed, 1)]
-        [InlineData(CssConstants.ExtraCondensed, 2)]
-        [InlineData(CssConstants.Condensed, 3)]
-        [InlineData(CssConstants.SemiCondensed, 4)]
-        [InlineData(CssConstants.Normal, 5)]
-        [InlineData(CssConstants.SemiExpanded, 6)]
-        [InlineData(CssConstants.Expanded, 7)]
-        [InlineData(CssConstants.ExtraExpanded, 8)]
-        [InlineData(CssConstants.UltraExpanded, 9)]
+        [InlineData(Keywords.UltraCondensed, 1)]
+        [InlineData(Keywords.ExtraCondensed, 2)]
+        [InlineData(Keywords.Condensed, 3)]
+        [InlineData(Keywords.SemiCondensed, 4)]
+        [InlineData(Keywords.Normal, 5)]
+        [InlineData(Keywords.SemiExpanded, 6)]
+        [InlineData(Keywords.Expanded, 7)]
+        [InlineData(Keywords.ExtraExpanded, 8)]
+        [InlineData(Keywords.UltraExpanded, 9)]
         public void Keyword_ResolvesToExpectedNumericScale(string keyword, int expected)
         {
             Assert.Equal(expected, FontStretchResolver.Resolve(keyword));

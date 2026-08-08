@@ -226,7 +226,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static double? ResolveReplacedRatio(string aspectRatio, double? intrinsicRatio)
         {
-            if (string.IsNullOrEmpty(aspectRatio) || aspectRatio == CssConstants.Auto)
+            if (string.IsNullOrEmpty(aspectRatio) || aspectRatio == Keywords.Auto)
                 return intrinsicRatio;
 
             if (!AspectRatioGrammar.TryParse(CssValueParser.GetCssTokens(aspectRatio), out var ratio, out var hasAuto)
@@ -400,7 +400,7 @@ namespace PeachPDF.Html.Core.Dom
             blockBox.ActualBottom = coordinates.MaxBottom + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
 
             // handle limiting block height when overflow is hidden
-            if (blockBox.Height != CssConstants.Auto && blockBox.Overflow.Value == Overflow.Hidden && blockBox.ActualBottom - blockBox.Location.Y > blockBox.ActualHeight)
+            if (blockBox.Height != Keywords.Auto && blockBox.Overflow.Value == Overflow.Hidden && blockBox.ActualBottom - blockBox.Location.Y > blockBox.ActualHeight)
             {
                 blockBox.ActualBottom = blockBox.Location.Y + blockBox.ActualHeight + blockBox.ActualPaddingBottom + blockBox.ActualPaddingTop;
             }
@@ -528,13 +528,13 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.MarginRight.Value.IsValue) return 0;
 
-            if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != CssConstants.TableCaption)
+            if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
             {
                 return 0;
             }
 
             // This will be used by the table layout engine later with boxWidth provided
-            if (box.DerivedStyle.ActualDisplay is CssConstants.Table && boxWidth is null)
+            if (box.DerivedStyle.ActualDisplay is Keywords.Table && boxWidth is null)
             {
                 return 0;
             }
@@ -559,13 +559,13 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.MarginLeft.Value.IsValue) return 0;
 
-            if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != CssConstants.TableCaption)
+            if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
             {
                 return 0;
             }
 
             // This will be used by the table layout engine later with boxWidth provided
-            if (box.DerivedStyle.ActualDisplay is CssConstants.Table && boxWidth is null)
+            if (box.DerivedStyle.ActualDisplay is Keywords.Table && boxWidth is null)
             {
                 return 0;
             }
@@ -594,7 +594,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             var containingWidth = box.ContainingBlock.Size.Width;
 
-            if (box.Width == CssConstants.Auto || string.IsNullOrEmpty(box.Width))
+            if (box.Width == Keywords.Auto || string.IsNullOrEmpty(box.Width))
             {
                 // An auto width fills the containing block, so its auto margins are 0. `max-width` can
                 // clamp the used width below the fill width — and `min-width` can then re-widen it (min
@@ -634,7 +634,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var childBox in box.Boxes)
             {
-                if (childBox.DerivedStyle.ActualDisplay == CssConstants.None) continue;
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
                 await childBox.MeasureWordsSize(g);
                 await MeasureWords(childBox, g);
@@ -691,7 +691,7 @@ namespace PeachPDF.Html.Core.Dom
             for (var b = box; b is not null; b = b.ParentBox)
             {
                 if (!IsMainColumnBox(b)) return false;
-                if (!string.IsNullOrEmpty(b.Width) && b.Width != CssConstants.Auto) return false;
+                if (!string.IsNullOrEmpty(b.Width) && b.Width != Keywords.Auto) return false;
                 if (b.IsRoot) break;
             }
 
@@ -770,20 +770,20 @@ namespace PeachPDF.Html.Core.Dom
             // ignored - without this guard, GetLargestChildWidth's recursive descendant walk (used
             // for position:absolute shrink-to-fit, e.g. ".eyes") wrongly folded 7.5em into the
             // ancestor's width, inflating it well past its real content.
-            if (box.Width != CssConstants.Auto && !string.IsNullOrEmpty(box.Width)
-                && !(box.DerivedStyle.ActualDisplay == CssConstants.Inline && box.Words.Count == 0))
+            if (box.Width != Keywords.Auto && !string.IsNullOrEmpty(box.Width)
+                && !(box.DerivedStyle.ActualDisplay == Keywords.Inline && box.Words.Count == 0))
             {
                 // Absolute boxes resolve a percentage width against their nearest positioned ancestor
                 // (CSS 2.1 §10.1), consistent with GetBoxHeight and the left/top positioning code.
                 width = CssValueParser.ParseLength(box.Width, PercentageBase(box).Size.Width, box);
             }
 
-            if (box is { Width: CssConstants.Auto, Position.Value: not PositionMode.Absolute })
+            if (box is { Width: Keywords.Auto, Position.Value: not PositionMode.Absolute })
             {
                 width -= box.ActualBoxSizeIncludedWidth;
             }
 
-            if (box is { Width: CssConstants.Auto, Position.Value: PositionMode.Absolute })
+            if (box is { Width: Keywords.Auto, Position.Value: PositionMode.Absolute })
             {
                 var absCb = PercentageBase(box);
                 if (box.Left.Value.IsValue && box.Right.Value.IsValue)
@@ -931,7 +931,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             height = 0;
 
-            if (string.IsNullOrEmpty(box.AspectRatio) || box.AspectRatio == CssConstants.Auto) return false;
+            if (string.IsNullOrEmpty(box.AspectRatio) || box.AspectRatio == Keywords.Auto) return false;
             if (box.Size.Width <= 0) return false;
 
             var tokens = CssValueParser.GetCssTokens(box.AspectRatio);
@@ -967,9 +967,9 @@ namespace PeachPDF.Html.Core.Dom
         {
             width = 0;
 
-            if (string.IsNullOrEmpty(box.AspectRatio) || box.AspectRatio == CssConstants.Auto) return false;
+            if (string.IsNullOrEmpty(box.AspectRatio) || box.AspectRatio == Keywords.Auto) return false;
             // Only when the box has no explicit width (an auto/absent width the ratio can determine).
-            if (box.Width != CssConstants.Auto && !string.IsNullOrEmpty(box.Width)) return false;
+            if (box.Width != Keywords.Auto && !string.IsNullOrEmpty(box.Width)) return false;
             if (!HasDefiniteHeight(box)) return false;
 
             var tokens = CssValueParser.GetCssTokens(box.AspectRatio);
@@ -997,8 +997,8 @@ namespace PeachPDF.Html.Core.Dom
                 // pass afterward) would recompute the cell's height from its own explicit `height`
                 // alone, discarding that stretch - exactly what made ".third-part" (Acid2's own
                 // "gets stretched to fit row" test case) end up 4.5pt short of its row.
-                if (childBox.DerivedStyle.ActualDisplay is CssConstants.TableCell or CssConstants.TableRow
-                    or CssConstants.TableRowGroup or CssConstants.TableHeaderGroup or CssConstants.TableFooterGroup)
+                if (childBox.DerivedStyle.ActualDisplay is Keywords.TableCell or Keywords.TableRow
+                    or Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup)
                 {
                     continue;
                 }
@@ -1262,7 +1262,7 @@ namespace PeachPDF.Html.Core.Dom
             // position (set when it actually opened) with wherever the resumed fragmentainer happens to
             // start. string-set fires exactly once per box per opening, mirroring a block box's own
             // once-per-_prologueDone guarantee.
-            if (opensHere && box != blockBox && !string.IsNullOrEmpty(box.StringSet) && box.StringSet != CssConstants.None)
+            if (opensHere && box != blockBox && !string.IsNullOrEmpty(box.StringSet) && box.StringSet != Keywords.None)
             {
                 // Unlike a block box's PerformLayoutPrologue, nothing else withdraws this box's previous
                 // registration before FlowBox re-opens it (a multicol measurement pass, a re-banding
@@ -1311,7 +1311,7 @@ namespace PeachPDF.Html.Core.Dom
             // box's whole height, so it only means anything for a box this pass both opened and
             // finished. For one it merely walked through the deficit is the box's entire height, which
             // it would then add to the flow all over again.
-            if (opensHere && box.DerivedStyle.ActualDisplay is not CssConstants.Inline && coordinates.MaxBottom - startY < box.ActualHeight)
+            if (opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline && coordinates.MaxBottom - startY < box.ActualHeight)
             {
                 coordinates.MaxBottom = startY + box.ActualHeight;
             }
@@ -1402,7 +1402,7 @@ namespace PeachPDF.Html.Core.Dom
 
             // Unlike a plain inline box, b.Location is already final here, so string-set/named-page can
             // be applied and finalized together rather than split across entry/exit like plain inlines.
-            if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != CssConstants.None)
+            if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != Keywords.None)
             {
                 if (b.NamedStrings.Count > 0)
                 {
@@ -1798,7 +1798,7 @@ namespace PeachPDF.Html.Core.Dom
                         ApplyAtomicInlineVerticalInsets(b, box, coordinates);
                     }
                 }
-                else if (b.DerivedStyle.ActualDisplay == CssConstants.InlineFlex)
+                else if (b.DerivedStyle.ActualDisplay == Keywords.InlineFlex)
                 {
                     // Nothing at all for a box a resumed pass is only walking through. An inline-flex
                     // contributes no word ordinals, so nothing else here would notice that it belongs to
@@ -1908,7 +1908,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="coordinates">the current line coordinates</param>
         private static void ApplyAtomicInlineVerticalInsets(CssBox b, CssBox flowContext, CssLineBoxCoordinates coordinates)
         {
-            if (b.DerivedStyle.ActualDisplay is not CssConstants.InlineBlock)
+            if (b.DerivedStyle.ActualDisplay is not Keywords.InlineBlock)
                 return;
 
             var topInset = b.ActualBorderTopWidth + b.ActualPaddingTop;
@@ -2281,7 +2281,7 @@ namespace PeachPDF.Html.Core.Dom
                         break;
                     default:
                         // baseline, and PeachBaselineMiddle (the deprecated img align=middle sentinel -
-                        // see CssConstants.PeachBaselineMiddle - has no distinct inline-layout effect,
+                        // see Keywords.PeachBaselineMiddle - has no distinct inline-layout effect,
                         // matching its pre-existing behavior before this typed-storage conversion).
                         lineBox.SetBaseLine(box, baseline);
                         break;

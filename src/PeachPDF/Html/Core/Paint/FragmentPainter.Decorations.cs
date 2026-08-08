@@ -57,8 +57,8 @@ namespace PeachPDF.Html.Core.Paint
 
             RRect BoxModelRect(string value) => value switch
             {
-                CssConstants.BorderBox => rect,
-                CssConstants.ContentBox => new RRect(
+                Keywords.BorderBox => rect,
+                Keywords.ContentBox => new RRect(
                     rect.X + box.ActualBorderLeftWidth + box.ActualPaddingLeft,
                     rect.Y + box.ActualBorderTopWidth  + box.ActualPaddingTop,
                     rect.Width  - box.ActualBorderLeftWidth - box.ActualBorderRightWidth  - box.ActualPaddingLeft - box.ActualPaddingRight,
@@ -255,7 +255,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>Resolves a shadow layer's authored color string to an <see cref="RColor"/>; a null/omitted
         /// or <c>currentColor</c> value uses the element's own text color (CSS Backgrounds 3 §5).</summary>
         private static RColor ResolveShadowColor(CssBox box, string? color) =>
-            string.IsNullOrEmpty(color) || color.Equals(CssConstants.CurrentColor, StringComparison.OrdinalIgnoreCase)
+            string.IsNullOrEmpty(color) || color.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase)
                 ? box.ActualColor
                 : box.HtmlContainer!.CssParser.ParseColor(color);
 
@@ -504,12 +504,12 @@ namespace PeachPDF.Html.Core.Paint
             var textDecorationStyle = styleSource.TextDecorationStyle;
             var textDecorationColor = styleSource.TextDecorationColor;
 
-            if (string.IsNullOrEmpty(textDecorationLine) || textDecorationLine == CssConstants.None)
+            if (string.IsNullOrEmpty(textDecorationLine) || textDecorationLine == Keywords.None)
                 return;
 
             if (string.IsNullOrEmpty(textDecorationStyle))
             {
-                textDecorationStyle = CssConstants.Solid;
+                textDecorationStyle = Keywords.Solid;
             }
 
             if (!string.IsNullOrEmpty(textDecorationColor) && !box.HtmlContainer!.CssParser.IsColorValid(textDecorationColor))
@@ -529,11 +529,11 @@ namespace PeachPDF.Html.Core.Paint
 
             var dashStyle = textDecorationStyle switch
             {
-                CssConstants.Solid => RDashStyle.Solid,
-                CssConstants.Double => RDashStyle.Solid,
-                CssConstants.Dotted => RDashStyle.Dot,
-                CssConstants.Dashed => RDashStyle.Dash,
-                CssConstants.Wavy => RDashStyle.Solid,
+                Keywords.Solid => RDashStyle.Solid,
+                Keywords.Double => RDashStyle.Solid,
+                Keywords.Dotted => RDashStyle.Dot,
+                Keywords.Dashed => RDashStyle.Dash,
+                Keywords.Wavy => RDashStyle.Solid,
                 _ => RDashStyle.Solid
             };
 
@@ -547,9 +547,9 @@ namespace PeachPDF.Html.Core.Paint
             {
                 double y = line switch
                 {
-                    CssConstants.Underline => Math.Round(rectangle.Top + styleSource.ActualFont.UnderlineOffset),
-                    CssConstants.LineThrough => rectangle.Top + rectangle.Height / 2f,
-                    CssConstants.Overline => rectangle.Top,
+                    Keywords.Underline => Math.Round(rectangle.Top + styleSource.ActualFont.UnderlineOffset),
+                    Keywords.LineThrough => rectangle.Top + rectangle.Height / 2f,
+                    Keywords.Overline => rectangle.Top,
                     _ => double.NaN
                 };
 
@@ -602,8 +602,8 @@ namespace PeachPDF.Html.Core.Paint
                 if (rect.Width <= 0 || rect.Height <= 0) continue;
                 CssImagePainter.Paint(g, box.ContentImage, layerIndex: 0,
                     originRect: rect, clipRect: rect, roundedClipPath: null,
-                    positionList: "0% 0%", sizeList: CssConstants.Auto, repeatList: "no-repeat",
-                    attachmentList: CssConstants.Scroll, viewportRect: rect, box: box,
+                    positionList: "0% 0%", sizeList: Keywords.Auto, repeatList: "no-repeat",
+                    attachmentList: Keywords.Scroll, viewportRect: rect, box: box,
                     drawBrush: brush =>
                     {
                         g.DrawRectangle(brush, rect.X, rect.Y, rect.Width, rect.Height);

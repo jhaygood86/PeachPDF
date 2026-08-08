@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using System;
@@ -30,7 +31,7 @@ namespace PeachPDF.Html.Core.Utils
             // fill (the initial value) and the no-known-intrinsic-size case both stretch to the content
             // box - identical to the pre-object-fit behavior, so the common path is unchanged.
             if (naturalWidth <= 0 || naturalHeight <= 0
-                || string.Equals(objectFit, CssConstants.Fill, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(objectFit, Keywords.Fill, StringComparison.OrdinalIgnoreCase))
             {
                 return (contentBox, false);
             }
@@ -41,13 +42,13 @@ namespace PeachPDF.Html.Core.Utils
 
             var (objectWidth, objectHeight) = objectFit.ToLowerInvariant() switch
             {
-                CssConstants.Contain =>
-                    BackgroundLayerResolver.ResolveSize(CssConstants.Contain, containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box),
-                CssConstants.Cover =>
-                    BackgroundLayerResolver.ResolveSize(CssConstants.Cover, containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box),
-                CssConstants.None =>
+                Keywords.Contain =>
+                    BackgroundLayerResolver.ResolveSize(Keywords.Contain, containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box),
+                Keywords.Cover =>
+                    BackgroundLayerResolver.ResolveSize(Keywords.Cover, containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box),
+                Keywords.None =>
                     (naturalWidth, naturalHeight),
-                CssConstants.ScaleDown =>
+                Keywords.ScaleDown =>
                     ScaleDown(containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box),
                 _ => // any unrecognized value falls back to fill
                     (containerWidth, containerHeight)
@@ -71,7 +72,7 @@ namespace PeachPDF.Html.Core.Utils
             double ratio, CssBox box)
         {
             var contain = BackgroundLayerResolver.ResolveSize(
-                CssConstants.Contain, containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box);
+                Keywords.Contain, containerWidth, containerHeight, naturalWidth, naturalHeight, ratio, box);
             return naturalWidth <= contain.Width ? (naturalWidth, naturalHeight) : contain;
         }
     }

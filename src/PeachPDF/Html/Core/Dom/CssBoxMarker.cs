@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
@@ -66,7 +67,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal void ResolveDefaultContent()
         {
-            if (!Content.Trim().Equals(CssConstants.Normal, System.StringComparison.OrdinalIgnoreCase)) return;
+            if (!Content.Trim().Equals(Keywords.Normal, System.StringComparison.OrdinalIgnoreCase)) return;
             if (ParentBox is not CssBox owner) return;
 
             if (owner.ListStyleImage is not null)
@@ -78,17 +79,17 @@ namespace PeachPDF.Html.Core.Dom
 
             var listStyleType = owner.ListStyleType;
 
-            if (listStyleType.Equals(CssConstants.Disc, System.StringComparison.OrdinalIgnoreCase) ||
-                listStyleType.Equals(CssConstants.Circle, System.StringComparison.OrdinalIgnoreCase) ||
-                listStyleType.Equals(CssConstants.Square, System.StringComparison.OrdinalIgnoreCase))
+            if (listStyleType.Equals(Keywords.Disc, System.StringComparison.OrdinalIgnoreCase) ||
+                listStyleType.Equals(Keywords.Circle, System.StringComparison.OrdinalIgnoreCase) ||
+                listStyleType.Equals(Keywords.Square, System.StringComparison.OrdinalIgnoreCase))
             {
                 MarkerShape = listStyleType.ToLowerInvariant();
                 return;
             }
 
-            if (listStyleType == CssConstants.None) return; // no marker at all
+            if (listStyleType == Keywords.None) return; // no marker at all
 
-            var index = CssCounterEngine.GetCounter(this, CssConstants.ListItem)?.Value ?? 1;
+            var index = CssCounterEngine.GetCounter(this, Keywords.ListItem)?.Value ?? 1;
 
             Text = CssCounterEngine.FormatCounterValue(index, listStyleType) + ".";
         }
@@ -140,7 +141,7 @@ namespace PeachPDF.Html.Core.Dom
 
             await MeasureWordsSize(g);
 
-            if (ListStylePosition != CssConstants.Outside) return;
+            if (ListStylePosition != Keywords.Outside) return;
             if (ParentBox is not CssBox owner) return;
 
             var word = Words.Count > 0 ? Words[0] : null;

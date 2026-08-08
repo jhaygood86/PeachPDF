@@ -407,7 +407,7 @@ thead { display: table-header-group; }
         [Fact]
         public async Task TableWithMultipleTfootElements_OnlyFirstBecomesRepeatingFooter()
         {
-            // Arrange - the CssConstants.TableFooterGroup mirror of
+            // Arrange - the Keywords.TableFooterGroup mirror of
             // TableWithMultipleTheadElements_OnlyFirstBecomesRepeatingHeader above: a second
             // <tfoot> has nowhere to detach to (the first already took _footerBox), so
             // AssignBoxKinds adds it to _bodyRows as a single row-like entry instead.

@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using System;
 
 namespace PeachPDF.Html.Core.Utils
@@ -20,10 +21,10 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         internal static double? ResolveSkewSinus(string fontStyleValue)
         {
-            if (string.IsNullOrEmpty(fontStyleValue) || !fontStyleValue.StartsWith(CssConstants.Oblique, StringComparison.Ordinal))
+            if (string.IsNullOrEmpty(fontStyleValue) || !fontStyleValue.StartsWith(Keywords.Oblique, StringComparison.Ordinal))
                 return null;
 
-            var rest = fontStyleValue[CssConstants.Oblique.Length..].Trim();
+            var rest = fontStyleValue[Keywords.Oblique.Length..].Trim();
             if (rest.Length == 0)
                 return null;
 

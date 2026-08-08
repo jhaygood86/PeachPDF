@@ -114,7 +114,7 @@ namespace PeachPDF.Tests.Integration
         {
             // -peachpdf-baseline-middle (same idea as -webkit-baseline-middle) is a PeachPDF-internal
             // sentinel, never produced by parsing authored CSS text - see
-            // CssConstants.PeachBaselineMiddle and VerticalAlignment.PeachBaselineMiddle. It has no
+            // Keywords.PeachBaselineMiddle and VerticalAlignment.PeachBaselineMiddle. It has no
             // distinct inline-layout effect (CssLayoutEngine.ApplyVerticalAlignment's switch falls
             // through to the baseline default), matching this attribute's pre-existing behavior.
             var (root, _) = await BuildAndLayout(Wrap("<img id='i' align='middle' src='x.png' width='10' height='10'>"));
@@ -332,15 +332,15 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task FaceAttribute_WithResolvableFont_SetsFontFamily()
         {
-            // Deliberately NOT CssConstants.DefaultFont: DerivedStyle lazily resolves a null/empty
+            // Deliberately NOT DefaultFontResolver.DefaultFont: DerivedStyle lazily resolves a null/empty
             // FontFamily to the default font once layout runs (see the "unresolvable" test below), so
             // asserting the default font here wouldn't distinguish "GetFontFamilyByName actually
             // resolved this" from "resolution was skipped entirely and the fallback papered over it".
             // Picking an installed family that ISN'T the platform default keeps this test meaningful
             // across the CI matrix (Windows/macOS/Linux each resolve a different default).
             var adapter = new PdfSharpAdapter();
-            var alternativeFont = CssConstants.GetInstalledFontFamilyNames()
-                .First(f => !f.Equals(CssConstants.DefaultFont, StringComparison.OrdinalIgnoreCase) && adapter.IsFontExists(f));
+            var alternativeFont = DefaultFontResolver.GetInstalledFontFamilyNames()
+                .First(f => !f.Equals(DefaultFontResolver.DefaultFont, StringComparison.OrdinalIgnoreCase) && adapter.IsFontExists(f));
 
             var (root, _) = await BuildAndLayout(Wrap($"<font id='f' face='{alternativeFont}'>x</font>"));
             var font = FindById(root, "f")!;
@@ -354,13 +354,13 @@ namespace PeachPDF.Tests.Integration
         {
             // GetFontFamilyByName returns null when no candidate resolves (see
             // CssValueParserFontFamilyTests), but DerivedStyle lazily resolves a null/empty FontFamily to
-            // CssConstants.DefaultFont once layout runs (the same fallback CSS's own unresolvable
+            // DefaultFontResolver.DefaultFont once layout runs (the same fallback CSS's own unresolvable
             // font-family gets) - FontFamilyList is untouched by that fallback, so it still holds the raw
             // attribute text.
             var (root, _) = await BuildAndLayout(Wrap("<font id='f' face='__DefinitelyNotARealFontFamily__'>x</font>"));
             var font = FindById(root, "f")!;
 
-            Assert.Equal(CssConstants.DefaultFont, font.FontFamily);
+            Assert.Equal(DefaultFontResolver.DefaultFont, font.FontFamily);
             Assert.Equal("__DefinitelyNotARealFontFamily__", font.FontFamilyList);
         }
 

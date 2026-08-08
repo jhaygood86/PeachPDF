@@ -668,16 +668,16 @@ namespace PeachPDF.Html.Core.Dom
                 if (_actualFontVariantLigatures is { } cached) return cached;
 
                 var value = Style.Font.FontVariantLigatures;
-                if (value == CssConstants.None)
+                if (value == Keywords.None)
                 {
                     _actualFontVariantLigatures = LigatureFeatures.Required;
                     return LigatureFeatures.Required;
                 }
 
                 var tokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                var resolved = tokens.Contains(CssConstants.NoCommonLigatures) ? LigatureFeatures.Required : LigatureFeatures.Default;
-                if (tokens.Contains(CssConstants.DiscretionaryLigatures)) resolved |= LigatureFeatures.Discretionary;
-                if (tokens.Contains(CssConstants.HistoricalLigatures)) resolved |= LigatureFeatures.Historical;
+                var resolved = tokens.Contains(Keywords.NoCommonLigatures) ? LigatureFeatures.Required : LigatureFeatures.Default;
+                if (tokens.Contains(Keywords.DiscretionaryLigatures)) resolved |= LigatureFeatures.Discretionary;
+                if (tokens.Contains(Keywords.HistoricalLigatures)) resolved |= LigatureFeatures.Historical;
 
                 _actualFontVariantLigatures = resolved;
                 return resolved;
@@ -701,12 +701,12 @@ namespace PeachPDF.Html.Core.Dom
 
                 var requested = Style.Font.FontVariantCaps switch
                 {
-                    CssConstants.SmallCaps => FontVariantCapsFeature.SmallCaps,
-                    CssConstants.AllSmallCaps => FontVariantCapsFeature.AllSmallCaps,
-                    CssConstants.PetiteCaps => FontVariantCapsFeature.PetiteCaps,
-                    CssConstants.AllPetiteCaps => FontVariantCapsFeature.AllPetiteCaps,
-                    CssConstants.Unicase => FontVariantCapsFeature.Unicase,
-                    CssConstants.TitlingCaps => FontVariantCapsFeature.TitlingCaps,
+                    Keywords.SmallCaps => FontVariantCapsFeature.SmallCaps,
+                    Keywords.AllSmallCaps => FontVariantCapsFeature.AllSmallCaps,
+                    Keywords.PetiteCaps => FontVariantCapsFeature.PetiteCaps,
+                    Keywords.AllPetiteCaps => FontVariantCapsFeature.AllPetiteCaps,
+                    Keywords.Unicase => FontVariantCapsFeature.Unicase,
+                    Keywords.TitlingCaps => FontVariantCapsFeature.TitlingCaps,
                     _ => FontVariantCapsFeature.None,
                 };
 
@@ -735,14 +735,14 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     resolved |= token switch
                     {
-                        CssConstants.LiningNums => NumericFeatures.LiningNums,
-                        CssConstants.OldstyleNums => NumericFeatures.OldstyleNums,
-                        CssConstants.ProportionalNums => NumericFeatures.ProportionalNums,
-                        CssConstants.TabularNums => NumericFeatures.TabularNums,
-                        CssConstants.DiagonalFractions => NumericFeatures.DiagonalFractions,
-                        CssConstants.StackedFractions => NumericFeatures.StackedFractions,
-                        CssConstants.Ordinal => NumericFeatures.Ordinal,
-                        CssConstants.SlashedZero => NumericFeatures.SlashedZero,
+                        Keywords.LiningNums => NumericFeatures.LiningNums,
+                        Keywords.OldstyleNums => NumericFeatures.OldstyleNums,
+                        Keywords.ProportionalNums => NumericFeatures.ProportionalNums,
+                        Keywords.TabularNums => NumericFeatures.TabularNums,
+                        Keywords.DiagonalFractions => NumericFeatures.DiagonalFractions,
+                        Keywords.StackedFractions => NumericFeatures.StackedFractions,
+                        Keywords.Ordinal => NumericFeatures.Ordinal,
+                        Keywords.SlashedZero => NumericFeatures.SlashedZero,
                         _ => NumericFeatures.None,
                     };
                 }
@@ -767,15 +767,15 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     resolved |= token switch
                     {
-                        CssConstants.Jis78Forms => EastAsianFeatures.Jis78,
-                        CssConstants.Jis83Forms => EastAsianFeatures.Jis83,
-                        CssConstants.Jis90Forms => EastAsianFeatures.Jis90,
-                        CssConstants.Jis04Forms => EastAsianFeatures.Jis04,
-                        CssConstants.Simplified => EastAsianFeatures.Simplified,
-                        CssConstants.Traditional => EastAsianFeatures.Traditional,
-                        CssConstants.FullWidth => EastAsianFeatures.FullWidth,
-                        CssConstants.ProportionalWidth => EastAsianFeatures.ProportionalWidth,
-                        CssConstants.Ruby => EastAsianFeatures.Ruby,
+                        Keywords.Jis78Forms => EastAsianFeatures.Jis78,
+                        Keywords.Jis83Forms => EastAsianFeatures.Jis83,
+                        Keywords.Jis90Forms => EastAsianFeatures.Jis90,
+                        Keywords.Jis04Forms => EastAsianFeatures.Jis04,
+                        Keywords.Simplified => EastAsianFeatures.Simplified,
+                        Keywords.Traditional => EastAsianFeatures.Traditional,
+                        Keywords.FullWidth => EastAsianFeatures.FullWidth,
+                        Keywords.ProportionalWidth => EastAsianFeatures.ProportionalWidth,
+                        Keywords.Ruby => EastAsianFeatures.Ruby,
                         _ => EastAsianFeatures.None,
                     };
                 }
@@ -800,7 +800,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (_actualFontFeatureSettings is { } cached) return cached;
 
                 var value = Style.Font.FontFeatureSettings;
-                var resolved = value == CssConstants.Normal
+                var resolved = value == Keywords.Normal
                     ? []
                     : ParseFontFeatureSettings(value);
 
@@ -823,8 +823,8 @@ namespace PeachPDF.Html.Core.Dom
                 if (parts.Length > 1)
                 {
                     var rawValue = parts[1];
-                    if (rawValue == CssConstants.Off) settingValue = 0;
-                    else if (rawValue != CssConstants.On) int.TryParse(rawValue, out settingValue);
+                    if (rawValue == Keywords.Off) settingValue = 0;
+                    else if (rawValue != Keywords.On) int.TryParse(rawValue, out settingValue);
                 }
 
                 entries.Add((tag, settingValue));
@@ -874,7 +874,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (string.IsNullOrEmpty(Style.Font.FontFamily))
                 {
-                    Owner.FontFamily = CssConstants.DefaultFont;
+                    Owner.FontFamily = DefaultFontResolver.DefaultFont;
                 }
 
                 // Defensive: FontArea's own default already seeds FontSize to "medium" (a real Keyword),
@@ -884,13 +884,13 @@ namespace PeachPDF.Html.Core.Dom
                 if (Style.Font.FontSize.Value is { IsKeyword: false, IsValue: false })
                 {
                     Owner.FontSize = CssKeywordOrValueParser.FromCssText<FontSizeKeyword, LengthOrCalc>(
-                        CssConstants.FontSize.ToString(CultureInfo.InvariantCulture) + "pt",
+                        DefaultFontResolver.FontSize.ToString(CultureInfo.InvariantCulture) + "pt",
                         Map.FontSizeKeywords, CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);
                 }
 
                 var st = GetActualFontStyleFlags();
 
-                double parentSize = CssConstants.FontSize;
+                double parentSize = DefaultFontResolver.FontSize;
                 double remSize;
 
                 var parentBox = Owner.ParentBox;
@@ -917,7 +917,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    remSize = CssConstants.FontSize;
+                    remSize = DefaultFontResolver.FontSize;
                 }
 
                 // For a box with text content this basis is unreachable in practice - word-splitting
@@ -931,11 +931,11 @@ namespace PeachPDF.Html.Core.Dom
                     containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt);
 
                 _actualFont = Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
-                              ?? Owner.GetCachedFont(CssConstants.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus);
+                              ?? Owner.GetCachedFont(DefaultFontResolver.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus);
 
                 if (_actualFont is null)
                 {
-                    throw new HtmlRenderException($"Cannot find font: {Style.Font.FontFamily} and Default Font {CssConstants.DefaultFont} is not installed", HtmlRenderErrorType.General);
+                    throw new HtmlRenderException($"Cannot find font: {Style.Font.FontFamily} and Default Font {DefaultFontResolver.DefaultFont} is not installed", HtmlRenderErrorType.General);
                 }
 
                 return _actualFont!;
@@ -1015,7 +1015,7 @@ namespace PeachPDF.Html.Core.Dom
             // FontStyle may be the bare "oblique" keyword or CSS Fonts Level 4's "oblique <angle>" form
             // (e.g. "oblique 10deg") - both are italic-equivalent for RFontStyle purposes, so match by
             // prefix rather than exact equality.
-            if (Style.Font.FontStyle is CssConstants.Italic || Style.Font.FontStyle.StartsWith(CssConstants.Oblique, StringComparison.Ordinal))
+            if (Style.Font.FontStyle is Keywords.Italic || Style.Font.FontStyle.StartsWith(Keywords.Oblique, StringComparison.Ordinal))
             {
                 st |= RFontStyle.Italic;
             }
@@ -1108,7 +1108,7 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// This box's <c>display</c>, blockified per CSS 2.1 §9.7 when <see cref="Owner"/> is floated
-        /// (<c>Style.DisplayPositioning.Float</c> is not <see cref="CssConstants.None"/>) - the value layout
+        /// (<c>Style.DisplayPositioning.Float</c> is not <see cref="Keywords.None"/>) - the value layout
         /// and paint should actually use. <c>Style.DisplayPositioning.Display</c> itself stays the raw
         /// cascaded keyword (what the cascade produced, e.g. for CSS-OM <c>getPropertyValue</c> readback),
         /// not blockified. Recomputed fresh every call, not cached - a single enum switch, same cost class
@@ -1123,19 +1123,19 @@ namespace PeachPDF.Html.Core.Dom
 
                 return area.Display.Value switch
                 {
-                    DisplayMode.Inline => CssConstants.Block,
-                    DisplayMode.InlineBlock => CssConstants.Block,
-                    DisplayMode.InlineTable => CssConstants.Table,
-                    DisplayMode.TableRow => CssConstants.Block,
-                    DisplayMode.TableRowGroup => CssConstants.Block,
-                    DisplayMode.TableColumn => CssConstants.Block,
-                    DisplayMode.TableColumnGroup => CssConstants.Block,
-                    DisplayMode.TableCell => CssConstants.Block,
-                    DisplayMode.TableCaption => CssConstants.Block,
-                    DisplayMode.TableHeaderGroup => CssConstants.Block,
-                    DisplayMode.TableFooterGroup => CssConstants.Block,
-                    DisplayMode.InlineFlex => CssConstants.Flex,
-                    DisplayMode.InlineGrid => CssConstants.Grid,
+                    DisplayMode.Inline => Keywords.Block,
+                    DisplayMode.InlineBlock => Keywords.Block,
+                    DisplayMode.InlineTable => Keywords.Table,
+                    DisplayMode.TableRow => Keywords.Block,
+                    DisplayMode.TableRowGroup => Keywords.Block,
+                    DisplayMode.TableColumn => Keywords.Block,
+                    DisplayMode.TableColumnGroup => Keywords.Block,
+                    DisplayMode.TableCell => Keywords.Block,
+                    DisplayMode.TableCaption => Keywords.Block,
+                    DisplayMode.TableHeaderGroup => Keywords.Block,
+                    DisplayMode.TableFooterGroup => Keywords.Block,
+                    DisplayMode.InlineFlex => Keywords.Flex,
+                    DisplayMode.InlineGrid => Keywords.Grid,
                     _ => area.Display.ToString()
                 };
             }

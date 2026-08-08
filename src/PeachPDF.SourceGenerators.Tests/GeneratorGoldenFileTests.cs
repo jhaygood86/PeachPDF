@@ -169,7 +169,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             // Issue #598: a case-insensitively-matched keyword must be stored in its canonical (as-authored)
             // casing, not the raw input — every downstream layout/paint comparison is an ordinal match
-            // against a lowercase CssConstants.* literal.
+            // against a lowercase Keywords.* literal.
             Assert.Contains(
                 "box.Transform = value.Equals(\"border-box\", global::System.StringComparison.OrdinalIgnoreCase) ? \"border-box\" : " +
                 "value.Equals(\"content-box\", global::System.StringComparison.OrdinalIgnoreCase) ? \"content-box\" : value;",

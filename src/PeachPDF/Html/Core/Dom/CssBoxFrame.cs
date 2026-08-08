@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
@@ -82,7 +83,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private void SetErrorBorder()
         {
-            SetAllBorders(CssConstants.Solid, "2px", "#A0A0A0");
+            SetAllBorders(Keywords.Solid, "2px", "#A0A0A0");
             BorderRightColor = BorderBottomColor = "#E3E3E3";
         }
 

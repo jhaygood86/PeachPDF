@@ -550,7 +550,7 @@ namespace PeachPDF.Tests.Integration
             internal StoppingCell(CssBox row) : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
                 Record = new InlineBreakToken(this, ResumeSlotIndex: 1, ResumePath: [],
                     ResumeWordIndex: 0, CompletedLineCount: 1);
             }

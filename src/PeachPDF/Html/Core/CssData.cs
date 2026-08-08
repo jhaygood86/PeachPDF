@@ -773,8 +773,8 @@ namespace PeachPDF.Html.Core
 
         private static bool HasFirstLineSubject(ISelector selector) => selector switch
         {
-            CompoundSelector compound => compound.LastOrDefault() is PseudoElementSelector { Name: CssConstants.FirstLine },
-            PseudoElementSelector pseudo => pseudo.Name == CssConstants.FirstLine,
+            CompoundSelector compound => compound.LastOrDefault() is PseudoElementSelector { Name: PseudoElementNames.FirstLine },
+            PseudoElementSelector pseudo => pseudo.Name == PseudoElementNames.FirstLine,
             _ => false
         };
 
@@ -831,7 +831,7 @@ namespace PeachPDF.Html.Core
 
                 switch (pseudoElementSelector.Name)
                 {
-                    case CssConstants.Before when !box.Boxes.Any(b => b.IsBeforePseudoElement):
+                    case PseudoElementNames.Before when !box.Boxes.Any(b => b.IsBeforePseudoElement):
                         {
                             var beforePseudoBox = new CssBox(box, null)
                             {
@@ -843,7 +843,7 @@ namespace PeachPDF.Html.Core
                             box.Boxes.Insert(0, beforePseudoBox);
                             break;
                         }
-                    case CssConstants.After when !box.Boxes.Any(b => b.IsAfterPseudoElement):
+                    case PseudoElementNames.After when !box.Boxes.Any(b => b.IsAfterPseudoElement):
                         {
                             var afterPseudoBox = new CssBox(box, null)
                             {
@@ -874,7 +874,7 @@ namespace PeachPDF.Html.Core
                     // EnsureListItemMarkers pass, since selector matching can't key off a computed
                     // Display value. See CssBoxMarker for how the marker box owns its own content
                     // resolution, sizing, and painting from here on.
-                    case CssConstants.Marker when !box.Boxes.Any(b => b.IsMarkerPseudoElement):
+                    case PseudoElementNames.Marker when !box.Boxes.Any(b => b.IsMarkerPseudoElement):
                         {
                             var markerPseudoBox = new CssBoxMarker(box);
 
@@ -889,7 +889,7 @@ namespace PeachPDF.Html.Core
                     // DomParser.ApplyFirstLetterPseudoElements) since it needs to know which of this
                     // box's descendants are block-level, which isn't reliably resolved until each
                     // descendant's own cascade pass has run.
-                    case CssConstants.FirstLetter:
+                    case PseudoElementNames.FirstLetter:
                         box.MatchesFirstLetterSelector = true;
                         break;
                 }
@@ -1017,10 +1017,10 @@ namespace PeachPDF.Html.Core
 
             switch (pseudoElementSelector.Name)
             {
-                case CssConstants.Before when box.IsBeforePseudoElement:
-                case CssConstants.After when box.IsAfterPseudoElement:
-                case CssConstants.Marker when box.IsMarkerPseudoElement:
-                case CssConstants.FirstLetter when box.IsFirstLetterPseudoElement:
+                case PseudoElementNames.Before when box.IsBeforePseudoElement:
+                case PseudoElementNames.After when box.IsAfterPseudoElement:
+                case PseudoElementNames.Marker when box.IsMarkerPseudoElement:
+                case PseudoElementNames.FirstLetter when box.IsFirstLetterPseudoElement:
                     return true;
                 default:
                     return false;
