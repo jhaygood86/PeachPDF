@@ -245,7 +245,7 @@
     },
     {
       "name": "fill-opacity",
-      "comment": "Same shape as opacity (see its comment) — TryParseOpacity's own fallback (1.0) already equals both the initial value and SvgElement's FillOpacity constructor default, so 'leave field unwritten on failure' reproduces SvgTreeBuilder.ApplyCommon's existing present-but-invalid behavior exactly (distinct from stroke-width/etc., which fall back to inherited instead).",
+      "comment": "Falls back to the inherited value on an invalid value (invalidBehavior: inherit), per SVG 1.1 §11.4 — see #675; SvgTreeBuilder.ApplyCommon checks TrySet's return value and assigns inherited.FillOpacity on failure, the same shape stroke-width/etc. use.",
       "inherited": true,
       "initialValue": "1",
       "cssDataType": "svg-opacity",
@@ -253,12 +253,12 @@
         "propertyPath": "FillOpacity",
         "csharpDataType": "double",
         "inheritedFrom": "FillOpacity",
-        "invalidBehavior": "leave-unset"
+        "invalidBehavior": "inherit"
       }
     },
     {
       "name": "stroke-opacity",
-      "comment": "Same shape as fill-opacity (see its comment).",
+      "comment": "Same shape as fill-opacity (see its comment) — see #675.",
       "inherited": true,
       "initialValue": "1",
       "cssDataType": "svg-opacity",
@@ -266,7 +266,7 @@
         "propertyPath": "StrokeOpacity",
         "csharpDataType": "double",
         "inheritedFrom": "StrokeOpacity",
-        "invalidBehavior": "leave-unset"
+        "invalidBehavior": "inherit"
       }
     },
     {

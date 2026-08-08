@@ -3128,6 +3128,14 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             """<svg viewBox="0 0 140 100" width="90" height="64"><g fill="none" stroke="#2980b9" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M20,75 L45,25 L70,75" stroke-linecap="not-a-cap" stroke-linejoin="not-a-join"/></g></svg>""",
             "group's round cap/join survive an invalid override")
     ) +
+    Row(
+        SvgSwatch("invalid fill/stroke inherit from group",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g fill="#8e44ad" stroke="#2c3e50" stroke-width="4"><circle cx="50" cy="50" r="35" fill="not-a-color" stroke="not-a-color"/></g></svg>""",
+            "g fill/stroke set > circle fill/stroke=\"not-a-color\": still purple with dark outline"),
+        SvgSwatch("invalid fill-opacity/stroke-opacity inherit from group",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g fill-opacity="0.4" stroke-opacity="0.4"><circle cx="50" cy="50" r="35" fill="#e74c3c" fill-opacity="not-a-number" stroke="#2c3e50" stroke-width="10" stroke-opacity="not-a-number"/></g></svg>""",
+            "group's 0.4 fill/stroke opacity survive an invalid override, not reset to 1.0")
+    ) +
 
     "<h2>10 — Transforms: rotate() &amp; skew()</h2>" +
     Row(
