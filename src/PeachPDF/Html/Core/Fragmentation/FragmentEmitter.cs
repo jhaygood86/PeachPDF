@@ -880,6 +880,46 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
+        /// Re-freezes every stale slot behind <paramref name="slot"/> right now, instead of leaving it for
+        /// <see cref="Finish"/>'s own replay to rediscover once the whole document is done.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="InvalidateFrom"/> is reached from several places that reopen exactly one already-frozen
+        /// slot without ever moving the driver's own resumption point back to it — a pure block-axis
+        /// translation (<c>CssBox</c>'s <c>Location</c> setter, via <c>OnBlockAxisRelocated</c>), a multi-
+        /// column refill, a rectangle reset — none of them a pass re-entry, so none of them has a token to
+        /// hand the driver for a slot it is not about to resume into. Left alone, such a slot sits in
+        /// <see cref="_stale"/> until <see cref="Finish"/>, whose own replay is a full, unpruned walk from the
+        /// document root for every one of them (~145,000 <c>BuildDraft</c> calls apiece on the css4.pub
+        /// Icelandic Dictionary) precisely because writing a new pruning mark mid-replay cannot tell "this
+        /// box's content is behind us for good" apart from "behind us only until the next stale slot in this
+        /// same batch" — see <see cref="Finish"/>'s own remarks. Called here, one slot behind the pass the
+        /// driver is *about* to run, that ambiguity does not exist: everything at or after <paramref name="slot"/>
+        /// has not been touched by this layout yet, so nothing still to come can retroactively give a lower,
+        /// already-stale slot more content. That is the same fact <see cref="EmitPass"/>'s own <c>frontier</c>
+        /// argument rests on for an ordinary forward slot; a slot caught up here just reaches that state on a
+        /// later call than the one that first opened it, rather than the one right after.
+        /// </para>
+        /// <para>
+        /// Plain <see cref="EmitSlot"/>, not <see cref="EmitPass"/>: there is no meaningful incoming/outgoing
+        /// resumption record to hand a slot nothing here re-enters as a pass, and none is needed —
+        /// <see cref="Finish"/>'s own replay re-freezes every stale slot the identical way, without one, and
+        /// no test has ever depended on continuation bookkeeping <see cref="Finish"/> itself never
+        /// re-establishes for a slot it heals.
+        /// </para>
+        /// </remarks>
+        internal void CatchUpStaleSlotsBehind(int slot)
+        {
+            if (_stale.Count == 0) return;
+
+            foreach (var stale in new List<int>(_stale))
+            {
+                if (stale < slot) EmitSlot(stale, mayWrite: true, frontier: stale >= _lastEmittedSlot);
+            }
+        }
+
+        /// <summary>
         /// Materializes the immutable tree. Returns an empty tree when there is nothing to paginate.
         /// </summary>
         internal FragmentTree Finish()
