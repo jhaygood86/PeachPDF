@@ -361,10 +361,17 @@ namespace PeachPDF.Html.Core.Dom
             var len = new CssLength(length);
             if (len.Unit == CssUnit.Ems)
             {
-                // GetEmHeight() is the em size in layout units (points), and the result is later
-                // re-parsed through ParseLength - so serialize as "pt" (identity), not "px" (which
-                // now resolves at the spec-correct 0.75pt and would shrink the value on re-parse).
-                length = len.ConvertEmToPoints(GetEmHeight()).ToString();
+                // GetEmHeight() is in the adapter's device-scaled font-measurement space (see
+                // DerivedStyle.ActualFont's own doc comment) - CreateFontInt divides a requested size
+                // by PixelsPerPoint once to get there, so that division has to be undone here before
+                // treating it as true CSS points, the same correction ResolveFontSizeValueComputation
+                // below applies to parent.ActualFont.Size. Usually invisible (PixelsPerPoint defaults
+                // to 1.0) but wrong by a factor of PixelsPerPoint under a non-default PixelsPerInch or
+                // ShrinkToFit/ScaleToPageSize (issue #631). The result is later re-parsed through
+                // ParseLength - so serialize as "pt" (identity), not "px" (which now resolves at the
+                // spec-correct 0.75pt and would shrink the value on re-parse).
+                var pixelsPerPoint = (HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                length = len.ConvertEmToPoints(GetEmHeight() * pixelsPerPoint).ToString();
             }
             return length;
         }

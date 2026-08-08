@@ -320,13 +320,18 @@ namespace PeachPDF.Html.Core.Parse
             // 1px = 0.75pt via Length.PointsPerPx) resolve straight to raw, unscaled points - for
             // those, multiplying by pixelsPerPoint once at the end (below) is exactly the scaling
             // needed. But its percentage/em/rem branches resolve against
-            // hundredPercent/emFactor/remFactor - here, htmlContainer.PageSize.Width and
-            // root.GetEmHeight()/GetRemHeight(), which are THEMSELVES already in pixelsPerPoint-scaled
-            // internal space - so passing them through unscaled and then multiplying the whole result
-            // by pixelsPerPoint again would double-scale a percentage/em/rem @page margin. Dividing
-            // these three bases down to true-point space first, so ParseLength's result is uniformly
-            // in true points regardless of which unit branch it took, then scaling that single result
-            // by pixelsPerPoint once, keeps every unit type correct.
+            // hundredPercent/emFactor/remFactor - here, htmlContainer.PageSize.Width (internal
+            // pixel space, i.e. true points already multiplied by PixelsPerPoint - see
+            // CascadeApplyPageStyles's own doc comment) and root.GetEmHeight()/GetRemHeight() (the
+            // adapter's device-scaled font-measurement space, i.e. true points already DIVIDED by
+            // PixelsPerPoint - CreateFontInt's own doc comment, and DerivedStyle.ActualFont's) - these
+            // two scale in OPPOSITE directions relative to PixelsPerPoint, so each needs its own
+            // correction to reach true-point space: PageSize.Width is divided, GetEmHeight()/
+            // GetRemHeight() are multiplied (issue #631 - the previous code divided both, which left
+            // the em/rem basis wrong by PixelsPerPoint² once the final multiply below re-applied the
+            // scaling). Normalizing all three bases to true-point space first, so ParseLength's result
+            // is uniformly in true points regardless of which unit branch it took, then scaling that
+            // single result by pixelsPerPoint once, keeps every unit type correct.
             // The same true-point bases the base rule resolves relative units against, captured as
             // this parse pass's shared snapshot so per-page rules (resolved later, at band-geometry/
             // paint time via PageRuleResolver.ResolvePageMargins) see identical numbers - SetContent
@@ -343,12 +348,12 @@ namespace PeachPDF.Html.Core.Parse
                 .Select(r => r.Style?.FontSize)
                 .LastOrDefault(fs => !string.IsNullOrEmpty(fs));
             var emPt = string.IsNullOrEmpty(basePageFontSize)
-                ? root.GetEmHeight() / pixelsPerPoint
+                ? root.GetEmHeight() * pixelsPerPoint
                 : MarginBoxRenderer.ResolveFontSizePt(basePageFontSize);
 
             var lengthContext = new PageLengthContext(
                 emPt,
-                root.GetRemHeight() / pixelsPerPoint,
+                root.GetRemHeight() * pixelsPerPoint,
                 htmlContainer.PageSize.Width / pixelsPerPoint);
             htmlContainer.PageLengthContext = lengthContext;
 
