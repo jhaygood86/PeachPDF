@@ -225,7 +225,7 @@
     },
     {
       "name": "fill-rule",
-      "comment": "Preserves SvgValueParsers.TryParseFillRule's current silent fallback to 'nonzero' on an invalid value (invalidBehavior: leave-unset, since SvgElement's own FillRule constructor default is already Nonzero) rather than SVG 1.1 §11.4's specified fallback to the inherited value — an existing spec deviation, encoded as-is and tracked separately (see the stroke-linecap entry's identical note), not fixed by this migration. supportedValues/keywordComparison document the real grammar; customValidator/customSetter reuse the shared TryParseFillRule parser directly rather than re-deriving a keyword→enum mapping (customSetter code runs only after Validate_FillRule already passed, so the second TryParseFillRule call here can never itself fail).",
+      "comment": "Falls back to the inherited value on an invalid value (invalidBehavior: inherit), per SVG 1.1 §11.4 — see #599; SvgTreeBuilder.ApplyCommon checks TrySet's return value and assigns inherited.FillRule on failure, the same shape stroke-width/etc. use. supportedValues/keywordComparison document the real grammar; customValidator/customSetter reuse the shared TryParseFillRule parser directly rather than re-deriving a keyword→enum mapping (customSetter code runs only after Validate_FillRule already passed, so the second TryParseFillRule call here can never itself fail).",
       "inherited": true,
       "initialValue": "nonzero",
       "cssDataType": "keyword",
@@ -238,7 +238,7 @@
         "propertyPath": "FillRule",
         "csharpDataType": "RFillMode",
         "inheritedFrom": "FillRule",
-        "invalidBehavior": "leave-unset",
+        "invalidBehavior": "inherit",
         "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseFillRule({value}, out _)",
         "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseFillRule({value}, out var parsed);\n{element}.FillRule = parsed;"
       }
@@ -271,7 +271,7 @@
     },
     {
       "name": "stroke-linecap",
-      "comment": "Preserves SvgValueParsers.TryParseLineCap's current silent fallback to 'butt' on an invalid value (invalidBehavior: leave-unset, since SvgElement's own StrokeLineCap constructor default is already Butt) rather than SVG 1.1 §11.4's specified fallback to the inherited value — an existing spec deviation, encoded as-is and tracked separately, not fixed by this migration. customValidator/customSetter reuse the shared TryParseLineCap parser directly (see the fill-rule entry's identical note) instead of the inline enum-mapping switch this entry used before the SVG cutover.",
+      "comment": "Falls back to the inherited value on an invalid value (invalidBehavior: inherit), per SVG 1.1 §11.4 — see #599; SvgTreeBuilder.ApplyCommon checks TrySet's return value and assigns inherited.StrokeLineCap on failure, the same shape stroke-width/etc. use. customValidator/customSetter reuse the shared TryParseLineCap parser directly (see the fill-rule entry's identical note) instead of the inline enum-mapping switch this entry used before the SVG cutover.",
       "inherited": true,
       "initialValue": "butt",
       "cssDataType": "keyword",
@@ -285,14 +285,14 @@
         "propertyPath": "StrokeLineCap",
         "csharpDataType": "RLineCap",
         "inheritedFrom": "StrokeLineCap",
-        "invalidBehavior": "leave-unset",
+        "invalidBehavior": "inherit",
         "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineCap({value}, out _)",
         "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineCap({value}, out var parsed);\n{element}.StrokeLineCap = parsed;"
       }
     },
     {
       "name": "stroke-linejoin",
-      "comment": "Same shape as stroke-linecap (see its comment) — TryParseLineJoin's own fallback (Miter) already equals SvgElement's StrokeLineJoin constructor default.",
+      "comment": "Same shape as stroke-linecap (see its comment) — falls back to the inherited value on an invalid value (invalidBehavior: inherit), per SVG 1.1 §11.4 — see #599.",
       "inherited": true,
       "initialValue": "miter",
       "cssDataType": "keyword",
@@ -306,7 +306,7 @@
         "propertyPath": "StrokeLineJoin",
         "csharpDataType": "RLineJoin",
         "inheritedFrom": "StrokeLineJoin",
-        "invalidBehavior": "leave-unset",
+        "invalidBehavior": "inherit",
         "customValidator": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineJoin({value}, out _)",
         "customSetter": "global::PeachPDF.Svg.SvgValueParsers.TryParseLineJoin({value}, out var parsed);\n{element}.StrokeLineJoin = parsed;"
       }

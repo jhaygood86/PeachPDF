@@ -841,9 +841,11 @@ namespace PeachPDF.Svg
             // decision (which genuinely differs per property — see css-properties.json's svg.invalidBehavior
             // comments) and delegates only the parse-and-validate step to the generated registry, whose
             // TrySet already returns false without writing the field on failure. That "leave unset on
-            // failure" contract reproduces the old hardcoded-keyword fallback for fill/stroke/fill-rule/
-            // fill-opacity/stroke-opacity/stroke-linecap/stroke-linejoin exactly, because SvgElement's own
-            // constructor defaults were already chosen to equal those hardcoded fallbacks.
+            // failure" contract reproduces the old hardcoded-keyword fallback for fill/stroke/fill-opacity/
+            // stroke-opacity exactly, because SvgElement's own constructor defaults were already chosen to
+            // equal those hardcoded fallbacks. fill-rule/stroke-linecap/stroke-linejoin instead check
+            // TrySet's return value and fall back to the inherited value on failure, per SVG 1.1 §11.4
+            // (see #599) — the same shape stroke-width/-miterlimit/-dashoffset/-dasharray already use.
 
             var fillAttr = Attr("fill");
             if (fillAttr is null || fillAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
@@ -879,11 +881,12 @@ namespace PeachPDF.Svg
 
             element.Transform = SvgTransformParser.Parse(Attr("transform"));
 
+            // fill-rule/stroke-linecap/stroke-linejoin fall back to the INHERITED value (not a hardcoded
+            // default) on an invalid value, per SVG 1.1 §11.4 - same shape as stroke-width/etc. above.
             var fillRuleAttr = Attr("fill-rule");
-            if (fillRuleAttr is null || fillRuleAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            if (fillRuleAttr is null || fillRuleAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "fill-rule", fillRuleAttr, in ctx))
                 element.FillRule = inherited.FillRule;
-            else
-                SvgPropertyRegistry.TrySet(element, "fill-rule", fillRuleAttr, in ctx);
 
             var fillOpacityAttr = Attr("fill-opacity");
             if (fillOpacityAttr is null || fillOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
@@ -898,16 +901,14 @@ namespace PeachPDF.Svg
                 SvgPropertyRegistry.TrySet(element, "stroke-opacity", strokeOpacityAttr, in ctx);
 
             var lineCapAttr = Attr("stroke-linecap");
-            if (lineCapAttr is null || lineCapAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            if (lineCapAttr is null || lineCapAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "stroke-linecap", lineCapAttr, in ctx))
                 element.StrokeLineCap = inherited.StrokeLineCap;
-            else
-                SvgPropertyRegistry.TrySet(element, "stroke-linecap", lineCapAttr, in ctx);
 
             var lineJoinAttr = Attr("stroke-linejoin");
-            if (lineJoinAttr is null || lineJoinAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            if (lineJoinAttr is null || lineJoinAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "stroke-linejoin", lineJoinAttr, in ctx))
                 element.StrokeLineJoin = inherited.StrokeLineJoin;
-            else
-                SvgPropertyRegistry.TrySet(element, "stroke-linejoin", lineJoinAttr, in ctx);
 
             var dashArrayAttr = Attr("stroke-dasharray");
             if (dashArrayAttr is null || dashArrayAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
