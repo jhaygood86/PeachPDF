@@ -26,10 +26,31 @@ namespace PeachPDF.Tests.CSS
         [InlineData((int)Length.Unit.Ex, false)]
         [InlineData((int)Length.Unit.Rem, false)]
         [InlineData((int)Length.Unit.Percent, false)]
+        [InlineData((int)Length.Unit.Ch, false)]
         [InlineData((int)Length.Unit.Vw, false)]
         [InlineData((int)Length.Unit.Vh, false)]
         [InlineData((int)Length.Unit.Vmin, false)]
         [InlineData((int)Length.Unit.Vmax, false)]
+        [InlineData((int)Length.Unit.Vi, false)]
+        [InlineData((int)Length.Unit.Vb, false)]
+        [InlineData((int)Length.Unit.Svw, false)]
+        [InlineData((int)Length.Unit.Svh, false)]
+        [InlineData((int)Length.Unit.Svi, false)]
+        [InlineData((int)Length.Unit.Svb, false)]
+        [InlineData((int)Length.Unit.Svmin, false)]
+        [InlineData((int)Length.Unit.Svmax, false)]
+        [InlineData((int)Length.Unit.Lvw, false)]
+        [InlineData((int)Length.Unit.Lvh, false)]
+        [InlineData((int)Length.Unit.Lvi, false)]
+        [InlineData((int)Length.Unit.Lvb, false)]
+        [InlineData((int)Length.Unit.Lvmin, false)]
+        [InlineData((int)Length.Unit.Lvmax, false)]
+        [InlineData((int)Length.Unit.Dvw, false)]
+        [InlineData((int)Length.Unit.Dvh, false)]
+        [InlineData((int)Length.Unit.Dvi, false)]
+        [InlineData((int)Length.Unit.Dvb, false)]
+        [InlineData((int)Length.Unit.Dvmin, false)]
+        [InlineData((int)Length.Unit.Dvmax, false)]
         [InlineData((int)Length.Unit.Cqw, false)]
         [InlineData((int)Length.Unit.Cqh, false)]
         [InlineData((int)Length.Unit.Cqi, false)]
@@ -59,6 +80,26 @@ namespace PeachPDF.Tests.CSS
         [InlineData((int)Length.Unit.Vh, "vh")]
         [InlineData((int)Length.Unit.Vmin, "vmin")]
         [InlineData((int)Length.Unit.Vmax, "vmax")]
+        [InlineData((int)Length.Unit.Vi, "vi")]
+        [InlineData((int)Length.Unit.Vb, "vb")]
+        [InlineData((int)Length.Unit.Svw, "svw")]
+        [InlineData((int)Length.Unit.Svh, "svh")]
+        [InlineData((int)Length.Unit.Svi, "svi")]
+        [InlineData((int)Length.Unit.Svb, "svb")]
+        [InlineData((int)Length.Unit.Svmin, "svmin")]
+        [InlineData((int)Length.Unit.Svmax, "svmax")]
+        [InlineData((int)Length.Unit.Lvw, "lvw")]
+        [InlineData((int)Length.Unit.Lvh, "lvh")]
+        [InlineData((int)Length.Unit.Lvi, "lvi")]
+        [InlineData((int)Length.Unit.Lvb, "lvb")]
+        [InlineData((int)Length.Unit.Lvmin, "lvmin")]
+        [InlineData((int)Length.Unit.Lvmax, "lvmax")]
+        [InlineData((int)Length.Unit.Dvw, "dvw")]
+        [InlineData((int)Length.Unit.Dvh, "dvh")]
+        [InlineData((int)Length.Unit.Dvi, "dvi")]
+        [InlineData((int)Length.Unit.Dvb, "dvb")]
+        [InlineData((int)Length.Unit.Dvmin, "dvmin")]
+        [InlineData((int)Length.Unit.Dvmax, "dvmax")]
         [InlineData((int)Length.Unit.Cqw, "cqw")]
         [InlineData((int)Length.Unit.Cqh, "cqh")]
         [InlineData((int)Length.Unit.Cqi, "cqi")]
@@ -89,6 +130,26 @@ namespace PeachPDF.Tests.CSS
         [InlineData("vmax", (int)Length.Unit.Vmax)]
         [InlineData("vmin", (int)Length.Unit.Vmin)]
         [InlineData("vw", (int)Length.Unit.Vw)]
+        [InlineData("vi", (int)Length.Unit.Vi)]
+        [InlineData("vb", (int)Length.Unit.Vb)]
+        [InlineData("svw", (int)Length.Unit.Svw)]
+        [InlineData("svh", (int)Length.Unit.Svh)]
+        [InlineData("svi", (int)Length.Unit.Svi)]
+        [InlineData("svb", (int)Length.Unit.Svb)]
+        [InlineData("svmin", (int)Length.Unit.Svmin)]
+        [InlineData("svmax", (int)Length.Unit.Svmax)]
+        [InlineData("lvw", (int)Length.Unit.Lvw)]
+        [InlineData("lvh", (int)Length.Unit.Lvh)]
+        [InlineData("lvi", (int)Length.Unit.Lvi)]
+        [InlineData("lvb", (int)Length.Unit.Lvb)]
+        [InlineData("lvmin", (int)Length.Unit.Lvmin)]
+        [InlineData("lvmax", (int)Length.Unit.Lvmax)]
+        [InlineData("dvw", (int)Length.Unit.Dvw)]
+        [InlineData("dvh", (int)Length.Unit.Dvh)]
+        [InlineData("dvi", (int)Length.Unit.Dvi)]
+        [InlineData("dvb", (int)Length.Unit.Dvb)]
+        [InlineData("dvmin", (int)Length.Unit.Dvmin)]
+        [InlineData("dvmax", (int)Length.Unit.Dvmax)]
         [InlineData("cqw", (int)Length.Unit.Cqw)]
         [InlineData("cqh", (int)Length.Unit.Cqh)]
         [InlineData("cqi", (int)Length.Unit.Cqi)]
@@ -212,13 +273,104 @@ namespace PeachPDF.Tests.CSS
         [InlineData((int)Length.Unit.Cqb)]
         [InlineData((int)Length.Unit.Cqmin)]
         [InlineData((int)Length.Unit.Cqmax)]
-        public void ToPixels_ContainerRelativeUnit_WithNoAncestorContainer_ResolvesToZero(int unitValue)
+        public void ToPixels_ContainerRelativeUnit_WithNoAncestorContainerOrViewport_ResolvesToZero(int unitValue)
         {
-            // No container size supplied (both null) - the same documented-accepted 0 fallback vw/vh/
-            // vmin/vmax already use, since PeachPDF has no viewport-unit numerator to fall back to either.
+            // Neither a container size nor a viewport size supplied (all four null) - the ultimate
+            // fallback with genuinely no context at all (e.g. a media-query/@page call site).
             var length = new Length(50f, (Length.Unit)unitValue);
 
             Assert.Equal(0d, length.ToPixels(0, 0, 0));
+        }
+
+        [Theory]
+        [InlineData((int)Length.Unit.Cqw, 400d)]   // 50% of the 800pt viewport width
+        [InlineData((int)Length.Unit.Cqi, 400d)]   // same as cqw
+        [InlineData((int)Length.Unit.Cqh, 300d)]   // 50% of the 600pt viewport height
+        [InlineData((int)Length.Unit.Cqb, 300d)]   // same as cqh
+        [InlineData((int)Length.Unit.Cqmin, 300d)] // min(800,600) = 600 -> 50% = 300
+        [InlineData((int)Length.Unit.Cqmax, 400d)] // max(800,600) = 800 -> 50% = 400
+        public void ToPixels_ContainerRelativeUnit_WithNoAncestorContainer_FallsBackToViewportSize(int unitValue, double expected)
+        {
+            // No ancestor query container (both container args null) but a real viewport size supplied -
+            // CSS Containment 3 §6.2's cq* -> sv* fallback (issue #615), not the old hardcoded 0.
+            var length = new Length(50f, (Length.Unit)unitValue);
+
+            Assert.Equal(expected, length.ToPixels(0, 0, 0, null, null, 800d, 600d));
+        }
+
+        [Theory]
+        [InlineData((int)Length.Unit.Cqmin, 300d)]
+        [InlineData((int)Length.Unit.Cqmax, 300d)]
+        public void ToPixels_ContainerRelativeUnit_InlineSizeOnlyContainer_FallsBackToViewportForBlockAxisOnly(int unitValue, double containerInlinePt)
+        {
+            // An inline-size-only container supplies a real inline size but no block size
+            // (CssBox.GetContainerRelativeUnitBasis returns null for the block axis there) - the
+            // fallback must apply per-axis, substituting the viewport only for the missing block axis,
+            // not falling back to the viewport for both axes just because one is missing.
+            var length = new Length(50f, (Length.Unit)unitValue);
+            const double viewportWidthPt = 1000d;  // deliberately different from containerInlinePt, so a
+            const double viewportHeightPt = 200d;  // wrong "fall back to viewport entirely" bug would show.
+
+            var result = length.ToPixels(0, 0, 0, containerInlinePt, null, viewportWidthPt, viewportHeightPt);
+
+            // cqmin/cqmax combine the REAL container inline size (300) with the VIEWPORT-fallback block
+            // size (200), i.e. min/max(300, 200) * 50% - not min/max(1000, 200) (all-viewport) or
+            // min/max(300, 0) (old hardcoded-zero fallback).
+            var expected = (Length.Unit)unitValue == Length.Unit.Cqmin
+                ? Math.Min(containerInlinePt, viewportHeightPt) / 100d * 50d
+                : Math.Max(containerInlinePt, viewportHeightPt) / 100d * 50d;
+            Assert.Equal(expected, result);
+        }
+
+        [Theory]
+        [InlineData((int)Length.Unit.Vw, 400d)]
+        [InlineData((int)Length.Unit.Vi, 400d)]
+        [InlineData((int)Length.Unit.Svw, 400d)]
+        [InlineData((int)Length.Unit.Lvw, 400d)]
+        [InlineData((int)Length.Unit.Dvw, 400d)]
+        [InlineData((int)Length.Unit.Vh, 300d)]
+        [InlineData((int)Length.Unit.Vb, 300d)]
+        [InlineData((int)Length.Unit.Svh, 300d)]
+        [InlineData((int)Length.Unit.Lvh, 300d)]
+        [InlineData((int)Length.Unit.Dvh, 300d)]
+        [InlineData((int)Length.Unit.Vmin, 300d)]
+        [InlineData((int)Length.Unit.Svmin, 300d)]
+        [InlineData((int)Length.Unit.Lvmin, 300d)]
+        [InlineData((int)Length.Unit.Dvmin, 300d)]
+        [InlineData((int)Length.Unit.Vmax, 400d)]
+        [InlineData((int)Length.Unit.Svmax, 400d)]
+        [InlineData((int)Length.Unit.Lvmax, 400d)]
+        [InlineData((int)Length.Unit.Dvmax, 400d)]
+        public void ToPixels_ViewportUnit_ResolvesAgainstPageSize(int unitValue, double expected)
+        {
+            // 800x600 page box; 50% of whichever axis the unit names. Small/large/dynamic variants
+            // resolve identically to the plain unit - a PDF page has no scrollbar/dynamic chrome to
+            // distinguish them by.
+            var length = new Length(50f, (Length.Unit)unitValue);
+
+            Assert.Equal(expected, length.ToPixels(0, 0, 0, null, null, 800d, 600d));
+        }
+
+        [Theory]
+        [InlineData((int)Length.Unit.Vw)]
+        [InlineData((int)Length.Unit.Vh)]
+        [InlineData((int)Length.Unit.Vmin)]
+        [InlineData((int)Length.Unit.Vmax)]
+        public void ToPixels_ViewportUnit_WithNoPageContext_ResolvesToZero(int unitValue)
+        {
+            var length = new Length(50f, (Length.Unit)unitValue);
+
+            Assert.Equal(0d, length.ToPixels(0, 0, 0));
+        }
+
+        [Fact]
+        public void ToPixels_Ch_ApproximatesHalfEm()
+        {
+            // CSS Values & Units §6.2's own sanctioned fallback when measuring the real "0" glyph is
+            // impractical - the same 0.5em formula this engine already uses for ex's x-height.
+            var length = new Length(2f, Length.Unit.Ch);
+
+            Assert.Equal(12d, length.ToPixels(12, 0, 0));
         }
 
         [Fact]

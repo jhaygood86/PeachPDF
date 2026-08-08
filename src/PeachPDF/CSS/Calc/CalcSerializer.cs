@@ -185,14 +185,24 @@ namespace PeachPDF.CSS
                     pixels = number.Value;
                     return true;
 
-                // Container-relative units (like em/rem/ex) need layout context this Layer-A-only fold has
-                // none of - a `50cqw` leaf folded here with no container size in scope would permanently
-                // bake in 0 as the canonical CssText, losing the unit before layout ever gets a chance to
-                // resolve it against a real container (see CalcParser.IsSupportedLengthUnit, which accepts
-                // these units into calc() specifically so layout's own CalcEvaluator can resolve them).
+                // Container-relative and viewport units (like em/rem/ex/ch) need layout context this
+                // Layer-A-only fold has none of - a `50cqw`/`50vw` leaf folded here with no container/page
+                // size in scope would permanently bake in 0 as the canonical CssText, losing the unit
+                // before layout ever gets a chance to resolve it against a real container/page (see
+                // CalcParser.IsSupportedLengthUnit, which accepts these units into calc() specifically so
+                // layout's own CalcEvaluator can resolve them).
                 case DimensionCalcNode dimension when dimension.Unit is not (Length.Unit.Em or Length.Unit.Rem or
-                    Length.Unit.Ex or Length.Unit.Cqw or Length.Unit.Cqh or Length.Unit.Cqi or Length.Unit.Cqb or
-                    Length.Unit.Cqmin or Length.Unit.Cqmax):
+                    Length.Unit.Ex or Length.Unit.Ch or
+                    Length.Unit.Cqw or Length.Unit.Cqh or Length.Unit.Cqi or Length.Unit.Cqb or
+                    Length.Unit.Cqmin or Length.Unit.Cqmax or
+                    Length.Unit.Vw or Length.Unit.Vh or Length.Unit.Vi or Length.Unit.Vb or
+                    Length.Unit.Vmin or Length.Unit.Vmax or
+                    Length.Unit.Svw or Length.Unit.Svh or Length.Unit.Svi or Length.Unit.Svb or
+                    Length.Unit.Svmin or Length.Unit.Svmax or
+                    Length.Unit.Lvw or Length.Unit.Lvh or Length.Unit.Lvi or Length.Unit.Lvb or
+                    Length.Unit.Lvmin or Length.Unit.Lvmax or
+                    Length.Unit.Dvw or Length.Unit.Dvh or Length.Unit.Dvi or Length.Unit.Dvb or
+                    Length.Unit.Dvmin or Length.Unit.Dvmax):
                     pixels = new Length((float)dimension.Value, dimension.Unit).ToPixels(0, 0, 0);
                     return true;
 

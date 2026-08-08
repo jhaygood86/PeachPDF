@@ -926,8 +926,9 @@ namespace PeachPDF.Html.Core.Dom
                 // Correct only for a box whose ActualFont happens to first be read post-layout - see
                 // .claude/accepted-gaps/font-size-container-relative-units-resolve-to-zero-for-text-content.md.
                 var (containerInlinePt, containerBlockPt) = Owner.GetContainerRelativeUnitBasis();
+                var (viewportWidthPt, viewportHeightPt) = Owner.GetViewportUnitBasis();
                 var fsize = FontSizeResolver.Resolve(Style.Font.FontSize.Value, parentSize, remSize,
-                    containerInlinePt, containerBlockPt);
+                    containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt);
 
                 _actualFont = Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
                               ?? Owner.GetCachedFont(CssConstants.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus);

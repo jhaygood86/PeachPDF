@@ -503,11 +503,13 @@ namespace PeachPDF.Html.Core.Parse
         /// Resolves a single <c>@page { size: ... }</c> dimension to true PDF points. Per
         /// <see href="https://www.w3.org/TR/css-page-3/#page-size-prop">css-page-3 §7.1</see> the
         /// grammar is <c>&lt;length&gt;{1,2}</c>: absolute units resolve context-free, and the
-        /// font-relative <c>em</c>/<c>ex</c>/<c>rem</c> resolve against the root element's font -
+        /// font-relative <c>em</c>/<c>ex</c>/<c>ch</c>/<c>rem</c> resolve against the root element's font -
         /// the same basis <c>@page</c> margins use (the page context's font in the common case where
-        /// no <c>@page { font-size }</c> is set). Percentages are not a <c>&lt;length&gt;</c> for
-        /// <c>size</c> (sheet geometry is document-global, not relative to any box), and viewport/
-        /// <c>ch</c> units have no page-sheet basis - both return null so the declaration is ignored
+        /// no <c>@page { font-size }</c> is set; <c>ch</c> approximates <c>0.5em</c> - see
+        /// <see cref="Length.ToPixels"/> - so it needs no basis beyond the same em). Percentages are not a
+        /// <c>&lt;length&gt;</c> for <c>size</c> (sheet geometry is document-global, not relative to any
+        /// box), and viewport units have no page-sheet basis (a page rule defining its own geometry in
+        /// terms of the viewport is self-referential) - both return null so the declaration is ignored
         /// and the configured page size is kept.
         /// </summary>
         private static double? ParseSizeDimensionToPdfPoints(string value, PageLengthContext context)
@@ -519,7 +521,7 @@ namespace PeachPDF.Html.Core.Parse
             if (!Length.TryParse(value.Trim().ToLowerInvariant(), out var length))
                 return null;
 
-            return length.Type is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Rem
+            return length.Type is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Ch or Length.Unit.Rem
                 ? length.ToPixels(context.EmPt, context.RemPt, context.HundredPercentPt)
                 : null;
         }
@@ -544,12 +546,15 @@ namespace PeachPDF.Html.Core.Parse
 
         /// <summary>
         /// Like <see cref="ParseLengthToPdfPoints(string)"/>, but with the captured per-pass
-        /// <see cref="PageLengthContext"/> so relative units (em/rem/ex/%) and calc() expressions
+        /// <see cref="PageLengthContext"/> so relative units (em/rem/ex/ch/%) and calc() expressions
         /// resolve too - against the exact same bases the base <c>@page</c> rule used, so a
         /// textually identical margin resolves identically in a base rule and a per-page rule.
-        /// Returns null (caller falls back to the base margin) for units with no meaningful page
-        /// context (vw/vh/vmin/vmax/ch) rather than letting <see cref="Length.ToPixels"/> silently
-        /// zero them into surprise zero-margins, and for unparseable input.
+        /// Returns null (caller falls back to the base margin) for viewport units - which have no
+        /// meaningful page context here (a page rule defining its own geometry in terms of the viewport
+        /// is self-referential) - rather than letting <see cref="Length.ToPixels"/> silently zero them
+        /// into surprise zero-margins, and for unparseable input. <c>ch</c> is not excluded: it
+        /// approximates <c>0.5em</c> (see <see cref="Length.ToPixels"/>), which needs no basis beyond the
+        /// same <c>EmPt</c> already captured here for <c>em</c> itself.
         /// </summary>
         internal static double? ParseLengthToPdfPoints(string value, PageLengthContext context)
         {
@@ -569,8 +574,14 @@ namespace PeachPDF.Html.Core.Parse
             if (!Length.TryParse(normalized, out var length))
                 return null;
 
-            return length.Type is Length.Unit.Ch or Length.Unit.Vw or Length.Unit.Vh
-                or Length.Unit.Vmin or Length.Unit.Vmax
+            return length.Type is Length.Unit.Vw or Length.Unit.Vh or Length.Unit.Vi or Length.Unit.Vb or
+                Length.Unit.Vmin or Length.Unit.Vmax or
+                Length.Unit.Svw or Length.Unit.Svh or Length.Unit.Svi or Length.Unit.Svb or
+                Length.Unit.Svmin or Length.Unit.Svmax or
+                Length.Unit.Lvw or Length.Unit.Lvh or Length.Unit.Lvi or Length.Unit.Lvb or
+                Length.Unit.Lvmin or Length.Unit.Lvmax or
+                Length.Unit.Dvw or Length.Unit.Dvh or Length.Unit.Dvi or Length.Unit.Dvb or
+                Length.Unit.Dvmin or Length.Unit.Dvmax
                 ? null
                 : length.ToPixels(context.EmPt, context.RemPt, context.HundredPercentPt);
         }

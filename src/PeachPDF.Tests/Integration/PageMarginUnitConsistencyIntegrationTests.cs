@@ -158,13 +158,14 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task BaseRule_ViewportOrChUnitMargin_LeavesConfiguredMarginUntouched()
+        public async Task BaseRule_ViewportUnitMargin_LeavesConfiguredMarginUntouched()
         {
-            // Issue #154: a BASE @page margin in a unit with no page context (vw/vh/vmin/vmax/ch) is
-            // an invalid declaration — per CSS Syntax error handling it must be dropped, leaving the
-            // previously-configured (PdfGenerateConfig/UA-default) margin in place, not silently
-            // resolved to zero. This is the base-rule analog of
-            // FirstPageViewportUnitMargin_FallsBackToBaseMargin's per-page assertion.
+            // Issue #154: a BASE @page margin in a unit with no page context (vw/vh/vmin/vmax, and their
+            // logical/small/large/dynamic variants) is an invalid declaration — per CSS Syntax error
+            // handling it must be dropped, leaving the previously-configured (PdfGenerateConfig/
+            // UA-default) margin in place, not silently resolved to zero. This is the base-rule analog of
+            // FirstPageViewportUnitMargin_FallsBackToBaseMargin's per-page assertion. ch is NOT one of
+            // these units — see BaseRule_ChUnitMargin_ResolvesAsHalfEm below.
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
@@ -175,12 +176,27 @@ namespace PeachPDF.Tests.Integration
 
             await container.SetHtml("""
                 <!DOCTYPE html><html><head><style>
-                @page { margin-top: 10vw; margin-left: 3ch; }
+                @page { margin-top: 10vw; margin-left: 10vh; }
                 </style></head><body><p>content</p></body></html>
                 """, null);
 
             Assert.Equal(40.0, container.MarginTop, 3);
             Assert.Equal(30.0, container.MarginLeft, 3);
+        }
+
+        [Fact]
+        public async Task BaseRule_ChUnitMargin_ResolvesAsHalfEm()
+        {
+            // Unlike viewport units, ch approximates 0.5em (issue #615) - it needs no page-viewport
+            // context, only the same EmPt basis em/ex already resolve against here (issue #162).
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { font-size: 30pt; margin-left: 4ch; }
+                body { margin: 0; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.Equal(60.0, container.MarginLeft, 3); // 4 * 0.5 * 30pt
         }
 
         [Fact]

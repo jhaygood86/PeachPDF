@@ -22,7 +22,7 @@ All CSS length units resolve through one shared conversion, at their spec-define
 | `cm` / `mm` | metric | 28.35pt / 2.835pt |
 | `pc` | 1/6 in | 12pt |
 
-In particular, `px` is spec-correct CSS pixels: a `96px`-wide element is exactly one inch wide in the output PDF, and a 96×96-pixel image renders at its true CSS size of one square inch — the same as every browser's print output and other spec-conformant paged renderers. Relative units (`em`/`rem`/`ex`/`%`) resolve against their usual per-property bases; viewport units (`vw`/`vh`/`vmin`/`vmax`) and `ch` are not supported.
+In particular, `px` is spec-correct CSS pixels: a `96px`-wide element is exactly one inch wide in the output PDF, and a 96×96-pixel image renders at its true CSS size of one square inch — the same as every browser's print output and other spec-conformant paged renderers. Relative units (`em`/`rem`/`ex`/`%`) resolve against their usual per-property bases; viewport units (`vw`/`vh`/`vmin`/`vmax`, and their logical/small/large/dynamic variants) are supported against the PDF page box — see [CSS Viewport Units](#css-viewport-units); `ch` is also supported, approximated as `0.5em`.
 
 ---
 
@@ -980,6 +980,44 @@ PeachPDF renders to PDF, so only media queries that target the `print` medium (o
 
 ---
 
+## CSS Viewport Units
+
+PeachPDF renders to a page, not a browser window, so the "viewport" a viewport-relative unit resolves
+against is the PDF page box — the same page-box dimensions [CSS Media Queries](#css-media-queries)' own
+`width`/`height` features already use.
+
+```css
+.hero {
+  width: 100vw;    /* the full page width */
+  height: 50vh;    /* half the page height */
+  font-size: 5vmin; /* 5% of whichever of width/height is smaller */
+}
+```
+
+| Unit | Resolves to |
+|---|---|
+| `vw`, `vi` | 1% of the page box's width |
+| `vh`, `vb` | 1% of the page box's height |
+| `vmin` | 1% of the smaller of the page box's width and height |
+| `vmax` | 1% of the larger of the page box's width and height |
+
+`vi`/`vb` (the logical inline/block axis forms) are treated the same as `vw`/`vh` — PeachPDF has no
+vertical-writing-mode support, so the inline axis is always horizontal and the block axis always
+vertical, the same treatment [`cqi`/`cqb`](#css-container-queries) already get.
+
+The small (`sv*`), large (`lv*`), and dynamic (`dv*`) viewport variants (`svw`, `svh`, `svi`, `svb`,
+`svmin`, `svmax`, and the equivalent `lv*`/`dv*` forms) are all fully supported, and all resolve
+identically to their plain counterpart above. Browsers distinguish these because a mobile browser's UI
+chrome (address bar, toolbars) can show or hide, changing the usable viewport size — a PDF page has no
+such chrome, no scrollbar, and no way to resize once layout starts, so there is only one viewport size to
+report.
+
+`ch` — the width of the font's "0" glyph — is also supported, approximated as `0.5em` per the fallback
+[CSS length units](https://developer.mozilla.org/en-US/docs/Web/CSS/length) explicitly permit when
+measuring the actual glyph is impractical, the same approximation this engine already uses for `ex`.
+
+---
+
 ## CSS Container Queries
 
 Supported ([CSS Containment 3](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_containment/Container_queries)). An element opts in to being a query container with the `container-type`/`container-name` properties (or the `container` shorthand); `@container` rules then apply based on that container's own resolved size or style rather than the page. Both forms — size queries and `style()` queries — evaluate against the **nearest eligible ancestor** query container, walking up from the matched element; an unnamed query uses the nearest eligible ancestor regardless of its name, and a named query (`@container sidebar (...)`) skips straight to the nearest ancestor declaring that name in its own `container-name`, even if a nearer ancestor is eligible but unnamed.
@@ -1014,7 +1052,7 @@ Supported ([CSS Containment 3](https://developer.mozilla.org/en-US/docs/Web/CSS/
 | `cqw`, `cqi` | 1% of the nearest ancestor query container's own resolved inline-axis size |
 | `cqh`, `cqb` | 1% of the nearest ancestor query container's own resolved block-axis size (only meaningful against a `size` container — `0` against an `inline-size`-only one, which doesn't track that axis) |
 | `cqmin`, `cqmax` | The smaller/larger of `cqi` and `cqb` |
-| Container-relative unit with no eligible ancestor container | Resolves to `0` — the same documented fallback `vw`/`vh`/`vmin`/`vmax` already use (PeachPDF has no viewport-unit numerator to fall back to either) |
+| Container-relative unit with no eligible ancestor container | Falls back to the corresponding small-viewport unit (`cqw`→`svw`, `cqh`→`svh`, `cqi`→`svi`, `cqb`→`svb`, `cqmin`→`svmin`, `cqmax`→`svmax`) — see [CSS Viewport Units](#css-viewport-units) |
 | Container-relative unit in `font-size` (e.g. `font-size: 10cqw`) | Resolves to `0` for any element with text content — a font-caching order limitation, not the general no-ancestor-container fallback above; a real ancestor container is found, but its size isn't available yet at the point text content first resolves the font. Works only for the uncommon case of an element with no text content of its own |
 
 ---
@@ -1061,7 +1099,7 @@ Known boundaries of per-page margins:
 - `position: fixed` elements and `background-attachment: fixed` layers keep positioning against the base page box on margin-overridden pages (they ride the page's content shift rather than re-resolving against that page's own margins).
 - When content-empty pages are skipped (see pagination), `:first`/`:left`/`:right` resolve against the underlying page sequence, not the renumbered output pages.
 
-**Units in `@page` margins:** base and per-page rules resolve margins through the same conversion, so a textually identical margin always produces identical page geometry whether it sits in the base rule or a selector-carrying rule. All absolute units (including spec-correct `px` at 0.75pt — see [Length units](#length-units)), `em`/`ex` (against the `@page` context's own `font-size` when a base or matching `@page` rule sets one, per [css-page-3 §7.1](https://www.w3.org/TR/css-page-3/#page-size-prop), else the root element's font), `rem` (always the root element's font), `%` (against the layout page width, for all four sides, per CSS's margin-percentage rule), and `calc()` expressions over those units are supported in both base and per-page rules. Viewport units (`vw`/`vh`/`vmin`/`vmax`) and `ch` are not supported in `@page` margins: such a declaration is invalid and is dropped ([CSS Syntax error handling](https://www.w3.org/TR/css-syntax-3/#error-handling)), leaving that side at its previously-cascaded value — the base margin for a per-page rule, or the configured (`PdfGenerateConfig`) / UA-default margin for a base rule. Base and per-page rules are fully symmetric here.
+**Units in `@page` margins:** base and per-page rules resolve margins through the same conversion, so a textually identical margin always produces identical page geometry whether it sits in the base rule or a selector-carrying rule. All absolute units (including spec-correct `px` at 0.75pt — see [Length units](#length-units)), `em`/`ex`/`ch` (against the `@page` context's own `font-size` when a base or matching `@page` rule sets one, per [css-page-3 §7.1](https://www.w3.org/TR/css-page-3/#page-size-prop), else the root element's font — `ch` approximates `0.5em`, see [CSS Viewport Units](#css-viewport-units)), `rem` (always the root element's font), `%` (against the layout page width, for all four sides, per CSS's margin-percentage rule), and `calc()` expressions over those units are supported in both base and per-page rules. Viewport units (`vw`/`vh`/`vmin`/`vmax`, and their logical/small/large/dynamic variants) are not supported in `@page` margins: a page rule defining its own geometry in terms of the viewport is self-referential, so such a declaration is invalid and is dropped ([CSS Syntax error handling](https://www.w3.org/TR/css-syntax-3/#error-handling)), leaving that side at its previously-cascaded value — the base margin for a per-page rule, or the configured (`PdfGenerateConfig`) / UA-default margin for a base rule. Base and per-page rules are fully symmetric here.
 
 ### `size` property
 
@@ -1129,7 +1167,7 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 | `font-style` | `italic` or `normal` |
 | `text-align` | `left`, `center`, `right`; default is inferred from box position |
 | `vertical-align` | `top`, `middle`, `bottom`; default is `middle` |
-| `width` / `min-width` / `max-width` | Controls the width of top/bottom margin boxes; boxes with explicit widths are honoured; remaining space is distributed equally among `auto` boxes. Relative units resolve per [css-page-3 §8](https://www.w3.org/TR/css-page-3/#margin-dimension): `%` against the margin area the box sits in (the content-box width shared by a top/bottom row), `em`/`ex` against the box's own computed font size, `rem` against the root. Viewport units (`vw`/`vh`/`vmin`/`vmax`) and `ch` have no page context and size the box as `auto` |
+| `width` / `min-width` / `max-width` | Controls the width of top/bottom margin boxes; boxes with explicit widths are honoured; remaining space is distributed equally among `auto` boxes. Relative units resolve per [css-page-3 §8](https://www.w3.org/TR/css-page-3/#margin-dimension): `%` against the margin area the box sits in (the content-box width shared by a top/bottom row), `em`/`ex`/`ch` against the box's own computed font size (`ch` approximates `0.5em`), `rem` against the root. Viewport units (`vw`/`vh`/`vmin`/`vmax`, and their logical/small/large/dynamic variants) have no page context and size the box as `auto` |
 | `height` / `min-height` / `max-height` | Controls the height of left/right margin boxes; relative units resolve as for `width`, with `%` against the content-box height shared by a left/right column |
 
 ### Named pages
@@ -1294,7 +1332,7 @@ PeachPDF supports [`calc()`](https://developer.mozilla.org/en-US/docs/Web/CSS/ca
   width: calc(100% - 40px);
   padding: clamp(8px, 5%, 24px);
   transform: rotate(calc(45deg + 10deg));
-  margin-left: min(5vw, 10px); /* vw isn't resolvable - see Unsupported CSS Features below */
+  margin-left: min(5vw, 10px); /* resolves against the page box - see CSS Viewport Units above */
 }
 ```
 
@@ -1309,7 +1347,7 @@ PeachPDF supports [`calc()`](https://developer.mozilla.org/en-US/docs/Web/CSS/ca
 | Angle units (`deg`, `grad`, `rad`, `turn`) inside a math function | Full | Mixed angle units fold to a single value at parse time (e.g. `rotate(calc(1turn / 4))` → `rotate(90deg)`), since angle units, unlike lengths/percentages, never need layout context to resolve |
 | Divide-by-zero / invalid category mixes (`calc(10px + 5)`, `calc(1px * 1px)`, `calc(10px + 5deg)`) | Rejected | The whole declaration is treated as invalid, the same as any other malformed CSS value |
 | Time and resolution units (`s`, `dpi`) inside a math function | Not supported | PeachPDF doesn't support these unit categories at all, with or without a math function |
-| Viewport units (`vw`/`vh`/`vmin`/`vmax`) inside a math function | Not supported | PeachPDF has no viewport-unit support anywhere |
+| Viewport units (`vw`/`vh`/`vmin`/`vmax`, and their logical/small/large/dynamic variants) inside a math function | Full | Resolved against the page box, the same basis the plain (non-`calc()`) unit form uses — see [CSS Viewport Units](#css-viewport-units) |
 | Container-relative units (`cqw`/`cqi`/`cqb`/`cqmin`/`cqmax`) inside a math function | Full | Resolved against the nearest ancestor query container's own size, the same basis the plain (non-`calc()`) unit form uses — see [CSS Container Queries](#css-container-queries) |
 | A math function inside CSS Grid track sizing | Full | A `calc()`/`min()`/`max()`/`clamp()` length resolves as a grid track size — bare, and inside `minmax()`/`fit-content()`/`repeat()` arguments (a wrong-category math function, e.g. an angle, drops the whole track list at parse time) |
 | A math function for an `<integer>`-typed property (`z-index`, `order`, `widows`) | Full | Must type-check as a plain `<number>` (a length/percentage/angle-category expression is rejected); the result is rounded to the nearest integer, ties away from zero, and folded to a literal at parse time — the same as a `<number>`-typed property, calc() is resolved eagerly rather than kept symbolic, since an integer-category expression has no relative unit to defer to layout |
@@ -1407,4 +1445,3 @@ The following CSS features are not supported:
 - **`word-wrap` / `overflow-wrap`**
 - **`outline`** and `outline-*` properties
 - **CSS selectors** — see the [CSS Selectors](#css-selectors) section above for what is and is not supported
-- **Viewport units** (`vw`, `vh`, `vmin`, `vmax`) — note responsive `@media` feature queries (`min-width`, `prefers-color-scheme`, …) **are** supported (see [CSS Media Queries](#css-media-queries)); it is the viewport length *units* that are not. Container-relative units (`cqw`/`cqi`/`cqb`/`cqmin`/`cqmax`) **are** now supported when resolved against a real ancestor query container (see [CSS Container Queries](#css-container-queries)); only the no-eligible-container fallback still resolves to `0` rather than falling through to a small-viewport unit, since PeachPDF has no viewport-unit numerator to fall back to either

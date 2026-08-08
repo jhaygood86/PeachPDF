@@ -34,5 +34,25 @@ namespace PeachPDF.CSS
         public static readonly string Cqb = "cqb";
         public static readonly string Cqmin = "cqmin";
         public static readonly string Cqmax = "cqmax";
+        public static readonly string Vi = "vi";
+        public static readonly string Vb = "vb";
+        public static readonly string Svw = "svw";
+        public static readonly string Svh = "svh";
+        public static readonly string Svi = "svi";
+        public static readonly string Svb = "svb";
+        public static readonly string Svmin = "svmin";
+        public static readonly string Svmax = "svmax";
+        public static readonly string Lvw = "lvw";
+        public static readonly string Lvh = "lvh";
+        public static readonly string Lvi = "lvi";
+        public static readonly string Lvb = "lvb";
+        public static readonly string Lvmin = "lvmin";
+        public static readonly string Lvmax = "lvmax";
+        public static readonly string Dvw = "dvw";
+        public static readonly string Dvh = "dvh";
+        public static readonly string Dvi = "dvi";
+        public static readonly string Dvb = "dvb";
+        public static readonly string Dvmin = "dvmin";
+        public static readonly string Dvmax = "dvmax";
     }
 }

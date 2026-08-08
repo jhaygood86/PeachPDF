@@ -287,10 +287,11 @@ namespace PeachPDF.Html.Core.Dom
         /// Relative <c>width</c>/<c>height</c>/<c>min-*</c>/<c>max-*</c> values resolve per
         /// <see href="https://www.w3.org/TR/css-page-3/#margin-dimension">css-page-3 §8</see>:
         /// <c>%</c> against the margin-area dimension the box sits in (the content-box width for
-        /// top/bottom rows, the content-box height for left/right columns), <c>em</c>/<c>ex</c>
-        /// against the box's own computed font size, and <c>rem</c> against the root
-        /// (<paramref name="remPt"/>). Units with no page context (<c>vw</c>/<c>vh</c>/<c>vmin</c>/
-        /// <c>vmax</c>/<c>ch</c>) resolve to null and the box sizes as <c>auto</c>.
+        /// top/bottom rows, the content-box height for left/right columns), <c>em</c>/<c>ex</c>/<c>ch</c>
+        /// against the box's own computed font size (<c>ch</c> approximates <c>0.5em</c>), and
+        /// <c>rem</c> against the root (<paramref name="remPt"/>). Viewport units (<c>vw</c>/<c>vh</c>/
+        /// <c>vmin</c>/<c>vmax</c>, and their logical/small/large/dynamic variants) have no page context
+        /// here, resolve to null, and the box sizes as <c>auto</c>.
         /// </summary>
         internal static XRect GetMarginBoxRect(string name, XSize page, double mL, double mT, double mR, double mB,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle, double remPt)
@@ -302,10 +303,10 @@ namespace PeachPDF.Html.Core.Dom
             var contentBottom = page.Height - mB;
             var contentHeight = contentBottom - contentTop;
 
-            // Resolve a margin-box dimension against its own font (em/ex), the root (rem), and the
+            // Resolve a margin-box dimension against its own font (em/ex/ch), the root (rem), and the
             // margin-area extent it sits in (%): contentWidth for width-family props on top/bottom
-            // rows, contentHeight for height-family props on left/right columns. Unresolvable units
-            // (vw/vh/vmin/vmax/ch) come back null → the box sizes as auto.
+            // rows, contentHeight for height-family props on left/right columns. Viewport units (no page
+            // context here - see DomParser.ParseLengthToPdfPoints) come back null → the box sizes as auto.
             double? ResolveDim(MarginStyleRule? r, string? value, double hundredPercentPt)
             {
                 if (r is null || string.IsNullOrWhiteSpace(value))

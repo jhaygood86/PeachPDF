@@ -132,6 +132,46 @@ namespace PeachPDF.CSS
                         return UnitNames.Cqmin;
                     case Unit.Cqmax:
                         return UnitNames.Cqmax;
+                    case Unit.Vi:
+                        return UnitNames.Vi;
+                    case Unit.Vb:
+                        return UnitNames.Vb;
+                    case Unit.Svw:
+                        return UnitNames.Svw;
+                    case Unit.Svh:
+                        return UnitNames.Svh;
+                    case Unit.Svi:
+                        return UnitNames.Svi;
+                    case Unit.Svb:
+                        return UnitNames.Svb;
+                    case Unit.Svmin:
+                        return UnitNames.Svmin;
+                    case Unit.Svmax:
+                        return UnitNames.Svmax;
+                    case Unit.Lvw:
+                        return UnitNames.Lvw;
+                    case Unit.Lvh:
+                        return UnitNames.Lvh;
+                    case Unit.Lvi:
+                        return UnitNames.Lvi;
+                    case Unit.Lvb:
+                        return UnitNames.Lvb;
+                    case Unit.Lvmin:
+                        return UnitNames.Lvmin;
+                    case Unit.Lvmax:
+                        return UnitNames.Lvmax;
+                    case Unit.Dvw:
+                        return UnitNames.Dvw;
+                    case Unit.Dvh:
+                        return UnitNames.Dvh;
+                    case Unit.Dvi:
+                        return UnitNames.Dvi;
+                    case Unit.Dvb:
+                        return UnitNames.Dvb;
+                    case Unit.Dvmin:
+                        return UnitNames.Dvmin;
+                    case Unit.Dvmax:
+                        return UnitNames.Dvmax;
                     default:
                         return string.Empty;
                 }
@@ -235,6 +275,26 @@ namespace PeachPDF.CSS
                 "cqb" => Unit.Cqb,
                 "cqmin" => Unit.Cqmin,
                 "cqmax" => Unit.Cqmax,
+                "vi" => Unit.Vi,
+                "vb" => Unit.Vb,
+                "svw" => Unit.Svw,
+                "svh" => Unit.Svh,
+                "svi" => Unit.Svi,
+                "svb" => Unit.Svb,
+                "svmin" => Unit.Svmin,
+                "svmax" => Unit.Svmax,
+                "lvw" => Unit.Lvw,
+                "lvh" => Unit.Lvh,
+                "lvi" => Unit.Lvi,
+                "lvb" => Unit.Lvb,
+                "lvmin" => Unit.Lvmin,
+                "lvmax" => Unit.Lvmax,
+                "dvw" => Unit.Dvw,
+                "dvh" => Unit.Dvh,
+                "dvi" => Unit.Dvi,
+                "dvb" => Unit.Dvb,
+                "dvmin" => Unit.Dvmin,
+                "dvmax" => Unit.Dvmax,
                 "%" => Unit.Percent,
                 _ => Unit.None
             };
@@ -260,15 +320,24 @@ namespace PeachPDF.CSS
         /// <param name="containerInlineSizePt">The nearest ancestor query container's own resolved
         /// inline-axis (width) size in points, for <c>cqw</c>/<c>cqi</c>/<c>cqmin</c>/<c>cqmax</c> -
         /// <c>null</c> when there is no eligible ancestor container (see
-        /// <see cref="Html.Core.Dom.CssBox.FindNearestQueryContainer"/>), which resolves those units to 0
-        /// (the same documented-accepted fallback <c>vw</c>/<c>vh</c>/<c>vmin</c>/<c>vmax</c> already
-        /// use).</param>
+        /// <see cref="Html.Core.Dom.CssBox.FindNearestQueryContainer"/>), which falls back to
+        /// <paramref name="viewportWidthPt"/> (the corresponding small-viewport unit, per CSS
+        /// Containment 3 §6.2).</param>
         /// <param name="containerBlockSizePt">The nearest ancestor query container's own resolved
         /// block-axis (height) size in points, for <c>cqh</c>/<c>cqb</c>/<c>cqmin</c>/<c>cqmax</c> -
         /// <c>null</c> with no eligible container, or when the eligible container is
-        /// <c>inline-size</c>-only (it doesn't track the block axis either).</param>
+        /// <c>inline-size</c>-only (it doesn't track the block axis either), which falls back to
+        /// <paramref name="viewportHeightPt"/> for that axis.</param>
+        /// <param name="viewportWidthPt">The page box's own width in points, for <c>vw</c>/<c>vi</c> and
+        /// their <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqw</c>/<c>cqi</c> fallback -
+        /// <c>null</c> when no page context is available (see
+        /// <see cref="Html.Core.Dom.CssBox.GetViewportUnitBasis"/>), which resolves those units to 0.</param>
+        /// <param name="viewportHeightPt">The page box's own height in points, for <c>vh</c>/<c>vb</c> and
+        /// their <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqh</c>/<c>cqb</c> fallback -
+        /// <c>null</c> when no page context is available.</param>
         internal double ToPixels(double emFactor, double remFactor, double hundredPercent,
-            double? containerInlineSizePt = null, double? containerBlockSizePt = null)
+            double? containerInlineSizePt = null, double? containerBlockSizePt = null,
+            double? viewportWidthPt = null, double? viewportHeightPt = null)
         {
             // The engine's internal layout unit is 1 point (PixelsPerInch defaults to 72), so
             // physical units (in/cm/mm/pc/pt) resolve directly against points. CSS px resolves
@@ -279,6 +348,12 @@ namespace PeachPDF.CSS
                 Unit.Em => emFactor * Value,
                 Unit.Rem => remFactor * Value,
                 Unit.Ex => emFactor / 2 * Value,
+                // CSS Values & Units §6.2: "In the cases where it is impossible or impractical to
+                // determine the measure of the '0' glyph, it must be assumed to be 0.5em wide" - the same
+                // spec-sanctioned approximation this engine already uses for ex's x-height above, applied
+                // here rather than threading real per-font glyph measurement through the whole layout
+                // engine's value-resolution pipeline (see the ch accepted-gap note for the reasoning).
+                Unit.Ch => 0.5 * emFactor * Value,
                 Unit.Px => PointsPerPx * Value,
                 Unit.In => // 1 in = 72 pt
                     72d * Value,
@@ -291,10 +366,18 @@ namespace PeachPDF.CSS
                 Unit.Cm => // 1 cm = 72/2.54 pt
                     (72d / 2.54d) * Value,
                 Unit.Percent => hundredPercent / 100d * Value,
-                Unit.Cqw or Unit.Cqi => (containerInlineSizePt ?? 0d) / 100d * Value,
-                Unit.Cqh or Unit.Cqb => (containerBlockSizePt ?? 0d) / 100d * Value,
-                Unit.Cqmin => Math.Min(containerInlineSizePt ?? 0d, containerBlockSizePt ?? 0d) / 100d * Value,
-                Unit.Cqmax => Math.Max(containerInlineSizePt ?? 0d, containerBlockSizePt ?? 0d) / 100d * Value,
+                Unit.Cqw or Unit.Cqi => (containerInlineSizePt ?? viewportWidthPt ?? 0d) / 100d * Value,
+                Unit.Cqh or Unit.Cqb => (containerBlockSizePt ?? viewportHeightPt ?? 0d) / 100d * Value,
+                Unit.Cqmin => Math.Min(containerInlineSizePt ?? viewportWidthPt ?? 0d, containerBlockSizePt ?? viewportHeightPt ?? 0d) / 100d * Value,
+                Unit.Cqmax => Math.Max(containerInlineSizePt ?? viewportWidthPt ?? 0d, containerBlockSizePt ?? viewportHeightPt ?? 0d) / 100d * Value,
+                Unit.Vw or Unit.Svw or Unit.Lvw or Unit.Dvw or Unit.Vi or Unit.Svi or Unit.Lvi or Unit.Dvi =>
+                    (viewportWidthPt ?? 0d) / 100d * Value,
+                Unit.Vh or Unit.Svh or Unit.Lvh or Unit.Dvh or Unit.Vb or Unit.Svb or Unit.Lvb or Unit.Dvb =>
+                    (viewportHeightPt ?? 0d) / 100d * Value,
+                Unit.Vmin or Unit.Svmin or Unit.Lvmin or Unit.Dvmin =>
+                    Math.Min(viewportWidthPt ?? 0d, viewportHeightPt ?? 0d) / 100d * Value,
+                Unit.Vmax or Unit.Svmax or Unit.Lvmax or Unit.Dvmax =>
+                    Math.Max(viewportWidthPt ?? 0d, viewportHeightPt ?? 0d) / 100d * Value,
                 _ => 0d
             };
         }
@@ -347,14 +430,39 @@ namespace PeachPDF.CSS
             // CSS Containment 3 §6.2 container-relative units. Resolved against the nearest ancestor
             // query container's own content-box size (CssBox.FindNearestQueryContainer) - see ToPixels'
             // containerInlineSizePt/containerBlockSizePt parameters. With no eligible ancestor container,
-            // these fall through to 0 in ToPixels, the same documented-accepted fallback vw/vh/vmin/vmax
-            // already use (PeachPDF has no small-viewport-unit numerator to fall back to either).
+            // these fall back to the corresponding small-viewport unit (Cqw -> Svw, etc.) via ToPixels'
+            // viewportWidthPt/viewportHeightPt parameters, per CSS Containment 3 §6.2/CSS Values 4 §6.2.
             Cqw,
             Cqh,
             Cqi,
             Cqb,
             Cqmin,
-            Cqmax
+            Cqmax,
+            // CSS Values and Units 4 §6.2 small/large/dynamic viewport-percentage units. Vi/Vb get the
+            // same horizontal-tb-only treatment Cqi/Cqb already have (Vi === Vw, Vb === Vh) - this engine
+            // has no vertical-writing-mode support. Small/large/dynamic variants all resolve identically
+            // here (see ToPixels) - a PDF page box has no scrollbar or dynamic browser chrome to distinguish
+            // them by.
+            Vi,
+            Vb,
+            Svw,
+            Svh,
+            Svi,
+            Svb,
+            Svmin,
+            Svmax,
+            Lvw,
+            Lvh,
+            Lvi,
+            Lvb,
+            Lvmin,
+            Lvmax,
+            Dvw,
+            Dvh,
+            Dvi,
+            Dvb,
+            Dvmin,
+            Dvmax
         }
 
         /// <summary>
