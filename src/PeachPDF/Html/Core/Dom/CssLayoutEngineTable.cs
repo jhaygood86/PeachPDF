@@ -1008,13 +1008,10 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Whether every column a cell spans, starting at <paramref name="columnIndex"/> for
-        /// <paramref name="colspan"/> columns, is collapsed - the case <see cref="LayoutBodyRow"/>
-        /// leaves no trailing border-spacing slot after, matching <see cref="GetWidthSum"/> leaving
-        /// the same slot out of the table's own width. False (a spacing slot is still owed) for a
-        /// cell that spans out of a collapsed column into a visible one, or past the last known
-        /// column - the former is issue #667's own documented remaining gap, and the latter
-        /// cannot be a collapsed column because <see cref="IsColumnCollapsed"/> is false past
-        /// <see cref="_columns"/>.
+        /// <paramref name="colspan"/> columns, is collapsed - used to skip a cell's own (invisible)
+        /// content from sizing a column it is entirely confined to (<see cref="GetColumnsMinMaxWidthByContent"/>,
+        /// <see cref="GetColumnMinWidths"/>). False past the last known column, since
+        /// <see cref="IsColumnCollapsed"/> is false there too.
         /// </summary>
         private bool CellOccupiesOnlyCollapsedColumns(int columnIndex, int colspan)
         {
@@ -1024,6 +1021,27 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Sums the border-spacing owed strictly between a cell's own spanned columns (not before its
+        /// first column or after its last - those are the previous/next cell's own concern). Column
+        /// <paramref name="columnIndex"/> + i is skipped when it's collapsed, matching <see cref="GetWidthSum"/>'s
+        /// one-slot-per-collapsed-column removal and <see cref="LayoutBodyRow"/>'s trailing-slot check:
+        /// the slot immediately after a collapsed column never exists, whether that boundary falls
+        /// inside a colspan cell's own span (issue #667: a cell straddling a collapsed and a visible
+        /// column) or between two separate cells.
+        /// </summary>
+        private double GetInteriorSpacing(int columnIndex, int colspan)
+        {
+            double spacing = 0;
+
+            for (var i = columnIndex; i < columnIndex + colspan - 1; i++)
+            {
+                if (!IsColumnCollapsed(i)) spacing += GetHorizontalSpacing();
+            }
+
+            return spacing;
         }
 
         /// <summary>
@@ -2526,12 +2544,12 @@ namespace PeachPDF.Html.Core.Dom
                 var columnIndex = GetCellRealColumnIndex(row, cell);
                 var width = GetCellWidth(columnIndex, cell);
 
-                // A cell occupying only collapsed column(s) contributes no border-spacing slot of its
-                // own either - GetWidthSum leaves the same slot out of the table's own width, and a
-                // cell straddling a collapsed and a visible column (colspan) still gets one, which is
-                // issue #667's own known remaining gap (see .claude/accepted-gaps/
-                // visibility-collapse-table-straddling-column-cell.md).
-                var spacingAfterCell = CellOccupiesOnlyCollapsedColumns(columnIndex, GetColSpan(cell))
+                // A cell contributes no border-spacing slot of its own when the last column it spans
+                // is collapsed - GetWidthSum leaves that same slot out of the table's own width. This
+                // is keyed on the span's last column rather than CellOccupiesOnlyCollapsedColumns so a
+                // colspan cell straddling a collapsed and a visible column (issue #667) is handled too:
+                // the slot is owed only when the cell's own trailing edge lands on a visible column.
+                var spacingAfterCell = IsColumnCollapsed(columnIndex + GetColSpan(cell) - 1)
                     ? 0
                     : GetHorizontalSpacing();
 
@@ -3046,7 +3064,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns></returns>
         private double GetCellWidth(int column, CssBox b)
         {
-            double colspan = Convert.ToSingle(GetColSpan(b));
+            var colspanInt = GetColSpan(b);
+            double colspan = Convert.ToSingle(colspanInt);
             double sum = 0f;
 
             for (int i = column; i < column + colspan; i++)
@@ -3058,7 +3077,10 @@ namespace PeachPDF.Html.Core.Dom
                 sum += _columnWidths[i];
             }
 
-            sum += (colspan - 1) * GetHorizontalSpacing();
+            // Border-spacing strictly between the spanned columns - not the blanket (colspan - 1) *
+            // spacing, since a boundary immediately after a collapsed column never exists (issue #667:
+            // a colspan cell straddling a collapsed and a visible column). See GetInteriorSpacing.
+            sum += GetInteriorSpacing(column, colspanInt);
 
             return sum;
         }
@@ -3203,8 +3225,7 @@ namespace PeachPDF.Html.Core.Dom
                     // CollapseColumnWidths zeroes them - left in, EnforceMinimumSize's colspan-neighbor
                     // adjustment would narrow the *next* column to compensate for a width the collapsed
                     // column never actually needs (issue #665). A cell straddling a collapsed and a
-                    // visible column still contributes normally - excluding it too would misjudge the
-                    // visible column it also occupies (issue #667's own accepted, narrower gap).
+                    // visible column still contributes normally.
                     if (CellOccupiesOnlyCollapsedColumns(realCol, colSpan)) continue;
 
                     var col = _columnWidths.Length > realCol ? realCol : _columnWidths.Length - 1;
@@ -3224,11 +3245,22 @@ namespace PeachPDF.Html.Core.Dom
                     }
                     maxWidth = Math.Max(maxWidth, minWidth);
 
-                    minWidth /= colSpan;
-                    maxWidth /= colSpan;
+                    // Divide across the span's *visible* columns only (issue #667) - a straddling cell
+                    // is guaranteed at least one by the CellOccupiesOnlyCollapsedColumns skip above, and
+                    // dividing by the raw colSpan would understate the one visible column's fair share
+                    // of content the collapsed column(s) it also spans will never carry.
+                    var visibleSpanColumns = 0;
+                    for (var j = 0; j < colSpan; j++)
+                    {
+                        if (!IsColumnCollapsed(col + j)) visibleSpanColumns++;
+                    }
+
+                    minWidth /= visibleSpanColumns;
+                    maxWidth /= visibleSpanColumns;
 
                     for (var j = 0; j < colSpan; j++)
                     {
+                        if (IsColumnCollapsed(col + j)) continue;
                         minFullWidths[col + j] = Math.Max(minFullWidths[col + j], minWidth);
                         maxFullWidths[col + j] = Math.Max(maxFullWidths[col + j], maxWidth);
                     }
@@ -3344,8 +3376,15 @@ namespace PeachPDF.Html.Core.Dom
                     // (invisible) content.
                     if (CellOccupiesOnlyCollapsedColumns(col, colspan)) continue;
 
+                    // A straddling cell's own leftover min-width belongs to the last *visible* column
+                    // it spans (issue #667) - walking back off a trailing collapsed column, since that
+                    // column is about to be zeroed by CollapseColumnWidths regardless of what's assigned
+                    // to it here. CellOccupiesOnlyCollapsedColumns above guarantees at least one visible
+                    // column exists in the span, so this always finds one at or before col.
                     var affectColumn = Math.Min(col + colspan, _columnMinWidths.Length) - 1;
-                    var spannedWidth = GetSpannedMinWidth(row, col, colspan) + (colspan - 1) * GetHorizontalSpacing();
+                    while (affectColumn > col && IsColumnCollapsed(affectColumn)) affectColumn--;
+
+                    var spannedWidth = GetSpannedMinWidth(row, col, colspan) + GetInteriorSpacing(col, colspan);
 
                     var cellMinWidth = cell.GetMinimumWidth();
                     if (cell.MinWidth != "0" && CssValueParser.IsValidLength(cell.MinWidth))
