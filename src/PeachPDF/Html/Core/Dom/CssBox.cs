@@ -2435,7 +2435,14 @@ namespace PeachPDF.Html.Core.Dom
         /// at the position <see cref="CssLayoutEngineFlex.AssignLocations"/>/line relocation already
         /// assigned it — every earlier item layout in those engines is a *measurement*, moved into place by
         /// translation afterward; this one is the item's real, final content layout, with nothing after it
-        /// to correct a wrong position back.
+        /// to correct a wrong position back. <c>CssLayoutEngineTable</c> sets it too, around every
+        /// <c>await cell.PerformLayout(g)</c>: a cell's own <c>Location</c> is this engine's decision in
+        /// exactly the same #166 sense, and its default UA <c>overflow: hidden</c> (<c>CssDefaults</c>)
+        /// already makes <see cref="Fragmentation.MonolithicContent.IsMonolithic"/> true for it, so without
+        /// this every cell whose content reached a page boundary took the movers below - silently spending
+        /// a forced break's one-shot retake latch on a retry that
+        /// <see cref="ResolveBlockChildOffset"/> cannot honour for a <c>TableCell</c>-display box
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/512">issue #512</see>).
         /// </para>
         /// <para>
         /// <b>It no longer decides whether the box is placed.</b> That is now the frame's own question,

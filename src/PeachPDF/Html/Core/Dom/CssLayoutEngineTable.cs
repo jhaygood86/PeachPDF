@@ -2088,7 +2088,7 @@ namespace PeachPDF.Html.Core.Dom
         /// asks the same question of what the row actually measured, which is only knowable here.
         /// </para>
         /// <para>
-        /// Four things make it decline, and each is a case where moving the row would be worse than
+        /// Five things make it decline, and each is a case where moving the row would be worse than
         /// leaving it:
         /// <list type="bullet">
         /// <item><description>
@@ -2111,6 +2111,19 @@ namespace PeachPDF.Html.Core.Dom
         /// <item><description>
         /// <b>The fragmentainer has a band of its own.</b> Inside a multi-column column the page grid does
         /// not describe the fragmentainer being filled, so its bands answer nothing here.
+        /// </description></item>
+        /// <item><description>
+        /// <b>A cell already took a forced break of its own.</b> A block inside a <c>&lt;td&gt;</c> is
+        /// ordinary block-flow content — <see cref="MonolithicContent.PaginatesItsOwnContent"/> does not
+        /// name a table cell — so its <c>break-before</c>/<c>break-after</c> already placed it at the real
+        /// next fragmentainer's top the first time the cell laid it out; the row is laid out at its true
+        /// row-top coordinate, not a provisional one a later translation corrects, so that placement is
+        /// already right. Retracting and re-placing the row asks
+        /// <see cref="CssBox.ForcedBreakTopFor"/> the same question again from the new top and takes the
+        /// same break a second time, walking the content one fragmentainer further than the value asked
+        /// for (<see href="https://github.com/jhaygood86/PeachPDF/issues/512">issue #512</see>). Declining
+        /// leaves the row's already-correct geometry alone — the interior gap this leaves between the two
+        /// halves is the break's own page skip, not room a later band could still use.
         /// </description></item>
         /// </list>
         /// </para>
@@ -2139,7 +2152,43 @@ namespace PeachPDF.Html.Core.Dom
 
             if (rowTop - HtmlContainerInt.PageBoundaryEpsilon <= container.PageTopOf(slot)) return false;
 
+            if (RowHoldsAnInternalForcedBreak(_bodyRows[rowIndex])) return false;
+
             return cursor.MaxBottom - rowTop <= RoomForARowIn(container, slot + 1);
+        }
+
+        /// <summary>
+        /// Whether something inside <paramref name="row"/>'s own cells took a forced break of its own —
+        /// see the fifth decline on <see cref="StraddleCorrectionAppliesTo"/> for why that rules out
+        /// moving the row.
+        /// </summary>
+        /// <remarks>
+        /// Not the row-level break <see cref="ForcedBreakFallsBeforeRow"/> reads: that is a value on the
+        /// row (or a row group it begins) read <i>before</i> the row is placed. This is read <i>after</i>,
+        /// off <see cref="CssBox.PlacedByForcedBreak"/>, which only a box block flow actually placed can
+        /// have set — a cell itself never does, since the table engine positions cells directly rather
+        /// than through <c>CssBox.PlaceBlockChild</c>.
+        /// </remarks>
+        private static bool RowHoldsAnInternalForcedBreak(CssBox row)
+        {
+            foreach (var cell in row.Boxes)
+            {
+                if (cell is not CssSpacingBox && BoxOrDescendantPlacedByForcedBreak(cell)) return true;
+            }
+
+            return false;
+        }
+
+        private static bool BoxOrDescendantPlacedByForcedBreak(CssBox box)
+        {
+            if (box.PlacedByForcedBreak) return true;
+
+            foreach (var child in box.Boxes)
+            {
+                if (BoxOrDescendantPlacedByForcedBreak(child)) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -2606,7 +2655,28 @@ namespace PeachPDF.Html.Core.Dom
                 // stopping point and the ones that finished are simply not in the carried list.
                 if (cursor.CarriedTokenFor(cell) is { } carried) cell.ResumeAt(carried, null);
 
-                await cell.PerformLayout(g);
+                // This cell's position is this engine's own decision, not block flow's - the same #166
+                // boundary that stops a break value travelling out of a cell (BreakPropagation.CanTravelOutOf)
+                // - so the flag says the same thing to its epilogue that CssLayoutEngineFlex/Grid's own
+                // commit pass already says to a flex/grid item's (ItemContentCommit.CommitLayout): the §4.3
+                // movers (avoid/monolithic, widows/orphans, the keep-with-next retry) all answer "this box
+                // does not fit, so lay it out again somewhere else" by re-running its own content layout in
+                // place - CssBox.ResolveBlockChildOffset never actually moves a table-cell-display box, so
+                // the retry cannot honour what it decided, only repeat the layout at the same top. Every
+                // <td>'s UA-default overflow:hidden (CssDefaults) already makes MonolithicContent.IsMonolithic
+                // true for it, so without this every cell whose content reaches a page boundary took that
+                // retry - silently dropping a forced break inside it the second time through, since the
+                // break's own one-shot latch (CssBox.PlacedByForcedBreak) was already spent by the first run
+                // (issue #512).
+                cell.PositionAssignedByEngine = true;
+                try
+                {
+                    await cell.PerformLayout(g);
+                }
+                finally
+                {
+                    cell.PositionAssignedByEngine = false;
+                }
 
                 // Did this cell finish? Asked here because here is the only place the answer exists: a
                 // box's record is cleared at the start of its next layout, and the engine's whole-table
