@@ -58,7 +58,7 @@ namespace PeachPDF.Text.Bidi
             {
                 BidiParagraphDirection.Ltr => (byte)0,
                 BidiParagraphDirection.Rtl => (byte)1,
-                _ => ComputeAutoParagraphLevel(originalTypes, 0, n)
+                _ => ComputeAutoParagraphLevel(originalTypes, 0, n, overrides)
             };
 
             var levels = new byte[n];
@@ -159,29 +159,71 @@ namespace PeachPDF.Text.Bidi
 
         // ----- P2/P3 -----
 
-        private static byte ComputeAutoParagraphLevel(BidiClass[] types, int start, int endExclusive)
+        /// <summary>
+        /// P2/P3: the first character of type L/AL/R, skipping any characters between an isolate
+        /// initiator and its matching PDI. <paramref name="overrides"/> makes this skip CSS-synthetic
+        /// isolate spans (<c>unicode-bidi: isolate</c>/<c>isolate-override</c>/<c>plaintext</c>'s own
+        /// nested boxes) too, since those never occupy a real LRI/RLI/FSI character position in the
+        /// flattened text for the loop below to see on its own - only a genuine isolate-initiating push
+        /// (<see cref="IsIsolateInitiator"/>) is skipped; a plain embedding/override span's content still
+        /// participates in detection, per spec. <paramref name="excludeOverrideIndex"/> excludes one
+        /// entry (its index into <paramref name="overrides"/>) from that skip - the override whose own
+        /// content this very call is scanning, when invoked from <see cref="PushSyntheticPush"/> for a
+        /// synthetic Fsi push, so it doesn't immediately skip over its entire own range.
+        /// </summary>
+        private static byte ComputeAutoParagraphLevel(
+            BidiClass[] types, int start, int endExclusive,
+            IReadOnlyList<BidiIsolateOverride>? overrides = null, int excludeOverrideIndex = -1)
         {
             var isolateDepth = 0;
-            for (var i = start; i < endExclusive; i++)
+            var i = start;
+            while (i < endExclusive)
             {
+                if (isolateDepth == 0 && overrides != null)
+                {
+                    var skipTo = -1;
+                    for (var k = 0; k < overrides.Count; k++)
+                    {
+                        if (k == excludeOverrideIndex) continue;
+                        var o = overrides[k];
+                        if (o.Start == i && o.End <= endExclusive && IsIsolateInitiator(o.Push) && o.End > skipTo)
+                            skipTo = o.End;
+                    }
+                    if (skipTo > i)
+                    {
+                        i = skipTo;
+                        continue;
+                    }
+                }
+
                 var t = types[i];
                 if (t is BidiClass.LRI or BidiClass.RLI or BidiClass.FSI)
                 {
                     isolateDepth++;
+                    i++;
                     continue;
                 }
                 if (t == BidiClass.PDI)
                 {
                     if (isolateDepth > 0) isolateDepth--;
+                    i++;
                     continue;
                 }
-                if (isolateDepth > 0) continue;
+                if (isolateDepth > 0)
+                {
+                    i++;
+                    continue;
+                }
 
                 if (t == BidiClass.L) return 0;
                 if (t is BidiClass.AL or BidiClass.R) return 1;
+                i++;
             }
             return 0;
         }
+
+        private static bool IsIsolateInitiator(BidiExplicitPush push) =>
+            push is BidiExplicitPush.Lri or BidiExplicitPush.Rli or BidiExplicitPush.Fsi;
 
         private static int FindMatchingPdiForFsi(BidiClass[] types, int start, int n)
         {
@@ -223,15 +265,22 @@ namespace PeachPDF.Text.Bidi
             var overflowEmbeddingCount = 0;
             var validIsolateCount = 0;
 
-            Dictionary<int, List<BidiIsolateOverride>>? startsAt = null;
+            // startsAt keeps each override's own index into `overrides` alongside it - PushSyntheticPush
+            // needs that index to exclude the override's own entry when it re-runs P2/P3 detection over
+            // its own [Start, End) range (see ComputeAutoParagraphLevel's excludeOverrideIndex), since a
+            // nested override can share an identical Start/Length with its own outer one (e.g. a
+            // unicode-bidi:plaintext box whose entire content is one nested unicode-bidi:isolate span)
+            // and so can't be told apart from it by value alone.
+            Dictionary<int, List<(BidiIsolateOverride Override, int Index)>>? startsAt = null;
             Dictionary<int, List<BidiIsolateOverride>>? endsAt = null;
-            foreach (var o in overrides)
+            for (var idx = 0; idx < overrides.Count; idx++)
             {
+                var o = overrides[idx];
                 if (o.Length <= 0) continue;
-                startsAt ??= new Dictionary<int, List<BidiIsolateOverride>>();
+                startsAt ??= new Dictionary<int, List<(BidiIsolateOverride, int)>>();
                 endsAt ??= new Dictionary<int, List<BidiIsolateOverride>>();
                 if (!startsAt.TryGetValue(o.Start, out var sl)) startsAt[o.Start] = sl = [];
-                sl.Add(o);
+                sl.Add((o, idx));
                 if (!endsAt.TryGetValue(o.End, out var el)) endsAt[o.End] = el = [];
                 el.Add(o);
             }
@@ -260,8 +309,8 @@ namespace PeachPDF.Text.Bidi
 
                 if (startsAt != null && startsAt.TryGetValue(i, out var opening))
                 {
-                    foreach (var o in opening)
-                        PushSyntheticPush(o.Push, stack, ref overflowIsolateCount, ref overflowEmbeddingCount, ref validIsolateCount);
+                    foreach (var (o, idx) in opening)
+                        PushSyntheticPush(o, idx, overrides, originalTypes, stack, ref overflowIsolateCount, ref overflowEmbeddingCount, ref validIsolateCount);
                 }
 
                 var cls = originalTypes[i];
@@ -300,7 +349,7 @@ namespace PeachPDF.Text.Bidi
                         levels[i] = top.Level;
                         var rtl = cls == BidiClass.RLI ||
                                   (cls == BidiClass.FSI &&
-                                   ComputeAutoParagraphLevel(originalTypes, i + 1, FindMatchingPdiForFsi(originalTypes, i + 1, n)) == 1);
+                                   ComputeAutoParagraphLevel(originalTypes, i + 1, FindMatchingPdiForFsi(originalTypes, i + 1, n), overrides) == 1);
                         var newLevel = NextLevel(top.Level, rtl);
                         if (newLevel <= MaxDepth && overflowIsolateCount == 0 && overflowEmbeddingCount == 0)
                         {
@@ -374,9 +423,11 @@ namespace PeachPDF.Text.Bidi
         }
 
         private static void PushSyntheticPush(
-            BidiExplicitPush push, List<StackEntry> stack,
+            BidiIsolateOverride o, int overrideIndex, IReadOnlyList<BidiIsolateOverride> overrides,
+            BidiClass[] originalTypes, List<StackEntry> stack,
             ref int overflowIsolateCount, ref int overflowEmbeddingCount, ref int validIsolateCount)
         {
+            var push = o.Push;
             var top = stack[^1];
             switch (push)
             {
@@ -407,13 +458,15 @@ namespace PeachPDF.Text.Bidi
                 case BidiExplicitPush.Rli:
                 case BidiExplicitPush.Fsi:
                 {
-                    // A synthetic Fsi push (CSS unicode-bidi:plaintext on an inline box) can't re-derive
-                    // P2/P3 the way a real FSI character can (there is no bounded "matching PDI" text
-                    // range to inspect ahead of time here) - treat as Lri, matching the common case where
-                    // plaintext content that reaches this path is LTR by default; a block-level box using
-                    // plaintext instead goes through BidiParagraphDirection.Auto at the Resolve() entry
-                    // point, which does the real P2/P3 detection.
-                    var rtl = push == BidiExplicitPush.Rli;
+                    // Unlike a real FSI character (where the matching PDI has to be located by scanning
+                    // forward), a synthetic Fsi push (CSS unicode-bidi:plaintext on an inline box) already
+                    // knows its own exact text range - [o.Start, o.End) is precisely that box's own
+                    // flattened content, nothing more - so P2/P3 can run directly over it. Passing
+                    // `overrides`/`overrideIndex` makes that scan skip any nested isolate span too
+                    // (excluding this override's own entry, so it doesn't just skip its whole self).
+                    var rtl = push == BidiExplicitPush.Rli ||
+                              (push == BidiExplicitPush.Fsi &&
+                               ComputeAutoParagraphLevel(originalTypes, o.Start, o.End, overrides, overrideIndex) == 1);
                     var newLevel = NextLevel(top.Level, rtl);
                     if (newLevel <= MaxDepth && overflowIsolateCount == 0 && overflowEmbeddingCount == 0)
                     {
@@ -433,7 +486,7 @@ namespace PeachPDF.Text.Bidi
             BidiExplicitPush push, List<StackEntry> stack,
             ref int overflowIsolateCount, ref int overflowEmbeddingCount, ref int validIsolateCount)
         {
-            if (push is BidiExplicitPush.Lri or BidiExplicitPush.Rli or BidiExplicitPush.Fsi)
+            if (IsIsolateInitiator(push))
             {
                 if (overflowIsolateCount > 0)
                 {
@@ -528,7 +581,7 @@ namespace PeachPDF.Text.Bidi
             Dictionary<int, int>? syntheticChain = null;
             foreach (var o in overrides)
             {
-                if (o.Push is not (BidiExplicitPush.Lri or BidiExplicitPush.Rli or BidiExplicitPush.Fsi)) continue;
+                if (!IsIsolateInitiator(o.Push)) continue;
                 if (!runEndIndex.ContainsKey(o.Start)) continue;
                 syntheticChain ??= new Dictionary<int, int>();
                 syntheticChain[o.Start] = o.End;

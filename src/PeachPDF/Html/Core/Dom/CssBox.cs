@@ -26,7 +26,9 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using PeachPDF.Html.Core.Fragments;
 // CssBox declares a property literally named ContainerType, which shadows the CSS-OM enum type of the
@@ -64,7 +66,24 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private const double VisibilityClipEpsilon = 1e-6;
 
-        private static uint _idCounter = 0;
+        // AsyncLocal, not a plain static: HtmlContainerInt.PerformLayout's container-query convergence
+        // loop (see ContainerQuerySizes's own remarks) depends on CssBox.Id being STABLE across its own
+        // two back-to-back SetHtml/DomParser.GenerateCssTree calls - the same document re-parsed twice
+        // must assign the same Id sequence both times. A plain process-wide `static uint` (as this used
+        // to be) broke that guarantee under ordinary concurrent use: xUnit runs test classes in parallel
+        // by default, and each PdfGenerator/HtmlContainerInt instance is independently thread-safe to use
+        // concurrently with another instance (see CLAUDE.md's "Thread safety" section) - but a totally
+        // unrelated test's concurrent ClearCounter()/++_idCounter call could reset or perturb THIS test's
+        // counter mid-parse, desynchronizing the two passes' Id sequences and silently breaking the
+        // by-Id container-size lookup (a size-query condition would just never converge to true) -
+        // exactly the intermittent ContainerQueryLayoutIntegrationTests failures this fixes. AsyncLocal
+        // scopes the counter to each call's own logical async flow (each test method's own call chain),
+        // so independent, concurrently-running parses on other threads never see or perturb this one's
+        // value - while ClearCounter()/the counter itself still behaves like ordinary mutable state
+        // within one flow's own sequential pass-after-pass calls.
+        private static readonly AsyncLocal<StrongBox<uint>> _idCounter = new();
+
+        private static StrongBox<uint> IdCounterBox => _idCounter.Value ??= new StrongBox<uint>(0);
 
         /// <summary>
         /// the parent css box of this css box in the hierarchy
@@ -111,7 +130,7 @@ namespace PeachPDF.Html.Core.Dom
                 _parentBox.Boxes.Add(this);
             }
 
-            Id = ++_idCounter;
+            Id = ++IdCounterBox.Value;
             HtmlTag = tag;
         }
 
@@ -119,7 +138,7 @@ namespace PeachPDF.Html.Core.Dom
 
         public static void ClearCounter()
         {
-            _idCounter = 0;
+            _idCounter.Value = new StrongBox<uint>(0);
         }
 
         /// <summary>
