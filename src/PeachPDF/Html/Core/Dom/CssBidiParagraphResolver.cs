@@ -66,9 +66,11 @@ namespace PeachPDF.Html.Core.Dom
             if (text.Length == 0) return;
 
             var paragraphText = text.ToString();
-            var direction = paragraphRoot.Direction.Value == DirectionMode.Rtl
-                ? BidiParagraphDirection.Rtl
-                : BidiParagraphDirection.Ltr;
+            var direction = paragraphRoot.UnicodeBidi.Value == UnicodeMode.Plaintext
+                ? BidiParagraphDirection.Auto
+                : paragraphRoot.Direction.Value == DirectionMode.Rtl
+                    ? BidiParagraphDirection.Rtl
+                    : BidiParagraphDirection.Ltr;
 
             var result = BidiResolver.Resolve(paragraphText, direction, overrides);
 

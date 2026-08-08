@@ -203,6 +203,70 @@ namespace PeachPDF.Tests.Html.Core
             Assert.All(results, text => Assert.Equal("olleh", text));
         }
 
+        [Fact]
+        public async Task UnicodeBidiPlaintext_OnBlockWithExplicitLtrDirection_RedirectsFromLeadingStrongRtlCharacter()
+        {
+            // CSS Writing Modes 4 §2.2: unicode-bidi: plaintext re-derives the paragraph's own base
+            // direction from the first strong character in its content (UAX#9 P2/P3), regardless of the
+            // computed `direction` property - dir="ltr" here must NOT win. "שלום עולם" starts with a
+            // strong-R character, so the detected base direction is RTL and the two words reorder right-
+            // to-left, exactly as they would under a real dir="rtl" (see
+            // RtlParagraph_DigitRunWithNoSurroundingWhitespace_SplitsIntoItsOwnWord's plain-RTL sibling
+            // case) rather than staying in the plain LTR order dir="ltr" alone would keep.
+            var html = LayoutHarness.Wrap(
+                """<p id="p" dir="ltr" style="unicode-bidi:plaintext; width:400pt">שלום עולם</p>""");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var p = LayoutHarness.FindById(root, "p");
+
+            Assert.NotNull(p);
+            var words = WordsOf(p!);
+            Assert.Equal(2, words.Count);
+
+            // Same L2 per-word character reversal into visual order the plain dir="rtl" tests above show
+            // (e.g. DirRtlSpan_InLtrParagraph_IsolatesFromSurroundingDigitsAndNeutrals's "עברית" ->
+            // "תירבע") - "שלום" -> "םולש", "עולם" -> "םלוע".
+            var shalom = Assert.Single(words, w => w.Text == "םולש");
+            var olam = Assert.Single(words, w => w.Text == "םלוע");
+
+            // Logical order is "שלום" then "עולם" - a detected RTL base direction reorders them so the
+            // first logical word ends up rightmost, the same visual pattern the plain dir="rtl" tests
+            // above assert (e.g. RtlParagraph_WordsOfDifferingWidths_DoNotOverlapAfterReordering).
+            Assert.True(shalom.Left > olam.Left,
+                $"expected plaintext's own first-strong-character detection to lay this out RTL despite dir=\"ltr\"; שלום.Left={shalom.Left}, עולם.Left={olam.Left}");
+        }
+
+        [Fact]
+        public async Task UnicodeBidiPlaintext_OnInlineSpan_DetectsOwnDirectionWithoutLeakingIntoSurroundingParagraph()
+        {
+            // An inline unicode-bidi: plaintext span establishes its own isolated first-strong-detected
+            // run (mapped to a synthetic FSI push - see CssUnicodeBidiMapping.MapToPushes) inside the
+            // surrounding LTR paragraph, the same isolation shape as Bdi_WithNoDirAttribute_... above, but
+            // driven by content detection rather than an explicit dir="rtl".
+            var html = LayoutHarness.Wrap(
+                """<p id="p">before <span id="s" style="unicode-bidi:plaintext">שלום עולם</span> after</p>""");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var p = LayoutHarness.FindById(root, "p");
+            var span = LayoutHarness.FindById(root, "s");
+
+            Assert.NotNull(p);
+            Assert.NotNull(span);
+
+            var pWords = WordsOf(p!);
+            var before = Assert.Single(pWords, w => w.Text == "before");
+            var after = Assert.Single(pWords, w => w.Text == "after");
+            Assert.True(before.Left < after.Left,
+                $"expected the surrounding LTR sentence's own word order to be unaffected by the isolated plaintext span; before.Left={before.Left}, after.Left={after.Left}");
+
+            var spanWords = WordsOf(span!);
+            Assert.Equal(2, spanWords.Count);
+            var shalom = Assert.Single(spanWords, w => w.Text == "םולש");
+            var olam = Assert.Single(spanWords, w => w.Text == "םלוע");
+            Assert.True(shalom.Left > olam.Left,
+                $"expected the plaintext span's own content to be detected as RTL and reordered; שלום.Left={shalom.Left}, עולם.Left={olam.Left}");
+        }
+
         private static List<CssRectWord> WordsOf(CssBox box) =>
             LayoutHarness.Descendants(box)
                 .SelectMany(b => b.Words.OfType<CssRectWord>())
