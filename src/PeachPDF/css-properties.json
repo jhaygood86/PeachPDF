@@ -1568,7 +1568,7 @@
     },
     {
       "name": "text-transform",
-      "comment": "cssDataType's own Map.TextTransforms includes full-width because it's already used elsewhere in the CSS-OM pipeline, even though CssBox.cs's ApplyTextTransform only implements uppercase/lowercase/capitalize - full-width parses and stores but has no distinct effect (see .claude/accepted-gaps/text-transform-full-width-no-effect.md). supportsDataType is the stricter, @supports-only list excluding full-width for exactly that reason, same shape as word-break's keep-all split.",
+      "comment": "cssDataType's own Map.TextTransforms includes full-width, mapped to CssBox.cs's ApplyTextTransform which converts characters to their Unicode fullwidth compatibility form. full-size-kana is not implemented (not in the TextTransform enum or Map.TextTransforms) so it's rejected outright and excluded from supportsSupportedValues below, same shape as word-break's keep-all split.",
       "inherited": true,
       "initialValue": "none",
       "cssDataType": {
@@ -1582,7 +1582,8 @@
         "none",
         "capitalize",
         "uppercase",
-        "lowercase"
+        "lowercase",
+        "full-width"
       ],
       "html": {
         "propertyPath": "TextTransform",

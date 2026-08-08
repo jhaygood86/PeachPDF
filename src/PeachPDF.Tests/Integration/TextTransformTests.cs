@@ -189,14 +189,11 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task FullWidth_ParsesAndStores_ButLeavesTextUnchanged()
+        public async Task FullWidth_ConvertsAsciiToFullwidthForm()
         {
-            // See .claude/accepted-gaps/text-transform-full-width-no-effect.md: full-width is a valid,
-            // stored keyword (Map.TextTransforms includes it) but CssBox.ApplyTextTransform doesn't
-            // implement the half-width-to-full-width mapping, so it's currently a rendering no-op.
             var html = """
                 <!DOCTYPE html><html><body>
-                <div id="el" style="text-transform: full-width">Hello World</div>
+                <div id="el" style="text-transform: full-width">Hi!</div>
                 </body></html>
                 """;
 
@@ -205,7 +202,62 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(el);
             Assert.Equal(TextTransform.FullWidth, el!.TextTransform.Value);
-            Assert.Equal("Hello", FindFirstWord(el)!.Text);
+            Assert.Equal("Ｈｉ！", FindFirstWord(el)!.Text);
+        }
+
+        [Fact]
+        public async Task FullWidth_ConvertsSpaceToIdeographicSpace()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="el" style="text-transform: full-width; white-space: pre">a b</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            var combined = string.Concat(AllWords(el!).Select(w => w.Text));
+            Assert.Equal("ａ　ｂ", combined);
+        }
+
+        [Fact]
+        public async Task FullWidth_LeavesCharactersWithNoFullwidthFormUnchanged()
+        {
+            // 日本 (already-fullwidth CJK characters) and 'é' (Latin-1 letter outside the mapped set)
+            // have no fullwidth compatibility form of their own, so both are left as-is.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="el" style="text-transform: full-width">日本é</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            var combined = string.Concat(AllWords(el!).Select(w => w.Text));
+            Assert.Equal("日本é", combined);
+        }
+
+        [Fact]
+        public async Task FullWidth_ConvertsCurrencyAndSymbolCharacters()
+        {
+            // U+00A2/A3/AC/AF/A6/A5/20A9 each have their own fullwidth compatibility form in the
+            // U+FFE0-FFE6 range, distinct from the ASCII offset mapping used for '!'-'~'.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="el" style="text-transform: full-width; white-space: pre">¢£¬¯¦¥₩</div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el");
+
+            Assert.NotNull(el);
+            var combined = string.Concat(AllWords(el!).Select(w => w.Text));
+            Assert.Equal("￠￡￢￣￤￥￦", combined);
         }
 
         // ── helpers ───────────────────────────────────────────────────────────
