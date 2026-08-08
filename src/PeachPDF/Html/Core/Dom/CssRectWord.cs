@@ -103,6 +103,28 @@ namespace PeachPDF.Html.Core.Dom
         internal void ReplaceText(string text) => _text = text;
 
         /// <summary>
+        /// Set only on a hyphenation-created prefix (<c>CssLayoutEngine.TryHyphenateWord</c>): the
+        /// single word it was split from, still carrying that word's own
+        /// <see cref="CssRect.HyphenationCandidates"/>. Lets a discarded fragmentainer line's split be
+        /// undone by restoring this in place of the prefix/suffix pair - see
+        /// <see cref="HyphenationSuffix"/> and issue #344.
+        /// </summary>
+        internal CssRect? PreSplitWord { get; set; }
+
+        /// <summary>
+        /// Set only on a hyphenation-created prefix: the suffix <c>TryHyphenateWord</c> created
+        /// alongside it. A resumed fragmentainer pass re-walks the same word list a split mutated in
+        /// place (<c>CssBox.Words</c>), so a split made against one pass's remaining line width would
+        /// otherwise survive into the next pass's fresh, undivided width unchanged - re-flowed as two
+        /// words with a hyphen neither the original word nor a fresh hyphenation decision would have
+        /// produced. <c>CssLayoutEngine.CreateLineBoxes</c> uses this (together with
+        /// <see cref="PreSplitWord"/>) to merge the pair back into one word whenever the line the split
+        /// was made for is itself discarded at a break, so the resumed pass decides afresh instead of
+        /// re-flowing a stale split.
+        /// </summary>
+        internal CssRectWord? HyphenationSuffix { get; set; }
+
+        /// <summary>
         /// Represents this word for debugging purposes
         /// </summary>
         /// <returns></returns>

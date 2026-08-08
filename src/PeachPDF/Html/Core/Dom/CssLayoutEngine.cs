@@ -375,6 +375,8 @@ namespace PeachPDF.Html.Core.Dom
                 // fragmentainer being left - and that fragmentainer's fragments are frozen at the end of this
                 // pass, before the resumed pass re-places them. §4.1 has already decided they belong to the
                 // next fragmentainer, so mark them as such; being positioned again clears it.
+                UndoAbandonedHyphenationSplits(coordinates.Line);
+
                 foreach (var word in coordinates.Line.Words)
                 {
                     word.AwaitsTheNextFragmentainer = true;
@@ -1840,6 +1842,49 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Undoes any hyphenation split (<see cref="TryHyphenateWord"/>) whose prefix ended up part of
+        /// <paramref name="discardedLine"/> - a line <see cref="CreateLineBoxes"/> is throwing away
+        /// because the flow it belongs to is resuming in the next fragmentainer. The split mutated its
+        /// owning box's <see cref="CssBox.Words"/> list in place against this line's own (now
+        /// irrelevant) remaining width, and a resumed pass re-walks that same list - so left alone, the
+        /// split would survive unchanged into the resumed pass's fresh, undivided width, showing up as
+        /// two words (with a needless hyphen) where the whole original word would have fit
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/344">#344</see>). Restoring the
+        /// original word here instead lets the resumed pass decide afresh whether to hyphenate at all.
+        /// </summary>
+        /// <remarks>
+        /// Only reachable for a prefix: the suffix half of a split that already wrapped onto its own,
+        /// separately-kept line is never a member of <paramref name="discardedLine"/>'s own word list,
+        /// so an ordinary hyphen straddling the fragmentainer break itself - suffix alone starting the
+        /// next fragmentainer, prefix already committed to the one that just closed - is left untouched.
+        /// </remarks>
+        internal static void UndoAbandonedHyphenationSplits(CssLineBox discardedLine)
+        {
+            foreach (var word in discardedLine.Words)
+            {
+                if (word is not CssRectWord { PreSplitWord: { } original, HyphenationSuffix: { } suffix } prefix)
+                    continue;
+
+                var ownerWords = prefix.OwnerBox.Words;
+                var prefixIndex = ownerWords.IndexOf(prefix);
+
+                if (prefixIndex < 0) continue;
+
+                ownerWords.Remove(suffix);
+                ownerWords[prefixIndex] = original;
+
+                // The restored word has never been positioned this pass, so its Top/Left are whatever
+                // it last carried (nothing, for a word this split had never let reach placement) - not
+                // the "unset" state FragmentEmitter's own AwaitsTheNextFragmentainer check relies on to
+                // tell a genuinely-placed word from one whose position means nothing yet. Set explicitly
+                // rather than left to default, since the loop that sets it for prefix/suffix's own
+                // discarded-line siblings runs against the line's word list, which still names the
+                // now-discarded prefix object, not this replacement.
+                original.AwaitsTheNextFragmentainer = true;
+            }
+        }
+
+        /// <summary>
         /// Tries to split <paramref name="word"/> at the widest of its precomputed
         /// <see cref="CssRect.HyphenationCandidates"/> (set by <see cref="CssBox.ParseToWords"/> — either
         /// an explicit soft hyphen position or an automatic <c>HyphenationEngine</c> suggestion) whose
@@ -1880,6 +1925,12 @@ namespace PeachPDF.Html.Core.Dom
                     Width = g.MeasureString(suffixText, b.ActualFont, b.ActualTextShapingFeatures).Width,
                     Height = b.ActualFont.Height
                 };
+
+                // Recorded so a discarded fragmentainer line can undo this split rather than carry it
+                // into the resumed pass unchanged - see CssRectWord.HyphenationSuffix.
+                prefix.PreSplitWord = word;
+                prefix.HyphenationSuffix = suffix;
+
                 return true;
             }
 
