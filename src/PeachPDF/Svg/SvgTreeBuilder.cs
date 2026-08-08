@@ -840,24 +840,22 @@ namespace PeachPDF.Svg
             // Each property below keeps ApplyCommon's own null/"inherit"/invalid-value fallback
             // decision (which genuinely differs per property — see css-properties.json's svg.invalidBehavior
             // comments) and delegates only the parse-and-validate step to the generated registry, whose
-            // TrySet already returns false without writing the field on failure. That "leave unset on
-            // failure" contract reproduces the old hardcoded-keyword fallback for fill/stroke/fill-opacity/
-            // stroke-opacity exactly, because SvgElement's own constructor defaults were already chosen to
-            // equal those hardcoded fallbacks. fill-rule/stroke-linecap/stroke-linejoin instead check
-            // TrySet's return value and fall back to the inherited value on failure, per SVG 1.1 §11.4
-            // (see #599) — the same shape stroke-width/-miterlimit/-dashoffset/-dasharray already use.
+            // TrySet already returns false without writing the field on failure. fill/stroke/fill-opacity/
+            // stroke-opacity/fill-rule/stroke-linecap/stroke-linejoin all check TrySet's return value and
+            // fall back to the INHERITED value (not a hardcoded default) on invalid input, per SVG 1.1
+            // §11.4 (see #599, #675) — the same shape stroke-width/-miterlimit/-dashoffset/-dasharray
+            // already use. opacity is the one exception (see its own comment below): it is not inherited,
+            // so an invalid value simply leaves the field at its hardcoded default.
 
             var fillAttr = Attr("fill");
-            if (fillAttr is null || fillAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            if (fillAttr is null || fillAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "fill", fillAttr, in ctx))
                 element.Fill = inherited.Fill;
-            else
-                SvgPropertyRegistry.TrySet(element, "fill", fillAttr, in ctx);
 
             var strokeAttr = Attr("stroke");
-            if (strokeAttr is null || strokeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            if (strokeAttr is null || strokeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "stroke", strokeAttr, in ctx))
                 element.Stroke = inherited.Stroke;
-            else
-                SvgPropertyRegistry.TrySet(element, "stroke", strokeAttr, in ctx);
 
             // stroke-width/-miterlimit/-dashoffset/-dasharray fall back to the INHERITED value (not a
             // hardcoded default) on an invalid value, unlike the properties above - TrySet's return is
@@ -889,16 +887,14 @@ namespace PeachPDF.Svg
                 element.FillRule = inherited.FillRule;
 
             var fillOpacityAttr = Attr("fill-opacity");
-            if (fillOpacityAttr is null || fillOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            if (fillOpacityAttr is null || fillOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "fill-opacity", fillOpacityAttr, in ctx))
                 element.FillOpacity = inherited.FillOpacity;
-            else
-                SvgPropertyRegistry.TrySet(element, "fill-opacity", fillOpacityAttr, in ctx);
 
             var strokeOpacityAttr = Attr("stroke-opacity");
-            if (strokeOpacityAttr is null || strokeOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            if (strokeOpacityAttr is null || strokeOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "stroke-opacity", strokeOpacityAttr, in ctx))
                 element.StrokeOpacity = inherited.StrokeOpacity;
-            else
-                SvgPropertyRegistry.TrySet(element, "stroke-opacity", strokeOpacityAttr, in ctx);
 
             var lineCapAttr = Attr("stroke-linecap");
             if (lineCapAttr is null || lineCapAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)

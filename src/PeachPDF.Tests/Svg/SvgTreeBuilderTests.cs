@@ -135,6 +135,32 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void Fill_InvalidValueOnChild_FallsBackToInheritedFromGroup()
+        {
+            // SVG 1.1 §11.4 / CSS Cascade & Inheritance 4 §3: an invalid value on an inherited
+            // property computes to the inherited value, not the svg-paint default (#675).
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><g fill="#ff0000"><path fill="not-a-color" d="M0,0 L10,0 L10,10 Z"/></g></svg>""");
+
+            var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
+            Assert.Equal(SvgPaintKind.Solid, path.Fill.Kind);
+            Assert.Equal(RColor.FromArgb(0xff, 0x00, 0x00), path.Fill.Color);
+        }
+
+        [Fact]
+        public void Stroke_InvalidValueOnChild_FallsBackToInheritedFromGroup()
+        {
+            // SVG 1.1 §11.4 / CSS Cascade & Inheritance 4 §3: an invalid value on an inherited
+            // property computes to the inherited value, not the svg-paint default (#675).
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><g stroke="#0000ff"><path stroke="not-a-color" d="M0,0 L10,0" /></g></svg>""");
+
+            var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
+            Assert.Equal(SvgPaintKind.Solid, path.Stroke.Kind);
+            Assert.Equal(RColor.FromArgb(0x00, 0x00, 0xff), path.Stroke.Color);
+        }
+
+        [Fact]
         public void FillOpacityAndStrokeOpacity_AreDistinctFromOpacity()
         {
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="5" opacity="0.8" fill-opacity="0.4" stroke-opacity="0.2"/></svg>""");
@@ -153,6 +179,19 @@ namespace PeachPDF.Tests.Svg
             var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
             var circle = Assert.IsType<SvgCircleElement>(Assert.Single(group.Children));
             Assert.Equal(0.3, circle.FillOpacity, 3);
+        }
+
+        [Fact]
+        public void FillOpacityAndStrokeOpacity_InvalidValueOnChild_FallBackToInheritedFromGroup()
+        {
+            // SVG 1.1 §11.4 / CSS Cascade & Inheritance 4 §3: an invalid value on an inherited
+            // property computes to the inherited value, not the hardcoded 1.0 default (#675).
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><g fill-opacity="0.3" stroke-opacity="0.6"><circle fill-opacity="not-a-number" stroke-opacity="not-a-number" cx="5" cy="5" r="5"/></g></svg>""");
+
+            var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
+            var circle = Assert.IsType<SvgCircleElement>(Assert.Single(group.Children));
+            Assert.Equal(0.3, circle.FillOpacity, 3);
+            Assert.Equal(0.6, circle.StrokeOpacity, 3);
         }
 
         [Fact]
