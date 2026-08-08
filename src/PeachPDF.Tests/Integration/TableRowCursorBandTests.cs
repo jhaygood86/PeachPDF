@@ -373,5 +373,41 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(0, container.CursorSpills);
         }
+
+        /// <summary>
+        /// A <c>break-before: page</c> on a block inside a cell already lands that block at the real next
+        /// band's top the first time the cell is laid out - the row is placed at its true row-top
+        /// coordinate, not a provisional one a later translation corrects. The straddle correction used to
+        /// read the gap that break opened as ordinary row content, retract the row and place it again on
+        /// the next band, which asked <c>CssBox.ForcedBreakTopFor</c> the same question a second time and
+        /// walked the break's target one band further than the value asked for
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/512">issue #512</see>).
+        /// </summary>
+        [Fact]
+        public async Task ARowsInternalForcedBreak_IsNotWalkedFurtherByTheStraddleCorrection()
+        {
+            var rows = string.Concat(Enumerable.Range(1, 8).Select(i =>
+                i == 4
+                    ? "<tr><td style='vertical-align:top'><div style='height:10pt'>before</div>"
+                      + "<div id='after' style='height:30pt;break-before:page'>after</div></td></tr>"
+                    : $"<tr><td style='vertical-align:top'><div style='height:50pt'>row {i}</div></td></tr>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            var placed = RowsOf(root);
+            Assert.Equal(8, placed.Count);
+
+            var after = LayoutHarness.FindById(root, "after")!;
+
+            // The break's own target: the next band, not the one after it.
+            Assert.Equal(1, container.SlotStartingAt(after.Location.Y));
+
+            // The fifth row follows immediately below the fourth's real content - not pushed to a further
+            // band by the break firing a second time.
+            Assert.Equal(1, container.SlotStartingAt(placed[4].Location.Y));
+            Assert.True(placed[4].Location.Y >= placed[3].ActualBottom - 1.01);
+        }
     }
 }
