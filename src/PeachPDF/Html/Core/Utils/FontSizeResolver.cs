@@ -9,7 +9,7 @@ namespace PeachPDF.Html.Core.Utils
     /// <see cref="CssValueParser.ParseLength(string, double, double, double, string?, bool, double?, double?, double?, double?)"/>
     /// understands) to a numeric size. Extracted from <c>CssBox.ActualFont</c>'s original inline
     /// switch so in-flow content and <c>MarginBoxRenderer.BuildFont</c> (@page margin boxes, which have no
-    /// real inheritance chain and pass <see cref="Utils.CssConstants.FontSize"/> for both
+    /// real inheritance chain and pass <see cref="Utils.DefaultFontResolver.FontSize"/> for both
     /// <c>parentSize</c>/<c>remSize</c>) share one implementation.
     /// </summary>
     internal static class FontSizeResolver
@@ -43,15 +43,15 @@ namespace PeachPDF.Html.Core.Utils
         {
             var fsize = fontSizeValue switch
             {
-                CssConstants.Medium => CssConstants.FontSize,
-                CssConstants.XXSmall => CssConstants.FontSize - 4,
-                CssConstants.XSmall => CssConstants.FontSize - 3,
-                CssConstants.Small => CssConstants.FontSize - 2,
-                CssConstants.Large => CssConstants.FontSize + 2,
-                CssConstants.XLarge => CssConstants.FontSize + 3,
-                CssConstants.XXLarge => CssConstants.FontSize + 4,
-                CssConstants.Smaller => parentSize - 2,
-                CssConstants.Larger => parentSize + 2,
+                Keywords.Medium => DefaultFontResolver.FontSize,
+                Keywords.XxSmall => DefaultFontResolver.FontSize - 4,
+                Keywords.XSmall => DefaultFontResolver.FontSize - 3,
+                Keywords.Small => DefaultFontResolver.FontSize - 2,
+                Keywords.Large => DefaultFontResolver.FontSize + 2,
+                Keywords.XLarge => DefaultFontResolver.FontSize + 3,
+                Keywords.XxLarge => DefaultFontResolver.FontSize + 4,
+                Keywords.Smaller => parentSize - 2,
+                Keywords.Larger => parentSize + 2,
                 _ => CssValueParser.ParseLength(fontSizeValue, parentSize, parentSize, remSize, null, true,
                     containerInlineSizePt, containerBlockSizePt, viewportWidthPt, viewportHeightPt)
             };
@@ -97,15 +97,15 @@ namespace PeachPDF.Html.Core.Utils
             {
                 fsize = fontSize.Keyword switch
                 {
-                    FontSizeKeyword.XxSmall => CssConstants.FontSize - 4,
-                    FontSizeKeyword.XSmall => CssConstants.FontSize - 3,
-                    FontSizeKeyword.Small => CssConstants.FontSize - 2,
-                    FontSizeKeyword.Large => CssConstants.FontSize + 2,
-                    FontSizeKeyword.XLarge => CssConstants.FontSize + 3,
-                    FontSizeKeyword.XxLarge => CssConstants.FontSize + 4,
+                    FontSizeKeyword.XxSmall => DefaultFontResolver.FontSize - 4,
+                    FontSizeKeyword.XSmall => DefaultFontResolver.FontSize - 3,
+                    FontSizeKeyword.Small => DefaultFontResolver.FontSize - 2,
+                    FontSizeKeyword.Large => DefaultFontResolver.FontSize + 2,
+                    FontSizeKeyword.XLarge => DefaultFontResolver.FontSize + 3,
+                    FontSizeKeyword.XxLarge => DefaultFontResolver.FontSize + 4,
                     FontSizeKeyword.Smaller => parentSize - 2,
                     FontSizeKeyword.Larger => parentSize + 2,
-                    _ => CssConstants.FontSize // Medium, or unset (unreachable in practice - see CssKeywordOrValue's own doc comment)
+                    _ => DefaultFontResolver.FontSize // Medium, or unset (unreachable in practice - see CssKeywordOrValue's own doc comment)
                 };
             }
 

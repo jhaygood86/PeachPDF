@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
 
@@ -116,13 +117,13 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Theory]
-        [InlineData(0, CssConstants.UpperAlpha, "")]
-        [InlineData(1, CssConstants.UpperAlpha, "A")]
-        [InlineData(27, CssConstants.UpperAlpha, "AA")]
-        [InlineData(1, CssConstants.LowerAlpha, "a")]
-        [InlineData(1, CssConstants.LowerLatin, "a")]
-        [InlineData(4, CssConstants.LowerRoman, "iv")]
-        [InlineData(4, CssConstants.UpperRoman, "IV")]
+        [InlineData(0, Keywords.UpperAlpha, "")]
+        [InlineData(1, Keywords.UpperAlpha, "A")]
+        [InlineData(27, Keywords.UpperAlpha, "AA")]
+        [InlineData(1, Keywords.LowerAlpha, "a")]
+        [InlineData(1, Keywords.LowerLatin, "a")]
+        [InlineData(4, Keywords.LowerRoman, "iv")]
+        [InlineData(4, Keywords.UpperRoman, "IV")]
         public void ConvertToAlphaNumber_KnownStyles(int number, string style, string expected)
         {
             Assert.Equal(expected, CommonUtils.ConvertToAlphaNumber(number, style));
@@ -131,15 +132,15 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void ConvertToAlphaNumber_LowerGreek_ProducesNonEmptyResult()
         {
-            var result = CommonUtils.ConvertToAlphaNumber(1, CssConstants.LowerGreek);
+            var result = CommonUtils.ConvertToAlphaNumber(1, Keywords.LowerGreek);
 
             Assert.NotEmpty(result);
         }
 
         [Theory]
-        [InlineData(CssConstants.Armenian)]
-        [InlineData(CssConstants.Georgian)]
-        [InlineData(CssConstants.Hebrew)]
+        [InlineData(Keywords.Armenian)]
+        [InlineData(Keywords.Georgian)]
+        [InlineData(Keywords.Hebrew)]
         public void ConvertToAlphaNumber_SpecificAlphabets_ProduceNonEmptyResult(string style)
         {
             var result = CommonUtils.ConvertToAlphaNumber(5, style);
@@ -148,10 +149,10 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Theory]
-        [InlineData(CssConstants.Hiragana)]
-        [InlineData(CssConstants.HiraganaIroha)]
-        [InlineData(CssConstants.Katakana)]
-        [InlineData(CssConstants.KatakanaIroha)]
+        [InlineData(Keywords.Hiragana)]
+        [InlineData(Keywords.HiraganaIroha)]
+        [InlineData(Keywords.Katakana)]
+        [InlineData(Keywords.KatakanaIroha)]
         public void ConvertToAlphaNumber_KanaAlphabets_ProduceNonEmptyResult(string style)
         {
             var result = CommonUtils.ConvertToAlphaNumber(5, style);
@@ -162,7 +163,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void ConvertToAlphaNumber_ZeroWithAnyStyle_ReturnsEmpty()
         {
-            Assert.Equal(string.Empty, CommonUtils.ConvertToAlphaNumber(0, CssConstants.Hebrew));
+            Assert.Equal(string.Empty, CommonUtils.ConvertToAlphaNumber(0, Keywords.Hebrew));
         }
     }
 }

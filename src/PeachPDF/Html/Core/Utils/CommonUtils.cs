@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Network;
 using System;
@@ -247,46 +248,46 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="number">the number to convert</param>
         /// <param name="style">the css style to convert by</param>
         /// <returns>converted string</returns>
-        public static string ConvertToAlphaNumber(int number, string style = CssConstants.UpperAlpha)
+        public static string ConvertToAlphaNumber(int number, string style = Keywords.UpperAlpha)
         {
             if (number == 0)
                 return string.Empty;
 
-            if (style.Equals(CssConstants.LowerGreek, StringComparison.InvariantCultureIgnoreCase))
+            if (style.Equals(Keywords.LowerGreek, StringComparison.InvariantCultureIgnoreCase))
             {
                 return ConvertToGreekNumber(number);
             }
-            else if (style.Equals(CssConstants.LowerRoman, StringComparison.InvariantCultureIgnoreCase))
+            else if (style.Equals(Keywords.LowerRoman, StringComparison.InvariantCultureIgnoreCase))
             {
                 return ConvertToRomanNumbers(number, true);
             }
-            else if (style.Equals(CssConstants.UpperRoman, StringComparison.InvariantCultureIgnoreCase))
+            else if (style.Equals(Keywords.UpperRoman, StringComparison.InvariantCultureIgnoreCase))
             {
                 return ConvertToRomanNumbers(number, false);
             }
-            else if (style.Equals(CssConstants.Armenian, StringComparison.InvariantCultureIgnoreCase))
+            else if (style.Equals(Keywords.Armenian, StringComparison.InvariantCultureIgnoreCase))
             {
                 return ConvertToSpecificNumbers(number, _armenianDigitsTable);
             }
-            else if (style.Equals(CssConstants.Georgian, StringComparison.InvariantCultureIgnoreCase))
+            else if (style.Equals(Keywords.Georgian, StringComparison.InvariantCultureIgnoreCase))
             {
                 return ConvertToSpecificNumbers(number, _georgianDigitsTable);
             }
-            else if (style.Equals(CssConstants.Hebrew, StringComparison.InvariantCultureIgnoreCase))
+            else if (style.Equals(Keywords.Hebrew, StringComparison.InvariantCultureIgnoreCase))
             {
                 return ConvertToSpecificNumbers(number, _hebrewDigitsTable);
             }
-            else if (style.Equals(CssConstants.Hiragana, StringComparison.InvariantCultureIgnoreCase) || style.Equals(CssConstants.HiraganaIroha, StringComparison.InvariantCultureIgnoreCase))
+            else if (style.Equals(Keywords.Hiragana, StringComparison.InvariantCultureIgnoreCase) || style.Equals(Keywords.HiraganaIroha, StringComparison.InvariantCultureIgnoreCase))
             {
                 return ConvertToSpecificNumbers2(number, _hiraganaDigitsTable);
             }
-            else if (style.Equals(CssConstants.Katakana, StringComparison.InvariantCultureIgnoreCase) || style.Equals(CssConstants.KatakanaIroha, StringComparison.InvariantCultureIgnoreCase))
+            else if (style.Equals(Keywords.Katakana, StringComparison.InvariantCultureIgnoreCase) || style.Equals(Keywords.KatakanaIroha, StringComparison.InvariantCultureIgnoreCase))
             {
                 return ConvertToSpecificNumbers2(number, _satakanaDigitsTable);
             }
             else
             {
-                var lowercase = style.Equals(CssConstants.LowerAlpha, StringComparison.InvariantCultureIgnoreCase) || style.Equals(CssConstants.LowerLatin, StringComparison.InvariantCultureIgnoreCase);
+                var lowercase = style.Equals(Keywords.LowerAlpha, StringComparison.InvariantCultureIgnoreCase) || style.Equals(Keywords.LowerLatin, StringComparison.InvariantCultureIgnoreCase);
                 return ConvertToEnglishNumber(number, lowercase);
             }
         }

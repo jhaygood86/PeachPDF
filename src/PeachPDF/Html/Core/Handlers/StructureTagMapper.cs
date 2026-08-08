@@ -74,10 +74,10 @@ namespace PeachPDF.Html.Core.Handlers
 
             var pdfTagType = box.PdfTagType;
 
-            if (string.IsNullOrEmpty(pdfTagType) || string.Equals(pdfTagType, CssConstants.Auto, System.StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(pdfTagType) || string.Equals(pdfTagType, Keywords.Auto, System.StringComparison.OrdinalIgnoreCase))
                 return ClassifyAuto(box);
 
-            if (string.Equals(pdfTagType, CssConstants.None, System.StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(pdfTagType, Keywords.None, System.StringComparison.OrdinalIgnoreCase))
                 return StructureTagClassification.None;
 
             // "auto" and "none" are both handled above via exact-string checks, and both are the
@@ -118,13 +118,13 @@ namespace PeachPDF.Html.Core.Handlers
         {
             var tableStructureType = box.DerivedStyle.ActualDisplay switch
             {
-                CssConstants.TableRow => "TR",
+                Keywords.TableRow => "TR",
                 // Anonymous table cells can't be distinguished into header (/TH) vs data (/TD) -
                 // there is no source <th>/<td> tag to read; /TD is the safe default.
-                CssConstants.TableCell => "TD",
-                CssConstants.TableHeaderGroup => "THead",
-                CssConstants.TableRowGroup => "TBody",
-                CssConstants.TableFooterGroup => "TFoot",
+                Keywords.TableCell => "TD",
+                Keywords.TableHeaderGroup => "THead",
+                Keywords.TableRowGroup => "TBody",
+                Keywords.TableFooterGroup => "TFoot",
                 _ => null
             };
 

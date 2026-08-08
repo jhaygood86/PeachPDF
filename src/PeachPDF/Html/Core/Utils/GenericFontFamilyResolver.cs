@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -21,45 +22,45 @@ namespace PeachPDF.Html.Core.Utils
     /// </remarks>
     internal static class GenericFontFamilyResolver
     {
-        /// <summary>Every CSS generic family this resolver maps (excludes <c>system-ui</c>, handled separately - see <see cref="CssConstants.DefaultFont"/>).</summary>
+        /// <summary>Every CSS generic family this resolver maps (excludes <c>system-ui</c>, handled separately - see <see cref="DefaultFontResolver.DefaultFont"/>).</summary>
         internal static readonly string[] Generics =
         [
-            CssConstants.Serif,
-            CssConstants.SansSerif,
-            CssConstants.Monospace,
-            CssConstants.Cursive,
-            CssConstants.Fantasy
+            Keywords.Serif,
+            Keywords.SansSerif,
+            Keywords.Monospace,
+            Keywords.Cursive,
+            Keywords.Fantasy
         ];
 
         private static readonly FrozenDictionary<string, string> Windows =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                [CssConstants.Serif] = "Times New Roman",
-                [CssConstants.SansSerif] = "Arial",
-                [CssConstants.Monospace] = "Consolas",
-                [CssConstants.Cursive] = "Comic Sans MS",
-                [CssConstants.Fantasy] = "Impact"
+                [Keywords.Serif] = "Times New Roman",
+                [Keywords.SansSerif] = "Arial",
+                [Keywords.Monospace] = "Consolas",
+                [Keywords.Cursive] = "Comic Sans MS",
+                [Keywords.Fantasy] = "Impact"
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         private static readonly FrozenDictionary<string, string> MacOS =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                [CssConstants.Serif] = "Times",
-                [CssConstants.SansSerif] = "Helvetica",
-                [CssConstants.Monospace] = "Menlo",
-                [CssConstants.Cursive] = "Apple Chancery",
-                [CssConstants.Fantasy] = "Papyrus"
+                [Keywords.Serif] = "Times",
+                [Keywords.SansSerif] = "Helvetica",
+                [Keywords.Monospace] = "Menlo",
+                [Keywords.Cursive] = "Apple Chancery",
+                [Keywords.Fantasy] = "Papyrus"
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         private static readonly FrozenDictionary<string, string> Android =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                [CssConstants.Serif] = "Noto Serif",
-                [CssConstants.SansSerif] = "Roboto",
-                [CssConstants.Monospace] = "Droid Sans Mono",
+                [Keywords.Serif] = "Noto Serif",
+                [Keywords.SansSerif] = "Roboto",
+                [Keywords.Monospace] = "Droid Sans Mono",
                 // Android has no distinct fantasy font either - Chromium reuses cursive's for it there too.
-                [CssConstants.Cursive] = "Dancing Script",
-                [CssConstants.Fantasy] = "Dancing Script"
+                [Keywords.Cursive] = "Dancing Script",
+                [Keywords.Fantasy] = "Dancing Script"
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>

@@ -17,7 +17,7 @@ public sealed class FontLibrary(HttpClient httpClient)
 {
     /// <summary>
     /// The Liberation faces, in the order they are registered. Liberation Sans is deliberately first: it is
-    /// what <c>CssConstants.DefaultFont</c> resolves to on a browser host, and registering it under exactly
+    /// what <c>DefaultFontResolver.DefaultFont</c> resolves to on a browser host, and registering it under exactly
     /// that name is what makes the engine's last-resort font a real font rather than a mapping.
     /// </summary>
     private static readonly string[] FontFiles =

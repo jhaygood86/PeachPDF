@@ -21,14 +21,14 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         internal static int Resolve(string fontStretchValue) => fontStretchValue switch
         {
-            CssConstants.UltraCondensed => 1,
-            CssConstants.ExtraCondensed => 2,
-            CssConstants.Condensed => 3,
-            CssConstants.SemiCondensed => 4,
-            CssConstants.SemiExpanded => 6,
-            CssConstants.Expanded => 7,
-            CssConstants.ExtraExpanded => 8,
-            CssConstants.UltraExpanded => 9,
+            Keywords.UltraCondensed => 1,
+            Keywords.ExtraCondensed => 2,
+            Keywords.Condensed => 3,
+            Keywords.SemiCondensed => 4,
+            Keywords.SemiExpanded => 6,
+            Keywords.Expanded => 7,
+            Keywords.ExtraExpanded => 8,
+            Keywords.UltraExpanded => 9,
             _ => Normal
         };
 

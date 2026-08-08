@@ -18,7 +18,7 @@ namespace PeachPDF.Html.Core.Dom
             : base(tableBox, new HtmlTag("none", false, new Dictionary<string, string> { { "colspan", "1" } }))
         {
             ExtendedBox = extendedBox;
-            Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
+            Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
 
             StartRow = startRow;
             EndRow = endRow;

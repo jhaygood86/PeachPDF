@@ -106,8 +106,8 @@ namespace PeachPDF.Tests.Integration
             var setup = TableOf(root).TableSetup;
 
             Assert.NotNull(setup);
-            Assert.Equal(CssConstants.Avoid, setup!.Header!.Box.BreakInside);
-            Assert.Equal(CssConstants.Avoid, setup.Footer!.Box.BreakInside);
+            Assert.Equal(Keywords.Avoid, setup!.Header!.Box.BreakInside);
+            Assert.Equal(Keywords.Avoid, setup.Footer!.Box.BreakInside);
         }
 
         /// <summary>
@@ -125,7 +125,7 @@ namespace PeachPDF.Tests.Integration
             var header = TableOf(root).TableSetup!.Header!.Box;
 
             Assert.All(LayoutHarness.Descendants(header).Skip(1),
-                box => Assert.Equal(CssConstants.Auto, box.BreakInside));
+                box => Assert.Equal(Keywords.Auto, box.BreakInside));
         }
 
         /// <summary>
@@ -144,7 +144,7 @@ namespace PeachPDF.Tests.Integration
                 .ToList();
 
             Assert.Equal(3, headings.Count);
-            Assert.All(headings, heading => Assert.Equal(CssConstants.Avoid, heading.BreakAfter));
+            Assert.All(headings, heading => Assert.Equal(Keywords.Avoid, heading.BreakAfter));
         }
 
         /// <summary>

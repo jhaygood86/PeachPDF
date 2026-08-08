@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = NewAdapter();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
-            var expected = adapter.GetFont("monospace", CssConstants.FontSize, RFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, RFontStyle.Regular) as FontAdapter;
 
             Assert.Equal(expected!.Font.Name, font.Name);
         }
@@ -43,22 +43,22 @@ namespace PeachPDF.Tests.Integration
             var adapter = NewAdapter();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, pageStyle, adapter);
-            var expected = adapter.GetFont("monospace", CssConstants.FontSize, RFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, RFontStyle.Regular) as FontAdapter;
 
             Assert.Equal(expected!.Font.Name, font.Name);
         }
 
         [Fact]
-        public void NeitherSet_FallsBackToCssConstantsDefaults()
+        public void NeitherSet_FallsBackToDefaultFontResolverDefaults()
         {
             var marginStyle = ParseDeclarations("content: \"x\";");
             var adapter = NewAdapter();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
-            var expected = adapter.GetFont(CssConstants.DefaultFont, CssConstants.FontSize, RFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont(DefaultFontResolver.DefaultFont, DefaultFontResolver.FontSize, RFontStyle.Regular) as FontAdapter;
 
             Assert.Equal(expected!.Font.Name, font.Name);
-            Assert.Equal(CssConstants.FontSize, font.Size, 3);
+            Assert.Equal(DefaultFontResolver.FontSize, font.Size, 3);
         }
 
         [Fact]
@@ -68,7 +68,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = NewAdapter();
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
-            var expected = adapter.GetFont("monospace", CssConstants.FontSize, RFontStyle.Regular) as FontAdapter;
+            var expected = adapter.GetFont("monospace", DefaultFontResolver.FontSize, RFontStyle.Regular) as FontAdapter;
 
             Assert.Equal(expected!.Font.Name, font.Name);
         }
@@ -114,7 +114,7 @@ namespace PeachPDF.Tests.Integration
 
             var font = MarginBoxRenderer.BuildFont(marginStyle, null, adapter);
 
-            Assert.Equal(CssConstants.FontSize + 2, font.Size, 3);
+            Assert.Equal(DefaultFontResolver.FontSize + 2, font.Size, 3);
         }
 
         [Fact]
@@ -137,7 +137,7 @@ namespace PeachPDF.Tests.Integration
             // value, since BuildFont tries the latter first and only falls back to the former for
             // keywords/relative units it can't handle.
             var direct = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints("14pt");
-            var viaSharedTable = FontSizeResolver.Resolve("14pt", CssConstants.FontSize, CssConstants.FontSize);
+            var viaSharedTable = FontSizeResolver.Resolve("14pt", DefaultFontResolver.FontSize, DefaultFontResolver.FontSize);
 
             Assert.Equal(direct, viaSharedTable);
         }

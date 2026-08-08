@@ -50,10 +50,10 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         private static bool EstablishesOwnParagraph(CssBox box) =>
-            box.IsRoot || box.DerivedStyle.ActualDisplay != CssConstants.Inline || box is CssBoxMarker;
+            box.IsRoot || box.DerivedStyle.ActualDisplay != Keywords.Inline || box is CssBoxMarker;
 
         private static bool ParticipatesInParentParagraph(CssBox box) =>
-            box.DerivedStyle.ActualDisplay == CssConstants.Inline && box is not (CssBoxImage or CssBoxSvg or CssBoxMarker);
+            box.DerivedStyle.ActualDisplay == Keywords.Inline && box is not (CssBoxImage or CssBoxSvg or CssBoxMarker);
 
         private static void ResolveParagraph(CssBox paragraphRoot)
         {

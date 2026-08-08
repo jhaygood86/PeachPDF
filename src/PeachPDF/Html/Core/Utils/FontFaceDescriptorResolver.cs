@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Fonts;
 
 namespace PeachPDF.Html.Core.Utils
@@ -31,8 +32,8 @@ namespace PeachPDF.Html.Core.Utils
             return tokens.Length switch
             {
                 1 when int.TryParse(tokens[0], out var numeric) => numeric,
-                1 when tokens[0] is CssConstants.Bold => 700,
-                1 when tokens[0] is CssConstants.Normal => 400,
+                1 when tokens[0] is Keywords.Bold => 700,
+                1 when tokens[0] is Keywords.Normal => 400,
                 2 when int.TryParse(tokens[0], out var lowerBound) => lowerBound,
                 _ => null
             };
@@ -52,8 +53,8 @@ namespace PeachPDF.Html.Core.Utils
 
             return firstToken switch
             {
-                CssConstants.Italic or CssConstants.Oblique => true,
-                CssConstants.Normal => false,
+                Keywords.Italic or Keywords.Oblique => true,
+                Keywords.Normal => false,
                 _ => null
             };
         }
@@ -73,9 +74,9 @@ namespace PeachPDF.Html.Core.Utils
 
             return trimmed switch
             {
-                CssConstants.UltraCondensed or CssConstants.ExtraCondensed or CssConstants.Condensed
-                    or CssConstants.SemiCondensed or CssConstants.Normal or CssConstants.SemiExpanded
-                    or CssConstants.Expanded or CssConstants.ExtraExpanded or CssConstants.UltraExpanded
+                Keywords.UltraCondensed or Keywords.ExtraCondensed or Keywords.Condensed
+                    or Keywords.SemiCondensed or Keywords.Normal or Keywords.SemiExpanded
+                    or Keywords.Expanded or Keywords.ExtraExpanded or Keywords.UltraExpanded
                     => FontStretchResolver.Resolve(trimmed),
                 _ => null
             };

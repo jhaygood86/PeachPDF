@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
@@ -91,7 +92,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     _imageLoadHandler = new ImageLoadHandler(HtmlContainer!);
 
-                    if (Content != CssConstants.Normal)
+                    if (Content != Keywords.Normal)
                     {
                         var imageContent = CssValueParser.GetImagePropertyValue(Content);
 

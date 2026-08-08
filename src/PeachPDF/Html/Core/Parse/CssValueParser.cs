@@ -397,7 +397,7 @@ namespace PeachPDF.Html.Core.Parse
 
             // A bare point value returns the raw point number directly rather than round-tripping
             // through pixel space, avoiding a redundant px->pt->px floating-point conversion.
-            if (returnPoints && unit == CssConstants.Pt)
+            if (returnPoints && unit == UnitNames.Pt)
             {
                 return number!.Value;
             }
@@ -487,21 +487,21 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (string.IsNullOrEmpty(borderValue))
             {
-                return GetActualBorderWidth(CssConstants.Medium, b);
+                return GetActualBorderWidth(Keywords.Medium, b);
             }
 
             return borderValue switch
             {
-                CssConstants.Thin => 1f,
-                CssConstants.Medium => 2f,
-                CssConstants.Thick => 4f,
+                Keywords.Thin => 1f,
+                Keywords.Medium => 2f,
+                Keywords.Thick => 4f,
                 _ => Math.Abs(ParseLength(borderValue, 1, b))
             };
         }
 
         /// <returns>
         /// The first comma-separated candidate that's actually installed/registered, or null if none of
-        /// them are - callers fall back to <see cref="CssConstants.DefaultFont"/> in that case (see
+        /// them are - callers fall back to <see cref="DefaultFontResolver.DefaultFont"/> in that case (see
         /// <c>CssBox.ActualFont</c>), same as when the whole family list fails to resolve any
         /// other way. Previously returned the literal string "inherit" as a not-found sentinel, which was
         /// confusable with the real CSS <c>inherit</c> keyword downstream.
@@ -658,7 +658,7 @@ namespace PeachPDF.Html.Core.Parse
         private static Final4Result? BuildFinal4(string transformValue, string transformOriginValue, CssBox box)
         {
             if (string.IsNullOrWhiteSpace(transformValue) ||
-                string.Equals(transformValue.Trim(), CssConstants.None, StringComparison.OrdinalIgnoreCase))
+                string.Equals(transformValue.Trim(), Keywords.None, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }
@@ -869,7 +869,7 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         public static bool IsValidTransformValue(string value)
         {
-            if (string.IsNullOrWhiteSpace(value) || string.Equals(value.Trim(), CssConstants.None, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(value) || string.Equals(value.Trim(), Keywords.None, StringComparison.OrdinalIgnoreCase))
                 return true;
 
             List<Token> tokens;

@@ -22,7 +22,7 @@
         "comment": { "type": "string" },
         "inherited": { "type": "boolean", "description": "CSS 2.1 §6.2 inheritance. Drives the generated InheritedProperties set." },
         "initialValue": {
-          "description": "A string literal, an {expression} spliced verbatim as C# (for a runtime/platform-computed default like CssConstants.DefaultFont), or null to declare 'no initial value, by design' (a logical scratch field, or a genuinely unimplemented property). The key must always be present — PPG006 fires if it's missing entirely.",
+          "description": "A string literal, an {expression} spliced verbatim as C# (for a runtime/platform-computed default like DefaultFontResolver.DefaultFont), or null to declare 'no initial value, by design' (a logical scratch field, or a genuinely unimplemented property). The key must always be present — PPG006 fires if it's missing entirely.",
           "oneOf": [
             { "type": "string" },
             { "type": "null" },

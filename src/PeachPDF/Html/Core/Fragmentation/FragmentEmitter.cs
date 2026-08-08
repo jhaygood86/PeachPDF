@@ -1586,7 +1586,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             (CssBox Root, double Shift, RRect Band)? displacement = null)
         {
             // A display:none subtree paints nothing at all, so it produces no fragments either.
-            if (box.DerivedStyle.ActualDisplay == CssConstants.None) return null;
+            if (box.DerivedStyle.ActualDisplay == Keywords.None) return null;
 
             // Fixed-position content ignores the page origin and repeats identically on every page, so
             // its fragments carry raw document coordinates (CSS Position 3: a fixed box's containing

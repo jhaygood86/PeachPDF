@@ -109,7 +109,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (box.IsInline)
             {
                 savedDisplay = box.Display;
-                box.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
+                box.Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
             }
 
             await box.LayoutContentAtItsAssignedPosition(g);

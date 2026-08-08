@@ -168,7 +168,7 @@ namespace PeachPDF.SourceGenerators.Emit
             // A case-insensitively-matched keyword (plain "keyword", or the keyword side of a union like
             // "length" | "keyword") must be stored in its canonical (as-authored-in-JSON) casing, not the
             // raw input — every downstream layout/paint comparison against this field is an ordinal match
-            // against a lowercase CssConstants.* literal, so an uncanonicalized "BLOCK" would validate but
+            // against a lowercase Keywords.* literal, so an uncanonicalized "BLOCK" would validate but
             // then silently fail to match anything (issue #598). A non-keyword value (e.g. an actual length
             // for a union property) falls through the chain unchanged.
             var hasCaseInsensitiveKeyword = entry.KeywordComparison != KeywordComparison.Ordinal &&
@@ -262,7 +262,7 @@ namespace PeachPDF.SourceGenerators.Emit
             {
                 var valueExpr = entry.InitialValueKind == InitialValueKind.Literal
                     ? StringLiteral(entry.InitialValueText!)
-                    : entry.InitialValueText; // Expression — spliced verbatim, e.g. CssConstants.DefaultFont
+                    : entry.InitialValueText; // Expression — spliced verbatim, e.g. DefaultFontResolver.DefaultFont
                 sb.AppendLine($"                [{StringLiteral(entry.Name)}] = {valueExpr},");
             }
             sb.AppendLine("            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);");

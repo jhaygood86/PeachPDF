@@ -253,7 +253,7 @@ namespace PeachPDF.Text
         /// Opens the decompressing view over the compressed resource. Taken as a parameter purely so a test
         /// can supply one that fails the way a Brotli-less host does, which is otherwise unreachable on any
         /// platform that has a decoder - the same explicit-input approach
-        /// <c>CssConstants.DetermineDefaultFont</c> uses for its platform table.
+        /// <c>DefaultFontResolver.DetermineDefaultFont</c> uses for its platform table.
         /// </param>
         internal static LanguagePatternSet? LoadPatternSet(string tag, Func<Stream, Stream> openDecompressed)
         {

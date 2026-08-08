@@ -98,13 +98,13 @@ namespace PeachPDF.Html.Core.Dom
         /// pre-check — which is gated on the *absence* of both groups, so reading repetition here would
         /// send a non-repeating table down a relocation path a table with a <c>&lt;thead&gt;</c> never takes.
         /// </remarks>
-        private bool HeaderIsDetached => _headerBox != null && _headerBox.DerivedStyle.ActualDisplay == CssConstants.TableHeaderGroup;
+        private bool HeaderIsDetached => _headerBox != null && _headerBox.DerivedStyle.ActualDisplay == Keywords.TableHeaderGroup;
 
         /// <summary>
         /// Whether the table has a <c>&lt;tfoot&gt;</c> this engine took out of the child list. See
         /// <see cref="HeaderIsDetached"/>; <see cref="_footerRepeats"/> is the other question.
         /// </summary>
-        private bool FooterIsDetached => _footerBox != null && _footerBox.DerivedStyle.ActualDisplay == CssConstants.TableFooterGroup;
+        private bool FooterIsDetached => _footerBox != null && _footerBox.DerivedStyle.ActualDisplay == Keywords.TableFooterGroup;
 
         /// <summary>
         /// Whether css-tables-3 §6.2 lets the detached <c>&lt;thead&gt;</c> be repeated on every band the
@@ -246,21 +246,21 @@ namespace PeachPDF.Html.Core.Dom
             {
                 switch (box.DerivedStyle.ActualDisplay)
                 {
-                    case CssConstants.TableColumn:
+                    case Keywords.TableColumn:
                         columns += GetSpan(box);
                         break;
-                    case CssConstants.TableRowGroup:
+                    case Keywords.TableRowGroup:
                         {
                             foreach (var cr in tableBox.Boxes)
                             {
                                 count++;
-                                if (cr.DerivedStyle.ActualDisplay == CssConstants.TableRow)
+                                if (cr.DerivedStyle.ActualDisplay == Keywords.TableRow)
                                     columns = Math.Max(columns, cr.Boxes.Count);
                             }
 
                             break;
                         }
-                    case CssConstants.TableRow:
+                    case Keywords.TableRow:
                         count++;
                         columns = Math.Max(columns, box.Boxes.Count);
                         break;
@@ -414,9 +414,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 switch (box.DerivedStyle.ActualDisplay)
                 {
-                    case CssConstants.TableCaption:
+                    case Keywords.TableCaption:
                         break;
-                    case CssConstants.TableRow:
+                    case Keywords.TableRow:
                         if (!IsRowCollapsed(box))
                         {
                             _bodyRows.Add(box);
@@ -424,10 +424,10 @@ namespace PeachPDF.Html.Core.Dom
                         }
                         originalRowIndex++;
                         break;
-                    case CssConstants.TableRowGroup:
+                    case Keywords.TableRowGroup:
                         foreach (CssBox childBox in box.Boxes)
                         {
-                            if (childBox.DerivedStyle.ActualDisplay != CssConstants.TableRow) continue;
+                            if (childBox.DerivedStyle.ActualDisplay != Keywords.TableRow) continue;
 
                             if (!IsRowCollapsed(childBox))
                             {
@@ -437,7 +437,7 @@ namespace PeachPDF.Html.Core.Dom
                             originalRowIndex++;
                         }
                         break;
-                    case CssConstants.TableHeaderGroup:
+                    case Keywords.TableHeaderGroup:
                         if (_headerBox != null)
                         {
                             _bodyRows.Add(box);
@@ -447,7 +447,7 @@ namespace PeachPDF.Html.Core.Dom
                             _headerBox = box;
                         originalRowIndex++;
                         break;
-                    case CssConstants.TableFooterGroup:
+                    case Keywords.TableFooterGroup:
                         if (_footerBox != null)
                         {
                             _bodyRows.Add(box);
@@ -457,11 +457,11 @@ namespace PeachPDF.Html.Core.Dom
                             _footerBox = box;
                         originalRowIndex++;
                         break;
-                    case CssConstants.TableColumn:
+                    case Keywords.TableColumn:
                         for (int i = 0; i < GetSpan(box); i++)
                             _columns.Add(box);
                         break;
-                    case CssConstants.TableColumnGroup:
+                    case Keywords.TableColumnGroup:
                         if (box.Boxes.Count == 0)
                         {
                             int gspan = GetSpan(box);
@@ -648,7 +648,7 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         if (i >= 20 && !double.IsNaN(_columnWidths[i])) continue; // limit column width check
 
-                        if (i >= row.Boxes.Count || row.Boxes[i].DerivedStyle.ActualDisplay != CssConstants.TableCell) continue;
+                        if (i >= row.Boxes.Count || row.Boxes[i].DerivedStyle.ActualDisplay != Keywords.TableCell) continue;
 
                         var len = CssValueParser.ParseLength(row.Boxes[i].Width, availCellSpace, row.Boxes[i]);
 
@@ -1338,7 +1338,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 foreach (var row in _headerBox.Boxes)
                 {
-                    if (row.DerivedStyle.ActualDisplay != CssConstants.TableRow)
+                    if (row.DerivedStyle.ActualDisplay != Keywords.TableRow)
                         continue;
                     if (IsRowCollapsed(row))
                         continue;
@@ -1377,7 +1377,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 foreach (var row in _footerBox.Boxes)
                 {
-                    if (row.DerivedStyle.ActualDisplay != CssConstants.TableRow)
+                    if (row.DerivedStyle.ActualDisplay != Keywords.TableRow)
                         continue;
                     if (IsRowCollapsed(row))
                         continue;
@@ -1884,10 +1884,10 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var box in _tableBox.Boxes)
             {
-                if (box.DerivedStyle.ActualDisplay != CssConstants.TableRowGroup)
+                if (box.DerivedStyle.ActualDisplay != Keywords.TableRowGroup)
                     continue;
 
-                var rows = box.Boxes.Where(b => b.DerivedStyle.ActualDisplay == CssConstants.TableRow && placed.Contains(b))
+                var rows = box.Boxes.Where(b => b.DerivedStyle.ActualDisplay == Keywords.TableRow && placed.Contains(b))
                     .ToList();
                 if (rows.Count == 0)
                     continue;
@@ -2298,8 +2298,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var slot = container.SlotStartingAt(proxy.Location.Y);
 
-                if (proxy.DerivedStyle.ActualDisplay == CssConstants.TableHeaderGroup) headerBands.Add(slot);
-                else if (proxy.DerivedStyle.ActualDisplay == CssConstants.TableFooterGroup) footerBands.Add(slot);
+                if (proxy.DerivedStyle.ActualDisplay == Keywords.TableHeaderGroup) headerBands.Add(slot);
+                else if (proxy.DerivedStyle.ActualDisplay == Keywords.TableFooterGroup) footerBands.Add(slot);
             }
 
             foreach (var slot in _bandsARowOverflowedInto.Order())
@@ -3116,7 +3116,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var childBox in box.Boxes)
             {
-                if (childBox.DerivedStyle.ActualDisplay == CssConstants.None) continue;
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
                 await childBox.MeasureWordsSize(g);
                 await MeasureWords(childBox, g);
@@ -3404,7 +3404,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private double GetHorizontalSpacing()
         {
-            return _tableBox.BorderCollapse == CssConstants.Collapse ? -1f : _tableBox.ActualBorderSpacingHorizontal;
+            return _tableBox.BorderCollapse == Keywords.Collapse ? -1f : _tableBox.ActualBorderSpacingHorizontal;
         }
 
         /// <summary>
@@ -3412,7 +3412,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static double GetHorizontalSpacing(CssBox box)
         {
-            return box.BorderCollapse == CssConstants.Collapse ? -1f : box.ActualBorderSpacingHorizontal;
+            return box.BorderCollapse == Keywords.Collapse ? -1f : box.ActualBorderSpacingHorizontal;
         }
 
         /// <summary>
@@ -3420,7 +3420,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private double GetVerticalSpacing()
         {
-            return _tableBox.BorderCollapse == CssConstants.Collapse ? -1f : _tableBox.ActualBorderSpacingVertical;
+            return _tableBox.BorderCollapse == Keywords.Collapse ? -1f : _tableBox.ActualBorderSpacingVertical;
         }
 
         /// <summary>

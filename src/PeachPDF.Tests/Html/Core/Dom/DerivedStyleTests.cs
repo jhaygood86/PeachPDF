@@ -15,42 +15,42 @@ namespace PeachPDF.Tests.Html.Core.Dom
     public class DerivedStyleTests
     {
         [Theory]
-        [InlineData(CssConstants.Inline, CssConstants.Block)]
-        [InlineData(CssConstants.InlineBlock, CssConstants.Block)]
-        [InlineData(CssConstants.InlineTable, CssConstants.Table)]
-        [InlineData(CssConstants.TableRow, CssConstants.Block)]
-        [InlineData(CssConstants.TableRowGroup, CssConstants.Block)]
-        [InlineData(CssConstants.TableColumn, CssConstants.Block)]
-        [InlineData(CssConstants.TableColumnGroup, CssConstants.Block)]
-        [InlineData(CssConstants.TableCell, CssConstants.Block)]
-        [InlineData(CssConstants.TableCaption, CssConstants.Block)]
-        [InlineData(CssConstants.TableHeaderGroup, CssConstants.Block)]
-        [InlineData(CssConstants.TableFooterGroup, CssConstants.Block)]
-        [InlineData(CssConstants.InlineFlex, CssConstants.Flex)]
-        [InlineData(CssConstants.InlineGrid, CssConstants.Grid)]
+        [InlineData(Keywords.Inline, Keywords.Block)]
+        [InlineData(Keywords.InlineBlock, Keywords.Block)]
+        [InlineData(Keywords.InlineTable, Keywords.Table)]
+        [InlineData(Keywords.TableRow, Keywords.Block)]
+        [InlineData(Keywords.TableRowGroup, Keywords.Block)]
+        [InlineData(Keywords.TableColumn, Keywords.Block)]
+        [InlineData(Keywords.TableColumnGroup, Keywords.Block)]
+        [InlineData(Keywords.TableCell, Keywords.Block)]
+        [InlineData(Keywords.TableCaption, Keywords.Block)]
+        [InlineData(Keywords.TableHeaderGroup, Keywords.Block)]
+        [InlineData(Keywords.TableFooterGroup, Keywords.Block)]
+        [InlineData(Keywords.InlineFlex, Keywords.Flex)]
+        [InlineData(Keywords.InlineGrid, Keywords.Grid)]
         public void ActualDisplay_OnAFloatedBox_BlockifiesInlineLevelAndTableInternalValues(string display, string expected)
         {
             var box = new CssBox(null, null)
             {
                 Display = CssProperty<DisplayMode>.FromCssText(display, Map.DisplayModes, DisplayMode.Inline),
-                Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left)
+                Float = CssProperty<Floating>.FromValue(Keywords.Left, Floating.Left)
             };
 
             Assert.Equal(expected, box.DerivedStyle.ActualDisplay);
         }
 
         [Theory]
-        [InlineData(CssConstants.Block)]
-        [InlineData(CssConstants.Flex)]
-        [InlineData(CssConstants.Grid)]
-        [InlineData(CssConstants.Table)]
-        [InlineData(CssConstants.None)]
+        [InlineData(Keywords.Block)]
+        [InlineData(Keywords.Flex)]
+        [InlineData(Keywords.Grid)]
+        [InlineData(Keywords.Table)]
+        [InlineData(Keywords.None)]
         public void ActualDisplay_OnAFloatedBox_LeavesAlreadyBlockLevelValuesUnchanged(string display)
         {
             var box = new CssBox(null, null)
             {
                 Display = CssProperty<DisplayMode>.FromCssText(display, Map.DisplayModes, DisplayMode.Inline),
-                Float = CssProperty<Floating>.FromValue(CssConstants.Left, Floating.Left)
+                Float = CssProperty<Floating>.FromValue(Keywords.Left, Floating.Left)
             };
 
             Assert.Equal(display, box.DerivedStyle.ActualDisplay);
@@ -61,11 +61,11 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             var box = new CssBox(null, null)
             {
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Inline, DisplayMode.Inline),
-                Float = CssProperty<Floating>.FromValue(CssConstants.None, Floating.None)
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.Inline, DisplayMode.Inline),
+                Float = CssProperty<Floating>.FromValue(Keywords.None, Floating.None)
             };
 
-            Assert.Equal(CssConstants.Inline, box.DerivedStyle.ActualDisplay);
+            Assert.Equal(Keywords.Inline, box.DerivedStyle.ActualDisplay);
         }
 
         [Fact]
@@ -73,12 +73,12 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             var box = new CssBox(null, null)
             {
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Inline, DisplayMode.Inline),
-                Float = CssProperty<Floating>.FromValue(CssConstants.Right, Floating.Right)
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.Inline, DisplayMode.Inline),
+                Float = CssProperty<Floating>.FromValue(Keywords.Right, Floating.Right)
             };
 
             Assert.Equal(DisplayMode.Inline, box.Display.Value);
-            Assert.Equal(CssConstants.Block, box.DerivedStyle.ActualDisplay);
+            Assert.Equal(Keywords.Block, box.DerivedStyle.ActualDisplay);
         }
     }
 }

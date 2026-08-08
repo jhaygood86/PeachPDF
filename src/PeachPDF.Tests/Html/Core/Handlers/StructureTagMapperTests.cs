@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         {
             // Shouldn't be reachable via real CSS (the property's Converter only accepts the fixed
             // keyword set), but Classify defends against it anyway rather than emitting a bogus /S.
-            var box = new CssBox(null, new HtmlTag("div", false)) { PdfTagType = "not-a-real-value", Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block) };
+            var box = new CssBox(null, new HtmlTag("div", false)) { PdfTagType = "not-a-real-value", Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block) };
 
             var classification = StructureTagMapper.Classify(box);
 
@@ -102,7 +102,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             // PdfTagType "auto", and CssBox.IsClickable (which requires an href per WHATWG - an
             // element without one isn't a hyperlink regardless of id/name) is false for it too, so
             // it falls through to the plain display-based fallback like any other inline element.
-            var box = new CssBox(null, new HtmlTag("a", false)) { PdfTagType = CssConstants.Auto };
+            var box = new CssBox(null, new HtmlTag("a", false)) { PdfTagType = Keywords.Auto };
 
             var classification = StructureTagMapper.Classify(box);
 
@@ -111,13 +111,13 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         }
 
         [Theory]
-        [InlineData(CssConstants.Inline, "Span")]
-        [InlineData(CssConstants.Block, "Div")]
+        [InlineData(Keywords.Inline, "Span")]
+        [InlineData(Keywords.Block, "Div")]
         public void Classify_UncommonTagWithNoDefaultStylesheetRule_FallsBackToDisplayBasedType(string display, string expectedStructureType)
         {
             // <cite> has no default-stylesheet -peachpdf-pdf-tag-type rule, so it stays "auto" and
             // falls through to the plain block/inline fallback.
-            var box = new CssBox(null, new HtmlTag("cite", false)) { PdfTagType = CssConstants.Auto, Display = CssProperty<DisplayMode>.FromCssText(display, Map.DisplayModes, DisplayMode.Inline) };
+            var box = new CssBox(null, new HtmlTag("cite", false)) { PdfTagType = Keywords.Auto, Display = CssProperty<DisplayMode>.FromCssText(display, Map.DisplayModes, DisplayMode.Inline) };
 
             var classification = StructureTagMapper.Classify(box);
 
@@ -125,17 +125,17 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         }
 
         [Theory]
-        [InlineData(CssConstants.TableRow, "TR")]
-        [InlineData(CssConstants.TableCell, "TD")]
-        [InlineData(CssConstants.TableHeaderGroup, "THead")]
-        [InlineData(CssConstants.TableRowGroup, "TBody")]
-        [InlineData(CssConstants.TableFooterGroup, "TFoot")]
+        [InlineData(Keywords.TableRow, "TR")]
+        [InlineData(Keywords.TableCell, "TD")]
+        [InlineData(Keywords.TableHeaderGroup, "THead")]
+        [InlineData(Keywords.TableRowGroup, "TBody")]
+        [InlineData(Keywords.TableFooterGroup, "TFoot")]
         public void Classify_AnonymousTableModelBox_MapsDisplayToTableStructureType(string display, string expectedStructureType)
         {
             // Anonymous boxes (HtmlTag == null) synthesized by CorrectAnonymousTables to complete
             // a table model have no source element for -peachpdf-pdf-tag-type to be set on - this
             // is the one place table substructure tagging is still Display-driven, not CSS-driven.
-            var box = new CssBox(null, null) { PdfTagType = CssConstants.Auto, Display = CssProperty<DisplayMode>.FromCssText(display, Map.DisplayModes, DisplayMode.Inline) };
+            var box = new CssBox(null, null) { PdfTagType = Keywords.Auto, Display = CssProperty<DisplayMode>.FromCssText(display, Map.DisplayModes, DisplayMode.Inline) };
 
             var classification = StructureTagMapper.Classify(box);
 
@@ -146,7 +146,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
         [Fact]
         public void Classify_AnonymousNonTableBoxWithNoWords_IsFullyTransparent()
         {
-            var box = new CssBox(null, null) { PdfTagType = CssConstants.Auto, Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block) };
+            var box = new CssBox(null, null) { PdfTagType = Keywords.Auto, Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block) };
 
             var classification = StructureTagMapper.Classify(box);
 

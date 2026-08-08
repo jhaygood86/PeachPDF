@@ -133,9 +133,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// cannot ask the combined question. Kept here so the two cannot name different sets.
         /// </summary>
         internal static bool RunsAnEngineOfItsOwn(string? display) =>
-            display is CssConstants.Flex or CssConstants.InlineFlex
-                    or CssConstants.Grid or CssConstants.InlineGrid
-                    or CssConstants.Table or CssConstants.InlineTable;
+            display is Keywords.Flex or Keywords.InlineFlex
+                    or Keywords.Grid or Keywords.InlineGrid
+                    or Keywords.Table or Keywords.InlineTable;
 
         // ── §2's "overflows rather than being sliced", as a fitting question ──
 

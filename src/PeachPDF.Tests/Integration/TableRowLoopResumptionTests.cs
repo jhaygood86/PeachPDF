@@ -110,7 +110,7 @@ namespace PeachPDF.Tests.Integration
             internal StoppingCell(CssBox row) : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
                 Record = new InlineBreakToken(this, ResumeSlotIndex: 2, ResumePath: [],
                     ResumeWordIndex: 4, CompletedLineCount: 1);
             }
@@ -593,7 +593,7 @@ namespace PeachPDF.Tests.Integration
             internal ThrowingCell(CssBox row) : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
             }
 
             protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>
@@ -955,7 +955,7 @@ namespace PeachPDF.Tests.Integration
             internal TallCell(CssBox row, double depth) : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
                 _depth = depth;
             }
 
@@ -992,15 +992,15 @@ namespace PeachPDF.Tests.Integration
                 : base(row, null)
             {
                 InheritStyle(row, everything: true);
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.TableCell, DisplayMode.TableCell);
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
                 VerticalAlign = CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue(
-                    CssConstants.Middle, new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Middle, null));
+                    Keywords.Middle, new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Middle, null));
                 _stops = stops;
                 _keepsItsContentAfterTheFirstLayout = keepsItsContentAfterTheFirstLayout;
 
                 OverflowingContent = new CssBox(this, null);
                 OverflowingContent.InheritStyle(this, everything: true);
-                OverflowingContent.Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
+                OverflowingContent.Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
             }
 
             /// <summary>The content that flowed past the cell's own box.</summary>

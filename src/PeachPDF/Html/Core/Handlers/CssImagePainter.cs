@@ -51,7 +51,7 @@ namespace PeachPDF.Html.Core.Handlers
             Action<RBrush> drawBrush)
         {
             var attachmentValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(attachmentList), layerIndex);
-            var positioningRect = attachmentValue == CssConstants.Fixed ? viewportRect : originRect;
+            var positioningRect = attachmentValue == Keywords.Fixed ? viewportRect : originRect;
 
             switch (image)
             {
@@ -138,7 +138,7 @@ namespace PeachPDF.Html.Core.Handlers
             var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
             var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
             BackgroundImageDrawHandler.DrawBackgroundImage(
-                g, t.Image, CssConstants.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
+                g, t.Image, Keywords.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
                 intrinsicSizeInCssPixels: false);
         }
 
@@ -187,7 +187,7 @@ namespace PeachPDF.Html.Core.Handlers
             var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
             var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
             BackgroundImageDrawHandler.DrawBackgroundImage(
-                g, t.Image, CssConstants.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
+                g, t.Image, Keywords.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
                 intrinsicSizeInCssPixels: false);
         }
 

@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.Integration
         public async Task PageMarginEm_ResolvesAgainstRootFontSize_UnderNonDefaultPixelsPerInch()
         {
             // No @page { font-size } is declared, so the em basis is root.GetEmHeight() - the UA-default
-            // "medium" root font-size (11pt, CssConstants.FontSize) - taking the exact path this issue
+            // "medium" root font-size (11pt, DefaultFontResolver.FontSize) - taking the exact path this issue
             // reports. PixelsPerInch = 144 => PixelsPerPoint = 2.
             var config = new PdfGenerateConfig
             {

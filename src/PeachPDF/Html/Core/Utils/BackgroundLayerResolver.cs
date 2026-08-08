@@ -55,7 +55,7 @@ namespace PeachPDF.Html.Core.Utils
             double? intrinsicWidth, double? intrinsicHeight, double? intrinsicRatio,
             CssBox box)
         {
-            var value = string.IsNullOrWhiteSpace(sizeLayerValue) ? CssConstants.Auto : sizeLayerValue.Trim();
+            var value = string.IsNullOrWhiteSpace(sizeLayerValue) ? Keywords.Auto : sizeLayerValue.Trim();
             var hasRatio = intrinsicRatio is > 0;
 
             var tokens = CssValueParser.GetCssTokens(value);

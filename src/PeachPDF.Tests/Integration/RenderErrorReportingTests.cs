@@ -36,7 +36,7 @@ namespace PeachPDF.Tests.Integration
             internal ThrowingBox(CssBox parent) : base(parent, null)
             {
                 InheritStyle(parent, everything: true);
-                Display = CssProperty<DisplayMode>.FromValue(CssConstants.Block, DisplayMode.Block);
+                Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
             }
 
             protected override ValueTask PerformLayoutImp(RGraphics g, CssBox frame, bool framePlacesChild) =>

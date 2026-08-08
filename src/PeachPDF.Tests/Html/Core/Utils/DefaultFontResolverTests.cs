@@ -5,18 +5,18 @@ using PeachPDF.Fonts;
 
 namespace PeachPDF.Tests.Html.Core.Utils
 {
-    public class CssConstantsTests
+    public class DefaultFontResolverTests
     {
         [Fact]
         public void DefaultFont_IsNotEmpty()
         {
-            Assert.NotEmpty(CssConstants.DefaultFont);
+            Assert.NotEmpty(DefaultFontResolver.DefaultFont);
         }
 
         [Fact]
         public void DetermineDefaultFont_Windows_ReturnsSegoeUi()
         {
-            var result = CssConstants.DetermineDefaultFont(isWindows: true, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: false);
+            var result = DefaultFontResolver.DetermineDefaultFont(isWindows: true, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: false);
 
             Assert.Equal("Segoe UI", result);
         }
@@ -24,7 +24,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void DetermineDefaultFont_MacOS_ReturnsArial()
         {
-            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: true, isLinux: false, isAndroid: false, isBrowser: false);
+            var result = DefaultFontResolver.DetermineDefaultFont(isWindows: false, isMacOS: true, isLinux: false, isAndroid: false, isBrowser: false);
 
             Assert.Equal("Arial", result);
         }
@@ -34,7 +34,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             // Exercises the real (non-forced) GetInstalledFontFamilyNames/FontResolver.SupportedFonts
             // path directly, regardless of which OS the test itself runs on.
-            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: true, isAndroid: false, isBrowser: false);
+            var result = DefaultFontResolver.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: true, isAndroid: false, isBrowser: false);
 
             Assert.NotEmpty(result);
         }
@@ -44,7 +44,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             // Exercises the real (non-forced) GetInstalledFontFamilyNames/FontResolver.SupportedFonts
             // path directly, regardless of which OS the test itself runs on.
-            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: true, isBrowser: false);
+            var result = DefaultFontResolver.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: true, isBrowser: false);
 
             Assert.NotEmpty(result);
         }
@@ -54,8 +54,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             // Guards against a regression where Android would be routed into the Linux
             // picker instead of its own, since isLinux may also be true on Android.
-            var androidOnly = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: true, isBrowser: false);
-            var androidAndLinux = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: true, isAndroid: true, isBrowser: false);
+            var androidOnly = DefaultFontResolver.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: true, isBrowser: false);
+            var androidAndLinux = DefaultFontResolver.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: true, isAndroid: true, isBrowser: false);
 
             Assert.Equal(androidOnly, androidAndLinux);
         }
@@ -63,7 +63,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void DetermineDefaultFont_UnknownPlatform_FallsBackToSegoeUi()
         {
-            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: false);
+            var result = DefaultFontResolver.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: false);
 
             Assert.Equal("Segoe UI", result);
         }
@@ -73,7 +73,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             // Exercises the real (non-forced) GetInstalledFontFamilyNames/FontResolver.SupportedFonts
             // path directly, regardless of which OS the test itself runs on.
-            var result = CssConstants.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: true);
+            var result = DefaultFontResolver.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: true);
 
             Assert.NotEmpty(result);
         }
@@ -84,7 +84,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             // The whole point of the browser branch: without it a WebAssembly host lands on the
             // unknown-platform "Segoe UI" fallback, which nothing there can possibly satisfy, and
             // CssBoxProperties.ActualFont throws rather than rendering.
-            var result = CssConstants.PickBrowserDefaultFont([]);
+            var result = DefaultFontResolver.PickBrowserDefaultFont([]);
 
             Assert.Equal("Liberation Sans", result);
         }
@@ -95,7 +95,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData(new[] { "Noto Sans", "Noto Serif" }, "Noto Sans")]
         public void PickBrowserDefaultFont_PrefersKnownArialAlternative(string[] installed, string expected)
         {
-            var result = CssConstants.PickBrowserDefaultFont(installed);
+            var result = DefaultFontResolver.PickBrowserDefaultFont(installed);
 
             Assert.Equal(expected, result);
         }
@@ -105,7 +105,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var installed = new[] { "Some Obscure Font", "Another Font" };
 
-            var result = CssConstants.PickBrowserDefaultFont(installed);
+            var result = DefaultFontResolver.PickBrowserDefaultFont(installed);
 
             Assert.Equal("Some Obscure Font", result);
         }
@@ -113,7 +113,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void GetInstalledFontFamilyNames_ReturnsOnlyNonEmptyFamilyNames()
         {
-            var names = CssConstants.GetInstalledFontFamilyNames().ToList();
+            var names = DefaultFontResolver.GetInstalledFontFamilyNames().ToList();
 
             Assert.All(names, Assert.NotEmpty);
         }
@@ -124,7 +124,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData(new[] { "Noto Sans", "Noto Serif" }, "Noto Sans")]
         public void PickLinuxDefaultFont_PrefersKnownArialAlternative(string[] installed, string expected)
         {
-            var result = CssConstants.PickLinuxDefaultFont(installed);
+            var result = DefaultFontResolver.PickLinuxDefaultFont(installed);
 
             Assert.Equal(expected, result);
         }
@@ -135,7 +135,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             // Liberation Sans is listed before DejaVu Sans in preference order.
             var installed = new[] { "DejaVu Sans", "Liberation Sans" };
 
-            var result = CssConstants.PickLinuxDefaultFont(installed);
+            var result = DefaultFontResolver.PickLinuxDefaultFont(installed);
 
             Assert.Equal("Liberation Sans", result);
         }
@@ -147,7 +147,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             // is returned rather than whatever casing the installed font happened to report.
             var installed = new[] { "liberation sans" };
 
-            var result = CssConstants.PickLinuxDefaultFont(installed);
+            var result = DefaultFontResolver.PickLinuxDefaultFont(installed);
 
             Assert.Equal("Liberation Sans", result);
         }
@@ -157,7 +157,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var installed = new[] { "Some Obscure Font", "Another Font" };
 
-            var result = CssConstants.PickLinuxDefaultFont(installed);
+            var result = DefaultFontResolver.PickLinuxDefaultFont(installed);
 
             Assert.Equal("Some Obscure Font", result);
         }
@@ -165,7 +165,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void PickLinuxDefaultFont_NoInstalledFonts_ReturnsNonEmptyFallback()
         {
-            var result = CssConstants.PickLinuxDefaultFont([]);
+            var result = DefaultFontResolver.PickLinuxDefaultFont([]);
 
             Assert.NotEmpty(result);
         }
@@ -176,7 +176,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData(new[] { "Droid Sans", "Droid Sans Mono" }, "Droid Sans")]
         public void PickAndroidDefaultFont_PrefersKnownArialAlternative(string[] installed, string expected)
         {
-            var result = CssConstants.PickAndroidDefaultFont(installed);
+            var result = DefaultFontResolver.PickAndroidDefaultFont(installed);
 
             Assert.Equal(expected, result);
         }
@@ -187,7 +187,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             // Roboto is listed before Noto Sans in preference order.
             var installed = new[] { "Noto Sans", "Roboto" };
 
-            var result = CssConstants.PickAndroidDefaultFont(installed);
+            var result = DefaultFontResolver.PickAndroidDefaultFont(installed);
 
             Assert.Equal("Roboto", result);
         }
@@ -197,7 +197,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var installed = new[] { "roboto" };
 
-            var result = CssConstants.PickAndroidDefaultFont(installed);
+            var result = DefaultFontResolver.PickAndroidDefaultFont(installed);
 
             Assert.Equal("Roboto", result);
         }
@@ -207,7 +207,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             var installed = new[] { "Some Obscure Font", "Another Font" };
 
-            var result = CssConstants.PickAndroidDefaultFont(installed);
+            var result = DefaultFontResolver.PickAndroidDefaultFont(installed);
 
             Assert.Equal("Some Obscure Font", result);
         }
@@ -215,7 +215,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void PickAndroidDefaultFont_NoInstalledFonts_ReturnsNonEmptyFallback()
         {
-            var result = CssConstants.PickAndroidDefaultFont([]);
+            var result = DefaultFontResolver.PickAndroidDefaultFont([]);
 
             Assert.NotEmpty(result);
         }

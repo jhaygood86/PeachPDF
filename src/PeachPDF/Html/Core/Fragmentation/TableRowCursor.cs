@@ -151,7 +151,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <c>CssBox.PerformLayoutImp</c> treats as "did not finish". That is safe today for a reason
         /// worth naming exactly, because it is not the obvious one: <c>CssBox.PlaceBlockChild</c> wraps
         /// its whole body — both <c>RequestBreakBefore</c> call sites included — in
-        /// <c>if (child.DerivedStyle.ActualDisplay != CssConstants.TableCell)</c>, so a cell cannot carry
+        /// <c>if (child.DerivedStyle.ActualDisplay != Keywords.TableCell)</c>, so a cell cannot carry
         /// that request at all. It is not that the row loop's per-row break check covers it; that check is a different
         /// decision, taken from <c>EstimateRowHeight</c> before the row is laid out. A change that gives
         /// a cell its own break-before has to add the second channel here.

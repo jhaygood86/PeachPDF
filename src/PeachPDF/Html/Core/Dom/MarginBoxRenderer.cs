@@ -60,7 +60,7 @@ namespace PeachPDF.Html.Core.Dom
                     continue;
 
                 var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, margins,
-                    pageStyle, htmlContainer.PageLengthContext?.RemPt ?? CssConstants.FontSize);
+                    pageStyle, htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize);
                 if (rect.Width <= 0 || rect.Height <= 0)
                     continue;
 
@@ -153,8 +153,8 @@ namespace PeachPDF.Html.Core.Dom
 
             CssImagePainter.Paint(graphicsAdapter, image, layerIndex: 0,
                 originRect: paintRect, clipRect: paintRect, roundedClipPath: null,
-                positionList: positionList, sizeList: CssConstants.Auto, repeatList: "no-repeat",
-                attachmentList: CssConstants.Scroll, viewportRect: paintRect, box: rootBox,
+                positionList: positionList, sizeList: Keywords.Auto, repeatList: "no-repeat",
+                attachmentList: Keywords.Scroll, viewportRect: paintRect, box: rootBox,
                 drawBrush: brush =>
                 {
                     graphicsAdapter.DrawRectangle(brush, paintRect.X, paintRect.Y, paintRect.Width, paintRect.Height);
@@ -439,7 +439,7 @@ namespace PeachPDF.Html.Core.Dom
         internal static double ResolveFontSizePt(StyleDeclaration style, StyleDeclaration? pageStyle)
         {
             var sizeStr = FirstNonEmpty(style.FontSize, pageStyle?.FontSize);
-            return string.IsNullOrEmpty(sizeStr) ? CssConstants.FontSize : ResolveFontSizePt(sizeStr);
+            return string.IsNullOrEmpty(sizeStr) ? DefaultFontResolver.FontSize : ResolveFontSizePt(sizeStr);
         }
 
         /// <summary>
@@ -450,11 +450,11 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal static double ResolveFontSizePt(string sizeStr) =>
             DomParser.ParseLengthToPdfPoints(sizeStr)
-            ?? FontSizeResolver.Resolve(sizeStr, CssConstants.FontSize, CssConstants.FontSize);
+            ?? FontSizeResolver.Resolve(sizeStr, DefaultFontResolver.FontSize, DefaultFontResolver.FontSize);
 
         internal static XFont BuildFont(StyleDeclaration style, StyleDeclaration? pageStyle, RAdapter adapter)
         {
-            var familyList = FirstNonEmpty(style.FontFamily, pageStyle?.FontFamily) ?? CssConstants.DefaultFont;
+            var familyList = FirstNonEmpty(style.FontFamily, pageStyle?.FontFamily) ?? DefaultFontResolver.DefaultFont;
             var weightStr = FirstNonEmpty(style.FontWeight, pageStyle?.FontWeight);
             var styleStr = FirstNonEmpty(style.FontStyle, pageStyle?.FontStyle);
 
@@ -481,12 +481,12 @@ namespace PeachPDF.Html.Core.Dom
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             var pixelSize = sizePt * pixelsPerPoint;
             var resolvedFont = FontFamilyResolver.Resolve(adapter, familyList, pixelSize, fontStyle)
-                                ?? FontFamilyResolver.Resolve(adapter, CssConstants.DefaultFont, pixelSize, fontStyle);
+                                ?? FontFamilyResolver.Resolve(adapter, DefaultFontResolver.DefaultFont, pixelSize, fontStyle);
 
             if (resolvedFont is not FontAdapter fontAdapter)
             {
                 throw new HtmlRenderException(
-                    $"Cannot find font: {familyList} and Default Font {CssConstants.DefaultFont} is not installed",
+                    $"Cannot find font: {familyList} and Default Font {DefaultFontResolver.DefaultFont} is not installed",
                     HtmlRenderErrorType.General);
             }
 
@@ -551,8 +551,8 @@ namespace PeachPDF.Html.Core.Dom
             // own direction, the same as an in-flow box's - see CssLayoutEngine.ResolveHorizontalAlign.
             textAlign = textAlign switch
             {
-                "start" => IsRtl(style, pageStyle) ? CssConstants.Right : CssConstants.Left,
-                "end" => IsRtl(style, pageStyle) ? CssConstants.Left : CssConstants.Right,
+                "start" => IsRtl(style, pageStyle) ? Keywords.Right : Keywords.Left,
+                "end" => IsRtl(style, pageStyle) ? Keywords.Left : Keywords.Right,
                 _ => textAlign
             };
 
@@ -568,8 +568,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="ResolveFontSizePt(StyleDeclaration,StyleDeclaration?)"/>'s own doc comment).
         /// </summary>
         private static bool IsRtl(StyleDeclaration style, StyleDeclaration? pageStyle) =>
-            (FirstNonEmpty(style.Direction, pageStyle?.Direction) ?? CssConstants.Ltr)
-            .Equals(CssConstants.Rtl, StringComparison.OrdinalIgnoreCase);
+            (FirstNonEmpty(style.Direction, pageStyle?.Direction) ?? Keywords.Ltr)
+            .Equals(Keywords.Rtl, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Applies real UAX#9 resolution (<see cref="BidiResolver"/>) to a margin box's resolved
