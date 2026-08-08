@@ -11,7 +11,8 @@ namespace PeachPDF.CSS
     internal readonly struct CalcContext
     {
         public CalcContext(double hundredPercent, double emFactor, double remFactor, bool returnPoints = false,
-            double? containerInlineSizePt = null, double? containerBlockSizePt = null)
+            double? containerInlineSizePt = null, double? containerBlockSizePt = null,
+            double? viewportWidthPt = null, double? viewportHeightPt = null)
         {
             HundredPercent = hundredPercent;
             EmFactor = emFactor;
@@ -19,6 +20,8 @@ namespace PeachPDF.CSS
             ReturnPoints = returnPoints;
             ContainerInlineSizePt = containerInlineSizePt;
             ContainerBlockSizePt = containerBlockSizePt;
+            ViewportWidthPt = viewportWidthPt;
+            ViewportHeightPt = viewportHeightPt;
         }
 
         public double HundredPercent { get; }
@@ -36,11 +39,16 @@ namespace PeachPDF.CSS
         /// query container's resolved size, for a <c>cqw</c>/<c>cqi</c>/<c>cqb</c>/etc. leaf inside calc().</summary>
         public double? ContainerInlineSizePt { get; }
         public double? ContainerBlockSizePt { get; }
+
+        /// <summary>See <see cref="Length.ToPixels"/>'s parameter of the same name - the page box's own
+        /// size, for a <c>vw</c>/<c>vh</c>/etc. leaf inside calc(), and the <c>cq*</c> no-container fallback.</summary>
+        public double? ViewportWidthPt { get; }
+        public double? ViewportHeightPt { get; }
     }
 
     /// <summary>
     /// Evaluates a validated calc-family AST to a pixel-space number. This is the one place calc()
-    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?)"/>),
+    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?)"/>),
     /// since only layout has the <see cref="CalcContext"/> a percentage/em/rem leaf needs to resolve.
     /// Reuses <see cref="Length.ToPixels"/> for every leaf, so no unit-conversion arithmetic is duplicated
     /// here. A null result signals a divide-by-zero; per the type-checker's rules every legal divisor is
@@ -62,7 +70,8 @@ namespace PeachPDF.CSS
                 case DimensionCalcNode dimension:
                     return new Length((float)dimension.Value, dimension.Unit)
                         .ToPixels(context.EmFactor, context.RemFactor, context.HundredPercent,
-                            context.ContainerInlineSizePt, context.ContainerBlockSizePt);
+                            context.ContainerInlineSizePt, context.ContainerBlockSizePt,
+                            context.ViewportWidthPt, context.ViewportHeightPt);
 
                 case PercentageCalcNode percentage:
                     return new Length((float)percentage.Value, Length.Unit.Percent)

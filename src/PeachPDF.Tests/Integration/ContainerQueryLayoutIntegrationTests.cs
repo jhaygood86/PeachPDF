@@ -79,14 +79,16 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ContainerRelativeUnit_WithNoAncestorContainer_ResolvesToZero()
+        public async Task ContainerRelativeUnit_WithNoAncestorContainer_FallsBackToViewportSize()
         {
+            // No ancestor container-type at all - falls back to the small-viewport unit (svw) per CSS
+            // Containment 3 §6.2/issue #615, i.e. 50% of the harness's 800pt page width, not 0.
             var html = Html("#target { width: 50cqw; height: 10px; }", "<div id='target'></div>");
 
             var root = await BuildRoot(html);
             var target = DomUtils.GetBoxById(root, "target");
             Assert.NotNull(target);
-            Assert.Equal(0d, target!.ActualBoxSizingWidth, 1);
+            Assert.Equal(400d, target!.ActualBoxSizingWidth, 1);
         }
 
         [Fact]

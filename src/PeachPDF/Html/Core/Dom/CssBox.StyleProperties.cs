@@ -396,28 +396,32 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// <c>font-size</c>'s eager em/ex/percent/smaller/larger-to-absolute-points resolution, run by
+        /// <c>font-size</c>'s eager em/ex/ch/percent/smaller/larger-to-absolute-points resolution, run by
         /// <c>RegistryEmitter.BuildHtmlAssignment</c> (the generated <c>CssPropertyRegistry</c>, a
         /// same-assembly but unrelated class - see <see cref="NoEms"/>'s own doc comment for why) against
         /// the raw authored text before <c>CssKeywordOrValueParser.FromCssText</c> parses it into
-        /// <see cref="FontSize"/>'s typed union. <c>calc()</c> and <c>rem</c> stay lazy, resolved later by
-        /// <see cref="DerivedStyle.ActualFont"/> via <see cref="FontSizeResolver"/>: <c>calc()</c> needs
-        /// real layout-time container-query information not available at cascade time (the same reason
-        /// every other <c>calc()</c>-accepting keyword-or-value property defers through
-        /// <see cref="PeachPDF.CSS.LengthOrCalc"/>), and <c>rem</c> resolves against a single, non-chained
-        /// reference so it can't compound across generations regardless of when it resolves. Every other
-        /// parent-relative form needs eager conversion here because <c>InheritStyle</c> adopts the whole
-        /// <c>Font</c> area from parent to child *by reference* - a value left as raw relative text would
-        /// be re-resolved by every non-overriding descendant against its own immediate parent, compounding
-        /// the multiplier once per generation (the bug fixed by making this eager - see PR #632's own
-        /// notes for the original investigation).
+        /// <see cref="FontSize"/>'s typed union. <c>calc()</c>, <c>rem</c>, and viewport units
+        /// (<c>vw</c>/etc.) stay lazy, resolved later by <see cref="DerivedStyle.ActualFont"/> via
+        /// <see cref="FontSizeResolver"/>: <c>calc()</c> needs real layout-time container-query information
+        /// not available at cascade time (the same reason every other <c>calc()</c>-accepting
+        /// keyword-or-value property defers through <see cref="PeachPDF.CSS.LengthOrCalc"/>), <c>rem</c>
+        /// resolves against a single, non-chained reference so it can't compound across generations
+        /// regardless of when it resolves, and a viewport unit isn't parent-relative at all (it resolves
+        /// against the page box, not the parent's font), so it has no compounding-across-generations risk
+        /// to eagerly guard against either. Every other parent-relative form needs eager conversion here
+        /// because <c>InheritStyle</c> adopts the whole <c>Font</c> area from parent to child *by
+        /// reference* - a value left as raw relative text would be re-resolved by every non-overriding
+        /// descendant against its own immediate parent, compounding the multiplier once per generation
+        /// (the bug fixed by making this eager - see PR #632's own notes for the original investigation).
+        /// <c>ch</c> shares <c>ex</c>'s exact <c>0.5em</c> formula (see <see cref="Length.ToPixels"/>) and
+        /// so needs the exact same eager treatment for the exact same reason.
         /// </summary>
         internal string ResolveFontSizeValueComputation(string value)
         {
             var trimmed = value.Trim();
             if (!CssValueParser.IsCalcFunction(value) && ParentBox is { } parent &&
                 (CssValueParser.GetCssTokens(value) is [UnitToken unitToken] &&
-                    Length.GetUnit(unitToken.Unit) is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Percent
+                    Length.GetUnit(unitToken.Unit) is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Ch or Length.Unit.Percent
                  || trimmed.Equals(CssConstants.Smaller, StringComparison.OrdinalIgnoreCase)
                  || trimmed.Equals(CssConstants.Larger, StringComparison.OrdinalIgnoreCase)))
             {

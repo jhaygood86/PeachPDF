@@ -510,6 +510,27 @@ namespace PeachPDF.Html.Core.Dom
             return (inlinePt, blockPt);
         }
 
+        /// <summary>
+        /// The page box's own size, resolved for <c>vw</c>/<c>vh</c>/<c>vi</c>/<c>vb</c>/<c>vmin</c>/
+        /// <c>vmax</c> unit resolution (CSS Values and Units 4 §6.2) and as the small-viewport fallback
+        /// for a <c>cq*</c> unit with no eligible ancestor container (<see cref="GetContainerRelativeUnitBasis"/>).
+        /// There is no scrollbar or dynamic browser chrome in a paged medium, so this is also the basis
+        /// for the <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants - they are numerically identical here.
+        /// </summary>
+        internal (double? ViewportWidthPt, double? ViewportHeightPt) GetViewportUnitBasis()
+        {
+            var container = HtmlContainer;
+            if (container is null) return (null, null);
+
+            var size = container.PageSize;
+            // Same double.MaxValue sentinel guard HasRealPageGrid/UseVariablePageWidth already use for an
+            // unpaginated/measurement pass with no real page geometry yet.
+            double? width = size.Width is > 0 and < double.MaxValue - 1 ? size.Width : null;
+            double? height = size.Height is > 0 and < double.MaxValue - 1 ? size.Height : null;
+
+            return (width, height);
+        }
+
         public bool IsHeightCalculated { get; set; } = false;
 
         /// <summary>

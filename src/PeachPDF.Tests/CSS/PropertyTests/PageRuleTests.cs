@@ -316,6 +316,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [InlineData("calc(1in + 96px)", 144.0)]
         [InlineData("calc(50% - 100pt)", 200.0)]
         [InlineData("calc(2em * 2)", 48.0)]
+        [InlineData("3ch", 18.0)] // ch approximates 0.5em - "3ch" against the 12pt EmPt basis is 3 * 6 = 18
         public void ParseLengthToPdfPoints_WithContext_ResolvesRelativeUnitsAndCalc(string input, double expectedPt)
         {
             var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input, TestContext);
@@ -328,15 +329,22 @@ namespace PeachPDF.Tests.CSS.PropertyTests
         [InlineData("10vh")]
         [InlineData("10vmin")]
         [InlineData("10vmax")]
-        [InlineData("3ch")]
+        [InlineData("10vi")]
+        [InlineData("10vb")]
+        [InlineData("10svw")]
+        [InlineData("10lvh")]
+        [InlineData("10dvmin")]
         [InlineData("")]
         [InlineData("   ")]
         [InlineData("not-a-length")]
         [InlineData("5")] // unitless non-zero is invalid per CSS Values & Units §5.1
         public void ParseLengthToPdfPoints_WithContext_ReturnsNull_ForUnresolvableInput(string input)
         {
-            // Viewport-relative and ch units have no meaningful page context — they must fall
-            // back to the base margin (null), not silently resolve to a zero margin.
+            // Viewport-relative units have no meaningful page context (a page rule defining its own
+            // geometry in terms of the viewport is self-referential) — they must fall back to the base
+            // margin (null), not silently resolve to a zero margin. ch is no longer in this list — it
+            // approximates 0.5em (see ParseLengthToPdfPoints_WithContext_ResolvesRelativeUnitsAndCalc's
+            // "3ch" case), which needs no page-viewport context.
             var result = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints(input, TestContext);
             Assert.Null(result);
         }

@@ -235,10 +235,19 @@ namespace PeachPDF.CSS
 
         private static bool IsSupportedLengthUnit(Length.Unit unit)
         {
-            return unit is Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex or Length.Unit.Px or
-                Length.Unit.Mm or Length.Unit.Cm or Length.Unit.In or Length.Unit.Pt or Length.Unit.Pc or
+            return unit is Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex or Length.Unit.Ch or
+                Length.Unit.Px or Length.Unit.Mm or Length.Unit.Cm or Length.Unit.In or Length.Unit.Pt or
+                Length.Unit.Pc or
                 Length.Unit.Cqw or Length.Unit.Cqh or Length.Unit.Cqi or Length.Unit.Cqb or
-                Length.Unit.Cqmin or Length.Unit.Cqmax;
+                Length.Unit.Cqmin or Length.Unit.Cqmax or
+                Length.Unit.Vw or Length.Unit.Vh or Length.Unit.Vi or Length.Unit.Vb or
+                Length.Unit.Vmin or Length.Unit.Vmax or
+                Length.Unit.Svw or Length.Unit.Svh or Length.Unit.Svi or Length.Unit.Svb or
+                Length.Unit.Svmin or Length.Unit.Svmax or
+                Length.Unit.Lvw or Length.Unit.Lvh or Length.Unit.Lvi or Length.Unit.Lvb or
+                Length.Unit.Lvmin or Length.Unit.Lvmax or
+                Length.Unit.Dvw or Length.Unit.Dvh or Length.Unit.Dvi or Length.Unit.Dvb or
+                Length.Unit.Dvmin or Length.Unit.Dvmax;
         }
 
         /// <summary>Whether <paramref name="name"/> is one of calc/min/max/clamp (case-insensitive).</summary>

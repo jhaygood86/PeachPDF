@@ -6514,6 +6514,68 @@ await SaveShowcaseAsync("container_queries", "Responsive Design", "Responsive @c
     "width rather than the page's.",
     containerQueryHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ── Viewport units (vw/vh/vmin/vmax) and the cq* -> sv* no-container fallback ──────────────
+// The "viewport" for a paged medium is the page box itself - every bar below is sized purely
+// from vw/vh/vmin/vmax/ch, with no percentage/pixel fallback, so a broken or zeroed conversion
+// would collapse every bar to nothing rather than just rendering at the wrong size.
+const string viewportUnitsHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+      html, body { margin: 0; font-family: sans-serif; background: #ffffff; color: #1f2937; }
+      .wrap { padding: 28px; }
+      h1 { font-size: 20pt; margin: 0 0 6px; }
+      h1 code { background: #f3f4f6; padding: 2px 6px; border-radius: 5px; font-size: 15pt; }
+      p.lede { font-size: 10.5pt; color: #475569; margin: 0 0 20px; max-width: 640px; }
+      .row { margin-bottom: 16px; }
+      .label { font-size: 9pt; color: #64748b; margin: 0 0 6px; font-family: monospace; }
+      .bar { height: 28px; border-radius: 6px; background: linear-gradient(135deg, #60a5fa, #2563eb); }
+      .square { height: 25vmin; border-radius: 6px; background: linear-gradient(135deg, #34d399, #059669); }
+      .no-container { width: 50cqw; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #f472b6, #db2777); }
+      .ch-box { width: 20ch; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #fbbf24, #d97706); }
+    </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <h1>Viewport units (<code>vw</code>/<code>vh</code>/<code>vmin</code>/<code>vmax</code>)</h1>
+        <p class="lede">The "viewport" for a paged medium is the page box itself. Every shape below is sized purely from a viewport-relative (or <code>cq*</code>/<code>ch</code>) unit, so a broken conversion would collapse it to nothing rather than just the wrong size.</p>
+        <div class="row">
+          <p class="label">width: 100vw</p>
+          <div class="bar" style="width: 100vw;"></div>
+        </div>
+        <div class="row">
+          <p class="label">width: 60vw</p>
+          <div class="bar" style="width: 60vw;"></div>
+        </div>
+        <div class="row">
+          <p class="label">width: 25vmax</p>
+          <div class="bar" style="width: 25vmax;"></div>
+        </div>
+        <div class="row">
+          <p class="label">height: 25vmin (square - the page's shorter side)</p>
+          <div class="square" style="width: 25vmin;"></div>
+        </div>
+        <div class="row">
+          <p class="label">width: 50cqw, no ancestor container-type - falls back to 50svw (the page's own width), not 0</p>
+          <div class="no-container"></div>
+        </div>
+        <div class="row">
+          <p class="label">width: 20ch - approximates 10em (0.5em per "0" glyph)</p>
+          <div class="ch-box"></div>
+        </div>
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("viewport_units", "Responsive Design", "Viewport units (vw/vh/vmin/vmax)",
+    "Bars and boxes sized entirely from `vw`/`vmin`/`vmax` against a fixed A4 page - proving the page " +
+    "box is a real, working viewport numerator. Also includes a `cqw` box with no ancestor " +
+    "`container-type`, which now falls back to the small-viewport unit instead of collapsing to a " +
+    "zero-width box, and a `ch`-sized box (the `0.5em` approximation).",
+    viewportUnitsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // Color fonts (COLR/CPAL) rendered as vector content. The hero row is a subset of the real COLRv1
 // build of Noto Color Emoji; the feature breakdown uses a small hand-authored public-domain COLRv1
 // fixture whose glyphs isolate each paint feature.

@@ -108,6 +108,35 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FontSize_ChThreeLevelsDeep_DoesNotCompoundAcrossNonOverridingDescendants()
+        {
+            // ch shares ex's exact 0.5em-per-unit formula (Length.ToPixels), and needs the exact same
+            // eager cascade-time resolution for the exact same reason (CssBox.StyleProperties.cs'
+            // ResolveFontSizeValueComputation) - this mirrors FontSize_ExThreeLevelsDeep_... above.
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="grandparent" style="font-size: 20pt">
+                  <div id="middle" style="font-size: 4ch">
+                    <div id="leaf"></div>
+                  </div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var grandparent = FindById(root, "grandparent");
+            var middle = FindById(root, "middle");
+            var leaf = FindById(root, "leaf");
+
+            Assert.NotNull(grandparent);
+            Assert.NotNull(middle);
+            Assert.NotNull(leaf);
+            // "4ch" against parent's font size is 4 * (parent * 0.5) = 2 * parent.
+            Assert.Equal(grandparent!.ActualFont.Size * 2, middle!.ActualFont.Size, 6);
+            Assert.Equal(middle.ActualFont.Size, leaf!.ActualFont.Size, 6);
+        }
+
+        [Fact]
         public async Task ActualFontSize_MirrorsActualFontSizeValue()
         {
             var html = """
