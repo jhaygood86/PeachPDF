@@ -123,6 +123,18 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void FillRule_InvalidValueOnChild_FallsBackToInheritedFromGroup()
+        {
+            // SVG 1.1 §11.4 / CSS Cascade & Inheritance 4 §3: an invalid value on an inherited
+            // property computes to the inherited value, not a hardcoded default (#599).
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><g fill-rule="evenodd"><path fill-rule="bogus" d="M0,0 L10,0 L10,10 Z"/></g></svg>""");
+
+            var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
+            Assert.Equal(RFillMode.EvenOdd, path.FillRule);
+        }
+
+        [Fact]
         public void FillOpacityAndStrokeOpacity_AreDistinctFromOpacity()
         {
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="5" r="5" opacity="0.8" fill-opacity="0.4" stroke-opacity="0.2"/></svg>""");
@@ -197,6 +209,19 @@ namespace PeachPDF.Tests.Svg
             var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><path d="M0,0 L10,0" stroke="black" stroke-linecap="round" stroke-linejoin="bevel"/></svg>""");
 
             var path = Assert.IsType<SvgPathElement>(Assert.Single(document.Children));
+            Assert.Equal(RLineCap.Round, path.StrokeLineCap);
+            Assert.Equal(RLineJoin.Bevel, path.StrokeLineJoin);
+        }
+
+        [Fact]
+        public void StrokeLineCapAndLineJoin_InvalidValueOnChild_FallsBackToInheritedFromGroup()
+        {
+            // SVG 1.1 §11.4 / CSS Cascade & Inheritance 4 §3: an invalid value on an inherited
+            // property computes to the inherited value, not a hardcoded default (#599).
+            var document = BuildFrom("""<svg xmlns="http://www.w3.org/2000/svg"><g stroke-linecap="round" stroke-linejoin="bevel"><path stroke="black" stroke-linecap="bogus" stroke-linejoin="bogus" d="M0,0 L10,0"/></g></svg>""");
+
+            var group = Assert.IsType<SvgGroupElement>(Assert.Single(document.Children));
+            var path = Assert.IsType<SvgPathElement>(Assert.Single(group.Children));
             Assert.Equal(RLineCap.Round, path.StrokeLineCap);
             Assert.Equal(RLineJoin.Bevel, path.StrokeLineJoin);
         }

@@ -3120,6 +3120,14 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             """<svg viewBox="0 0 100 100" width="80" height="80"><circle cx="50" cy="50" r="35" fill="#e74c3c" stroke="#2c3e50" stroke-width="10" stroke-opacity="0.4"/></svg>""",
             "stroke-opacity=\"0.4\" (fill unaffected)")
     ) +
+    Row(
+        SvgSwatch("invalid fill-rule inherits, doesn't reset to nonzero",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><g fill-rule="evenodd"><path d="M20,20 L80,20 L80,80 L20,80 Z M35,35 L65,35 L65,65 L35,65 Z" fill="#8e44ad" fill-rule="not-a-rule"/></g></svg>""",
+            "g fill-rule=\"evenodd\" > path fill-rule=\"not-a-rule\": still a donut"),
+        SvgSwatch("invalid stroke-linecap/linejoin inherit from group",
+            """<svg viewBox="0 0 140 100" width="90" height="64"><g fill="none" stroke="#2980b9" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"><path d="M20,75 L45,25 L70,75" stroke-linecap="not-a-cap" stroke-linejoin="not-a-join"/></g></svg>""",
+            "group's round cap/join survive an invalid override")
+    ) +
 
     "<h2>10 — Transforms: rotate() &amp; skew()</h2>" +
     Row(
