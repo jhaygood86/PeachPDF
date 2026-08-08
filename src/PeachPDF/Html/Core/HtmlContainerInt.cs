@@ -1082,6 +1082,12 @@ namespace PeachPDF.Html.Core
                     var context = new FragmentainerContext(this, Root!, slot);
                     CurrentFragmentainer = context;
 
+                    // A translation, refill, or rectangle reset since the last iteration may have reopened an
+                    // already-frozen slot behind this one without moving the driver back to it (see
+                    // FragmentEmitter.CatchUpStaleSlotsBehind's own remarks) - heal it now, one pass before it
+                    // would otherwise wait for Finish()'s far more expensive replay.
+                    _emitter?.CatchUpStaleSlotsBehind(slot);
+
                     // What this pass was entered with, so a decision discovered on a later one can send the
                     // driver back to it. Recorded before the pass runs, since that is the state re-entering
                     // it needs and nothing the pass produces can be part of it.
