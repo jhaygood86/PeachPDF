@@ -225,8 +225,9 @@ namespace PeachPDF.Tests.Html.Core.Fragments
 
             Assert.NotEmpty(perWord);
 
-            // Words are monolithic - CssRect.BreakPage relocates a whole word rather than splitting
-            // it - so no word may be claimed by two fragmentainers.
+            // Words are monolithic - CssRect.WouldStraddleFragmentainer moves a whole straddling line
+            // to the next fragmentainer rather than splitting a word across the boundary - so no word
+            // may be claimed by two fragmentainers.
             Assert.All(perWord, entry => Assert.Single(entry.Value.Distinct()));
         }
 

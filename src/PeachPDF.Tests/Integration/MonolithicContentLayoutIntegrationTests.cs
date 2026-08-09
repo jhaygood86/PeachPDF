@@ -255,9 +255,10 @@ namespace PeachPDF.Tests.Integration
 
         // The replaced half of §2 reaches the same outcome by a different route: an <img> is forced inline
         // (DomParser.CorrectReplacedElementBoxes), so it never runs the epilogue's mover at all - its whole
-        // word is relocated by CssRect.BreakPage instead. Worth pinning, because the predicate's
-        // CssBoxImage/CssBoxSvg arms are unreachable from the mover and it would be easy to read that as
-        // the rule not being delivered.
+        // word moves through the ordinary per-word fragmentainer check instead
+        // (CssRect.WouldStraddleFragmentainer/InlineBreakToken, in CssLayoutEngine.FlowBox), the same path
+        // any other word takes. Worth pinning, because the predicate's CssBoxImage/CssBoxSvg arms are
+        // unreachable from the mover and it would be easy to read that as the rule not being delivered.
         [Fact]
         public async Task StraddlingImage_MovesWholeThroughTheWordPath()
         {

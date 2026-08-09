@@ -100,8 +100,9 @@ namespace PeachPDF.Html.Core.Fragments
 
     /// <summary>
     /// One laid-out word (or inline replaced run) positioned inside a fragmentainer. Words are
-    /// monolithic — a word never straddles a fragmentainer boundary (see <see cref="CssRect.BreakPage"/>),
-    /// so each <see cref="CssRect"/> produces exactly one <see cref="TextFragment"/>.
+    /// monolithic — a word never straddles a fragmentainer boundary (see
+    /// <see cref="CssRect.WouldStraddleFragmentainer"/>), so each <see cref="CssRect"/> produces
+    /// exactly one <see cref="TextFragment"/>.
     /// </summary>
     /// <param name="Rect">the word's rectangle, in fragmentainer-local coordinates</param>
     /// <param name="Word">the word this fragment positions; the source of its text, font, and style</param>

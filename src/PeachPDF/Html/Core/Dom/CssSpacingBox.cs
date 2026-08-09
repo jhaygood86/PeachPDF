@@ -36,11 +36,6 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public int EndRow { get; }
 
-        public override bool BreakPage()
-        {
-            return ExtendedBox.BreakPage();
-        }
-
         // This box paints nothing of its own. The spanned cell shows through it because the fragment
         // builder makes that cell one of this box's fragment children, so the ordinary paint walk
         // reaches it - rather than this box re-entering paint on a box that lives elsewhere in the tree.

@@ -141,9 +141,9 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(BaseMt + rightBand + leftBand, container.PageTopOf(2));
 
             // Text must fragment at the VARIABLE boundaries: no laid-out word may straddle a slot
-            // boundary (CssRect.BreakPage relocates a straddling line to the next band's top), and
-            // the flow must genuinely reach past the first two bands so several variable
-            // boundaries were actually exercised.
+            // boundary (CssRect.WouldStraddleFragmentainer moves a straddling line to the next band's
+            // top as a whole), and the flow must genuinely reach past the first two bands so several
+            // variable boundaries were actually exercised.
             var words = new List<PeachPDF.Html.Core.Dom.CssRect>();
             CollectWords(container.Root!, words);
             Assert.NotEmpty(words);

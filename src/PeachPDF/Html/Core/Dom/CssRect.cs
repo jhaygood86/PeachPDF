@@ -319,30 +319,10 @@ namespace PeachPDF.Html.Core.Dom
         /// Asks <see cref="HtmlContainerInt.BandBeingFilled"/> — the fragmentainer the pass is actually
         /// filling, not merely the band this word's own top happens to fall in. Safe now that
         /// <see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see>'s stage 1 makes every
-        /// mechanism that can spill flow past that fragmentainer step the pass cursor to match; before
-        /// that landed, this could only ask the page grid (see <see cref="WouldStraddleItsOwnBand"/>,
-        /// which still does, for the relocation this predicate must never be confused with).
+        /// mechanism that can spill flow past that fragmentainer step the pass cursor to match.
         /// </para>
         /// </remarks>
-        public bool WouldStraddleFragmentainer() => WouldStraddle(BandSource.Filling);
-
-        /// <summary>
-        /// Whether this word, at its current <see cref="Top"/>, has left the band its own top falls in -
-        /// the legacy relocation's question, asked of the page grid rather than the fragmentainer the
-        /// pass is filling.
-        /// </summary>
-        /// <remarks>
-        /// <see cref="BreakPage"/> moves a word to the content top of the band <i>after</i> the one its
-        /// top is in - a coordinate fact about the grid, not a break decision the pass records - so it
-        /// must keep asking this rather than <see cref="WouldStraddleFragmentainer"/>: a word an atomic
-        /// inline's vertical inset has just shifted into a later band, while the pass cursor still names
-        /// an earlier one, is relocated one band on either way, never two.
-        /// </remarks>
-        internal bool WouldStraddleItsOwnBand() => WouldStraddle(BandSource.Grid);
-
-        private enum BandSource { Filling, Grid }
-
-        private bool WouldStraddle(BandSource source)
+        public bool WouldStraddleFragmentainer()
         {
             var container = OwnerBox.HtmlContainer!;
 
@@ -364,12 +344,10 @@ namespace PeachPDF.Html.Core.Dom
                        && HtmlContainerInt.FallsPast(Bottom + reservedEnd, columnBand.Band);
             }
 
-            // The same question, of the band this word started in rather than of the column's. Asking it
-            // as "does the bottom edge fall past that band" rather than as "are the top and bottom in
-            // different slots" is what makes the two arms one question with two bands, instead of two
-            // questions - a slot index is a fact about the page grid, and a column has no slot of its own.
+            // The band this word's own top falls in, asked of the fragmentainer the pass is actually
+            // filling rather than merely of the page grid.
             var gridBand = container.BandStartingAt(Top);
-            var band = source is BandSource.Filling ? container.BandBeingFilled(Top, gridBand) : gridBand;
+            var band = container.BandBeingFilled(Top, gridBand);
 
             return HtmlContainerInt.FallsPast(Bottom + reservedEnd, band);
         }
@@ -445,27 +423,6 @@ namespace PeachPDF.Html.Core.Dom
             var (clonedTop, reservedEnd) = ClonedInsets(container);
 
             return MonolithicContent.FitsNoFragmentainer(Height, clonedTop, reservedEnd, container);
-        }
-
-        public bool BreakPage()
-        {
-            // Non-null for the same reason WouldStraddleItsOwnBand's own read of it is: a word is only
-            // ever asked this during layout, which a box without a container never reaches.
-            var container = OwnerBox.HtmlContainer!;
-
-            // A relocation, not a break decision: this word moves to the content top of the next band
-            // whatever the pass cursor is doing, so it must ask the page grid rather than
-            // WouldStraddleFragmentainer's "is the pass filling this" question.
-            if (!WouldStraddleItsOwnBand())
-                return false;
-
-            // The fragmentainer's own content edge, per css-break-3 §2. This used to land one unit
-            // below it, purely to keep a relocated word off the exact boundary value - a question the
-            // page grid's own epsilons already answer, and which the band-overlap test in the fragment
-            // builder answers the same way (a rect starting exactly at a band top belongs to that band
-            // and overlaps the previous one by zero).
-            Top = container.NextPageTopOf(Top);
-            return true;
         }
     }
 }

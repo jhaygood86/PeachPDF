@@ -10,8 +10,9 @@ namespace PeachPDF.Tests.Html.Core
     /// derived <see cref="HtmlContainerInt.PageBandHeightOf"/>/<see cref="HtmlContainerInt.PageBottomOf"/>/
     /// <see cref="HtmlContainerInt.NextPageTopOf"/> every page-boundary decision now routes through.
     /// On the uniform grid these identities pin the arithmetic the raw-math call sites were migrated
-    /// away from (modulo in CssBox/CssRect.BreakPage, hand-rolled pageIndex/pageTop in the table and
-    /// multicol engines).
+    /// away from (hand-rolled pageIndex/pageTop in the table and multicol engines; the pre-#321
+    /// per-word/per-box <c>CssRect</c>/<c>CssBox.BreakPage</c> relocation this migrated away from
+    /// entirely was retired by issue #333).
     /// </summary>
     public class HtmlContainerIntPageGridTests
     {
@@ -80,52 +81,6 @@ namespace PeachPDF.Tests.Html.Core
                 Assert.Equal(k, container.PageIndexOf(container.PageTopOf(k)));
         }
 
-        // ── CssBox.BreakPage (the block-level relocation used by table spacing boxes) ──
-
-        [Fact]
-        public void CssBoxBreakPage_StraddlingBox_RelocatesToNextSlotTop()
-        {
-            var container = CreateContainer();
-            var box = PeachPDF.Html.Core.Dom.CssBox.CreateBlock();
-            box.HtmlContainer = container;
-            box.Location = new RPoint(0, MarginTop + BandHeight - 50);
-            box.ActualBottom = MarginTop + BandHeight + 50;
-
-            Assert.True(box.BreakPage());
-            // The slot's own content edge, per css-break-3 §2. This used to land one unit below it,
-            // to keep the relocated box off the exact boundary value - a question PageIndexOf's own
-            // epsilon already answers, as the flush-fit case below shows.
-            Assert.Equal(container.PageTopOf(1), box.Location.Y);
-            Assert.Equal(1, container.PageIndexOf(box.Location.Y));
-        }
-
-        [Fact]
-        public void CssBoxBreakPage_FlushFitAtBoundary_DoesNotRelocate()
-        {
-            // A box ending exactly ON a slot boundary is wholly inside the earlier slot - the
-            // flush-fit epsilon makes it a non-break (the historical modulo formulation spuriously
-            // relocated it a full page).
-            var container = CreateContainer();
-            var box = PeachPDF.Html.Core.Dom.CssBox.CreateBlock();
-            box.HtmlContainer = container;
-            box.Location = new RPoint(0, MarginTop + BandHeight - 100);
-            box.ActualBottom = MarginTop + BandHeight;
-
-            Assert.False(box.BreakPage());
-            Assert.Equal(MarginTop + BandHeight - 100, box.Location.Y);
-        }
-
-        [Fact]
-        public void CssBoxBreakPage_TallerThanBand_NeverRelocates()
-        {
-            var container = CreateContainer();
-            var box = PeachPDF.Html.Core.Dom.CssBox.CreateBlock();
-            box.HtmlContainer = container;
-            box.Location = new RPoint(0, MarginTop + 10);
-            box.ActualBottom = MarginTop + 10 + BandHeight + 5;
-
-            Assert.False(box.BreakPage());
-        }
         [Fact]
         public void SlotStartingAt_ATopEdgeFlushOnABoundary_BeginsTheLaterSlot()
         {
