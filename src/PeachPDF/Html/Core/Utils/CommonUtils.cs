@@ -14,6 +14,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Network;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -39,11 +40,22 @@ namespace PeachPDF.Html.Core.Utils
             }
         };
 
+        /// <summary>
+        /// Table to convert numbers into hebrew digits - CSS Counter Styles Level 3 §6.1's "hebrew"
+        /// <c>@counter-style</c>. Row 3 (thousands) is each units-row letter with a geresh (U+05F3)
+        /// appended, per the spec's <c>additive-symbols</c> list (e.g. 1000 is "\5D0\5F3", the same
+        /// letter as 1 plus a geresh) - added here since the 3-row table previously in this file
+        /// silently dropped the thousands digit entirely for any value >= 1000. Capped at 9999 (not
+        /// the spec's full 1-10999 range) to match the same 4-row/9999 depth already used for
+        /// Armenian/Georgian below, rather than adding a 10000 special case matching neither pattern.
+        /// 15 and 16 need a further, non-tabular override - see <see cref="ConvertToHebrewNumber"/>.
+        /// </summary>
         private static readonly string[,] _hebrewDigitsTable =
         {
             { "א", "ב", "ג", "ד", "ה", "ו", "ז", "ח", "ט" },
             { "י", "כ", "ל", "מ", "נ", "ס", "ע", "פ", "צ" },
-            { "ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק", }
+            { "ק", "ר", "ש", "ת", "תק", "תר", "תש", "תת", "תתק", },
+            { "א׳", "ב׳", "ג׳", "ד׳", "ה׳", "ו׳", "ז׳", "ח׳", "ט׳" }
         };
 
         private static readonly string[,] _georgianDigitsTable =
@@ -53,22 +65,184 @@ namespace PeachPDF.Html.Core.Utils
             { "რ", "ს", "ტ", "ჳ", "ფ", "ქ", "ღ", "ყ", "შ" }
         };
 
+        /// <summary>
+        /// Table to convert numbers into (uppercase) armenian digits - CSS Counter Styles Level 3
+        /// §6.1's "armenian"/"upper-armenian" <c>@counter-style</c> (the two names are aliases of the
+        /// same style). Row 3 (thousands) added for the same reason as <see cref="_hebrewDigitsTable"/>'s
+        /// - the pre-existing 3-row table silently dropped the thousands digit for any value >= 1000.
+        /// </summary>
         private static readonly string[,] _armenianDigitsTable =
         {
             { "Ա", "Բ", "Գ", "Դ", "Ե", "Զ", "Է", "Ը", "Թ" },
             { "Ժ", "Ի", "Լ", "Խ", "Ծ", "Կ", "Հ", "Ձ", "Ղ" },
-            { "Ճ", "Մ", "Յ", "Ն", "Շ", "Ո", "Չ", "Պ", "Ջ" }
+            { "Ճ", "Մ", "Յ", "Ն", "Շ", "Ո", "Չ", "Պ", "Ջ" },
+            { "Ռ", "Ս", "Վ", "Տ", "Ր", "Ց", "Ւ", "Փ", "Ք" }
         };
 
+        /// <summary>Table to convert numbers into lowercase armenian digits - CSS Counter Styles Level 3
+        /// §6.1's "lower-armenian" <c>@counter-style</c>, the lowercase counterpart of
+        /// <see cref="_armenianDigitsTable"/>.</summary>
+        private static readonly string[,] _lowerArmenianDigitsTable =
+        {
+            { "ա", "բ", "գ", "դ", "ե", "զ", "է", "ը", "թ" },
+            { "ժ", "ի", "լ", "խ", "ծ", "կ", "հ", "ձ", "ղ" },
+            { "ճ", "մ", "յ", "ն", "շ", "ո", "չ", "պ", "ջ" },
+            { "ռ", "ս", "վ", "տ", "ր", "ց", "ւ", "փ", "ք" }
+        };
+
+        /// <summary>Dictionary-order hiragana lettering - CSS Counter Styles Level 3 §6.2's "hiragana"
+        /// <c>@counter-style</c>.</summary>
         private static readonly string[] _hiraganaDigitsTable =
         [
             "あ", "ぃ", "ぅ", "ぇ", "ぉ", "か", "き", "く", "け", "こ", "さ", "し", "す", "せ", "そ", "た", "ち", "つ", "て", "と", "な", "に", "ぬ", "ね", "の", "は", "ひ", "ふ", "へ", "ほ", "ま", "み", "む", "め", "も", "ゃ", "ゅ", "ょ", "ら", "り", "る", "れ", "ろ", "ゎ", "ゐ", "ゑ", "を", "ん"
         ];
 
+        /// <summary>
+        /// Iroha-order hiragana lettering - CSS Counter Styles Level 3 §6.2's "hiragana-iroha"
+        /// <c>@counter-style</c>. This is a genuinely different 47-character ORDER from
+        /// <see cref="_hiraganaDigitsTable"/> (i, ro, ha, ni, ho, he, to, ... vs the dictionary a, i, u,
+        /// e, o, ka, ki, ...), not a formatting variant of it - previously this style silently reused
+        /// the dictionary-order table, which produced dictionary-order output under the "iroha" name.
+        /// </summary>
+        private static readonly string[] _hiraganaIrohaDigitsTable =
+        [
+            "い", "ろ", "は", "に", "ほ", "へ", "と", "ち", "り", "ぬ",
+            "る", "を", "わ", "か", "よ", "た", "れ", "そ", "つ", "ね",
+            "な", "ら", "む", "う", "ゐ", "の", "お", "く", "や", "ま",
+            "け", "ふ", "こ", "え", "て", "あ", "さ", "き", "ゆ", "め",
+            "み", "し", "ゑ", "ひ", "も", "せ", "す"
+        ];
+
+        /// <summary>Dictionary-order katakana lettering - CSS Counter Styles Level 3 §6.2's "katakana"
+        /// <c>@counter-style</c>.</summary>
         private static readonly string[] _satakanaDigitsTable =
         [
             "ア", "イ", "ウ", "エ", "オ", "カ", "キ", "ク", "ケ", "コ", "サ", "シ", "ス", "セ", "ソ", "タ", "チ", "ツ", "テ", "ト", "ナ", "ニ", "ヌ", "ネ", "ノ", "ハ", "ヒ", "フ", "ヘ", "ホ", "マ", "ミ", "ム", "メ", "モ", "ヤ", "ユ", "ヨ", "ラ", "リ", "ル", "レ", "ロ", "ワ", "ヰ", "ヱ", "ヲ", "ン"
         ];
+
+        /// <summary>
+        /// Iroha-order katakana lettering - CSS Counter Styles Level 3 §6.2's "katakana-iroha"
+        /// <c>@counter-style</c>. See <see cref="_hiraganaIrohaDigitsTable"/>'s remarks - same fix, same
+        /// reason (this style previously silently reused the dictionary-order table too).
+        /// </summary>
+        private static readonly string[] _katakanaIrohaDigitsTable =
+        [
+            "イ", "ロ", "ハ", "ニ", "ホ", "ヘ", "ト", "チ", "リ", "ヌ",
+            "ル", "ヲ", "ワ", "カ", "ヨ", "タ", "レ", "ソ", "ツ", "ネ",
+            "ナ", "ラ", "ム", "ウ", "ヰ", "ノ", "オ", "ク", "ヤ", "マ",
+            "ケ", "フ", "コ", "エ", "テ", "ア", "サ", "キ", "ユ", "メ",
+            "ミ", "シ", "ヱ", "ヒ", "モ", "セ", "ス"
+        ];
+
+        /// <summary>
+        /// Per-script decimal-digit-substitution tables (index 0 = the script's own "0" glyph, ...
+        /// index 9 = its "9" glyph) for CSS Counter Styles Level 3 §6.1's "numeric" system styles -
+        /// the same base-10 place-value system as western decimal, just with different digit glyphs.
+        /// Codepoints are sourced verbatim from the spec's own <c>@counter-style</c> definitions.
+        /// </summary>
+        private static readonly string[] _arabicIndicDigitsTable =
+            ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+
+        private static readonly string[] _bengaliDigitsTable =
+            ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+
+        private static readonly string[] _cambodianDigitsTable =
+            ["០", "១", "២", "៣", "៤", "៥", "៦", "៧", "៨", "៩"];
+
+        private static readonly string[] _cjkDecimalDigitsTable =
+            ["〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
+
+        private static readonly string[] _devanagariDigitsTable =
+            ["०", "१", "२", "३", "४", "५", "६", "७", "८", "९"];
+
+        private static readonly string[] _gujaratiDigitsTable =
+            ["૦", "૧", "૨", "૩", "૪", "૫", "૬", "૭", "૮", "૯"];
+
+        private static readonly string[] _gurmukhiDigitsTable =
+            ["੦", "੧", "੨", "੩", "੪", "੫", "੬", "੭", "੮", "੯"];
+
+        private static readonly string[] _kannadaDigitsTable =
+            ["೦", "೧", "೨", "೩", "೪", "೫", "೬", "೭", "೮", "೯"];
+
+        private static readonly string[] _laoDigitsTable =
+            ["໐", "໑", "໒", "໓", "໔", "໕", "໖", "໗", "໘", "໙"];
+
+        private static readonly string[] _malayalamDigitsTable =
+            ["൦", "൧", "൨", "൩", "൪", "൫", "൬", "൭", "൮", "൯"];
+
+        private static readonly string[] _mongolianDigitsTable =
+            ["᠐", "᠑", "᠒", "᠓", "᠔", "᠕", "᠖", "᠗", "᠘", "᠙"];
+
+        private static readonly string[] _myanmarDigitsTable =
+            ["၀", "၁", "၂", "၃", "၄", "၅", "၆", "၇", "၈", "၉"];
+
+        private static readonly string[] _oriyaDigitsTable =
+            ["୦", "୧", "୨", "୩", "୪", "୫", "୬", "୭", "୮", "୯"];
+
+        private static readonly string[] _persianDigitsTable =
+            ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+
+        private static readonly string[] _tamilDigitsTable =
+            ["௦", "௧", "௨", "௩", "௪", "௫", "௬", "௭", "௮", "௯"];
+
+        private static readonly string[] _teluguDigitsTable =
+            ["౦", "౧", "౨", "౩", "౪", "౫", "౬", "౭", "౮", "౯"];
+
+        private static readonly string[] _thaiDigitsTable =
+            ["๐", "๑", "๒", "๓", "๔", "๕", "๖", "๗", "๘", "๙"];
+
+        private static readonly string[] _tibetanDigitsTable =
+            ["༠", "༡", "༢", "༣", "༤", "༥", "༦", "༧", "༨", "༩"];
+
+        private static readonly FrozenDictionary<string, string[]> _positionalDigitTables =
+            new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                { Keywords.ArabicIndic, _arabicIndicDigitsTable },
+                { Keywords.Bengali, _bengaliDigitsTable },
+                { Keywords.Cambodian, _cambodianDigitsTable },
+                { Keywords.Khmer, _cambodianDigitsTable },
+                { Keywords.CjkDecimal, _cjkDecimalDigitsTable },
+                { Keywords.Devanagari, _devanagariDigitsTable },
+                { Keywords.Gujarati, _gujaratiDigitsTable },
+                { Keywords.Gurmukhi, _gurmukhiDigitsTable },
+                { Keywords.Kannada, _kannadaDigitsTable },
+                { Keywords.Lao, _laoDigitsTable },
+                { Keywords.Malayalam, _malayalamDigitsTable },
+                { Keywords.Mongolian, _mongolianDigitsTable },
+                { Keywords.Myanmar, _myanmarDigitsTable },
+                { Keywords.Oriya, _oriyaDigitsTable },
+                { Keywords.Persian, _persianDigitsTable },
+                { Keywords.Tamil, _tamilDigitsTable },
+                { Keywords.Telugu, _teluguDigitsTable },
+                { Keywords.Thai, _thaiDigitsTable },
+                { Keywords.Tibetan, _tibetanDigitsTable }
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Fixed (finite, non-repeating) symbol lists for CSS Counter Styles Level 3 §6.4's
+        /// "cjk-earthly-branch"/"cjk-heavenly-stem" <c>@counter-style</c>s - a value outside 1..N falls
+        /// back to decimal, same as the spec's default <c>fallback: decimal</c> for any counter style
+        /// that doesn't declare its own.
+        /// </summary>
+        private static readonly string[] _cjkEarthlyBranchSymbols =
+        [
+            "子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉",
+            "戌", "亥"
+        ];
+
+        private static readonly string[] _cjkHeavenlyStemSymbols =
+        [
+            "甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"
+        ];
+
+        /// <summary>Ethiopic numeral tens/units glyphs - CSS Counter Styles Level 3 §7.2's
+        /// "ethiopic-numeric" algorithm (<see cref="ConvertToEthiopicNumber"/>). Index 0 = the "10"/"1"
+        /// glyph, ... index 8 = the "90"/"9" glyph.</summary>
+        private static readonly string[] _ethiopicTensGlyphs =
+            ["፲", "፳", "፴", "፵", "፶", "፷", "፸", "፹", "፺"];
+
+        private static readonly string[] _ethiopicUnitsGlyphs =
+            ["፩", "፪", "፫", "፬", "፭", "፮", "፯", "፰", "፱"];
 
         /// <summary>
         /// Check if the given codepoint is of Asian range. Takes a <see cref="Rune"/> (a whole Unicode
@@ -243,6 +417,42 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Style-name -> converter lookup for every "alphabetic"-family (CSS Counter Styles Level 3
+        /// §6.2) and additive-family (§3.7's "additive" system - armenian/georgian/hebrew/roman) style
+        /// this codebase implements via a hand-authored table/algorithm, keyed the same way
+        /// <see cref="Dom.CssCounterEngine"/>'s own recognized-style check is - a single source of truth
+        /// for "which styles does this method handle" instead of two independently-maintained lists.
+        /// </summary>
+        private static readonly FrozenDictionary<string, Func<int, string>> _alphabeticConverters =
+            new Dictionary<string, Func<int, string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                { Keywords.LowerGreek, ConvertToGreekNumber },
+                { Keywords.LowerRoman, n => ConvertToRomanNumbers(n, true) },
+                { Keywords.UpperRoman, n => ConvertToRomanNumbers(n, false) },
+                { Keywords.Armenian, n => ConvertToSpecificNumbers(n, _armenianDigitsTable) },
+                { Keywords.UpperArmenian, n => ConvertToSpecificNumbers(n, _armenianDigitsTable) },
+                { Keywords.LowerArmenian, n => ConvertToSpecificNumbers(n, _lowerArmenianDigitsTable) },
+                { Keywords.Georgian, n => ConvertToSpecificNumbers(n, _georgianDigitsTable) },
+                { Keywords.Hebrew, ConvertToHebrewNumber },
+                { Keywords.Hiragana, n => ConvertToSpecificNumbers2(n, _hiraganaDigitsTable) },
+                { Keywords.HiraganaIroha, n => ConvertToSpecificNumbers2(n, _hiraganaIrohaDigitsTable) },
+                { Keywords.Katakana, n => ConvertToSpecificNumbers2(n, _satakanaDigitsTable) },
+                { Keywords.KatakanaIroha, n => ConvertToSpecificNumbers2(n, _katakanaIrohaDigitsTable) },
+                { Keywords.LowerAlpha, n => ConvertToEnglishNumber(n, true) },
+                { Keywords.LowerLatin, n => ConvertToEnglishNumber(n, true) },
+                { Keywords.UpperAlpha, n => ConvertToEnglishNumber(n, false) },
+                { Keywords.UpperLatin, n => ConvertToEnglishNumber(n, false) }
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Whether <paramref name="style"/> is one of the alphabetic/additive counter styles
+        /// <see cref="ConvertToAlphaNumber"/> genuinely handles - the single source of truth
+        /// <see cref="Dom.CssCounterEngine.FormatCounterValue"/> checks before calling it, so a known
+        /// style is never wrongly demoted to decimal and an unknown one never wrongly promoted to alpha.
+        /// </summary>
+        public static bool IsAlphabeticCounterStyle(string style) => _alphabeticConverters.ContainsKey(style);
+
+        /// <summary>
         /// Convert number to alphanumeric system by the requested style (UpperAlpha, LowerRoman, Hebrew, etc.).
         /// </summary>
         /// <param name="number">the number to convert</param>
@@ -253,43 +463,145 @@ namespace PeachPDF.Html.Core.Utils
             if (number == 0)
                 return string.Empty;
 
-            if (style.Equals(Keywords.LowerGreek, StringComparison.InvariantCultureIgnoreCase))
+            return _alphabeticConverters.TryGetValue(style, out var convert)
+                ? convert(number)
+                : ConvertToEnglishNumber(number, false);
+        }
+
+        /// <summary>
+        /// Hebrew's additive algorithm (<see cref="ConvertToSpecificNumbers"/> over
+        /// <see cref="_hebrewDigitsTable"/>) with the CSS Counter Styles Level 3 §6.1 override for a
+        /// tens-and-units value of 15 or 16: the naive per-digit-group combination would produce
+        /// יה/יו, which closely resembles the Tetragrammaton, so the spec mandates טו/טז instead. 17-19
+        /// don't need an override - their naive combination (יז/יח/יט) already matches the spec's table.
+        /// </summary>
+        private static string ConvertToHebrewNumber(int number)
+        {
+            if (number <= 0) return string.Empty;
+
+            var tensAndUnits = number % 100;
+            if (tensAndUnits is 15 or 16)
             {
-                return ConvertToGreekNumber(number);
+                var hundredsAndUp = ConvertToSpecificNumbers(number - tensAndUnits, _hebrewDigitsTable);
+                return hundredsAndUp + (tensAndUnits == 15 ? "טו" : "טז");
             }
-            else if (style.Equals(Keywords.LowerRoman, StringComparison.InvariantCultureIgnoreCase))
+
+            return ConvertToSpecificNumbers(number, _hebrewDigitsTable);
+        }
+
+        /// <summary>
+        /// Converts a number into a per-script positional (place-value) numeral by substituting each
+        /// base-10 digit for the script's own glyph, per CSS Counter Styles Level 3 §6.1's "numeric"
+        /// system (arabic-indic, devanagari, thai, cjk-decimal, ...) - the same algorithm as western
+        /// decimal, just with different digit glyphs. Returns null when <paramref name="style"/> isn't
+        /// one of the known "numeric"-system styles, so the caller can fall back to plain decimal.
+        /// </summary>
+        public static string? ConvertToPositionalNumber(int number, string style)
+        {
+            return _positionalDigitTables.TryGetValue(style, out var digits)
+                ? ConvertToPositionalDigits(number, digits)
+                : null;
+        }
+
+        private static string ConvertToPositionalDigits(int number, string[] digits)
+        {
+            if (number == 0) return digits[0];
+
+            var negative = number < 0;
+            var magnitude = negative ? -(long)number : number;
+            var sb = string.Empty;
+
+            while (magnitude > 0)
             {
-                return ConvertToRomanNumbers(number, true);
+                sb = digits[(int)(magnitude % 10)] + sb;
+                magnitude /= 10;
             }
-            else if (style.Equals(Keywords.UpperRoman, StringComparison.InvariantCultureIgnoreCase))
+
+            return negative ? "-" + sb : sb;
+        }
+
+        /// <summary>
+        /// Looks up a fixed (non-repeating) counter-style symbol for CSS Counter Styles Level 3 §6.4's
+        /// "cjk-earthly-branch"/"cjk-heavenly-stem". Returns null when <paramref name="style"/> isn't
+        /// one of those two names, or when <paramref name="number"/> falls outside the style's finite
+        /// 1..N range, so the caller can fall back to decimal either way - this codebase doesn't model
+        /// a per-style <c>fallback</c> descriptor, and decimal is the spec's own default for one.
+        /// </summary>
+        public static string? ConvertToFixedCjkSymbol(int number, string style)
+        {
+            string[] symbols;
+            if (style.Equals(Keywords.CjkEarthlyBranch, StringComparison.OrdinalIgnoreCase))
             {
-                return ConvertToRomanNumbers(number, false);
+                symbols = _cjkEarthlyBranchSymbols;
             }
-            else if (style.Equals(Keywords.Armenian, StringComparison.InvariantCultureIgnoreCase))
+            else if (style.Equals(Keywords.CjkHeavenlyStem, StringComparison.OrdinalIgnoreCase))
             {
-                return ConvertToSpecificNumbers(number, _armenianDigitsTable);
-            }
-            else if (style.Equals(Keywords.Georgian, StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ConvertToSpecificNumbers(number, _georgianDigitsTable);
-            }
-            else if (style.Equals(Keywords.Hebrew, StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ConvertToSpecificNumbers(number, _hebrewDigitsTable);
-            }
-            else if (style.Equals(Keywords.Hiragana, StringComparison.InvariantCultureIgnoreCase) || style.Equals(Keywords.HiraganaIroha, StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ConvertToSpecificNumbers2(number, _hiraganaDigitsTable);
-            }
-            else if (style.Equals(Keywords.Katakana, StringComparison.InvariantCultureIgnoreCase) || style.Equals(Keywords.KatakanaIroha, StringComparison.InvariantCultureIgnoreCase))
-            {
-                return ConvertToSpecificNumbers2(number, _satakanaDigitsTable);
+                symbols = _cjkHeavenlyStemSymbols;
             }
             else
             {
-                var lowercase = style.Equals(Keywords.LowerAlpha, StringComparison.InvariantCultureIgnoreCase) || style.Equals(Keywords.LowerLatin, StringComparison.InvariantCultureIgnoreCase);
-                return ConvertToEnglishNumber(number, lowercase);
+                return null;
             }
+
+            return number is >= 1 && number <= symbols.Length ? symbols[number - 1] : null;
+        }
+
+        /// <summary>
+        /// Converts a positive integer into ethiopic numerals per CSS Counter Styles Level 3 §7.2's
+        /// documented algorithm: split into 2-digit groups starting from the least significant, then
+        /// for each group (processed most-significant-first): omit its digits (not its separator) when
+        /// the group is zero, is the most-significant group and equals 1, or has an odd index and
+        /// equals 1; substitute the remaining tens/units glyphs; then append a hundred separator (፻) to
+        /// every odd-indexed group that wasn't originally zero, and a ten-thousand separator (፼) to
+        /// every even-indexed group except group 0. Verified against the spec's own worked examples for
+        /// values an <see langword="int"/> can hold (100 -> ፻; 78010092 -> ፸፰፻፩፼፺፪, the spec's
+        /// smaller worked example) - see <c>CommonUtilsTests.ConvertToEthiopicNumber_MatchesSpecAlgorithm</c>.
+        /// The spec's other worked example, 780100000092, exceeds <see cref="int.MaxValue"/> and so isn't
+        /// reachable through this method's <see langword="int"/> parameter.
+        /// </summary>
+        public static string ConvertToEthiopicNumber(int number)
+        {
+            if (number == 1) return _ethiopicUnitsGlyphs[0];
+            if (number <= 0) return string.Empty;
+
+            var groupValues = new List<int>();
+            var remaining = number;
+            while (remaining > 0)
+            {
+                groupValues.Add(remaining % 100);
+                remaining /= 100;
+            }
+
+            var mostSignificantIndex = groupValues.Count - 1;
+            var sb = new StringBuilder();
+
+            for (var i = mostSignificantIndex; i >= 0; i--)
+            {
+                var value = groupValues[i];
+
+                var omitDigits = value == 0
+                    || (i == mostSignificantIndex && value == 1)
+                    || (i % 2 == 1 && value == 1);
+
+                if (!omitDigits)
+                {
+                    var tens = value / 10;
+                    var units = value % 10;
+                    if (tens > 0) sb.Append(_ethiopicTensGlyphs[tens - 1]);
+                    if (units > 0) sb.Append(_ethiopicUnitsGlyphs[units - 1]);
+                }
+
+                if (i % 2 == 1 && value != 0)
+                {
+                    sb.Append('፻'); // ፻ hundred
+                }
+                else if (i % 2 == 0 && i != 0)
+                {
+                    sb.Append('፼'); // ፼ ten-thousand
+                }
+            }
+
+            return sb.ToString();
         }
 
         /// <summary>
@@ -388,24 +700,31 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Convert the given integer into given alphabet numeric system.
+        /// Convert the given integer into given alphabet numeric system. Driven by
+        /// <paramref name="alphabet"/>'s own length (a bijective base-(length+1) numbering) rather than
+        /// a literal 48/49, so this also serves alphabets of a different length correctly - e.g. the 47
+        /// character hiragana-iroha/katakana-iroha orderings alongside the pre-existing 48-character
+        /// dictionary-order hiragana/katakana tables. A hard-coded 49 here previously threw
+        /// IndexOutOfRangeException on any counter value >= 48 for a 47-length alphabet.
         /// </summary>
         /// <param name="number">the number to convert</param>
         /// <param name="alphabet">the alphabet system to use</param>
         /// <returns>the number string</returns>
         private static string ConvertToSpecificNumbers2(int number, string[] alphabet)
         {
+            var @base = alphabet.Length + 1;
+
             for (int i = 20; i > 0; i--)
             {
-                if (number > 49 * i - i + 1)
+                if (number > alphabet.Length * i + 1)
                     number++;
             }
 
             var sb = string.Empty;
             while (number > 0)
             {
-                sb = alphabet[Math.Max(0, number % 49 - 1)].ToString(CultureInfo.InvariantCulture) + sb;
-                number /= 49;
+                sb = alphabet[Math.Max(0, number % @base - 1)].ToString(CultureInfo.InvariantCulture) + sb;
+                number /= @base;
             }
             return sb;
         }

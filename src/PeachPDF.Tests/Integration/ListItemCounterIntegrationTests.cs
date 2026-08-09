@@ -165,6 +165,94 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("1", beforeA.Text);
         }
 
+        [Theory]
+        // Representative "numeric" (positional digit-substitution) styles - CSS Counter Styles Level 3 §6.1.
+        [InlineData("devanagari", 12, "१२.")]
+        [InlineData("thai", 12, "๑๒.")]
+        [InlineData("cjk-decimal", 12, "一二.")]
+        // "fixed" styles (§6.4) - in range, and beyond it (falls back to plain decimal).
+        [InlineData("cjk-earthly-branch", 1, "子.")]
+        [InlineData("cjk-earthly-branch", 13, "13.")]
+        [InlineData("cjk-heavenly-stem", 1, "甲.")]
+        [InlineData("cjk-heavenly-stem", 11, "11.")]
+        // Ethiopic numeric (§7.2)'s own algorithm.
+        [InlineData("ethiopic-numeric", 100, "፻.")]
+        // Armenian variants (§6.1) - lower-armenian is new; upper-armenian is an alias of armenian; both
+        // need their thousands place (armenian previously silently dropped it above 999).
+        [InlineData("lower-armenian", 1, "ա.")]
+        [InlineData("upper-armenian", 1, "Ա.")]
+        [InlineData("armenian", 1000, "Ռ.")]
+        // Hebrew (§6.1) - the 15/16 Tetragrammaton-avoidance override, and the thousands place (also
+        // previously silently dropped above 999).
+        [InlineData("hebrew", 15, "טו.")]
+        [InlineData("hebrew", 16, "טז.")]
+        [InlineData("hebrew", 1000, "א׳.")]
+        // hiragana-iroha/katakana-iroha (§6.2) - previously silently reused the dictionary-order table.
+        [InlineData("hiragana-iroha", 1, "い.")]
+        [InlineData("katakana-iroha", 1, "イ.")]
+        public async Task Marker_NewOrFixedListStyleType_RendersExpectedGlyph(string listStyleType, int index, string expected)
+        {
+            var items = string.Concat(Enumerable.Range(1, index).Select(i => $"<li id='i{i}'>x</li>"));
+            var root = await BuildAndLayout(Wrap($"<ol style='list-style-type: {listStyleType}'>{items}</ol>"));
+            var last = (CssBoxMarker)FindById(root, $"i{index}")!.Boxes.Single(b => b.IsMarkerPseudoElement);
+            Assert.Equal(expected, last.Text);
+        }
+
+        [Fact]
+        public async Task Marker_StringListStyleType_RendersLiteralTextWithNoSuffix()
+        {
+            var root = await BuildAndLayout(Wrap(
+                "<ol style='list-style-type: \"-&gt; \"'><li id='a'>a</li></ol>"));
+
+            var a = (CssBoxMarker)FindById(root, "a")!.Boxes.Single(b => b.IsMarkerPseudoElement);
+
+            Assert.Equal("-> ", a.Text);
+        }
+
+        [Fact]
+        public async Task Marker_StringListStyleType_HandlesNonAsciiLiteral()
+        {
+            var root = await BuildAndLayout(Wrap(
+                "<ol style='list-style-type: \"→ \"'><li id='a'>a</li></ol>"));
+
+            var a = (CssBoxMarker)FindById(root, "a")!.Boxes.Single(b => b.IsMarkerPseudoElement);
+
+            Assert.Equal("→ ", a.Text);
+        }
+
+        [Fact]
+        public async Task BeforeContent_CounterDisclosureOpenStyle_RendersFixedGlyph()
+        {
+            // content: counter(name, disclosure-open) must agree with the default marker's own
+            // disclosure-open rendering, per the "single source of truth" convention this suite already
+            // guards for other styles (see DefaultNumbering_MatchesExplicitCounterOverride above).
+            var root = await BuildAndLayout(Wrap(
+                "<style>li::before { content: counter(list-item, disclosure-open) }</style>" +
+                "<ol><li id='a'>first</li><li id='b'>second</li></ol>"));
+
+            var beforeA = FindById(root, "a")!.Boxes.Single(b => b.IsBeforePseudoElement);
+            var beforeB = FindById(root, "b")!.Boxes.Single(b => b.IsBeforePseudoElement);
+
+            Assert.Equal("▾", beforeA.Text);
+            Assert.Equal("▾", beforeB.Text);
+        }
+
+        [Fact]
+        public async Task Marker_DisclosureListStyleTypes_RenderFixedGlyphRegardlessOfIndex()
+        {
+            var root = await BuildAndLayout(Wrap(
+                "<ol style='list-style-type: disclosure-open'><li id='a'>a</li><li id='b'>b</li></ol>" +
+                "<ol style='list-style-type: disclosure-closed'><li id='c'>c</li></ol>"));
+
+            var a = (CssBoxMarker)FindById(root, "a")!.Boxes.Single(b => b.IsMarkerPseudoElement);
+            var b = (CssBoxMarker)FindById(root, "b")!.Boxes.Single(b => b.IsMarkerPseudoElement);
+            var c = (CssBoxMarker)FindById(root, "c")!.Boxes.Single(b => b.IsMarkerPseudoElement);
+
+            Assert.Equal("▾ ", a.Text);
+            Assert.Equal("▾ ", b.Text);
+            Assert.Equal("▸ ", c.Text);
+        }
+
         [Fact]
         public async Task Marker_DecimalLeadingZeroListStyle_ZeroPadsSingleDigits()
         {

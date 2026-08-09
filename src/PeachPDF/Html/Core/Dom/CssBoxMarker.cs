@@ -13,6 +13,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System.Threading.Tasks;
 
@@ -88,6 +89,34 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             if (listStyleType == Keywords.None) return; // no marker at all
+
+            if (listStyleType.Equals(Keywords.DisclosureOpen, System.StringComparison.OrdinalIgnoreCase) ||
+                listStyleType.Equals(Keywords.DisclosureClosed, System.StringComparison.OrdinalIgnoreCase))
+            {
+                // CSS Counter Styles Level 3 §6.3: a fixed symbol, not a counted numbering style - every
+                // item gets the same glyph regardless of its list-item index, so the counter value
+                // passed in is irrelevant (FormatCounterValue ignores it for these two styles) and isn't
+                // worth a real counter lookup. Suffix is a plain space, not the "." every other named
+                // style gets below.
+                Text = CssCounterEngine.FormatCounterValue(0, listStyleType) + " ";
+                return;
+            }
+
+            // list-style-type: <string> - a literal marker (e.g. list-style-type: "-> ") rather than a
+            // named counter style: no counting, and per CSS Lists Level 3 no automatic suffix is
+            // appended (unlike every named style below, which get "."). ListStyleType stores the raw
+            // CSS-OM serialization of the declared value, so a string value still carries its quotes -
+            // only tokenize the (rare) case that could actually be one, rather than paying tokenizer
+            // cost for every ordinary keyword value.
+            if (listStyleType.Length > 0 && (listStyleType[0] == '"' || listStyleType[0] == '\''))
+            {
+                var tokens = CssValueParser.GetCssTokens(listStyleType);
+                if (tokens.Count == 1 && tokens[0] is StringToken literalMarker)
+                {
+                    Text = literalMarker.Data;
+                    return;
+                }
+            }
 
             var index = CssCounterEngine.GetCounter(this, Keywords.ListItem)?.Value ?? 1;
 

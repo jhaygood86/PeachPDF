@@ -982,6 +982,96 @@ await SaveShowcaseAsync("marker_styling", "Lists & Generated Content", "::marker
     "Styling list markers with the ::marker pseudo-element, including real per-item numbering via the list-item counter.",
     markerHtml, pdfConfig);
 
+// --- list-style-type value coverage showcase ---
+
+// Reuses SourceSans3 (already proven, via the font-variant-caps/bidi showcases above, to embed
+// cleanly) rather than the module-level sourceSans3B64/notoHebrewB64 declared later in this script -
+// those aren't in scope yet at this point in a top-level-statements file, which executes strictly in
+// source order.
+var listStyleTypeSourceSans3B64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf")));
+var listStyleTypeNotoHebrewB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansHebrewSubset.ttf")));
+
+const string ListStyleTypeCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
+    .css { font-size: 5.5pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var listStyleTypeHtml = "<!DOCTYPE html><html><head>" +
+    $"<style>@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{listStyleTypeSourceSans3B64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Hebrew'; src: url('data:font/truetype;base64,{listStyleTypeNotoHebrewB64}') format('truetype'); }}" +
+    "body { font: 8.5pt 'SS3', 'Hebrew', sans-serif; margin: 0 }</style>" +
+    ListStyleTypeCss + "</head><body>" +
+
+    "<h1>CSS list-style-type Value Coverage</h1>" +
+
+    "<h2>1 — Symbolic markers (disclosure-open/-closed) and a literal &lt;string&gt; marker</h2>" +
+    "<p class=\"intro\">disclosure-open/disclosure-closed are fixed, uncounted glyphs (every item gets " +
+    "the same marker); a &lt;string&gt; value is literal marker text with no automatic suffix.</p>" +
+    Row(
+        ListSwatch("disclosure-open", "list-style-type: disclosure-open;"),
+        ListSwatch("disclosure-closed", "list-style-type: disclosure-closed;"),
+        // Single-quoted CSS string literal - ListSwatch wraps listCss in a double-quoted HTML style="..."
+        // attribute, so a double-quoted CSS string here would prematurely close that attribute.
+        ListSwatch("literal &lt;string&gt;", "list-style-type: '→ ';"),
+        ListSwatch("none (baseline)", "list-style-type: none;")
+    ) +
+
+    "<h2>2 — Fixed styles, past their range</h2>" +
+    "<p class=\"intro\">cjk-earthly-branch/cjk-heavenly-stem have a finite 12/10-symbol range; a " +
+    "counter value beyond it falls back to plain decimal, per CSS Counter Styles Level 3.</p>" +
+    Row(
+        ListSwatch("cjk-earthly-branch (1-12)", "list-style-type: cjk-earthly-branch;"),
+        ListSwatch("cjk-heavenly-stem (1-10)", "list-style-type: cjk-heavenly-stem;"),
+        ListSwatch("cjk-decimal", "list-style-type: cjk-decimal;"),
+        ListSwatch("ethiopic-numeric", "list-style-type: ethiopic-numeric;")
+    ) +
+
+    "<h2>3 — Hebrew: additive numbering, including the 15/16 override</h2>" +
+    "<p class=\"intro\">15 and 16 are manually overridden to טו/טז instead of the " +
+    "naive combination, which closely resembles the Tetragrammaton - list starts at item 14 to show " +
+    "the transition, and now correctly reaches four digits (1000+) rather than silently dropping the " +
+    "thousands place.</p>" +
+    // font-family is set explicitly (Hebrew first) rather than relying on inherited per-codepoint
+    // fallback through 'SS3' - avoids a PDF font-subsetting interaction with the many other special
+    // glyphs (disclosure triangles, the string arrow) used earlier on this same page.
+    "<ol style=\"margin: 0; padding-left: 2em; list-style-type: hebrew; font-family: 'Hebrew', 'SS3', sans-serif\" start=\"14\">" +
+    string.Concat(Enumerable.Repeat("<li>Item</li>", 6)) +
+    "</ol>" +
+    "<div class=\"css\">list-style-type: hebrew; &lt;ol start=\"14\"&gt;</div>" +
+
+    "<h2>4 — Additional numeric/alphabetic/fixed styles now supported</h2>" +
+    "<p class=\"intro\">Every value below is verified by the automated test suite " +
+    "(CommonUtilsTests/ListItemCounterIntegrationTests) against the CSS Counter Styles Level 3 spec " +
+    "text. Rendering the actual script glyph (rather than this page's fallback font's notdef box) " +
+    "needs a font covering that script registered via PdfGenerator.AddFontFromStream - see " +
+    "docs/usage-examples.md#fonts - the same requirement any HTML renderer has for non-Latin text.</p>" +
+    Row(
+        ListSwatch("devanagari", "list-style-type: devanagari;"),
+        ListSwatch("thai", "list-style-type: thai;"),
+        ListSwatch("arabic-indic", "list-style-type: arabic-indic;"),
+        ListSwatch("bengali", "list-style-type: bengali;")
+    ) +
+    Row(
+        ListSwatch("lower-armenian", "list-style-type: lower-armenian;"),
+        ListSwatch("upper-armenian", "list-style-type: upper-armenian;"),
+        ListSwatch("hiragana-iroha", "list-style-type: hiragana-iroha;"),
+        ListSwatch("katakana-iroha", "list-style-type: katakana-iroha;")
+    ) +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("list_style_type", "Lists & Generated Content", "List Style Type Coverage",
+    "The full CSS Counter Styles Level 3 predefined-style coverage list-style-type now supports - numeric, fixed, symbolic, and additive systems, plus a literal <string> marker.",
+    listStyleTypeHtml, pdfConfig);
+
 // --- content image showcase ---
 
 static string ContentSwatch(string desc, string contentValue, string pseudoElement = "before", string width = "40px", string height = "28px", string? cssLabel = null) =>
