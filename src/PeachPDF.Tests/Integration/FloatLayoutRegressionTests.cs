@@ -268,6 +268,33 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FloatRight_InNarrowerNestedBlock_WithMarginLeft_StillAvoidsAWiderAncestorFloatRightSibling()
+        {
+            // Companion to the test above, with margin-left added to the nested float: DomUtils.
+            // IsFloatIntersecting's Floating.Right branch used to add coordinates.MarginLeft into the
+            // threshold it compares the ancestor float's left edge against - a leftover term that used
+            // to cancel out CssFloatCoordinates.FloatRightStartX's own margin-left bug, and became a
+            // second, independent bug once that formula was fixed: it inflates the intersection
+            // threshold by the nested float's own margin-left, so an ancestor float whose left edge
+            // falls within that margin-left-wide window goes undetected and the nested float never
+            // extends out to meet it. outerR's left edge (500 - 280 = 220pt) sits inside exactly that
+            // window here (the correct threshold is 200pt, the buggy one 240pt).
+            var html = Wrap(@"
+                <div style='width:500pt;'>
+                    <div id='outerR' style='float:right; width:280pt; height:80pt;'></div>
+                    <div style='width:200pt;'>
+                        <div id='r' style='float:right; width:100pt; height:30pt; margin-left:40pt;'></div>
+                    </div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var outerR = FindById(root, "outerR")!;
+            var r = FindById(root, "r")!;
+
+            Assert.Equal(outerR.Location.X - outerR.ActualMarginLeft, r.ActualRight, 1);
+        }
+
+        [Fact]
         public async Task FloatRight_NarrowsLineWrapWidth_SoTextWrapsBeforeReachingIt()
         {
             // DomUtils.GetLastRightIntersectingFloatBox used to query
@@ -297,6 +324,27 @@ namespace PeachPDF.Tests.Integration
                     $"word '{word.Text}' at Rectangle.Right={word.Rectangle.Right} overlaps the float:right " +
                     $"box, whose left edge (including margin) is at {floatLeftEdge}");
             }
+        }
+
+        [Fact]
+        public async Task FloatRight_WithMarginLeft_StillReachesContainingBlockRightEdge()
+        {
+            // CssFloatCoordinates.FloatRightStartX used to subtract MarginLeft a second time on top
+            // of Right already being margin-right-adjusted (FloatBoxRight sets Right = limitRight -
+            // box.ActualMarginRight), shifting a float:right box's own border-box left/right edges an
+            // extra margin-left to the left. A box's left margin is space to its own left - it must
+            // not pull the box's own right edge inward - so with margin-right:0, dd's border-box
+            // right edge should sit flush against dl's ClientRight regardless of margin-left.
+            var html = Wrap(@"
+                <dl style='width:200pt; margin:0; padding:0; border:0;'>
+                    <dd id='dd' style='float:right; width:80pt; height:20pt; margin:0 0 0 10pt;'></dd>
+                </dl>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var dl = FindById(root, "dd")!.ParentBox!;
+            var dd = FindById(root, "dd")!;
+
+            Assert.Equal(dl.ClientRight, dd.ActualRight, 1);
         }
 
         [Fact]
