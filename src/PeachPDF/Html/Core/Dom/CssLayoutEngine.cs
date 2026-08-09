@@ -1592,7 +1592,7 @@ namespace PeachPDF.Html.Core.Dom
                             coordinates.MaxBottom += box.ActualLineHeight - (coordinates.MaxBottom - coordinates.CurrentY);
 
                         var actualLimitRight = limitRight;
-                        var lastRightIntersectingFloatBox = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates, word.FullWidth);
+                        var lastRightIntersectingFloatBox = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
 
                         if (lastRightIntersectingFloatBox is not null)
                         {

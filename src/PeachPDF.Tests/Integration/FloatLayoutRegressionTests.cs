@@ -268,6 +268,84 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FloatRight_NarrowsLineWrapWidth_SoTextWrapsBeforeReachingIt()
+        {
+            // DomUtils.GetLastRightIntersectingFloatBox used to query
+            // GetFirstIntersectingFloatBox in Floating.Left mode - a point-collision test that can
+            // only detect a right float once the cursor has already walked into its span, never in
+            // advance. That let words on the row overlapping the float's vertical span
+            // ([0, 50pt)) be placed straight through it instead of wrapping before its left edge
+            // (300pt container - 100pt float = 200pt).
+            var html = Wrap(@"
+                <div style='width:300pt;'>
+                    <div id='f' style='float:right; width:100pt; height:50pt;'></div>
+                    <p id='text' style='margin:0;'>this line of text should wrap before it reaches the floated box on the right</p>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var floatBox = FindById(root, "f")!;
+            var text = FindById(root, "text")!;
+            var floatLeftEdge = floatBox.Location.X - floatBox.ActualMarginLeft;
+
+            var wordsOverlappingFloat = WordsOverlappingVerticalSpan(text, floatBox.Location.Y, floatBox.ActualBottom);
+
+            Assert.NotEmpty(wordsOverlappingFloat);
+
+            foreach (var word in wordsOverlappingFloat)
+            {
+                Assert.True(word.Rectangle.Right <= floatLeftEdge + 1,
+                    $"word '{word.Text}' at Rectangle.Right={word.Rectangle.Right} overlaps the float:right " +
+                    $"box, whose left edge (including margin) is at {floatLeftEdge}");
+            }
+        }
+
+        [Fact]
+        public async Task FloatLeft_StillNarrowsLineWrapWidth_AfterTheRightFloatFix()
+        {
+            // Companion to the float:right fix above: GetLastLeftIntersectingFloatBox implements a
+            // different (point-collision-then-push) algorithm that was already correct for
+            // float:left, and must remain so. Every word overlapping the float's vertical span must
+            // start at or after the float's right edge, and the paragraph must wrap to more lines
+            // than an unfloated control.
+            const string longText =
+                "this line of text should wrap below and around the floated box on the left before it reaches the container edge";
+
+            var withFloatHtml = Wrap($@"
+                <div style='width:300pt;'>
+                    <div id='f' style='float:left; width:100pt; height:50pt;'></div>
+                    <p id='text' style='margin:0;'>{longText}</p>
+                </div>");
+
+            var withoutFloatHtml = Wrap($@"
+                <div style='width:300pt;'>
+                    <p id='text' style='margin:0;'>{longText}</p>
+                </div>");
+
+            var (withFloatRoot, _) = await BuildAndLayout(withFloatHtml);
+            var (withoutFloatRoot, _) = await BuildAndLayout(withoutFloatHtml);
+
+            var floatBox = FindById(withFloatRoot, "f")!;
+            var withFloatText = FindById(withFloatRoot, "text")!;
+            var withoutFloatText = FindById(withoutFloatRoot, "text")!;
+            var floatRightEdge = floatBox.ActualRight + floatBox.ActualMarginRight;
+
+            var wordsOverlappingFloat = WordsOverlappingVerticalSpan(withFloatText, floatBox.Location.Y, floatBox.ActualBottom);
+
+            Assert.NotEmpty(wordsOverlappingFloat);
+
+            foreach (var word in wordsOverlappingFloat)
+            {
+                Assert.True(word.Rectangle.Left >= floatRightEdge - 1,
+                    $"word '{word.Text}' at Rectangle.Left={word.Rectangle.Left} starts before the float:left " +
+                    $"box's right edge (including margin) at {floatRightEdge}");
+            }
+
+            Assert.True(withFloatText.ActualBoxSizingHeight > withoutFloatText.ActualBoxSizingHeight,
+                $"narrowing the line width with a float:left should force extra line wraps and a taller box " +
+                $"(with float: {withFloatText.ActualBoxSizingHeight}, without: {withoutFloatText.ActualBoxSizingHeight})");
+        }
+
+        [Fact]
         public async Task ClearLeft_IgnoresAPrecedingFloatRightSibling()
         {
             // clear:left only clears past float:left siblings - a float:right sibling must not push it
@@ -370,6 +448,29 @@ namespace PeachPDF.Tests.Integration
                 if (found is not null) return found;
             }
             return null;
+        }
+
+        private static List<CssRect> WordsOverlappingVerticalSpan(CssBox box, double top, double bottom)
+        {
+            List<CssRect> words = [];
+            CollectWordsOverlappingVerticalSpan(box, top, bottom, words);
+            return words;
+        }
+
+        private static void CollectWordsOverlappingVerticalSpan(CssBox box, double top, double bottom, List<CssRect> words)
+        {
+            foreach (var word in box.Words)
+            {
+                if (word.Top < bottom && word.Top + word.Height > top)
+                {
+                    words.Add(word);
+                }
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                CollectWordsOverlappingVerticalSpan(child, top, bottom, words);
+            }
         }
 
         private static CssBox? FindById(CssBox box, string id)
