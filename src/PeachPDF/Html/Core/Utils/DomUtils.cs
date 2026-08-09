@@ -692,38 +692,80 @@ namespace PeachPDF.Html.Core.Utils
             return lastIntersectingFloat;
         }
 
-        public static CssBox? GetLastRightIntersectingFloatBox(CssBox box, CssLineBoxCoordinates coordinates, double referenceWidth)
+        /// <summary>
+        /// A right float's constraint on a line is unlike a left float's: a left float caps where
+        /// the cursor itself currently sits (a point-collision test, correct in
+        /// <see cref="GetLastLeftIntersectingFloatBox"/> above), but a right float caps how far
+        /// right the cursor is *allowed to reach in advance* - a lookahead, independent of the
+        /// cursor's current position or the word being placed. Reusing the point-collision test
+        /// here (as this method used to, by querying <see cref="GetFirstIntersectingFloatBox"/> in
+        /// <see cref="Floating.Left"/> mode) can only detect the float once the cursor has already
+        /// walked into its span, never before - so this scans for every float:right box whose
+        /// vertical span covers the current row and returns the one with the smallest left edge,
+        /// which is the actual binding constraint regardless of where the cursor is right now.
+        /// </summary>
+        public static CssBox? GetLastRightIntersectingFloatBox(CssBox box, CssLineBoxCoordinates coordinates)
         {
-            var left = coordinates.CurrentX;
-            CssBox? lastIntersectingFloat = null;
+            var container = box.HtmlContainer;
+            container?.RecordFloatScanCall();
 
-            // See the matching bound in GetLastLeftIntersectingFloatBox above for why this is needed.
-            var iterations = 0;
-            while (iterations++ < 10000)
+            // See GetFirstIntersectingFloatBox above for why this short-circuit exists.
+            if (container?.HasFloatedBoxes != true)
             {
-                CssFloatCoordinates floatCoordinates = new()
-                {
-                    Left = left,
-                    Top = coordinates.CurrentY,
-                    MarginLeft = box.ActualMarginLeft,
-                    MarginRight = box.ActualMarginRight,
-                    MaxBottom = coordinates.MaxBottom,
-                    ReferenceWidth = referenceWidth,
-                    Right = left + referenceWidth
-                };
-
-                var intersectingFloat = GetFirstIntersectingFloatBox(box, floatCoordinates, Floating.Left);
-
-                if (intersectingFloat is null)
-                {
-                    break;
-                }
-
-                left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight;
-                lastIntersectingFloat = intersectingFloat;
+                return null;
             }
 
-            return lastIntersectingFloat;
+            var boxesVisited = 0;
+            var narrowest = FindNarrowestRightFloatBox(box, coordinates.CurrentY, ref boxesVisited);
+            container.RecordFloatScanBoxVisits(boxesVisited);
+            return narrowest;
+        }
+
+        /// <summary>
+        /// Same ancestor/preceding-sibling traversal shape as <see cref="FindIntersectingFloatBox"/>,
+        /// but accumulates the narrowest match across the whole walk instead of returning on the
+        /// first hit - the wrap-limit query needs the binding constraint among every float:right box
+        /// covering this row, not merely the first one the traversal order happens to reach.
+        /// </summary>
+        private static CssBox? FindNarrowestRightFloatBox(CssBox reference, double top, ref int boxesVisited)
+        {
+            CssBox? narrowest = null;
+            var narrowestLeft = double.PositiveInfinity;
+
+            while (reference.ParentBox is not null)
+            {
+                var currentBoxIdx = reference.ParentBox.Boxes.IndexOf(reference);
+
+                for (var i = 0; i < currentBoxIdx; i++)
+                {
+                    ScanForNarrowestRightFloatBox(reference.ParentBox.Boxes[i], top, ref narrowest, ref narrowestLeft, ref boxesVisited);
+                }
+
+                reference = reference.ParentBox;
+            }
+
+            return narrowest;
+        }
+
+        private static void ScanForNarrowestRightFloatBox(CssBox box, double top, ref CssBox? narrowest, ref double narrowestLeft, ref int boxesVisited)
+        {
+            boxesVisited++;
+
+            if (box.Float.Value == Floating.Right && box.Location.Y <= top && top < box.ActualBottom)
+            {
+                var left = box.Location.X - box.ActualMarginLeft;
+
+                if (left < narrowestLeft)
+                {
+                    narrowestLeft = left;
+                    narrowest = box;
+                }
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                ScanForNarrowestRightFloatBox(childBox, top, ref narrowest, ref narrowestLeft, ref boxesVisited);
+            }
         }
 
         public static CssBox? GetNearestParentElementBox(CssBox box)
