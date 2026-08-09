@@ -44,6 +44,44 @@ namespace PeachPDF.Tests.Integration
                 $"Block height ({height}) must cover the inline-block's own 200px of vertical padding");
         }
 
+        // A tighter companion to the test above: asserts the block's height against the button's own
+        // measured insets and word height, not just a loose lower bound - a lower bound alone cannot
+        // catch OVER-counting. This is the shape that let the pre-shift design (issue #333) land with
+        // FinalizeFlowBoxExit's "handle height setting" fallback silently double-counting the button's
+        // own top inset (border-top+padding-top) for a box reached through FlowBox's recursive branch:
+        // `startY`, captured at that nested call's own entry, already named the content-box top (this
+        // issue's pre-shift), while ActualHeight is a border-box measurement, so summing them counted
+        // the top inset twice. `height >= 200` alone does not notice a result that is too large.
+        [Fact]
+        public async Task PaddedInlineBlock_SoleContentOfBlock_BlockHeightMatchesInsetsExactly()
+        {
+            const string html = @"<!DOCTYPE html>
+<html>
+<body style='margin: 0'>
+<div style='height: 300px'>filler</div>
+<div class='wrapper'><button class='btn' style='padding: 100px 14px'>Go</button></div>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            var wrapper = FindBoxByClass(rootBox, "wrapper");
+            var button = FindBoxByClass(rootBox, "btn");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(button);
+
+            var word = FindFirstWord(button!);
+            Assert.NotNull(word);
+
+            var expectedHeight = button!.ActualBorderTopWidth + button.ActualPaddingTop
+                + word!.Height
+                + button.ActualBorderBottomWidth + button.ActualPaddingBottom;
+            var actualHeight = wrapper!.ActualBottom - wrapper.Location.Y;
+
+            Assert.True(Math.Abs(actualHeight - expectedHeight) < 0.5,
+                $"Block height ({actualHeight}) must equal the button's own top inset + word height + bottom inset ({expectedHeight}) exactly, not merely cover it - a value this far off (e.g. the top inset counted twice) would still pass a '>=' check");
+        }
+
         [Fact]
         public async Task PaddedInlineBlock_TallerContentLine_DoesNotShrinkBlock()
         {
@@ -213,16 +251,111 @@ namespace PeachPDF.Tests.Integration
                 $"Inset-shifted word must not straddle a page boundary (top={word.Top:F1}, bottom={word.Bottom:F1}, pageHeight={pageHeight})");
         }
 
+        // The multi-column analog of InsetShiftNearPageBoundary_WordsDoNotStraddleThePage: under the
+        // break-token model (issue #333) a fragmentainer straddle discovered by the inset shift must
+        // move the WHOLE line to column 2 - landing at that column's own content top - rather than
+        // merely avoid straddling within column 1's own band (which the pre-#333 per-word relocation
+        // could do just as well, and would make an assertion of "not straddling" alone pass for the
+        // wrong reason). Column 1 comfortably fits the un-inset word; only the padding-top shift pushes
+        // it past the column's bottom.
+        [Fact]
+        public async Task InsetShiftNearColumnBoundary_WholeLineMovesToNextColumn()
+        {
+            var html = @"<!DOCTYPE html>
+<html>
+<body style='margin: 0'>
+<div id='mc' style='columns: 2; column-gap: 0; column-fill: auto; width: 200pt'>
+<div style='height: 220pt'>filler</div>
+<button id='btn' style='padding-top: 60pt'>Go</button>
+</div>
+</body>
+</html>";
+
+            var (root, _) = await BuildCssBoxTree(html, width: 200, height: 300);
+
+            var mc = FindFirst(root, b => b.HtmlTag?.TryGetAttribute("id", "") == "mc");
+            var button = FindFirst(root, b => b.HtmlTag?.TryGetAttribute("id", "") == "btn");
+            Assert.NotNull(mc);
+            Assert.NotNull(button);
+
+            var word = FindFirstWord(button!);
+            Assert.NotNull(word);
+
+            var columnWidth = (mc!.ClientRight - mc.ClientLeft) / 2;
+            Assert.True(word!.Left >= mc.ClientLeft + columnWidth - 0.1,
+                $"expected the inset-shifted line to move whole to column 2 (columnWidth={columnWidth}), word is at x={word.Left}");
+            // The button's only line never got kept anywhere, so this pass genuinely opens the box's
+            // content from its own top - the 60pt padding-top applies here exactly as it would have in
+            // column 1, landing the word at column 2's content top plus its own inset, not at Y~0.
+            Assert.True(Math.Abs(word.Top - 60) < 5,
+                $"expected padding-top (60) to apply once, at column 2's own content top, word top={word.Top}");
+        }
+
+        // An inline-block's content can wrap onto more than one internal line (CssLayoutEngine.FlowBox
+        // recurses into the SAME blockBox.LineBoxes list for it) - the pre-shift design this issue
+        // introduced has to get every such line right individually, not just the first, since
+        // CreateLineBoxes can only discard one in-progress line at a time. Here the first internal line
+        // (after the padding-top shift) still fits column 1; only the second, forced-break line straddles
+        // and moves alone. Distinct from the previous test in a way worth pinning: this resumed pass is a
+        // CONTINUATION of the box's content (its first line already landed in column 1), so padding-top
+        // must NOT apply a second time - only a pass that genuinely opens the box's own content does that.
+        // orphans/widows are relaxed to 1 to isolate that mechanism from this one: the UA default of 2
+        // would otherwise refuse to leave a single orphan line behind and move the whole two-line box,
+        // which is a different (and already-tested) mechanism, not the one under test here.
+        [Fact]
+        public async Task InsetShiftedInlineBlock_SecondInternalLine_MovesAloneToNextColumn()
+        {
+            var html = @"<!DOCTYPE html>
+<html>
+<body style='margin: 0'>
+<div id='mc' style='columns: 2; column-gap: 0; column-fill: auto; width: 200pt; orphans: 1; widows: 1'>
+<div style='height: 150pt'>filler</div>
+<span id='btn' style='display:inline-block; padding-top: 60pt'>First<br>Second</span>
+</div>
+</body>
+</html>";
+
+            var (root, _) = await BuildCssBoxTree(html, width: 200, height: 300);
+
+            var mc = FindFirst(root, b => b.HtmlTag?.TryGetAttribute("id", "") == "mc");
+            var button = FindFirst(root, b => b.HtmlTag?.TryGetAttribute("id", "") == "btn");
+            Assert.NotNull(mc);
+            Assert.NotNull(button);
+
+            var firstWord = AllWords(button!).Single(w => w.Text == "First");
+            var secondWord = AllWords(button!).Single(w => w.Text == "Second");
+
+            var columnWidth = (mc!.ClientRight - mc.ClientLeft) / 2;
+
+            Assert.True(firstWord.Left < mc.ClientLeft + columnWidth - 0.1,
+                $"expected the button's first internal line to stay in column 1, word is at x={firstWord.Left}");
+            Assert.True(secondWord.Left >= mc.ClientLeft + columnWidth - 0.1,
+                $"expected the button's second internal line to move alone to column 2, word is at x={secondWord.Left}");
+            // A continuation, not an opening pass: the box's first line already landed in column 1, so
+            // padding-top must not be re-applied here - the word starts at column 2's raw content top.
+            Assert.True(secondWord.Top < 15,
+                $"expected the resumed (continuation) line to start at column 2's raw content top with no re-applied inset, word top={secondWord.Top}");
+        }
+
         #region Helpers
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
         {
+            return await BuildCssBoxTree(html, width: 595, height: 842);
+        }
+
+        private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html, double width, double height)
+        {
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter);
+            container.MarginTop = 0;
+            container.MarginLeft = 0;
+            container.MarginRight = 0;
+            container.MarginBottom = 0;
 
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
+            var size = new XSize(width, height);
             container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
 
@@ -258,6 +391,18 @@ namespace PeachPDF.Tests.Integration
             }
 
             return null;
+        }
+
+        private static List<CssRect> AllWords(CssBox box)
+        {
+            var words = new List<CssRect>(box.Words);
+
+            foreach (var child in box.Boxes)
+            {
+                words.AddRange(AllWords(child));
+            }
+
+            return words;
         }
 
         private static CssBox? FindBoxByClass(CssBox root, string className)

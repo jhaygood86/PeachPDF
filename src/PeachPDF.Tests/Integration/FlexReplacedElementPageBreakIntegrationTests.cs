@@ -25,7 +25,7 @@ namespace PeachPDF.Tests.Integration
     /// content size - <c>AssignLocations</c> always translates the item to its real final position
     /// afterward via <c>CssBox.OffsetTop</c>. But that temporary position can itself straddle a page
     /// boundary, and <see cref="CssLayoutEngine.FlowBox"/>'s per-word page-break-avoidance check
-    /// (<c>CssRect.BreakPage</c>) would fire against it, permanently jumping the item's phantom word
+    /// (<c>CssRect.WouldStraddleFragmentainer</c>) would fire against it, permanently jumping the item's phantom word
     /// to the next page - independently of the item's own <c>Location</c>, which stays put. The later
     /// translation only shifts <c>Location</c> by a delta computed from itself, so the word's spurious
     /// jump survives untouched, permanently desyncing painted content from its own box.
@@ -42,7 +42,7 @@ namespace PeachPDF.Tests.Integration
     /// that cell - so a re-check at that point could itself fire against a not-yet-relocated
     /// position and reintroduce the exact word/Location desync bug one level later (confirmed by
     /// re-generating and visually inspecting the SVG showcase after adding it). Word-level
-    /// page-break avoidance (<c>CssRect.BreakPage</c>) was therefore simply unavailable for
+    /// page-break avoidance (<c>CssRect.WouldStraddleFragmentainer</c>) was therefore simply unavailable for
     /// content inside any <c>display:flex</c> container, in exchange for correctness.
     ///
     /// <b>Superseded, for one shape, by issue #430's fix.</b> <c>CssLayoutEngineFlex</c> now runs a

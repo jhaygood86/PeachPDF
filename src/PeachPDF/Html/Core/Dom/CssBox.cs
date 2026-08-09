@@ -4468,9 +4468,9 @@ namespace PeachPDF.Html.Core.Dom
             CssLayoutEngine.ApplyHeight(this);
             CssLayoutEngine.ApplyParentHeight(this);
 
-            // css-break keep-with-next at the word-flow fragmentation site: word flow relocates any
-            // line that would straddle a page boundary to the next page (CssRect.BreakPage, called
-            // from CssLayoutEngine.FlowBox). When that happens to this block's FIRST line, the break
+            // css-break keep-with-next at the word-flow fragmentation site: word flow moves any line
+            // that would straddle a page boundary to the next page as a whole (CssRect.WouldStraddleFragmentainer,
+            // asked from CssLayoutEngine.FlowBox). When that happens to this block's FIRST line, the break
             // effectively falls right before this box's content - so preceding siblings chained to it
             // by break-after/break-before: avoid (css-break §3.1, e.g. the UA default
             // `h1-h6 { break-after: avoid }`) must not be left behind on the old page. Move the
@@ -5625,27 +5625,6 @@ namespace PeachPDF.Html.Core.Dom
 
             var inFlowChildren = Boxes.Where(b => !b.IsOutOfFlow && b.DerivedStyle.ActualDisplay != Keywords.None && b != this).ToList();
             return inFlowChildren.Count == 0 || inFlowChildren.All(b => b.IsMarginCollapseThrough(depth + 1));
-        }
-
-        public virtual bool BreakPage()
-        {
-            var container = HtmlContainer;
-
-            if (Size.Height >= container!.PageSize.Height)
-                return false;
-
-            // Given the height guard above, the box straddles a slot boundary exactly when its top
-            // and bottom land in different slots. The epsilons make a flush fit a NON-break: a box
-            // ending exactly ON a boundary is wholly inside the earlier slot (css-break-3 - no
-            // spurious relocation for exact-fit content), where the historical modulo formulation
-            // relocated it by a page.
-            if (container.SlotStartingAt(Location.Y)
-                >= container.SlotEndingAt(ActualBottom))
-                return false;
-
-            Location = Location with { Y = container.NextPageTopOf(Location.Y) };
-
-            return true;
         }
 
         /// <summary>

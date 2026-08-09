@@ -128,7 +128,8 @@ namespace PeachPDF.Tests.Integration
 
         // The canonical real-document case: a heading followed by a plain paragraph. The paragraph
         // is not relocated wholesale - word flow pushes its first LINE to the next page
-        // (CssRect.BreakPage) - and the keep-with-next retry must still bring the heading along.
+        // (CssRect.WouldStraddleFragmentainer records a break rather than letting the line straddle)
+        // - and the keep-with-next retry must still bring the heading along.
         [Fact]
         public async Task ParagraphFirstLinePushedByWordFlow_PullsAvoidChainedHeadingAlong()
         {

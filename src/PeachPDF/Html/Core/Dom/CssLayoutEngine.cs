@@ -1289,10 +1289,22 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static void FinalizeFlowBoxExit(CssBox box, CssBox blockBox, CssLineBoxCoordinates coordinates, bool opensHere, int startOrdinal, double startX, double startY)
         {
+            // FlowBox's per-child loop pre-shifts CurrentY by box's own border-top+padding-top before
+            // recursing into an atomic inline-level (display:inline-block) box's content (issue #333),
+            // so when this box was reached that way, `startY` (captured at this call's own entry) names
+            // the CONTENT box's top, not the border box's - while ActualHeight below is a border-box
+            // measurement. The two fallbacks that follow reconstruct this box's own border-box rectangle
+            // from `startY`/`ActualHeight`, so they must undo that shift first, or they double-count the
+            // top inset on top of what ActualHeight already carries. A zero inset (no border/padding, or
+            // a display this box's own pre-shift never applies to) leaves this a no-op.
+            var trueStartY = box.DerivedStyle.ActualDisplay is Keywords.InlineBlock
+                ? startY - (box.ActualBorderTopWidth + box.ActualPaddingTop)
+                : startY;
+
             // handle height setting: the flowed content came out shorter than the box's own
             // ActualHeight (e.g. an inline-block button whose vertical padding exceeds its one
             // small-font text line), so extend MaxBottom to cover the box's full height from
-            // where it started. This must be startY-anchored: the old
+            // where it started. This must be trueStartY-anchored: the old
             // `MaxBottom = ActualHeight - (MaxBottom - startY)` form assigned the deficit as an
             // ABSOLUTE document Y (a tiny value near the page top), dragging MaxBottom above
             // startY - when such a box was a block's last/only inline content, the block's
@@ -1313,9 +1325,9 @@ namespace PeachPDF.Html.Core.Dom
             // box's whole height, so it only means anything for a box this pass both opened and
             // finished. For one it merely walked through the deficit is the box's entire height, which
             // it would then add to the flow all over again.
-            if (opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline && coordinates.MaxBottom - startY < box.ActualHeight)
+            if (opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline && coordinates.MaxBottom - trueStartY < box.ActualHeight)
             {
-                coordinates.MaxBottom = startY + box.ActualHeight;
+                coordinates.MaxBottom = trueStartY + box.ActualHeight;
             }
 
             // handle width setting
@@ -1333,7 +1345,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // hack for actual width handling
                 coordinates.CurrentX += box.ActualWidth - (coordinates.CurrentX - startX);
-                coordinates.Line.Rectangles.Add(box, new RRect(startX, startY, box.ActualWidth, box.ActualHeight));
+                coordinates.Line.Rectangles.Add(box, new RRect(startX, trueStartY, box.ActualWidth, box.ActualHeight));
             }
 
             // handle box that is only a whitespace
@@ -1498,6 +1510,34 @@ namespace PeachPDF.Html.Core.Dom
                 // fragmentainer placed?
                 var childStartOrdinal = coordinates.WordOrdinal;
                 var childOpensHere = childStartOrdinal >= coordinates.ResumeOrdinal;
+
+                // CSS2.1 §8.1 box model: an atomic inline-level box's (display:inline-block) content sits
+                // inside its padding box, border-top+padding-top below its own top edge. Applied here,
+                // before any of b's content is placed, rather than shifting already-placed words
+                // afterward (issue #333) - so the ordinary per-word WouldStraddleFragmentainer check
+                // below sees the real final position from the start, for every line b's own content may
+                // wrap onto, not just the first (CreateLineBoxes can only discard one in-progress line,
+                // so a straddle discovered only on a later internal line would have no way to discard the
+                // earlier ones). Guarded with !ReferenceEquals(b, box) for the self-iteration case
+                // (boxes = [box], b == box) even though the two conditions that would have to coincide
+                // for it to fire never do: self-iteration requires box.Words.Count > 0, but reaching this
+                // loop as a nested FlowBox call at all requires the PARENT's own per-child dispatch to
+                // have found b.Words.Count == 0 (a box holding words directly takes the loop's other,
+                // non-recursive branch instead) - the same b can't satisfy both. Kept explicit rather than
+                // assumed, since a display:inline-block box acquiring direct words in the future would
+                // silently double the shift here rather than fail loudly. Only on the pass that opens b's
+                // own content (childOpensHere): a continuation must not re-push a box's later lines down
+                // by a padding it already paid on an earlier fragmentainer.
+                var appliesAtomicInset = b.DerivedStyle.ActualDisplay is Keywords.InlineBlock && !ReferenceEquals(b, box);
+                var atomicTopInset = appliesAtomicInset ? b.ActualBorderTopWidth + b.ActualPaddingTop : 0;
+                var atomicBottomInset = appliesAtomicInset ? b.ActualBorderBottomWidth + b.ActualPaddingBottom : 0;
+                var preShiftedForAtomicInset = childOpensHere && atomicTopInset > 0;
+                var lineBeforeChild = coordinates.Line;
+
+                if (preShiftedForAtomicInset)
+                {
+                    coordinates.CurrentY += atomicTopInset;
+                }
 
                 var leftSpacing = (b.Position.Value != PositionMode.Absolute && b.Position.Value != PositionMode.Fixed) ? b.ActualMarginLeft + b.ActualBorderLeftWidth + b.ActualPaddingLeft : 0;
                 var rightSpacing = (b.Position.Value != PositionMode.Absolute && b.Position.Value != PositionMode.Fixed) ? b.ActualMarginRight + b.ActualBorderRightWidth + b.ActualPaddingRight : 0;
@@ -1728,45 +1768,46 @@ namespace PeachPDF.Html.Core.Dom
                         // claimed that line in both bands and it painted sliced in half on each. The
                         // giveaway is that wrapping the identical text in a block inside the same cell
                         // was already correct - the nested box is not a cell, so it never took this arm.
-                        if (box is { IsFixed: false } && box.HtmlContainer?.SuppressWordPageBreaks != true)
+                        //
+                        // A null Fragmentainer means there is nothing here to ask (issue #400: "a
+                        // measurement pass names no fragmentainer at all" - the question is meaningless
+                        // there, not merely unanswerable), so this is simply skipped rather than falling
+                        // back to a relocation - issue #333 retired the last caller of the pre-#321
+                        // per-word CssRect.BreakPage mechanism that used to run here.
+                        if (box is { IsFixed: false } && box.HtmlContainer?.SuppressWordPageBreaks != true
+                            && coordinates.Fragmentainer is not null)
                         {
-                            if (coordinates.Fragmentainer is not null)
+                            // The same question CssRect.BreakPage used to ask after the fact, answered
+                            // here instead so this flow can stop before placing the word rather than
+                            // relocating it and carrying on. The break is taken at the start of the line,
+                            // not at this word: a line box is monolithic (css-break-3 §4.1), so the whole
+                            // of it moves to the next fragmentainer rather than leaving its shorter words
+                            // behind.
+                            if (word.WouldStraddleFragmentainer())
                             {
-                                // The same question CssRect.BreakPage asks, answered one step earlier so
-                                // this flow can stop here instead of relocating the word and carrying on.
-                                // The break is taken at the start of the line, not at this word: a line
-                                // box is monolithic (css-break-3 §4.1), so the whole of it moves to the
-                                // next fragmentainer rather than leaving its shorter words behind.
-                                if (word.WouldStraddleFragmentainer())
-                                {
-                                    // CompletedLineCount is filled in by CreateLineBoxes once the
-                                    // in-progress line has been discarded, since that is what fixes how
-                                    // many lines this fragmentainer actually kept.
-                                    coordinates.Break = new InlineBreakToken(
-                                        blockBox,
-                                        // Derived from where the break actually fell (the band this line
-                                        // was trying to sit in), never assumed to be "the pass after this
-                                        // one" - see ResumeSlotForBreakBefore's own remarks.
-                                        word.ResumeSlotForBreakBefore(),
-                                        [], coordinates.LineStartOrdinal, CompletedLineCount: 0,
-                                        FollowsForcedBreak: coordinates.Line.FollowsForcedBreak);
-                                    return;
-                                }
-
-                                // A word too tall for any fragmentainer overflows the one it is in
-                                // rather than breaking (css-break-3 §2) - so the words after it, on this
-                                // same line or a later one, flow into whatever band follows without a
-                                // break ever recording the crossing. Step the cursor there so any further
-                                // fragmentation question this pass asks answers about the band flow has
-                                // actually reached, not the one this overflowing word started in - #435.
-                                if (word.OverflowsEveryFragmentainer())
-                                {
-                                    coordinates.Fragmentainer.StepOverTo(box.HtmlContainer!.SlotEndingAt(word.Bottom));
-                                }
+                                // CompletedLineCount is filled in by CreateLineBoxes once the
+                                // in-progress line has been discarded, since that is what fixes how
+                                // many lines this fragmentainer actually kept.
+                                coordinates.Break = new InlineBreakToken(
+                                    blockBox,
+                                    // Derived from where the break actually fell (the band this line
+                                    // was trying to sit in), never assumed to be "the pass after this
+                                    // one" - see ResumeSlotForBreakBefore's own remarks.
+                                    word.ResumeSlotForBreakBefore(),
+                                    [], coordinates.LineStartOrdinal, CompletedLineCount: 0,
+                                    FollowsForcedBreak: coordinates.Line.FollowsForcedBreak);
+                                return;
                             }
-                            else
+
+                            // A word too tall for any fragmentainer overflows the one it is in
+                            // rather than breaking (css-break-3 §2) - so the words after it, on this
+                            // same line or a later one, flow into whatever band follows without a
+                            // break ever recording the crossing. Step the cursor there so any further
+                            // fragmentation question this pass asks answers about the band flow has
+                            // actually reached, not the one this overflowing word started in - #435.
+                            if (word.OverflowsEveryFragmentainer())
                             {
-                                word.BreakPage();
+                                coordinates.Fragmentainer.StepOverTo(box.HtmlContainer!.SlotEndingAt(word.Bottom));
                             }
                         }
 
@@ -1786,18 +1827,17 @@ namespace PeachPDF.Html.Core.Dom
                     // A box holding its words directly (e.g. a ::before/::after pseudo-element,
                     // whose generated text lives on the box itself rather than an anonymous
                     // child) never goes through the FlowBox recursion below, so it gets its
-                    // atomic-inline vertical insets here. Skipped for the self-iteration case
-                    // (boxes = [box], b == box): there the insets are applied by the PARENT's
-                    // own recursion branch after this call returns - applying both would inset
-                    // the words twice.
+                    // atomic-inline vertical insets (the bottomInset/MaxBottom bookkeeping - the
+                    // topInset itself was already applied before this box's words above were placed)
+                    // here. Skipped for the self-iteration case (boxes = [box], b == box): there the
+                    // insets are applied by the PARENT's own recursion branch after this call returns -
+                    // applying both would double the bottom inset.
                     //
-                    // ...and neither does a box this pass placed nothing for: the inset shifts every
-                    // word the box has flowed, so re-running it on a resumed pass would move an
-                    // earlier fragmentainer's words down again, once per pass after the one that
-                    // placed them.
+                    // ...and neither does a box this pass placed nothing for: a box this pass placed
+                    // none for has already had its bookkeeping done by the pass that placed it.
                     if (!ReferenceEquals(b, box) && coordinates.PlacedSince(childStartOrdinal))
                     {
-                        ApplyAtomicInlineVerticalInsets(b, box, coordinates);
+                        ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
                     }
                 }
                 else if (b.DerivedStyle.ActualDisplay == Keywords.InlineFlex)
@@ -1824,8 +1864,18 @@ namespace PeachPDF.Html.Core.Dom
                     // box it placed none for has already had it.
                     if (coordinates.PlacedSince(childStartOrdinal))
                     {
-                        ApplyAtomicInlineVerticalInsets(b, box, coordinates);
+                        ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
                     }
+                }
+
+                // Undoes the pre-shift above for whatever comes after b on the same line: the shift must
+                // only affect b's own content, never a sibling's. Left alone when b's own content wrapped
+                // onto a new line internally (coordinates.Line changed) - that new CurrentY already comes
+                // from the (correctly pre-shifted) MaxBottom the wrap computed it from, not from this
+                // pre-shift, so there is nothing here to subtract back.
+                if (preShiftedForAtomicInset && ReferenceEquals(lineBeforeChild, coordinates.Line))
+                {
+                    coordinates.CurrentY -= atomicTopInset;
                 }
 
                 // A box whose content was all placed in an earlier fragmentainer is not re-closed here
@@ -1940,74 +1990,55 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// CSS2.1 §8.1 box model: an atomic inline-level box's content is laid out inside its
         /// padding box, so its flowed words must sit border+padding-top BELOW the box's top
-        /// edge - <see cref="FlowBox"/> placed them at the line's CurrentY (the box's top).
-        /// Without this inset, <see cref="CssLineBox.UpdateRectangle"/>'s padding expansion
-        /// pushes the box's background/border rect UP above the text instead (a button's label
-        /// hugged its top border). Shifts the flowed words down into the content box and grows
-        /// the flow bottom to cover the full padding box. Plain <c>display: inline</c> boxes
-        /// are excluded per §10.8.1 - their vertical padding paints without taking vertical
-        /// space, which the existing rect expansion alone already models correctly. An
-        /// absolutely/fixed-positioned box still gets its words inset (its content sits inside
-        /// its own padding box regardless), but never grows the in-flow
-        /// <see cref="CssLineBoxCoordinates.MaxBottom"/> - out-of-flow boxes must not affect
-        /// ancestor flow height (CSS2.1 §9.6).
+        /// edge. <see cref="FlowBox"/>'s per-child loop now applies that inset by pre-shifting
+        /// <c>coordinates.CurrentY</c> before b's content is flowed (issue #333), so by the time
+        /// this runs every word b has flowed already sits at its correct final <see cref="CssRect.Top"/> -
+        /// what remains is purely bookkeeping. Without growing <see cref="CssLineBoxCoordinates.MaxBottom"/>
+        /// by the bottom inset, <see cref="CssLineBox.UpdateRectangle"/>'s padding expansion would close
+        /// the box's background/border rect at the last word's own bottom rather than below it (a
+        /// button's label would hug its bottom border). Plain <c>display: inline</c> boxes are excluded
+        /// per §10.8.1 by the caller (their vertical padding paints without taking vertical space, which
+        /// the existing rect expansion alone already models correctly) - <paramref name="bottomInset"/>
+        /// is precomputed as 0 for them. An absolutely/fixed-positioned box still gets its own insets
+        /// (its content sits inside its own padding box regardless) but never grows the in-flow
+        /// <see cref="CssLineBoxCoordinates.MaxBottom"/> - out-of-flow boxes must not affect ancestor flow
+        /// height (CSS2.1 §9.6).
         /// </summary>
         /// <param name="b">the just-flowed inline-level box</param>
-        /// <param name="flowContext">the box whose inline flow <paramref name="b"/> participates in
-        /// (<see cref="FlowBox"/>'s own <c>box</c> parameter) - carries the same fixed/table-cell
-        /// page-break exemptions the per-word flow placement uses</param>
         /// <param name="coordinates">the current line coordinates</param>
-        private static void ApplyAtomicInlineVerticalInsets(CssBox b, CssBox flowContext, CssLineBoxCoordinates coordinates)
+        /// <param name="bottomInset">b's own border-bottom+padding-bottom, precomputed by the caller (0
+        /// when b is not an atomic inline-level box)</param>
+        private static void ApplyAtomicInlineVerticalInsets(CssBox b, CssLineBoxCoordinates coordinates, double bottomInset)
         {
-            if (b.DerivedStyle.ActualDisplay is not Keywords.InlineBlock)
+            if (bottomInset <= 0 || b.Position.Value is PositionMode.Absolute or PositionMode.Fixed)
                 return;
 
-            var topInset = b.ActualBorderTopWidth + b.ActualPaddingTop;
-            var bottomInset = b.ActualBorderBottomWidth + b.ActualPaddingBottom;
+            var maxWordBottom = MaxFlowedWordBottom(b);
 
-            if (topInset <= 0 && bottomInset <= 0)
-                return;
-
-            // Word flow already ran CssRect.BreakPage per word; the inset shift below can push
-            // a line that legitimately fit above a page boundary back across it, so the shifted
-            // words re-check - a monolithic line must land fully within one fragmentainer
-            // (css-break §4). Same exemption as the flow-time call.
-            var breakPages = flowContext is { IsFixed: false };
-            var maxWordBottom = OffsetFlowedWords(b, topInset, breakPages);
-
-            if (maxWordBottom > double.MinValue
-                && b.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed))
+            if (maxWordBottom > double.MinValue)
             {
                 coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, maxWordBottom + bottomInset);
             }
         }
 
         /// <summary>
-        /// Shifts every word already flowed inside <paramref name="box"/>'s subtree down by
-        /// <paramref name="amount"/> (an atomic inline-level box's border+padding-top content
-        /// inset - see <see cref="ApplyAtomicInlineVerticalInsets"/>), optionally re-running the
-        /// page-boundary check on each shifted word, and returns the lowest word bottom after
-        /// the shift, or <see cref="double.MinValue"/> when the subtree holds no words at all.
+        /// The deepest bottom edge among every word already flowed inside <paramref name="box"/>'s
+        /// subtree, or <see cref="double.MinValue"/> when it holds none. A read-only walk - unlike the
+        /// shifting/relocating walk it replaced (issue #333), every word already sits at its correct
+        /// <see cref="CssRect.Top"/> by the time <see cref="ApplyAtomicInlineVerticalInsets"/> runs.
         /// </summary>
-        private static double OffsetFlowedWords(CssBox box, double amount, bool breakPages)
+        private static double MaxFlowedWordBottom(CssBox box)
         {
             var maxBottom = double.MinValue;
 
             foreach (var word in box.Words)
             {
-                word.Top += amount;
-
-                if (breakPages && box.HtmlContainer?.SuppressWordPageBreaks != true)
-                {
-                    word.BreakPage();
-                }
-
                 maxBottom = Math.Max(maxBottom, word.Bottom);
             }
 
             foreach (var child in box.Boxes)
             {
-                maxBottom = Math.Max(maxBottom, OffsetFlowedWords(child, amount, breakPages));
+                maxBottom = Math.Max(maxBottom, MaxFlowedWordBottom(child));
             }
 
             return maxBottom;
