@@ -300,6 +300,27 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FloatRight_WithMarginLeft_StillReachesContainingBlockRightEdge()
+        {
+            // CssFloatCoordinates.FloatRightStartX used to subtract MarginLeft a second time on top
+            // of Right already being margin-right-adjusted (FloatBoxRight sets Right = limitRight -
+            // box.ActualMarginRight), shifting a float:right box's own border-box left/right edges an
+            // extra margin-left to the left. A box's left margin is space to its own left - it must
+            // not pull the box's own right edge inward - so with margin-right:0, dd's border-box
+            // right edge should sit flush against dl's ClientRight regardless of margin-left.
+            var html = Wrap(@"
+                <dl style='width:200pt; margin:0; padding:0; border:0;'>
+                    <dd id='dd' style='float:right; width:80pt; height:20pt; margin:0 0 0 10pt;'></dd>
+                </dl>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var dl = FindById(root, "dd")!.ParentBox!;
+            var dd = FindById(root, "dd")!;
+
+            Assert.Equal(dl.ClientRight, dd.ActualRight, 1);
+        }
+
+        [Fact]
         public async Task FloatLeft_StillNarrowsLineWrapWidth_AfterTheRightFloatFix()
         {
             // Companion to the float:right fix above: GetLastLeftIntersectingFloatBox implements a

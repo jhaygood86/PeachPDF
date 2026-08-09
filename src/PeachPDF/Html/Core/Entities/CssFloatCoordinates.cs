@@ -9,6 +9,6 @@
         public required double MarginLeft { get; set; }
         public required double MarginRight { get; set; }
         public required double ReferenceWidth { get; set; }
-        public double FloatRightStartX => Right - ReferenceWidth - MarginLeft;
+        public double FloatRightStartX => Right - ReferenceWidth;
     }
 }
