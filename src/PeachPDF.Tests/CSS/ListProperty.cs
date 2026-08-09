@@ -143,6 +143,75 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("decimal-leading-zero", concrete.Value);
         }
 
+        [Theory]
+        // Pre-existing values that were documented as supported but - until Converters.ListStyleConverter
+        // (Map.ListStyles) was completed alongside the new values below - actually failed to parse at
+        // this CSS-OM layer, since an unrecognized keyword makes the whole declaration invalid; a
+        // `<style>`/inline-style declaration for one of these silently fell back to the property's
+        // cascaded/initial value instead of ever reaching CssBoxMarker.
+        [InlineData("hebrew", "hebrew")]
+        [InlineData("hiragana", "hiragana")]
+        [InlineData("hiragana-iroha", "hiragana-iroha")]
+        [InlineData("katakana", "katakana")]
+        [InlineData("katakana-iroha", "katakana-iroha")]
+        // Numeric (positional digit-substitution) styles - CSS Counter Styles Level 3 §6.1.
+        [InlineData("arabic-indic", "arabic-indic")]
+        [InlineData("Bengali", "bengali")]
+        [InlineData("cambodian", "cambodian")]
+        [InlineData("khmer", "khmer")]
+        [InlineData("cjk-decimal", "cjk-decimal")]
+        [InlineData("devanagari", "devanagari")]
+        [InlineData("gujarati", "gujarati")]
+        [InlineData("gurmukhi", "gurmukhi")]
+        [InlineData("kannada", "kannada")]
+        [InlineData("lao", "lao")]
+        [InlineData("malayalam", "malayalam")]
+        [InlineData("mongolian", "mongolian")]
+        [InlineData("myanmar", "myanmar")]
+        [InlineData("oriya", "oriya")]
+        [InlineData("persian", "persian")]
+        [InlineData("tamil", "tamil")]
+        [InlineData("telugu", "telugu")]
+        [InlineData("thai", "thai")]
+        [InlineData("tibetan", "tibetan")]
+        // Fixed styles - §6.4.
+        [InlineData("cjk-earthly-branch", "cjk-earthly-branch")]
+        [InlineData("cjk-heavenly-stem", "cjk-heavenly-stem")]
+        // Ethiopic numeric - §7.2.
+        [InlineData("ethiopic-numeric", "ethiopic-numeric")]
+        // Armenian variants - §6.1.
+        [InlineData("lower-armenian", "lower-armenian")]
+        [InlineData("UPPER-ARMENIAN", "upper-armenian")]
+        // Symbolic (fixed-glyph, uncounted) styles - §6.3.
+        [InlineData("disclosure-open", "disclosure-open")]
+        [InlineData("disclosure-closed", "disclosure-closed")]
+        public void CssListStyleTypeNewKeywordLegal(string input, string expected)
+        {
+            var snippet = $"list-style-type: {input} ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("list-style-type", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<ListStyleTypeProperty>(property);
+            var concrete = (ListStyleTypeProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal(expected, concrete.Value);
+        }
+
+        [Fact]
+        public void CssListStyleTypeStringLegal()
+        {
+            var snippet = "list-style-type: \"-> \" ";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("list-style-type", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<ListStyleTypeProperty>(property);
+            var concrete = (ListStyleTypeProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("\"-> \"", concrete.Value);
+        }
+
         [Fact]
         public void CssListStyleTypeNumberIllegal()
         {

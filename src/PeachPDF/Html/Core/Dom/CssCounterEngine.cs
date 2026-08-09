@@ -32,7 +32,41 @@ namespace PeachPDF.Html.Core.Dom
                 return number.ToString("00", CultureInfo.InvariantCulture);
             }
 
-            if (IsAlphabeticCounterStyle(style))
+            // "numeric" system (CSS Counter Styles Level 3 §6.1) - positional digit substitution, e.g.
+            // arabic-indic, devanagari, thai, cjk-decimal.
+            var positional = CommonUtils.ConvertToPositionalNumber(number, style);
+            if (positional is not null)
+            {
+                return positional;
+            }
+
+            // "fixed" system (§6.4) - a finite, non-repeating symbol list; out of range falls through
+            // to decimal below, same as every other unrepresentable case.
+            var fixedSymbol = CommonUtils.ConvertToFixedCjkSymbol(number, style);
+            if (fixedSymbol is not null)
+            {
+                return fixedSymbol;
+            }
+
+            if (style.Equals(Keywords.EthiopicNumeric, StringComparison.OrdinalIgnoreCase) && number >= 1)
+            {
+                return CommonUtils.ConvertToEthiopicNumber(number);
+            }
+
+            // "symbolic" system (§6.3) - a single fixed glyph, the same for every counter value (not
+            // just every list item), unlike every style above/below. Handled here rather than only in
+            // CssBoxMarker so content: counter(name, disclosure-open) agrees with the default marker.
+            if (style.Equals(Keywords.DisclosureOpen, StringComparison.OrdinalIgnoreCase))
+            {
+                return "▾"; // U+25BE BLACK DOWN-POINTING SMALL TRIANGLE
+            }
+
+            if (style.Equals(Keywords.DisclosureClosed, StringComparison.OrdinalIgnoreCase))
+            {
+                return "▸"; // U+25B8 BLACK RIGHT-POINTING SMALL TRIANGLE
+            }
+
+            if (CommonUtils.IsAlphabeticCounterStyle(style))
             {
                 var formatted = CommonUtils.ConvertToAlphaNumber(number, style);
 
@@ -45,28 +79,6 @@ namespace PeachPDF.Html.Core.Dom
             // `decimal` (explicit) and any unknown/invalid style fall back to decimal.
             return number.ToString(CultureInfo.InvariantCulture);
         }
-
-        /// <summary>
-        /// Whether <paramref name="style"/> is one of the alphabetic/algorithmic counter styles that
-        /// <see cref="CommonUtils.ConvertToAlphaNumber"/> genuinely handles. Listed explicitly (rather
-        /// than relying on that method's catch-all) so a known style isn't wrongly demoted to decimal
-        /// and an unknown one isn't wrongly promoted to alpha - unknown styles must fall back to decimal.
-        /// </summary>
-        private static bool IsAlphabeticCounterStyle(string style) =>
-            style.Equals(Keywords.LowerGreek, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.LowerRoman, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.UpperRoman, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.Armenian, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.Georgian, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.Hebrew, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.Hiragana, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.HiraganaIroha, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.Katakana, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.KatakanaIroha, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.LowerAlpha, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.LowerLatin, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.UpperAlpha, StringComparison.OrdinalIgnoreCase) ||
-            style.Equals(Keywords.UpperLatin, StringComparison.OrdinalIgnoreCase);
 
         private static void ApplyCounterResets(CssBox box)
         {

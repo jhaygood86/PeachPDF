@@ -276,7 +276,7 @@ namespace PeachPDF.CSS
             Map.TextDecorationLines.ToConverter().Many().OrNone();
 
         public static readonly IValueConverter ListPositionConverter = Map.ListPositions.ToConverter();
-        public static readonly IValueConverter ListStyleConverter = Map.ListStyles.ToConverter();
+        public static readonly IValueConverter ListStyleConverter = Map.ListStyles.ToConverter().Or(StringConverter);
         public static readonly IValueConverter BreakModeConverter = Map.BreakModes.ToConverter();
         public static readonly IValueConverter BreakInsideModeConverter = Map.BreakInsideModes.ToConverter();
         public static readonly IValueConverter PageBreakModeConverter = Map.PageBreakModes.ToConverter();
