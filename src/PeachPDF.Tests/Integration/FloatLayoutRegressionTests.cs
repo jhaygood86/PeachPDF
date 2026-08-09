@@ -268,6 +268,33 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FloatRight_InNarrowerNestedBlock_WithMarginLeft_StillAvoidsAWiderAncestorFloatRightSibling()
+        {
+            // Companion to the test above, with margin-left added to the nested float: DomUtils.
+            // IsFloatIntersecting's Floating.Right branch used to add coordinates.MarginLeft into the
+            // threshold it compares the ancestor float's left edge against - a leftover term that used
+            // to cancel out CssFloatCoordinates.FloatRightStartX's own margin-left bug, and became a
+            // second, independent bug once that formula was fixed: it inflates the intersection
+            // threshold by the nested float's own margin-left, so an ancestor float whose left edge
+            // falls within that margin-left-wide window goes undetected and the nested float never
+            // extends out to meet it. outerR's left edge (500 - 280 = 220pt) sits inside exactly that
+            // window here (the correct threshold is 200pt, the buggy one 240pt).
+            var html = Wrap(@"
+                <div style='width:500pt;'>
+                    <div id='outerR' style='float:right; width:280pt; height:80pt;'></div>
+                    <div style='width:200pt;'>
+                        <div id='r' style='float:right; width:100pt; height:30pt; margin-left:40pt;'></div>
+                    </div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var outerR = FindById(root, "outerR")!;
+            var r = FindById(root, "r")!;
+
+            Assert.Equal(outerR.Location.X - outerR.ActualMarginLeft, r.ActualRight, 1);
+        }
+
+        [Fact]
         public async Task FloatRight_NarrowsLineWrapWidth_SoTextWrapsBeforeReachingIt()
         {
             // DomUtils.GetLastRightIntersectingFloatBox used to query

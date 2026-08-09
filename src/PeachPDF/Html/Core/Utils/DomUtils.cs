@@ -1079,7 +1079,7 @@ namespace PeachPDF.Html.Core.Utils
             switch (floatProp)
             {
                 case Floating.Left when targetRight > currentLeft && targetLeft <= currentLeft:
-                case Floating.Right when targetLeft > coordinates.FloatRightStartX + coordinates.MarginLeft + coordinates.ReferenceWidth + coordinates.MarginRight:
+                case Floating.Right when targetLeft > coordinates.FloatRightStartX + coordinates.ReferenceWidth + coordinates.MarginRight:
                     return true;
                 default:
                     return false;
