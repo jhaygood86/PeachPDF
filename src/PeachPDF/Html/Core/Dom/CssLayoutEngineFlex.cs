@@ -102,10 +102,19 @@ namespace PeachPDF.Html.Core.Dom
             // Whether the main axis has indefinite size (column + auto height = no grow/shrink)
             bool mainSizeIndefinite = !_isRow && !hasDefiniteHeight;
 
+            // A position: running() child (css-gcpm-3) never becomes a flex item - it is excluded from
+            // this container's own algorithm the same way it is excluded from plain block flow
+            // (CssBox.LayoutBlockChildren), registered here instead since flex items never reach that
+            // loop at all.
+            foreach (var runningChild in _flexBox.Boxes.Where(b => b.IsRunningPositioned))
+            {
+                runningChild.RegisterAsRunningElement(_flexBox);
+            }
+
             // Phase 1: collect and order flex items.
             // Anonymous whitespace-only boxes between flex items must be discarded per CSS spec.
             var rawItems = _flexBox.Boxes
-                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsOutOfFlow
+                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsExcludedFromFlow
                             && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
                 .OrderBy(ParseOrder)
                 .ThenBy(b => _flexBox.Boxes.IndexOf(b))

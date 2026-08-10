@@ -116,12 +116,12 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib)) && index - diff - 1 >= 0)
+            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib)) && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) ? null : sib;
+            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) ? null : sib;
 
             return sib;
         }
@@ -256,7 +256,7 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = conBlock.Boxes[index - diff];
 
-            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed) && index - diff - 1 >= 0)
+            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running) && index - diff - 1 >= 0)
             {
                 sib = conBlock.Boxes[index - ++diff];
             }
@@ -972,7 +972,11 @@ namespace PeachPDF.Html.Core.Utils
                 return true;
             }
 
-            if (box.Position.Value is PositionMode.Fixed or PositionMode.Sticky)
+            // Fixed/sticky always get their own stacking context; a running box (css-gcpm-3) joins them
+            // here rather than the ZIndex-gated Absolute/Relative arm above - once laid out standalone
+            // against a margin box (RunningElementLayout) it needs an unconditional stacking context for
+            // its own descendants, matching DerivedStyle.IsPositioned's own treatment of Running.
+            if (box.Position.Value is PositionMode.Fixed or PositionMode.Sticky or PositionMode.Running)
             {
                 return true;
             }

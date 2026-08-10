@@ -12,7 +12,7 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 - Flexbox layout (CSS Flexbox Level 1) and CSS Multi-column Layout
 - All five CSS-wide keywords: `inherit`, `initial`, `unset`, `revert`, `revert-layer`
 - Gradients (`linear-gradient`, `radial-gradient`, `conic-gradient`, and repeating variants) with CSS Color Level 4 interpolation
-- CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers via `string-set`/`string()`
+- CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers via `string-set`/`string()` and `position: running()`/`element()`
 - Automatic [PDF metadata extraction](https://peachpdf.net/html-css-support.html#pdf-metadata-extraction) from HTML `<title>` and `<meta>` elements
 - Optional Tagged PDF (PDF/UA) output — logical structure tree, automatic document language, CSS-driven tag mapping via `-peachpdf-pdf-tag-type` (see `PdfGenerateConfig.EnableTaggedPdf`)
 - Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery — with per-character font matching (`@font-face` `unicode-range` and coverage-based fallback across the `font-family` stack) and monochrome emoji / supplementary-plane (astral) text via `cmap` format-12 (outlines only; color-emoji tables are not embedded)

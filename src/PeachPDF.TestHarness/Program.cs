@@ -1382,6 +1382,71 @@ await SaveShowcaseAsync("paged_media_named_strings", "Paged Media", "Named Strin
     "Running headers populated from document content with string-set and string().",
     namedStringsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── CSS Paged Media showcase — running elements (position: running() / element()) ──
+
+var runningElementsHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: A4 portrait;
+      margin: 30mm 20mm 25mm 20mm;
+      @top-center { content: element(chapter-heading); }
+      @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; font-family: Arial; color: #888; }
+    }
+    body { font: 10pt Arial, sans-serif; margin: 0; }
+    h1 { font-size: 20pt; margin: 0 0 12pt; }
+    h1.running {
+      /* Removed from normal flow entirely - never appears here, only in @top-center. */
+      position: running(chapter-heading);
+      display: flex; align-items: center; gap: 8pt;
+      font-size: 9pt; margin: 0;
+    }
+    h1.running .badge {
+      background: #2563eb; color: #fff; font-weight: bold;
+      border-radius: 3pt; padding: 2pt 7pt; font-size: 8pt;
+    }
+    h1.running .title { font-style: italic; color: #333; }
+    p { margin: 0 0 8pt; line-height: 1.5; }
+    .page-break { page-break-after: always; }
+    </style>
+    </head>
+    <body>
+
+    <div class="page-break">
+      <h1 class="running"><span class="badge">Ch. 1</span><span class="title">Introduction</span></h1>
+      <h1>Chapter 1: Introduction</h1>
+      <p>Unlike string-set/string() (previous showcase), which captures plain text only, position: running()
+      removes this whole heading from the flow and content: element() shows it in the margin box complete
+      with its own formatting - the blue "Ch. 1" badge and italic title are real, laid-out elements, not
+      captured strings.</p>
+      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore
+      et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla
+      pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt.</p>
+    </div>
+
+    <div>
+      <h1 class="running"><span class="badge">Ch. 2</span><span class="title">Methodology</span></h1>
+      <h1>Chapter 2: Methodology</h1>
+      <p>The running header updates to the new chapter's badge and title as soon as this heading is
+      encountered - the same first/start/last/first-except selection rules string() already offers,
+      applied to a whole element instead of a string.</p>
+      <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum
+      deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati.</p>
+      <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et
+      voluptates repudiandae sint et molestiae non recusandae itaque earum rerum hic tenetur.</p>
+    </div>
+
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_running_elements", "Paged Media", "Running Elements",
+    "Running headers with full formatting fidelity via position: running() and content: element() - unlike string-set/string(), the margin box shows a real, laid-out element (colors, badges, nested spans), not just captured text.",
+    runningElementsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ── Per-page margin variation showcase ─────────────────────────────────────
 // Per-page top/bottom margin overrides are layout-affecting (CSS Paged Media 3 page-box
 // model): each page's own margins define its content band, so the flowing text genuinely

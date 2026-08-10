@@ -125,8 +125,17 @@ namespace PeachPDF.Html.Core.Dom
                 _gridBox.ActualBottom = _gridBox.Location.Y + fullHeight;
             }
 
+            // A position: running() child (css-gcpm-3) never becomes a grid item - it is excluded from
+            // this container's own algorithm the same way it is excluded from plain block flow
+            // (CssBox.LayoutBlockChildren), registered here instead since grid items never reach that
+            // loop at all.
+            foreach (var runningChild in _gridBox.Boxes.Where(b => b.IsRunningPositioned))
+            {
+                runningChild.RegisterAsRunningElement(_gridBox);
+            }
+
             var items = _gridBox.Boxes
-                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsOutOfFlow
+                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsExcludedFromFlow
                             && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
                 .ToList();
 

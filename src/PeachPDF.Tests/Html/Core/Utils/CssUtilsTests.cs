@@ -205,6 +205,56 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task SetPropertyValue_Position_RunningFunction_ParsesModeAndName()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "position", "running(chapter-title)");
+
+            Assert.Equal(PositionMode.Running, box.Position.Value);
+            Assert.Equal("running(chapter-title)", box.Position.ToString());
+            Assert.Equal("chapter-title", box.RunningElementName);
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_Position_RunningFunction_PreservesCustomIdentCase()
+        {
+            // <custom-ident> is case-sensitive (CSS Values & Units §4.2), unlike a plain position keyword.
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "position", "running(Chapter-Title)");
+
+            Assert.Equal("Chapter-Title", box.RunningElementName);
+            Assert.Equal("running(Chapter-Title)", box.Position.ToString());
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_Position_PlainKeywordAfterRunning_ClearsRunningElementName()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "position", "running(chapter-title)");
+            CssUtils.SetPropertyValue(parser, box, "position", "relative");
+
+            Assert.Equal(PositionMode.Relative, box.Position.Value);
+            Assert.Null(box.RunningElementName);
+        }
+
+        [Theory]
+        [InlineData("running()")]
+        [InlineData("running(#foo)")]
+        [InlineData("running(chapter, title)")]
+        public async Task SetPropertyValue_Position_MalformedRunningFunction_IsIgnored(string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("position: absolute;");
+
+            CssUtils.SetPropertyValue(parser, box, "position", value);
+
+            Assert.Equal(PositionMode.Absolute, box.Position.Value);
+            Assert.Null(box.RunningElementName);
+        }
+
+        [Fact]
         public async Task NumericFontWeight_700OrAbove_ResolvesToBoldFont()
         {
             var box = await FindDivBox("font-weight: 700;");

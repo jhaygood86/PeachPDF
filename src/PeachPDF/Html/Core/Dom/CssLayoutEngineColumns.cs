@@ -71,8 +71,17 @@ namespace PeachPDF.Html.Core.Dom
             var containerWidth = await CssLayoutEngine.GetBoxWidth(g, columnsBox);
             columnsBox.ActualRight = columnsBox.Location.X + containerWidth + columnsBox.ActualBoxSizeIncludedWidth;
 
+            // A position: running() child (css-gcpm-3) never becomes a column child - it is excluded from
+            // this container's own algorithm the same way it is excluded from plain block flow
+            // (CssBox.LayoutBlockChildren), registered here instead since neither the multi-column path
+            // below nor the single-column (columnCount <= 1) block-flow fallback route through that loop.
+            foreach (var runningChild in columnsBox.Boxes.Where(b => b.IsRunningPositioned))
+            {
+                runningChild.RegisterAsRunningElement(columnsBox);
+            }
+
             var children = columnsBox.Boxes
-                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsOutOfFlow
+                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsExcludedFromFlow
                             && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
                 .ToList();
 
@@ -99,11 +108,15 @@ namespace PeachPDF.Html.Core.Dom
                 columnsBox.ActualBottom = columnsBox.Location.Y;
                 foreach (var childBox in columnsBox.Boxes)
                 {
+                    // Already registered (as the current running-element occupant) by the loop above -
+                    // a running child is excluded from this fallback's own block flow too.
+                    if (childBox.IsRunningPositioned) continue;
+
                     await columnsBox.LayoutBlockChild(g, childBox);
                 }
 
                 columnsBox.ActualRight = columnsBox.CalculateActualRight();
-                if (columnsBox.Boxes.Any(b => !b.IsOutOfFlow))
+                if (columnsBox.Boxes.Any(b => !b.IsExcludedFromFlow))
                 {
                     columnsBox.ActualBottom = columnsBox.MarginBottomCollapse();
                 }
