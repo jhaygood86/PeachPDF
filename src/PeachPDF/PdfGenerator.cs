@@ -12,6 +12,7 @@
 
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -24,6 +25,7 @@ using System;
 using System.Linq;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
+using PeachPDF.Utilities;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
@@ -412,6 +414,11 @@ namespace PeachPDF
                         container.HtmlContainerInt,
                         marginBoxImageCache);
                 }
+
+                if (fragmentainer.MarginBoxes.Count > 0)
+                {
+                    PaintElementMarginBoxes(g, _pdfSharpAdapter, container.HtmlContainerInt, fragmentainer.MarginBoxes);
+                }
             }
 
             foreach (var cachedImage in marginBoxImageCache.Values)
@@ -509,6 +516,36 @@ namespace PeachPDF
         }
 
         /// <summary>
+        /// Paints one page's css-gcpm-3 <c>content: element()</c> margin-box content - real, laid-out
+        /// <see cref="CssBox"/> subtrees (<see cref="FragmentainerFragment.MarginBoxes"/>), unlike the
+        /// plain string/counter/image content <see cref="MarginBoxRenderer.Render"/> still draws directly.
+        /// Reuses <see cref="FragmentPainter.PaintFragment"/> completely unmodified - the same call every
+        /// other <see cref="BoxFragment"/> in the document goes through - so real formatting/descendant
+        /// elements (backgrounds, borders, nested inline styling) paint correctly for free, and (per
+        /// <c>FragmentPainter.PaintFragment</c>'s own doc comment, "the single choke point all tagging
+        /// flows through") so tagged-PDF structure attaches automatically when enabled, keyed to whichever
+        /// page's <c>structureTagBuilder.BeginPage</c> is currently open - the precondition this call site,
+        /// immediately after the same page's main-content paint, satisfies.
+        /// </summary>
+        /// <remarks>
+        /// Mirrors <see cref="MarginBoxRenderer"/>'s own <c>PaintImage</c> precedent for going from a
+        /// point-space margin-box rect to a fresh, scoped <see cref="GraphicsAdapter"/> - <see cref="MarginBoxFragment.Content"/>'s
+        /// coordinates are already in that same pixel space (<see cref="RunningElementLayout.LayoutRunningElementFor"/>
+        /// laid it out directly against the pixel-converted rect), so no further conversion happens here.
+        /// </remarks>
+        private static void PaintElementMarginBoxes(XGraphics g, RAdapter adapter, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes)
+        {
+            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
+            var painter = new FragmentPainter(htmlContainer);
+
+            foreach (var marginBox in marginBoxes)
+            {
+                painter.PaintFragment(graphicsAdapter, marginBox.Content);
+            }
+        }
+
+        /// <summary>
         /// Handle HTML links by create PDF Documents link either to external URL or to another page in the document.
         /// <paramref name="structureTagBuilder"/> is non-null only when tagged PDF output is enabled -
         /// used to attach each created Link annotation's "/OBJR" back to its owning "/Link" structure
@@ -528,6 +565,28 @@ namespace PeachPDF
                 slotToPage[fragmentainers[p].SlotIndex] = p;
 
             var maxMappedSlot = slotToPage.Count > 0 ? slotToPage.Keys.Max() : -1;
+
+            // An anchor inside a skipped (content-empty) slot attributes to the next materialized
+            // page - the nearest place a reader can actually land. Shared by both link sources below
+            // (the main document tree and, per §5.1, css-gcpm-3 running-element content) so they can
+            // never disagree about which page an anchor lands on.
+            (int PageIndex, double TopPt)? ResolveAnchorTarget(string anchorId)
+            {
+                var anchorRect = container.GetElementRectangle(anchorId);
+                if (!anchorRect.HasValue) return null;
+
+                var anchorSlot = inner.SlotStartingAt(anchorRect.Value.Top * ppp);
+                var anchorPage = -1;
+                for (var s = Math.Max(anchorSlot, 0); anchorPage < 0 && s <= maxMappedSlot; s++)
+                    if (slotToPage.TryGetValue(s, out var found))
+                        anchorPage = found;
+                if (anchorPage < 0) anchorPage = fragmentainers.Count - 1;
+
+                var anchorTopPt = inner.PageGeometry.GetPage(anchorSlot).MarginTopPt
+                    + (anchorRect.Value.Top * ppp - inner.PageTopOf(anchorSlot)) / ppp;
+
+                return (anchorPage, anchorTopPt);
+            }
 
             foreach (var link in container.GetLinks())
             {
@@ -558,23 +617,10 @@ namespace PeachPDF
                     if (link.IsAnchor)
                     {
                         // create link to another page in the document
-                        var anchorRect = container.GetElementRectangle(link.AnchorId);
+                        var target = ResolveAnchorTarget(link.AnchorId);
+                        if (target is not { } t) continue;
 
-                        if (!anchorRect.HasValue) continue;
-
-                        var anchorSlot = inner.SlotStartingAt(anchorRect.Value.Top * ppp);
-                        // An anchor inside a skipped (content-empty) slot attributes to the next
-                        // materialized page - the nearest place a reader can actually land.
-                        var anchorPage = -1;
-                        for (var s = Math.Max(anchorSlot, 0); anchorPage < 0 && s <= maxMappedSlot; s++)
-                            if (slotToPage.TryGetValue(s, out var found))
-                                anchorPage = found;
-                        if (anchorPage < 0) anchorPage = fragmentainers.Count - 1;
-
-                        var anchorTopPt = inner.PageGeometry.GetPage(anchorSlot).MarginTopPt
-                            + (anchorRect.Value.Top * ppp - inner.PageTopOf(anchorSlot)) / ppp;
-
-                        document.AddNamedDestination(link.AnchorId, anchorPage + 1, PdfNamedDestinationParameters.CreateFitVertically(anchorTopPt));
+                        document.AddNamedDestination(link.AnchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitVertically(t.TopPt));
                         annotation = document.Pages[pageIndex].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
                     }
                     else
@@ -587,6 +633,103 @@ namespace PeachPDF
                     {
                         structureTagBuilder.LinkAnnotationToStructureElement(link.SourceBox, document.Pages[pageIndex], annotation);
                     }
+                }
+            }
+
+            HandleRunningElementLinks(document, container, orgPageSize, fragmentainers, ResolveAnchorTarget, structureTagBuilder);
+        }
+
+        /// <summary>
+        /// The second, per-page link source §5.1 of the implementation plan calls for: a link inside a
+        /// css-gcpm-3 running element's content. <see cref="HandleLinks"/>'s own main loop is driven by
+        /// <c>container.GetLinks()</c>, which walks only the live, main-tree <see cref="CssBox"/>
+        /// geometry - a running box's own <c>&lt;a&gt;</c> is never flowed there
+        /// (<see cref="CssBox.IsRunningPositioned"/> excludes it from the main pass entirely, see
+        /// <c>CssBox.LayoutBlockChildren</c>), and the same <c>&lt;a&gt;</c> can legitimately produce a
+        /// <i>different</i> annotation on every page its running element was selected onto (a different
+        /// rect each time, since <c>RunningElementLayout</c> genuinely re-lays it out per page) - the
+        /// single-Y slot-attribution model the main loop uses doesn't fit that at all. Each page's own
+        /// captured <see cref="MarginBoxFragment.Content"/> already names exactly one page, with an
+        /// already-final rect, so no slot-attribution is needed here - only the anchor-target resolution
+        /// is shared, via <paramref name="resolveAnchorTarget"/>.
+        /// </summary>
+        private static void HandleRunningElementLinks(
+            PdfDocument document,
+            HtmlContainer container,
+            XSize orgPageSize,
+            IReadOnlyList<FragmentainerFragment> fragmentainers,
+            Func<string, (int PageIndex, double TopPt)?> resolveAnchorTarget,
+            StructureTagBuilder? structureTagBuilder)
+        {
+            var ppp = container.PixelsPerPoint;
+
+            for (var pageIndex = 0; pageIndex < fragmentainers.Count && pageIndex < document.Pages.Count; pageIndex++)
+            {
+                var marginBoxes = fragmentainers[pageIndex].MarginBoxes;
+                if (marginBoxes.Count == 0) continue;
+
+                foreach (var marginBox in marginBoxes)
+                {
+                    foreach (var (fragment, box) in FindLinkFragments(marginBox.Content))
+                    {
+                        var href = box.HtmlTag?.TryGetAttribute("href") ?? "";
+                        if (href.Length == 0) continue;
+
+                        var rectPt = Utils.Convert(fragment.Rect, ppp);
+                        var xRect = new XRect(rectPt.X, orgPageSize.Height - (rectPt.Y + rectPt.Height), rectPt.Width, rectPt.Height);
+
+                        PdfLinkAnnotation annotation;
+
+                        if (href[0] == '#')
+                        {
+                            var anchorId = href[1..];
+                            var target = resolveAnchorTarget(anchorId);
+                            if (target is not { } t) continue;
+
+                            document.AddNamedDestination(anchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitVertically(t.TopPt));
+                            annotation = document.Pages[pageIndex].AddDocumentLink(new PdfRectangle(xRect), anchorId);
+                        }
+                        else
+                        {
+                            var baseElement = DomUtils.GetBoxByTagName(container.HtmlContainerInt.Root, "base");
+                            var baseUrl = baseElement?.HtmlTag?.TryGetAttribute("href", "");
+                            var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? container.HtmlContainerInt.Adapter.BaseUri : new RUri(baseUrl);
+                            var resolvedHref = baseUri is null ? href : new RUri(baseUri, href).AbsoluteUri;
+
+                            annotation = document.Pages[pageIndex].AddWebLink(new PdfRectangle(xRect), resolvedHref);
+                        }
+
+                        // The same source box can legitimately gain more than one annotation here (once
+                        // per page its running element was selected onto) - LinkAnnotationToStructureElement
+                        // is already called once per annotation in the main loop above too, so a repeat
+                        // call for the same box is an existing, exercised shape, not a new one.
+                        if (structureTagBuilder != null)
+                        {
+                            structureTagBuilder.LinkAnnotationToStructureElement(box, document.Pages[pageIndex], annotation);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Recursively collects every clickable, visible box fragment in <paramref name="fragment"/>'s
+        /// subtree - the fragment-tree analog of <see cref="DomUtils.GetAllLinkBoxes"/>, which walks the
+        /// live <see cref="CssBox"/> tree the same way but is unusable here since a running element's
+        /// content never appears in that tree with meaningful geometry (see <see cref="HandleRunningElementLinks"/>).
+        /// </summary>
+        private static IEnumerable<(BoxFragment Fragment, CssBox Box)> FindLinkFragments(BoxFragment fragment)
+        {
+            if (fragment.Box is { IsClickable: true, Visibility.Value: Visibility.Visible })
+            {
+                yield return (fragment, fragment.Box);
+            }
+
+            foreach (var child in fragment.Children)
+            {
+                foreach (var found in FindLinkFragments(child))
+                {
+                    yield return found;
                 }
             }
         }

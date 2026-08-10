@@ -55,4 +55,16 @@ namespace PeachPDF.Html.Core.Dom
     {
         public string? FontFamilyList { get; init; }
     }
+
+    /// <summary>
+    /// The one field with no <c>css-properties.json</c> propertyPath of its own - not a real CSS
+    /// property, a PeachPDF-internal companion to <c>Position</c> carrying the <c>&lt;custom-ident&gt;</c>
+    /// argument of css-gcpm-3's <c>running(&lt;custom-ident&gt;)</c> (relevant only when
+    /// <c>Position.Value == PositionMode.Running</c>). Every other <see cref="DisplayPositioningArea"/>
+    /// field (including <c>Position</c> itself) is generated - see <c>ComputedStyleAreas.g.cs</c>.
+    /// </summary>
+    internal sealed partial record DisplayPositioningArea
+    {
+        public string? RunningElementName { get; init; }
+    }
 }

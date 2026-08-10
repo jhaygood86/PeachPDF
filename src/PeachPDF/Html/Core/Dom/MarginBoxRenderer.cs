@@ -11,6 +11,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -57,6 +58,12 @@ namespace PeachPDF.Html.Core.Dom
                 if (string.IsNullOrEmpty(contentValue) ||
                     contentValue.Equals("none", StringComparison.OrdinalIgnoreCase) ||
                     contentValue.Equals("normal", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // content: element() (css-gcpm-3) is handled entirely by HtmlContainerInt's own margin-box
+                // layout phase - a real CssBox subtree needs real layout, which this text/image-only
+                // pipeline cannot give it - and painted from FragmentainerFragment.MarginBoxes instead.
+                if (TryParseElementFunction(contentValue, out _, out _))
                     continue;
 
                 var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, margins,
@@ -223,6 +230,45 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Detects <c>content: element(&lt;name&gt; [, first|start|last|first-except]?)</c> (css-gcpm-3) -
+        /// checked as an exclusive, first-checked whole-declaration match (mirroring how
+        /// <see cref="ResolveContentImage"/>'s image detection already short-circuits before
+        /// <see cref="ResolveContent"/>'s text resolution), since per spec <c>element()</c> cannot combine
+        /// with any other <c>content</c> value.
+        /// </summary>
+        internal static bool TryParseElementFunction(
+            string contentValue,
+            [NotNullWhen(true)] out string? name,
+            out string keyword)
+        {
+            name = null;
+            keyword = "first";
+
+            var tokens = CssValueParser.GetCssTokens(contentValue);
+            if (tokens is not [FunctionToken { Data: "element" } elementToken])
+                return false;
+
+            var args = elementToken.ArgumentTokens
+                .Where(t => t.Type != TokenType.Whitespace && t.Type != TokenType.Comma)
+                .ToArray();
+
+            if (args.Length == 0 || args[0] is not KeywordToken { Type: TokenType.Ident } nameToken)
+                return false;
+
+            name = nameToken.Data;
+
+            if (args.Length > 1)
+            {
+                if (args[1] is not KeywordToken { Type: TokenType.Ident } keywordToken)
+                    return false;
+
+                keyword = keywordToken.Data;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Resolves <c>string(&lt;name&gt;, first|start|last|first-except)</c> against the document-level
         /// <see cref="NamedString"/> list for the page starting at pagination slot <paramref name="currentPageIndex"/>.
         /// </summary>
@@ -258,27 +304,29 @@ namespace PeachPDF.Html.Core.Dom
             Func<double, int> pageIndexOf,
             IReadOnlyList<NamedString> namedStrings)
         {
-            return keyword.ToLowerInvariant() switch
-            {
-                // last assignment that started before this page (running header)
-                "start" => namedStrings
-                    .LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) < currentPageIndex)?.Value ?? string.Empty,
-                // first assignment on this page
-                "first" => namedStrings
-                    .FirstOrDefault(s => s.Name == name && pageIndexOf(s.Y) == currentPageIndex)?.Value
-                    ?? namedStrings.LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) < currentPageIndex)?.Value
-                    ?? string.Empty,
-                // last assignment on this page
-                "last" => namedStrings
-                    .LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) == currentPageIndex)?.Value
-                    ?? namedStrings.LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) < currentPageIndex)?.Value
-                    ?? string.Empty,
-                // first-except: return empty on the page where this string is first assigned
-                "first-except" => namedStrings.Any(s => s.Name == name && pageIndexOf(s.Y) == currentPageIndex)
-                    ? string.Empty
-                    : namedStrings.LastOrDefault(s => s.Name == name && pageIndexOf(s.Y) < currentPageIndex)?.Value ?? string.Empty,
-                _ => namedStrings.FirstOrDefault(s => s.Name == name)?.Value ?? string.Empty,
-            };
+            return RunningSelectionEngine.SelectByKeyword(
+                namedStrings, name, keyword, currentPageIndex,
+                static s => s.Name, static s => s.Y, pageIndexOf)?.Value ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Resolves <c>element(&lt;name&gt;, first|start|last|first-except)</c> (css-gcpm-3) against the
+        /// document-level <see cref="RunningElement"/> list, for the page starting at pagination slot
+        /// <paramref name="currentPageIndex"/> - the whole-box analog of <see cref="ResolveNamedString"/>,
+        /// sharing its selection rules via <see cref="RunningSelectionEngine"/>. Returns the selected
+        /// box's <see cref="CssBox"/> itself (not a value to draw), since <c>element()</c> content needs
+        /// to be laid out for real against the margin box's own rect - see <c>RunningElementLayout</c>.
+        /// </summary>
+        internal static CssBox? ResolveRunningElement(
+            string name,
+            string keyword,
+            int currentPageIndex,
+            Func<double, int> pageIndexOf,
+            IReadOnlyList<RunningElement> runningElements)
+        {
+            return RunningSelectionEngine.SelectByKeyword(
+                runningElements, name, keyword, currentPageIndex,
+                static r => r.Name, static r => r.Y, pageIndexOf)?.Box;
         }
 
         /// <summary>

@@ -72,5 +72,6 @@ namespace PeachPDF.CSS
         public const string CrossFade = "cross-fade";
         public const string Element = "element";
         public const string Style = "style";
+        public const string Running = "running";
     }
 }

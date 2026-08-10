@@ -1145,8 +1145,11 @@ namespace PeachPDF.Html.Core.Dom
 
         #region Position, multi-column
 
-        /// <summary>True for a positioned element: <c>position</c> of relative, absolute, fixed, or sticky.</summary>
-        public bool IsPositioned => Style.DisplayPositioning.Position.Value is PositionMode.Relative or PositionMode.Absolute or PositionMode.Fixed or PositionMode.Sticky;
+        /// <summary>True for a positioned element: <c>position</c> of relative, absolute, fixed, sticky,
+        /// or (css-gcpm-3) running - a running box is laid out standalone against a page margin box
+        /// (see <c>RunningElementLayout</c>), where it must be a positioning root for its own
+        /// <c>position: absolute</c> descendants the same way any other positioned box is.</summary>
+        public bool IsPositioned => Style.DisplayPositioning.Position.Value is PositionMode.Relative or PositionMode.Absolute or PositionMode.Fixed or PositionMode.Sticky or PositionMode.Running;
 
         /// <summary>
         /// Whether this box establishes a CSS multi-column formatting context, per spec: <c>column-width</c>

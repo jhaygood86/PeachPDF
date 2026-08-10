@@ -33,7 +33,8 @@ namespace PeachPDF.CSS
                 AttrConverter).Or(
                 CounterConverter).Or(
                 new ContentFunctionConverter()).Or(
-                new StringFunctionConverter()).Many()).OrDefault();
+                new StringFunctionConverter()).Or(
+                new GcpmElementFunctionConverter()).Many()).OrDefault();
 
         private abstract class ContentMode
         {

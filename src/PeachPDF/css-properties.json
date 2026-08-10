@@ -1404,6 +1404,7 @@
     },
     {
       "name": "position",
+      "comment": "Multi-field write, mirroring font-family's precedent: css-gcpm-3 extends the keyword grammar with a running(<custom-ident>) function form, which the plain enum-keyword data type can't express. customValidator/customSetter delegate to the shared PositionValueGrammar.TryParse (also used by the CSS-OM PositionProperty converter's RunningFunctionConverter) so the two never independently re-derive the grammar; the resolved custom-ident is stored on the hand-written CssBox.RunningElementName companion field (see ComputedStyleAreas.cs's DisplayPositioningArea partial), not in this enum.",
       "inherited": false,
       "initialValue": "static",
       "cssDataType": {
@@ -1416,7 +1417,9 @@
         "propertyPath": "Position",
         "csharpDataType": "CssProperty<PositionMode>",
         "area": "DisplayPositioningArea",
-        "getterExpression": "{box}.Position.ToString()"
+        "getterExpression": "{box}.Position.ToString()",
+        "customValidator": "global::PeachPDF.CSS.PositionValueGrammar.TryParse({value}, out _, out _)",
+        "customSetter": "global::PeachPDF.CSS.PositionValueGrammar.TryParse({value}, out var runningPositionMode, out var runningElementName);\n{box}.Position = global::PeachPDF.CSS.CssProperty<global::PeachPDF.CSS.PositionMode>.FromValue(global::PeachPDF.CSS.PositionValueGrammar.CanonicalCssText({value}, runningElementName), runningPositionMode);\n{box}.RunningElementName = runningElementName;"
       }
     },
     {

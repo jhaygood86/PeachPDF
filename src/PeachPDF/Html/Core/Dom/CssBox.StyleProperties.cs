@@ -121,6 +121,29 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>True for a positioned element: <c>position</c> of relative, absolute, fixed, or sticky.</summary>
         public bool IsPositioned => DerivedStyle.IsPositioned;
 
+        /// <summary>True when <c>position: running(&lt;custom-ident&gt;)</c> (css-gcpm-3) - the box is
+        /// removed from normal flow entirely and never placed at its original position. Kept separate
+        /// from <see cref="IsOutOfFlow"/>, which drives the absolute/fixed placement machinery a running
+        /// box must never enter.</summary>
+        public bool IsRunningPositioned => Position.Value == PositionMode.Running;
+
+        /// <summary>
+        /// The <c>&lt;custom-ident&gt;</c> argument of <c>position: running(&lt;custom-ident&gt;)</c>
+        /// (css-gcpm-3), or null when <see cref="IsRunningPositioned"/> is false. A PeachPDF-internal
+        /// companion to <see cref="Position"/> with no <c>css-properties.json</c> propertyPath of its
+        /// own - see <c>DisplayPositioningArea</c> in <c>ComputedStyleAreas.cs</c>.
+        /// </summary>
+        public string? RunningElementName
+        {
+            get => _computedStyle.DisplayPositioning.RunningElementName;
+            set
+            {
+                var area = _computedStyle.DisplayPositioning;
+                var newArea = area.SetPropertyValue(area.RunningElementName, value, static (a, v) => a with { RunningElementName = v });
+                _computedStyle = _computedStyle.AdoptArea(area, newArea, static (s, a) => s with { DisplayPositioning = a });
+            }
+        }
+
         #endregion
 
         #region Line-height, vertical-align, text-*

@@ -978,7 +978,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                     slot.Index,
                     slot.Geometry,
                     slot.LocalOriginY,
-                    Materialize(root));
+                    Materialize(root),
+                    MarginBoxes: []);
 
                 firstCandidate ??= fragmentainer;
 

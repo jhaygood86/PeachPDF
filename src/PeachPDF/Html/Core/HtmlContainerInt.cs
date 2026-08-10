@@ -79,6 +79,13 @@ namespace PeachPDF.Html.Core
 
         private readonly List<NamedPageElement> _namedPageElements = new();
 
+        /// <summary>
+        /// Document-level running-element storage for css-gcpm-3's <c>position: running()</c>, in
+        /// document order (the order <see cref="Dom.CssBox.LayoutBlockChildren"/> registers them, which
+        /// is document order for the same reason <see cref="_namedStrings"/> is).
+        /// </summary>
+        private readonly List<RunningElement> _runningElements = new();
+
         #endregion
 
 
@@ -165,6 +172,45 @@ namespace PeachPDF.Html.Core
             {
                 _namedStrings.Remove(namedString);
             }
+        }
+
+        /// <summary>
+        /// Gets the document-level running elements (css-gcpm-3 <c>position: running()</c>) in document
+        /// order. Consulted by margin-box layout to resolve <c>content: element(name[, keyword])</c>.
+        /// </summary>
+        internal IReadOnlyList<RunningElement> RunningElements => _runningElements;
+
+        /// <summary>
+        /// Registers <paramref name="box"/> as the current occupant of <paramref name="name"/> at
+        /// document position <paramref name="y"/>. Called from <see cref="Dom.CssBox.LayoutBlockChildren"/>
+        /// in place of ordinarily placing/laying out the child - see <see cref="RunningElement"/>.
+        /// </summary>
+        internal RunningElement RegisterRunningElement(string name, Dom.CssBox box, double y)
+        {
+            var element = new RunningElement(name, box, y);
+            _runningElements.Add(element);
+            return element;
+        }
+
+        /// <summary>
+        /// Withdraws a running-element registration a box made on an earlier run of its own skip-and-
+        /// register hook, mirroring <see cref="UnregisterNamedStrings"/>'s same withdraw-before-register
+        /// discipline (see the 2026-08-02 string-set/named-page reflow-corruption fix this mirrors):
+        /// the block-children loop that registers a running box can be re-entered more than once inside
+        /// one layout (a restart rewinding to before it), so registering without first withdrawing the
+        /// previous entry would accumulate stale duplicates pointing at superseded document positions.
+        /// </summary>
+        internal void UnregisterRunningElement(RunningElement element)
+        {
+            _runningElements.Remove(element);
+        }
+
+        /// <summary>
+        /// Clears all document-level running elements.
+        /// </summary>
+        internal void ClearRunningElements()
+        {
+            _runningElements.Clear();
         }
 
         internal IReadOnlyList<NamedPageElement> NamedPageElements => _namedPageElements;
@@ -719,6 +765,7 @@ namespace PeachPDF.Html.Core
             Root = null;
             DocumentLanguage = null;
             ClearNamedStrings();
+            ClearRunningElements();
             ClearNamedPageElements();
             // New content means new @page rules: drop cached slot geometry, the vertical-override
             // scan, and the captured relative-unit context so nothing consults the previous
@@ -953,7 +1000,80 @@ namespace PeachPDF.Html.Core
             // Layout's final phase: materialize the fragments the passes emitted into the immutable tree
             // everything downstream consumes. Only the last LayoutDocument invocation's emitter survives the
             // reflow loop, so the tree can never describe an intermediate invocation's geometry.
-            FragmentTree = _emitter?.Finish() ?? new FragmentTree([]);
+            var tree = _emitter?.Finish() ?? new FragmentTree([]);
+
+            // css-gcpm-3's content: element() needs the final page list/count (first/start/last/first-except
+            // selection is page-index-based), so it runs here, after the tree above is built, rather than
+            // as part of the emitter's own per-pass work.
+            FragmentTree = await LayoutMarginBoxes(g, tree);
+        }
+
+        /// <summary>
+        /// Lays out every page's <c>content: element(name[, keyword])</c> margin-box content for real
+        /// (css-gcpm-3) and captures it into <paramref name="tree"/>, so paint stays fragment-driven for
+        /// this content the same way it already is for everything else - see
+        /// <see cref="Fragments.FragmentainerFragment.MarginBoxes"/>. Plain string/counter/<c>string()</c>/
+        /// image margin-box content is untouched: it stays on <see cref="MarginBoxRenderer"/>'s existing,
+        /// separate, fragment-tree-free pipeline, since there is no formatting/descendant-element fidelity
+        /// to gain by moving already-plain-text content through real <see cref="CssBox"/> layout.
+        /// </summary>
+        private async ValueTask<FragmentTree> LayoutMarginBoxes(RGraphics g, FragmentTree tree)
+        {
+            if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0 || _runningElements.Count == 0)
+                return tree;
+
+            var ppp = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var sheetSizePt = new XSize(PageSheetWidth / ppp, PageSheetHeight / ppp);
+            var totalPages = tree.Fragmentainers.Count;
+            var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
+
+            var updated = new List<FragmentainerFragment>(totalPages);
+            var pageNumber = 0;
+
+            foreach (var fragmentainer in tree.Fragmentainers)
+            {
+                pageNumber++;
+                var geom = fragmentainer.Geometry;
+                var pageY = geom.Top;
+                var activeName = PageRuleResolver.ActiveNameAtPageEnd(_namedPageElements, pageY, geom.BandHeight);
+                var applicableMargins = PageRuleResolver.SelectApplicableMarginRules(PageRules, pageNumber, activeName);
+                var applicablePageStyle = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName);
+
+                List<MarginBoxFragment>? marginBoxes = null;
+
+                foreach (var marginRule in applicableMargins)
+                {
+                    var boxName = marginRule.Selector?.Text?.Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(boxName)) continue;
+
+                    var contentValue = marginRule.Style.Content;
+                    if (string.IsNullOrEmpty(contentValue)) continue;
+
+                    if (!MarginBoxRenderer.TryParseElementFunction(contentValue, out var name, out var keyword))
+                        continue;
+
+                    var currentPageIndex = SlotStartingAt(pageY);
+                    var runningBox = MarginBoxRenderer.ResolveRunningElement(
+                        name, keyword, currentPageIndex, SlotStartingAt, _runningElements);
+                    if (runningBox is null) continue;
+
+                    var rectPt = MarginBoxRenderer.GetMarginBoxRect(
+                        boxName, sheetSizePt, geom.MarginLeftPt, geom.MarginTopPt, geom.MarginRightPt, geom.MarginBottomPt,
+                        applicableMargins, applicablePageStyle, remPt);
+                    if (rectPt.Width <= 0 || rectPt.Height <= 0) continue;
+
+                    var pixelRect = new RRect(rectPt.X * ppp, rectPt.Y * ppp, rectPt.Width * ppp, rectPt.Height * ppp);
+
+                    await RunningElementLayout.LayoutRunningElementFor(g, runningBox, pixelRect, this);
+                    var content = MarginBoxContentFragmentBuilder.Build(runningBox);
+
+                    (marginBoxes ??= []).Add(new MarginBoxFragment(boxName, content));
+                }
+
+                updated.Add(marginBoxes is null ? fragmentainer : fragmentainer with { MarginBoxes = marginBoxes });
+            }
+
+            return tree with { Fragmentainers = updated };
         }
 
         /// <summary>
@@ -1008,7 +1128,7 @@ namespace PeachPDF.Html.Core
                 var child = box.Boxes[i];
 
                 if (child.DerivedStyle.ActualDisplay == Keywords.None
-                    || child.Position.Value is PositionMode.Absolute or PositionMode.Fixed
+                    || child.Position.Value is PositionMode.Absolute or PositionMode.Fixed or PositionMode.Running
                     || child.IsFloated)
                 {
                     continue;
@@ -2048,6 +2168,9 @@ namespace PeachPDF.Html.Core
         /// </para>
         /// </remarks>
         internal double PageSheetHeight => PageSize.Height + MarginTop + MarginBottom;
+
+        /// <summary>The whole page box's width, in layout space - the horizontal mirror of <see cref="PageSheetHeight"/>.</summary>
+        internal double PageSheetWidth => PageSize.Width + MarginLeft + MarginRight;
 
         /// <summary>
         /// The document Y-coordinate one past the bottom of pagination slot <paramref name="pageIndex"/>'s

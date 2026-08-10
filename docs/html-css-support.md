@@ -420,7 +420,7 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `display` | [display](https://developer.mozilla.org/en-US/docs/Web/CSS/display) | `block`, `inline`, `inline-block`, `none`, `flex`, `inline-flex`, `grid`, `inline-grid`, `table`, `table-row`, `table-cell`, `table-header-group`, `table-footer-group`, `table-row-group`, `table-column`, `table-column-group`, `table-caption`, `list-item` |
-| `position` | [position](https://developer.mozilla.org/en-US/docs/Web/CSS/position) | `static`, `relative`, `absolute`, `fixed` (renders ignoring page margins). `sticky` is treated as `relative` with a zero offset, since there is no scroll to ever cross a sticky threshold against — it participates in normal flow and in stacking/z-index like a positioned box, but its `top`/`right`/`bottom`/`left` values (the scroll-threshold parameters, not a static offset) never shift it |
+| `position` | [position](https://developer.mozilla.org/en-US/docs/Web/CSS/position) | `static`, `relative`, `absolute`, `fixed` (renders ignoring page margins). `sticky` is treated as `relative` with a zero offset, since there is no scroll to ever cross a sticky threshold against — it participates in normal flow and in stacking/z-index like a positioned box, but its `top`/`right`/`bottom`/`left` values (the scroll-threshold parameters, not a static offset) never shift it. `running(<custom-ident>)` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#running-syntax)) removes the element from normal flow entirely, making it available to a page margin box via `content: element(<custom-ident>)` — see [Running elements](#running-elements-position-running--element) |
 | `float` | [float](https://developer.mozilla.org/en-US/docs/Web/CSS/float) | `left`, `right`, `none` |
 | `clear` | [clear](https://developer.mozilla.org/en-US/docs/Web/CSS/clear) | `left`, `right`, `both`, `none` |
 | `overflow` | [overflow](https://developer.mozilla.org/en-US/docs/Web/CSS/overflow) | Affects clipping regions; there is no interactive scrolling in PDF output |
@@ -1151,6 +1151,7 @@ Margin boxes are sub-rules of `@page` that place text inside the page margins (o
 | `counter(page)` | `content: counter(page)` | Current 1-based page number |
 | `counter(pages)` | `content: counter(pages)` | Total page count |
 | `string(name)` | `content: string(chapter)` | Named string captured via `string-set`; see below |
+| `element(name)` | `content: element(chapter-title)` | The current `position: running(chapter-title)` element, laid out for real and shown complete with its own formatting and descendant elements — not just captured text (contrast with `string()` above). See [Running elements](#running-elements-position-running--element). Not combinable with text/counter/string/image content in the same declaration |
 | Mixed | `content: "Page " counter(page) " of " counter(pages)` | Concatenated |
 | `url(...)` | `content: url("logo.svg")` | An image (raster or SVG, incl. `data:` URIs) — useful for a logo in a running header. Rendered at natural size, aligned within the box by the box's `text-align`/`vertical-align` (same as text content: the default follows the box's position — e.g. `@top-right` end-aligned, `@top-center` centered — and an explicit `text-align`/`vertical-align` applies), clipped to the box. Not combinable with text/counter/string content in the same declaration |
 | Gradient function | `content: linear-gradient(to right, red, blue)` | `linear-gradient()`/`radial-gradient()`/`conic-gradient()` (and their `repeating-` forms), filling the box |
@@ -1232,6 +1233,37 @@ h2 { string-set: section  content(); }
 | `string(name, last)` | Last assignment of `name` that appears on this page; if none, the last from a previous page |
 | `string(name, start)` | Last assignment of `name` that started before this page (running header — the value in effect at the top of the page) |
 | `string(name, first-except)` | Empty on the page where `name` is first assigned; otherwise same as `first` |
+
+### Running elements (`position: running()` / `element()`)
+
+Running elements are [css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#running-syntax)'s richer alternative to named strings: instead of capturing an element's plain text, `position: running(<custom-ident>)` removes the whole element from normal flow and makes it available to a page margin box via `content: element(<custom-ident>)`, which lays it out for real — complete with its own formatting (fonts, colors, borders) and any descendant elements (a `<span>`, an inline image), not just its text content.
+
+```css
+h1.chapter { position: running(chapter-title); }
+
+@page {
+  @top-center { content: element(chapter-title); }
+}
+```
+
+```html
+<h1 class="chapter">Chapter One <span style="color: #c00;">— Draft</span></h1>
+```
+
+The `<h1>` no longer appears at its original position in the document; instead, its full rendered form — including the red "— Draft" span — appears in the `@top-center` margin box of every page until a later `position: running(chapter-title)` element replaces it.
+
+**`element()` keyword variants** (identical selection rules to `string()` above, applied to the whole element rather than a captured string):
+
+| Keyword | Behavior |
+|---------|---------|
+| `element(name)` / `element(name, first)` | First `running(name)` element that appears on this page; if none, the last one from a previous page |
+| `element(name, last)` | Last `running(name)` element that appears on this page; if none, the last from a previous page |
+| `element(name, start)` | Last `running(name)` element that started before this page (running header — the element in effect at the top of the page) |
+| `element(name, first-except)` | Empty on the page where `name` is first assigned; otherwise same as `first` |
+
+**Limitations:**
+- `position: running()` is honored for elements in normal block flow and for flex/grid/multi-column item children. It is not currently honored on a table row or cell.
+- Content painted via `content: element()` does not currently respect its own internal stacking order (`z-index`) among its descendants — it paints in document order. This only matters for a running element that itself contains absolutely-positioned, `z-index`-stacked content, not for ordinary text/image headers and footers.
 
 ### Headers and footers — complete example
 

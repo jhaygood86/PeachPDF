@@ -202,6 +202,14 @@ namespace PeachPDF.Html.Core.Dom
         internal NamedPageElement? RegisteredNamedPageElement { get; set; }
 
         /// <summary>
+        /// The css-gcpm-3 <c>running()</c> tracking entry this box registered with
+        /// <see cref="HtmlContainerInt"/> (if any) - mirrors <see cref="RegisteredNamedPageElement"/>'s
+        /// same withdraw-before-register purpose, for the same reflow-corruption reason. See
+        /// <see cref="RegisterAsRunningElement"/>.
+        /// </summary>
+        internal RunningElement? RegisteredRunningElement { get; set; }
+
+        /// <summary>
         /// Is the box is of "br" element.
         /// </summary>
         public bool IsBrElement => HtmlTag != null && HtmlTag.Name.Equals("br", StringComparison.InvariantCultureIgnoreCase);
@@ -321,6 +329,16 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsFloated => Float.Value is Floating.Left or Floating.Right;
 
         public bool IsOutOfFlow => IsFloated || Position.Value is PositionMode.Absolute or PositionMode.Fixed;
+
+        /// <summary>
+        /// <see cref="IsOutOfFlow"/> plus <see cref="IsRunningPositioned"/> - every reason a box
+        /// contributes nothing to its parent's in-flow content (size, sibling adjacency, printable-content
+        /// detection). Deliberately a separate predicate from <see cref="IsOutOfFlow"/> rather than folded
+        /// into it: <see cref="IsOutOfFlow"/> also gates the absolute/fixed <i>placement</i> machinery
+        /// (<c>CommitBlockChildOffset</c>), which a running box must never enter at all - it is excluded
+        /// from flow far more completely than "out of flow but still positioned like <c>absolute</c>".
+        /// </summary>
+        internal bool IsExcludedFromFlow => IsOutOfFlow || IsRunningPositioned;
 
         /// <summary>
         /// Is the css box clickable (by default only an "a" element with an href is clickable) - per
@@ -2693,7 +2711,7 @@ namespace PeachPDF.Html.Core.Dom
 
                         ActualRight = CalculateActualRight();
 
-                        if (Boxes.Any(b => !b.IsOutOfFlow))
+                        if (Boxes.Any(b => !b.IsExcludedFromFlow))
                         {
                             ActualBottom = MarginBottomCollapse();
                         }
@@ -2985,6 +3003,19 @@ namespace PeachPDF.Html.Core.Dom
 
                     if (IsOutsideMarker(childBox)) continue;
 
+                    // A position: running() child (css-gcpm-3) is removed from normal flow entirely - it
+                    // is never placed here (no Location/ActualBottom/content layout this generation), only
+                    // registered as the current occupant of its name so a page margin box's own, later,
+                    // content: element() layout pass (RunningElementLayout) can find and re-lay it out for
+                    // real. Every reader that walks Boxes for flow purposes (sibling lookups, printable-
+                    // content detection, break propagation, the flex/grid/columns item-collection filters)
+                    // must exclude CssBox.IsRunningPositioned the same way it already excludes display:none.
+                    if (childBox.IsRunningPositioned)
+                    {
+                        childBox.RegisterAsRunningElement(this);
+                        continue;
+                    }
+
                     // Only the child the previous pass stopped at resumes; everything after it is laid out
                     // from the start, having never been reached.
                     if (i == start && resumeAt is not null && !resumeConsumed)
@@ -3271,6 +3302,46 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Registers this box as the current occupant of its <c>position: running(name)</c> name
+        /// (css-gcpm-3), in place of the placement/content layout it would otherwise be given - called
+        /// from <see cref="LayoutBlockChildren"/>'s own child loop for a plain block-flow child, and
+        /// equivalently from <c>CssLayoutEngineFlex</c>/<c>CssLayoutEngineGrid</c>/
+        /// <c>CssLayoutEngineColumns</c>'s own item-collection filtering for a flex/grid/multicol child
+        /// (see <see cref="IsRunningPositioned"/>).
+        /// </summary>
+        /// <param name="parent">The frame that would have placed this child, consulted only for its
+        /// content-top as the fallback when there is no preceding in-flow sibling.</param>
+        /// <remarks>
+        /// Because this box never reaches <c>PlaceAndSizeBlockChild</c>, it never gets a real
+        /// <see cref="Location"/> - so unlike <see cref="NamedPageRegistrationY"/>, which reads the box's
+        /// own (by-then-final) <c>Location.Y</c>, the document position <c>element()</c>'s selection needs
+        /// is approximated from the surrounding flow: the nearest preceding in-flow sibling's
+        /// <see cref="ActualBottom"/>, or <paramref name="parent"/>'s own <c>ClientTop</c> when this is the
+        /// first (in-flow-sibling-wise) child. Withdraws this box's own previous registration first
+        /// (<see cref="RegisteredRunningElement"/>) - the same discipline <see cref="RegisteredNamedPageElement"/>
+        /// already follows and for the same reason: this loop iteration can be re-entered more than once
+        /// inside one layout (a restart rewinding to before this child), and registering without
+        /// withdrawing first would accumulate stale duplicates pointing at superseded document positions.
+        /// </remarks>
+        internal void RegisterAsRunningElement(CssBox parent)
+        {
+            if (RunningElementName is not { Length: > 0 } name) return;
+
+            var container = HtmlContainer;
+            if (container is null) return;
+
+            if (RegisteredRunningElement is { } stale)
+            {
+                container.UnregisterRunningElement(stale);
+            }
+
+            var previousInFlowSibling = DomUtils.GetPreviousSibling(this, false);
+            var y = previousInFlowSibling?.ActualBottom ?? parent.ClientTop;
+
+            RegisteredRunningElement = container.RegisterRunningElement(name, this, y);
         }
 
         /// <summary>
@@ -5491,7 +5562,7 @@ namespace PeachPDF.Html.Core.Dom
             while (chainMembers.Count < 1000 && current.Overflow.Value == PeachPDF.CSS.Overflow.Visible &&
                    current.ActualBorderTopWidth < 0.1 && current.ActualPaddingTop < 0.1)
             {
-                var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsOutOfFlow && b.DerivedStyle.ActualDisplay != Keywords.None);
+                var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsExcludedFromFlow && b.DerivedStyle.ActualDisplay != Keywords.None);
                 if (firstInFlowChild == null || firstInFlowChild.Clear.Value != ClearMode.None || firstInFlowChild == current) break;
 
                 margins.Fold(firstInFlowChild.ActualMarginTop);
@@ -5623,7 +5694,7 @@ namespace PeachPDF.Html.Core.Dom
                  CssValueParser.ParseLength(MinHeight, ContainingBlock.Size.Height, this) <= 0);
             if (!minHeightZero) return false;
 
-            var inFlowChildren = Boxes.Where(b => !b.IsOutOfFlow && b.DerivedStyle.ActualDisplay != Keywords.None && b != this).ToList();
+            var inFlowChildren = Boxes.Where(b => !b.IsExcludedFromFlow && b.DerivedStyle.ActualDisplay != Keywords.None && b != this).ToList();
             return inFlowChildren.Count == 0 || inFlowChildren.All(b => b.IsMarginCollapseThrough(depth + 1));
         }
 
@@ -5671,7 +5742,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns>Resulting bottom margin</returns>
         internal double MarginBottomCollapse()
         {
-            var lastNonFloatingBox = Boxes.Last(b => !b.IsOutOfFlow);
+            var lastNonFloatingBox = Boxes.Last(b => !b.IsExcludedFromFlow);
 
             double margin = 0;
             // Per CSS 2.1 §8.3.1, a box's own bottom margin can only collapse with (i.e. be folded

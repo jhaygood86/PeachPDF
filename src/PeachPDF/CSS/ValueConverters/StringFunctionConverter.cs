@@ -11,8 +11,6 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class StringFunctionConverter : IValueConverter
     {
-        private static readonly string[] ValidKeywords = { "first", "last", "start", "first-except" };
-
         public IPropertyValue Convert(IEnumerable<Token> value)
         {
             var first = value.OnlyOrDefault();
@@ -41,7 +39,7 @@ namespace PeachPDF.CSS
                 if (args[1] is KeywordToken keywordToken)
                 {
                     var kw = keywordToken.Data.ToLowerInvariant();
-                    if (!ValidKeywords.Contains(kw))
+                    if (!GcpmSelectionKeywords.Values.Contains(kw))
                         return null;
 
                     keyword = kw;

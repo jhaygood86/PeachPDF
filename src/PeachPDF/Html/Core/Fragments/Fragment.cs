@@ -238,12 +238,37 @@ namespace PeachPDF.Html.Core.Fragments
     /// coordinates when the tree is built.
     /// </param>
     /// <param name="Root">the root box's fragment in this fragmentainer</param>
+    /// <param name="MarginBoxes">
+    /// This page's <c>content: element()</c> margin-box content (css-gcpm-3), populated by a later
+    /// phase once the final page list is known (<c>HtmlContainerInt</c>'s margin-box layout phase) -
+    /// empty for a document with no such margin box, and always empty on the draft this record is
+    /// first constructed with (<see cref="Fragmentation.FragmentEmitter.Finish"/>). Plain string/counter/
+    /// <c>string()</c>/image margin-box content stays on its existing, separate, fragment-tree-free
+    /// pipeline (<c>MarginBoxRenderer</c>) - only <c>element()</c>'s genuine box-subtree content needs
+    /// real layout, so only it is threaded through the fragment tree.
+    /// </param>
     internal sealed record FragmentainerFragment(
         RRect Rect,
         int SlotIndex,
         PageBandGeometry Geometry,
         double LocalOriginY,
-        BoxFragment Root) : Fragment(Rect);
+        BoxFragment Root,
+        IReadOnlyList<MarginBoxFragment> MarginBoxes) : Fragment(Rect);
+
+    /// <summary>
+    /// One page margin box's <c>content: element(name)</c> content (css-gcpm-3) - the box-subtree
+    /// analog of a plain string/counter/image margin box, which stays on <c>MarginBoxRenderer</c>'s
+    /// existing, separate pipeline (see <see cref="FragmentainerFragment.MarginBoxes"/>). Its
+    /// coordinates are absolute page-content coordinates in internal pixel space (matching
+    /// <c>PixelsPerPoint</c>-scaled <c>CssBox.Location</c>), the same space
+    /// <see cref="RunningElementLayout.LayoutRunningElementFor"/> laid <see cref="Content"/> out
+    /// against - not fragmentainer-local like an ordinary <see cref="BoxFragment"/>, since a margin
+    /// box has no fragmentainer of its own to be local to.
+    /// </summary>
+    /// <param name="BoxName">The margin-box selector this content belongs to (e.g. <c>top-center</c>) -
+    /// informational only, not consulted by paint.</param>
+    /// <param name="Content">The selected running element's own laid-out subtree.</param>
+    internal sealed record MarginBoxFragment(string BoxName, BoxFragment Content) : Fragment(Content.Rect);
 
     /// <summary>
     /// The complete immutable result of laying out one document: its fragmentainers, in page order.
