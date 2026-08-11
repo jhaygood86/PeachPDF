@@ -44,12 +44,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <c>data</c> resource resolves to something renderable, which measurement decides.
         /// <c>&lt;hr&gt;</c> and a list marker have their own content painters but are not replaced
         /// elements, and they are never tall enough for the distinction to matter anyway.
+        /// <c>CssBoxFormField</c> (<c>&lt;input&gt;</c>/<c>&lt;select&gt;</c>) is not a replaced
+        /// element per spec either, but is included here anyway: an AcroForm widget annotation names
+        /// exactly one page rect, so a form field must never fragment across a page break regardless
+        /// of what §2 itself would otherwise allow.
         /// </remarks>
         internal static bool IsReplaced(CssBox box) => box switch
         {
             // Also matches CssBoxVideo, which resolves its poster through the same <object> machinery.
             CssBoxObject o => o.IsReplaced,
-            CssBoxImage or CssBoxSvg or CssBoxFrame => true,
+            CssBoxImage or CssBoxSvg or CssBoxFrame or CssBoxFormField => true,
             _ => false
         };
 

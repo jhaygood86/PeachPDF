@@ -7213,6 +7213,73 @@ await SaveShowcaseAsync("table_visibility_collapse", "Layout", "Table Row/Column
     + "unlike visibility: hidden which still reserves the space.",
     visibilityCollapseHtml, pdfConfig);
 
+// --- interactive PDF forms showcase ---
+//
+// See docs/html-css-support.md#interactive-pdf-forms-support. EnableInteractivePdfForms turns
+// <input>/<select> into real fillable AcroForm fields (text, checkbox, radio group, select) instead
+// of the default static rendering - this is also what actually exercises the flag-on static-look
+// painter (checkbox/radio glyphs, bordered text/select chrome) end to end, the same way earlier
+// showcases in this file have caught real paint-order bugs before automated tests did.
+
+const string InteractiveFormsCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0; color: #222 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    p.intro { margin: 0 0 0.7em; color: #555 }
+    .field { margin: 0 0 0.6em }
+    label { display: inline-block; width: 130pt }
+    input[type=text] { width: 160pt }
+    </style>
+    """;
+
+var interactiveFormsHtml = "<!DOCTYPE html><html><head>" + InteractiveFormsCss + "</head><body>" +
+
+    "<h1>Interactive PDF Forms</h1>" +
+    "<p class=\"intro\">-peachpdf-pdf-form-field turns &lt;input&gt;/&lt;select&gt; into real, fillable AcroForm fields when PdfGenerateConfig.EnableInteractivePdfForms is set - open this PDF in a real reader and fill it in.</p>" +
+
+    "<h2>Text field</h2>" +
+    "<div class=\"field\"><label for=\"name\">Full name</label><input type=\"text\" id=\"name\" name=\"name\" value=\"Jane Doe\" /></div>" +
+
+    "<h2>Comb text field</h2>" +
+    "<div class=\"field\"><label for=\"code\">Confirmation code</label><input type=\"text\" id=\"code\" name=\"code\" value=\"AB12\" style=\"-peachpdf-pdf-form-field-comb: 6\" /></div>" +
+
+    "<h2>Checkbox</h2>" +
+    "<div class=\"field\"><label for=\"subscribe\">Subscribe to updates</label><input type=\"checkbox\" id=\"subscribe\" name=\"subscribe\" checked /></div>" +
+
+    "<h2>Radio group</h2>" +
+    "<div class=\"field\"><label>Shipping plan</label>" +
+    "<input type=\"radio\" id=\"plan-basic\" name=\"plan\" value=\"basic\" checked /> <label for=\"plan-basic\" style=\"width:auto\">Basic</label>&nbsp;&nbsp;" +
+    "<input type=\"radio\" id=\"plan-pro\" name=\"plan\" value=\"pro\" /> <label for=\"plan-pro\" style=\"width:auto\">Pro</label>" +
+    "</div>" +
+
+    "<h2>Select (combo box)</h2>" +
+    "<div class=\"field\"><label for=\"country\">Country</label>" +
+    "<select id=\"country\" name=\"country\">" +
+    "<option value=\"us\">United States</option>" +
+    "<option value=\"ca\" selected>Canada</option>" +
+    "<option value=\"mx\">Mexico</option>" +
+    "</select></div>" +
+
+    "<h2>Custom-styled field (border, background, padding, color, font - all ordinary CSS)</h2>" +
+    "<div class=\"field\"><label for=\"custom\">Nickname</label>" +
+    "<input type=\"text\" id=\"custom\" name=\"nickname\" value=\"Buttercup\" style=\"" +
+    "border: 2pt dashed #8a2be2; background-color: #f5e9ff; color: #4b0082; " +
+    "padding: 4pt 8pt; font: italic 12pt Georgia, serif; width: 180pt\" /></div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("interactive_pdf_forms", "Interactivity", "Interactive PDF Forms",
+    "Real, fillable AcroForm text/checkbox/radio/select fields generated from ordinary <input>/<select> markup via EnableInteractivePdfForms.",
+    interactiveFormsHtml, new PdfGenerateConfig
+    {
+        PageSize = PageSize.A4,
+        PageOrientation = PageOrientation.Portrait,
+        ShrinkToFit = true,
+        EnableInteractivePdfForms = true
+    });
+
 // The manifest that drives the website's /showcase page (see docs/showcase.html and
 // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
 var manifestJson = JsonSerializer.Serialize(showcaseManifest,

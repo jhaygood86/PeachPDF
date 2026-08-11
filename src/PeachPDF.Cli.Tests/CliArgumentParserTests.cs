@@ -160,7 +160,7 @@ public class CliArgumentParserTests
         var options = ArgumentParser.Parse([
             "--pdf-title", "T", "--pdf-author", "A", "--pdf-subject", "S",
             "--pdf-keywords", "K", "--pdf-creator", "C", "--pdf-lang", "en-US",
-            "--tagged-pdf", "--no-compress", "--media", "screen", "--no-author-style",
+            "--tagged-pdf", "--interactive-pdf-forms", "--no-compress", "--media", "screen", "--no-author-style",
             "doc.html",
         ]);
 
@@ -172,6 +172,7 @@ public class CliArgumentParserTests
         Assert.Equal("C", options.PdfCreator);
         Assert.Equal("en-US", options.PdfLang);
         Assert.True(options.TaggedPdf);
+        Assert.True(options.InteractivePdfForms);
         Assert.True(options.NoCompress);
         Assert.Equal("screen", options.Media);
         Assert.True(options.NoAuthorStyle);

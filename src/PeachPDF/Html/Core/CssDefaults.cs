@@ -78,6 +78,8 @@ namespace PeachPDF.Html.Core
             pre             { white-space: pre }
             button, textarea,
             input, select   { display: inline-block }
+            input[type=hidden]
+                            { display: none }
             big             { font-size: 1.17em }
             small, sub, sup { font-size: .83em }
             sub             { vertical-align: sub }
@@ -204,6 +206,18 @@ namespace PeachPDF.Html.Core
             h4              { bookmark-level: 4 }
             h5              { bookmark-level: 5 }
             h6              { bookmark-level: 6 }
+
+            /* Default form-field chrome. CSS 2.1's own sample sheet leaves input/select with no
+               border or background at all - a form control's baseline look is UA "widget"
+               rendering, not something CSS defines - so PeachPDF supplies a plain rectangle here
+               matching the classic browser text-field look, the same border/background/padding
+               every -peachpdf-pdf-form-field-eligible box (text/checkbox/radio/select) rendered
+               unconditionally before real CSS-driven form-field styling existed. Applies whether
+               or not EnableInteractivePdfForms is on - a form field is an ordinary static box
+               otherwise. A checkbox/radio's own circular shape and check-mark/dot glyph are drawn
+               in code (FormFieldChrome), not CSS, so no radius/glyph rule belongs here. Author
+               stylesheets may override any of this like any other UA default. */
+            input, select   { border: 0.75pt solid black; background-color: white; padding: 1pt 2pt; }
         """;
 
         /// <summary>

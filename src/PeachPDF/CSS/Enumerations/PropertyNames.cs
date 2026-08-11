@@ -206,6 +206,15 @@ namespace PeachPDF.CSS
         public static readonly string PageBreakInside = "page-break-inside";
         public static readonly string PageName = "page";
         public static readonly string PdfTagType = "-peachpdf-pdf-tag-type";
+        public static readonly string PdfFormField = "-peachpdf-pdf-form-field";
+        public static readonly string PdfFormFieldAutoFontSize = "-peachpdf-pdf-form-field-auto-font-size";
+        public static readonly string PdfFormFieldComb = "-peachpdf-pdf-form-field-comb";
+        public static readonly string PdfFormFieldDoNotScroll = "-peachpdf-pdf-form-field-do-not-scroll";
+        /// <summary>Hidden, undocumented compat shorthand for Prince's own
+        /// -prince-pdf-form-field-settings spelling - see PrincePdfFormFieldSettingsProperty. Expands
+        /// into PdfFormField/PdfFormFieldAutoFontSize/PdfFormFieldComb/PdfFormFieldDoNotScroll at parse
+        /// time; not documented in docs/, PeachPDF's own docs only ever show the -peachpdf- spelling.</summary>
+        public static readonly string PrincePdfFormFieldSettings = "-prince-pdf-form-field-settings";
         public static readonly string BookmarkLevel = "bookmark-level";
         public static readonly string BookmarkLabel = "bookmark-label";
         public static readonly string BookmarkState = "bookmark-state";

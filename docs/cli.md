@@ -106,6 +106,7 @@ the default media type is **print**.
 | `--pdf-creator=CREATOR` | Set the PDF creator. |
 | `--pdf-lang=LANG` | Set the PDF document language (the catalog `/Lang` entry), used when the document declares no language of its own (a document's own `<html lang>` takes priority). |
 | `--tagged-pdf` | Emit a tagged (PDF/UA) structure tree. |
+| `--interactive-pdf-forms` | Emit fillable AcroForm fields for `<input>`/`<select>` elements. |
 | `--no-compress` | Do not compress PDF content streams. |
 
 Length units accepted by `--page-size` and `--page-margin` are `mm`, `cm`, `in`, `pt`, `pc`, and `px`

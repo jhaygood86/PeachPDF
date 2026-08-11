@@ -21,6 +21,7 @@ using PeachPDF.Network;
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
 - [Fonts](#fonts)
 - [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
+- [Enabling interactive PDF forms](#enabling-interactive-pdf-forms)
 - [ASP.NET Core controller endpoint](#aspnet-core-controller-endpoint)
 - [ASP.NET Core Minimal API endpoint](#aspnet-core-minimal-api-endpoint)
 - [Azure Functions (isolated worker) HTTP handler](#azure-functions-isolated-worker-http-handler)
@@ -354,6 +355,36 @@ When `EnableTaggedPdf` is left at its default (`false`), none of this runs — o
 The HTML-tag → structure-type mapping is CSS-driven and author-overridable via the `-peachpdf-pdf-tag-type` custom property — see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support) in HTML & CSS Support for the property's accepted values, the full default mapping table, and known limitations.
 
 PDF outline (bookmark) generation is a separate, always-on feature — no `PdfGenerateConfig` flag needed — driven purely by the `bookmark-level`/`bookmark-label`/`bookmark-state` CSS properties; see [PDF Bookmarks (Outline) Support](html-css-support.md#pdf-bookmarks-outline-support) in HTML & CSS Support.
+
+## Enabling interactive PDF forms
+
+PeachPDF can optionally produce a *fillable* PDF — real AcroForm text, checkbox, radio, and select (combo-box) fields a reader can actually fill in, instead of the default static rendering of `<input>`/`<select>` elements. Interactive forms are **off by default**; enable them with:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    EnableInteractivePdfForms = true
+};
+```
+
+```html
+<form>
+  <label>Name: <input type="text" name="name" value="" /></label>
+  <label><input type="checkbox" name="subscribe" checked /> Subscribe to updates</label>
+  <label><input type="radio" name="plan" value="basic" checked /> Basic</label>
+  <label><input type="radio" name="plan" value="pro" /> Pro</label>
+  <select name="country">
+    <option value="us">United States</option>
+    <option value="ca">Canada</option>
+  </select>
+</form>
+```
+
+With the flag on, each `<input>`/`<select>` above becomes a real AcroForm field: `type="checkbox"`/`type="radio"` inputs become checkbox/radio fields (radios sharing a `name` become one mutually-exclusive group), every other `<input>` becomes a text field, and `<select>` becomes a combo-box field populated from its `<option>` children. `<textarea>` and `<button>` are not supported and always render as static boxes.
+
+When `EnableInteractivePdfForms` is left at its default (`false`), none of this runs — no AcroForm object is created and the page's static rendering is unchanged.
+
+The field-kind inference is CSS-driven and author-overridable via the `-peachpdf-pdf-form-field` custom property (plus three text-field-only sub-setting properties for auto-sizing, comb layout, and scroll behavior) — see [Interactive PDF Forms Support](html-css-support.md#interactive-pdf-forms-support) in HTML & CSS Support for the full property reference and default inference table.
 
 ## ASP.NET Core controller endpoint
 

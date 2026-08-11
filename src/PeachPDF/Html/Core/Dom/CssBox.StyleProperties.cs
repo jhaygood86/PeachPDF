@@ -310,6 +310,13 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the font that should be actually used to paint the text of the box.</summary>
         public RFont ActualFont => DerivedStyle.ActualFont;
 
+        /// <summary>
+        /// Resolves a font with this box's own family/style/weight/stretch/oblique - the same identity
+        /// <see cref="ActualFont"/> uses - at an explicit point size instead of the box's own cascaded
+        /// <c>font-size</c>. For a caller that computes its own target size out-of-band.
+        /// </summary>
+        internal RFont GetActualFontAtSize(double fontSize) => DerivedStyle.GetActualFontAtSize(fontSize);
+
         /// <summary>Gets the resolved GSUB ligature features (CSS <c>font-variant-ligatures</c>) for this box's text.</summary>
         public LigatureFeatures ActualFontVariantLigatures => DerivedStyle.ActualFontVariantLigatures;
 
@@ -867,9 +874,18 @@ namespace PeachPDF.Html.Core.Dom
             // "everything" caller) never reaches DomUtils.GetAllLinkAndBookmarkBoxes's walk at all (its
             // subtree isn't reachable via CssBox.Boxes), so there is no case where carrying these over
             // would help - only ones where it would duplicate.
+            // -peachpdf-pdf-form-field and its three sub-setting longhands get the same treatment as
+            // PdfTagType above, for the same reason: a structural duplicate (a form field cloned into
+            // a repeated table header/footer via CssProxyBox) is a fragment of the SAME source
+            // element, so its own resolved classification must carry over rather than reverting to
+            // "auto"/"none".
             var generatedContent = _computedStyle.GeneratedContent;
             var newGeneratedContent = generatedContent
-                .SetPropertyValue(generatedContent.PdfTagType, parentStyle.GeneratedContent.PdfTagType, static (a, v) => a with { PdfTagType = v });
+                .SetPropertyValue(generatedContent.PdfTagType, parentStyle.GeneratedContent.PdfTagType, static (a, v) => a with { PdfTagType = v })
+                .SetPropertyValue(generatedContent.PdfFormField, parentStyle.GeneratedContent.PdfFormField, static (a, v) => a with { PdfFormField = v })
+                .SetPropertyValue(generatedContent.PdfFormFieldAutoFontSize, parentStyle.GeneratedContent.PdfFormFieldAutoFontSize, static (a, v) => a with { PdfFormFieldAutoFontSize = v })
+                .SetPropertyValue(generatedContent.PdfFormFieldComb, parentStyle.GeneratedContent.PdfFormFieldComb, static (a, v) => a with { PdfFormFieldComb = v })
+                .SetPropertyValue(generatedContent.PdfFormFieldDoNotScroll, parentStyle.GeneratedContent.PdfFormFieldDoNotScroll, static (a, v) => a with { PdfFormFieldDoNotScroll = v });
             _computedStyle = _computedStyle.AdoptArea(generatedContent, newGeneratedContent, static (s, a) => s with { GeneratedContent = a });
         }
     }

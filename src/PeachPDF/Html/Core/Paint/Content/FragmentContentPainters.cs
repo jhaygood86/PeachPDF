@@ -1,4 +1,5 @@
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Handlers;
 
 namespace PeachPDF.Html.Core.Paint.Content
 {
@@ -14,6 +15,7 @@ namespace PeachPDF.Html.Core.Paint.Content
         private static readonly FrameFragmentPainter FramePainter = new();
         private static readonly HrFragmentPainter HrPainter = new();
         private static readonly MarkerFragmentPainter MarkerPainter = new();
+        private static readonly FormFieldFragmentPainter FormFieldPainter = new();
 
         /// <summary>
         /// The painter for <paramref name="box"/>'s content, or null when the generic box paint applies.
@@ -28,6 +30,11 @@ namespace PeachPDF.Html.Core.Paint.Content
             CssBoxFrame => FramePainter,
             CssBoxHr => HrPainter,
             CssBoxMarker => MarkerPainter,
+            // Only when interactive forms are enabled AND the box actually resolves to a field kind -
+            // otherwise this falls through to the generic path, preserving the flag-off static box
+            // rendering byte-for-byte (see FormFieldFragmentPainter's own doc comment).
+            CssBoxFormField formField when formField.HtmlContainer?.FormFieldBuilder != null
+                && FormFieldMapper.Classify(formField).Kind != FormFieldKind.None => FormFieldPainter,
             _ => null,
         };
     }

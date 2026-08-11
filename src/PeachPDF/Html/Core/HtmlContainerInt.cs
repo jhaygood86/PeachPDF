@@ -726,6 +726,15 @@ namespace PeachPDF.Html.Core
         internal Handlers.StructureTagBuilder? StructureTagBuilder { get; set; }
 
         /// <summary>
+        /// Orchestrates AcroForm field/widget bookkeeping during PDF generation. Set by
+        /// <c>PdfGenerator</c> before painting only when
+        /// <c>PdfGenerateConfig.EnableInteractivePdfForms</c> is set; null (the default) means
+        /// interactive forms are disabled and both the form-field content painter and
+        /// <c>PdfGenerator.HandleFormFields</c> are no-ops.
+        /// </summary>
+        internal Handlers.FormFieldBuilder? FormFieldBuilder { get; set; }
+
+        /// <summary>
         /// Init with optional document and stylesheet.
         /// </summary>
         /// <param name="htmlSource">the html to init with, init empty if not given</param>

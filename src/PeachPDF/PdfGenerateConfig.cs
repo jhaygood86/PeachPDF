@@ -228,6 +228,14 @@ namespace PeachPDF
         public bool EnableTaggedPdf { get; set; } = false;
 
         /// <summary>
+        /// When set to <c>true</c>, PeachPDF emits real, fillable AcroForm fields (text, checkbox,
+        /// radio, select) for form elements whose resolved <c>-peachpdf-pdf-form-field</c> value
+        /// requests one, instead of the default static box rendering. Defaults to <c>false</c> - an
+        /// explicit, informed opt-in, exactly like <see cref="EnableTaggedPdf"/>.
+        /// </summary>
+        public bool EnableInteractivePdfForms { get; set; } = false;
+
+        /// <summary>
         /// Set all 4 margins to the given value.
         /// </summary>
         /// <param name="value"></param>

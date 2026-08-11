@@ -993,6 +993,21 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Resolves a font with this box's own family/style/weight/stretch/oblique (the same inputs
+        /// <see cref="ActualFont"/> uses) but an explicit point size instead of the box's cascaded
+        /// <c>font-size</c> - for a caller that already computed its own target size out-of-band (e.g.
+        /// an interactive PDF form field's "auto font size" fit-to-height appearance stream) and needs
+        /// the box's real font identity at that size, not a re-derivation of what size to use.
+        /// </summary>
+        internal RFont GetActualFontAtSize(double fsize)
+        {
+            var st = GetActualFontStyleFlags();
+            return Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+                   ?? Owner.GetCachedFont(DefaultFontResolver.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus)
+                   ?? throw new HtmlRenderException($"Cannot find font: {Style.Font.FontFamily} and Default Font {DefaultFontResolver.DefaultFont} is not installed", HtmlRenderErrorType.General);
+        }
+
+        /// <summary>
         /// This box's resolved <c>font-size</c>, in the same units as <see cref="ActualFont"/>'s own
         /// <c>Size</c> - a thin accessor kept alongside it for symmetry with the rest of this class's
         /// naming, not an independent computation. <see cref="CssBox.FontSize"/> is safe to read as a plain
