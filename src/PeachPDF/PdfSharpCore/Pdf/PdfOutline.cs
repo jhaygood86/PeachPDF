@@ -131,9 +131,35 @@ namespace PeachPDF.PdfSharpCore.Pdf
         int _count;
 
         /// <summary>
-        /// The total number of open descendants at all lower levels.
+        /// The number of descendants that would be visible in the outline panel if this item
+        /// were open, i.e. immediate children plus (recursively) the visible descendants of
+        /// whichever of those children are themselves open. Computed bottom-up by
+        /// <see cref="ComputeVisibleDescendantCount"/> before it is used to write /Count
+        /// (PDF 32000-1 Table 152/153) -- a closed intermediate item hides its own descendants
+        /// from every ancestor's count, so this cannot be accumulated incrementally as items are
+        /// added (see issue #715).
         /// </summary>
-        internal int OpenCount;
+        int _visibleDescendantCount;
+
+        /// <summary>
+        /// Computes <see cref="_visibleDescendantCount"/> for this item and every descendant,
+        /// bottom-up, in a single pass.
+        /// </summary>
+        internal void ComputeVisibleDescendantCount()
+        {
+            int total = 0;
+            if (_outlines != null)
+            {
+                foreach (PdfOutline child in _outlines)
+                {
+                    child.ComputeVisibleDescendantCount();
+                    total++;
+                    if (child.Opened)
+                        total += child._visibleDescendantCount;
+                }
+            }
+            _visibleDescendantCount = total;
+        }
 
         /// <summary>
         /// Counts the open outline items. Not yet used.
@@ -321,10 +347,12 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     Elements[Keys.First] = _outlines[0].Reference;
                     Elements[Keys.Last] = _outlines[_outlines.Count - 1].Reference;
 
-                    // TODO: /Count - the meaning is not completely clear to me.
-                    // Get PDFs created with Acrobat and analyse what to implement.
-                    if (OpenCount > 0)
-                        Elements[Keys.Count] = new PdfInteger(OpenCount);
+                    // The root has no Opened flag of its own -- its top-level items are always
+                    // visible, so /Count is simply the number of items that would show up in the
+                    // outline panel across the whole tree (PDF 32000-1 Table 152).
+                    ComputeVisibleDescendantCount();
+                    if (_visibleDescendantCount > 0)
+                        Elements[Keys.Count] = new PdfInteger(_visibleDescendantCount);
                 }
                 else
                 {
@@ -358,9 +386,13 @@ namespace PeachPDF.PdfSharpCore.Pdf
                         Elements[Keys.First] = _outlines[0].Reference;
                         Elements[Keys.Last] = _outlines[_outlines.Count - 1].Reference;
                     }
-                    // TODO: /Count - the meaning is not completely clear to me
-                    if (OpenCount > 0)
-                        Elements[Keys.Count] = new PdfInteger((_opened ? 1 : -1) * OpenCount);
+                    // If this item is open, /Count is the number of its own descendants that are
+                    // visible; if closed, a negative number whose absolute value is how many
+                    // descendants would become visible if it were reopened (PDF 32000-1 Table 153).
+                    // Either way that is _visibleDescendantCount, computed for the whole tree from
+                    // the root's ComputeVisibleDescendantCount() call above.
+                    if (hasKids)
+                        Elements[Keys.Count] = new PdfInteger((_opened ? 1 : -1) * _visibleDescendantCount);
 
                     if (_textColor != XColor.Empty && Owner.HasVersion("1.4"))
                         Elements[Keys.C] = new PdfLiteral("[{0}]", PdfEncoders.ToString(_textColor, PdfColorMode.Rgb));
