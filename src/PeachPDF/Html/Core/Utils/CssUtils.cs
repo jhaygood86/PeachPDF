@@ -136,7 +136,8 @@ namespace PeachPDF.Html.Core.Utils
                 "border-left-color",
                 "border-right-color",
                 "background-color",
-                "column-rule-color"
+                "column-rule-color",
+                "outline-color"
             ];
 
             var colorValue = GetPropertyValue(box, "color") ?? Keywords.Initial;

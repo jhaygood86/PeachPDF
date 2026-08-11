@@ -904,6 +904,8 @@ namespace PeachPDF.Tests.Integration
             public override void DrawImage(RImage image, RRect destRect) => DrawImageCallCount++;
             public override void PushTransform(RMatrix matrix) { }
             public override void PopTransform() { }
+            public override void PushBlendMode(RBlendMode mode) { }
+            public override void PopBlendMode() { }
             public override void PushClip(RRect rect) => _clipStack.Push(rect);
             public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
             public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }

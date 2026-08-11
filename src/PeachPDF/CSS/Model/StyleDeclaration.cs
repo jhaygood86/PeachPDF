@@ -1309,6 +1309,12 @@ namespace PeachPDF.CSS
             set => SetPropertyValue(PropertyNames.OutlineWidth, value);
         }
 
+        public string OutlineOffset
+        {
+            get => GetPropertyValue(PropertyNames.OutlineOffset);
+            set => SetPropertyValue(PropertyNames.OutlineOffset, value);
+        }
+
         public string Overflow
         {
             get => GetPropertyValue(PropertyNames.Overflow);

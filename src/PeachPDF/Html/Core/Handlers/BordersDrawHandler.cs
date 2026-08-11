@@ -449,9 +449,11 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// Makes the specified color darker for inset/outset borders.
+        /// Makes the specified color darker for inset/outset borders - also shared by
+        /// <see cref="OutlineDrawHandler"/> for its own inset/outset/groove/ridge shading, since
+        /// darkening a color for a beveled line style isn't a border-specific operation.
         /// </summary>
-        private static RColor Darken(RColor c)
+        internal static RColor Darken(RColor c)
         {
             return RColor.FromArgb(c.R / 2, c.G / 2, c.B / 2);
         }

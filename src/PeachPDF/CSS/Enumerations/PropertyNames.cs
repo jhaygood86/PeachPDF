@@ -188,6 +188,7 @@ namespace PeachPDF.CSS
         public static readonly string Order = "order";
         public static readonly string Orphans = "orphans";
         public static readonly string OutlineColor = "outline-color";
+        public static readonly string OutlineOffset = "outline-offset";
         public static readonly string OutlineStyle = "outline-style";
         public static readonly string OutlineWidth = "outline-width";
         public static readonly string Outline = "outline";

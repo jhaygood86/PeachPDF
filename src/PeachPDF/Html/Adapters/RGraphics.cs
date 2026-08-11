@@ -157,6 +157,20 @@ namespace PeachPDF.Html.Adapters
         /// </summary>
         public abstract void PopTransform();
 
+        /// <summary>
+        /// Push a PDF blend mode for subsequent drawing, saving state so it can later be undone by
+        /// <see cref="PopBlendMode"/> (stack-shaped, same convention as <see cref="PushClip(RRect)"/>/
+        /// <see cref="PopClip"/>). Used e.g. to composite a fill against the content underneath it via
+        /// <see cref="RBlendMode.Difference"/> for a true color inversion (CSS <c>outline-color: invert</c>).
+        /// </summary>
+        /// <param name="mode">Blend mode to apply to subsequent drawing.</param>
+        public abstract void PushBlendMode(RBlendMode mode);
+
+        /// <summary>
+        /// Pop the most recent <see cref="PushBlendMode"/>, restoring the prior blend mode.
+        /// </summary>
+        public abstract void PopBlendMode();
+
 
         /// <summary>
         /// Restore the clipping region to the initial clip.

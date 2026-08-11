@@ -239,6 +239,61 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             Assert.True(concrete.HasValue);
             Assert.Equal("1px solid rgb(0, 0, 0)", concrete.Value);
         }
+
+        [Fact]
+        public void CssOutlineOffsetPositiveLengthLegal()
+        {
+            var snippet = "outline-offset :  3px";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("outline-offset", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<OutlineOffsetProperty>(property);
+            var concrete = (OutlineOffsetProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("3px", concrete.Value);
+        }
+
+        [Fact]
+        public void CssOutlineOffsetNegativeLengthLegal()
+        {
+            var snippet = "outline-offset :  -2px";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("outline-offset", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<OutlineOffsetProperty>(property);
+            var concrete = (OutlineOffsetProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("-2px", concrete.Value);
+        }
+
+        [Fact]
+        public void CssOutlineOffsetKeywordIllegal()
+        {
+            var snippet = "outline-offset :  auto";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("outline-offset", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<OutlineOffsetProperty>(property);
+            var concrete = (OutlineOffsetProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.False(concrete.HasValue);
+        }
+
+        [Fact]
+        public void CssOutlineShorthandDoesNotExpandOffset()
+        {
+            // The outline shorthand is outline-color || outline-style || outline-width only
+            // (CSS-UI-4 §4) - outline-offset is never part of it and must be set independently.
+            var style = ParseDeclarations("outline: 1px solid red; outline-offset: 4px");
+            Assert.Equal("1px solid rgb(255, 0, 0)", style.Outline);
+            Assert.Equal("4px", style.OutlineOffset);
+
+            var styleWithoutOffset = ParseDeclarations("outline: 1px solid red");
+            Assert.Equal("1px solid rgb(255, 0, 0)", styleWithoutOffset.Outline);
+            Assert.Equal(string.Empty, styleWithoutOffset.OutlineOffset);
+        }
     }
 }
 

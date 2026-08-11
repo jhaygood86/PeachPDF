@@ -6,7 +6,7 @@
     {
         private static readonly IValueConverter StyleConverter = WithAny(
             LineWidthConverter.Option().For(PropertyNames.OutlineWidth),
-            LineStyleConverter.Option().For(PropertyNames.OutlineStyle),
+            OutlineStyleConverter.Option().For(PropertyNames.OutlineStyle),
             InvertedColorConverter.Option().For(PropertyNames.OutlineColor)).OrDefault();
 
         internal OutlineProperty()

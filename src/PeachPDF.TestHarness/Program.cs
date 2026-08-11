@@ -4571,6 +4571,92 @@ await SaveShowcaseAsync("border_style", "Backgrounds & Borders", "Border Styles"
     "The full set of CSS border styles, from solid and dashed to groove, ridge, inset, and outset.",
     borderStyleHtml, pdfConfig);
 
+// --- outline showcase ---
+
+const string OutlineCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    p.intro { margin: 0 0 0.7em; color: #555; break-after: avoid }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25% }
+    .obox { height: 40px; background: #eee; margin: 12px 8px; }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+static string OutlineStyleSwatch(string desc, string style) =>
+    "<td>" +
+    $"<div class=\"obox\" style=\"outline: 8px {style} #4a90d9\"></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">outline: 8px {style} #4a90d9</div>" +
+    "</td>";
+
+var outlineHtml = "<!DOCTYPE html><html><head>" + OutlineCss + "</head><body>" +
+
+    "<h1>CSS outline Test Page</h1>" +
+    "<p class=\"intro\">outline never affects box sizing - it paints a ring entirely outside the border edge, offset by outline-offset, and can visually overlap surrounding content without shifting it.</p>" +
+
+    "<h2>outline-style keywords</h2>" +
+    Row(
+        OutlineStyleSwatch("solid", "solid"),
+        OutlineStyleSwatch("dashed", "dashed"),
+        OutlineStyleSwatch("dotted", "dotted"),
+        OutlineStyleSwatch("double", "double")
+    ) +
+    Row(
+        OutlineStyleSwatch("groove", "groove"),
+        OutlineStyleSwatch("ridge", "ridge"),
+        OutlineStyleSwatch("inset", "inset"),
+        OutlineStyleSwatch("outset", "outset")
+    ) +
+    Row(
+        OutlineStyleSwatch("auto (renders as solid)", "auto")
+    ) +
+
+    "<h2>outline-offset</h2>" +
+    "<p class=\"intro\">A negative offset pulls the outline back over the border and padding; a positive offset pushes it further away.</p>" +
+    Row(
+        "<td><div class=\"obox\" style=\"outline: 6px solid #d94a4a; outline-offset: -10px; border: 3px solid #333\"></div>" +
+        "<div class=\"desc\">outline-offset: -10px</div>" +
+        "<div class=\"css\">outline: 6px solid #d94a4a; outline-offset: -10px</div></td>" +
+        "<td><div class=\"obox\" style=\"outline: 6px solid #d94a4a; border: 3px solid #333\"></div>" +
+        "<div class=\"desc\">outline-offset: 0 (default)</div>" +
+        "<div class=\"css\">outline: 6px solid #d94a4a; border: 3px solid #333</div></td>" +
+        "<td><div class=\"obox\" style=\"outline: 6px solid #d94a4a; outline-offset: 10px; border: 3px solid #333\"></div>" +
+        "<div class=\"desc\">outline-offset: 10px</div>" +
+        "<div class=\"css\">outline: 6px solid #d94a4a; outline-offset: 10px</div></td>"
+    ) +
+
+    "<h2>outline-color: invert</h2>" +
+    "<p class=\"intro\">invert performs a true per-pixel color inversion of whatever is underneath the outline (via a PDF blend mode), not an approximation - it reads correctly over any background.</p>" +
+    Row(
+        "<td><div class=\"obox\" style=\"background: #d94a4a; outline: 10px solid invert; outline-offset: -14px\"></div>" +
+        "<div class=\"desc\">over a red background</div>" +
+        "<div class=\"css\">outline: 10px solid invert; outline-offset: -14px</div></td>" +
+        "<td><div class=\"obox\" style=\"background: #2e7d32; outline: 10px solid invert; outline-offset: -14px\"></div>" +
+        "<div class=\"desc\">over a green background</div>" +
+        "<div class=\"css\">outline: 10px solid invert; outline-offset: -14px</div></td>" +
+        "<td><div class=\"obox\" style=\"background: linear-gradient(to right, #222, #eee); outline: 10px solid invert; outline-offset: -14px\"></div>" +
+        "<div class=\"desc\">over a gradient</div>" +
+        "<div class=\"css\">outline: 10px solid invert; outline-offset: -14px</div></td>"
+    ) +
+
+    "<h2>Layout-neutral: outline never shifts surrounding content</h2>" +
+    "<p class=\"intro\">This box's outline is wider than its own padding, so it visually overlaps its siblings - but every box below sits exactly where it would if the outline were removed.</p>" +
+    "<div style=\"background:#eee\">before</div>" +
+    "<div style=\"background:#fff2cc; outline: 20px solid #d94a4a; outline-offset: 6px; margin: 4px 0\">outlined (20px, offset 6px)</div>" +
+    "<div style=\"background:#eee\">after</div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("outline", "Backgrounds & Borders", "Outline",
+    "outline / outline-color / outline-style / outline-width / outline-offset: a layout-neutral ring drawn outside the border edge, including a true per-pixel color inversion for outline-color: invert.",
+    outlineHtml, pdfConfig);
+
 // --- vertical-align showcase ---
 
 static string VerticalAlignSwatch(string desc, string va) =>
