@@ -171,27 +171,41 @@ namespace PeachPDF
         /// Get all the links in the HTML with the element rectangle and href data.
         /// </summary>
         /// <returns>collection of all the links in the HTML</returns>
-        public List<LinkElementData<XRect>> GetLinks()
+        public List<LinkElementData<XRect>> GetLinks() => GetLinks(null);
+
+        /// <summary>
+        /// Same as <see cref="GetLinks()"/>, additionally collecting every bookmark-candidate box
+        /// (<c>bookmark-level != none</c>) into <paramref name="bookmarkBoxes"/> from the same tree
+        /// walk (see <see cref="Html.Core.HtmlContainerInt.GetLinks(List{CssBox}?)"/>), when a caller
+        /// needs both - internal only, since the parameter type is internal.
+        /// </summary>
+        internal List<LinkElementData<XRect>> GetLinks(List<CssBox>? bookmarkBoxes)
         {
             var linkElements = new List<LinkElementData<XRect>>();
 
-            var baseElement = DomUtils.GetBoxByTagName(HtmlContainerInt.Root, "base");
-            var baseUrl = "";
-
-            if (baseElement is not null)
+            foreach (var link in HtmlContainerInt.GetLinks(bookmarkBoxes))
             {
-                baseUrl = baseElement.HtmlTag?.TryGetAttribute("href", "");
-            }
-
-            var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? HtmlContainerInt.Adapter.BaseUri : new RUri(baseUrl);
-
-            foreach (var link in HtmlContainerInt.GetLinks())
-            {
-                var href = link.Href.StartsWith('#') || baseUri is null ? link.Href : new RUri(baseUri, link.Href).AbsoluteUri;
+                var href = ResolveHref(link.Href);
                 linkElements.Add(new LinkElementData<XRect>(link.Id, href, Utils.Convert(link.Rectangle, PixelsPerPoint), link.SourceBox));
             }
 
             return linkElements;
+        }
+
+        /// <summary>
+        /// Resolves a relative href (from an <c>&lt;a href&gt;</c> or a <c>-peachpdf-bookmark-target:
+        /// attr()/url()</c> value) against the document's <c>&lt;base&gt;</c> element/adapter base URI -
+        /// shared by <see cref="GetLinks(List{CssBox}?)"/> and <c>BookmarkOutlineBuilder</c> so an
+        /// external bookmark target resolves exactly like an equivalent link would, rather than being
+        /// written raw (unresolvable by a reader for anything but an already-absolute URL).
+        /// </summary>
+        internal string ResolveHref(string href)
+        {
+            var baseElement = DomUtils.GetBoxByTagName(HtmlContainerInt.Root, "base");
+            var baseUrl = baseElement?.HtmlTag?.TryGetAttribute("href", "") ?? "";
+            var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? HtmlContainerInt.Adapter.BaseUri : new RUri(baseUrl);
+
+            return href.StartsWith('#') || baseUri is null ? href : new RUri(baseUri, href).AbsoluteUri;
         }
 
         /// <summary>

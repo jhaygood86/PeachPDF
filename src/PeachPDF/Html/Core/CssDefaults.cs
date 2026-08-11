@@ -192,6 +192,18 @@ namespace PeachPDF.Html.Core
             code, kbd,
             samp, var       { -peachpdf-pdf-tag-type: Code }
             a[href]         { -peachpdf-pdf-tag-type: Link }
+
+            /* Default bookmark-level mapping (css-content-3 §2) - author stylesheets may override
+               any of these, or set bookmark-level: none to exclude a heading from the generated PDF
+               outline. Every other element defaults to bookmark-level: none (this property's own
+               initial value), which is also PeachPDF's zero-config "no bookmarks" state for a
+               document with no headings - see BookmarkOutlineBuilder. */
+            h1              { bookmark-level: 1 }
+            h2              { bookmark-level: 2 }
+            h3              { bookmark-level: 3 }
+            h4              { bookmark-level: 4 }
+            h5              { bookmark-level: 5 }
+            h6              { bookmark-level: 6 }
         """;
 
         /// <summary>

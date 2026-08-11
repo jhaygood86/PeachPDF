@@ -326,6 +326,38 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Same walk as <see cref="GetAllLinkBoxes"/>, additionally collecting every box whose resolved
+        /// <c>bookmark-level</c> is not <c>none</c> into <paramref name="bookmarkBoxes"/> (in document
+        /// order, for free, since this is a pre-order walk) - so <c>PdfGenerator</c> can build its PDF
+        /// outline from a single full-tree traversal instead of a second, independent one. Link and
+        /// bookmark candidacy are independent conditions; a box can be both (a linked heading).
+        /// </summary>
+        public static void GetAllLinkAndBookmarkBoxes(CssBox? box, List<CssBox> linkBoxes, List<CssBox> bookmarkBoxes)
+        {
+            switch (box)
+            {
+                case null:
+                    return;
+                case { IsClickable: true, Visibility.Value: Visibility.Visible }:
+                    linkBoxes.Add(box);
+                    break;
+            }
+
+            // BookmarkLevel is stored as its raw, already-validated none|<integer> string (see
+            // bookmark-level's css-properties.json entry) - any non-"none" value is a candidate;
+            // BookmarkOutlineBuilder.ResolveLevel does the actual int parse.
+            if (box.BookmarkLevel is { Length: > 0 } level && level != Keywords.None)
+            {
+                bookmarkBoxes.Add(box);
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                GetAllLinkAndBookmarkBoxes(childBox, linkBoxes, bookmarkBoxes);
+            }
+        }
+
+        /// <summary>
         /// Collect every SVG-sourced link candidate (from <c>&lt;a&gt;</c> elements inside an inline
         /// <c>&lt;svg&gt;</c> or a standalone <c>&lt;img src="x.svg"&gt;</c>) found anywhere in the
         /// HTML tree, already resolved to page-space rectangles via <see cref="SvgRenderer.CollectLinks"/>.

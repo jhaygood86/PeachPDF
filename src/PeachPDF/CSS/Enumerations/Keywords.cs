@@ -211,6 +211,8 @@
         public const string Devanagari = "devanagari";
         public const string DisclosureOpen = "disclosure-open";
         public const string DisclosureClosed = "disclosure-closed";
+        public const string Open = "open";
+        public const string Closed = "closed";
         public const string EthiopicNumeric = "ethiopic-numeric";
         public const string Gujarati = "gujarati";
         public const string Gurmukhi = "gurmukhi";
@@ -387,6 +389,7 @@
         public const string Last = "last";
         public const string SelfStart = "self-start";
         public const string SelfEnd = "self-end";
+        public const string Self = "self";
         public const string Size = "size";
         public const string InlineSize = "inline-size";
 

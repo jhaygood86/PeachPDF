@@ -29,11 +29,7 @@ namespace PeachPDF.CSS
             ContentModes.ToConverter().Or(
                 UrlConverter).Or(
                 Converters.GradientConverter).Or(
-                StringConverter).Or(
-                AttrConverter).Or(
-                CounterConverter).Or(
-                new ContentFunctionConverter()).Or(
-                new StringFunctionConverter()).Or(
+                Converters.ContentListItemConverter).Or(
                 new GcpmElementFunctionConverter()).Many()).OrDefault();
 
         private abstract class ContentMode

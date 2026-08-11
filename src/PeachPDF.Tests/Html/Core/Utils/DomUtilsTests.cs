@@ -164,6 +164,32 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task GetAllLinkAndBookmarkBoxes_CollectsBothIndependently()
+        {
+            var root = await Render("<div><a href='#'>Link</a><h1>Heading</h1><span>Neither</span></div>");
+
+            var links = new System.Collections.Generic.List<CssBox>();
+            var bookmarks = new System.Collections.Generic.List<CssBox>();
+            DomUtils.GetAllLinkAndBookmarkBoxes(root, links, bookmarks);
+
+            Assert.Contains(links, b => b.HtmlTag?.Name == "a");
+            Assert.Contains(bookmarks, b => b.HtmlTag?.Name == "h1");
+            Assert.DoesNotContain(bookmarks, b => b.HtmlTag?.Name == "a");
+        }
+
+        [Fact]
+        public void GetAllLinkAndBookmarkBoxes_NullBox_IsANoOp()
+        {
+            var links = new System.Collections.Generic.List<CssBox>();
+            var bookmarks = new System.Collections.Generic.List<CssBox>();
+
+            DomUtils.GetAllLinkAndBookmarkBoxes(null, links, bookmarks);
+
+            Assert.Empty(links);
+            Assert.Empty(bookmarks);
+        }
+
+        [Fact]
         public async Task GetCssBox_LocationInsideBounds_ReturnsABox()
         {
             var root = await Render("<div id='outer' style='width:100px;height:50px'><span id='inner'>Text</span></div>");

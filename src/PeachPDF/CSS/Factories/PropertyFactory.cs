@@ -391,6 +391,15 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.StringSet, () => new StringSetProperty());
             AddLonghand(PropertyNames.PageName, () => new PageNameProperty());
             AddLonghand(PropertyNames.PdfTagType, () => new PdfTagTypeProperty());
+            AddLonghand(PropertyNames.BookmarkLevel, () => new BookmarkLevelProperty());
+            AddLonghand(PropertyNames.BookmarkLabel, () => new BookmarkLabelProperty());
+            AddLonghand(PropertyNames.BookmarkState, () => new BookmarkStateProperty());
+            AddLonghand(PropertyNames.PeachPdfBookmarkTarget, () => new BookmarkTargetProperty());
+            AddLonghand(PropertyNames.PrinceBookmarkLevel, () => new PrinceBookmarkLevelProperty());
+            AddLonghand(PropertyNames.PrinceBookmarkLabel, () => new PrinceBookmarkLabelProperty());
+            AddLonghand(PropertyNames.PrinceBookmarkState, () => new PrinceBookmarkStateProperty());
+            AddLonghand(PropertyNames.PrinceBookmarkTarget, () => new PrinceBookmarkTargetProperty());
+            AddLonghand(PropertyNames.BookmarkTarget, () => new BookmarkTargetAliasProperty());
             AddLonghand(PropertyNames.TableLayout, () => new TableLayoutProperty());
             AddLonghand(PropertyNames.TextAlign, () => new TextAlignProperty());
             AddLonghand(PropertyNames.TextAlignLast, () => new TextAlignLastProperty());

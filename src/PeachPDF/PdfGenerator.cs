@@ -429,8 +429,16 @@ namespace PeachPDF
             // StructureTagBuilder.Finish and HandleLinks's own tagging-aware section below).
             structureTagBuilder?.Finish();
 
-            // add web links and anchors
-            HandleLinks(document.PdfDocument, container, orgPageSize, fragmentainers, structureTagBuilder);
+            // add web links and anchors. bookmarkBoxes rides along on the same full-tree walk
+            // GetLinks() already performs (DomUtils.GetAllLinkAndBookmarkBoxes), so building the PDF
+            // outline afterwards adds zero net full-tree traversals.
+            var bookmarkBoxes = new List<CssBox>();
+            HandleLinks(document.PdfDocument, container, orgPageSize, fragmentainers, bookmarkBoxes, structureTagBuilder);
+
+            // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
+            // UA stylesheet, everything else defaults to none), so this is unconditional: a document
+            // with no headings simply collects zero bookmark boxes above and adds no outline.
+            BookmarkOutlineBuilder.Build(document.PdfDocument, container, fragmentainers, bookmarkBoxes);
 
             measure?.Dispose();
         }
@@ -547,24 +555,20 @@ namespace PeachPDF
 
         /// <summary>
         /// Handle HTML links by create PDF Documents link either to external URL or to another page in the document.
+        /// <paramref name="bookmarkBoxes"/> collects every bookmark-candidate box found along the way
+        /// (see <see cref="Html.Core.Utils.DomUtils.GetAllLinkAndBookmarkBoxes"/>), for
+        /// <see cref="BookmarkOutlineBuilder"/> to consume afterwards without a second full-tree walk.
         /// <paramref name="structureTagBuilder"/> is non-null only when tagged PDF output is enabled -
         /// used to attach each created Link annotation's "/OBJR" back to its owning "/Link" structure
         /// element (see the tagging-aware section below), completing the bidirectional PDF/UA
         /// linkage between the annotation and the structure tree.
         /// </summary>
-        private static void HandleLinks(PdfDocument document, HtmlContainer container, XSize orgPageSize, IReadOnlyList<FragmentainerFragment> fragmentainers, StructureTagBuilder? structureTagBuilder = null)
+        private static void HandleLinks(PdfDocument document, HtmlContainer container, XSize orgPageSize, IReadOnlyList<FragmentainerFragment> fragmentainers, List<CssBox> bookmarkBoxes, StructureTagBuilder? structureTagBuilder = null)
         {
             var inner = container.HtmlContainerInt;
             var ppp = container.PixelsPerPoint;
 
-            // Materialized pages are the fragmentainers, which may skip content-empty grid slots
-            // entirely - so a document-space slot index and a document.Pages index are NOT
-            // interchangeable. Build the slot -> page mapping once.
-            var slotToPage = new Dictionary<int, int>(fragmentainers.Count);
-            for (var p = 0; p < fragmentainers.Count; p++)
-                slotToPage[fragmentainers[p].SlotIndex] = p;
-
-            var maxMappedSlot = slotToPage.Count > 0 ? slotToPage.Keys.Max() : -1;
+            var (slotToPage, maxMappedSlot) = PageAnchorResolver.BuildSlotToPageMap(fragmentainers);
 
             // An anchor inside a skipped (content-empty) slot attributes to the next materialized
             // page - the nearest place a reader can actually land. Shared by both link sources below
@@ -573,22 +577,12 @@ namespace PeachPDF
             (int PageIndex, double TopPt)? ResolveAnchorTarget(string anchorId)
             {
                 var anchorRect = container.GetElementRectangle(anchorId);
-                if (!anchorRect.HasValue) return null;
-
-                var anchorSlot = inner.SlotStartingAt(anchorRect.Value.Top * ppp);
-                var anchorPage = -1;
-                for (var s = Math.Max(anchorSlot, 0); anchorPage < 0 && s <= maxMappedSlot; s++)
-                    if (slotToPage.TryGetValue(s, out var found))
-                        anchorPage = found;
-                if (anchorPage < 0) anchorPage = fragmentainers.Count - 1;
-
-                var anchorTopPt = inner.PageGeometry.GetPage(anchorSlot).MarginTopPt
-                    + (anchorRect.Value.Top * ppp - inner.PageTopOf(anchorSlot)) / ppp;
-
-                return (anchorPage, anchorTopPt);
+                return anchorRect.HasValue
+                    ? PageAnchorResolver.ResolveRectToPage(inner, ppp, slotToPage, maxMappedSlot, fragmentainers.Count, anchorRect.Value)
+                    : null;
             }
 
-            foreach (var link in container.GetLinks())
+            foreach (var link in container.GetLinks(bookmarkBoxes))
             {
                 // Link rects are true points (the public GetLinks wrapper divides by PixelsPerPoint
                 // and resolves relative hrefs against the document base URI); slot attribution runs
@@ -620,7 +614,15 @@ namespace PeachPDF
                         var target = ResolveAnchorTarget(link.AnchorId);
                         if (target is not { } t) continue;
 
-                        document.AddNamedDestination(link.AnchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitVertically(t.TopPt));
+                        // /FitH top fits page width and positions vertically at top - the "jump down
+                        // to this Y" behavior an anchor link destination actually wants; CreateFitVertically
+                        // would instead pass TopPt as /FitV's horizontal left parameter. TopPt itself is
+                        // top-down (0 at the page's own top margin, increasing downward, matching every
+                        // other rect this pass works with - see the xRect construction below), but /FitH's
+                        // own "top" parameter is PDF default user space, which is bottom-up (0 at the page's
+                        // bottom edge) - flipping via orgPageSize.Height is required, exactly like the xRect
+                        // construction below already does for the same reason.
+                        document.AddNamedDestination(link.AnchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(orgPageSize.Height - t.TopPt));
                         annotation = document.Pages[pageIndex].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
                     }
                     else
@@ -686,7 +688,9 @@ namespace PeachPDF
                             var target = resolveAnchorTarget(anchorId);
                             if (target is not { } t) continue;
 
-                            document.AddNamedDestination(anchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitVertically(t.TopPt));
+                            // See the same flip's comment in HandleLinks above - TopPt is top-down, /FitH's
+                            // own top parameter needs bottom-up PDF default user space.
+                            document.AddNamedDestination(anchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(orgPageSize.Height - t.TopPt));
                             annotation = document.Pages[pageIndex].AddDocumentLink(new PdfRectangle(xRect), anchorId);
                         }
                         else

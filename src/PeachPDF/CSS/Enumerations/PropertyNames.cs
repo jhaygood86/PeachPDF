@@ -206,6 +206,21 @@ namespace PeachPDF.CSS
         public static readonly string PageBreakInside = "page-break-inside";
         public static readonly string PageName = "page";
         public static readonly string PdfTagType = "-peachpdf-pdf-tag-type";
+        public static readonly string BookmarkLevel = "bookmark-level";
+        public static readonly string BookmarkLabel = "bookmark-label";
+        public static readonly string BookmarkState = "bookmark-state";
+        public static readonly string PeachPdfBookmarkTarget = "-peachpdf-bookmark-target";
+        /// <summary>Hidden, undocumented compat aliases for Prince's own bookmark property spellings -
+        /// see css-properties.json's aliasOf entries for these names. Prince documents both an
+        /// unprefixed and a -prince- prefixed spelling for all four bookmark-* properties; only
+        /// bookmark-target/-prince-bookmark-target need aliasing to -peachpdf-bookmark-target (a
+        /// PeachPDF extension, not a real css-content-3 property) since level/label/state's
+        /// unprefixed spelling already matches the real spec name.</summary>
+        public static readonly string PrinceBookmarkLevel = "-prince-bookmark-level";
+        public static readonly string PrinceBookmarkLabel = "-prince-bookmark-label";
+        public static readonly string PrinceBookmarkState = "-prince-bookmark-state";
+        public static readonly string PrinceBookmarkTarget = "-prince-bookmark-target";
+        public static readonly string BookmarkTarget = "bookmark-target";
         public static readonly string Perspective = "perspective";
         public static readonly string PerspectiveOrigin = "perspective-origin";
         public static readonly string PointerEvents = "pointer-events";

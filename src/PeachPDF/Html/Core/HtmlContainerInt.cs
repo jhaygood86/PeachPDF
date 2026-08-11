@@ -777,13 +777,20 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// Get all the links in the HTML with the element rectangle and href data.
+        /// Get all the links in the HTML with the element rectangle and href data, additionally
+        /// collecting every bookmark-candidate box (<c>bookmark-level != none</c>) into
+        /// <paramref name="bookmarkBoxes"/> from the same tree walk when non-null (see
+        /// <see cref="Utils.DomUtils.GetAllLinkAndBookmarkBoxes"/>) - the only caller is
+        /// <see cref="HtmlContainer.GetLinks(List{CssBox}?)"/>, which is where the public,
+        /// bookmark-agnostic <see cref="HtmlContainer.GetLinks()"/> contract lives.
         /// </summary>
-        /// <returns>collection of all the links in the HTML</returns>
-        public List<LinkElementData<RRect>> GetLinks()
+        internal List<LinkElementData<RRect>> GetLinks(List<CssBox>? bookmarkBoxes)
         {
             var linkBoxes = new List<CssBox>();
-            DomUtils.GetAllLinkBoxes(Root, linkBoxes);
+            if (bookmarkBoxes is null)
+                DomUtils.GetAllLinkBoxes(Root, linkBoxes);
+            else
+                DomUtils.GetAllLinkAndBookmarkBoxes(Root, linkBoxes, bookmarkBoxes);
 
             var linkElements = new List<LinkElementData<RRect>>();
             foreach (var box in linkBoxes)

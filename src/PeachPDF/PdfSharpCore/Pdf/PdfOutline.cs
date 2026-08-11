@@ -180,6 +180,19 @@ namespace PeachPDF.PdfSharpCore.Pdf
         PdfPage _destinationPage = null!;
 
         /// <summary>
+        /// Gets or sets an external URL this outline item links to instead of a page in this
+        /// document, written as a <c>/A</c> URI action (mutually exclusive with <see cref="DestinationPage"/>'s
+        /// <c>/Dest</c> per PDF 32000-1:2008 Table 153/Table 176). Ignored when <see cref="DestinationPage"/>
+        /// is also set.
+        /// </summary>
+        public string? Url
+        {
+            get { return _url; }
+            set { _url = value; }
+        }
+        string? _url;
+
+        /// <summary>
         /// Gets or sets the left position of the page positioned at the left side of the window.
         /// Applies only if PageDestinationType is Xyz, FitV, FitR, or FitBV.
         /// </summary>
@@ -323,10 +336,14 @@ namespace PeachPDF.PdfSharpCore.Pdf
                     int index = _parent._outlines.IndexOf(this);
                     Debug.Assert(index != -1);
 
-                    // Has destination?
+                    // Has destination? Mutually exclusive with an /A action - a page destination always
+                    // wins if both happen to be set.
                     if (DestinationPage != null)
                         //Elements[Keys.Dest] = new PdfArray(Owner, DestinationPage.Reference, new PdfLiteral("/XYZ null null 0"));
                         Elements[Keys.Dest] = CreateDestArray();
+                    else if (!string.IsNullOrEmpty(Url))
+                        Elements[Keys.A] = new PdfLiteral("<</S/URI/URI{0}>>",
+                            PdfEncoders.ToStringLiteral(Url, PdfStringEncoding.WinAnsiEncoding));
 
                     // Not the first element?
                     if (index > 0)

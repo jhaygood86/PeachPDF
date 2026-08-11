@@ -1481,6 +1481,104 @@ A table assembled purely through CSS (`display: table` / `table-row` / `table-ce
 
 ---
 
+## PDF Bookmarks (Outline) Support
+
+PeachPDF automatically generates a PDF outline (the navigable bookmark sidebar most PDF readers show) from a document's headings, per [CSS Generated Content Module Level 3's bookmark properties](https://www.w3.org/TR/css-content-3/#bookmarks). This needs no configuration: `h1`–`h6` get a bookmark by default, and a document with no headings simply produces no outline at all.
+
+### `bookmark-level`
+
+Determines whether an element generates a bookmark, and its nesting depth (`1` is shallowest).
+
+| | |
+|---|---|
+| Initial value | `none` |
+| Applies to | All elements |
+| Inherited | No |
+| Percentages | N/A |
+
+```css
+/* Give every top-level <section>'s heading a bookmark of its own, one level deeper than its
+   parent section's heading */
+section h1 { bookmark-level: 1; }
+section section h1 { bookmark-level: 2; }
+
+/* Exclude a heading from the outline entirely */
+h2.no-bookmark { bookmark-level: none; }
+```
+
+Accepted values: `none`, or a positive `<integer>` (`1` and up). Nesting is not required to follow a strict hierarchy — a bookmark's parent is the nearest *preceding* bookmark (in document order) with a shallower level, or the outline root if none exists; a level with no shallower ancestor ever declared still generates a valid, root-level bookmark.
+
+### `bookmark-label`
+
+The bookmark's text, as a `<content-list>` — the same string/`counter()`/`attr()`/`content()`/`string()` grammar the [`content`](#generated-content) property accepts (`url()`, gradients, and the quote/`element()` functions are not accepted here, since none of them produce text).
+
+| | |
+|---|---|
+| Initial value | `content(text)` |
+| Applies to | All elements |
+| Inherited | No |
+| Percentages | N/A |
+
+```css
+/* Default: the heading's own rendered text becomes the bookmark label */
+h1 { /* bookmark-label: content(text) is the initial value - no rule needed */ }
+
+/* A generated label combining a counter, a literal string and an attribute */
+h1 { counter-increment: chapter; bookmark-label: "Chapter " counter(chapter) ": " attr(data-title); }
+```
+
+### `bookmark-state`
+
+The bookmark's initial expansion state in the reader's outline panel.
+
+| | |
+|---|---|
+| Initial value | `open` |
+| Applies to | Block-level elements |
+| Inherited | No |
+| Percentages | N/A |
+
+```css
+/* Collapse deep subsection bookmarks by default */
+h3 { bookmark-state: closed; }
+```
+
+Accepted values: `open`, `closed`.
+
+### `-peachpdf-bookmark-target` (bookmark link target)
+
+By default a bookmark links to the element that generated it. `-peachpdf-bookmark-target` overrides that — this is PeachPDF's own extension (not part of css-content-3, which defines no such property); it follows the same naming convention as [`-peachpdf-pdf-tag-type`](#-peachpdf-pdf-tag-type-tagged-pdf-structure-type) for a PDF-output feature with no real spec-track name.
+
+| | |
+|---|---|
+| Initial value | `self` |
+| Applies to | All elements |
+| Inherited | No |
+| Percentages | N/A |
+
+```css
+/* Point a table-of-contents entry's bookmark at the chapter it lists, not the ToC row itself */
+.toc-entry { -peachpdf-bookmark-target: attr(href); }
+
+/* Link straight to an external URL instead of anywhere in this document */
+h1.appendix-ref { -peachpdf-bookmark-target: url(https://example.com/appendix); }
+```
+
+Accepted values: `self`, `url(<url>)`, or `attr(<attribute-name>)`. A value resolving to `#fragment` targets the element with that `id` in the same document; any other resolved value is treated as an external URL. A target that can't be resolved (e.g. a missing `id`) leaves that bookmark without a destination rather than removing the bookmark itself.
+
+### Default `bookmark-level` mapping
+
+| HTML | `bookmark-level` |
+|------|-------------------|
+| `h1`–`h6` | `1`–`6` |
+| Everything else | `none` (this property's own initial value) |
+
+### Known limitation — bookmarks inside repeated running/margin-box content or repeated table headers/footers are not collected
+
+A heading that only ever appears as [running element](usage-examples.md) content in an `@page` margin box (repeated per page, with no single canonical position) does not get a bookmark, even if it would otherwise have a non-`none` `bookmark-level` — only the main document content tree is walked for bookmark candidates. The same applies to a `<thead>`/`<tfoot>` repeated across a page break: a heading placed there produces no bookmark either.
+
+---
+
 ## Unsupported CSS Features
 
 The following CSS features are not supported:

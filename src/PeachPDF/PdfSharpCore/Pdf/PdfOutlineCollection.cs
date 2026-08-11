@@ -83,7 +83,8 @@ namespace PeachPDF.PdfSharpCore.Pdf
             if (outline == null)
                 throw new ArgumentNullException(nameof(outline));
 
-            // DestinationPage is optional. PDFsharp does not yet support outlines with action ("/A") instead of destination page ("/DEST")
+            // DestinationPage is optional - an outline may instead carry a Url (written as an /A URI
+            // action, see PdfOutline.PrepareForSave), or neither (no destination at all).
             if (outline.DestinationPage != null && !ReferenceEquals(Owner, outline.DestinationPage.Owner))
                 throw new ArgumentException("Destination page must belong to this document.");
 
@@ -272,7 +273,8 @@ namespace PeachPDF.PdfSharpCore.Pdf
             if (outline == null)
                 throw new ArgumentNullException(nameof(outline));
 
-            // DestinationPage is optional. PDFsharp does not yet support outlines with action ("/A") instead of destination page ("/DEST")
+            // DestinationPage is optional - an outline may instead carry a Url (written as an /A URI
+            // action, see PdfOutline.PrepareForSave), or neither (no destination at all).
             if (outline.DestinationPage != null && !ReferenceEquals(Owner, outline.DestinationPage.Owner))
                 throw new ArgumentException("Destination page must belong to this document.");
 
