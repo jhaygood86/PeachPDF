@@ -4527,6 +4527,45 @@ await SaveShowcaseAsync("tagged_pdf", "Standards & Accessibility", "Tagged PDF (
     "Accessible, tagged PDF output: a logical structure tree with headings, lists, tables, alt text, links, and tag-type overrides.",
     taggedPdfHtml, taggedPdfConfig);
 
+// --- PDF Bookmarks (Outline) showcase ---
+// Like tagged PDF above, the outline is invisible in a normal page render - its value is manual
+// inspection of the reader's bookmark/outline sidebar (e.g. Acrobat's or a browser PDF viewer's
+// panel) rather than visual comparison, but included anyway per this repo's showcase convention.
+
+const string BookmarksCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { counter-reset: chapter; font: 10pt Arial, sans-serif; margin: 0 }
+    h1.chapter { counter-increment: chapter; font-size: 16pt; break-before: page }
+    h1.chapter:first-of-type { break-before: avoid }
+    h1.cover { font-size: 20pt; break-before: avoid }
+    h2 { font-size: 12pt; margin-top: 1.2em }
+    p.intro { color: #555 }
+    .toc-entry { display: block; margin: 0.2em 0 }
+    </style>
+    """;
+
+var bookmarksHtml = "<!DOCTYPE html><html><head>" + BookmarksCss + "</head><body>" +
+
+    "<h1 class=\"cover\" style=\"bookmark-level: none\">Cover Page</h1>" +
+    "<p class=\"intro\">This heading is excluded from the outline (bookmark-level: none) even though h1 defaults to bookmark-level: 1 - it's just a cover page, not a real chapter.</p>" +
+    "<a class=\"toc-entry\" href=\"#chapter2\" style=\"bookmark-level: 1; bookmark-label: '→ Jump straight to Chapter 2'; -peachpdf-bookmark-target: attr(href)\">Jump straight to Chapter 2</a>" +
+
+    "<h1 class=\"chapter\" style=\"bookmark-label: 'Chapter ' counter(chapter) ': Introduction'\">Introduction</h1>" +
+    "<p class=\"intro\">This chapter's bookmark label is generated from a counter, not its own heading text (bookmark-label: 'Chapter ' counter(chapter) ': Introduction').</p>" +
+    "<h2>Background</h2><p>Ordinary h2 bookmark (default bookmark-level: 2, label defaults to content(text) - the heading's own rendered text).</p>" +
+    "<h2 style=\"bookmark-state: closed\">Appendix Notes (collapsed by default)</h2><p>This h2's bookmark starts collapsed in the reader's outline panel (bookmark-state: closed) - expand it to see its own nested sub-bookmark.</p>" +
+    "<h3>Appendix Note A</h3><p>Nested under the collapsed Appendix Notes bookmark - stays hidden until that entry is expanded.</p>" +
+
+    "<h1 class=\"chapter\" id=\"chapter2\">Chapter Two</h1>" +
+    "<p class=\"intro\">This is where the \"Jump straight to Chapter 2\" bookmark on the cover page actually points, via -peachpdf-bookmark-target: attr(href) reading its own href.</p>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("bookmarks", "Standards & Accessibility", "PDF Bookmarks (Outline)",
+    "Automatic PDF outline generation from headings, with full CSS control via bookmark-level/bookmark-label/bookmark-state and -peachpdf-bookmark-target.",
+    bookmarksHtml, pdfConfig);
+
 // --- border-style showcase ---
 
 const string BorderStyleCss = """

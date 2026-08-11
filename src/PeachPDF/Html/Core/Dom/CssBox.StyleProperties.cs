@@ -856,8 +856,20 @@ namespace PeachPDF.Html.Core.Dom
             // box-splitting) represents a structural duplicate of the SAME source box's own
             // resolved content, not real ancestor->descendant inheritance, so its own resolved
             // tag type must carry over too.
+            //
+            // bookmark-level/-label/-state/-target deliberately do NOT get the same treatment: a
+            // bookmark is per-SOURCE-ELEMENT (one outline entry per element), not per-box like a
+            // structure-tree tag. DomParser's inline/block box-splitting produces multiple sibling
+            // CssBoxes for the SAME element (e.g. bookmark-level on a <span> that wraps a block child) -
+            // carrying bookmark metadata into "everything" would give every split fragment its own
+            // bookmark, each with only its own fragment's content(text), instead of the one bookmark the
+            // whole element should produce. CssProxyBox's repeated header/footer clone (the other
+            // "everything" caller) never reaches DomUtils.GetAllLinkAndBookmarkBoxes's walk at all (its
+            // subtree isn't reachable via CssBox.Boxes), so there is no case where carrying these over
+            // would help - only ones where it would duplicate.
             var generatedContent = _computedStyle.GeneratedContent;
-            var newGeneratedContent = generatedContent.SetPropertyValue(generatedContent.PdfTagType, parentStyle.GeneratedContent.PdfTagType, static (a, v) => a with { PdfTagType = v });
+            var newGeneratedContent = generatedContent
+                .SetPropertyValue(generatedContent.PdfTagType, parentStyle.GeneratedContent.PdfTagType, static (a, v) => a with { PdfTagType = v });
             _computedStyle = _computedStyle.AdoptArea(generatedContent, newGeneratedContent, static (s, a) => s with { GeneratedContent = a });
         }
     }

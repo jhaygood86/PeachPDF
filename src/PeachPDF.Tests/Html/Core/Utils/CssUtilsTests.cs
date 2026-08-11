@@ -597,6 +597,118 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal("div", box.PdfTagType);
         }
 
+        // --- bookmark-level / bookmark-label / bookmark-state / -peachpdf-bookmark-target (issue #711) ---
+
+        [Fact]
+        public async Task SetPropertyValue_BookmarkLevel_ParsesIntegerAndNone()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "bookmark-level", "3");
+            Assert.Equal("3", CssUtils.GetPropertyValue(box, "bookmark-level"));
+
+            CssUtils.SetPropertyValue(parser, box, "bookmark-level", "none");
+            Assert.Equal("none", CssUtils.GetPropertyValue(box, "bookmark-level"));
+        }
+
+        [Theory]
+        [InlineData("0")]
+        [InlineData("-1")]
+        [InlineData("banana")]
+        public async Task SetPropertyValue_BookmarkLevelInvalid_IsIgnored(string invalidValue)
+        {
+            var (box, parser) = await FindDivBoxAndParser("bookmark-level: 2;");
+
+            CssUtils.SetPropertyValue(parser, box, "bookmark-level", invalidValue);
+
+            Assert.Equal("2", CssUtils.GetPropertyValue(box, "bookmark-level"));
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_BookmarkLabel_AcceptsContentList()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "bookmark-label", "\"Chapter \" counter(chapter) \": \" attr(data-title)");
+
+            Assert.Equal("\"Chapter \" counter(chapter) \": \" attr(data-title)", CssUtils.GetPropertyValue(box, "bookmark-label"));
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_BookmarkLabelUrl_IsRejected()
+        {
+            // <content-list> excludes url()/gradients - not text-producing - unlike `content` itself.
+            var (box, parser) = await FindDivBoxAndParser("bookmark-label: \"kept\";");
+
+            CssUtils.SetPropertyValue(parser, box, "bookmark-label", "url(logo.png)");
+
+            Assert.Equal("\"kept\"", CssUtils.GetPropertyValue(box, "bookmark-label"));
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_BookmarkState_ParsesOpenAndClosed()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "bookmark-state", "closed");
+            Assert.Equal("closed", CssUtils.GetPropertyValue(box, "bookmark-state"));
+
+            CssUtils.SetPropertyValue(parser, box, "bookmark-state", "open");
+            Assert.Equal("open", CssUtils.GetPropertyValue(box, "bookmark-state"));
+        }
+
+        [Theory]
+        [InlineData("self")]
+        [InlineData("url(#chapter2)")]
+        [InlineData("attr(href)")]
+        public async Task SetPropertyValue_PeachPdfBookmarkTarget_ParsesSelfUrlAttr(string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "-peachpdf-bookmark-target", value);
+
+            Assert.Equal(value, CssUtils.GetPropertyValue(box, "-peachpdf-bookmark-target"));
+        }
+
+        // -prince-bookmark-level/-label/-state translate to the real spec properties; -prince-bookmark-target
+        // and bare bookmark-target (Prince's own convenience alias) both translate to -peachpdf-bookmark-target,
+        // since bookmark-target itself is not a real css-content-3 property.
+        [Theory]
+        [InlineData("-prince-bookmark-level", "bookmark-level", "4")]
+        [InlineData("-prince-bookmark-label", "bookmark-label", "\"Custom\"")]
+        [InlineData("-prince-bookmark-state", "bookmark-state", "closed")]
+        [InlineData("-prince-bookmark-target", "-peachpdf-bookmark-target", "url(#x)")]
+        [InlineData("bookmark-target", "-peachpdf-bookmark-target", "url(#x)")]
+        public async Task SetPropertyValue_BookmarkAlias_MapsToCanonicalProperty(string aliasName, string canonicalName, string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, aliasName, value);
+
+            Assert.Equal(value, CssUtils.GetPropertyValue(box, canonicalName));
+        }
+
+        [Theory]
+        [InlineData("bookmark-level", "none")]
+        [InlineData("bookmark-label", "content(text)")]
+        [InlineData("bookmark-state", "open")]
+        [InlineData("-peachpdf-bookmark-target", "self")]
+        [InlineData("-prince-bookmark-level", "none")]
+        [InlineData("-prince-bookmark-label", "content(text)")]
+        [InlineData("-prince-bookmark-state", "open")]
+        [InlineData("-prince-bookmark-target", "self")]
+        [InlineData("bookmark-target", "self")]
+        public async Task BookmarkProperties_AreSnapshottableAndHaveAnInitialValue(string name, string? expectedInitial = null)
+        {
+            var (box, _) = await FindDivBoxAndParser("");
+
+            Assert.Contains(name, CssUtils.SnapshotProperties(box).Keys);
+            if (expectedInitial is not null)
+            {
+                Assert.Equal(expectedInitial, CssDefaults.GetInitialValue(name));
+            }
+        }
+
         // Same two prerequisites for box-decoration-break (css-break-3 §6.2): without the known-name entry
         // there is no revert snapshot to roll back to, and without the initial-value entry
         // "initial"/"unset"/"revert" resolve to null and the declaration is dropped. The behavioural

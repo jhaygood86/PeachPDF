@@ -3,6 +3,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
@@ -35,6 +36,19 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            cssBox.Text = ResolveContentTokens(cssBox, tokens);
+        }
+
+        /// <summary>
+        /// Resolves a tokenized <c>&lt;content-list&gt;</c> (strings, <c>counter()</c>, <c>attr()</c>,
+        /// <c>content()</c>, <c>string()</c>) against <paramref name="cssBox"/> into its text value.
+        /// Shared by <see cref="ApplyContent"/> (the <c>content</c> property) and
+        /// <see cref="ResolveBookmarkLabel"/> (<c>bookmark-label</c>, whose value IS a
+        /// <c>&lt;content-list&gt;</c> and nothing else) so both consume one resolver for the same
+        /// grammar rather than each re-walking it independently.
+        /// </summary>
+        internal static string ResolveContentTokens(CssBox cssBox, List<Token> tokens)
+        {
             var contentText = new StringBuilder();
 
             foreach (var token in tokens)
@@ -92,7 +106,20 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            cssBox.Text = contentText.ToString();
+            return contentText.ToString();
+        }
+
+        /// <summary>
+        /// Resolves <c>bookmark-label</c> (CSS Generated Content Module Level 3 §2) for a PDF outline
+        /// entry's title. The property's initial value is the raw text <c>content(text)</c>, which the
+        /// shared <see cref="ResolveContentTokens"/> switch already handles via its existing
+        /// <c>content()</c>/<c>"text"</c> branch (<see cref="ExtractContentValue"/> -&gt;
+        /// <see cref="ExtractText"/>) - so the default case needs no special-casing here.
+        /// </summary>
+        public static string ResolveBookmarkLabel(CssBox cssBox)
+        {
+            var tokens = CssValueParser.GetCssTokens(cssBox.BookmarkLabel);
+            return ResolveContentTokens(cssBox, tokens);
         }
 
         /// <summary>
@@ -245,7 +272,7 @@ namespace PeachPDF.Html.Core.Dom
             };
         }
 
-        private static string? ExtractText(CssBox cssBox)
+        internal static string? ExtractText(CssBox cssBox)
         {
             // Get the text content of the element (normalized whitespace)
             // If this is a pseudo-element, get the parent's text

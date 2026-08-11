@@ -746,6 +746,119 @@
       }
     },
     {
+      "name": "bookmark-level",
+      "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-level). cssom/string-stored, like -peachpdf-pdf-tag-type - BookmarkOutlineBuilder parses the raw none/<integer> string itself (mirroring StructureTagMapper.Classify's own re-parse of PdfTagType), since the CSS-OM BookmarkLevelProperty converter (Converters.BookmarkLevelConverter) already validates the grammar at declaration time. h1-h6 default to 1-6 via CssDefaults.cs's UA stylesheet, everything else defaults to none (this property's own initial value), which is itself the zero-config \"no bookmarks\" state.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BookmarkLevel",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "bookmark-label",
+      "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-label). A <content-list> - the same string/counter()/attr()/content()/string() grammar `content` accepts, minus url()/gradients (image content, not applicable to a label) and the quote-modes/element() (meaningful only within flowing generated content, not a standalone label string) - see the shared Converters.ContentListItemConverter both properties' CSS-OM converters reference, and CssContentEngine.ResolveContentTokens/ResolveBookmarkLabel for the shared resolver. Initial value content(text) means \"the element's own rendered text\", resolved via the same content()/\"text\" branch content() itself uses.",
+      "inherited": false,
+      "initialValue": "content(text)",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BookmarkLabel",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "bookmark-state",
+      "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-state). cssom/string-stored, like bookmark-level - BookmarkOutlineBuilder parses the raw open/closed string itself via Map.BookmarkStates.",
+      "inherited": false,
+      "initialValue": "open",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BookmarkState",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-bookmark-target",
+      "comment": "NOT a css-content-3 property - css-content-3 defines only bookmark-level/-label/-state (verified against the spec source directly; an earlier draft of this issue assumed bookmark-target was part of the same spec and it is not). This is Prince's own extension (prince-bookmark-target, self | url() | attr(), default self) - PeachPDF's own documented spelling follows the -peachpdf-pdf-tag-type precedent for a PDF-output feature with no real spec-track name, rather than the unprefixed spelling Prince itself uses. See BookmarkOutlineBuilder.ResolveTargetValue for self/url()/attr() resolution and the in-document-fragment-vs-external-URL split.",
+      "inherited": false,
+      "initialValue": "self",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "BookmarkTarget",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-bookmark-level",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-level spelling (Prince documents both an unprefixed and a -prince- prefixed form for all four bookmark-* properties) - translates to the real spec property bookmark-level at parse time. Not documented in docs/, same pattern as the other PDF-output extensions' Prince/prefixed compat shims.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "aliasOf": "bookmark-level",
+      "html": {
+        "propertyPath": "BookmarkLevel",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-bookmark-label",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-label spelling - translates to the real spec property bookmark-label at parse time.",
+      "inherited": false,
+      "initialValue": "content(text)",
+      "cssDataType": "cssom",
+      "aliasOf": "bookmark-label",
+      "html": {
+        "propertyPath": "BookmarkLabel",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-bookmark-state",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-state spelling - translates to the real spec property bookmark-state at parse time.",
+      "inherited": false,
+      "initialValue": "open",
+      "cssDataType": "cssom",
+      "aliasOf": "bookmark-state",
+      "html": {
+        "propertyPath": "BookmarkState",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-bookmark-target",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-target spelling - translates to -peachpdf-bookmark-target (a PeachPDF extension, not a real spec property - see that entry) at parse time.",
+      "inherited": false,
+      "initialValue": "self",
+      "cssDataType": "cssom",
+      "aliasOf": "-peachpdf-bookmark-target",
+      "html": {
+        "propertyPath": "BookmarkTarget",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "bookmark-target",
+      "comment": "Hidden, undocumented compat alias for Prince's own bookmark-target spelling (Prince's convenience alias for its prince-bookmark-target extension) - translates to -peachpdf-bookmark-target at parse time. The one place in this file an unprefixed name is NOT a real spec property: css-content-3 defines no bookmark-target at all (see -peachpdf-bookmark-target's own comment).",
+      "inherited": false,
+      "initialValue": "self",
+      "cssDataType": "cssom",
+      "aliasOf": "-peachpdf-bookmark-target",
+      "html": {
+        "propertyPath": "BookmarkTarget",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
       "name": "margin-bottom",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,

@@ -353,6 +353,8 @@ When `EnableTaggedPdf` is left at its default (`false`), none of this runs — o
 
 The HTML-tag → structure-type mapping is CSS-driven and author-overridable via the `-peachpdf-pdf-tag-type` custom property — see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support) in HTML & CSS Support for the property's accepted values, the full default mapping table, and known limitations.
 
+PDF outline (bookmark) generation is a separate, always-on feature — no `PdfGenerateConfig` flag needed — driven purely by the `bookmark-level`/`bookmark-label`/`bookmark-state` CSS properties; see [PDF Bookmarks (Outline) Support](html-css-support.md#pdf-bookmarks-outline-support) in HTML & CSS Support.
+
 ## ASP.NET Core controller endpoint
 
 Render to a `MemoryStream`, rewind it, and return it with `File()` so ASP.NET Core streams it to the client with the right content type. `BuildInvoiceHtml` below stands in for whatever HTML-generation logic you use (a Razor template, a string builder, etc.) — the PDF-specific part is everything after `var html = ...`.

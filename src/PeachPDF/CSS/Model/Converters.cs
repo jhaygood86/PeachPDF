@@ -119,6 +119,18 @@ namespace PeachPDF.CSS
                 .Or(new FunctionValueConverter(FunctionNames.Counters, WithArgs(name, def, kind))));
         });
 
+        // The subset of the <content-list> grammar (CSS Generated Content 3 §2) shared between `content`
+        // (ContentProperty, which additionally allows url()/gradients - image content, not applicable to
+        // a bookmark label - plus the quote-modes and element(), both meaningful only within flowing
+        // generated content, not a standalone label string) and `bookmark-label` (BookmarkLabelProperty,
+        // whose value IS a <content-list> and nothing else) - kept in one place per this repo's "don't
+        // write two independent parsers for the same CSS value grammar" convention rather than
+        // duplicating the combinator chain.
+        public static readonly IValueConverter ContentListItemConverter =
+            StringConverter.Or(AttrConverter).Or(CounterConverter).Or(
+                new ContentFunctionConverter()).Or(
+                new StringFunctionConverter());
+
         public static readonly IValueConverter ShapeConverter = Construct(() =>
         {
             var length = LengthConverter.Required();
@@ -272,6 +284,14 @@ namespace PeachPDF.CSS
         /// </summary>
         public static readonly IValueConverter OutlineStyleConverter = Map.OutlineStyles.ToConverter();
         public static readonly IValueConverter PdfTagTypeConverter = Map.PdfTagTypes.ToConverter();
+        public static readonly IValueConverter BookmarkLevelConverter = PositiveIntegerConverter.OrNone();
+        public static readonly IValueConverter BookmarkStateConverter = Map.BookmarkStates.ToConverter();
+        public static readonly IValueConverter BookmarkLabelConverter = ContentListItemConverter.Many();
+
+        // Prince's own grammar for its bookmark-target extension (self | url() | attr()) - not a real
+        // css-content-3 property, see -peachpdf-bookmark-target's css-properties.json entry.
+        public static readonly IValueConverter BookmarkTargetConverter =
+            Assign(Keywords.Self, Keywords.Self).Or(UrlConverter).Or(AttrConverter);
         public static readonly IValueConverter BackgroundAttachmentConverter = Map.BackgroundAttachments.ToConverter();
         public static readonly IValueConverter BackgroundRepeatConverter = Map.BackgroundRepeats.ToConverter();
         public static readonly IValueConverter BoxModelConverter = Map.BoxModels.ToConverter();

@@ -64,6 +64,25 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
         }
 
         [Fact]
+        public void Save_WithOutlineUrl_WritesUriActionNotDest()
+        {
+            // An outline with a Url and no DestinationPage writes an /A URI action instead of /Dest
+            // (mutually exclusive per PDF 32000-1:2008 Table 153/176) - see PdfOutline.PrepareForSave.
+            var doc = new PdfDocument();
+            doc.AddPage();
+            var outline = new PeachPDF.PdfSharpCore.Pdf.PdfOutline { Title = "External", Url = "https://example.com" };
+            doc.Outlines.Add(outline);
+
+            using var stream = new MemoryStream();
+            doc.Save(stream);
+
+            var text = System.Text.Encoding.ASCII.GetString(stream.ToArray());
+            Assert.Contains("/S/URI", text);
+            Assert.Contains("https://example.com", text);
+            Assert.DoesNotContain("/Dest", text);
+        }
+
+        [Fact]
         public void Save_WithDefaultTextColor_OmitsColorEntry()
         {
             var doc = new PdfDocument();

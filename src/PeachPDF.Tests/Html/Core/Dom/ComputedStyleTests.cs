@@ -235,6 +235,32 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public void InheritStyle_Everything_DoesNotCopyBookmarkProperties()
+        {
+            // Unlike PdfTagType/box-sizing above, bookmark-level/-label/-state/-target deliberately do
+            // NOT carry over on the "everything" path (CssProxyBox's repeated header/footer clone,
+            // DomParser's inline/block split) - a bookmark is per-SOURCE-ELEMENT, not per-box, so an
+            // inline element carrying bookmark-level that gets split into multiple sibling CssBoxes
+            // (e.g. because it wraps a block child) must produce exactly one bookmark, not one per
+            // split fragment. See CssBox.StyleProperties.cs's InheritStyle "everything" branch.
+            var source = new CssBox(null, null)
+            {
+                BookmarkLevel = "2",
+                BookmarkLabel = "\"Custom\"",
+                BookmarkState = "closed",
+                BookmarkTarget = "url(#other)"
+            };
+            var clone = new CssBox(null, null);
+
+            clone.InheritStyle(source, everything: true);
+
+            Assert.Equal("none", clone.BookmarkLevel);
+            Assert.Equal("content(text)", clone.BookmarkLabel);
+            Assert.Equal("open", clone.BookmarkState);
+            Assert.Equal("self", clone.BookmarkTarget);
+        }
+
+        [Fact]
         public void InheritStyle_UnicodeBidi_DoesNotAdoptParentsValue()
         {
             // unicode-bidi is CSS-spec Inherited: no, unlike every other property in the otherwise-100%-
