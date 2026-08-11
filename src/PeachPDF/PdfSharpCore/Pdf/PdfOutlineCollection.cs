@@ -95,16 +95,6 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
             AddToOutlinesTree(outline);
             _outlines.Add(outline);
-
-            if (outline.Opened)
-            {
-                outline = _parent;
-                while (outline != null)
-                {
-                    outline.OpenCount++;
-                    outline = outline.Parent;
-                }
-            }
         }
 
         /// <summary>

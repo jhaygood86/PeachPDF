@@ -111,5 +111,44 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
 
             Assert.Equal(1, parent.CountOpen());
         }
+
+        [Fact]
+        public void PrepareForSave_ClosedIntermediateItem_ExcludesHiddenDescendantsFromAncestorCounts()
+        {
+            // Regression test for #715: a closed intermediate item must not let its own
+            // descendants leak into an ancestor's /Count, and must itself carry the negative
+            // count of what would appear if it were reopened (PDF 32000-1 Table 152/153).
+            var doc = new PdfDocument();
+            var page = doc.AddPage();
+            var top = doc.Outlines.Add("Top", page, opened: true);
+            var closedMid = top.Outlines.Add("Closed mid", page, opened: false);
+            closedMid.Outlines.Add("H3 A", page, opened: true);
+            closedMid.Outlines.Add("H3 B", page, opened: true);
+
+            var root = top.Parent;
+            root.PrepareForSave();
+
+            Assert.Equal(2, root.Elements.GetInteger(PdfOutline.Keys.Count));
+            Assert.Equal(1, top.Elements.GetInteger(PdfOutline.Keys.Count));
+            Assert.Equal(-2, closedMid.Elements.GetInteger(PdfOutline.Keys.Count));
+        }
+
+        [Fact]
+        public void PrepareForSave_ClosedItemWithClosedChildren_StillWritesCount()
+        {
+            // An item with descendants must always carry a /Count entry, even when none of its
+            // children (or their descendants) are open -- the PDF spec requires it whenever the
+            // item has any descendants at all, not only when some are open.
+            var doc = new PdfDocument();
+            var page = doc.AddPage();
+            var closedParent = doc.Outlines.Add("Closed parent", page, opened: false);
+            closedParent.Outlines.Add("Closed child A", page, opened: false);
+            closedParent.Outlines.Add("Closed child B", page, opened: false);
+
+            var root = closedParent.Parent;
+            root.PrepareForSave();
+
+            Assert.Equal(-2, closedParent.Elements.GetInteger(PdfOutline.Keys.Count));
+        }
     }
 }
