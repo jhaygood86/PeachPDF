@@ -284,6 +284,11 @@ namespace PeachPDF.CSS
         /// </summary>
         public static readonly IValueConverter OutlineStyleConverter = Map.OutlineStyles.ToConverter();
         public static readonly IValueConverter PdfTagTypeConverter = Map.PdfTagTypes.ToConverter();
+        public static readonly IValueConverter PdfFormFieldConverter = Map.PdfFormFieldKinds.ToConverter();
+        public static readonly IValueConverter PdfFormFieldAutoFontSizeConverter = Toggle(Keywords.Auto, Keywords.None);
+        public static readonly IValueConverter PdfFormFieldCombConverter = PositiveIntegerConverter.OrNone();
+        public static readonly IValueConverter PdfFormFieldDoNotScrollConverter = Toggle(Keywords.Auto, Keywords.None);
+        public static readonly IValueConverter PrincePdfFormFieldSettingsConverter = new PrincePdfFormFieldSettingsShorthandConverter();
         public static readonly IValueConverter BookmarkLevelConverter = PositiveIntegerConverter.OrNone();
         public static readonly IValueConverter BookmarkStateConverter = Map.BookmarkStates.ToConverter();
         public static readonly IValueConverter BookmarkLabelConverter = ContentListItemConverter.Many();

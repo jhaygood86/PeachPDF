@@ -87,6 +87,8 @@ internal static class CliProgram
               --pdf-creator=CREATOR  Set the PDF creator.
               --pdf-lang=LANG        Set the PDF language (/Lang).
               --tagged-pdf           Emit a tagged (PDF/UA) structure tree.
+              --interactive-pdf-forms
+                                     Emit fillable AcroForm fields for form elements.
               --no-compress          Do not compress PDF content streams.
 
         Network (HTTP inputs and resources):

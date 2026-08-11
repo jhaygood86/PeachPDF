@@ -436,5 +436,13 @@
         public const string Note = "Note";
         public const string Reference = "Reference";
         public const string Link = "Link";
+        public const string Checkbox = "checkbox";
+        public const string Radio = "radio";
+        public const string Select = "select";
+        public const string Comb = "comb";
+        public const string AutoFontSize = "auto-font-size";
+        public const string DoNotScroll = "do-not-scroll";
+        public const string Password = "password";
+        public const string Email = "email";
     }
 }

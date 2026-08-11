@@ -169,6 +169,16 @@ namespace PeachPDF.CSS
                 {Keywords.Reference, PdfTagType.Reference},
                 {Keywords.Link, PdfTagType.Link}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, PdfFormFieldKeyword> PdfFormFieldKinds =
+            new Dictionary<string, PdfFormFieldKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, PdfFormFieldKeyword.Auto},
+                {Keywords.None, PdfFormFieldKeyword.None},
+                {Keywords.Text, PdfFormFieldKeyword.Text},
+                {Keywords.Checkbox, PdfFormFieldKeyword.Checkbox},
+                {Keywords.Radio, PdfFormFieldKeyword.Radio},
+                {Keywords.Select, PdfFormFieldKeyword.Select}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, BoxModel> BoxModels =
             new Dictionary<string, BoxModel>(StringComparer.OrdinalIgnoreCase)
             {

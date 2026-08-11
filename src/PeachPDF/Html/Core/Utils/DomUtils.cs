@@ -358,6 +358,30 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Collect every visible &lt;input&gt;/&lt;select&gt; box in document order, for
+        /// <c>PdfGenerator.HandleFormFields</c> to classify and place - the same shape as
+        /// <see cref="GetAllLinkBoxes"/>, since both are post-layout geometry queries over the live
+        /// box tree rather than paint (see CLAUDE.md's fragment-tree-is-the-paint-contract rule, which
+        /// this is deliberately outside of, exactly like <see cref="GetAllLinkBoxes"/> already is).
+        /// </summary>
+        public static void GetAllFormFieldBoxes(CssBox? box, List<CssBox> fieldBoxes)
+        {
+            switch (box)
+            {
+                case null:
+                    return;
+                case CssBoxFormField { Visibility.Value: Visibility.Visible }:
+                    fieldBoxes.Add(box);
+                    break;
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                GetAllFormFieldBoxes(childBox, fieldBoxes);
+            }
+        }
+
+        /// <summary>
         /// Collect every SVG-sourced link candidate (from <c>&lt;a&gt;</c> elements inside an inline
         /// <c>&lt;svg&gt;</c> or a standalone <c>&lt;img src="x.svg"&gt;</c>) found anywhere in the
         /// HTML tree, already resolved to page-space rectangles via <see cref="SvgRenderer.CollectLinks"/>.

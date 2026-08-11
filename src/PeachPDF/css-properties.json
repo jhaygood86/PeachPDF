@@ -746,6 +746,54 @@
       }
     },
     {
+      "name": "-peachpdf-pdf-form-field",
+      "comment": "PeachPDF's PDF-output extension for interactive form fields (no W3C spec - see issue #709). auto infers the field kind from the element (tag name + <input type=>) via FormFieldMapper.Classify; text/checkbox/radio/select force a kind regardless of the element's own type. Inert unless PdfGenerateConfig.EnableInteractivePdfForms is set, and only ever applies to a real <input>/<select> element - a declaration on any other element is simply ignored. cssom/string-stored, like -peachpdf-pdf-tag-type - FormFieldMapper re-resolves the raw string via Map.PdfFormFieldKinds.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "PdfFormField",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-form-field-auto-font-size",
+      "comment": "PeachPDF's own spelling of Prince's -prince-pdf-form-field-settings 'auto-font-size' sub-option (see the shorthand's own entry) - when auto, a generated text field's /DA font size is written as 0 (PDF's own auto-size convention) instead of a fixed size. Only meaningful when the element also classifies to a text field.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "PdfFormFieldAutoFontSize",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-form-field-comb",
+      "comment": "PeachPDF's own spelling of Prince's -prince-pdf-form-field-settings 'comb(<integer>)' sub-option (see the shorthand's own entry) - none | <integer>, the number of evenly-spaced character cells. Sets the PDF field flag bit Comb and /MaxLen. Only meaningful when the element also classifies to a text field.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "PdfFormFieldComb",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-form-field-do-not-scroll",
+      "comment": "PeachPDF's own spelling of Prince's -prince-pdf-form-field-settings 'do-not-scroll' sub-option (see the shorthand's own entry) - sets the PDF field flag bit DoNotScroll. No appearance-stream effect, just a flag PDF readers use for their own editing UI. Only meaningful when the element also classifies to a text field.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "PdfFormFieldDoNotScroll",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
       "name": "bookmark-level",
       "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-level). cssom/string-stored, like -peachpdf-pdf-tag-type - BookmarkOutlineBuilder parses the raw none/<integer> string itself (mirroring StructureTagMapper.Classify's own re-parse of PdfTagType), since the CSS-OM BookmarkLevelProperty converter (Converters.BookmarkLevelConverter) already validates the grammar at declaration time. h1-h6 default to 1-6 via CssDefaults.cs's UA stylesheet, everything else defaults to none (this property's own initial value), which is itself the zero-config \"no bookmarks\" state.",
       "inherited": false,

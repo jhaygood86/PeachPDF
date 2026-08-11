@@ -2405,6 +2405,17 @@ namespace PeachPDF.Html.Core.Parse
 
             foreach (var childBox in box.Boxes)
             {
+                // A display:none child renders nothing at all - it is neither the "inline" half nor
+                // the "block" half of this box's content, so it must not be able to make an otherwise
+                // purely-inline box look like it has a block-in-inline problem (reproduced by an
+                // inline-block <select> with a display:none <option> child: without this, the
+                // <option> - "not inline" per CssBox.IsInline, since its ActualDisplay is "none", not
+                // "inline" - made this method report false for a <select> holding only display:none
+                // children, which made the SELECT'S OWN PARENT look like it had block-in-inline
+                // content, splitting the parent and hoisting the option out of <select> entirely).
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.None)
+                    continue;
+
                 if (!childBox.IsInline || !ContainsInlinesOnlyDeep(childBox))
                 {
                     return false;
@@ -2451,6 +2462,12 @@ namespace PeachPDF.Html.Core.Parse
             bool hasInline = false;
             for (int i = 0; i < box.Boxes.Count && (!hasBlock || !hasInline); i++)
             {
+                // A display:none child is neither half of "variant" content (see the identical
+                // reasoning in ContainsInlinesOnlyDeep) - it must not be able to make an otherwise
+                // uniformly-inline run of siblings look like it needs a block wrapper.
+                if (box.Boxes[i].DerivedStyle.ActualDisplay == Keywords.None)
+                    continue;
+
                 var isBlock = !box.Boxes[i].IsInline;
                 hasBlock = hasBlock || isBlock;
                 hasInline = hasInline || JoinsTheInlineRun(box.Boxes[i]);

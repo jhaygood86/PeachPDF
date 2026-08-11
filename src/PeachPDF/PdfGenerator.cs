@@ -296,6 +296,13 @@ namespace PeachPDF
             var structureTagBuilder = config.EnableTaggedPdf ? new StructureTagBuilder(document.PdfDocument) : null;
             container.HtmlContainerInt.StructureTagBuilder = structureTagBuilder;
 
+            // Same shape as structureTagBuilder above: only constructed when interactive PDF forms are
+            // enabled - FragmentContentPainters.For and HandleFormFields (below) both check
+            // HtmlContainerInt.FormFieldBuilder for null and skip all classification/bookkeeping when
+            // it's not set, so this is the single point that gates the whole feature off by default.
+            var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.PdfDocument, container.HtmlContainerInt.Adapter) : null;
+            container.HtmlContainerInt.FormFieldBuilder = formFieldBuilder;
+
             // Per CSS2.1 §14.2 the "canvas" (here: every page) is filled with body's background if it
             // declares one, else html's. Resolved during layout, since the fragment tree's own
             // page-materialization rule depends on it.
@@ -434,6 +441,11 @@ namespace PeachPDF
             // outline afterwards adds zero net full-tree traversals.
             var bookmarkBoxes = new List<CssBox>();
             HandleLinks(document.PdfDocument, container, orgPageSize, fragmentainers, bookmarkBoxes, structureTagBuilder);
+
+            if (formFieldBuilder != null)
+            {
+                HandleFormFields(document.PdfDocument, container, orgPageSize, fragmentainers, formFieldBuilder);
+            }
 
             // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
             // UA stylesheet, everything else defaults to none), so this is unconditional: a document
@@ -639,6 +651,50 @@ namespace PeachPDF
             }
 
             HandleRunningElementLinks(document, container, orgPageSize, fragmentainers, ResolveAnchorTarget, structureTagBuilder);
+        }
+
+        /// <summary>
+        /// Creates AcroForm fields/widgets for every classified &lt;input&gt;/&lt;select&gt; box, one
+        /// per page. Mirrors <see cref="HandleLinks"/>'s own per-box rect-to-page resolution (matching
+        /// its exact math, since both convert a post-layout box rect to page-space PDF points against
+        /// the same slot geometry) rather than <see cref="HandleLinks"/>'s multi-slot loop, which
+        /// exists only because a link's box can span a page break - a form-control box never can
+        /// (see <c>MonolithicContent.IsReplaced</c>'s <c>CssBoxFormField</c> arm), so each
+        /// field resolves to exactly one page and one rect.
+        /// </summary>
+        private static void HandleFormFields(PdfDocument document, HtmlContainer container, XSize orgPageSize, IReadOnlyList<FragmentainerFragment> fragmentainers, FormFieldBuilder formFieldBuilder)
+        {
+            var inner = container.HtmlContainerInt;
+            var ppp = container.PixelsPerPoint;
+            var (slotToPage, _) = PageAnchorResolver.BuildSlotToPageMap(fragmentainers);
+
+            var fieldBoxes = new List<CssBox>();
+            DomUtils.GetAllFormFieldBoxes(inner.Root, fieldBoxes);
+
+            foreach (var box in fieldBoxes)
+            {
+                var classification = FormFieldMapper.Classify(box);
+                if (classification.Kind == FormFieldKind.None)
+                    continue;
+
+                var pixelRect = CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+
+                var slot = Math.Max(inner.PageIndexOf(pixelRect.Top), 0);
+                if (!slotToPage.TryGetValue(slot, out var pageIndex) || pageIndex >= document.Pages.Count)
+                    continue;
+
+                var slotGeom = inner.PageGeometry.GetPage(slot);
+                var topPt = slotGeom.MarginTopPt + (pixelRect.Top - inner.PageTopOf(slot)) / ppp;
+                var leftPt = slotGeom.MarginLeftPt + (pixelRect.Left - inner.MarginLeft) / ppp;
+                var widthPt = pixelRect.Width / ppp;
+                var heightPt = pixelRect.Height / ppp;
+
+                if (widthPt <= 0 || heightPt <= 0)
+                    continue;
+
+                var xRect = new XRect(leftPt, orgPageSize.Height - (topPt + heightPt), widthPt, heightPt);
+                formFieldBuilder.AddField(document.Pages[pageIndex], new PdfRectangle(xRect), box, classification);
+            }
         }
 
         /// <summary>

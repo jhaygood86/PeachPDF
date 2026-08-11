@@ -54,7 +54,7 @@ namespace PeachPDF.Html.Core.Utils
         //        public const string I = "I";
         public const string Iframe = "iframe";
         public const string Img = "img";
-        //        public const string INPUT = "INPUT";
+        public const string Input = "input";
         //        public const string INS = "INS";
         //        public const string ISINDEX = "ISINDEX";
         //        public const string KBD = "KBD";
@@ -72,7 +72,7 @@ namespace PeachPDF.Html.Core.Utils
         public const string Object = "object";
         //        public const string OL = "OL";
         //        public const string OPTGROUP = "OPTGROUP";
-        //        public const string OPTION = "OPTION";
+        public const string Option = "option";
         //        public const string P = "P";
         //        public const string PARAM = "PARAM";
         //        public const string PRE = "PRE";
@@ -80,7 +80,7 @@ namespace PeachPDF.Html.Core.Utils
         //        public const string S = "S";
         //        public const string SAMP = "SAMP";
         //        public const string SCRIPT = "SCRIPT";
-        //        public const string SELECT = "SELECT";
+        public const string Select = "select";
         //        public const string SMALL = "SMALL";
         //        public const string SPAN = "SPAN";
         //        public const string STRIKE = "STRIKE";

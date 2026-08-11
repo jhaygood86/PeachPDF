@@ -192,14 +192,14 @@ Example:
 
 ### Forms
 
-Form elements are rendered as static boxes. There is no interactive behavior — inputs cannot be focused or edited, and forms cannot be submitted.
+Form elements are rendered as static boxes by default. There is no interactive behavior unless [interactive PDF forms output](#interactive-pdf-forms-support) is explicitly enabled — inputs cannot be focused or edited, and forms cannot be submitted.
 
 | Element | MDN Reference | Notes |
 |---------|--------------|-------|
-| `button` | [button](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/button) | Rendered as a static `inline-block` box |
-| `input` | [input](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input) | Rendered as a static `inline-block` box; no interactivity |
-| `select` | [select](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select) | Rendered as a static `inline-block` box |
-| `textarea` | [textarea](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/textarea) | Rendered as a static `inline-block` box |
+| `button` | [button](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/button) | Rendered as a static `inline-block` box; never becomes an interactive AcroForm field, even with interactive PDF forms enabled |
+| `input` | [input](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input) | Rendered as a static `inline-block` box with a browser-like default size. With [interactive PDF forms](#interactive-pdf-forms-support) enabled, becomes a real fillable text, checkbox, or radio field depending on its `type` |
+| `select` | [select](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select) | Rendered as a static `inline-block` box. With [interactive PDF forms](#interactive-pdf-forms-support) enabled, becomes a real fillable combo-box field populated from its `option` children |
+| `textarea` | [textarea](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/textarea) | Rendered as a static `inline-block` box; never becomes an interactive AcroForm field, even with interactive PDF forms enabled |
 
 ### Scripting
 
@@ -1478,6 +1478,89 @@ Any tag not listed here (e.g. `<cite>`, `<mark>`, `<time>`) falls through to the
 #### Known limitation — anonymous (CSS-generated) table structure cannot be tag-overridden
 
 A table assembled purely through CSS (`display: table` / `table-row` / `table-cell` on arbitrary elements, rather than real `<table>`/`<tr>`/`<td>` markup) gets its row/cell/group tagging (`TR`/`TH`-or-`TD`/`THead`/`TBody`/`TFoot`) from a hardcoded fallback based on the computed `display` value, **not** from `-peachpdf-pdf-tag-type` — the synthesized anonymous boxes PeachPDF creates to complete the table model have no source HTML element for any selector, author or default stylesheet, to match against. Authors who need override control over table structure tagging (e.g. distinguishing header cells from data cells, which the anonymous fallback cannot do — it always tags anonymous cells `TD`) must use real `<table>`/`<tr>`/`<th>`/`<td>`/etc. markup rather than relying on CSS's table display model to synthesize the structure implicitly.
+
+---
+
+## Interactive PDF Forms Support
+
+PeachPDF can optionally produce a *fillable* PDF — real AcroForm fields (ISO 32000-1 §12.7) a reader can type into, check, or select, instead of the default static rendering. There is no W3C CSS spec for this (it's inherently PDF-specific); PeachPDF exposes it as its own CSS extension, the same shape as [`-peachpdf-pdf-tag-type`](#-peachpdf-pdf-tag-type-tagged-pdf-structure-type) above.
+
+Interactive forms are **off by default** and enabled with a single `PdfGenerateConfig` flag — see [Enabling interactive PDF forms](usage-examples.md#enabling-interactive-pdf-forms) in Usage Examples for the configuration snippet. When `EnableInteractivePdfForms` is left at its default (`false`), no `-peachpdf-pdf-form-field*` property is ever read, no AcroForm object is created, and the page's own static rendering is unchanged — output is byte-for-byte the same as if the feature didn't exist in the codebase at all.
+
+Only real `<input>`/`<select>` elements are ever eligible to become a field — `<textarea>`, `<button>`, and any other element are always rendered as static boxes, regardless of the flag. This is a deliberate scope boundary for the initial implementation, not a bug. A `<select multiple>` is likewise not yet supported as a multi-select list box — it becomes a single-value combo box, honoring only the first `selected` `<option>`.
+
+### Field appearance and styling
+
+A field's `border`, `background-color`, `padding`, `color`, and `font` (family, weight, style, size — including a custom `@font-face`) are all ordinary CSS, read from the element exactly like any other box's, and drive the actual widget appearance a reader shows — not just the flag-off static look:
+
+```css
+input[type=text] {
+  border: 1pt solid #8a2be2;
+  background-color: #f5e9ff;
+  padding: 4pt 8pt;
+  color: #4b0082;
+  font: italic 12pt Georgia, serif;
+}
+```
+
+`input`/`select` get a plain default appearance (a thin solid black border, white background, small horizontal/vertical padding) from PeachPDF's own UA stylesheet when the author sets none of these — the same look every field had before per-field styling existed. A checkbox/radio's circular shape and check-mark/dot glyph are fixed (not stylable via `border-radius` or similar); its border/background/glyph color still follow `border`/`background-color`/`color`.
+
+Once a user actually starts typing into a text/select field, a reader regenerates its look from `/DA` (PDF's own "default appearance" string) rather than the baked-in widget appearance above — `/DA` always uses the PDF standard Helvetica font (Latin-1/WinAnsi only), regardless of the field's own `font-family`. This is deliberate: PeachPDF, like most PDF generators, embeds only the glyphs a document's text actually used, so a custom embedded font has no glyph ready for a character the user types that never appeared in the original value — Helvetica's complete, no-embedding-needed WinAnsi coverage avoids that failure mode for live editing. A field's *initial* appearance (what the PDF shows before anyone edits it) always uses the real font, including for non-Latin-1 text.
+
+### `-peachpdf-pdf-form-field`
+
+| | |
+|---|---|
+| Initial value | `auto` |
+| Applies to | `input`, `select` |
+| Inherited | No |
+| Percentages | N/A |
+
+```css
+/* Force a styled <div>-like custom control to become a checkbox field (only works on a real <input>/<select> - a <div> never becomes a field regardless) */
+input.agree-checkbox { -peachpdf-pdf-form-field: checkbox; }
+
+/* Opt an input out of interactive forms even though EnableInteractivePdfForms is on */
+input[readonly] { -peachpdf-pdf-form-field: none; }
+```
+
+Accepted values (case-insensitive): `auto`, `none`, `text`, `checkbox`, `radio`, `select`.
+
+- **`auto`** (the initial value) — the field kind is inferred from the element: an `<input>` with `type="checkbox"` becomes a checkbox field, `type="radio"` becomes a radio field, a `<select>` becomes a select (combo-box) field, and every other `<input>` type (`text`, `email`, `password`, `number`, `tel`, `url`, `search`, `date`, or no `type` at all) becomes a text field. `type="hidden"`, `"submit"`, `"reset"`, `"button"`, `"image"`, and `"file"` are not text-like and resolve to `none` under `auto`.
+- **`none`** — the element never becomes an AcroForm field, however it classifies under `auto`; it keeps its static-box rendering.
+- **`text`**, **`checkbox`**, **`radio`**, **`select`** — forces the field kind regardless of the element's own tag/`type` (e.g. an `<input type="text">` forced to `checkbox` still becomes a checkbox field).
+
+Radio buttons sharing the same `name` attribute become one AcroForm field with mutually exclusive states, exactly like an HTML radio group's own mutual-exclusivity rule.
+
+### Text-field sub-settings
+
+Three more longhand properties, meaningful only on a field that resolves to `text` (directly or via `auto`):
+
+| | |
+|---|---|
+| Initial value | `none` (`-peachpdf-pdf-form-field-comb` also accepts an integer) |
+| Applies to | `input` |
+| Inherited | No |
+| Percentages | N/A |
+
+- **`-peachpdf-pdf-form-field-auto-font-size: auto \| none`** — when `auto`, the field's font size auto-fits its box height instead of using a fixed size.
+- **`-peachpdf-pdf-form-field-comb: none \| <integer>`** — divides the field into the given number of evenly spaced character cells (ISO 32000-1's "comb" field), the classic boxed layout for things like a one-character-per-box confirmation code input.
+- **`-peachpdf-pdf-form-field-do-not-scroll: auto \| none`** — when `auto`, tells the PDF reader not to scroll the field's text when it overflows the box.
+
+```css
+input.confirmation-code { -peachpdf-pdf-form-field-comb: 6; }
+```
+
+### Default field-kind inference
+
+| HTML | `-peachpdf-pdf-form-field: auto` resolves to |
+|------|------------------------------------------------|
+| `select` | `select` |
+| `input[type=checkbox]` | `checkbox` |
+| `input[type=radio]` | `radio` |
+| `input[type=text]`, `input[type=email]`, `input[type=password]`, `input[type=number]`, `input[type=tel]`, `input[type=url]`, `input[type=search]`, `input[type=date]`, `input` (no `type`) | `text` |
+| `input[type=hidden]`, `input[type=submit]`, `input[type=reset]`, `input[type=button]`, `input[type=image]`, `input[type=file]` | `none` |
+| `textarea`, `button`, any other element | `none` (fixed — cannot be overridden) |
 
 ---
 

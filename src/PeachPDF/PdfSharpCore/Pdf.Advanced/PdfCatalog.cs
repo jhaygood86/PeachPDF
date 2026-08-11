@@ -27,6 +27,7 @@
 // DEALINGS IN THE SOFTWARE.
 #endregion
 
+using PeachPDF.PdfSharpCore.Pdf.AcroForms;
 using PeachPDF.PdfSharpCore.Pdf.IO;
 using PeachPDF.PdfSharpCore.Pdf.Structure;
 
@@ -166,6 +167,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         PdfStructureTreeRoot _structureTreeRoot = null!;
 
         /// <summary>
+        /// Gets the interactive form dictionary ("/AcroForm"), lazily creating it on first access.
+        /// Only ever touched when interactive PDF forms output is enabled - untouched, this stays
+        /// null and no indirect object is allocated for it.
+        /// </summary>
+        internal PdfAcroForm AcroForm
+        {
+            get { return _acroForm ??= (PdfAcroForm)Elements.GetValue(Keys.AcroForm, VCF.CreateIndirect); }
+        }
+        PdfAcroForm _acroForm = null!;
+
+        /// <summary>
         /// Gets the mark information dictionary ("/MarkInfo"), lazily creating it on first access.
         /// </summary>
         internal PdfMarkInformation MarkInfo
@@ -182,6 +194,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             _pages?.PrepareForSave();
 
             _structureTreeRoot?.PrepareForSave();
+            _acroForm?.PrepareForSave();
 
             if (_outline == null || _outline.Outlines.Count <= 0) return;
 
@@ -280,6 +293,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// </summary>
             [KeyInfo("1.3", KeyType.Dictionary | KeyType.Optional, typeof(PdfStructureTreeRoot))]
             public const string StructTreeRoot = "/StructTreeRoot";
+
+            /// <summary>
+            /// (Optional; must be an indirect reference) The document's interactive form (AcroForm)
+            /// dictionary.
+            /// </summary>
+            [KeyInfo("1.2", KeyType.Dictionary | KeyType.Optional, typeof(PdfAcroForm))]
+            public const string AcroForm = "/AcroForm";
 
             /// <summary>
             /// (Optional; PDF 1.4) A mark information dictionary containing information

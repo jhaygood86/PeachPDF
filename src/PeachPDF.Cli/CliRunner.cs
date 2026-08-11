@@ -89,6 +89,7 @@ internal static class CliRunner
             PageOrientation = options.Orientation ?? PageOrientation.Portrait,
             CompressContentStreams = !options.NoCompress,
             EnableTaggedPdf = options.TaggedPdf,
+            EnableInteractivePdfForms = options.InteractivePdfForms,
             Media = options.Media ?? "print",
             IgnoreAuthorStyleSheets = options.NoAuthorStyle,
             // Set on the config rather than on the loader, so it holds for every input kind - including

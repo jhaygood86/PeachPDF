@@ -80,6 +80,7 @@ internal sealed class CliOptions
     // --- PDF output ---
     public bool NoCompress { get; set; }
     public bool TaggedPdf { get; set; }
+    public bool InteractivePdfForms { get; set; }
     public string? PdfTitle { get; set; }
     public string? PdfAuthor { get; set; }
     public string? PdfSubject { get; set; }

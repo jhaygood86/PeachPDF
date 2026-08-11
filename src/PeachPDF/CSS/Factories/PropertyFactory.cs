@@ -391,6 +391,12 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.StringSet, () => new StringSetProperty());
             AddLonghand(PropertyNames.PageName, () => new PageNameProperty());
             AddLonghand(PropertyNames.PdfTagType, () => new PdfTagTypeProperty());
+            AddLonghand(PropertyNames.PdfFormField, () => new PdfFormFieldProperty());
+            AddLonghand(PropertyNames.PdfFormFieldAutoFontSize, () => new PdfFormFieldAutoFontSizeProperty());
+            AddLonghand(PropertyNames.PdfFormFieldComb, () => new PdfFormFieldCombProperty());
+            AddLonghand(PropertyNames.PdfFormFieldDoNotScroll, () => new PdfFormFieldDoNotScrollProperty());
+            AddShorthand(PropertyNames.PrincePdfFormFieldSettings, () => new PrincePdfFormFieldSettingsProperty(),
+                PropertyNames.PdfFormField, PropertyNames.PdfFormFieldAutoFontSize, PropertyNames.PdfFormFieldComb, PropertyNames.PdfFormFieldDoNotScroll);
             AddLonghand(PropertyNames.BookmarkLevel, () => new BookmarkLevelProperty());
             AddLonghand(PropertyNames.BookmarkLabel, () => new BookmarkLabelProperty());
             AddLonghand(PropertyNames.BookmarkState, () => new BookmarkStateProperty());

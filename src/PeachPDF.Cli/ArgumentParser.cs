@@ -123,6 +123,7 @@ internal static class ArgumentParser
 
                 case "no-compress": _options.NoCompress = true; break;
                 case "tagged-pdf": _options.TaggedPdf = true; break;
+                case "interactive-pdf-forms": _options.InteractivePdfForms = true; break;
                 case "pdf-title": _options.PdfTitle = RequireValue(name, inlineValue) ?? _options.PdfTitle; break;
                 case "pdf-author": _options.PdfAuthor = RequireValue(name, inlineValue) ?? _options.PdfAuthor; break;
                 case "pdf-subject": _options.PdfSubject = RequireValue(name, inlineValue) ?? _options.PdfSubject; break;
