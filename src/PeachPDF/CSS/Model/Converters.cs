@@ -264,6 +264,13 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter DefaultFontFamiliesConverter = Map.DefaultFontFamilies.ToConverter();
         public static readonly IValueConverter LineStyleConverter = Map.LineStyles.ToConverter();
+        /// <summary>
+        /// <c>outline-style</c>'s own converter (<c>&lt;'border-style'&gt; | auto</c>, CSS-UI-4 §4) - a
+        /// separate converter/keyword map from <see cref="LineStyleConverter"/> so that <c>auto</c>
+        /// stays an outline-style-only value; every <c>border-*-style</c>/<c>column-rule-style</c>
+        /// property keeps using <see cref="LineStyleConverter"/> unchanged.
+        /// </summary>
+        public static readonly IValueConverter OutlineStyleConverter = Map.OutlineStyles.ToConverter();
         public static readonly IValueConverter PdfTagTypeConverter = Map.PdfTagTypes.ToConverter();
         public static readonly IValueConverter BackgroundAttachmentConverter = Map.BackgroundAttachments.ToConverter();
         public static readonly IValueConverter BackgroundRepeatConverter = Map.BackgroundRepeats.ToConverter();

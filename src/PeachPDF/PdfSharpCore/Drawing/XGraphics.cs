@@ -1895,6 +1895,16 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
+        /// Activates a separable/HSL PDF blend mode for subsequent painting - see
+        /// <see cref="XGraphicsPdfRenderer.SetBlendMode"/>. Scope with <see cref="Save()"/>/
+        /// <see cref="Restore(XGraphicsState)"/> so the blend mode is restored to Normal afterward.
+        /// </summary>
+        internal void SetBlendMode(string pdfBlendModeName)
+        {
+            (_renderer as XGraphicsPdfRenderer)?.SetBlendMode(pdfBlendModeName);
+        }
+
+        /// <summary>
         /// Begins a tagged marked-content sequence for the given structure type and marked-content
         /// identifier - see <see cref="XGraphicsPdfRenderer.BeginMarkedContent"/>.
         /// </summary>

@@ -197,6 +197,8 @@ namespace PeachPDF.Tests.TestSupport
         public sealed record PushClipCall(RRect Rect);
         public sealed record PopClipCall;
         public sealed record DrawImageCall(RImage Image, RRect DestRect);
+        public sealed record PushBlendModeCall(RBlendMode Mode);
+        public sealed record PopBlendModeCall;
 
         public List<object> Log { get; } = [];
         public List<DrawStringCall> DrawStringCalls { get; } = [];
@@ -261,6 +263,8 @@ namespace PeachPDF.Tests.TestSupport
             Log.Add(new PopClipCall());
         }
         public override void PushClipExclude(RRect rect) { }
+        public override void PushBlendMode(RBlendMode mode) => Log.Add(new PushBlendModeCall(mode));
+        public override void PopBlendMode() => Log.Add(new PopBlendModeCall());
         public override object SetAntiAliasSmoothingMode() => new object();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }
         public override RGraphicsPath GetGraphicsPath() => new TestGraphicsPath();

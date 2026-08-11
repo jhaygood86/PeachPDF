@@ -356,6 +356,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.OutlineColor, () => new OutlineColorProperty(), true);
             AddLonghand(PropertyNames.OutlineStyle, () => new OutlineStyleProperty());
             AddLonghand(PropertyNames.OutlineWidth, () => new OutlineWidthProperty(), true);
+            AddLonghand(PropertyNames.OutlineOffset, () => new OutlineOffsetProperty(), true);
 
             AddLonghand(PropertyNames.Overflow, () => new OverflowProperty());
             AddLonghand(PropertyNames.OverflowWrap, () => new OverflowWrapProperty());

@@ -282,6 +282,22 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 
 Known limitation: `double`/`groove`/`ridge` combined with `border-radius` on the same edge falls back to a single solid-colored stroke at the full border width — full rounded rendering of these three styles (two concentric arcs, or a two-tone beveled arc) is out of scope for CSS1 compliance.
 
+### Outline
+
+| Property | MDN Reference | Notes |
+|----------|--------------|-------|
+| `outline` | [outline](https://developer.mozilla.org/en-US/docs/Web/CSS/outline) | Shorthand for `outline-color`, `outline-style`, `outline-width`, in any order |
+| `outline-color` | [outline-color](https://developer.mozilla.org/en-US/docs/Web/CSS/outline-color) | Any `<color>`, `currentcolor` (the initial value), or the legacy `invert` keyword |
+| `outline-style` | [outline-style](https://developer.mozilla.org/en-US/docs/Web/CSS/outline-style) | `none` (initial), `auto`, `solid`, `dashed`, `dotted`, `double`, `groove`, `ridge`, `inset`, `outset` |
+| `outline-width` | [outline-width](https://developer.mozilla.org/en-US/docs/Web/CSS/outline-width) | `<length>`, or `thin`/`medium`/`thick` |
+| `outline-offset` | [outline-offset](https://developer.mozilla.org/en-US/docs/Web/CSS/outline-offset) | `<length>`, may be negative to pull the outline back over the border |
+
+Unlike `border`, outline is layout-neutral: it never participates in box sizing, is drawn entirely outside the border edge (offset by `outline-offset`), and can visually overlap sibling content without shifting anything. It does not follow `border-radius` — PeachPDF always draws a rectangular outline, which CSS Basic User Interface 4 explicitly leaves as a UA choice (a UA *may* round it to match, but is not required to).
+
+`outline-style: auto` — a UA-defined appearance, typically used for a browser's own focus ring — renders identically to `solid`.
+
+`outline-color: invert` is a legacy value: rather than approximating it with a fixed color, PeachPDF renders it as a true per-pixel color inversion of whatever is underneath the outline, using a PDF blend mode (`/Difference` composited with white, which is mathematically equivalent to inverting the backdrop). This is a genuine inversion, not a fixed guess at a contrasting color, and it composites correctly regardless of what's behind the outline at render time.
+
 ### Box Shadow
 
 | Property | MDN Reference | Notes |
@@ -1475,5 +1491,4 @@ The following CSS features are not supported:
 - **Filters and effects** — `filter`, `backdrop-filter`, `mix-blend-mode` (not parsed at all)
 - **`text-shadow`**
 - **`word-wrap` / `overflow-wrap`**
-- **`outline`** and `outline-*` properties
 - **CSS selectors** — see the [CSS Selectors](#css-selectors) section above for what is and is not supported

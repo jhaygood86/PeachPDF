@@ -556,6 +556,64 @@
       }
     },
     {
+      "name": "outline-color",
+      "inherited": false,
+      "initialValue": "currentcolor",
+      "cssDataType": ["color", "current-color", "keyword"],
+      "supportedValues": ["invert"],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "OutlineColor",
+        "invalidates": "InvalidateOutlineColor",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "outline-style",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "OutlineStyle",
+        "keywordMap": "Map.OutlineStyles",
+        "fallback": "OutlineStyle.None"
+      },
+      "html": {
+        "propertyPath": "OutlineStyle",
+        "csharpDataType": "CssProperty<OutlineStyle>",
+        "area": "BorderArea",
+        "getterExpression": "{box}.OutlineStyle.ToString()"
+      }
+    },
+    {
+      "name": "outline-width",
+      "comment": "thin/medium/thick are real <line-width> keywords (CSS-UI-4 §4). An authored value (e.g. \"outline-width: thin\") never reaches this layer as the literal keyword - the CSS-OM's LineWidthConverter already resolves it to a literal px Length, and Property.Value serializes that resolved length, so Validate_OutlineWidth only ever sees e.g. \"1px\" (which the plain \"length\" clause already accepts). These three keywords are listed here for the *initial-value* defaulting path instead: DomParser.CascadeApplyStyles re-applies each property's literal css-properties.json initialValue (\"medium\" here) via CssUtils.SetPropertyValue every cascade pass, which - unlike the record's own C# default field initializer - does run through this same Validate_OutlineWidth gate.",
+      "inherited": false,
+      "initialValue": "medium",
+      "cssDataType": ["length", "keyword"],
+      "supportedValues": ["thin", "medium", "thick"],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "OutlineWidth",
+        "invalidates": "InvalidateOutlineWidth",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "outline-offset",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "OutlineOffset",
+        "invalidates": "InvalidateOutlineOffset",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
       "name": "transform-origin",
       "inherited": false,
       "initialValue": "50% 50% 0",

@@ -247,6 +247,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the actual column-rule color (the line drawn between columns in a multi-column container).</summary>
         public RColor ActualColumnRuleColor => DerivedStyle.ActualColumnRuleColor;
 
+        public double ActualOutlineWidth => DerivedStyle.ActualOutlineWidth;
+        public RColor ActualOutlineColor => DerivedStyle.ActualOutlineColor;
+        public double ActualOutlineOffset => DerivedStyle.ActualOutlineOffset;
+
         public double ActualBorderTopLeftRadiusX => DerivedStyle.ActualBorderTopLeftRadiusX;
         public double ActualBorderTopLeftRadiusY => DerivedStyle.ActualBorderTopLeftRadiusY;
         public double ActualBorderTopRightRadiusX => DerivedStyle.ActualBorderTopRightRadiusX;

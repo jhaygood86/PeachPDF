@@ -179,6 +179,56 @@ namespace PeachPDF.Html.Core.Dom
 
         #endregion
 
+        #region Outline
+
+        private double _actualOutlineWidth = double.NaN;
+        private RColor _actualOutlineColor = RColor.Empty;
+        private double _actualOutlineOffset = double.NaN;
+
+        public double ActualOutlineWidth
+        {
+            get
+            {
+                if (!double.IsNaN(_actualOutlineWidth)) return _actualOutlineWidth;
+
+                _actualOutlineWidth = CssValueParser.GetActualBorderWidth(Style.Border.OutlineWidth, Owner);
+                if (Style.Border.OutlineStyle.Value == OutlineStyle.None)
+                    _actualOutlineWidth = 0f;
+
+                return _actualOutlineWidth;
+            }
+        }
+
+        /// <summary>
+        /// Unaware of the legacy <c>invert</c> keyword by design - <c>OutlineDrawHandler</c> checks the
+        /// raw <see cref="CssBox.OutlineColor"/> string for <c>"invert"</c> itself and bypasses this
+        /// property entirely in that case, painting via a PDF blend mode instead of a resolved color.
+        /// </summary>
+        public RColor ActualOutlineColor
+        {
+            get
+            {
+                if (_actualOutlineColor.IsEmpty) _actualOutlineColor = Owner.GetActualColor(Style.Border.OutlineColor);
+                return _actualOutlineColor;
+            }
+        }
+
+        public double ActualOutlineOffset
+        {
+            get
+            {
+                if (!double.IsNaN(_actualOutlineOffset)) return _actualOutlineOffset;
+                _actualOutlineOffset = CssValueParser.ParseLength(Style.Border.OutlineOffset, 0, Owner);
+                return _actualOutlineOffset;
+            }
+        }
+
+        internal void InvalidateOutlineWidth() => _actualOutlineWidth = double.NaN;
+        internal void InvalidateOutlineColor() => _actualOutlineColor = RColor.Empty;
+        internal void InvalidateOutlineOffset() => _actualOutlineOffset = double.NaN;
+
+        #endregion
+
         #region Border radii
 
         private double _actualBorderTopLeftRadiusX = double.NaN;

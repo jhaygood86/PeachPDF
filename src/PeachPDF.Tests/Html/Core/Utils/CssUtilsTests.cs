@@ -305,6 +305,61 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task ApplyCurrentColor_ReplacesOutlineColorCurrentColorWithColorValue()
+        {
+            var (box, parser) = await FindDivBoxAndParser("color: rgb(10, 20, 30); outline-color: currentColor;");
+
+            CssUtils.ApplyCurrentColor(box, parser);
+
+            Assert.Equal("rgb(10, 20, 30)", box.OutlineColor);
+        }
+
+        [Fact]
+        public async Task ApplyCurrentColor_LeavesOutlineColorInvertUntouched()
+        {
+            // "invert" is a distinct keyword from "currentcolor" - ApplyCurrentColor must only rewrite
+            // a literal "currentcolor", never touch any other outline-color value.
+            var (box, parser) = await FindDivBoxAndParser("color: rgb(10, 20, 30); outline-color: invert;");
+
+            CssUtils.ApplyCurrentColor(box, parser);
+
+            Assert.Equal("invert", box.OutlineColor);
+        }
+
+        [Fact]
+        public async Task OutlineStyleAuto_ParsesToOutlineStyleAutoAndRoundTrips()
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "outline-style", "auto");
+
+            Assert.Equal(PeachPDF.CSS.OutlineStyle.Auto, box.OutlineStyle.Value);
+            Assert.Equal("auto", CssUtils.GetPropertyValue(box, "outline-style"));
+        }
+
+        [Fact]
+        public async Task OutlineStyleAuto_IsRejectedForBorderTopStyle()
+        {
+            // "auto" is outline-style's own value, deliberately kept out of the shared LineStyle/
+            // Map.LineStyles that every border-*-style property still uses.
+            var (box, parser) = await FindDivBoxAndParser("border-top-style: dashed;");
+
+            CssUtils.SetPropertyValue(parser, box, "border-top-style", "auto");
+
+            Assert.Equal("dashed", CssUtils.GetPropertyValue(box, "border-top-style"));
+        }
+
+        [Fact]
+        public async Task OutlineColorInvert_IsRejectedForBorderTopColor()
+        {
+            var (box, parser) = await FindDivBoxAndParser("border-top-color: rgb(1, 2, 3);");
+
+            CssUtils.SetPropertyValue(parser, box, "border-top-color", "invert");
+
+            Assert.Equal("rgb(1, 2, 3)", CssUtils.GetPropertyValue(box, "border-top-color"));
+        }
+
+        [Fact]
         public async Task WhiteSpace_ReturnsPositiveWidth()
         {
             var (box, _) = await FindDivBoxAndParser("font-size: 16px;");
@@ -329,6 +384,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["border-bottom-width", "2px"], ["border-left-width", "3px"], ["border-right-width", "4px"], ["border-top-width", "5px"],
             ["border-bottom-style", "dashed"], ["border-left-style", "dotted"], ["border-right-style", "double"], ["border-top-style", "groove"],
             ["border-bottom-color", "rgb(1, 2, 3)"], ["border-left-color", "rgb(4, 5, 6)"], ["border-right-color", "rgb(7, 8, 9)"], ["border-top-color", "rgb(10, 11, 12)"],
+            ["outline-width", "5px"], ["outline-style", "groove"], ["outline-color", "rgb(10, 11, 12)"], ["outline-offset", "3px"],
             ["border-spacing", "3px"], ["border-collapse", "collapse"], ["box-sizing", "border-box"],
             // "clone" only - a "slice" row would pass with the setter deleted, since slice is the default.
             ["box-decoration-break", "clone"],
@@ -411,6 +467,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("border-top", "99px solid red", "border-top-width")]
         [InlineData("border-style", "dashed", "border-top-style")]
         [InlineData("border-color", "rgb(9, 9, 9)", "border-top-color")]
+        [InlineData("outline", "9px solid red", "outline-width")]
         [InlineData("flex", "9 9 90px", "flex-grow")]
         [InlineData("flex-flow", "column wrap", "flex-direction")]
         [InlineData("columns", "9 90px", "column-count")]

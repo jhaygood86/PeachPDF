@@ -117,6 +117,17 @@ namespace PeachPDF.Adapters
             _g.Restore();
         }
 
+        public override void PushBlendMode(RBlendMode mode)
+        {
+            _g.Save();
+            _g.SetBlendMode(mode.ToString());
+        }
+
+        public override void PopBlendMode()
+        {
+            _g.Restore();
+        }
+
         public override object SetAntiAliasSmoothingMode()
         {
             var prevMode = _g.SmoothingMode;

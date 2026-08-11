@@ -3,7 +3,7 @@
     internal sealed class OutlineStyleProperty : Property
     {
         private static readonly IValueConverter
-            StyleConverter = Converters.LineStyleConverter.OrDefault(LineStyle.None);
+            StyleConverter = Converters.OutlineStyleConverter.OrDefault(OutlineStyle.None);
 
         internal OutlineStyleProperty()
             : base(PropertyNames.OutlineStyle)

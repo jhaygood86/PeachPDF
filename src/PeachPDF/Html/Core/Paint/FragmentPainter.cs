@@ -346,6 +346,14 @@ namespace PeachPDF.Html.Core.Paint
             var lines = fragment.Lines;
             var clip = g.GetClip();
 
+            // Outline is drawn last - CSS Basic User Interface 4 §4: "the outline ... is drawn 'over' a
+            // box, i.e., the outline is always on top" of that box's own content and, per CSS2.1
+            // Appendix E, of its entire stacking context (all its descendants too). So the per-line
+            // geometry this box's outline needs is captured here, alongside border's own (which paints
+            // immediately, unlike outline), and the actual outline draw calls are deferred to their own
+            // pass after this box's text/decorations/descendants have all painted, below.
+            List<(RRect Rect, BoxDecorationGeometry Geometry)>? outlinePaints = null;
+
             for (var i = 0; i < lines.Count; i++)
             {
                 var actualRect = lines[i].Rect;
@@ -410,6 +418,8 @@ namespace PeachPDF.Html.Core.Paint
                     geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge);
 
                 if (geometry.NeedsClip) g.PopClip();
+
+                (outlinePaints ??= []).Add((rectForBorders, geometry));
             }
 
             if (box.ColumnRuleSegments is { Count: > 0 } && box.ActualColumnRuleWidth > 0)
@@ -484,6 +494,19 @@ namespace PeachPDF.Html.Core.Paint
                 {
                     if (p.Box.IsFixed)
                         PaintStackingParticipant(g, p);
+                }
+            }
+
+            if (outlinePaints is not null)
+            {
+                foreach (var (paintRect, geometry) in outlinePaints)
+                {
+                    if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
+
+                    OutlineDrawHandler.DrawOutline(g, box, paintRect,
+                        geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge);
+
+                    if (geometry.NeedsClip) g.PopClip();
                 }
             }
 

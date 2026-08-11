@@ -107,6 +107,21 @@ namespace PeachPDF.CSS
                 {Keywords.Groove, LineStyle.Groove},
                 {Keywords.Hidden, LineStyle.Hidden}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, OutlineStyle> OutlineStyles =
+            new Dictionary<string, OutlineStyle>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.None, OutlineStyle.None},
+                {Keywords.Solid, OutlineStyle.Solid},
+                {Keywords.Double, OutlineStyle.Double},
+                {Keywords.Dotted, OutlineStyle.Dotted},
+                {Keywords.Dashed, OutlineStyle.Dashed},
+                {Keywords.Inset, OutlineStyle.Inset},
+                {Keywords.Outset, OutlineStyle.Outset},
+                {Keywords.Ridge, OutlineStyle.Ridge},
+                {Keywords.Groove, OutlineStyle.Groove},
+                {Keywords.Hidden, OutlineStyle.Hidden},
+                {Keywords.Auto, OutlineStyle.Auto}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, PdfTagType> PdfTagTypes =
             new Dictionary<string, PdfTagType>(StringComparer.OrdinalIgnoreCase)
             {
