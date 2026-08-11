@@ -1,5 +1,10 @@
 using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PdfSharpCore.Pdf.AcroForms;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
+using PeachPDF.PdfSharpCore.Pdf.Annotations;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -70,14 +75,19 @@ namespace PeachPDF.Tests.Integration
             // draws through the field's own real, possibly embedded font, which shows text as
             // encoded glyph IDs rather than literal ASCII bytes - "PeachProbe" is never itself a
             // substring of the stream that draws it (see the next test for a value-sensitivity check
-            // that doesn't rely on decoding those glyph IDs either).
-            var pdfText = await RenderToPdfText("<input name='n' value='PeachProbe' />", enableForms: true);
+            // that doesn't rely on decoding those glyph IDs either). Reads bytes directly off the
+            // live PdfDocument object graph rather than round-tripping through Save() and re-parsing
+            // - see FormFieldStylingIntegrationTests's own remarks on why.
+            var document = await RenderAsync("<input name='n' value='PeachProbe' />", enableForms: true);
 
-            var pageContentStream = ExtractStream(pdfText, "PeachPDF.PdfSharpCore.Pdf.Advanced.PdfContent");
-            var widgetAppearanceStream = ExtractStream(pdfText, "PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject");
+            var pageContentBytes = GetPageContentBytes(document);
+            var widgetAppearanceBytes = ResolveNormalAppearance(Assert.Single(Fields(document))).Stream.Value;
 
-            Assert.DoesNotContain(" Tj", pageContentStream);
-            Assert.Contains(" Tj", widgetAppearanceStream);
+            var pageContentText = Encoding.Latin1.GetString(pageContentBytes);
+            var widgetAppearanceText = Encoding.Latin1.GetString(widgetAppearanceBytes);
+
+            Assert.DoesNotContain(" Tj", pageContentText);
+            Assert.Contains(" Tj", widgetAppearanceText);
         }
 
         [Fact]
@@ -87,21 +97,13 @@ namespace PeachPDF.Tests.Integration
             // say, always drawing the same placeholder run) - the two streams must differ, without
             // asserting on their literal bytes (see the previous test for why: real font embedding
             // shows text as encoded glyph IDs, not the source characters).
-            var streamA = ExtractStream(await RenderToPdfText("<input name='n' value='PeachProbe' />", enableForms: true), "PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject");
-            var streamB = ExtractStream(await RenderToPdfText("<input name='n' value='OtherValue' />", enableForms: true), "PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject");
+            var documentA = await RenderAsync("<input name='n' value='PeachProbe' />", enableForms: true);
+            var documentB = await RenderAsync("<input name='n' value='OtherValue' />", enableForms: true);
+
+            var streamA = ResolveNormalAppearance(Assert.Single(Fields(documentA))).Stream.Value;
+            var streamB = ResolveNormalAppearance(Assert.Single(Fields(documentB))).Stream.Value;
 
             Assert.NotEqual(streamA, streamB);
-        }
-
-        static string ExtractStream(string pdfText, string objectTypeComment)
-        {
-            var header = $"% {objectTypeComment}";
-            var headerIndex = pdfText.IndexOf(header, System.StringComparison.Ordinal);
-            Assert.True(headerIndex >= 0, $"No object commented '{header}' found.");
-
-            var streamIndex = pdfText.IndexOf("stream", headerIndex, System.StringComparison.Ordinal);
-            var endIndex = pdfText.IndexOf("endstream", streamIndex, System.StringComparison.Ordinal);
-            return pdfText.Substring(streamIndex, endIndex - streamIndex);
         }
 
         [Fact]
@@ -110,17 +112,59 @@ namespace PeachPDF.Tests.Integration
             // Structural proof that the selected option's label drives the baked appearance - see
             // TextField_FlagOn_DifferentValues_BakeDifferentWidgetAppearanceStreams's own remarks for
             // why this compares whole streams rather than asserting on decoded glyph text.
-            var streamRed = ExtractStream(
-                await RenderToPdfText("<select><option value='r' selected>Red</option><option value='g'>Green</option></select>", enableForms: true),
-                "PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject");
-            var streamGreen = ExtractStream(
-                await RenderToPdfText("<select><option value='r'>Red</option><option value='g' selected>Green</option></select>", enableForms: true),
-                "PeachPDF.PdfSharpCore.Pdf.Advanced.PdfFormXObject");
+            var documentRed = await RenderAsync(
+                "<select><option value='r' selected>Red</option><option value='g'>Green</option></select>", enableForms: true);
+            var documentGreen = await RenderAsync(
+                "<select><option value='r'>Red</option><option value='g' selected>Green</option></select>", enableForms: true);
+
+            var streamRed = ResolveNormalAppearance(Assert.Single(Fields(documentRed))).Stream.Value;
+            var streamGreen = ResolveNormalAppearance(Assert.Single(Fields(documentGreen))).Stream.Value;
 
             Assert.NotEqual(streamRed, streamGreen);
         }
 
-        static async Task<string> RenderToPdfText(string bodyHtml, bool enableForms)
+        // ─── Object-graph helpers (see the class remarks on why these don't round-trip through Save()) ─────────────────────
+
+        static byte[] GetPageContentBytes(PdfDocument document)
+        {
+            using var ms = new MemoryStream();
+            foreach (var content in document.Pages[0].Contents)
+            {
+                ms.Write(content.Stream.Value, 0, content.Stream.Value.Length);
+            }
+            return ms.ToArray();
+        }
+
+        /// <summary>
+        /// Resolves a field's "/AP /N" appearance - either a direct reference to one
+        /// <see cref="PdfFormXObject"/> (text/select fields), or, for a two-state field
+        /// (checkbox/radio), the state dictionary's entry matching the field's own current
+        /// <see cref="PdfAcroField.AppearanceState"/>.
+        /// </summary>
+        static PdfFormXObject ResolveNormalAppearance(PdfAcroField field)
+        {
+            var ap = field.Elements.GetDictionary(PdfAnnotation.Keys.AP);
+            if (ap.Elements["/N"] is PdfReference { Value: PdfFormXObject direct })
+                return direct;
+
+            var states = ap.Elements.GetDictionary("/N");
+            return (PdfFormXObject)states.Elements.GetReference(field.AppearanceState!).Value;
+        }
+
+        static List<PdfAcroField> Fields(PdfDocument document)
+        {
+            var array = document.Catalog.AcroForm.Fields;
+            var result = new List<PdfAcroField>();
+            foreach (var item in array)
+            {
+                var dict = item is PdfReference iref ? iref.Value : item;
+                if (dict is PdfAcroField field)
+                    result.Add(field);
+            }
+            return result;
+        }
+
+        static async Task<PdfDocument> RenderAsync(string bodyHtml, bool enableForms)
         {
             var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
             var config = new PdfGenerateConfig
@@ -130,9 +174,15 @@ namespace PeachPDF.Tests.Integration
                 EnableInteractivePdfForms = enableForms,
             };
 
-            var doc = await new PdfGenerator().GeneratePdf(html, config);
+            var result = await new PdfGenerator().GeneratePdf(html, config);
+            return result.PdfDocument;
+        }
+
+        static async Task<string> RenderToPdfText(string bodyHtml, bool enableForms)
+        {
+            var document = await RenderAsync(bodyHtml, enableForms);
             var ms = new MemoryStream();
-            doc.Save(ms);
+            document.Save(ms);
             return Encoding.Latin1.GetString(ms.ToArray());
         }
     }
