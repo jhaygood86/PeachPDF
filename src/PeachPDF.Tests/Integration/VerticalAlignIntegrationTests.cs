@@ -161,15 +161,28 @@ namespace PeachPDF.Tests.Integration
                 + "<td style='height:100pt'>Tall</td>"
                 + "<td id='v' style='height:100pt; vertical-align:middle'>Short</td>"
                 + "</tr></table>");
+            var htmlBottom = Wrap(
+                "<table><tr>"
+                + "<td style='height:100pt'>Tall</td>"
+                + "<td id='v' style='height:100pt; vertical-align:bottom'>Short</td>"
+                + "</tr></table>");
 
             var (rootTop, _) = await BuildAndLayout(htmlTop);
             var (rootMiddle, _) = await BuildAndLayout(htmlMiddle);
+            var (rootBottom, _) = await BuildAndLayout(htmlBottom);
 
             var topY = CssBox.FirstWordOccurence(FindById(rootTop, "v")!, FindById(rootTop, "v")!.LineBoxes[0])!.Top;
             var middleY = CssBox.FirstWordOccurence(FindById(rootMiddle, "v")!, FindById(rootMiddle, "v")!.LineBoxes[0])!.Top;
+            var bottomY = CssBox.FirstWordOccurence(FindById(rootBottom, "v")!, FindById(rootBottom, "v")!.LineBoxes[0])!.Top;
 
-            Assert.True(middleY > topY,
-                $"vertical-align:middle ({middleY}) should push the cell's content lower than vertical-align:top ({topY}) even with an explicit cell height");
+            Assert.True(middleY > topY && middleY < bottomY,
+                $"vertical-align:middle ({middleY}) should land strictly between vertical-align:top ({topY}) and vertical-align:bottom ({bottomY}) even with an explicit cell height");
+
+            // ApplyCellVerticalAlignment splits the leftover room evenly for `middle` (half of what
+            // `bottom` moves it by), so middle must sit at the exact midpoint - not merely somewhere
+            // between top and bottom - or a regression that under/over-shoots the centering offset
+            // would still pass the weaker between-top-and-bottom check above.
+            Assert.Equal((topY + bottomY) / 2, middleY, precision: 2);
         }
 
         [Fact]
