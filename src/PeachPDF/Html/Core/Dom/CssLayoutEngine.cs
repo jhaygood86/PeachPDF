@@ -539,7 +539,17 @@ namespace PeachPDF.Html.Core.Dom
                 return 0d;
 
             var cellBottom = cell.ClientBottom;
-            var bottom = CssBox.GetMaximumBottom(cell, 0f);
+
+            // Measure over the cell's children, not the cell itself: GetMaximumBottom's own-height
+            // fallback exists for a childless box with an explicit height, but the cell always has an
+            // explicit ActualBottom by this point (the row just stretched it), so passing the cell as
+            // startBox would clamp `bottom` to `cellBottom` and always compute a zero offset whenever the
+            // cell also carries a CSS `height` (issue found via `height` + `vertical-align: middle`).
+            var bottom = cell.ClientTop;
+            foreach (var b in cell.Boxes)
+            {
+                bottom = CssBox.GetMaximumBottom(b, bottom);
+            }
 
             var dist = cellKeyword switch
             {
