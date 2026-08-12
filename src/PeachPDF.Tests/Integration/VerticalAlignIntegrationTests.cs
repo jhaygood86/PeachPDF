@@ -122,9 +122,6 @@ namespace PeachPDF.Tests.Integration
             // from the inline ApplyVerticalAlignment exercised by the other tests in this file) - a
             // short cell in a taller row must be pushed all the way to the row's bottom under
             // vertical-align:bottom, unlike vertical-align:top where it stays put.
-            // "v"'s own height is left auto (an explicit height would make GetMaximumBottom clamp to
-            // the cell's own already-row-equalized bottom, leaving no room for the alignment to move
-            // its content within) - the tall sibling alone is what stretches the shared row.
             var htmlTop = Wrap(
                 "<table><tr>"
                 + "<td style='height:100pt'>Tall</td>"
@@ -144,6 +141,35 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(bottomY > topY,
                 $"vertical-align:bottom ({bottomY}) should push the cell's content lower than vertical-align:top ({topY})");
+        }
+
+        [Fact]
+        public async Task Middle_OnATableCellWithExplicitHeight_CentersShortContent()
+        {
+            // GetMaximumBottom's own-height fallback used to be applied to the cell itself: once the
+            // row-layout loop stretches the cell's ActualBottom to the row's shared height, a cell that
+            // also carries a CSS `height` had its own explicit height clamp the "content bottom" back to
+            // that same row-equalized ActualBottom, making the (cellBottom - bottom) offset always zero -
+            // vertical-align:middle/bottom were silent no-ops whenever a `<td>` had an explicit height.
+            var htmlTop = Wrap(
+                "<table><tr>"
+                + "<td style='height:100pt'>Tall</td>"
+                + "<td id='v' style='height:100pt; vertical-align:top'>Short</td>"
+                + "</tr></table>");
+            var htmlMiddle = Wrap(
+                "<table><tr>"
+                + "<td style='height:100pt'>Tall</td>"
+                + "<td id='v' style='height:100pt; vertical-align:middle'>Short</td>"
+                + "</tr></table>");
+
+            var (rootTop, _) = await BuildAndLayout(htmlTop);
+            var (rootMiddle, _) = await BuildAndLayout(htmlMiddle);
+
+            var topY = CssBox.FirstWordOccurence(FindById(rootTop, "v")!, FindById(rootTop, "v")!.LineBoxes[0])!.Top;
+            var middleY = CssBox.FirstWordOccurence(FindById(rootMiddle, "v")!, FindById(rootMiddle, "v")!.LineBoxes[0])!.Top;
+
+            Assert.True(middleY > topY,
+                $"vertical-align:middle ({middleY}) should push the cell's content lower than vertical-align:top ({topY}) even with an explicit cell height");
         }
 
         [Fact]
