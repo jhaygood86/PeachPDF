@@ -7311,6 +7311,52 @@ await SaveShowcaseAsync("table_visibility_collapse", "Layout", "Table Row/Column
     + "unlike visibility: hidden which still reserves the space.",
     visibilityCollapseHtml, pdfConfig);
 
+// --- caption-side showcase (issue #705) ---
+//
+// caption-side was previously unimplemented: a <table>'s <caption> child was never assigned a
+// position at all by CssLayoutEngineTable.AssignBoxKinds, so it painted with degenerate zero-height
+// geometry. This exercises both values (CSS 2.1 §17.4's only two: top, the initial value, and
+// bottom), stacked above or below the row grid and stretched to the table's own content width.
+var tableCaptionHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a5 landscape; margin: 12mm }
+    body { font: 10pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 14pt; margin: 0 0 0.3em }
+    h2 { font-size: 11pt; margin: 1.2em 0 0.4em }
+    p.intro { color: #6b7280; font-size: 9pt; margin: 0 0 0.6em; max-width: 34em }
+    table { border-collapse: separate; border-spacing: 0; margin-bottom: 0.6em; border: 1.5pt solid #334155 }
+    caption { font-weight: 600; padding: 5pt; background: #eef2ff; text-align: center }
+    td, th { border: 0.75pt solid #94a3b8; padding: 4pt 8pt; text-align: left }
+    th { background: #f8fafc }
+    #bottom-table caption { caption-side: bottom }
+    </style></head><body>
+    <h1>caption-side: Positioning a &lt;caption&gt; Above or Below a Table</h1>
+    <p class="intro">caption-side's only two values (CSS 2.1 §17.4) stack the caption above the row
+    grid (<code>top</code>, the initial value) or below it (<code>bottom</code>) - always spanning the
+    table's own content width.</p>
+
+    <h2>caption-side: top (default)</h2>
+    <table>
+    <caption>Table 1. Quarterly results by region</caption>
+    <tr><th>Region</th><th>Q1</th><th>Q2</th></tr>
+    <tr><td>North</td><td>120</td><td>135</td></tr>
+    <tr><td>South</td><td>98</td><td>110</td></tr>
+    </table>
+
+    <h2>caption-side: bottom</h2>
+    <table id="bottom-table">
+    <caption>Table 2. Same data, caption moved below the table</caption>
+    <tr><th>Region</th><th>Q1</th><th>Q2</th></tr>
+    <tr><td>North</td><td>120</td><td>135</td></tr>
+    <tr><td>South</td><td>98</td><td>110</td></tr>
+    </table>
+    </body></html>
+    """;
+await SaveShowcaseAsync("table_caption", "Layout", "Table Captions (caption-side)",
+    "caption-side: top (the initial value) and bottom (CSS 2.1 §17.4), stacking a <table>'s <caption> "
+    + "above or below its row grid and stretching it to the table's own content width.",
+    tableCaptionHtml, pdfConfig);
+
 // --- interactive PDF forms showcase ---
 //
 // See docs/html-css-support.md#interactive-pdf-forms-support. EnableInteractivePdfForms turns

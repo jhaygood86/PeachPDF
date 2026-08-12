@@ -66,9 +66,30 @@ namespace PeachPDF.Html.Core.Dom
         private readonly List<CssBox> _columns = [];
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         private readonly List<CssBox> _allRows = [];
+
+        /// <summary>
+        /// Every <c>table-caption</c> box among the table's direct children, in source order -
+        /// populated by <see cref="AssignBoxKinds"/> and split by each box's own <c>caption-side</c>
+        /// into <see cref="_topCaptions"/>/<see cref="_bottomCaptions"/>.
+        /// </summary>
+        private readonly List<CssBox> _captionBoxes = [];
+
+        /// <summary>Captions with <c>caption-side: top</c> (the initial value) - laid out above the row grid.</summary>
+        private readonly List<CssBox> _topCaptions = [];
+
+        /// <summary>Captions with <c>caption-side: bottom</c> - laid out below the row grid.</summary>
+        private readonly List<CssBox> _bottomCaptions = [];
+
+        /// <summary>
+        /// The combined height <see cref="_topCaptions"/> occupies above the row grid - set once by
+        /// <see cref="LayoutCells"/> on the pass that lays them out. Left at 0 on a continuation pass,
+        /// which is harmless: every use of it feeds a <c>Math.Max</c> against the resumed page's own
+        /// top (<see cref="ResumedRowTop"/>), which always wins over a stale/zero caption height.
+        /// </summary>
+        private double _topCaptionsHeight;
 
         private int _columnCount;
 
@@ -415,6 +436,7 @@ namespace PeachPDF.Html.Core.Dom
                 switch (box.DerivedStyle.ActualDisplay)
                 {
                     case Keywords.TableCaption:
+                        _captionBoxes.Add(box);
                         break;
                     case Keywords.TableRow:
                         if (!IsRowCollapsed(box))
@@ -492,6 +514,14 @@ namespace PeachPDF.Html.Core.Dom
 
             if (_footerBox != null)
                 _allRows.AddRange(_footerBox.Boxes.Where(r => !IsRowCollapsed(r)));
+
+            // CSS 2.1 §17.4: caption-side's only two values split the table's caption(s) into a group
+            // stacked above the row grid and a group stacked below it - each caption goes by its own
+            // computed value, not the table's or the first caption's.
+            foreach (var caption in _captionBoxes)
+            {
+                (caption.CaptionSide == Keywords.Bottom ? _bottomCaptions : _topCaptions).Add(caption);
+            }
         }
 
         /// <summary>
@@ -1150,13 +1180,56 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Lays <paramref name="captions"/> out as ordinary full-width blocks, stacked in source order
+        /// starting at (<paramref name="x"/>, <paramref name="y"/>) and sized to <paramref name="width"/>
+        /// - CSS 2.1 §17.4: a caption box takes the full width of the table. Each is placed at its own
+        /// assigned position (<see cref="CssBox.LayoutContentAtItsAssignedPosition"/>) rather than
+        /// through the generic block-flow frame, since this engine - not a block-flow cursor a table box
+        /// does not otherwise keep - owns where it goes.
+        /// </summary>
+        /// <returns><paramref name="y"/> unchanged when <paramref name="captions"/> is empty, otherwise
+        /// the bottom edge after the last caption's own bottom margin.</returns>
+        private static async ValueTask<double> LayoutCaptionGroup(
+            RGraphics g, IReadOnlyList<CssBox> captions, double x, double y, double width)
+        {
+            var currentY = y;
+
+            foreach (var caption in captions)
+            {
+                currentY += caption.ActualMarginTop;
+
+                caption.Location = new RPoint(x, currentY);
+                caption.ActualRight = x + width;
+
+                await caption.LayoutContentAtItsAssignedPosition(g);
+
+                currentY = caption.ActualBottom + caption.ActualMarginBottom;
+            }
+
+            return currentY;
+        }
+
+        /// <summary>
         /// Layout the cells by the calculated table layout
         /// </summary>
         /// <param name="g"></param>
         private async ValueTask LayoutCells(RGraphics g)
         {
             var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
-            var startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
+
+            // Lay the top caption(s) out above the row grid before anything else claims this
+            // coordinate - once, on the pass that starts the row loop from the top. A continuation
+            // resumes rows on a later fragmentainer and must not redo this: the caption already sits
+            // where the first pass put it, and _topCaptionsHeight staying 0 on that pass is harmless
+            // (see its own remarks).
+            if (!_continuesAPreviousPass && _topCaptions.Count > 0)
+            {
+                var topCaptionsBottom = await LayoutCaptionGroup(
+                    g, _topCaptions, _tableBox.Location.X, _tableBox.ClientTop, GetWidthSum());
+                _topCaptionsHeight = topCaptionsBottom - _tableBox.ClientTop;
+            }
+
+            var startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + GetVerticalSpacing(), 0);
 
             var container = _tableBox.HtmlContainer;
             var pageHeight = container?.PageSize.Height ?? double.MaxValue;
@@ -1516,7 +1589,8 @@ namespace PeachPDF.Html.Core.Dom
                         slot, availableHeight, estimatedBodyHeight);
 
                     _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
-                    startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
+                    foreach (var caption in _topCaptions) caption.OffsetTop(pageBreakOffset);
+                    startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + GetVerticalSpacing(), 0);
                     // startY is a fresh restart point at the table's own content-top edge on the new
                     // page, not an arbitrary interior coordinate - the same "top edge flush on a
                     // boundary" case HtmlContainerInt.SlotStartingAt exists for (see the identical fix in
@@ -1557,8 +1631,9 @@ namespace PeachPDF.Html.Core.Dom
 
                     _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
                     _headerBox.OffsetTop(pageBreakOffset);
+                    foreach (var caption in _topCaptions) caption.OffsetTop(pageBreakOffset);
 
-                    startY = Math.Max(_tableBox.ClientTop + GetVerticalSpacing(), 0);
+                    startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + GetVerticalSpacing(), 0);
                     // startY is a fresh restart point at the table's own content-top edge on the new
                     // page, not an arbitrary interior coordinate - the same "top edge flush on a
                     // boundary" case HtmlContainerInt.SlotStartingAt exists for (see the identical fix in
@@ -1833,7 +1908,21 @@ namespace PeachPDF.Html.Core.Dom
             // Step 7: Set final table dimensions
             var tableRight = Math.Max(cursor.MaxRight, _tableBox.Location.X + _tableBox.ActualWidth);
             _tableBox.ActualRight = tableRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
-            _tableBox.ActualBottom = Math.Max(cursor.MaxBottom, startY) + GetVerticalSpacing() + _tableBox.ActualBorderBottomWidth;
+
+            // Computed ahead of ActualBottom rather than only assigned to TableContinuation below,
+            // because a bottom caption's placement depends on it: the caption belongs after the
+            // table's very last row, never stitched into the middle of a table still spanning
+            // fragmentainers, so it may only be laid out on the pass that finishes the row loop.
+            var tableContinuation = cursor.Continuation(_tableBox);
+            var contentBottom = Math.Max(cursor.MaxBottom, startY) + GetVerticalSpacing();
+
+            if (tableContinuation is null && _bottomCaptions.Count > 0)
+            {
+                contentBottom = await LayoutCaptionGroup(
+                    g, _bottomCaptions, _tableBox.Location.X, contentBottom, GetWidthSum());
+            }
+
+            _tableBox.ActualBottom = contentBottom + _tableBox.ActualBorderBottomWidth;
 
             // Publish where the row loop stopped, as a copy of the cursor's own state rather than the
             // cursor: a caller that kept one alive past this point would otherwise mutate what it has
@@ -1848,7 +1937,7 @@ namespace PeachPDF.Html.Core.Dom
             // one field for both: BeginLayoutPass clears PendingBreakToken at the top of the table's next
             // layout, and the record has to survive that in order to be handed back to the run that
             // continues it.
-            _tableBox.TableContinuation = cursor.Continuation(_tableBox);
+            _tableBox.TableContinuation = tableContinuation;
 
             if (_tableBox.TableContinuation is { } stopped)
             {

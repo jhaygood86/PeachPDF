@@ -1722,6 +1722,22 @@
       }
     },
     {
+      "name": "caption-side",
+      "inherited": true,
+      "initialValue": "top",
+      "cssDataType": "keyword",
+      "supportedValues": [
+        "top",
+        "bottom"
+      ],
+      "keywordComparison": "invariant-ignore-case",
+      "html": {
+        "propertyPath": "CaptionSide",
+        "csharpDataType": "string",
+        "area": "TableArea"
+      }
+    },
+    {
       "name": "line-height",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrUnitless>-backed (issue #598's follow-up) - the tenth and final keyword-or-value batch. Fixes a real pre-existing bug along the way: a bare unitless multiplier (e.g. 'line-height: 1.5') previously validated but silently collapsed ActualLineHeight to 0 (the old string-based ParseLength had no case for a number with no unit token); LengthOrUnitless's Unitless side now resolves it correctly (CSS2.1 §10.8.1: the number times the element's own font size). 'auto' is deliberately not in supportedValues - CSS Inline Layout 3's grammar is 'normal | <number> | <length-percentage>', auto was never part of it.",
       "inherited": true,

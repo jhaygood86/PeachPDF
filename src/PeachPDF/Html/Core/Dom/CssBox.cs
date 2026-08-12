@@ -2686,11 +2686,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>display: none</c> box, a <c>table-row</c>, a bare inline. So any later code that measures this
         /// box's own height, or moves it, has to ask this first: for those boxes the coordinates belong to
         /// something else and both the measurement and the move are meaningless.
+        /// <c>table-caption</c> is included alongside <c>table-cell</c> for the same reason: like a cell,
+        /// a caption's position is assigned entirely by <see cref="CssLayoutEngineTable"/>
+        /// (<see cref="CssBox.LayoutContentAtItsAssignedPosition"/>) rather than by the generic
+        /// block-flow frame, so it needs <see cref="LayoutContents"/>'s real dispatch rather than the
+        /// sibling-copying fallback that leaves it at a degenerate zero-height Bounds.
         /// </remarks>
         internal bool PlacesItselfAsBlockBox =>
             IsBlock
             || DerivedStyle.ActualDisplay is Keywords.ListItem or Keywords.Table or Keywords.InlineTable
-                       or Keywords.TableCell or Keywords.Flex or Keywords.InlineFlex
+                       or Keywords.TableCell or Keywords.TableCaption or Keywords.Flex or Keywords.InlineFlex
                        or Keywords.Grid or Keywords.InlineGrid;
 
         /// <summary>
