@@ -4605,6 +4605,47 @@ await SaveShowcaseAsync("hyphenation_controls", "Typography & Text", "Hyphenatio
     + "lines in a row (issue #713).",
     hyphenateControlsHtml, pdfConfig);
 
+// --- CSS Text 4 hyphenate-limit-last showcase ---
+// hyphenate-limit-last only has anything to show at a real fragmentainer break, so unlike the other four
+// controls above (compact side-by-side columns on one page) this needs two full pages each: a filler
+// div pushes the narrow, hyphenating column to end exactly two lines before the page boundary, so its
+// last line is a real candidate for the property to act on. The filler height was found empirically
+// (dumping CssBox.LineBoxes per page against this exact @page/font/width/line-height combination), not
+// hand-derived - this repo's convention for pixel-exact fragmentation fixtures.
+var hyphenateLimitLastFillerWords = string.Join(' ', Enumerable.Repeat("x antidisestablishmentarianism", 8));
+
+var hyphenateLimitLastHtml = "<!DOCTYPE html><html lang=\"en-US\"><head>" +
+    """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
+    h3 { font-size: 7.5pt; margin: 0 0 4px; color: #1d4ed8 }
+    .col { width: 90px; border: 1px solid #bbb; padding: 6px; font-size: 10px; line-height: 20pt; hyphens: auto }
+    .filler { height: 625pt }
+    </style>
+    """ +
+    "</head><body>" +
+    "<h1>hyphenate-limit-last (CSS Text 4)</h1>" +
+    "<p class=\"intro\">The filler below pushes this narrow, hyphenating column to end two lines before the " +
+    "page boundary — under the default none its last line still ends in a hyphen; under always that hyphen " +
+    "is undone and the whole word moves to the top of the next page instead.</p>" +
+    "<div><h3>hyphenate-limit-last: none (default)</h3>" +
+    "<div class=\"filler\"></div>" +
+    "<div class=\"col\">" + hyphenateLimitLastFillerWords + "</div></div>" +
+    "<div style=\"break-before:page\"><h3>hyphenate-limit-last: always</h3>" +
+    "<div class=\"filler\"></div>" +
+    "<div class=\"col\" style=\"hyphenate-limit-last:always\">" +
+    hyphenateLimitLastFillerWords + "</div></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("hyphenate_limit_last", "Typography & Text", "hyphenate-limit-last",
+    "CSS Text 4's hyphenate-limit-last preventing a hyphen from ending the last line before a page break: "
+    + "the default none lets it hyphenate right up to the boundary, always moves the whole word onto the "
+    + "following page instead.",
+    hyphenateLimitLastHtml, pdfConfig);
+
 // --- Tagged PDF (PDF/UA) showcase ---
 // Tags are invisible in a normal page render, so this showcase's value is manual inspection of
 // the structure tree (e.g. Acrobat's Tags panel, or another PDF/UA-aware checker) rather than

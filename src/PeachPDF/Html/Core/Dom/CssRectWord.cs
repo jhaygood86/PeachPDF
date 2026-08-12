@@ -125,6 +125,15 @@ namespace PeachPDF.Html.Core.Dom
         internal CssRectWord? HyphenationSuffix { get; set; }
 
         /// <summary>
+        /// Set only on a hyphenation-created suffix: the prefix <c>TryHyphenateWord</c> created it
+        /// alongside - the mirror image of <see cref="HyphenationSuffix"/>/<see cref="PreSplitWord"/>.
+        /// Lets <c>hyphenate-limit-last</c> (CSS Text 4 §6.3.5) recognize, from the word that opens a
+        /// fragmentainer's discarded line, that the line just kept before it ends in a hyphen that may
+        /// have to be taken back.
+        /// </summary>
+        internal CssRectWord? HyphenationPrefix { get; set; }
+
+        /// <summary>
         /// Represents this word for debugging purposes
         /// </summary>
         /// <returns></returns>
