@@ -863,6 +863,151 @@ Assert.NotNull(tbody);
 
         #endregion
 
+        #region Caption Tests
+
+        [Fact]
+        public async Task TableCaption_DefaultCaptionSide_LaysOutAboveRows()
+        {
+            // caption-side's initial value is "top" (CSS 2.1 §17.4) - a <caption> with no explicit
+            // caption-side should land above the row grid, not overlap or follow it.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; }
+        td { border: 1px solid black; padding: 4px; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Table caption</caption>
+        <tr><td id='cell1'>A</td><td>B</td></tr>
+        <tr><td>C</td><td>D</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            var caption = FindById(rootBox, "cap");
+            var firstCell = FindById(rootBox, "cell1");
+
+            Assert.NotNull(table);
+            Assert.NotNull(caption);
+            Assert.NotNull(firstCell);
+
+            Assert.True(caption!.ActualBottom > caption.Location.Y, "Caption should have height");
+            Assert.Equal(table!.Location.Y, caption.Location.Y, 1);
+            Assert.True(firstCell!.Location.Y >= caption.ActualBottom - 0.01,
+                "First row should be laid out below the caption");
+        }
+
+        [Fact]
+        public async Task TableCaption_CaptionSideBottom_LaysOutBelowRows()
+        {
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; }
+        td { border: 1px solid black; padding: 4px; }
+        caption { caption-side: bottom; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Table caption</caption>
+        <tr><td>A</td><td>B</td></tr>
+        <tr><td id='cell2'>C</td><td>D</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            var caption = FindById(rootBox, "cap");
+            var lastCell = FindById(rootBox, "cell2");
+
+            Assert.NotNull(table);
+            Assert.NotNull(caption);
+            Assert.NotNull(lastCell);
+
+            Assert.True(caption!.ActualBottom > caption.Location.Y, "Caption should have height");
+            Assert.True(caption.Location.Y >= lastCell!.ActualBottom - 0.01,
+                "Caption should be laid out below the last row");
+            Assert.Equal(table!.ActualBottom, caption.ActualBottom, 1);
+        }
+
+        [Fact]
+        public async Task TableCaption_SpansFullTableWidth()
+        {
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; }
+        td { border: 1px solid black; padding: 4px; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Short</caption>
+        <tr><td>A longer cell than the caption text</td><td>B</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            var caption = FindById(rootBox, "cap");
+
+            Assert.NotNull(table);
+            Assert.NotNull(caption);
+
+            Assert.Equal(table!.Location.X, caption!.Location.X, 1);
+            Assert.Equal(table.ActualRight, caption.ActualRight, 1);
+        }
+
+        [Fact]
+        public async Task TableCaption_TableHasItsOwnBorder_CaptionStillAlignsWithBorderBox()
+        {
+            // The table element's own border (as opposed to a border on its cells) contributes to
+            // GetWidthSum() - LayoutCaptionGroup must position the caption from the table's true
+            // border-box left edge (Location.X), not from inside it (ClientLeft), or the caption
+            // drifts right by exactly the table's own left border width.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; border: 4px solid black; }
+        td { border: 1px solid black; padding: 4px; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Short</caption>
+        <tr><td>A longer cell than the caption text</td><td>B</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            var caption = FindById(rootBox, "cap");
+
+            Assert.NotNull(table);
+            Assert.NotNull(caption);
+
+            Assert.Equal(table!.Location.X, caption!.Location.X, 1);
+            Assert.Equal(table.ActualRight, caption.ActualRight, 1);
+        }
+
+        #endregion
+
    #region Helper Methods
 
         private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(

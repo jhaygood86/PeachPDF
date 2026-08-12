@@ -401,7 +401,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["width", "100px"], ["max-width", "200px"], ["min-width", "50px"], ["height", "120px"], ["max-height", "240px"], ["min-height", "60px"],
             ["background-color", "rgb(4, 5, 6)"], ["background-position", "center"], ["background-size", "cover"], ["background-repeat", "no-repeat"],
             ["background-origin", "border-box"], ["background-clip", "padding-box"], ["background-attachment", "fixed"],
-            ["color", "rgb(7, 8, 9)"], ["content", "normal"], ["display", "block"], ["direction", "rtl"], ["empty-cells", "hide"],
+            ["color", "rgb(7, 8, 9)"], ["content", "normal"], ["display", "block"], ["direction", "rtl"], ["empty-cells", "hide"], ["caption-side", "bottom"],
             ["clear", "both"], ["position", "absolute"], ["line-height", "1.5"], ["vertical-align", "middle"], ["text-indent", "20px"],
             ["text-align", "center"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
             ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"],
