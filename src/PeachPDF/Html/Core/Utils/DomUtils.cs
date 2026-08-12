@@ -468,6 +468,35 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Builds an id -&gt; box index for <paramref name="root"/>'s whole subtree in one walk, for
+        /// callers (<c>target-counter()</c>/<c>target-text()</c> resolution) that look up many ids across
+        /// one document rather than the single id <see cref="GetBoxById"/> is built for - repeating that
+        /// method's own uncached O(n) walk once per lookup would be O(n*m) for a table of contents with m
+        /// entries. First occurrence wins on a duplicate id, matching <see cref="GetBoxById"/>'s own
+        /// pre-order short-circuit.
+        /// </summary>
+        internal static Dictionary<string, CssBox> BuildIdIndex(CssBox root)
+        {
+            var index = new Dictionary<string, CssBox>(StringComparer.OrdinalIgnoreCase);
+            CollectIds(root, index);
+            return index;
+        }
+
+        private static void CollectIds(CssBox box, Dictionary<string, CssBox> index)
+        {
+            var id = box.HtmlTag?.TryGetAttribute("id");
+            if (!string.IsNullOrEmpty(id))
+            {
+                index.TryAdd(id, box);
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                CollectIds(childBox, index);
+            }
+        }
+
+        /// <summary>
         /// Gets css box under the given subtree with the given tag name
         /// </summary>
         /// <param name="box">the box to start search from</param>
@@ -885,6 +914,27 @@ namespace PeachPDF.Html.Core.Utils
             foreach (var child in box.Boxes)
             {
                 if (AnyBoxEstablishesSizeContainer(child)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether any box in <paramref name="box"/>'s subtree resolved a <c>target-counter(_, page)</c>
+        /// content token against a page map that did not exist yet (<see cref="CssBox.HasPendingTargetPageContent"/>,
+        /// set by <c>CssContentEngine.AppendTargetCounter</c> during the DOM-construction-time content
+        /// pass). Gates <see cref="HtmlContainerInt.PerformLayoutOnePass"/>'s target-page convergence
+        /// loop the same way <see cref="AnyBoxClonesDecorations"/>/<see cref="AnyBoxEstablishesSizeContainer"/>
+        /// gate their own loops - the overwhelming majority of documents use neither, and for those the
+        /// loop must cost nothing beyond this one tree walk.
+        /// </summary>
+        internal static bool AnyBoxHasTargetPageContent(CssBox box)
+        {
+            if (box.HasPendingTargetPageContent) return true;
+
+            foreach (var child in box.Boxes)
+            {
+                if (AnyBoxHasTargetPageContent(child)) return true;
             }
 
             return false;

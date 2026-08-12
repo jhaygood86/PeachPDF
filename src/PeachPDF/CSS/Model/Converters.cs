@@ -129,7 +129,10 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter ContentListItemConverter =
             StringConverter.Or(AttrConverter).Or(CounterConverter).Or(
                 new ContentFunctionConverter()).Or(
-                new StringFunctionConverter());
+                new StringFunctionConverter()).Or(
+                new TargetCounterFunctionConverter()).Or(
+                new TargetTextFunctionConverter()).Or(
+                new LeaderFunctionConverter());
 
         public static readonly IValueConverter ShapeConverter = Construct(() =>
         {

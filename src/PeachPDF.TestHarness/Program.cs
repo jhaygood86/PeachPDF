@@ -1447,6 +1447,104 @@ await SaveShowcaseAsync("paged_media_running_elements", "Paged Media", "Running 
     "Running headers with full formatting fidelity via position: running() and content: element() - unlike string-set/string(), the margin box shows a real, laid-out element (colors, badges, nested spans), not just captured text.",
     runningElementsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
+// The classic hand-authored table of contents: leader() fills the gap between a chapter
+// title and its page number with a dotted rule, and target-counter(attr(href), page)
+// resolves to the REAL page each chapter lands on after layout/pagination - not a stale,
+// hand-typed number. The second TOC list below splits the leader and page number across
+// two separate <a> elements rather than one, to demonstrate that leader() sees the whole
+// line (every box on it), not just its own element's content - the fill still lines up
+// correctly against text from a completely different sibling element.
+var targetCounterHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: A4 portrait;
+      margin: 25mm 20mm;
+      @bottom-center { content: counter(page); font-size: 8pt; font-family: Arial; color: #888; }
+    }
+    body { font: 11pt Georgia, serif; margin: 0; color: #222; }
+    h1 { font-size: 22pt; margin: 0 0 18pt; }
+    h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin: 22pt 0 6pt; }
+    p { line-height: 1.6; margin: 0 0 10pt; }
+    p.note { font-size: 9pt; color: #888; }
+
+    .toc { list-style: none; margin: 0; padding: 0; }
+    .toc li { margin: 0 0 8pt; }
+    .toc a { color: #222; text-decoration: none; }
+    .toc a.entry::after {
+      /* One declaration: leader and page number both live on the same <a>'s ::after. */
+      content: leader(dotted) " " target-counter(attr(href), page);
+      color: #888;
+    }
+
+    .toc-split li { display: block; }
+    .toc-split .fill::after { content: leader(dotted); color: #888; }
+    .toc-split .pagenum::after { content: target-counter(attr(href), page); color: #888; }
+
+    .chapter { break-before: page; }
+    .chapter h1 { border-bottom: 2pt solid #2563eb; padding-bottom: 6pt; }
+    </style>
+    </head>
+    <body>
+
+    <h1>Table of Contents</h1>
+    <ul class="toc">
+      <li><a class="entry" href="#ch1">Chapter One: Introduction</a></li>
+      <li><a class="entry" href="#ch2">Chapter Two: Methodology</a></li>
+      <li><a class="entry" href="#ch3">Chapter Three: Results</a></li>
+    </ul>
+
+    <h2>Same idiom, split across two elements</h2>
+    <p class="note">leader() distributes the line's remaining width across every leader on it,
+    including a later sibling element's content it never itself declared - here the fill and the
+    page number are two separate &lt;a&gt; elements, not one.</p>
+    <ul class="toc toc-split">
+      <li><a href="#ch1">Chapter One</a><a class="fill" href="#ch1"></a><a class="pagenum" href="#ch1"></a></li>
+      <li><a href="#ch2">Chapter Two</a><a class="fill" href="#ch2"></a><a class="pagenum" href="#ch2"></a></li>
+      <li><a href="#ch3">Chapter Three</a><a class="fill" href="#ch3"></a><a class="pagenum" href="#ch3"></a></li>
+    </ul>
+
+    <div class="chapter" id="ch1">
+      <h1>Chapter One: Introduction</h1>
+      <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
+      labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris
+      nisi ut aliquip ex ea commodo consequat.</p>
+      <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla
+      pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt
+      mollit anim id est laborum.</p>
+    </div>
+
+    <div class="chapter" id="ch2">
+      <h1>Chapter Two: Methodology</h1>
+      <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium
+      voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati
+      cupiditate non provident.</p>
+      <p>Similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga.
+      Et harum quidem rerum facilis est et expedita distinctio.</p>
+      <p>Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod
+      maxime placeat facere possimus, omnis voluptas assumenda est omnis dolor repellendus.</p>
+    </div>
+
+    <div class="chapter" id="ch3">
+      <h1>Chapter Three: Results</h1>
+      <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut
+      et voluptates repudiandae sint et molestiae non recusandae itaque earum rerum hic tenetur a
+      sapiente delectus.</p>
+      <p>Ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores
+      repellat.</p>
+    </div>
+
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("target_counter_toc", "Paged Media", "Table of Contents (target-counter / leader)",
+    "A hand-authored table of contents with real, non-stale page numbers - leader(dotted) fills the gap and target-counter(attr(href), page) resolves the actual page each chapter lands on after pagination, including split across separate elements on the same line.",
+    targetCounterHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ── Per-page margin variation showcase ─────────────────────────────────────
 // Per-page top/bottom margin overrides are layout-affecting (CSS Paged Media 3 page-box
 // model): each page's own margins define its content band, so the flowing text genuinely

@@ -3,6 +3,8 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
+using System;
+using System.Text;
 
 namespace PeachPDF.Html.Core.Paint
 {
@@ -38,6 +40,12 @@ namespace PeachPDF.Html.Core.Paint
                 // just left. See GitHub issue #113.
                 if (clip.Width <= VisibilityClipEpsilon || clip.Height <= VisibilityClipEpsilon) continue;
 
+                if (word is CssRectLeader leader)
+                {
+                    PaintLeader(g, leader.FirstLineStyle ?? box, leader, wordFragment.Rect);
+                    continue;
+                }
+
                 // A word on the target's first formatted line, under a ::first-line rule, uses that
                 // resolved shadow box's font/color/letter-spacing instead of the box's own - it was
                 // already measured against this same styleSource (see ApplyFirstLineStyleOverride), so
@@ -56,6 +64,48 @@ namespace PeachPDF.Html.Core.Paint
                 var text = word.FirstLineText ?? word.Text!;
                 g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
             }
+        }
+
+        /// <summary>
+        /// Paints a <c>leader()</c> content-list item (css-content-3 §6) - the "Chapter One ..........
+        /// 12" table-of-contents idiom's fill. <see cref="LeaderKind.Dotted"/>/<see cref="LeaderKind.Custom"/>
+        /// tile the pattern unit as real glyphs in <paramref name="styleSource"/>'s own font (matching
+        /// what typing the literal characters would look like - a real UA's own rendering - rather than a
+        /// dashed pen line, whose gaps are drawn at underline position/spacing, not baseline-anchored
+        /// glyph spacing). <see cref="LeaderKind.Solid"/> is drawn as one continuous filled rule instead of
+        /// tiled underscores, which would show font-dependent gaps a real continuous rule never has.
+        /// <see cref="LeaderKind.Space"/> paints nothing - an invisible reserved gap, as its name implies.
+        /// </summary>
+        private static void PaintLeader(RGraphics g, CssBox styleSource, CssRectLeader leader, RRect rect)
+        {
+            if (leader.Kind == LeaderKind.Space || rect.Width <= 0) return;
+
+            var font = styleSource.ActualFont;
+
+            if (leader.Kind == LeaderKind.Solid)
+            {
+                var thickness = Math.Max(1d, font.Height / 12d);
+                var y = Math.Round(rect.Y + font.UnderlineOffset);
+                using var brush = g.GetSolidBrush(styleSource.ActualColor);
+                g.DrawRectangle(brush, rect.X, y, rect.Width, thickness);
+                return;
+            }
+
+            var unit = leader.Kind == LeaderKind.Custom ? leader.CustomPattern : ".";
+            if (string.IsNullOrEmpty(unit)) return;
+
+            var unitWidth = g.MeasureString(unit, font, styleSource.ActualTextShapingFeatures).Width;
+            if (unitWidth <= 0) return;
+
+            var repeatCount = (int)(rect.Width / unitWidth);
+            if (repeatCount <= 0) return;
+
+            var tiled = new StringBuilder(unit.Length * repeatCount);
+            for (var i = 0; i < repeatCount; i++) tiled.Append(unit);
+
+            g.DrawString(tiled.ToString(), font, styleSource.ActualColor, new RPoint(rect.X, rect.Y),
+                new RSize(rect.Width, rect.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette,
+                styleSource.ActualTextShapingFeatures);
         }
     }
 }

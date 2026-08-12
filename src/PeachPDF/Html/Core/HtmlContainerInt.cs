@@ -19,6 +19,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Fragments;
+using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
@@ -26,6 +27,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core
@@ -85,6 +87,18 @@ namespace PeachPDF.Html.Core
         /// is document order for the same reason <see cref="_namedStrings"/> is).
         /// </summary>
         private readonly List<RunningElement> _runningElements = new();
+
+        /// <summary>
+        /// Lazily-built id -&gt; box index backing <see cref="GetBoxById(CssBox, string)"/>
+        /// (<c>target-counter()</c>/<c>target-text()</c> resolution, which can look up many ids across
+        /// one document - see <see cref="DomUtils.BuildIdIndex"/>). Rebuilt whenever the tree's topmost
+        /// box identity has changed since the last build (covers the <c>@container</c> convergence
+        /// loop's own re-parse, which produces a new tree), never invalidated otherwise - ids don't
+        /// change mid-pass.
+        /// </summary>
+        private Dictionary<string, CssBox>? _idIndex;
+
+        private CssBox? _idIndexRoot;
 
         #endregion
 
@@ -834,6 +848,54 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
+        /// Cached id -&gt; box lookup for <c>target-counter()</c>/<c>target-text()</c> resolution
+        /// (<see cref="CssContentEngine.AppendTargetCounter"/>/<see cref="CssContentEngine.ResolveTargetText"/>),
+        /// which can call this many times per document (once per resolved reference, across up to 4
+        /// content-resolution passes) - unlike <see cref="GetElementRectangle"/>'s single-lookup use,
+        /// repeating <see cref="DomUtils.GetBoxById"/>'s own uncached O(n) walk here would be O(n*m) for a
+        /// table of contents with m entries.
+        /// </summary>
+        /// <param name="fromBox">
+        /// Any box in the tree to search - its topmost ancestor is walked to and used as the search root,
+        /// rather than this container's own <see cref="Root"/>. <c>ApplyContent</c>'s very first
+        /// resolution pass runs from <c>DomParser.CorrectTextBoxes</c>, which happens *inside*
+        /// <c>DomParser.GenerateCssTree</c> - <see cref="Root"/> is only assigned by <see cref="SetHtml"/>
+        /// once that whole method returns, so it is always null at that point and a lookup keyed off it
+        /// would silently never resolve anything on the pass that matters most. Walking from the box
+        /// actually being resolved works at every call site (pre-layout DOM construction, the target-page
+        /// convergence loop, and any later re-resolution) with no ordering dependency.
+        /// </param>
+        /// <param name="elementId">the id to find the box by</param>
+        internal CssBox? GetBoxById(CssBox fromBox, string elementId)
+        {
+            var actualRoot = fromBox;
+            while (actualRoot.ParentBox != null)
+            {
+                actualRoot = actualRoot.ParentBox;
+            }
+
+            if (!ReferenceEquals(_idIndexRoot, actualRoot))
+            {
+                _idIndex = DomUtils.BuildIdIndex(actualRoot);
+                _idIndexRoot = actualRoot;
+            }
+
+            return _idIndex != null && _idIndex.TryGetValue(elementId, out var box) ? box : null;
+        }
+
+        /// <summary>
+        /// The fragmentainer-slot -&gt; materialized-page map <see cref="CssContentEngine.AppendTargetCounter"/>
+        /// resolves <c>target-counter(_, page)</c> against, built fresh each iteration of
+        /// <see cref="PerformLayoutOnePass"/>'s target-page convergence loop from that iteration's own
+        /// (still provisional) fragment tree. Null before the loop's first iteration has run at all - a
+        /// box resolving <c>target-counter(_, page)</c> against a null map emits the same placeholder
+        /// <c>counter(page)</c> already silently produces outside margin boxes today (see
+        /// <see cref="Dom.CssBox.HasPendingTargetPageContent"/>), and the loop revisits it once a real map
+        /// exists.
+        /// </summary>
+        internal (IReadOnlyDictionary<int, int> SlotToPage, int MaxMappedSlot, int FallbackPageCount)? TargetPageMap { get; private set; }
+
+        /// <summary>
         /// Measures the bounds of box and children, recursively.
         /// </summary>
         /// <param name="g">Device context to draw</param>
@@ -1000,6 +1062,57 @@ namespace PeachPDF.Html.Core
 
             // After layout, re-apply content to pseudo-elements now that named strings are set
             ReapplyPseudoElementContent(Root);
+
+            // css-content-3's target-counter(target, page) needs the final page a target box landed on,
+            // which only exists once pagination has run - but the resolved page-number text's own width
+            // can change line-breaking, which can change pagination. Same "layout depends on layout"
+            // shape as UseVariablePageWidth's reflow loop above and PerformLayout's own @container
+            // refinement loop, solved the same way: materialize a provisional fragment tree just far
+            // enough to build a slot->page map, re-resolve every target-counter(_, page) against it, and
+            // repeat (capped at the same 3 iterations those two loops already established) until a round
+            // resolves to the same text the previous round did. Only entered for documents that actually
+            // use target-counter(_, page) - AnyBoxHasTargetPageContent is the same cascade-only precheck
+            // cost class as AnyBoxClonesDecorations/AnyBoxEstablishesSizeContainer above.
+            if (DomUtils.AnyBoxHasTargetPageContent(Root))
+            {
+                var targetPageRootWidth = MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width);
+
+                // Seeded from the state already on hand (the placeholder "1" text every target-counter(_,
+                // page) box currently holds), mirroring UseVariablePageWidth's own reflow loop above -
+                // this only lets the loop exit after a single round in the edge case where a target
+                // genuinely resolves to page 1 (placeholder happens to already be correct), but costs
+                // nothing to seed correctly rather than from null.
+                var previousSignature = TargetPageContentSignature(Root);
+
+                for (var pass = 0; pass < 3; pass++)
+                {
+                    // Speculative: LayoutDocument (below) replaces _emitter with a fresh one on its next
+                    // call, so finishing this one early to read its tree and discarding the result costs
+                    // nothing - only the reflow loop's own final Finish() (further down) is ever assigned
+                    // to FragmentTree.
+                    var provisionalTree = _emitter?.Finish() ?? new FragmentTree([]);
+                    var (slotToPage, maxMappedSlot) = PageAnchorResolver.BuildSlotToPageMap(provisionalTree.Fragmentainers);
+                    TargetPageMap = (slotToPage, maxMappedSlot, provisionalTree.Fragmentainers.Count);
+                    ResolveTargetPageContent(Root);
+                    var currentSignature = TargetPageContentSignature(Root);
+
+                    // Always reflow after resolving, even when this round's text matches the previous
+                    // round's (checked below): a leader()-bearing box's content is rebuilt via
+                    // ParseToWordsWithLeaders on every resolve, which always creates fresh CssRectLeader
+                    // instances (Width 0) regardless of whether the resolved text actually changed - only
+                    // this pass's own LayoutDocument call (CssLayoutEngine.ApplyLeaderFill) gives them a
+                    // real width. Skipping it whenever text happened to match would leave those particular
+                    // boxes' leaders permanently zero-width.
+                    Root.Size = new RSize(targetPageRootWidth, 0);
+                    Root.Location = Location;
+                    ActualSize = RSize.Empty;
+                    await LayoutDocument(g);
+                    ReapplyPseudoElementContent(Root);
+
+                    if (currentSignature == previousSignature) break;
+                    previousSignature = currentSignature;
+                }
+            }
 
             // Recompute after layout in case pseudo-element reapplication added any out-of-flow boxes.
             // Every box's size is final now, so it's safe to also compute HasStackingHoistCandidates.
@@ -1882,6 +1995,75 @@ namespace PeachPDF.Html.Core
                     }
                 }
                 ReapplyPseudoElementContent(childBox);
+            }
+        }
+
+        /// <summary>
+        /// Re-resolves <c>target-counter(_, page)</c> for every box <c>CssContentEngine.AppendTargetCounter</c>
+        /// has ever flagged (<see cref="CssBox.HasPendingTargetPageContent"/>) against whatever
+        /// <see cref="TargetPageMap"/> currently holds - the target-page convergence loop's per-round
+        /// work. Mirrors <see cref="ReapplyPseudoElementContent"/>'s own "apply then re-parse words if
+        /// there's text" contract; a leader-bearing box's content is fully handled inside
+        /// <c>ApplyContent</c> itself (it calls <c>ParseToWordsWithLeaders</c> directly and leaves
+        /// <c>Text</c> null), so the guard below naturally no-ops for it.
+        /// </summary>
+        private static void ResolveTargetPageContent(CssBox box)
+        {
+            if (box.HasPendingTargetPageContent)
+            {
+                CssContentEngine.ApplyContent(box);
+                if (!string.IsNullOrEmpty(box.Text))
+                {
+                    box.ParseToWords();
+                }
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                ResolveTargetPageContent(childBox);
+            }
+        }
+
+        /// <summary>
+        /// Separators <see cref="AppendTargetPageContentSignature"/> uses to keep one word's text from
+        /// silently concatenating into its neighbour's (e.g. "1" + "2" needs to stay distinguishable from
+        /// "12") and to mark a <see cref="CssRectLeader"/> (whose own <c>Text</c> is always null) as
+        /// present. U+0001/U+0002 rather than a printable character since neither can appear in ordinary
+        /// resolved content.
+        /// </summary>
+        private const string LeaderSignatureMarker = "\u0001";
+
+        private const char SignatureSeparator = '\u0002';
+
+        /// <summary>
+        /// A cheap, order-sensitive signature of every <see cref="CssBox.HasPendingTargetPageContent"/>
+        /// box's currently-resolved content, for the target-page convergence loop's fixpoint check
+        /// (mirrors <see cref="PageAssignmentSignature"/>'s own "compare a signature, not the whole tree"
+        /// shape). Built from <see cref="CssBox.Words"/> rather than <see cref="CssBox.Text"/> so it
+        /// works uniformly whether or not the box also contains a <c>leader()</c> (which leaves
+        /// <c>Text</c> permanently null - see <see cref="CssContentEngine.ApplyContent"/>).
+        /// </summary>
+        private static string TargetPageContentSignature(CssBox box)
+        {
+            var sb = new StringBuilder();
+            AppendTargetPageContentSignature(box, sb);
+            return sb.ToString();
+        }
+
+        private static void AppendTargetPageContentSignature(CssBox box, StringBuilder sb)
+        {
+            if (box.HasPendingTargetPageContent)
+            {
+                sb.Append(SignatureSeparator);
+                foreach (var word in box.Words)
+                {
+                    sb.Append(word is CssRectLeader ? LeaderSignatureMarker : word.Text).Append(SignatureSeparator);
+                }
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                AppendTargetPageContentSignature(childBox, sb);
             }
         }
 

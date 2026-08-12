@@ -111,6 +111,16 @@ namespace PeachPDF.Html.Core.Dom
         protected bool _wordsSizeMeasured;
         public CssImage? ContentImage { get; internal set; }
 
+        /// <summary>
+        /// Set by <c>CssContentEngine.AppendTargetCounter</c> when this box's <c>Content</c>
+        /// resolved a <c>target-counter(_, page)</c> token against a page map that did not exist yet (so
+        /// it emitted the same placeholder <c>counter(page)</c> already silently produces outside margin
+        /// boxes today). Gates <see cref="DomUtils.AnyBoxHasTargetPageContent"/> and
+        /// <see cref="HtmlContainerInt"/>'s target-page convergence loop, which revisits every box this
+        /// is set on once a real page map exists.
+        /// </summary>
+        internal bool HasPendingTargetPageContent { get; set; }
+
 
         #endregion
 
@@ -829,8 +839,34 @@ namespace PeachPDF.Html.Core.Dom
         public void ParseToWords()
         {
             Words.Clear();
+            // A rebuilt Words list invalidates any earlier MeasureWordsSize pass - its own words-measured
+            // guard would otherwise silently skip these brand-new CssRect instances forever, leaving them
+            // at their default zero Width/Height (see the identical reset in ParseToWordsWithLeaders).
+            // Matters whenever this runs after the very first (DOM-construction-time) call - e.g.
+            // HtmlContainerInt.ReapplyPseudoElementContent's post-layout string() re-resolution, or the
+            // target-page convergence loop's per-round re-resolution.
+            _wordsSizeMeasured = false;
+            AppendWordsFromText(_text!);
+        }
 
-            var text = ApplyTextTransform(_text!, TextTransform);
+        /// <summary>
+        /// Splits <paramref name="sourceText"/> into words and appends them to <see cref="Words"/> - the
+        /// body of <see cref="ParseToWords"/>, extracted so <see cref="ParseToWordsWithLeaders"/> can call
+        /// it once per text segment around each <c>leader()</c> content-list item without re-deriving the
+        /// word-splitting logic. Behavior-preserving for <see cref="ParseToWords"/>'s own (leader-free)
+        /// call, which always passes this box's own <c>_text</c>.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="BidiLevels"/> is indexed against this box's own assigned <c>Text</c>, so a segment
+        /// that isn't it (every call <see cref="ParseToWordsWithLeaders"/> makes) reads it as null and
+        /// falls back to direction-only bidi levels the same way plain no-bidi-info text already does -
+        /// an acceptable v1 simplification for leader-bearing generated content, consistent with the
+        /// existing bidi gap already accepted for ::before/::after text (see
+        /// .claude/accepted-gaps/generated-content-excluded-from-bidi-resolution.md).
+        /// </remarks>
+        private void AppendWordsFromText(string sourceText)
+        {
+            var text = ApplyTextTransform(sourceText, TextTransform);
             var startIdx = 0;
             var preserveSpaces = WhiteSpace.Value is Whitespace.Pre or Whitespace.PreWrap;
             var respectNewLines = preserveSpaces || WhiteSpace.Value == Whitespace.PreLine || IsBrElement;
@@ -924,7 +960,7 @@ namespace PeachPDF.Html.Core.Dom
                             // kept alongside so a ::first-line rule's own text-transform (if different
                             // from this box's) can be re-derived later without the information a transform
                             // like uppercase would otherwise destroy. See CssRect.OriginalText.
-                            var rawOriginalWord = _text!.Substring(startIdx, endIdx - startIdx);
+                            var rawOriginalWord = sourceText.Substring(startIdx, endIdx - startIdx);
 
                             List<int>? hyphenationCandidates = null;
                             string cleanWord;
@@ -975,6 +1011,38 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     startIdx = endIdx;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Like <see cref="ParseToWords"/>, but for a <c>content</c> value containing one or more
+        /// <c>leader()</c> items (<see cref="CssContentEngine"/>'s segment-producing path, used instead
+        /// of its single flat-string path whenever the tokenized content list contains a
+        /// <c>leader()</c> token). Each text segment is split into words via
+        /// <see cref="AppendWordsFromText"/> exactly as <see cref="ParseToWords"/> does; each leader
+        /// segment becomes one <see cref="CssRectLeader"/> whose real width is decided later, post-flow
+        /// and potentially against sibling boxes on the same line, by <c>CssLayoutEngine.ApplyLeaderFill</c>.
+        /// Does not set <c>Text</c> - a leader-bearing box's content list has no single flat-string
+        /// representation, and nothing needs it (<see cref="CssContentEngine.GetTextContent"/>'s
+        /// <c>Text</c>-null fallback already walks <see cref="Boxes"/> instead, which a leader-bearing
+        /// pseudo-element is never a sensible target of anyway).
+        /// </summary>
+        internal void ParseToWordsWithLeaders(IReadOnlyList<CssContentEngine.ContentSegment> segments)
+        {
+            Words.Clear();
+            // See ParseToWords' identical reset - a rebuilt Words list must be re-measured.
+            _wordsSizeMeasured = false;
+
+            foreach (var segment in segments)
+            {
+                if (segment.Leader is { } kind)
+                {
+                    Words.Add(new CssRectLeader(this, kind, segment.CustomPattern));
+                }
+                else if (!string.IsNullOrEmpty(segment.Text))
+                {
+                    AppendWordsFromText(segment.Text);
                 }
             }
         }
@@ -4856,6 +4924,21 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g"></param>
         internal virtual async ValueTask MeasureWordsSize(RGraphics g)
         {
+            // A leader's width is inherently a per-pass, transient value - CssLayoutEngine.ApplyLeaderFill
+            // recomputes it fresh every pass from that pass's own line content, unlike ordinary text whose
+            // measured width never changes once set. It must be reset here unconditionally, ahead of the
+            // "already measured" guard below: a box whose content never changes across a multi-pass layout
+            // (UseVariablePageWidth's reflow loop, the @container convergence loop, or
+            // HtmlContainerInt's target-page convergence loop - e.g. a leader()-only box with no
+            // target-counter of its own, so nothing ever calls ParseToWords on it again) would otherwise
+            // carry a previous pass's resolved (non-zero) width into this pass's initial flow, corrupting
+            // the wrap decision for whatever follows it on the line.
+            foreach (var leaderWord in Words.OfType<CssRectLeader>())
+            {
+                leaderWord.Width = 0;
+                leaderWord.Height = ActualFont.Height;
+            }
+
             if (_wordsSizeMeasured) return;
 
             await EnsureAuxiliaryImagesLoadedAsync();
@@ -4881,6 +4964,10 @@ namespace PeachPDF.Html.Core.Dom
             {
                 foreach (var boxWord in Words)
                 {
+                    // Already reset (Width/Height) by the unconditional pre-guard loop above, on every
+                    // call including this one - nothing left to do here but skip the text-measurement
+                    // path below.
+                    if (boxWord is CssRectLeader) continue;
                     if (boxWord.IsImage) continue;
                     var font = ResolveWordFont(boxWord, this);
                     boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualTextShapingFeatures).Width : 0;
@@ -4920,6 +5007,12 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var boxWord in Words)
             {
+                if (boxWord is CssRectLeader leaderWord)
+                {
+                    leaderWord.FirstLineStyle = firstLineStyle;
+                    leaderWord.Height = firstLineStyle.ActualFont.Height;
+                    continue;
+                }
                 if (boxWord.IsImage) continue;
 
                 boxWord.FirstLineStyle = firstLineStyle;
@@ -4962,6 +5055,13 @@ namespace PeachPDF.Html.Core.Dom
             for (var i = fromWordIndex; i < Words.Count; i++)
             {
                 var boxWord = Words[i];
+                if (boxWord is CssRectLeader leaderWord)
+                {
+                    leaderWord.FirstLineStyle = null;
+                    leaderWord.FirstLineText = null;
+                    leaderWord.Height = ActualFont.Height;
+                    continue;
+                }
                 if (boxWord.IsImage) continue;
 
                 boxWord.FirstLineStyle = null;

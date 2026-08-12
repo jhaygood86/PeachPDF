@@ -1,8 +1,10 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -11,6 +13,15 @@ namespace PeachPDF.Html.Core.Dom
 {
     internal static class CssContentEngine
     {
+        /// <summary>
+        /// One item of a <c>content</c> value that contains a <c>leader()</c> (css-content-3 §6) - a
+        /// resolved text run, or the pattern a <c>leader()</c> item asked for (never both). Produced by
+        /// <see cref="BuildContentSegments"/> and consumed by <see cref="CssBox.ParseToWordsWithLeaders"/>,
+        /// since a leader-bearing content list has no single flat-string representation the way every
+        /// other <c>content</c> value does.
+        /// </summary>
+        internal readonly record struct ContentSegment(string? Text, LeaderKind? Leader, string? CustomPattern);
+
         public static void ApplyContent(CssBox cssBox)
         {
             if (cssBox.Content is Keywords.None or Keywords.Normal)
@@ -36,7 +47,94 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            // A leader() item's width is decided later, post-flow (CssLayoutEngine.ApplyLeaderFill), not
+            // here - it has no text representation at all, so a content list containing one can't
+            // collapse into cssBox.Text the way every other content value does. ParseToWordsWithLeaders
+            // populates cssBox.Words directly and leaves Text null; CssContentEngine.GetTextContent's
+            // Text-null fallback already walks Boxes instead, which a leader-bearing pseudo-element is
+            // never a sensible target-text() target of anyway.
+            if (ContainsLeader(tokens))
+            {
+                cssBox.ParseToWordsWithLeaders(BuildContentSegments(cssBox, tokens));
+                return;
+            }
+
             cssBox.Text = ResolveContentTokens(cssBox, tokens);
+        }
+
+        private static bool ContainsLeader(List<Token> tokens)
+        {
+            foreach (var token in tokens)
+            {
+                if (token is FunctionToken { Data: FunctionNames.Leader }) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Splits a content list containing one or more <c>leader()</c> items into
+        /// <see cref="ContentSegment"/>s - a resolved text run for every other token (reusing
+        /// <see cref="ResolveContentTokens"/> one token at a time, so this never re-derives that switch's
+        /// own per-token resolution), flushed whenever a <c>leader()</c> token is hit.
+        /// </summary>
+        private static List<ContentSegment> BuildContentSegments(CssBox cssBox, List<Token> tokens)
+        {
+            var segments = new List<ContentSegment>();
+            var textBuffer = new StringBuilder();
+
+            void FlushText()
+            {
+                if (textBuffer.Length > 0)
+                {
+                    segments.Add(new ContentSegment(textBuffer.ToString(), null, null));
+                    textBuffer.Clear();
+                }
+            }
+
+            foreach (var token in tokens)
+            {
+                if (token is FunctionToken { Data: FunctionNames.Leader } leaderToken)
+                {
+                    FlushText();
+                    var (kind, pattern) = ResolveLeaderToken(leaderToken);
+                    segments.Add(new ContentSegment(null, kind, pattern));
+                    continue;
+                }
+
+                textBuffer.Append(ResolveContentTokens(cssBox, [token]));
+            }
+
+            FlushText();
+            return segments;
+        }
+
+        /// <summary>
+        /// Grammar already validated at parse time (<see cref="LeaderFunctionConverter"/>). The default
+        /// return below is reached for the real, spec-legal <c>leader()</c> (zero-argument, defaults to
+        /// <see cref="LeaderKind.Dotted"/>) as well as for any other malformed value, which degrades the
+        /// same way rather than throwing.
+        /// </summary>
+        private static (LeaderKind Kind, string? Pattern) ResolveLeaderToken(FunctionToken leaderToken)
+        {
+            var args = leaderToken.ArgumentTokens
+                .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
+                .ToArray();
+
+            if (args.Length == 1)
+            {
+                switch (args[0])
+                {
+                    case KeywordToken { Data: Keywords.Solid }:
+                        return (LeaderKind.Solid, null);
+                    case KeywordToken { Data: Keywords.Space }:
+                        return (LeaderKind.Space, null);
+                    case StringToken stringToken:
+                        return (LeaderKind.Custom, stringToken.Data);
+                }
+            }
+
+            return (LeaderKind.Dotted, null);
         }
 
         /// <summary>
@@ -103,10 +201,173 @@ namespace PeachPDF.Html.Core.Dom
                             }
                             break;
                         }
+                    case FunctionToken { Data: FunctionNames.TargetCounter } targetCounterToken:
+                        {
+                            AppendTargetCounter(contentText, cssBox, targetCounterToken);
+                            break;
+                        }
+                    case FunctionToken { Data: FunctionNames.TargetText } targetTextToken:
+                        {
+                            var targetTextValue = ResolveTargetText(cssBox, targetTextToken);
+                            if (!string.IsNullOrEmpty(targetTextValue))
+                            {
+                                contentText.Append(targetTextValue);
+                            }
+                            break;
+                        }
                 }
             }
 
             return contentText.ToString();
+        }
+
+        /// <summary>
+        /// Appends the value of a <c>target-counter(&lt;target&gt;, &lt;counter-name&gt; [, &lt;style&gt;])</c>
+        /// function (css-content-3 §5) to <paramref name="sb"/> - a counter's value at another element,
+        /// not this one. <c>&lt;target&gt;</c> is resolved via <see cref="ResolveTarget"/>. The
+        /// <c>page</c> counter name is UA magic (mirroring <see cref="MarginBoxRenderer"/>'s own handling
+        /// of <c>counter(page)</c> in margin boxes), resolved against the final page the target box lands
+        /// on - see <see cref="HtmlContainerInt"/>'s target-page convergence loop
+        /// (<c>PerformLayoutOnePass</c>), which is what makes that page number real rather than the
+        /// placeholder emitted before a page map exists. Any other counter name resolves immediately via
+        /// <see cref="CssCounterEngine.GetCounter"/>, with no pagination dependency.
+        /// </summary>
+        private static void AppendTargetCounter(StringBuilder sb, CssBox cssBox, FunctionToken functionToken)
+        {
+            var arguments = functionToken.ArgumentTokens
+                .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
+                .ToArray();
+
+            if (arguments.Length < 2 || arguments[1] is not KeywordToken counterNameToken)
+            {
+                return;
+            }
+
+            var targetBox = ResolveTarget(cssBox, arguments[0]);
+            if (targetBox == null)
+            {
+                // Unresolved target (including the running-element/repeated-table-header gap this shares
+                // with PDF bookmarks - see
+                // .claude/accepted-gaps/target-counter-target-text-running-element-not-resolved.md) -
+                // never throws, emits nothing, the same as a real UA's own "target not rendered" behavior.
+                return;
+            }
+
+            var style = arguments.Length > 2 && arguments[2] is KeywordToken styleToken
+                ? styleToken.Data
+                : Keywords.Decimal;
+
+            if (counterNameToken.Data.Equals("page", StringComparison.OrdinalIgnoreCase))
+            {
+                // A structural, permanent fact about this box's content - not "still needs its first
+                // resolution" - so every convergence-loop pass keeps re-visiting it even after it has
+                // resolved once, since a later pass's pagination can still move which page the target
+                // lands on.
+                cssBox.HasPendingTargetPageContent = true;
+                var container = cssBox.HtmlContainer;
+
+                if (container?.TargetPageMap is { } map)
+                {
+                    var targetRect = CommonUtils.GetFirstValueOrDefault(targetBox.Rectangles, targetBox.Bounds);
+                    var pageIndex = PageAnchorResolver.ResolvePixelYToPage(
+                        container, map.SlotToPage, map.MaxMappedSlot, map.FallbackPageCount, targetRect.Top);
+                    sb.Append(CssCounterEngine.FormatCounterValue(pageIndex + 1, style));
+                }
+                else
+                {
+                    // No page map yet (the pre-layout DOM-construction pass, or before the target-page
+                    // convergence loop's first iteration has run) - the same placeholder counter(page)
+                    // already silently produces outside margin boxes today; the convergence loop revisits
+                    // this box once a real map exists.
+                    sb.Append(CssCounterEngine.FormatCounterValue(1, style));
+                }
+
+                return;
+            }
+
+            var counterValue = CssCounterEngine.GetCounter(targetBox, counterNameToken.Data)?.Value ?? 1;
+            sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
+        }
+
+        /// <summary>
+        /// Resolves <c>target-text(&lt;target&gt; [, content | before | after | first-letter])</c>
+        /// (css-content-3 §5). Only the default <c>content</c> mode resolves to anything for v1 (see
+        /// <see cref="TargetTextFunctionConverter"/>'s own doc comment) - <c>before</c>/<c>after</c>/
+        /// <c>first-letter</c> parse but intentionally produce nothing yet, same as an unresolved target.
+        /// </summary>
+        private static string? ResolveTargetText(CssBox cssBox, FunctionToken functionToken)
+        {
+            var arguments = functionToken.ArgumentTokens
+                .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
+                .ToArray();
+
+            if (arguments.Length == 0)
+            {
+                return null;
+            }
+
+            var targetBox = ResolveTarget(cssBox, arguments[0]);
+            if (targetBox == null)
+            {
+                return null;
+            }
+
+            var mode = arguments.Length > 1 && arguments[1] is KeywordToken modeToken
+                ? modeToken.Data.ToLowerInvariant()
+                : "content";
+
+            return mode == "content" ? ExtractText(targetBox) : null;
+        }
+
+        /// <summary>
+        /// Resolves <c>target-counter()</c>/<c>target-text()</c>'s shared <c>&lt;target&gt;</c> argument
+        /// (<c>&lt;string&gt; | url(&lt;url&gt;) | attr(&lt;ident&gt;)</c> - the same shape
+        /// <c>-peachpdf-bookmark-target</c> already established, see
+        /// <see cref="BookmarkOutlineBuilder"/>) to the element it names, via
+        /// <see cref="HtmlContainerInt.GetBoxById(CssBox, string)"/>. A <c>url()</c>/<c>attr()</c> value carries a
+        /// leading <c>#</c> the same way an <c>&lt;a href="#id"&gt;</c> anchor does; a bare
+        /// <c>&lt;string&gt;</c> target names the id directly. Never throws on an unresolved id - the
+        /// caller treats that the same as any other unresolved target.
+        /// </summary>
+        private static CssBox? ResolveTarget(CssBox cssBox, Token targetToken)
+        {
+            var container = cssBox.HtmlContainer;
+            if (container == null)
+            {
+                return null;
+            }
+
+            var id = targetToken switch
+            {
+                StringToken stringToken => stringToken.Data,
+                UrlToken urlToken => string.IsNullOrEmpty(urlToken.Data) ? null : urlToken.Data,
+                FunctionToken { Data: "attr" } attrToken => ResolveTargetAttr(cssBox, attrToken),
+                _ => null
+            };
+
+            if (string.IsNullOrEmpty(id))
+            {
+                return null;
+            }
+
+            if (id[0] == '#')
+            {
+                id = id[1..];
+            }
+
+            return string.IsNullOrEmpty(id) ? null : container.GetBoxById(cssBox, id);
+        }
+
+        private static string? ResolveTargetAttr(CssBox cssBox, FunctionToken attrToken)
+        {
+            if (attrToken.ArgumentTokens.FirstOrDefault() is not KeywordToken nameToken)
+            {
+                return null;
+            }
+
+            var sourceBox = cssBox.IsPseudoElement && cssBox.ParentBox != null ? cssBox.ParentBox : cssBox;
+            var value = sourceBox.GetAttribute(nameToken.Data, "");
+            return string.IsNullOrEmpty(value) ? null : value;
         }
 
         /// <summary>

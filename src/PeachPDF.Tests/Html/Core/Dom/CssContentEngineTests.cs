@@ -2,6 +2,8 @@ using PeachPDF.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Utils;
+using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Html.Core.Dom
 {
@@ -357,6 +359,108 @@ namespace PeachPDF.Tests.Html.Core.Dom
             CssContentEngine.ApplyContent(box);
 
             Assert.Equal(string.Empty, box.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetTextUrlTarget_ResolvesTargetsOwnText()
+        {
+            var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#ch2))";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal("Chapter Two", tocBox.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetTextAttrTarget_ResolvesViaHrefAttribute()
+        {
+            var container = await BuildContainer(
+                "<div id=\"ch2\">Chapter Two</div><a id=\"link\" href=\"#ch2\"></a>");
+            var linkBox = DomUtils.GetBoxById(container.Root, "link")!;
+            linkBox.Content = "target-text(attr(href))";
+
+            CssContentEngine.ApplyContent(linkBox);
+
+            Assert.Equal("Chapter Two", linkBox.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetTextUnresolvedTarget_ReturnsEmptyWithoutThrowing()
+        {
+            var container = await BuildContainer("<div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#does-not-exist))";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal(string.Empty, tocBox.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetCounterCustomName_ResolvesImmediatelyWithNoPaginationDependency()
+        {
+            var container = await BuildContainer(
+                "<div id=\"ch2\" style=\"counter-reset: chapter 4\">Chapter Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-counter(url(#ch2), chapter)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            // A custom counter's value is structural (populated during DOM construction), unlike `page` -
+            // resolves correctly with no HtmlContainerInt.TargetPageMap involved at all.
+            Assert.Equal("4", tocBox.Text);
+            Assert.False(tocBox.HasPendingTargetPageContent);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetCounterPage_BeforePageMapExists_EmitsPlaceholderAndFlagsBox()
+        {
+            var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-counter(url(#ch2), page)";
+
+            Assert.Null(container.TargetPageMap);
+            CssContentEngine.ApplyContent(tocBox);
+
+            // Same placeholder counter(page) already silently produces outside margin boxes today - real
+            // resolution only happens once HtmlContainerInt's target-page convergence loop has run.
+            Assert.Equal("1", tocBox.Text);
+            Assert.True(tocBox.HasPendingTargetPageContent);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetCounterPageWithStyle_FormatsPlaceholderInRequestedStyle()
+        {
+            var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-counter(url(#ch2), page, upper-roman)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal("I", tocBox.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetCounterUnresolvedTarget_ReturnsEmptyAndDoesNotFlagBox()
+        {
+            var container = await BuildContainer("<div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-counter(url(#does-not-exist), page)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal(string.Empty, tocBox.Text);
+            Assert.False(tocBox.HasPendingTargetPageContent);
+        }
+
+        private static async Task<HtmlContainerInt> BuildContainer(string bodyHtml)
+        {
+            var adapter = new PdfSharpAdapter();
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml($"<!DOCTYPE html><html><head></head><body>{bodyHtml}</body></html>", null);
+            return container;
         }
 
         private CssBox CreateBox()
