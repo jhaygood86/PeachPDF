@@ -371,6 +371,13 @@ namespace PeachPDF.Html.Core.Dom
                 // complete, which is what the resumed pass must not re-finalize.
                 blockBox.LineBoxes.Remove(coordinates.Line);
 
+                // hyphenate-limit-last (CSS Text 4 §6.3.5): the line CreateLineBoxes just kept - now the
+                // last one before this break - may not end in a hyphen the property forbids. Unlike
+                // widows this is knowable the moment the break itself is discovered, synchronously: the
+                // "last line" in question is the one this same pass just finished, not one that has yet
+                // to be laid out.
+                stopped = EnforceHyphenateLimitLastBeforeBreak(blockBox, coordinates.Line, context, stopped, completedLines);
+
                 // Discarding the line leaves its words where they were being built, which is inside the
                 // fragmentainer being left - and that fragmentainer's fragments are frozen at the end of this
                 // pass, before the resumed pass re-places them. §4.1 has already decided they belong to the
@@ -1992,23 +1999,139 @@ namespace PeachPDF.Html.Core.Dom
                 if (word is not CssRectWord { PreSplitWord: { } original, HyphenationSuffix: { } suffix } prefix)
                     continue;
 
-                var ownerWords = prefix.OwnerBox.Words;
-                var prefixIndex = ownerWords.IndexOf(prefix);
-
-                if (prefixIndex < 0) continue;
-
-                ownerWords.Remove(suffix);
-                ownerWords[prefixIndex] = original;
-
-                // The restored word has never been positioned this pass, so its Top/Left are whatever
-                // it last carried (nothing, for a word this split had never let reach placement) - not
-                // the "unset" state FragmentEmitter's own AwaitsTheNextFragmentainer check relies on to
-                // tell a genuinely-placed word from one whose position means nothing yet. Set explicitly
-                // rather than left to default, since the loop that sets it for prefix/suffix's own
-                // discarded-line siblings runs against the line's word list, which still names the
-                // now-discarded prefix object, not this replacement.
-                original.AwaitsTheNextFragmentainer = true;
+                TryRestoreHyphenationSplit(prefix, original, suffix);
             }
+        }
+
+        /// <summary>
+        /// Merges a hyphenation split back into <paramref name="original"/>, in
+        /// <paramref name="prefix"/>'s owner box's <see cref="CssBox.Words"/> list - the shared "undo"
+        /// mechanics both <see cref="UndoAbandonedHyphenationSplits"/> and
+        /// <see cref="EnforceHyphenateLimitLastBeforeBreak"/> need, differing only in which line they
+        /// found the split's prefix on and why. Returns whether the merge happened -
+        /// <paramref name="prefix"/> not being present in its own owner's word list is the one way it
+        /// declines (should not happen given <see cref="TryHyphenateWord"/>'s own invariants, but callers
+        /// hold a reference to <paramref name="prefix"/> from elsewhere and cannot assume it still does).
+        /// </summary>
+        private static bool TryRestoreHyphenationSplit(CssRectWord prefix, CssRect original, CssRectWord suffix)
+        {
+            var ownerWords = prefix.OwnerBox.Words;
+            var prefixIndex = ownerWords.IndexOf(prefix);
+
+            if (prefixIndex < 0) return false;
+
+            ownerWords.Remove(suffix);
+            ownerWords[prefixIndex] = original;
+
+            // The restored word has never been positioned this pass, so its Top/Left are whatever
+            // it last carried (nothing, for a word this split had never let reach placement) - not
+            // the "unset" state FragmentEmitter's own AwaitsTheNextFragmentainer check relies on to
+            // tell a genuinely-placed word from one whose position means nothing yet. Set explicitly
+            // rather than left to default, since the loop that sets it for prefix/suffix's own
+            // discarded-line siblings runs against the line's word list, which still names the
+            // now-discarded prefix object, not this replacement.
+            original.AwaitsTheNextFragmentainer = true;
+            return true;
+        }
+
+        /// <summary>
+        /// <c>hyphenate-limit-last</c> (CSS Text 4 §6.3.5, <c>none | always | column | page | spread</c>):
+        /// undoes <paramref name="discardedLine"/>'s preceding line's trailing hyphenation split when the
+        /// resolved value forbids hyphenating before this break, so the whole original word moves into
+        /// the fragmentainer this break resumes in instead - the same "whole word moves on" outcome an
+        /// ordinary overflowing (never-hyphenated) word already gets at a fragmentainer boundary.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Only reachable through the one shape <see cref="TryHyphenateWord"/> ever produces: a split's
+        /// suffix always opens a fresh line of its own, so a hyphen a forbidding value would reject shows
+        /// up as <paramref name="discardedLine"/>'s own first word carrying a
+        /// <see cref="CssRectWord.HyphenationPrefix"/> link back to the prefix that ends the line
+        /// <c>CreateLineBoxes</c> just kept - read off <c>blockBox.LineBoxes[^1]</c>, since the caller has
+        /// already removed <paramref name="discardedLine"/> from that list.
+        /// </para>
+        /// <para>
+        /// Never reached for the element's own true final line: a split's suffix always claims that
+        /// position instead of the hyphenated prefix (it either fits right after the prefix - not a
+        /// hyphenated line end at all - or opens a new line, which becomes the element's new final line),
+        /// so <c>always</c>'s "last full line of the element" clause needs no separate handling here -
+        /// only its "last line before a break" clause does.
+        /// </para>
+        /// <para>
+        /// PeachPDF has no facing-page "spread" concept (css-text-4 borrows the term from paged media this
+        /// engine does not model), so <c>spread</c> is treated the same as <c>page</c>.
+        /// </para>
+        /// </remarks>
+        internal static InlineBreakToken EnforceHyphenateLimitLastBeforeBreak(
+            CssBox blockBox, CssLineBox discardedLine, FragmentainerContext? context, InlineBreakToken stopped,
+            int completedLines)
+        {
+            var limit = blockBox.HyphenateLimitLast.Value;
+
+            if (discardedLine.Words is not [CssRectWord { HyphenationPrefix: { } prefix }, ..])
+                return stopped;
+
+            if (prefix is not { PreSplitWord: { } original, HyphenationSuffix: { } suffix })
+                return stopped;
+
+            var isColumnBreak = context?.HasOwnBand ?? false;
+
+            // None is handled explicitly here rather than filtered out beforehand, so this switch is the
+            // only place that decides what each value forbids. The `_` arm is unreachable for any value
+            // the cascade can actually produce (HyphenateLimitLast has exactly these five members) - kept
+            // only because the compiler cannot see that guarantee and requires the switch expression to
+            // be exhaustive against the underlying byte's full range.
+            var forbidden = limit switch
+            {
+                HyphenateLimitLast.None => false,
+                HyphenateLimitLast.Always => true,
+                HyphenateLimitLast.Column => isColumnBreak,
+                HyphenateLimitLast.Page or HyphenateLimitLast.Spread => !isColumnBreak,
+                _ => false
+            };
+
+            if (!forbidden) return stopped;
+
+            // keptLine must be a line THIS pass produced. When the current pass's own seed line (the one
+            // that resumed a split's suffix) is itself what just got discarded, blockBox.LineBoxes[^1] is
+            // a line an EARLIER pass already finalized - possibly already emitted into a frozen fragment.
+            // TakeEarlyBreak and TryRewindForWidows both call HtmlContainerInt.InvalidateEmittedFragmentsFor
+            // before touching geometry that old; this is a synchronous, same-pass-only fixup with no such
+            // machinery, so it declines instead of mutating a line paint may never re-read. blockBox.
+            // DiscardLineBoxesFrom(completedLines) at the top of CreateLineBoxes guarantees indices below
+            // completedLines all predate this pass, which is also what makes an empty LineBoxes list (no
+            // kept line exists at all) fall out of the same check, since -1 < completedLines always.
+            var keptLineIndex = blockBox.LineBoxes.Count - 1;
+            if (keptLineIndex < completedLines) return stopped;
+
+            var keptLine = blockBox.LineBoxes[keptLineIndex];
+
+            // If the prefix is its line's only word, that line was already a fresh, full-width one - the
+            // same width the next fragmentainer's opening line will offer. Undoing the split would only
+            // recreate an identical too-narrow-for-the-whole-word line there, which hyphenates again,
+            // whose prefix is again its line's only word, forever - a livelock this measurably produced
+            // (100,000+ empty pages before the fragmentainer-pass cap forced a monolithic fallback) before
+            // this guard existed. Declining leaves the hyphen in place, which is the CSS-conformant
+            // fallback anyway: a value this engine cannot honor at all is better given up than looped on
+            // (the same reasoning `orphans`/`widows` already applies when nothing above a box in its
+            // fragmentainer means moving it cannot help either).
+            if (keptLine.Words.Count <= 1) return stopped;
+
+            if (!keptLine.Words.Remove(prefix)) return stopped;
+
+            if (!TryRestoreHyphenationSplit(prefix, original, suffix))
+            {
+                // Should not happen (the prefix that just came off keptLine has to still be in its own
+                // owner box's word list), but restoring what was removed leaves nothing worse off than
+                // declining the whole rewrite would have.
+                keptLine.Words.Add(prefix);
+                return stopped;
+            }
+
+            // One lower than the suffix's own ordinal (what stopped.ResumeWordIndex already names) -
+            // the resumed pass re-walks the owner list from scratch, now one entry shorter, so the
+            // restored whole word lands exactly where the prefix - not the suffix - was counted.
+            return stopped with { ResumeWordIndex = stopped.ResumeWordIndex - 1 };
         }
 
         /// <summary>
@@ -2096,6 +2219,7 @@ namespace PeachPDF.Html.Core.Dom
                 // into the resumed pass unchanged - see CssRectWord.HyphenationSuffix.
                 prefix.PreSplitWord = word;
                 prefix.HyphenationSuffix = suffix;
+                suffix.HyphenationPrefix = prefix;
 
                 return true;
             }

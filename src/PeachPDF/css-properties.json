@@ -2024,7 +2024,7 @@
     },
     {
       "name": "hyphenate-limit-last",
-      "comment": "CSS Text 4 §6.3.5: none | always | column | page | spread. Parsed, cascaded and inherited; layout does not yet act on it - see the accepted-gaps note (needs orphans/widows-caliber fragmentainer-boundary lookahead).",
+      "comment": "CSS Text 4 §6.3.5: none | always | column | page | spread. Parsed, cascaded and inherited; CssLayoutEngine.EnforceHyphenateLimitLastBeforeBreak enforces it at the fragmentainer-boundary discard point in CreateLineBoxes. spread is treated the same as page (no facing-page layout in this engine).",
       "inherited": true,
       "initialValue": "none",
       "cssDataType": {

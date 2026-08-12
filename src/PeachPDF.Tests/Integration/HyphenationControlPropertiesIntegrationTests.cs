@@ -211,7 +211,8 @@ namespace PeachPDF.Tests.Integration
                 .Select(line => line.Words.Count > 0 && line.Words[^1].Text is { Length: > 0 } t && t.EndsWith('-'))
                 .ToList();
 
-        // ─── hyphenate-limit-last (parses/cascades; layout effect tracked as issue #723) ─────────
+        // ─── hyphenate-limit-last (cascade only - see HyphenateLimitLastEnforcementTests and ───────
+        // ─── HyphenateLimitLastPaginationIntegrationTests for its layout effect, issue #723) ─────
 
         [Fact]
         public async Task HyphenateLimitLast_DefaultsToNone()
