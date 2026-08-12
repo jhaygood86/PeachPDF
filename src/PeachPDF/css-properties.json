@@ -1979,6 +1979,205 @@
       }
     },
     {
+      "name": "hyphenate-character",
+      "comment": "CSS Text 4 §6.3.1: auto | <string>. cssDataType 'cssom' delegates grammar validation to the CSS-OM's own HyphenateCharacterProperty; layout resolves the raw stored text (list-style-type's own <string>-storage convention - still carries its quotes) to the actual glyph, defaulting auto to '-' (see docs/html-css-support.md and the accepted-gaps note on script-appropriate auto selection).",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "HyphenateCharacter",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "hyphenate-limit-chars",
+      "comment": "CSS Text 4 §6.3.4: [ auto | <integer> ]{1,3}. cssDataType 'cssom' delegates grammar validation to the shared HyphenateLimitCharsGrammar; layout re-parses the raw stored text to get the word/before/after minimums (CssLayoutEngine.TryHyphenateWord).",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "HyphenateLimitChars",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "hyphenate-limit-lines",
+      "comment": "CSS Text 4 §6.3.5: no-limit | <integer [0,∞]>. CssKeywordOrValue<NoLimitKeyword,int>-backed, the z-index/column-width shape.",
+      "inherited": true,
+      "initialValue": "no-limit",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "NoLimitKeyword",
+        "keywordMap": "Map.NoLimitKeywords",
+        "fallback": "NoLimitKeyword.NoLimit",
+        "valueType": "integer",
+        "min": 0
+      },
+      "html": {
+        "propertyPath": "HyphenateLimitLines",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<NoLimitKeyword, int>>",
+        "area": "PaginationArea",
+        "getterExpression": "{box}.HyphenateLimitLines.ToString()"
+      }
+    },
+    {
+      "name": "hyphenate-limit-last",
+      "comment": "CSS Text 4 §6.3.5: none | always | column | page | spread. Parsed, cascaded and inherited; layout does not yet act on it - see the accepted-gaps note (needs orphans/widows-caliber fragmentainer-boundary lookahead).",
+      "inherited": true,
+      "initialValue": "none",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "HyphenateLimitLast",
+        "keywordMap": "Map.HyphenateLimitLastModes",
+        "fallback": "HyphenateLimitLast.None"
+      },
+      "html": {
+        "propertyPath": "HyphenateLimitLast",
+        "csharpDataType": "CssProperty<HyphenateLimitLast>",
+        "area": "PaginationArea",
+        "getterExpression": "{box}.HyphenateLimitLast.ToString()"
+      }
+    },
+    {
+      "name": "hyphenate-limit-zone",
+      "comment": "CSS Text 4 §6.3.3: <length-percentage>, percentages resolved against the line box's own length. Initial 0 preserves the pre-existing behavior of always preferring a hyphenated break over leaving any unfilled space.",
+      "inherited": true,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "HyphenateLimitZone",
+        "csharpDataType": "string",
+        "area": "PaginationArea"
+      }
+    },
+    {
+      "name": "-prince-hyphenate-character",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-character spelling (Prince also documents an unprefixed \"hyphenate-character\" that is spelled identically to the real CSS Text 4 property, so needs no separate alias entry of its own) - translates to hyphenate-character at parse time. Not documented in docs/.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "aliasOf": "hyphenate-character",
+      "html": {
+        "propertyPath": "HyphenateCharacter",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "hyphenate-lines",
+      "comment": "Hidden, undocumented compat alias for Prince's own \"hyphenate-lines\" spelling of hyphenate-limit-lines (not a css-text-4 property name; Prince's own, same no-limit | <integer> grammar) - see princexml.com/doc/css-props. Not documented in docs/.",
+      "inherited": true,
+      "initialValue": "no-limit",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "NoLimitKeyword",
+        "keywordMap": "Map.NoLimitKeywords",
+        "fallback": "NoLimitKeyword.NoLimit",
+        "valueType": "integer",
+        "min": 0
+      },
+      "aliasOf": "hyphenate-limit-lines",
+      "html": {
+        "propertyPath": "HyphenateLimitLines",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<NoLimitKeyword, int>>",
+        "area": "PaginationArea",
+        "getterExpression": "{box}.HyphenateLimitLines.ToString()"
+      }
+    },
+    {
+      "name": "-prince-hyphenate-limit-lines",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-limit-lines spelling - translates to hyphenate-limit-lines at parse time. Not documented in docs/.",
+      "inherited": true,
+      "initialValue": "no-limit",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "NoLimitKeyword",
+        "keywordMap": "Map.NoLimitKeywords",
+        "fallback": "NoLimitKeyword.NoLimit",
+        "valueType": "integer",
+        "min": 0
+      },
+      "aliasOf": "hyphenate-limit-lines",
+      "html": {
+        "propertyPath": "HyphenateLimitLines",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<NoLimitKeyword, int>>",
+        "area": "PaginationArea",
+        "getterExpression": "{box}.HyphenateLimitLines.ToString()"
+      }
+    },
+    {
+      "name": "hyphenate-before",
+      "comment": "Hidden, undocumented compat alias for Prince's own standalone \"hyphenate-before\" property (<integer>, initial 2). Prince has no combined hyphenate-limit-chars of its own, so this composes into the real property's \"before\" component via HyphenateLimitCharsGrammar.WithBefore rather than aliasing a longhand 1:1 (aliasOf requires an identical grammar, which this genuinely isn't). initialValue is deliberately null (a property genuinely not participating in the cascade's defaulting store), NOT Prince's own \"2\": DomParser.CascadeApplyStyles's defaulting loop unconditionally re-asserts every CssDefaults-registered property's own initial value on any box that already diverges from ComputedStyle.Default, and this property's only effect is a side effect on a DIFFERENT property's storage (HyphenateLimitChars) - a real initialValue here would silently compose 'before: 2' into every such box's hyphenate-limit-chars even when the author never wrote hyphenate-before at all. Not documented in docs/.",
+      "inherited": true,
+      "initialValue": null,
+      "cssDataType": {
+        "type": "integer",
+        "min": 0
+      },
+      "html": {
+        "propertyPath": "HyphenateLimitChars",
+        "csharpDataType": "string",
+        "area": "TextArea",
+        "customSetter": "{box}.HyphenateLimitChars = global::PeachPDF.CSS.HyphenateLimitCharsGrammar.WithBefore({box}.HyphenateLimitChars, {value});",
+        "hasGetter": false
+      }
+    },
+    {
+      "name": "-prince-hyphenate-before",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-before spelling - see hyphenate-before, including why initialValue is null rather than Prince's own \"2\". Not documented in docs/.",
+      "inherited": true,
+      "initialValue": null,
+      "cssDataType": {
+        "type": "integer",
+        "min": 0
+      },
+      "aliasOf": "hyphenate-before",
+      "html": {
+        "propertyPath": "HyphenateLimitChars",
+        "csharpDataType": "string",
+        "area": "TextArea",
+        "customSetter": "{box}.HyphenateLimitChars = global::PeachPDF.CSS.HyphenateLimitCharsGrammar.WithBefore({box}.HyphenateLimitChars, {value});",
+        "hasGetter": false
+      }
+    },
+    {
+      "name": "hyphenate-after",
+      "comment": "Hidden, undocumented compat alias for Prince's own standalone \"hyphenate-after\" property (<integer>, initial 2) - composes into hyphenate-limit-chars's \"after\" component via HyphenateLimitCharsGrammar.WithAfter - see hyphenate-before, including why initialValue is null rather than Prince's own \"2\". Not documented in docs/.",
+      "inherited": true,
+      "initialValue": null,
+      "cssDataType": {
+        "type": "integer",
+        "min": 0
+      },
+      "html": {
+        "propertyPath": "HyphenateLimitChars",
+        "csharpDataType": "string",
+        "area": "TextArea",
+        "customSetter": "{box}.HyphenateLimitChars = global::PeachPDF.CSS.HyphenateLimitCharsGrammar.WithAfter({box}.HyphenateLimitChars, {value});",
+        "hasGetter": false
+      }
+    },
+    {
+      "name": "-prince-hyphenate-after",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-after spelling - see hyphenate-after, including why initialValue is null rather than Prince's own \"2\". Not documented in docs/.",
+      "inherited": true,
+      "initialValue": null,
+      "cssDataType": {
+        "type": "integer",
+        "min": 0
+      },
+      "aliasOf": "hyphenate-after",
+      "html": {
+        "propertyPath": "HyphenateLimitChars",
+        "csharpDataType": "string",
+        "area": "TextArea",
+        "customSetter": "{box}.HyphenateLimitChars = global::PeachPDF.CSS.HyphenateLimitCharsGrammar.WithAfter({box}.HyphenateLimitChars, {value});",
+        "hasGetter": false
+      }
+    },
+    {
       "name": "text-decoration-line",
       "inherited": false,
       "initialValue": "none",

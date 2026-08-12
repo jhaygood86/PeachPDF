@@ -19,6 +19,8 @@
         public const string Backwards = "backwards";
         public const string Page = "page";
         public const string Column = "column";
+        public const string Spread = "spread";
+        public const string NoLimit = "no-limit";
         public const string AvoidPage = "avoid-page";
         public const string AvoidColumn = "avoid-column";
         public const string AvoidRegion = "avoid-region";
