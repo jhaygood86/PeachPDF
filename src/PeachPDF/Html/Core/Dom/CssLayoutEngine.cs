@@ -1717,15 +1717,23 @@ namespace PeachPDF.Html.Core.Dom
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a
                         // cached candidate break point (from ParseToWords - either an explicit soft
                         // hyphen or an automatic HyphenationEngine suggestion) lets a hyphenated prefix
-                        // fit in the space remaining on the current line instead.
+                        // fit in the space remaining on the current line instead - gated by
+                        // hyphenate-limit-lines (no more than N consecutive hyphenated lines) and
+                        // hyphenate-limit-zone (only bother when skipping the hyphen would otherwise
+                        // leave more than the zone's worth of unfilled space on this line).
+                        var availableWidth = actualLimitRight - coordinates.CurrentX - rightSpacing - clonedTrailing;
+
                         if (!word.SuppressWrapBefore && overflows && !word.IsLineBreak && !wrapNoWrapBox &&
                             word.HyphenationCandidates is { Count: > 0 } &&
-                            TryHyphenateWord(g, b, word, actualLimitRight - coordinates.CurrentX - rightSpacing - clonedTrailing, out var prefixWord, out var suffixWord))
+                            IsWithinHyphenateLimitLines(blockBox, coordinates) &&
+                            IsWithinHyphenateLimitZone(blockBox, availableWidth, actualLimitRight - lineStartX) &&
+                            TryHyphenateWord(g, b, word, availableWidth, out var prefixWord, out var suffixWord))
                         {
                             b.Words[wordIndex] = prefixWord!;
                             b.Words.Insert(wordIndex + 1, suffixWord!);
                             word = prefixWord!;
                             overflows = false;
+                            coordinates.CurrentLineHyphenated = true;
                         }
 
                         // A resumed flow's opening line is empty, so there is nothing to wrap away from;
@@ -1742,6 +1750,13 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (wrapping)
                         {
+                            // The line about to close is being abandoned for a new one - fold whether it
+                            // ended in a hyphen into the running consecutive-hyphenated-lines count before
+                            // that state resets for the line that's about to start.
+                            coordinates.ConsecutiveHyphenatedLines =
+                                coordinates.CurrentLineHyphenated ? coordinates.ConsecutiveHyphenatedLines + 1 : 0;
+                            coordinates.CurrentLineHyphenated = false;
+
                             // b's content straddles the line-1/2 boundary: its words were measured
                             // using blockBox's first-line style (above), but word (and everything after
                             // it in b) is wrapping off line 1 right now, so it/they are no longer
@@ -1997,15 +2012,42 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// <c>hyphenate-limit-lines</c> (CSS Text 4 §6.3.5): whether the line about to be built is still
+        /// allowed to end in a hyphen, given how many immediately preceding lines already did.
+        /// </summary>
+        private static bool IsWithinHyphenateLimitLines(CssBox blockBox, CssLineBoxCoordinates coordinates)
+        {
+            var limit = blockBox.HyphenateLimitLines.Value;
+            return !limit.IsValue || coordinates.ConsecutiveHyphenatedLines < limit.Value!.Value;
+        }
+
+        /// <summary>
+        /// <c>hyphenate-limit-zone</c> (CSS Text 4 §6.3.3): whether the space this line would otherwise
+        /// leave unfilled - <paramref name="availableWidth"/>, the same remaining width the hyphenation
+        /// attempt itself measures a candidate prefix against - is worth spending a hyphen to reclaim.
+        /// The initial value 0 makes this always true, preserving the engine's pre-existing behavior of
+        /// attempting a hyphenated break whenever there is a candidate and any overflow at all.
+        /// </summary>
+        private static bool IsWithinHyphenateLimitZone(CssBox blockBox, double availableWidth, double lineBoxLength)
+        {
+            var declared = blockBox.HyphenateLimitZone;
+            if (string.IsNullOrEmpty(declared) || declared == "0") return true;
+
+            var zone = CssValueParser.ParseLength(declared, lineBoxLength, blockBox);
+            return availableWidth > zone;
+        }
+
+        /// <summary>
         /// Tries to split <paramref name="word"/> at the widest of its precomputed
         /// <see cref="CssRect.HyphenationCandidates"/> (set by <see cref="CssBox.ParseToWords"/> — either
         /// an explicit soft hyphen position or an automatic <c>HyphenationEngine</c> suggestion) whose
-        /// hyphenated prefix (with a literal trailing <c>-</c>, actually measured) still fits in
-        /// <paramref name="availableWidth"/>. Candidates are tried from the last (rightmost, keeping the
-        /// most text on the current line) to the first, so the result is the longest prefix that fits —
-        /// not just the first candidate found. Returns false (leaving <paramref name="prefix"/>/
-        /// <paramref name="suffix"/> null) if no candidate fits, in which case the caller falls back to
-        /// wrapping the whole word as before.
+        /// hyphenated prefix (with a trailing <c>hyphenate-character</c> glyph, actually measured) still
+        /// fits in <paramref name="availableWidth"/> and satisfies <c>hyphenate-limit-chars</c>'s word/
+        /// before/after minimums. Candidates are tried from the last (rightmost, keeping the most text on
+        /// the current line) to the first, so the result is the longest prefix that fits — not just the
+        /// first candidate found. Returns false (leaving <paramref name="prefix"/>/<paramref name="suffix"/>
+        /// null) if no candidate fits, in which case the caller falls back to wrapping the whole word as
+        /// before.
         /// </summary>
         private static bool TryHyphenateWord(RGraphics g, CssBox b, CssRect word, double availableWidth, out CssRectWord? prefix, out CssRectWord? suffix)
         {
@@ -2017,12 +2059,24 @@ namespace PeachPDF.Html.Core.Dom
             if (string.IsNullOrEmpty(text) || candidates is not { Count: > 0 })
                 return false;
 
+            // The bool result is intentionally unchecked: on a genuinely malformed stored value (never
+            // produced by the validated cascade) TryParse already resets all three out params to null -
+            // "no constraint", the same safe default as an explicit "auto" - so there is no distinct
+            // failure behavior to branch on.
+            HyphenateLimitCharsGrammar.TryParse(b.HyphenateLimitChars, out var wordMin, out var beforeMin, out var afterMin);
+            if (wordMin.HasValue && text.Length < wordMin.Value)
+                return false;
+
+            var hyphenCharacter = ResolveHyphenateCharacter(b);
+
             for (var i = candidates.Count - 1; i >= 0; i--)
             {
                 var breakAt = candidates[i];
                 if (breakAt <= 0 || breakAt >= text.Length) continue;
+                if (beforeMin.HasValue && breakAt < beforeMin.Value) continue;
+                if (afterMin.HasValue && text.Length - breakAt < afterMin.Value) continue;
 
-                var prefixText = text[..breakAt] + "-";
+                var prefixText = text[..breakAt] + hyphenCharacter;
                 var prefixWidth = g.MeasureString(prefixText, b.ActualFont, b.ActualTextShapingFeatures).Width;
                 if (prefixWidth > availableWidth) continue;
 
@@ -2047,6 +2101,29 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Resolves <c>hyphenate-character</c> (CSS Text 4 §6.3.1) to the literal glyph(s)
+        /// <see cref="TryHyphenateWord"/> appends to a hyphenated prefix. <c>b.HyphenateCharacter</c>
+        /// stores the raw CSS-OM serialization of the declared value (the <c>list-style-type</c> <c>&lt;string&gt;</c>
+        /// convention — a string value still carries its quotes), so <c>auto</c> is the literal text
+        /// "auto" here, not a resolved character. There is no per-script "typographic convention" table
+        /// behind <c>auto</c> — it always resolves to the U+002D HYPHEN-MINUS this engine has always
+        /// hardcoded (see the accepted-gaps note); an explicit empty string is honored as specified
+        /// (CSS Text 4 §6.3.1's note), breaking the line with no visible hyphen glyph at all.
+        /// </summary>
+        private static string ResolveHyphenateCharacter(CssBox b)
+        {
+            var declared = b.HyphenateCharacter;
+            if (string.IsNullOrEmpty(declared) || declared.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase))
+                return "-";
+
+            // GetFontFaceFamilyName is the existing "unwrap a stored CSS-OM <string> literal" helper
+            // (the same list-style-type/font-family convention this property's own storage follows) -
+            // its only possible no-match fallback here is Auto, already handled above, since Layer A
+            // validation guarantees HyphenateCharacter is always either "auto" or a real string token.
+            return CssValueParser.GetFontFaceFamilyName(declared);
         }
 
         /// <summary>

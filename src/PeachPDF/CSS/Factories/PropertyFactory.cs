@@ -316,6 +316,18 @@ namespace PeachPDF.CSS
 
             AddLonghand(PropertyNames.Height, () => new HeightProperty(), true);
             AddLonghand(PropertyNames.Hyphens, () => new HyphensProperty());
+            AddLonghand(PropertyNames.HyphenateCharacter, () => new HyphenateCharacterProperty());
+            AddLonghand(PropertyNames.HyphenateLimitChars, () => new HyphenateLimitCharsProperty());
+            AddLonghand(PropertyNames.HyphenateLimitLines, () => new HyphenateLimitLinesProperty());
+            AddLonghand(PropertyNames.HyphenateLimitLast, () => new HyphenateLimitLastProperty());
+            AddLonghand(PropertyNames.HyphenateLimitZone, () => new HyphenateLimitZoneProperty());
+            AddLonghand(PropertyNames.PrinceHyphenateCharacter, () => new PrinceHyphenateCharacterProperty());
+            AddLonghand(PropertyNames.HyphenateLines, () => new HyphenateLinesProperty());
+            AddLonghand(PropertyNames.PrinceHyphenateLimitLines, () => new PrinceHyphenateLimitLinesProperty());
+            AddLonghand(PropertyNames.HyphenateBefore, () => new HyphenateBeforeProperty());
+            AddLonghand(PropertyNames.PrinceHyphenateBefore, () => new PrinceHyphenateBeforeProperty());
+            AddLonghand(PropertyNames.HyphenateAfter, () => new HyphenateAfterProperty());
+            AddLonghand(PropertyNames.PrinceHyphenateAfter, () => new PrinceHyphenateAfterProperty());
 
             AddLonghand(PropertyNames.JustifyContent, () => new JustifyContentProperty());
 

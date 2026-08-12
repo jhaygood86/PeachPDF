@@ -227,6 +227,20 @@ namespace PeachPDF.CSS
                 {Keywords.Manual, Hyphens.Manual},
                 {Keywords.Auto, Hyphens.Auto}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, HyphenateLimitLast> HyphenateLimitLastModes =
+            new Dictionary<string, HyphenateLimitLast>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.None, HyphenateLimitLast.None},
+                {Keywords.Always, HyphenateLimitLast.Always},
+                {Keywords.Column, HyphenateLimitLast.Column},
+                {Keywords.Page, HyphenateLimitLast.Page},
+                {Keywords.Spread, HyphenateLimitLast.Spread}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, NoLimitKeyword> NoLimitKeywords =
+            new Dictionary<string, NoLimitKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.NoLimit, NoLimitKeyword.NoLimit}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, PlayState> PlayStates =
             new Dictionary<string, PlayState>(StringComparer.OrdinalIgnoreCase)
             {

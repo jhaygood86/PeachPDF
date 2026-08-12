@@ -4561,6 +4561,50 @@ foreach (var (tag, title, words) in hyphenationShowcases)
         hyphenationHtml, pdfConfig);
 }
 
+// --- CSS Text 4 hyphenation control properties showcase ---
+// Same narrow-justified-column setup as the hyphens:auto showcase above, but each column overrides
+// a different one of the five CSS Text 4 hyphenation control properties so the effect of each is
+// visible side by side against the first (default-behavior) column.
+
+var hyphenateControlsHtml = "<!DOCTYPE html><html lang=\"en-US\"><head>" +
+    """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
+    .col { width: 95px; border: 1px solid #bbb; padding: 6px; hyphens: auto; text-align: justify; float: left; margin-right: 10px }
+    .col h3 { font-size: 7.5pt; margin: 0 0 4px; color: #1d4ed8 }
+    .words p { margin: 0 0 6px }
+    .prose p { margin: 0 }
+    .default { }
+    .character { hyphenate-character: "\2192" }
+    .limit-chars { hyphenate-limit-chars: 5 6 6 }
+    .limit-zone { hyphenate-limit-zone: 90% }
+    .lines { width: 110px; font-size: 10px }
+    .limit-lines { hyphenate-limit-lines: 1 }
+    </style>
+    """ +
+    "</head><body>" +
+    "<h1>Hyphenation control properties (CSS Text 4)</h1>" +
+    "<p class=\"intro\">The first two pairs of columns are the same long words; hyphenate-character swaps the glyph and hyphenate-limit-chars moves the break point by widening the before/after minimums. The middle pair is running prose, where hyphenate-limit-zone accepts a larger ragged gap rather than hyphenating the line's last word. The last pair repeats one long word, where hyphenate-limit-lines caps how many consecutive lines may end in a hyphen.</p>" +
+    "<div class=\"col words default\"><h3>hyphens: auto</h3><p>internationalization</p><p>antidisestablishmentarianism</p><p>uncharacteristically</p></div>" +
+    "<div class=\"col words character\"><h3>hyphenate-character: \"→\"</h3><p>internationalization</p><p>antidisestablishmentarianism</p><p>uncharacteristically</p></div>" +
+    "<div class=\"col words limit-chars\"><h3>hyphenate-limit-chars: 5 6 6</h3><p>internationalization</p><p>antidisestablishmentarianism</p><p>uncharacteristically</p></div>" +
+    "<div class=\"col prose default\"><h3>hyphenate-limit-zone: 0 (default)</h3><p>This report documents extraordinarily comprehensive internationalization efforts across every department.</p></div>" +
+    "<div class=\"col prose limit-zone\"><h3>hyphenate-limit-zone: 90%</h3><p>This report documents extraordinarily comprehensive internationalization efforts across every department.</p></div>" +
+    "<div class=\"col prose lines default\"><h3>hyphenate-limit-lines: no-limit (default)</h3><p>antidisestablishmentarianism antidisestablishmentarianism antidisestablishmentarianism antidisestablishmentarianism</p></div>" +
+    "<div class=\"col prose lines limit-lines\"><h3>hyphenate-limit-lines: 1</h3><p>antidisestablishmentarianism antidisestablishmentarianism antidisestablishmentarianism antidisestablishmentarianism</p></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("hyphenation_controls", "Typography & Text", "Hyphenation Control Properties",
+    "CSS Text 4's hyphenate-character, hyphenate-limit-chars, hyphenate-limit-zone and hyphenate-limit-lines "
+    + "shown side by side against default hyphens:auto behavior: a custom hyphen glyph, wider before/after "
+    + "character minimums moving where a word breaks, a wide limit-zone accepting a larger ragged gap at a "
+    + "line's end rather than hyphenating its last word, and a limit-lines of 1 stopping two hyphenated "
+    + "lines in a row (issue #713).",
+    hyphenateControlsHtml, pdfConfig);
+
 // --- Tagged PDF (PDF/UA) showcase ---
 // Tags are invisible in a normal page render, so this showcase's value is manual inspection of
 // the structure tree (e.g. Acrobat's Tags panel, or another PDF/UA-aware checker) rather than

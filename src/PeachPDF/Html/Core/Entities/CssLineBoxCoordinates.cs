@@ -71,5 +71,20 @@ namespace PeachPDF.Html.Core.Entities
         /// Where this flow stopped, or null while it is still filling the current fragmentainer.
         /// </summary>
         public InlineBreakToken? Break { get; set; }
+
+        /// <summary>
+        /// Whether the line currently being built already ends in a hyphenation split — tracked so the
+        /// wrap that closes it can fold that into <see cref="ConsecutiveHyphenatedLines"/> before starting
+        /// the next line. Reset to false whenever a new line starts.
+        /// </summary>
+        public bool CurrentLineHyphenated { get; set; }
+
+        /// <summary>
+        /// How many lines immediately before the one currently being built ended in a hyphenation split —
+        /// what <c>hyphenate-limit-lines</c> (CSS Text 4 §6.3.5) gates against. Resets to 0 the first time
+        /// a line closes without a hyphen, and (like the rest of this per-pass state) restarts from 0 at
+        /// the top of a resumed fragmentainer pass rather than carrying across the page/column boundary.
+        /// </summary>
+        public int ConsecutiveHyphenatedLines { get; set; }
     }
 }

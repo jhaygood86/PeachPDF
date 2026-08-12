@@ -156,6 +156,28 @@ namespace PeachPDF.CSS
         public static readonly string GlyphOrientationVertical = "glyph-orientation-vertical";
         public static readonly string Height = "height";
         public static readonly string Hyphens = "hyphens";
+        public static readonly string HyphenateCharacter = "hyphenate-character";
+        public static readonly string HyphenateLimitChars = "hyphenate-limit-chars";
+        public static readonly string HyphenateLimitLines = "hyphenate-limit-lines";
+        public static readonly string HyphenateLimitLast = "hyphenate-limit-last";
+        public static readonly string HyphenateLimitZone = "hyphenate-limit-zone";
+        /// <summary>Hidden, undocumented compat alias for Prince's own -prince-hyphenate-character
+        /// spelling - see hyphenate-character's css-properties.json entry.</summary>
+        public static readonly string PrinceHyphenateCharacter = "-prince-hyphenate-character";
+        /// <summary>Hidden, undocumented compat aliases for Prince's own hyphenation property family
+        /// (princexml.com/doc/css-props) - see css-properties.json's aliasOf entries and
+        /// HyphenateLimitCharsGrammar.WithBefore/WithAfter. Prince's own unprefixed spelling for
+        /// CSS Text 4's hyphenate-limit-lines is "hyphenate-lines" (not the same string, unlike
+        /// hyphenate-character); it additionally offers "-prince-hyphenate-limit-lines" as an alias of
+        /// its own "hyphenate-lines". Prince has no combined hyphenate-limit-chars of its own - instead
+        /// separate hyphenate-before/hyphenate-after longhands, each with a -prince- prefixed alias, so
+        /// these compose into (rather than alias) hyphenate-limit-chars.</summary>
+        public static readonly string HyphenateLines = "hyphenate-lines";
+        public static readonly string PrinceHyphenateLimitLines = "-prince-hyphenate-limit-lines";
+        public static readonly string HyphenateBefore = "hyphenate-before";
+        public static readonly string PrinceHyphenateBefore = "-prince-hyphenate-before";
+        public static readonly string HyphenateAfter = "hyphenate-after";
+        public static readonly string PrinceHyphenateAfter = "-prince-hyphenate-after";
         public static readonly string ImeMode = "ime-mode";
         public static readonly string JustifyContent = "justify-content";
         public static readonly string LayoutGrid = "layout-grid";
