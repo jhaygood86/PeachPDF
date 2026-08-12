@@ -44,17 +44,35 @@ namespace PeachPDF.Html.Core.Handlers
             HtmlContainerInt inner, double ppp, IReadOnlyDictionary<int, int> slotToPage, int maxMappedSlot,
             int fallbackPageCount, XRect rect)
         {
-            var slot = inner.SlotStartingAt(rect.Top * ppp);
+            var pixelY = rect.Top * ppp;
+            var page = ResolvePixelYToPage(inner, slotToPage, maxMappedSlot, fallbackPageCount, pixelY);
+
+            var slot = inner.SlotStartingAt(pixelY);
+            var topPt = inner.PageGeometry.GetPage(slot).MarginTopPt
+                + (pixelY - inner.PageTopOf(slot)) / ppp;
+
+            return (page, topPt);
+        }
+
+        /// <summary>
+        /// The page-index half of <see cref="ResolveRectToPage"/>, taking a Y already in
+        /// <paramref name="inner"/>'s own internal pixel space rather than true points - for callers
+        /// (<c>CssContentEngine.AppendTargetCounter</c>'s <c>target-counter(_, page)</c> resolution) that
+        /// run during layout itself, before a <c>PixelsPerPoint</c>/<c>PdfDocument</c> exists to convert
+        /// through, and only need the page number (not <see cref="ResolveRectToPage"/>'s point-space
+        /// <c>TopPt</c>, meaningless without one).
+        /// </summary>
+        public static int ResolvePixelYToPage(
+            HtmlContainerInt inner, IReadOnlyDictionary<int, int> slotToPage, int maxMappedSlot,
+            int fallbackPageCount, double pixelY)
+        {
+            var slot = inner.SlotStartingAt(pixelY);
             var page = -1;
             for (var s = Math.Max(slot, 0); page < 0 && s <= maxMappedSlot; s++)
                 if (slotToPage.TryGetValue(s, out var found))
                     page = found;
-            if (page < 0) page = fallbackPageCount - 1;
 
-            var topPt = inner.PageGeometry.GetPage(slot).MarginTopPt
-                + (rect.Top * ppp - inner.PageTopOf(slot)) / ppp;
-
-            return (page, topPt);
+            return page < 0 ? fallbackPageCount - 1 : page;
         }
     }
 }

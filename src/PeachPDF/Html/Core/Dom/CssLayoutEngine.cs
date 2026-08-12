@@ -432,11 +432,73 @@ namespace PeachPDF.Html.Core.Dom
             for (var i = firstLine; i < blockBox.LineBoxes.Count; i++)
             {
                 var lineBox = blockBox.LineBoxes[i];
+                ApplyLeaderFill(lineBox);
                 ApplyHorizontalAlignment(lineBox, blockFinished);
                 ApplyBidiReordering(lineBox);
                 BubbleRectangles(blockBox, lineBox);
                 ApplyVerticalAlignment(lineBox);
                 lineBox.AssignRectanglesToBoxes();
+            }
+        }
+
+        /// <summary>
+        /// Distributes the line's remaining width across every <c>leader()</c> item on it (css-content-3
+        /// §6: shared equally when there's more than one), then shifts every later word by however much
+        /// space each leader claimed - the classic "Chapter One .......... 12" table-of-contents idiom.
+        /// Must run first, before <see cref="ApplyHorizontalAlignment"/>/<see cref="BubbleRectangles"/> -
+        /// alignment, bidi reordering and rectangle bubbling all read final word positions, and
+        /// <see cref="CssLineBox.Words"/> already aggregates every word on the line regardless of which
+        /// <see cref="CssBox"/> owns it (the same aggregate <see cref="ApplyJustifyAlignment"/>/
+        /// <see cref="ApplyCenterAlignment"/> already read), so this sees a <c>leader()</c> from one
+        /// element and later words from a completely different sibling element with no extra plumbing -
+        /// e.g. <c>&lt;a&gt;Chapter Two&lt;/a&gt;&lt;span class="fill"&gt;&lt;/span&gt;&lt;span
+        /// class="page"&gt;&lt;/span&gt;</c> with the fill and page-number content declared on the two
+        /// spans separately.
+        /// </summary>
+        /// <remarks>
+        /// Shifts each word's <c>Left</c> in place rather than recomputing every word's absolute position
+        /// from scratch (mirroring <see cref="ApplyJustifyAlignment"/>'s own approach, not
+        /// <see cref="ApplyCenterAlignment"/>'s single-constant-<c>diff</c> one, since this shift is
+        /// progressive - different amounts before/after each leader) - this preserves every other word's
+        /// spacing exactly as <c>FlowBox</c> computed it (word-spacing, RTL split fragments, small-caps
+        /// runs, <c>::first-line</c> overrides). <see cref="CssLineBox.Rectangles"/> needs no separate fix-
+        /// up: it is only ever populated afterwards, by <see cref="BubbleRectangles"/>, which derives each
+        /// box's rectangle fresh from its (now-shifted) words' own <c>Left</c>/<c>Right</c> extent.
+        /// </remarks>
+        private static void ApplyLeaderFill(CssLineBox lineBox)
+        {
+            var leaderCount = 0;
+            foreach (var w in lineBox.Words)
+            {
+                if (w is CssRectLeader) leaderCount++;
+            }
+
+            if (leaderCount == 0) return; // fast path - leaders are rare on any given line
+
+            var indent = GetLineTextIndent(lineBox.OwnerBox, lineBox.Equals(lineBox.OwnerBox.LineBoxes[0]), lineBox.FollowsForcedBreak);
+            var availWidth = lineBox.OwnerBox.ClientRectangle.Width - indent;
+
+            var nonLeaderWidth = 0d;
+            foreach (var w in lineBox.Words)
+            {
+                if (w is not CssRectLeader) nonLeaderWidth += w.FullWidth;
+            }
+
+            var perLeaderWidth = Math.Max(0d, (availWidth - nonLeaderWidth) / leaderCount);
+
+            var shift = 0d;
+            foreach (var word in lineBox.Words)
+            {
+                if (word is CssRectLeader leader)
+                {
+                    leader.Left += shift;
+                    leader.Width = perLeaderWidth;
+                    shift += perLeaderWidth;
+                }
+                else if (shift != 0d)
+                {
+                    word.Left += shift;
+                }
             }
         }
 
