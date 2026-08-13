@@ -348,7 +348,11 @@ namespace PeachPDF.Html.Core.Dom
                 MaxBottom = startY,
                 Fragmentainer = fragmenting ? context : null,
                 ResumeOrdinal = resume?.ResumeWordIndex ?? 0,
-                SuppressLeadingWrap = resume is not null
+                SuppressLeadingWrap = resume is not null,
+                // hyphenate-limit-lines (CSS Text 4 §6.3.5): a run of consecutive hyphenated lines that
+                // straddles this boundary keeps counting rather than restarting at 0 - see
+                // InlineBreakToken.ConsecutiveHyphenatedLines.
+                ConsecutiveHyphenatedLines = resume?.ConsecutiveHyphenatedLines ?? 0
             };
 
             //Flow words and boxes
@@ -1901,7 +1905,11 @@ namespace PeachPDF.Html.Core.Dom
                                     // one" - see ResumeSlotForBreakBefore's own remarks.
                                     word.ResumeSlotForBreakBefore(),
                                     [], coordinates.LineStartOrdinal, CompletedLineCount: 0,
-                                    FollowsForcedBreak: coordinates.Line.FollowsForcedBreak);
+                                    FollowsForcedBreak: coordinates.Line.FollowsForcedBreak,
+                                    // The discarded line-in-progress never closed, so it hasn't been
+                                    // folded in either way - this is exactly the run of already-closed
+                                    // trailing hyphenated lines the resumed pass must keep counting from.
+                                    ConsecutiveHyphenatedLines: coordinates.ConsecutiveHyphenatedLines);
                                 return;
                             }
 
@@ -2153,7 +2161,14 @@ namespace PeachPDF.Html.Core.Dom
             // One lower than the suffix's own ordinal (what stopped.ResumeWordIndex already names) -
             // the resumed pass re-walks the owner list from scratch, now one entry shorter, so the
             // restored whole word lands exactly where the prefix - not the suffix - was counted.
-            return stopped with { ResumeWordIndex = stopped.ResumeWordIndex - 1 };
+            //
+            // keptLine is exactly the line stopped.ConsecutiveHyphenatedLines counted as the run's most
+            // recent member when it closed (hyphenate-limit-lines folds a line's hyphenation state into
+            // the running count the moment it closes, before this pass ever reaches the break that lands
+            // it here). Un-hyphenating it now breaks that run wherever it stood - a trailing run whose
+            // last member no longer ends in a hyphen isn't a shorter run, it's no run at all - so the
+            // resumed pass must start back at 0 rather than inherit a count this undo has just made stale.
+            return stopped with { ResumeWordIndex = stopped.ResumeWordIndex - 1, ConsecutiveHyphenatedLines = 0 };
         }
 
         /// <summary>

@@ -56,8 +56,12 @@ namespace PeachPDF.Tests.Html.Core.Dom
             discardedLine.Words.Add(suffix);
             blockBox.LineBoxes.Remove(discardedLine);
 
+            // Nonzero so AssertForbiddingValueUndoesTheSplit can confirm the undo resets the carried count
+            // to 0 rather than merely leaving it untouched - keptLine (the line being un-hyphenated) is
+            // exactly the line this count's most recent member counted, per InlineBreakToken.
+            // ConsecutiveHyphenatedLines's own contract.
             var token = new InlineBreakToken(blockBox, ResumeSlotIndex: 1, ResumePath: [], ResumeWordIndex: 8,
-                CompletedLineCount: 3);
+                CompletedLineCount: 3, ConsecutiveHyphenatedLines: 2);
 
             return (blockBox, prefix, suffix, keptLine, discardedLine, token);
         }
@@ -142,6 +146,11 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // One lower than the suffix's own ordinal: the owner list is one entry shorter after the
             // merge, so the restored whole word is counted where the prefix used to be.
             Assert.Equal(token.ResumeWordIndex - 1, result.ResumeWordIndex);
+
+            // keptLine no longer ends in a hyphen, so the trailing run hyphenate-limit-lines was counting
+            // is broken wherever it stood - the resumed pass must start back at 0, not inherit the
+            // now-stale count (issue #724's ConsecutiveHyphenatedLines carry, interacting with this undo).
+            Assert.Equal(0, result.ConsecutiveHyphenatedLines);
         }
 
         [Fact]
