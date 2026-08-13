@@ -22,10 +22,10 @@ machine, in the page, with no server involved.</p>
   {% for s in items %}
   <div class="card showcase-card">
     <a class="showcase-thumb-link" href="{{ '/showcase/' | append: s.pdf | relative_url }}">
-      <img class="showcase-thumb" src="{{ '/showcase/' | append: s.slug | append: '.png' | relative_url }}" alt="First page of the {{ s.title }} showcase PDF" loading="lazy">
+      <img class="showcase-thumb" src="{{ '/showcase/' | append: s.slug | append: '.png' | relative_url }}" alt="First page of the {{ s.title | escape }} showcase PDF" loading="lazy">
     </a>
-    <h3>{{ s.title }}</h3>
-    <p>{{ s.description }}</p>
+    <h3>{{ s.title | escape }}</h3>
+    <p>{{ s.description | escape }}</p>
     <p class="showcase-links">
       <a href="{{ '/showcase/' | append: s.pdf | relative_url }}">View PDF</a>
       <a href="{{ '/showcase/' | append: s.html | relative_url }}">HTML source</a>
