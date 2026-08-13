@@ -344,7 +344,13 @@ namespace PeachPDF.Html.Core.Dom
             // get the table boxes into the proper fields
             AssignBoxKinds();
 
-            // Insert EmptyBoxes for vertical cell spanning. 
+            // Before anything below captures an index into _tableBox.Boxes (RemoveHeaderFooterFromTree's
+            // _headerIndex/_footerIndex, baked into a proxy and consumed by a later pass's
+            // RestoreStructureFromAnyPreviousRun) - see EnsureGridDecorationBoxStructure's own remarks
+            // for why the ordering matters.
+            EnsureGridDecorationBoxStructure();
+
+            // Insert EmptyBoxes for vertical cell spanning.
             InsertEmptyBoxes();
 
             // Determine Row and Column Count, and ColumnWidths
@@ -1210,6 +1216,101 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// CSS 2.1 §17.4 gives a table with a caption an anonymous "table wrapper box" that owns
+        /// margin/position while border/background/padding stay with the row grid alone - PeachPDF has
+        /// no such wrapper (see .claude/accepted-gaps entry / issue #721: the practical effect is a
+        /// bordered/filled &lt;table&gt; visually enclosing its own caption). Introducing a real wrapper
+        /// ancestor is the larger structural change the issue itself scopes out; this instead gives a
+        /// captioned table's grid a dedicated leaf decoration box - <see cref="CssBox.TableGridDecorationBox"/>,
+        /// the first of <see cref="_tableBox"/>'s own children - that carries a copy of _tableBox's own
+        /// border/background (<see cref="CssBox.AdoptBorderAndBackgroundFrom"/>) and is sized, once
+        /// layout knows where the grid itself starts and ends, to the grid's own border-box rect by
+        /// <see cref="FinalizeGridDecorationBoxGeometry"/>. _tableBox's own border/background paint is
+        /// suppressed (<see cref="CssBox.SuppressOwnBorderPaint"/>/<see cref="CssBox.SuppressOwnBackgroundPaint"/>)
+        /// so the two don't double-paint; _tableBox's own <see cref="CssBox.Location"/>/
+        /// <c>ActualBottom</c> are untouched and keep spanning the combined
+        /// grid+caption assembly, exactly as every other consumer of this box (block-flow siblings,
+        /// §4.3 page-break relocation, etc.) already expects.
+        /// <para>
+        /// Called right after <see cref="AssignBoxKinds"/>, before anything in this pass captures an
+        /// index into <see cref="_tableBox"/>'s own <c>Boxes</c> list - <see cref="RemoveHeaderFooterFromTree"/>'s
+        /// <c>_headerIndex</c>/<c>_footerIndex</c>, baked into a <see cref="CssProxyBox"/>'s own
+        /// <c>SourceIndex</c> and consumed by a later pass's <see cref="RestoreStructureFromAnyPreviousRun"/>.
+        /// Positioning the decoration box here, ahead of that capture, on every pass (idempotently - a
+        /// captioned table keeps exactly one, reused and just repositioned to the front on every later
+        /// pass) means the index a header/footer restore later replays against is always relative to a
+        /// list that already accounts for this box, on every past and future pass alike. Doing this
+        /// later - once real geometry is known, at Step 7 - would insert it after an index an earlier
+        /// pass already captured and baked into a proxy, silently shifting every subsequent restore by
+        /// one slot.
+        /// </para>
+        /// A captionless table (the overwhelming majority - most real-world tables put borders on cells
+        /// rather than on &lt;table&gt; itself) never creates this box: zero cost, zero behavior change.
+        /// </summary>
+        private void EnsureGridDecorationBoxStructure()
+        {
+            if (_captionBoxes.Count == 0) return;
+
+            var decorationBox = _tableBox.TableGridDecorationBox;
+            if (decorationBox is null)
+            {
+                decorationBox = new CssBox(_tableBox, tag: null)
+                {
+                    Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
+                    IsTableGridDecorationBox = true
+                };
+                decorationBox.AdoptBorderAndBackgroundFrom(_tableBox);
+
+                _tableBox.SuppressOwnBorderPaint = true;
+                _tableBox.SuppressOwnBackgroundPaint = true;
+                _tableBox.TableGridDecorationBox = decorationBox;
+            }
+
+            // Kept first in _tableBox.Boxes on every pass rather than trusted to stay there - header/
+            // footer detachment and proxy restoration both mutate this same list, and painting the grid's
+            // background after real row/cell content would draw over content it should sit behind. Cheap
+            // to check first: nothing after this method's own first run ever displaces it (every
+            // RemoveHeaderFooterFromTree/RestoreStructureFromAnyPreviousRun index is captured or consumed
+            // relative to a list that already has this box at 0), so the common case - every pass after
+            // the first, on every table with a caption - is an O(1) reference check rather than an O(n)
+            // remove-and-shift on a large table's own child list.
+            if (_tableBox.Boxes.Count == 0 || !ReferenceEquals(_tableBox.Boxes[0], decorationBox))
+            {
+                _tableBox.Boxes.Remove(decorationBox);
+                _tableBox.Boxes.Insert(0, decorationBox);
+            }
+        }
+
+        /// <summary>
+        /// Sizes the grid decoration box <see cref="EnsureGridDecorationBoxStructure"/> created to the
+        /// row grid's own border-box - see that method's remarks, and the Step 7 call site for
+        /// <paramref name="gridBorderBoxBottom"/>. Runs every pass, mirroring how _tableBox's own
+        /// ActualRight/ActualBottom are (re)published every pass rather than only once the table
+        /// completes. A captionless table never has a decoration box to size; a no-op then.
+        /// </summary>
+        /// <param name="gridBorderBoxBottom">
+        /// the grid's own border-box bottom edge, in document coordinates - already computed by the
+        /// caller as part of settling _tableBox's own ActualBottom.
+        /// </param>
+        private void FinalizeGridDecorationBoxGeometry(double gridBorderBoxBottom)
+        {
+            if (_tableBox.TableGridDecorationBox is not { } decorationBox) return;
+
+            // The top caption group's own (persistent, set once by the pass that laid it out and never
+            // touched again) geometry, rather than _topCaptionsHeight - a per-engine-instance field that
+            // resets to 0 on a continuation's fresh instance even though the caption above it was laid
+            // out by an earlier one. Reading the caption box itself is correct on every pass alike.
+            var gridBorderBoxTop = _topCaptions.Count > 0
+                ? _topCaptions[^1].ActualBottom + _topCaptions[^1].ActualMarginBottom
+                : _tableBox.Location.Y;
+
+            decorationBox.Location = new RPoint(_tableBox.Location.X, gridBorderBoxTop);
+            decorationBox.ActualRight = _tableBox.ActualRight;
+            decorationBox.ActualBottom = gridBorderBoxBottom;
+            decorationBox.PageBreakBottoms = _tableBox.PageBreakBottoms;
+        }
+
+        /// <summary>
         /// Layout the cells by the calculated table layout
         /// </summary>
         /// <param name="g"></param>
@@ -1224,9 +1325,18 @@ namespace PeachPDF.Html.Core.Dom
             // (see its own remarks).
             if (!_continuesAPreviousPass && _topCaptions.Count > 0)
             {
+                // CSS 2.1 §17.4: a top caption sits flush above the row grid's own border-box, with
+                // nothing (no border, no background) above it - anchored at _tableBox.Location.Y (the
+                // combined assembly's true top) rather than ClientTop (inside the grid's own border),
+                // which would otherwise leave a border-width gap of nothing above the caption where the
+                // border used to visually sit before this box's own border paint was suppressed (issue
+                // #721; see EnsureGridDecorationBoxStructure/FinalizeGridDecorationBoxGeometry). Note
+                // startY below stays anchored at ClientTop unchanged - the two anchors differ by exactly
+                // _tableBox.ActualBorderTopWidth, which startY's own formula already adds back via
+                // ClientTop, so the row grid's own position is unaffected by this.
                 var topCaptionsBottom = await LayoutCaptionGroup(
-                    g, _topCaptions, _tableBox.Location.X, _tableBox.ClientTop, GetWidthSum());
-                _topCaptionsHeight = topCaptionsBottom - _tableBox.ClientTop;
+                    g, _topCaptions, _tableBox.Location.X, _tableBox.Location.Y, GetWidthSum());
+                _topCaptionsHeight = topCaptionsBottom - _tableBox.Location.Y;
             }
 
             var startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + GetVerticalSpacing(), 0);
@@ -1916,13 +2026,31 @@ namespace PeachPDF.Html.Core.Dom
             var tableContinuation = cursor.Continuation(_tableBox);
             var contentBottom = Math.Max(cursor.MaxBottom, startY) + GetVerticalSpacing();
 
+            // CSS 2.1 §17.4: the row grid's own border-box bottom - where FinalizeGridDecorationBoxGeometry
+            // sizes the grid's own paint rect to (issue #721) - sits here, before any bottom caption is
+            // added below it. A bottom caption is positioned from this edge (flush beneath the grid's own
+            // border, mirroring the top caption's own flush-above positioning in LayoutCells) rather than
+            // from the bare contentBottom a caption used to start from, which put the caption where the
+            // grid's own border still had to be drawn beneath it.
+            var gridBorderBoxBottom = contentBottom + _tableBox.ActualBorderBottomWidth;
+
             if (tableContinuation is null && _bottomCaptions.Count > 0)
             {
+                // The caption's own returned bottom (its ActualBottom plus its own bottom margin)
+                // already includes the grid's border-bottom width once, via gridBorderBoxBottom above
+                // - adding ActualBorderBottomWidth again below would double-count it, extending
+                // _tableBox's combined extent (and so a following sibling's position) past the
+                // caption's own visible bottom edge by one border width.
                 contentBottom = await LayoutCaptionGroup(
-                    g, _bottomCaptions, _tableBox.Location.X, contentBottom, GetWidthSum());
+                    g, _bottomCaptions, _tableBox.Location.X, gridBorderBoxBottom, GetWidthSum());
+                _tableBox.ActualBottom = contentBottom;
+            }
+            else
+            {
+                _tableBox.ActualBottom = gridBorderBoxBottom;
             }
 
-            _tableBox.ActualBottom = contentBottom + _tableBox.ActualBorderBottomWidth;
+            FinalizeGridDecorationBoxGeometry(gridBorderBoxBottom);
 
             // Publish where the row loop stopped, as a copy of the cursor's own state rather than the
             // cursor: a caller that kept one alive past this point would otherwise mutate what it has

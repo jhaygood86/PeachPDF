@@ -316,6 +316,37 @@ namespace PeachPDF.Html.Core.Dom
         internal bool SuppressOwnBackgroundPaint { get; set; }
 
         /// <summary>
+        /// Set on a <c>&lt;table&gt;</c> box that has a caption, alongside <see cref="SuppressOwnBackgroundPaint"/>:
+        /// CSS 2.1 §17.4's own border/background belong to the row grid alone, not to the table+caption
+        /// assembly this box's <see cref="Location"/>/<c>ActualBottom</c> still
+        /// span - see <see cref="TableGridDecorationBox"/>, which paints the border this box no longer
+        /// does, at the grid's own rect. Issue #721.
+        /// </summary>
+        internal bool SuppressOwnBorderPaint { get; set; }
+
+        /// <summary>
+        /// On a <c>&lt;table&gt;</c> box with a caption, the anonymous leaf <see cref="CssLayoutEngineTable"/>
+        /// gives the row grid to carry its own border/background - see <see cref="SuppressOwnBorderPaint"/>.
+        /// Null for every other box, including a captionless table (the overwhelming majority, for which
+        /// this box's own border/background already correctly wrap only the grid with no caption to
+        /// exclude - see .claude/recent-fixes/2026-08-13-table-caption-grid-only-border-background.md /
+        /// issue #721).
+        /// </summary>
+        internal CssBox? TableGridDecorationBox { get; set; }
+
+        /// <summary>
+        /// True on the box <see cref="TableGridDecorationBox"/> points to (never set anywhere else) - a
+        /// synthetic, paint-only <c>Boxes[0]</c> with no author content, counters, or margin of its own.
+        /// Checked by every generic "first in-flow child"/"previous sibling" walk that a real content box
+        /// occupying that slot would otherwise need to answer for - <see cref="BreakPropagation"/>'s
+        /// break-before/after propagation, <see cref="Utils.DomUtils.GetPreviousSibling"/>,
+        /// <see cref="CssCounterEngine"/>'s own sibling walk, and <see cref="FoldOwnAdjoiningTopMargins"/>'s
+        /// margin-collapse lookahead - each of which must see whatever the table's own first *real* child
+        /// (its caption) sees, not this box. Issue #721.
+        /// </summary>
+        internal bool IsTableGridDecorationBox { get; set; }
+
+        /// <summary>
         /// Whether this box declares any background of its own (a visible <c>background-color</c> and/or
         /// at least one <c>background-image</c>/gradient layer) - used by
         /// <c>PdfGenerator.ResolveCanvasBackground</c> to decide, per CSS2.1 §14.2, whether
@@ -5669,7 +5700,11 @@ namespace PeachPDF.Html.Core.Dom
             while (chainMembers.Count < 1000 && current.Overflow.Value == PeachPDF.CSS.Overflow.Visible &&
                    current.ActualBorderTopWidth < 0.1 && current.ActualPaddingTop < 0.1)
             {
-                var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsExcludedFromFlow && b.DerivedStyle.ActualDisplay != Keywords.None);
+                // A captioned table's grid decoration box (TableGridDecorationBox, issue #721) is a
+                // synthetic Boxes[0] with a margin that is always 0 and no children of its own - without
+                // this exclusion it would end the chain right there with a 0 fold, instead of reaching
+                // the table's real first-in-flow child (its caption) and that caption's own top margin.
+                var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsExcludedFromFlow && b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsTableGridDecorationBox);
                 if (firstInFlowChild == null || firstInFlowChild.Clear.Value != ClearMode.None || firstInFlowChild == current) break;
 
                 margins.Fold(firstInFlowChild.ActualMarginTop);

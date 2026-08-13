@@ -164,6 +164,42 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public async Task PageBreakBottoms_CaptionedTableWithOwnBorder_MirroredOntoGridDecorationBox()
+        {
+            // Issue #721: a captioned table's own border/background paint from its grid decoration box
+            // rather than from the table box itself (see CssLayoutEngineTable.EnsureGridDecorationBoxStructure/
+            // FinalizeGridDecorationBoxGeometry) - FragmentPainter's multi-page bottom-border-truncation
+            // (keyed on PageBreakBottoms) has to run for that box too, or a captioned, bordered table
+            // spanning pages would draw its bottom border past the page break on every intermediate page.
+            var pageHeight = 200.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:separate;border-spacing:0;border:2px solid black;'>
+        <caption>A long, bordered, captioned table</caption>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 20).Select(i =>
+    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+            Assert.NotNull(table!.PageBreakBottoms);
+            Assert.NotEmpty(table.PageBreakBottoms!);
+
+            var decoration = table.TableGridDecorationBox;
+            Assert.NotNull(decoration);
+            Assert.Same(table.PageBreakBottoms, decoration!.PageBreakBottoms);
+        }
+
+        [Fact]
         public async Task PageBreakBottoms_SinglePageTable_IsNullOrEmpty()
         {
             // A table that fits entirely on one page should NOT have PageBreakBottoms populated.

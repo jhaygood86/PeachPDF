@@ -469,12 +469,16 @@ namespace PeachPDF.Html.Core.Dom
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while (sib.DerivedStyle.ActualDisplay == Keywords.None && index - diff - 1 >= 0)
+            // A captioned table's grid decoration box (CssBox.TableGridDecorationBox, issue #721) is a
+            // synthetic paint-only Boxes[0] with no counters of its own to inherit or increment - stepped
+            // over exactly like DomUtils.GetPreviousSibling steps over it, so the caption's own counter
+            // resolution sees whatever preceded the table itself.
+            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.IsTableGridDecorationBox) && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == Keywords.None ? null : sib;
+            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.IsTableGridDecorationBox ? null : sib;
 
             return sib;
         }
