@@ -1484,8 +1484,17 @@ var targetCounterHtml = """
     .toc-split .fill::after { content: leader(dotted); color: #888; }
     .toc-split .pagenum::after { content: target-counter(attr(href), page); color: #888; }
 
+    .xref li { margin: 0 0 6pt; }
+    .xref-label { color: #555; }
+    .xref-content::after { content: target-text(attr(href)); font-weight: bold; }
+    .xref-badge::after { content: target-text(attr(href), before); font-weight: bold; color: #2563eb; }
+    .xref-mark::after { content: target-text(attr(href), after); font-weight: bold; color: #2563eb; }
+    .xref-letter::after { content: target-text(attr(href), first-letter); font-weight: bold; color: #2563eb; }
+
     .chapter { break-before: page; }
     .chapter h1 { border-bottom: 2pt solid #2563eb; padding-bottom: 6pt; }
+    #ch1-title::after { content: " (revised)"; }
+    #ch3-title::before { content: "Featured: "; }
     </style>
     </head>
     <body>
@@ -1507,8 +1516,22 @@ var targetCounterHtml = """
       <li><a href="#ch3">Chapter Three</a><a class="fill" href="#ch3"></a><a class="pagenum" href="#ch3"></a></li>
     </ul>
 
+    <h2>Cross-references (target-text() modes)</h2>
+    <p class="note">target-text(&lt;target&gt;[, content | before | after | first-letter]) pulls text from
+    another element without retyping it: the default content mode copies the target's own text, before/after
+    copy that element's generated ::before/::after content, and first-letter copies just its opening
+    character. Chapter One's heading carries a generated "(revised)" suffix via ::after and Chapter Three's
+    carries a "Featured:" badge via ::before - both pulled here purely through target-text(), not duplicated
+    by hand.</p>
+    <ul class="xref">
+      <li><span class="xref-label">Chapter One is titled</span> "<a class="xref-content" href="#ch1-title"></a>"</li>
+      <li><span class="xref-label">Chapter One's heading ends with</span> <a class="xref-mark" href="#ch1-title"></a></li>
+      <li><span class="xref-label">Chapter Two's heading starts with the letter</span> <a class="xref-letter" href="#ch2-title"></a></li>
+      <li><span class="xref-label">Chapter Three is flagged</span> <a class="xref-badge" href="#ch3-title"></a></li>
+    </ul>
+
     <div class="chapter" id="ch1">
-      <h1>Chapter One: Introduction</h1>
+      <h1 id="ch1-title">Chapter One: Introduction</h1>
       <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
       labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris
       nisi ut aliquip ex ea commodo consequat.</p>
@@ -1518,7 +1541,7 @@ var targetCounterHtml = """
     </div>
 
     <div class="chapter" id="ch2">
-      <h1>Chapter Two: Methodology</h1>
+      <h1 id="ch2-title">Chapter Two: Methodology</h1>
       <p>At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium
       voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati
       cupiditate non provident.</p>
@@ -1529,7 +1552,7 @@ var targetCounterHtml = """
     </div>
 
     <div class="chapter" id="ch3">
-      <h1>Chapter Three: Results</h1>
+      <h1 id="ch3-title">Chapter Three: Results</h1>
       <p>Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut
       et voluptates repudiandae sint et molestiae non recusandae itaque earum rerum hic tenetur a
       sapiente delectus.</p>
@@ -1541,8 +1564,8 @@ var targetCounterHtml = """
     </html>
     """;
 
-await SaveShowcaseAsync("target_counter_toc", "Paged Media", "Table of Contents (target-counter / leader)",
-    "A hand-authored table of contents with real, non-stale page numbers - leader(dotted) fills the gap and target-counter(attr(href), page) resolves the actual page each chapter lands on after pagination, including split across separate elements on the same line.",
+await SaveShowcaseAsync("target_counter_toc", "Paged Media", "Table of Contents & Cross-References (target-counter / target-text / leader)",
+    "A hand-authored table of contents with real, non-stale page numbers - leader(dotted) fills the gap and target-counter(attr(href), page) resolves the actual page each chapter lands on after pagination, including split across separate elements on the same line. A cross-reference list demonstrates all four target-text() modes: content, before, after, and first-letter.",
     targetCounterHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ── Per-page margin variation showcase ─────────────────────────────────────

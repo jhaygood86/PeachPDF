@@ -399,6 +399,89 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public async Task ApplyContent_TargetTextContentMode_ResolvesTargetsOwnText()
+        {
+            // Explicit "content" mode (as opposed to the default-argument form covered by
+            // ApplyContent_TargetTextUrlTarget_ResolvesTargetsOwnText) exercises the same "content" arm
+            // of ResolveTargetText's mode switch.
+            var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#ch2), content)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal("Chapter Two", tocBox.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetTextBeforeMode_ResolvesTargetsBeforePseudoElement()
+        {
+            var container = await BuildContainerWithHead(
+                "#ch2::before { content: \"Chapter: \"; }",
+                "<div id=\"ch2\">Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#ch2), before)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal("Chapter: ", tocBox.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetTextAfterMode_ResolvesTargetsAfterPseudoElement()
+        {
+            var container = await BuildContainerWithHead(
+                "#ch2::after { content: \" (end)\"; }",
+                "<div id=\"ch2\">Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#ch2), after)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal(" (end)", tocBox.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetTextFirstLetterMode_ResolvesTargetsFirstLetter()
+        {
+            var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#ch2), first-letter)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal("C", tocBox.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetTextBeforeModeWithNoBeforePseudoElement_ReturnsEmpty()
+        {
+            var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#ch2), before)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal(string.Empty, tocBox.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetTextUnrecognizedMode_ReturnsEmpty()
+        {
+            // TargetTextFunctionConverter rejects an unrecognized mode keyword at parse time, but
+            // CssBox.Content is a raw string post-cascade, so exercise ResolveTargetText's mode switch
+            // default arm directly the same way ApplyContent_WithStringFunctionUnknownKeyword_FallsBackToFirst
+            // exercises GetNamedStringValueFromDocument's default arm above.
+            var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#ch2), not-a-real-mode)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal(string.Empty, tocBox.Text);
+        }
+
+        [Fact]
         public async Task ApplyContent_TargetCounterCustomName_ResolvesImmediatelyWithNoPaginationDependency()
         {
             var container = await BuildContainer(
@@ -460,6 +543,15 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var adapter = new PdfSharpAdapter();
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml($"<!DOCTYPE html><html><head></head><body>{bodyHtml}</body></html>", null);
+            return container;
+        }
+
+        private static async Task<HtmlContainerInt> BuildContainerWithHead(string styleCss, string bodyHtml)
+        {
+            var adapter = new PdfSharpAdapter();
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(
+                $"<!DOCTYPE html><html><head><style>{styleCss}</style></head><body>{bodyHtml}</body></html>", null);
             return container;
         }
 
