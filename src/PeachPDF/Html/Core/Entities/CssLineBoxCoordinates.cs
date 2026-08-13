@@ -82,8 +82,10 @@ namespace PeachPDF.Html.Core.Entities
         /// <summary>
         /// How many lines immediately before the one currently being built ended in a hyphenation split —
         /// what <c>hyphenate-limit-lines</c> (CSS Text 4 §6.3.5) gates against. Resets to 0 the first time
-        /// a line closes without a hyphen, and (like the rest of this per-pass state) restarts from 0 at
-        /// the top of a resumed fragmentainer pass rather than carrying across the page/column boundary.
+        /// a line closes without a hyphen. Unlike the rest of this per-pass state, this does <b>not</b>
+        /// restart from 0 at the top of a resumed fragmentainer pass: <c>CreateLineBoxes</c> seeds it from
+        /// <see cref="Fragmentation.InlineBreakToken.ConsecutiveHyphenatedLines"/>, so a run of consecutive
+        /// hyphenated lines keeps counting across the page/column boundary instead.
         /// </summary>
         public int ConsecutiveHyphenatedLines { get; set; }
     }

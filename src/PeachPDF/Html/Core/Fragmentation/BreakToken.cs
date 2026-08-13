@@ -126,6 +126,14 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// across the boundary so <c>text-indent: each-line</c> (CSS Text 3 §3) still recognizes a resumed line
     /// that follows a forced break in the source, rather than only a line born mid-fragmentainer.
     /// </param>
+    /// <param name="ConsecutiveHyphenatedLines">
+    /// <see cref="Entities.CssLineBoxCoordinates.ConsecutiveHyphenatedLines"/> as of the break - the run of
+    /// trailing hyphenated lines this fragmentainer produced, not counting the discarded line-in-progress
+    /// (it never closed, so it has not contributed to the count either way; the resumed pass rebuilds and
+    /// evaluates it fresh). Carried the same way <see cref="FollowsForcedBreak"/> is, so
+    /// <c>hyphenate-limit-lines</c> (CSS Text 4 §6.3.5) keeps counting a run of consecutive hyphenated
+    /// lines that straddles a page/column break instead of restarting it at 0.
+    /// </param>
     internal sealed record InlineBreakToken(
         CssBox Box,
         int ResumeSlotIndex,
@@ -133,7 +141,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         int ResumeWordIndex,
         int CompletedLineCount,
         int LinesKeptHere = 0,
-        bool FollowsForcedBreak = false) : BreakToken(Box, ResumeSlotIndex)
+        bool FollowsForcedBreak = false,
+        int ConsecutiveHyphenatedLines = 0) : BreakToken(Box, ResumeSlotIndex)
     {
         /// <summary>
         /// Compared by <b>contents</b>, because the driver's no-progress backstop is an equality test —
@@ -158,10 +167,11 @@ namespace PeachPDF.Html.Core.Fragmentation
             && CompletedLineCount == other.CompletedLineCount
             && LinesKeptHere == other.LinesKeptHere
             && FollowsForcedBreak == other.FollowsForcedBreak
+            && ConsecutiveHyphenatedLines == other.ConsecutiveHyphenatedLines
             && ResumePath.SequenceEqual(other.ResumePath);
 
         public override int GetHashCode() =>
             HashCode.Combine(Box, ResumeSlotIndex, ResumeWordIndex, CompletedLineCount, LinesKeptHere,
-                FollowsForcedBreak, ResumePath.Count);
+                FollowsForcedBreak, ConsecutiveHyphenatedLines, ResumePath.Count);
     }
 }
