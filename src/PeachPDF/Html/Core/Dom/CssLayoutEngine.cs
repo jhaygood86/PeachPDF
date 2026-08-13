@@ -1101,7 +1101,19 @@ namespace PeachPDF.Html.Core.Dom
             // GetBoxHeight couldn't resolve a value at all (e.g. a percentage height against an
             // indefinite containing block) - keep the existing Math.Max fallback there so the box
             // keeps its content-driven height instead of collapsing to zero.
-            box.ActualBottom = boxHeight is not null
+            //
+            // A table cell is the one box kind §10.6.3's "definite height wins regardless of content"
+            // rule does not apply to - CSS 2.1 §17.5.3 makes a cell's own height (before its row even
+            // equalizes every cell to the row's tallest) already the greater of its specified height
+            // and the minimum height its content requires, so an explicit height smaller than content
+            // must never shrink it here. This runs directly on the cell itself (PerformLayoutEpilogue,
+            // via cell.PerformLayout - see ApplyParentHeight's own comment on that call), strictly after
+            // CreateLineBoxes has already set ActualBottom to the real content bottom, so Math.Max
+            // against that value is exactly "at least the content's required height" - the table row
+            // loop's later Math.Max across every cell's ActualBottom (CssLayoutEngineTable.LayoutBodyRow)
+            // then reconciles the row height from correct per-cell values instead of ones already
+            // clipped to their own too-small specified height (issue #729).
+            box.ActualBottom = boxHeight is not null && !box.IsTableCell
                 ? box.Location.Y + height
                 : Math.Max(box.ActualBottom, box.Location.Y + height);
 
