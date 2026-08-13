@@ -145,6 +145,115 @@ var tallCellHeight = tallCell.ActualBottom - tallCell.Location.Y;
 
       #endregion
 
+        #region Explicit Cell Height Smaller Than Content Tests
+
+        [Fact]
+        public async Task ExplicitCellHeightSmallerThanContent_DoesNotClipCellOrOverlapNextRow()
+        {
+            // CSS 2.1 §17.5.3: a cell's specified `height` only feeds the row-height calculation
+            // (row height = max of the row's own height, each cell's height, and the minimum height
+            // the cells' content requires) - it never clips the cell's own content, regardless of
+            // `overflow` (td/th default to overflow:hidden in CssDefaults). `height:1px` is a legacy
+            // "definite-height containing block" author hack that relies on this: the cell must still
+            // grow to its content's full height, and the next row must start below that, not on top of
+            // it (issue #729).
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; }
+        td { border: 1px solid black; padding: 4pt; font-size: 14pt; height: 1px; }
+    </style>
+</head>
+<body>
+    <table>
+        <tr><td id='tall'>Line one<br>Line two<br>Line three</td></tr>
+        <tr><td id='next'>Next row</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var tallCell = FindById(rootBox, "tall");
+            var nextCell = FindById(rootBox, "next");
+
+            Assert.NotNull(tallCell);
+            Assert.NotNull(nextCell);
+
+            var tallCellHeight = tallCell!.ActualBottom - tallCell.Location.Y;
+
+            // Three 14pt lines plus padding is well over 1px - if the specified height still clipped
+            // the cell, this would be close to 1px + padding instead.
+            Assert.True(tallCellHeight > 30,
+                $"first row's cell should grow to its content's height, not the specified 1px (actual: {tallCellHeight})");
+
+            // A 1pt tolerance accounts for border-collapse's shared border sitting on the boundary
+            // between the two rows - what this guards against is the tens-of-points overlap the bug
+            // produced (the next row starting inside the tall cell's real text), not sub-point border
+            // placement.
+            Assert.True(nextCell!.Location.Y >= tallCell.ActualBottom - 1,
+                $"second row (starting at {nextCell.Location.Y}) must not overlap the first row's actual content bottom ({tallCell.ActualBottom})");
+        }
+
+        [Fact]
+        public async Task ExplicitCellHeightSmallerThanContent_StretchesEveryCellInTheRow()
+        {
+            // The row-height reconciliation in CssLayoutEngineTable.LayoutBodyRow takes the max of
+            // every cell's ActualBottom for the row - so a short, unconstrained sibling cell in the
+            // same row as the height:1px cell must still be stretched down to the tall cell's real
+            // content height, per the same §17.5.3 row-height rule.
+            //
+            // The row's actual final height is cross-checked against a reference table holding only
+            // the tall cell's own content (no explicit height, no sibling) rather than an arbitrary
+            // threshold - a broken row reconciliation could equalize both cells to some smaller,
+            // wrongly-clipped value, which a threshold alone would not catch if picked too low.
+            const string cellStyle = "border: 1px solid black; padding: 4pt; font-size: 14pt;";
+            var referenceHtml = $@"
+<!DOCTYPE html>
+<html>
+<head><style>table {{ border-collapse: collapse; }}</style></head>
+<body>
+    <table>
+        <tr><td id='reference' style='{cellStyle}'>Line one<br>Line two<br>Line three</td></tr>
+    </table>
+</body>
+</html>";
+            var html = $@"
+<!DOCTYPE html>
+<html>
+<head><style>table {{ border-collapse: collapse; }}</style></head>
+<body>
+    <table>
+        <tr>
+            <td id='tall' style='{cellStyle} height:1px'>Line one<br>Line two<br>Line three</td>
+            <td id='short' style='{cellStyle}'>Short</td>
+        </tr>
+    </table>
+</body>
+</html>";
+
+            var (referenceRoot, _) = await BuildCssBoxTree(referenceHtml);
+            var referenceCell = FindById(referenceRoot, "reference");
+            Assert.NotNull(referenceCell);
+            var referenceHeight = referenceCell!.ActualBottom - referenceCell.Location.Y;
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var tallCell = FindById(rootBox, "tall");
+            var shortCell = FindById(rootBox, "short");
+
+            Assert.NotNull(tallCell);
+            Assert.NotNull(shortCell);
+
+            var rowHeight = shortCell!.ActualBottom - shortCell.Location.Y;
+            Assert.True(rowHeight >= referenceHeight - 1,
+                $"the row (height {rowHeight}) should stretch to at least the tall cell's real, unconstrained content height ({referenceHeight}), not a clipped value");
+
+            Assert.Equal(tallCell!.ActualBottom, shortCell.ActualBottom, 1);
+        }
+
+        #endregion
+
         #region Header/Footer Layout Tests
 
   [Fact]
