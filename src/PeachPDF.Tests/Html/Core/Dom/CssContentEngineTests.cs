@@ -466,6 +466,22 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public async Task ApplyContent_TargetTextUnrecognizedMode_ReturnsEmpty()
+        {
+            // TargetTextFunctionConverter rejects an unrecognized mode keyword at parse time, but
+            // CssBox.Content is a raw string post-cascade, so exercise ResolveTargetText's mode switch
+            // default arm directly the same way ApplyContent_WithStringFunctionUnknownKeyword_FallsBackToFirst
+            // exercises GetNamedStringValueFromDocument's default arm above.
+            var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#ch2), not-a-real-mode)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal(string.Empty, tocBox.Text);
+        }
+
+        [Fact]
         public async Task ApplyContent_TargetCounterCustomName_ResolvesImmediatelyWithNoPaginationDependency()
         {
             var container = await BuildContainer(
