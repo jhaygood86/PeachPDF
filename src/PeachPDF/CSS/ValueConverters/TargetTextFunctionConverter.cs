@@ -9,10 +9,8 @@ namespace PeachPDF.CSS
     /// Converter for css-content-3's <c>target-text(&lt;target&gt;
     /// [, content | before | after | first-letter]?)</c> - pulls another element's text content.
     /// <c>&lt;target&gt;</c> shares <see cref="TargetGrammar"/> with
-    /// <see cref="TargetCounterFunctionConverter"/>. The grammar accepts all four modes; only the
-    /// default <c>content</c> mode is resolved to anything at runtime for v1 (see
-    /// <c>CssContentEngine.ResolveTargetText</c>) - <c>before</c>/<c>after</c>/<c>first-letter</c> parse
-    /// but currently resolve to empty, same as an unresolved target.
+    /// <see cref="TargetCounterFunctionConverter"/>. All four modes resolve at runtime (see
+    /// <c>CssContentEngine.ResolveTargetText</c>).
     /// </summary>
     internal sealed class TargetTextFunctionConverter : IValueConverter
     {

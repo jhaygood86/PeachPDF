@@ -291,9 +291,10 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Resolves <c>target-text(&lt;target&gt; [, content | before | after | first-letter])</c>
-        /// (css-content-3 §5). Only the default <c>content</c> mode resolves to anything for v1 (see
-        /// <see cref="TargetTextFunctionConverter"/>'s own doc comment) - <c>before</c>/<c>after</c>/
-        /// <c>first-letter</c> parse but intentionally produce nothing yet, same as an unresolved target.
+        /// (css-content-3 §5). All four modes resolve against the target element, mirroring
+        /// <see cref="ExtractContentValue"/>'s own <c>content()</c> mode dispatch (used by the
+        /// <c>content</c> property and <c>bookmark-label</c>) - just against the resolved
+        /// <paramref name="functionToken"/> target box instead of <paramref name="cssBox"/> itself.
         /// </summary>
         private static string? ResolveTargetText(CssBox cssBox, FunctionToken functionToken)
         {
@@ -316,7 +317,14 @@ namespace PeachPDF.Html.Core.Dom
                 ? modeToken.Data.ToLowerInvariant()
                 : "content";
 
-            return mode == "content" ? ExtractText(targetBox) : null;
+            return mode switch
+            {
+                "content" => ExtractText(targetBox),
+                "before" => ExtractPseudoElementContent(targetBox, isBeforePseudo: true),
+                "after" => ExtractPseudoElementContent(targetBox, isBeforePseudo: false),
+                "first-letter" => ExtractFirstLetter(targetBox),
+                _ => null
+            };
         }
 
         /// <summary>
