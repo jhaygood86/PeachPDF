@@ -104,7 +104,10 @@ namespace PeachPDF.Html.Core.Utils
         /// (CSS 2.1 §12.5.1). The marker is <c>Boxes[0]</c> of every list item, so for an item whose content
         /// is block-level it is the box the item's first real child would otherwise resolve its own top
         /// against: that child was placed at the marker's <c>ActualBottom</c>, which is 0 until the marker is
-        /// positioned — after the children are — and the item laid out with no height at all.
+        /// positioned — after the children are — and the item laid out with no height at all. A table's
+        /// grid decoration box (<see cref="CssBox.TableGridDecorationBox"/>, issue #721) is stepped over for
+        /// the same shape of reason: it is a captioned table's own <c>Boxes[0]</c>, and its author-visible
+        /// caption must see whatever preceded the table itself, not this synthetic paint-only box.
         /// </remarks>
         /// <returns>Box before this one on the tree. Null if it is the first</returns>
         public static CssBox? GetPreviousSibling(CssBox b, bool includeFloats = true)
@@ -116,12 +119,12 @@ namespace PeachPDF.Html.Core.Utils
             var diff = 1;
             var sib = b.ParentBox.Boxes[index - diff];
 
-            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib)) && index - diff - 1 >= 0)
+            while ((sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Absolute || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox) && index - diff - 1 >= 0)
             {
                 sib = b.ParentBox.Boxes[index - ++diff];
             }
 
-            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) ? null : sib;
+            sib = sib.DerivedStyle.ActualDisplay == Keywords.None || sib.Position.Value == PositionMode.Fixed || sib.Position.Value == PositionMode.Running || (!includeFloats && sib.IsFloated) || CssBox.IsOutsideMarker(sib) || sib.IsTableGridDecorationBox ? null : sib;
 
             return sib;
         }
@@ -1145,10 +1148,18 @@ namespace PeachPDF.Html.Core.Utils
             // gap-detection this method exists for entirely.
             if (!box.SuppressOwnBackgroundPaint && box.HasOwnBackground) return true;
 
-            if (RenderUtils.IsColorVisible(box.ActualBorderTopColor) && box.ActualBorderTopWidth > 0) return true;
-            if (RenderUtils.IsColorVisible(box.ActualBorderBottomColor) && box.ActualBorderBottomWidth > 0) return true;
-            if (RenderUtils.IsColorVisible(box.ActualBorderLeftColor) && box.ActualBorderLeftWidth > 0) return true;
-            if (RenderUtils.IsColorVisible(box.ActualBorderRightColor) && box.ActualBorderRightWidth > 0) return true;
+            // Excludes a captioned table whose own border paint CssLayoutEngineTable suppressed in favor
+            // of its grid decoration box (SuppressOwnBorderPaint, issue #721) - without this exclusion, a
+            // pagination slot holding only that table's own (never-painted) border values would be
+            // counted as printable content it will never actually draw, for the same reason the
+            // background exclusion just above exists.
+            if (!box.SuppressOwnBorderPaint)
+            {
+                if (RenderUtils.IsColorVisible(box.ActualBorderTopColor) && box.ActualBorderTopWidth > 0) return true;
+                if (RenderUtils.IsColorVisible(box.ActualBorderBottomColor) && box.ActualBorderBottomWidth > 0) return true;
+                if (RenderUtils.IsColorVisible(box.ActualBorderLeftColor) && box.ActualBorderLeftWidth > 0) return true;
+                if (RenderUtils.IsColorVisible(box.ActualBorderRightColor) && box.ActualBorderRightWidth > 0) return true;
+            }
 
             return false;
         }

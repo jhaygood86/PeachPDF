@@ -7409,16 +7409,17 @@ var tableCaptionHtml = """
     h1 { font-size: 14pt; margin: 0 0 0.3em }
     h2 { font-size: 11pt; margin: 1.2em 0 0.4em }
     p.intro { color: #6b7280; font-size: 9pt; margin: 0 0 0.6em; max-width: 34em }
-    table { border-collapse: separate; border-spacing: 0; margin-bottom: 0.6em; border: 1.5pt solid #334155 }
-    caption { font-weight: 600; padding: 5pt; background: #eef2ff; text-align: center }
-    td, th { border: 0.75pt solid #94a3b8; padding: 4pt 8pt; text-align: left }
+    table { border-collapse: separate; border-spacing: 0; margin-bottom: 0.6em; border: 1.5pt solid #334155; background: #eef2ff }
+    caption { font-weight: 600; padding: 5pt; text-align: center }
+    td, th { border: 0.75pt solid #94a3b8; padding: 4pt 8pt; text-align: left; background: white }
     th { background: #f8fafc }
     #bottom-table caption { caption-side: bottom }
     </style></head><body>
     <h1>caption-side: Positioning a &lt;caption&gt; Above or Below a Table</h1>
     <p class="intro">caption-side's only two values (CSS 2.1 §17.4) stack the caption above the row
     grid (<code>top</code>, the initial value) or below it (<code>bottom</code>) - always spanning the
-    table's own content width.</p>
+    table's own content width. The <code>&lt;table&gt;</code> element's own border/background (CSS 2.1
+    §17.4) wrap the row grid only - the caption sits outside them, in its own unbordered/unfilled area.</p>
 
     <h2>caption-side: top (default)</h2>
     <table>
@@ -7439,7 +7440,8 @@ var tableCaptionHtml = """
     """;
 await SaveShowcaseAsync("table_caption", "Layout", "Table Captions (caption-side)",
     "caption-side: top (the initial value) and bottom (CSS 2.1 §17.4), stacking a <table>'s <caption> "
-    + "above or below its row grid and stretching it to the table's own content width.",
+    + "above or below its row grid and stretching it to the table's own content width, with the "
+    + "<table>'s own border/background wrapping the row grid only.",
     tableCaptionHtml, pdfConfig);
 
 // --- interactive PDF forms showcase ---

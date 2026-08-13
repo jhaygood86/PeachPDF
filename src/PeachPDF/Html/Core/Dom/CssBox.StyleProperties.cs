@@ -34,6 +34,22 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>The CSS properties cascaded onto this box. See <see cref="Dom.ComputedStyle"/>.</summary>
         internal ComputedStyle ComputedStyle => _computedStyle;
 
+        /// <summary>
+        /// Adopts <paramref name="source"/>'s entire Border and Background style areas by reference -
+        /// safe because each area is copy-on-write (see <see cref="InheritStyle"/>'s own remarks). Used
+        /// to give a table's grid-only decoration box (<see cref="CssLayoutEngineTable"/>,
+        /// <see cref="TableGridDecorationBox"/>) the same border/background CSS 2.1 §17.4 says paints
+        /// around the row grid rather than the table+caption assembly - issue #721. A whole-area copy
+        /// rather than a property-by-property one so it also carries <c>box-shadow</c>/
+        /// <c>background-size</c>, which <see cref="InheritStyle"/>'s own enumerated copy (used for an
+        /// unrelated purpose - see its remarks) deliberately does not.
+        /// </summary>
+        internal void AdoptBorderAndBackgroundFrom(CssBox source)
+        {
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Border, source._computedStyle.Border, static (s, a) => s with { Border = a });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.Background, source._computedStyle.Background, static (s, a) => s with { Background = a });
+        }
+
         private readonly DerivedStyle _derivedStyle;
 
         /// <summary>Values calculated from <see cref="ComputedStyle"/> for this box. See <see cref="Dom.DerivedStyle"/>.</summary>

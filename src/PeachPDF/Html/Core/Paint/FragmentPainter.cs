@@ -366,8 +366,12 @@ namespace PeachPDF.Html.Core.Paint
                 var geometry = BoxDecorationGeometry.For(box, lines[i]);
 
                 // Outset (drop) shadows paint BEFORE the background so they sit behind the box
-                // (CSS Backgrounds & Borders 3 §5).
-                if (BoxDecorationGeometry.HasBoxShadow(box))
+                // (CSS Backgrounds & Borders 3 §5). box-shadow lives in the same style area
+                // AdoptBorderAndBackgroundFrom copies onto a table's grid decoration box (issue #721),
+                // so it's suppressed on this box alongside the border stroke itself, not on its own
+                // flag - painting it here too would double the shadow (once at this box's own,
+                // caption-inclusive rect, once at the decoration box's grid-only one).
+                if (!box.SuppressOwnBorderPaint && BoxDecorationGeometry.HasBoxShadow(box))
                     PaintBoxShadows(g, box, geometry, inset: false);
 
                 // A box whose background was "promoted" to fill the whole page canvas (see
@@ -385,16 +389,20 @@ namespace PeachPDF.Html.Core.Paint
                     if (geometry.NeedsClip) g.PopClip();
                 }
 
-                // Inset shadows paint AFTER (over) the background, clipped to the padding box.
-                if (BoxDecorationGeometry.HasBoxShadow(box))
+                // Inset shadows paint AFTER (over) the background, clipped to the padding box. See the
+                // outset call above for why this is gated on SuppressOwnBorderPaint too.
+                if (!box.SuppressOwnBorderPaint && BoxDecorationGeometry.HasBoxShadow(box))
                     PaintBoxShadows(g, box, geometry, inset: true);
 
                 // For multi-page tables, draw the outer bottom border at the page-break Y on
                 // intermediate pages (instead of at the rectangle's bottom, which is off-page).
-                // The page clip already constrains the side-border top to MarginTop.
+                // The page clip already constrains the side-border top to MarginTop. Keyed purely on
+                // PageBreakBottoms rather than also requiring a Table/InlineTable display - only
+                // CssLayoutEngineTable ever sets it, on the table box itself and (for a captioned
+                // table, see CssBox.TableGridDecorationBox) on its grid decoration box, whose own
+                // display is deliberately not "table" (issue #721).
                 var rectForBorders = geometry.DecorationRect;
-                if ((box.DerivedStyle.ActualDisplay == Keywords.Table || box.DerivedStyle.ActualDisplay == Keywords.InlineTable)
-                    && box.PageBreakBottoms != null && box.HtmlContainer != null)
+                if (box.PageBreakBottoms != null && box.HtmlContainer != null)
                 {
                     // PageBreakBottoms is keyed by pagination slot, which is exactly what the fragment
                     // records - no re-deriving the slot from a scroll offset.
@@ -414,8 +422,13 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
 
-                BordersDrawHandler.DrawBoxBorders(g, box, rectForBorders,
-                    geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge);
+                // A captioned table's own border is suppressed - its grid decoration box paints the
+                // border instead, at the grid's own rect (CssBox.SuppressOwnBorderPaint, issue #721).
+                if (!box.SuppressOwnBorderPaint)
+                {
+                    BordersDrawHandler.DrawBoxBorders(g, box, rectForBorders,
+                        geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge);
+                }
 
                 if (geometry.NeedsClip) g.PopClip();
 

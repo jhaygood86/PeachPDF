@@ -1,5 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
@@ -1113,6 +1114,252 @@ Assert.NotNull(tbody);
 
             Assert.Equal(table!.Location.X, caption!.Location.X, 1);
             Assert.Equal(table.ActualRight, caption.ActualRight, 1);
+        }
+
+        [Fact]
+        public async Task TableCaption_TableHasOwnBorderAndBackground_GridDecorationBoxExcludesTopCaption()
+        {
+            // Issue #721 (CSS 2.1 §17.4): a <table>'s own border/background belong to the row grid
+            // alone - a captioned table with a border/background on the <table> element itself must not
+            // paint either around the caption too.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; border: 4px solid black; background: #eee; }
+        td { border: 1px solid black; padding: 4px; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Table caption</caption>
+        <tr><td>A</td><td>B</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            var caption = FindById(rootBox, "cap");
+
+            Assert.NotNull(table);
+            Assert.NotNull(caption);
+
+            var decoration = table!.TableGridDecorationBox;
+            Assert.NotNull(decoration);
+
+            // The grid decoration box - which now owns the table's own border/background paint - starts
+            // right where the caption ends, not above it.
+            Assert.Equal(caption!.ActualBottom, decoration!.Location.Y, 1);
+            Assert.True(decoration.Location.Y > table.Location.Y,
+                "Grid decoration box should start below the table's own (caption-inclusive) top");
+
+            // Left/right are unaffected by the fix - still match the caption's own span.
+            Assert.Equal(table.Location.X, decoration.Location.X, 1);
+            Assert.Equal(table.ActualRight, decoration.ActualRight, 1);
+
+            Assert.True(table.SuppressOwnBorderPaint);
+            Assert.True(table.SuppressOwnBackgroundPaint);
+        }
+
+        [Fact]
+        public async Task TableCaption_CaptionSideBottom_TableHasOwnBorderAndBackground_GridDecorationBoxExcludesCaption()
+        {
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; border: 4px solid black; background: #eee; }
+        td { border: 1px solid black; padding: 4px; }
+        caption { caption-side: bottom; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Table caption</caption>
+        <tr><td>A</td><td>B</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+            var caption = FindById(rootBox, "cap");
+
+            Assert.NotNull(table);
+            Assert.NotNull(caption);
+
+            var decoration = table!.TableGridDecorationBox;
+            Assert.NotNull(decoration);
+
+            // The grid decoration box ends right where the bottom caption starts, not below it.
+            Assert.Equal(caption!.Location.Y, decoration!.ActualBottom, 1);
+            Assert.True(decoration.ActualBottom < table.ActualBottom,
+                "Grid decoration box should end above the table's own (caption-inclusive) bottom");
+
+            // Regression guard: the table's own combined extent must end exactly at the caption's own
+            // visible bottom edge, not one extra grid-border-width past it - a bottom caption's start
+            // position already has that width folded in (it starts flush below the grid's own border),
+            // so re-adding it when settling _tableBox.ActualBottom would double-count it.
+            Assert.Equal(caption.ActualBottom + caption.ActualMarginBottom, table.ActualBottom, 1);
+        }
+
+        [Fact]
+        public async Task TableCaption_NoOwnBorderOrBackground_TableStillPaintsNormally()
+        {
+            // A captioned table whose border only lives on its cells (the common real-world case, per
+            // the accepted-gap note this fix closes) gets a grid decoration box too (it doesn't know in
+            // advance that the border/background it copies are empty), but must not visibly change
+            // anything: no border/background of its own to paint, on either box.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; }
+        td { border: 1px solid black; padding: 4px; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Table caption</caption>
+        <tr><td id='cell1'>A</td><td>B</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            var firstCell = FindById(rootBox, "cell1")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, table, g);
+
+            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawRectCall>());
+            // The cell's own border still paints - only the table's (absent) own border/background is
+            // the point of this test.
+            var gCell = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, firstCell, gCell);
+            Assert.NotEmpty(gCell.Log.OfType<TestRecordingGraphics.DrawPolygonCall>());
+        }
+
+        [Fact]
+        public async Task TableCaption_TableHasOwnBorder_PaintDrawsBorderOnlyAtGridRect()
+        {
+            // Painting-level check, per this repo's own testing convention that a layout-geometry
+            // assertion alone isn't proof for anything touching the RGraphics adapter layer: confirms
+            // the actual paint calls draw the table's own border at the grid decoration box's rect, not
+            // somewhere spanning the caption too (_tableBox's own border paint is suppressed - see
+            // CssBox.SuppressOwnBorderPaint - so every border-shaped draw call in this log has to be the
+            // decoration box's).
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; border: 4px solid rgb(10, 20, 30); }
+        td { padding: 4px; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Table caption</caption>
+        <tr><td>A</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            var caption = FindById(rootBox, "cap")!;
+            var decoration = table.TableGridDecorationBox;
+            Assert.NotNull(decoration);
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, table, g);
+
+            var borderPolygons = g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>().ToList();
+            Assert.NotEmpty(borderPolygons);
+            Assert.All(borderPolygons, polygon =>
+                Assert.All(polygon.Points, point =>
+                    Assert.True(point.Y >= caption.ActualBottom - 0.5,
+                        $"Table's own border must not paint above y={caption.ActualBottom} (the caption's own area), but a border point painted at y={point.Y}")));
+        }
+
+        [Fact]
+        public async Task TableCaption_TableHasOwnBoxShadow_PaintsExactlyOnce()
+        {
+            // Regression guard: box-shadow lives in the same style area (BorderArea) that
+            // AdoptBorderAndBackgroundFrom copies onto the grid decoration box, but PaintBoxShadows is
+            // gated on SuppressOwnBorderPaint separately from the border stroke itself - without that
+            // gate, both _tableBox and its decoration box would paint the shadow, once at each box's own
+            // (different) rect.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; box-shadow: 5px 5px black; background: white; }
+        td { padding: 4px; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Table caption</caption>
+        <tr><td>A</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            Assert.NotNull(table.TableGridDecorationBox);
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, table, g);
+
+            static bool IsOpaqueBlack(RColor c) => c.A == 255 && c is { R: 0, G: 0, B: 0 };
+            var shadowRects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().Where(r => IsOpaqueBlack(r.Color)).ToList();
+            Assert.Single(shadowRects);
+        }
+
+        [Fact]
+        public async Task TableCaption_TableHasOwnBackground_PaintFillsOnlyTheGridRect()
+        {
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: separate; border-spacing: 0; background: rgb(200, 200, 200); }
+        td { padding: 4px; }
+    </style>
+</head>
+<body>
+    <table>
+        <caption id='cap'>Table caption</caption>
+        <tr><td>A</td></tr>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            var decoration = table.TableGridDecorationBox;
+            Assert.NotNull(decoration);
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, table, g);
+
+            var backgroundRects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            Assert.NotEmpty(backgroundRects);
+            Assert.All(backgroundRects, rect =>
+            {
+                Assert.Equal(decoration!.Location.Y, rect.Y, 1);
+                Assert.Equal(decoration.ActualBottom - decoration.Location.Y, rect.Height, 1);
+            });
         }
 
         #endregion

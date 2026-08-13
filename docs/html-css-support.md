@@ -773,7 +773,7 @@ Limitations:
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
 | `empty-cells` | [empty-cells](https://developer.mozilla.org/en-US/docs/Web/CSS/empty-cells) | `show`, `hide` |
-| `caption-side` | [caption-side](https://developer.mozilla.org/en-US/docs/Web/CSS/caption-side) | `top` (default), `bottom` — a `table-caption` box is stacked above or below the table's row grid and stretched to the table's own content width. Painted inside the `<table>` element's own border/background box rather than a separate outer "table wrapper box", so a bordered or filled table's border/background extends behind the caption too, which [CSS 2.1 §17.4](https://www.w3.org/TR/CSS21/tables.html#caption-position) does not ask for |
+| `caption-side` | [caption-side](https://developer.mozilla.org/en-US/docs/Web/CSS/caption-side) | `top` (default), `bottom` — a `table-caption` box is stacked above or below the table's row grid and stretched to the table's own content width, outside the `<table>` element's own border/background per [CSS 2.1 §17.4](https://www.w3.org/TR/CSS21/tables.html#caption-position) |
 
 ### Generated Content
 

@@ -184,12 +184,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// §3.1's "a break before a container's own first in-flow child is the break point before the
         /// container" never fired for a list item. The item stayed behind as an empty stub of its own chrome
         /// with the bullet beside nothing, while its content — and no number — went to the next
-        /// fragmentainer.
+        /// fragmentainer. A captioned table's grid decoration box (<see cref="CssBox.TableGridDecorationBox"/>,
+        /// issue #721) is excluded for the identical reason: it is that table's own <c>Boxes[0]</c>, ahead of
+        /// the caption a forced break-before/after should actually be read from and propagated on behalf of.
         /// </remarks>
         private static bool IsInFlow(CssBox box) =>
             box.DerivedStyle.ActualDisplay != Keywords.None
             && box.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed or PositionMode.Running)
             && !box.IsFloated
-            && !CssBox.IsOutsideMarker(box);
+            && !CssBox.IsOutsideMarker(box)
+            && !box.IsTableGridDecorationBox;
     }
 }
