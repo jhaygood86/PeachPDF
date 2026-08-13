@@ -131,6 +131,34 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         }
 
         /// <summary>
+        /// The two named optional fields the <see cref="InlineToken_DiffersInAnyOfItsOwnFields"/> theory's
+        /// own int parameters can't carry - a bool and a second int appended after it. Without these, a
+        /// hand-written <c>Equals</c>/<c>GetHashCode</c> that dropped either would pass every case above
+        /// while still comparing two tokens with different resumed-line state as equal.
+        /// </summary>
+        [Fact]
+        public void InlineToken_DiffersInFollowsForcedBreak()
+        {
+            var box = new CssBox(null, null);
+
+            var first = new InlineBreakToken(box, 1, new List<int> { 0 }, 2, 7, FollowsForcedBreak: false);
+            var second = new InlineBreakToken(box, 1, new List<int> { 0 }, 2, 7, FollowsForcedBreak: true);
+
+            Assert.NotEqual(first, second);
+        }
+
+        [Fact]
+        public void InlineToken_DiffersInConsecutiveHyphenatedLines()
+        {
+            var box = new CssBox(null, null);
+
+            var first = new InlineBreakToken(box, 1, new List<int> { 0 }, 2, 7, ConsecutiveHyphenatedLines: 0);
+            var second = new InlineBreakToken(box, 1, new List<int> { 0 }, 2, 7, ConsecutiveHyphenatedLines: 1);
+
+            Assert.NotEqual(first, second);
+        }
+
+        /// <summary>
         /// A flex container's own no-progress backstop is the same equality test
         /// <see cref="TableBreakToken"/>'s own tests exist for: every pass builds fresh
         /// <see cref="UnfinishedFlexItem"/>/<see cref="CssBox"/> lists, so contents-based equality is what

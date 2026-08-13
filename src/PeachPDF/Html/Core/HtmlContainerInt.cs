@@ -1738,7 +1738,7 @@ namespace PeachPDF.Html.Core
         /// <paramref name="budget"/> instead of wherever it did, or false when the chain does not end in
         /// that box's inline flow.
         /// </summary>
-        private static bool TryRebuildForBudget(
+        internal static bool TryRebuildForBudget(
             BreakToken token, CssBox box, int budget, out BreakToken rebuilt)
         {
             rebuilt = token;
@@ -1752,7 +1752,14 @@ namespace PeachPDF.Html.Core
                         // is to pick up instead.
                         ResumeWordIndex = box.LineBoxes[budget].StartOrdinal,
                         CompletedLineCount = budget,
-                        LinesKeptHere = budget - (inline.CompletedLineCount - inline.LinesKeptHere)
+                        LinesKeptHere = budget - (inline.CompletedLineCount - inline.LinesKeptHere),
+                        // hyphenate-limit-lines (CSS Text 4 §6.3.5): the rewind can give back a line the
+                        // original ConsecutiveHyphenatedLines count was itself computed through, so the
+                        // count has to be re-derived from what the budget actually keeps rather than kept
+                        // as-is - the same "stale unless recomputed" hazard
+                        // EnforceHyphenateLimitLastBeforeBreak's own reset exists for, just reached by a
+                        // rewind giving lines back instead of a hyphen being undone.
+                        ConsecutiveHyphenatedLines = TrailingHyphenatedLineCount(box, budget - 1)
                     };
                     return true;
 
@@ -1764,6 +1771,33 @@ namespace PeachPDF.Html.Core
                 default:
                     return false;
             }
+        }
+
+        /// <summary>
+        /// How many of <paramref name="box"/>'s own line boxes, counting back from
+        /// <paramref name="lastKeptIndex"/>, end in a hyphenation split - i.e. what
+        /// <see cref="Entities.CssLineBoxCoordinates.ConsecutiveHyphenatedLines"/> would hold if layout
+        /// had stopped exactly after that line rather than wherever the original pass actually did.
+        /// </summary>
+        /// <remarks>
+        /// A hyphenated line's last word is always a split's prefix (<c>TryHyphenateWord</c>'s own
+        /// construction sets <see cref="CssRectWord.PreSplitWord"/> on it), so this needs no text/glyph
+        /// comparison - unlike the character a custom <c>hyphenate-character</c> might render, which
+        /// data alone this method has access to.
+        /// </remarks>
+        private static int TrailingHyphenatedLineCount(CssBox box, int lastKeptIndex)
+        {
+            var count = 0;
+
+            for (var i = lastKeptIndex; i >= 0; i--)
+            {
+                if (box.LineBoxes[i].Words is not [.., CssRectWord { PreSplitWord: not null }])
+                    break;
+
+                count++;
+            }
+
+            return count;
         }
 
         /// <summary>
