@@ -147,7 +147,17 @@ namespace PeachPDF.Html.Core.Dom
 
                     var (c, colSpan, lastRow) = placements[cell];
 
-                    spans[cell] = new CellSpan(r, c, lastRow - r + 1, colSpan);
+                    // A rowspan declared past the grid's own last row (e.g. a header cell's rowspan
+                    // exceeding its own row-group's row count - CssLayoutEngineTable.GetLastRowInGrid's
+                    // header/footer arithmetic doesn't clamp it, unlike a body row's GetEffectiveEndRowIndex)
+                    // still has to report a real row inside the grid - a CellSpan naming one outside it is
+                    // exactly the kind of value CollapsedBorderModel indexes its own line-width arrays with,
+                    // with no bounds check of its own. colSpan needs no equivalent clamp: ComputeColumnPlacements
+                    // grows columnCount to fit every cell's own start+colSpan as it places it, so c+colSpan
+                    // is always within columnCount already.
+                    var clampedLastRow = Math.Min(lastRow, rowCount - 1);
+
+                    spans[cell] = new CellSpan(r, c, clampedLastRow - r + 1, colSpan);
 
                     for (var rr = r; rr <= lastRow && rr < rowCount; rr++)
                     {

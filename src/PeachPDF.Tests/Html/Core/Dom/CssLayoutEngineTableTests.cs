@@ -529,6 +529,210 @@ th, td { border: 1px solid black; padding: 8px; }
             Assert.True(d.Location.X < e!.Location.X);
         }
 
+        [Fact]
+        public async Task TableLayout_RowspanInThead_CellStretchesToCoverEveryRowItSpans()
+        {
+            // https://github.com/jhaygood86/PeachPDF/issues/742: LayoutBodyRow's ordinary vertical-alignment
+            // loop only stretches a rowSpan==1 cell to the row's own max bottom - a rowSpan>1 cell is
+            // instead supposed to be closed later, on the row its span ends on, via CloseSpanningCell/
+            // TableRowCursor.RowSpannedBoxes, both keyed by TableRowCursor.RowIndex. During a detached
+            // header's/footer's own measurement pass RowIndex stays pinned at -1 for every row of the group
+            // (ForRowGroupMeasurement's own cursor never advances it), so that machinery never engages and
+            // a header/footer rowspan cell kept only its own single-row content height, never stretched to
+            // cover the rows it actually spans - even though those rows were visibly taller.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 400px; }
+        th, td { border: 1px solid black; }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr><th id='a' rowspan='2'>A</th><th id='b' style='height:60px'>B</th></tr>
+            <tr><th id='d' style='height:60px'>D</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>x</td><td>y</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+
+            var a = FindById(headerProxy.SourceBox, "a");
+            var b = FindById(headerProxy.SourceBox, "b");
+            var d = FindById(headerProxy.SourceBox, "d");
+
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+            Assert.NotNull(d);
+
+            // A spans both rows, so its own bottom has to reach as far down as D's (the last row it
+            // spans) - not stop at its own single line of text partway through B's row.
+            Assert.Equal(d!.ActualBottom, a!.ActualBottom, 1);
+            Assert.True(a.ActualBottom > b!.ActualBottom, "A should reach past B's own row into D's.");
+        }
+
+        [Fact]
+        public async Task TableLayout_RowspanCellTallerThanItsRows_GrowsTheHeaderToFitInstead()
+        {
+            // The header-height counterpart of TableLayout_RowspanInThead_CellStretchesToCoverEveryRowItSpans:
+            // a rowspan cell is excluded from its own opening row's own natural height (LayoutBodyRow's
+            // rowMaxBottom only folds in a rowSpan==1 cell), so when the cell's own content is TALLER than
+            // every row it spans combined, simply stretching the cell to match the header's already-settled
+            // total height isn't enough - the header's own total height has to grow to fit the cell instead,
+            // or the table body starts overlapping the header's own tallest content.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 200px; }
+        th, td { border: 1px solid black; }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr><th id='a' rowspan='2'>tall AAAA BBBB CCCC DDDD EEEE FFFF GGGG HHHH IIII JJJJ</th><th id='b'>B</th></tr>
+            <tr><th id='d'>D</th></tr>
+        </thead>
+        <tbody>
+            <tr><td id='x'>x</td><td id='y'>y</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+
+            var a = FindById(headerProxy.SourceBox, "a");
+            var x = FindById(rootBox, "x");
+
+            Assert.NotNull(a);
+            Assert.NotNull(x);
+
+            // The header's own bottom (what positions the first body row) has to reach at least as far
+            // as A's tall content does - not leave A's trailing lines rendering below where the header
+            // itself, and so the body row after it, was placed.
+            Assert.True(headerProxy.SourceBox.ActualBottom >= a!.ActualBottom - 1,
+                $"header bottom ({headerProxy.SourceBox.ActualBottom}) should reach A's own bottom ({a.ActualBottom})");
+            Assert.True(x!.Location.Y >= a.ActualBottom - 1,
+                $"first body row (Y={x.Location.Y}) must not start above A's own tall content (bottom={a.ActualBottom})");
+        }
+
+        [Fact]
+        public async Task TableLayout_RowspanExceedingTheadsOwnRowCount_DoesNotThrow()
+        {
+            // A rowspan declared larger than the <thead>'s own row count (rowspan="99" in a 2-row header)
+            // used to make TableGrid.Build record a CellSpan whose LastRow pointed past the grid's own
+            // last row - CollapsedBorderModel then indexed its own line-width arrays with that out-of-range
+            // value and threw IndexOutOfRangeException. Merely asserts layout completes without throwing;
+            // the exact geometry a malformed rowspan this large produces isn't otherwise specified.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 200px; }
+        th, td { border: 1px solid black; }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr><th id='a' rowspan='99'>A</th><th>B</th></tr>
+            <tr><th>D</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>x</td><td>y</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+        }
+
+        [Fact]
+        public async Task TableLayout_RowspanAcrossACollapsedTheadRow_ClosesOnTheCorrectRow()
+        {
+            // A rowspan's own value counts rows in the header's raw source order, collapsed ones
+            // included (CSS 2.1 §17.6.1) - the same remapping issue #665 already applies for a body
+            // row's rowspan crossing a visibility:collapse row (GetEffectiveEndRowIndex) has to apply
+            // here too, since RegisterRowSpanCellsEndingRow's row-group-local index is the *filtered*
+            // per-iteration counter (collapsed rows are skipped before it advances), not a raw one.
+            // Row 'skip' (raw index 1) is collapsed; A's rowspan='3' (raw rows 0,1,2) should close on
+            // 'c' (raw index 2, filtered index 1) - not on 'd' (raw index 3, filtered index 2), which
+            // naive filtered-index arithmetic (rowIndex + rowSpan - 1 = 0 + 3 - 1 = 2) would reach.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 200px; }
+        th, td { border: 1px solid black; }
+        .skip { visibility: collapse; }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr><th id='a' rowspan='3'>A</th><th id='b'>B</th></tr>
+            <tr class='skip'><th>skip</th></tr>
+            <tr><th id='c' style='height:60px'>C</th></tr>
+            <tr><th id='d' style='height:60px'>D</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>x</td><td>y</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+
+            var a = FindById(headerProxy.SourceBox, "a");
+            var c = FindById(headerProxy.SourceBox, "c");
+            var d = FindById(headerProxy.SourceBox, "d");
+
+            Assert.NotNull(a);
+            Assert.NotNull(c);
+            Assert.NotNull(d);
+
+            // A closes on C (its rowspan's real, collapse-aware end row), not D - so A's own bottom
+            // matches C's, and stops short of D's.
+            Assert.Equal(c!.ActualBottom, a!.ActualBottom, 1);
+            Assert.True(a.ActualBottom < d!.ActualBottom - 1,
+                $"A's bottom ({a.ActualBottom}) should stop at C's row, short of D's ({d.ActualBottom}).");
+        }
+
       [Fact]
         public async Task TableLayout_RemovesHeaderFromTreeWhenRepeating()
         {

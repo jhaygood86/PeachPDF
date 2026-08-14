@@ -32,20 +32,16 @@ Boxes-list-entry-counting `currentColumn`), and walking `currentX` forward past 
 cell's real `columnIndex` before placing that cell - the same width-plus-trailing-spacing formula a real
 cell in that column would have advanced by, applied one skipped column at a time.
 
-## What was deliberately not done
-
-The rowspan cell's own height still isn't stretched to cover every row it spans in a detached header/footer
-- confirmed by direct measurement, not assumed - a separate, deeper defect through `TableRowCursor.RowIndex`
-being pinned at `-1` for the whole of a header/footer measurement pass (so the existing
-`RowSpannedBoxes`/`CloseSpanningCell` height-closing machinery, keyed by row index, never engages for a
-header/footer rowspan). This fix stays entirely within `GetCellRealColumnIndex`/`LayoutBodyRow`'s column
-cursor and never touches `TableRowCursor`, deliberately - tracked separately as
-[#742](https://github.com/jhaygood86/PeachPDF/issues/742).
+Direct measurement while verifying this fix also turned up a related but separate defect in the same
+repro shape - the rowspan cell's own *height* was never stretched to cover every row it spans - fixed
+alongside this one; see
+[the matching note](2026-08-14-rowspan-cell-height-now-stretches-across-a-thead-tfoot-measurement-pass.md)
+for why it needed a different mechanism than this fix.
 
 ## Evidence
 
 New regression test (`CssLayoutEngineTableTests.TableLayout_RowspanInThead_PositionsLaterRowCellInItsOwnColumn`)
 measures the laid-out box tree directly (via the header proxy's `SourceBox`, since a `<thead>` is detached
 from the ordinary box tree) and asserts the previously-mispositioned cell now shares its column's exact
-X/width with the other real cells in that column. Full suite green (8827 tests, net8.0), zero warnings on
+X/width with the other real cells in that column. Full suite green (8830 tests, net8.0), zero warnings on
 `dotnet build -t:Rebuild`.
