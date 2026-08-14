@@ -343,6 +343,192 @@ th, td { border: 1px solid black; padding: 8px; }
             _output.WriteLine($"Table has {table.Boxes.Count} children including footer");
         }
 
+        [Fact]
+        public async Task TableLayout_RowspanInThead_PositionsLaterRowCellInItsOwnColumn()
+        {
+            // https://github.com/jhaygood86/PeachPDF/issues/740: GetCellRealColumnIndex sums a row's own
+            // preceding cells' colspans, which only accounts for a rowspan gap when InsertEmptyBoxes has
+            // padded it with a CssSpacingBox placeholder first - true for an ordinary body row, never true
+            // for a detached <thead>'s own rows. A rowspan cell (A) starting in the header's first row and
+            // reaching into its second row used to leave that second row's only real cell (D) positioned
+            // at column 0's X/width instead of column 1's - overlapping A instead of sitting under B.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 400px; }
+        th, td { border: 1px solid black; }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr><th id='a' rowspan='2'>A</th><th id='b'>B</th></tr>
+            <tr><th id='d'>D</th></tr>
+        </thead>
+        <tbody>
+            <tr><td id='x'>x</td><td id='y'>y</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+
+            var a = FindById(headerProxy.SourceBox, "a");
+            var b = FindById(headerProxy.SourceBox, "b");
+            var d = FindById(headerProxy.SourceBox, "d");
+            var x = FindById(rootBox, "x");
+            var y = FindById(rootBox, "y");
+
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+            Assert.NotNull(d);
+            Assert.NotNull(x);
+            Assert.NotNull(y);
+
+            // Column 0 (A, x) and column 1 (B, D, y) each share one X/width - D belongs in column 1
+            // alongside B and y, not column 0 alongside A.
+            Assert.Equal(x!.Location.X, a!.Location.X, 1);
+            Assert.Equal(x.ActualRight, a.ActualRight, 1);
+            Assert.Equal(y!.Location.X, b!.Location.X, 1);
+            Assert.Equal(y.ActualRight, b.ActualRight, 1);
+            Assert.Equal(y.Location.X, d!.Location.X, 1);
+            Assert.Equal(y.ActualRight, d.ActualRight, 1);
+        }
+
+        [Fact]
+        public async Task TableLayout_StaggeredRowspanChainInThead_DoesNotUndercountColumns()
+        {
+            // https://github.com/jhaygood86/PeachPDF/issues/740: DetermineColumnCount's no-<col> fallback
+            // sums each row's own Boxes colspans - the same naive computation GetCellRealColumnIndex used
+            // to do, and just as wrong for a detached <thead> row whose only real cell follows a rowspan
+            // gap. Once GetCellRealColumnIndex became rowspan-occupancy-aware (this issue's own fix), a
+            // cell's real column could exceed a _columnWidths array sized off this still-naive count -
+            // here, 5 single-cell rows each with one entry in their own Boxes list (naive sum: 1 throughout)
+            // actually need 5 columns, staggered diagonally by decreasing rowspans. Before the matching
+            // DetermineColumnCount fix this threw IndexOutOfRangeException out of LayoutBodyRow's column-
+            // skip loop; this asserts it lays out cleanly and each cell reaches its own column instead.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 500px; }
+        th, td { border: 1px solid black; }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr><th id='a' rowspan='5'>A</th></tr>
+            <tr><th id='b' rowspan='4'>B</th></tr>
+            <tr><th id='c' rowspan='3'>C</th></tr>
+            <tr><th id='d' rowspan='2'>D</th></tr>
+            <tr><th id='e'>E</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>only one body cell, so it can't reveal the true column count either</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+
+            var a = FindById(headerProxy.SourceBox, "a");
+            var b = FindById(headerProxy.SourceBox, "b");
+            var c = FindById(headerProxy.SourceBox, "c");
+            var d = FindById(headerProxy.SourceBox, "d");
+            var e = FindById(headerProxy.SourceBox, "e");
+
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+            Assert.NotNull(c);
+            Assert.NotNull(d);
+            Assert.NotNull(e);
+
+            // Each cell sits strictly to the right of the previous one - the staggered diagonal these five
+            // columns form - rather than every cell piling up at column 0.
+            Assert.True(a!.Location.X < b!.Location.X);
+            Assert.True(b.Location.X < c!.Location.X);
+            Assert.True(c.Location.X < d!.Location.X);
+            Assert.True(d.Location.X < e!.Location.X);
+        }
+
+        [Fact]
+        public async Task TableLayout_ColCountNarrowerThanStaggeredRowspanChain_DoesNotUndercountColumns()
+        {
+            // The <col>-declared twin of TableLayout_StaggeredRowspanChainInThead_DoesNotUndercountColumns:
+            // DetermineColumnCount's _columns.Count > 0 branch used to trust the declared <col> count
+            // outright, with no floor from actual cell content at all - here only 2 <col>s are declared,
+            // but the same 5-column staggered rowspan chain as the no-<col> test actually needs 5. Exercises
+            // the other half of DetermineColumnCount's fix (both branches, not just the no-<col> fallback).
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 500px; }
+        th, td { border: 1px solid black; }
+    </style>
+</head>
+<body>
+    <table>
+        <col /><col />
+        <thead>
+            <tr><th id='a' rowspan='5'>A</th></tr>
+            <tr><th id='b' rowspan='4'>B</th></tr>
+            <tr><th id='c' rowspan='3'>C</th></tr>
+            <tr><th id='d' rowspan='2'>D</th></tr>
+            <tr><th id='e'>E</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>only one body cell, so it can't reveal the true column count either</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+
+            var a = FindById(headerProxy.SourceBox, "a");
+            var b = FindById(headerProxy.SourceBox, "b");
+            var c = FindById(headerProxy.SourceBox, "c");
+            var d = FindById(headerProxy.SourceBox, "d");
+            var e = FindById(headerProxy.SourceBox, "e");
+
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+            Assert.NotNull(c);
+            Assert.NotNull(d);
+            Assert.NotNull(e);
+
+            Assert.True(a!.Location.X < b!.Location.X);
+            Assert.True(b.Location.X < c!.Location.X);
+            Assert.True(c.Location.X < d!.Location.X);
+            Assert.True(d.Location.X < e!.Location.X);
+        }
+
       [Fact]
         public async Task TableLayout_RemovesHeaderFromTreeWhenRepeating()
         {
