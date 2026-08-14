@@ -116,11 +116,14 @@ namespace PeachPDF.Tests.Integration
             // Constructs a case where BOTH fixes fire, in sequence, for the same table in one
             // layout pass. The 10pt spacer + 800pt heading + 40pt margin gives the table a
             // natural top of 850pt, crossing the 842pt page-1 boundary on its own - Gap 1 pulls
-            // the heading along, landing it exactly at the page-2 top (842) and the table just
-            // 2pt short of page 2's own bottom (842 + 840 = 1682, leaving only 2pt of the
-            // 842pt-tall page 2 for the table's header). That's nowhere near enough for even
-            // the thead's own first row, so Gap 2's header-aware pre-check fires a *second* time
-            // and relocates the table (with its already-relocated header) again, onto page 3.
+            // the heading along, landing it exactly at the page-2 top (842) and the table close
+            // to page 2's own bottom, leaving nowhere near enough room for even the thead's own
+            // first row. Gap 2's header-aware pre-check then fires a *second* time and relocates
+            // the table (with its already-relocated header) again, onto page 3 - landing exactly
+            // at its top (2 * 842 = 1684) here since the table declares no border anywhere, so
+            // CSS 2.1 §17.6.2 resolves every collapsed grid line to a real zero rather than the
+            // flat non-zero nudge a border-less collapsed table used to get regardless of whether
+            // it declared a border to justify one.
             // Gap 2's own guard correctly declines to pull the heading a second time - re-pulling
             // it this far would no longer leave room for the header alongside it either - so the
             // heading stays exactly where Gap 1 alone put it while the table moves on without it.
@@ -156,8 +159,8 @@ namespace PeachPDF.Tests.Integration
 
             // Gap 2 fires a second time and pushes the table on to page 3 - past what Gap 1
             // alone would have produced (which stopped just short of page 2's own bottom).
-            Assert.True(table!.Location.Y > 2 * PageHeight,
-                $"Table should be pushed on to page 3 (Y > {2 * PageHeight}) by Gap 2's second pass but Y={table.Location.Y:F1}");
+            Assert.True(table!.Location.Y >= 2 * PageHeight,
+                $"Table should be pushed on to page 3 (Y >= {2 * PageHeight}) by Gap 2's second pass but Y={table.Location.Y:F1}");
 
             // Document order is preserved even though heading and table now sit on different
             // pages - a direct consequence of Gap 2's guard correctly declining to re-pull an

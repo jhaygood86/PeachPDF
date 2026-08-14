@@ -497,7 +497,11 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.NotNull(table.PageBreakBottoms);
             Assert.NotEmpty(table.PageBreakBottoms);
 
-            var lastPageIndex = (int)(table.ActualBottom / pageHeight);
+            // The actual fragmentainer count, not a heuristic division of table.ActualBottom by
+            // pageHeight - collapsed-border geometry (issue #735's own fix) shifts exactly how tall the
+            // table measures, and a division-based estimate drifts out of sync with the real page count
+            // as that arithmetic gets more precise, landing on a page index the fragment tree never built.
+            var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
             Assert.True(lastPageIndex >= 1, "Table should span at least 2 pages for this test to be meaningful.");
 
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
@@ -730,6 +734,292 @@ namespace PeachPDF.Tests.Html.Core.Dom
                 $"but found none. All lines: [{string.Join(", ", recording.HorizontalLines.Select(y => $"{y:F1}"))}]");
         }
 
+        [Fact]
+        public async Task RepeatedThead_BoundaryToBody_ResolvesFreshPerPage_NotReusedFromPage1()
+        {
+            // CSS 2.1 §17.6.2 resolves a border against whichever row is *visually* adjacent - for a
+            // repeated <thead>, that is whatever row actually starts each page, not the header's single
+            // DOM-order neighbor (body row 1). Only row 1 (page 1's true neighbor) gets a deliberately
+            // huge, distinctive border; every other row keeps an ordinary thin one. A resolution that
+            // reuses page 1's answer on every later page would wrongly show the huge border repeated at
+            // every page's header boundary too; a per-page-fresh resolution shows it only on page 1.
+            var pageHeight = 400.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;'>
+        <thead>
+            <tr><th style='border:1px solid black;padding:5px;'>Header</th></tr>
+        </thead>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 30).Select(i =>
+    i == 1
+        ? "<tr><td style='border:9px solid red;padding:5px;'>Row 1</td></tr>"
+        : $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
+            Assert.True(lastPageIndex >= 2, "Table should span at least 3 pages for this test to be meaningful.");
+
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+
+            // Page 0: the header's true DOM/visual neighbor (row 1's huge red border) drives the
+            // boundary - a thick (>=8pt) roughly-horizontal segment must appear somewhere on this page.
+            var page0Recording = new RecordingGraphics(adapter);
+            FragmentPaintHarness.PaintPage(container, page0Recording, 0);
+            Assert.Contains(page0Recording.Log, IsThickHorizontalSegment);
+
+            // Every later page: the header repeats above a *different* row (an ordinary 1px border), so
+            // no page after the first should show that same thick segment anywhere.
+            for (var page = 1; page <= lastPageIndex; page++)
+            {
+                var recording = new RecordingGraphics(adapter);
+                FragmentPaintHarness.PaintPage(container, recording, page);
+                Assert.DoesNotContain(recording.Log, IsThickHorizontalSegment);
+            }
+        }
+
+        // 9px resolves to 6.75pt (1px = 0.75pt, see Length.PointsPerPx); an ordinary 1px border resolves
+        // to 0.75pt, so a threshold well between the two distinguishes "row 1's huge border won" from
+        // "an ordinary row's border won" without being sensitive to the exact px-to-pt ratio.
+        private static bool IsThickHorizontalSegment(PaintOp op) =>
+            op.Kind is PaintOpKind.Polygon or PaintOpKind.Line &&
+            op.Bounds.Width > op.Bounds.Height && op.Bounds.Height >= 4;
+
+        [Fact]
+        public async Task RepeatedThead_OwnInternalGridLine_RedrawnTranslatedOnEveryPage()
+        {
+            // A multi-row <thead>'s own internal grid line (between its own rows) is fixed, unlike the
+            // boundary to the body - but a repeated group's *position* still differs per page, since each
+            // CssProxyBox.PerformLayoutImp repositions the same shared header rows to wherever that page's
+            // proxy sits. Reading the live row geometry after the whole table has laid out (as
+            // EmitCollapsedBorderSegments does for an ordinary body row) would only reflect whichever
+            // proxy happened to lay out last - this line must instead come from each proxy's own captured
+            // BoxGeometrySnapshot, so it has to reappear, correctly positioned, on every page.
+            //
+            // Page height (1200) is deliberately generous relative to the two-row header's own height
+            // (~160pt): css-tables-3 §6.2 (SettleWhetherTheGroupsRepeat) only repeats a group under a
+            // quarter of the page's own height, and a too-small page here would silently turn this into a
+            // non-repeating-header test instead of the multi-page one intended.
+            var pageHeight = 1200.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;'>
+        <thead>
+            <tr><th style='border:1px solid black;border-bottom:5px solid green;padding:5px;'>Header A</th></tr>
+            <tr><th style='border:1px solid black;border-top:5px solid green;padding:5px;'>Header B</th></tr>
+        </thead>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 90).Select(i =>
+    $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
+            Assert.True(lastPageIndex >= 2, "Table should span at least 3 pages for this test to be meaningful.");
+
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+
+            // 5px resolves to 3.75pt - between the 0.75pt ordinary borders and the header's own outer
+            // 1px (0.75pt) edges, so this threshold catches only the header's own internal line.
+            static bool IsHeaderInternalLine(PaintOp op) =>
+                op.Kind is PaintOpKind.Polygon or PaintOpKind.Line &&
+                op.Bounds.Width > op.Bounds.Height && op.Bounds.Height is >= 2 and < 4;
+
+            for (var page = 0; page <= lastPageIndex; page++)
+            {
+                var recording = new RecordingGraphics(adapter);
+                FragmentPaintHarness.PaintPage(container, recording, page);
+                Assert.True(recording.Log.Any(IsHeaderInternalLine),
+                    $"Expected the header's own internal grid line on page {page}, but found none.");
+            }
+        }
+
+        [Fact]
+        public async Task RepeatedThead_RowspanInHeadersLastRow_BoundaryColumnsAttributeToTheRightCell()
+        {
+            // CollapsedBorderModel.ResolveRepeatedGroupBoundary reads cell candidates from the header's
+            // own last row at each column via TableGrid.CellAt - which correctly follows a rowspan cell
+            // (here, A, spanning both header rows in the last column) into the boundary line, unlike
+            // scanning the last row's own Boxes list by hand (which held only D, and would either
+            // misattribute column 1 to it or miss it depending on where in the row the span falls).
+            //
+            // The rowspan cell is placed LAST in row 0 (not first) deliberately: a rowspan cell reaching
+            // into a later row from earlier in the *same* row deliberately leaves that later row's own
+            // Boxes list non-dense (CssLayoutEngineTable.InsertEmptyBoxes, which pads exactly this gap
+            // with a CssSpacingBox placeholder, never touches a detached header's own rows - only
+            // _bodyRows) - tracked separately as
+            // https://github.com/jhaygood86/PeachPDF/issues/736, since TableGrid.Build's own column-index
+            // computation mis-places a cell after such a gap regardless of which resolver reads the grid
+            // afterward. Putting the rowspan cell last avoids that unrelated, pre-existing gap: row 1's
+            // only real cell (D) is then genuinely its own first Boxes entry, so its column index is
+            // right either way, and only column 1 depends on rowspan-aware occupancy at all.
+            var pageHeight = 400.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;'>
+        <thead>
+            <tr><th style='border-bottom:1px solid black'>B</th><th rowspan='2' style='border-bottom:9px solid red'>A</th></tr>
+            <tr><th style='border-bottom:3px solid blue'>D</th></tr>
+        </thead>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 20).Select(i =>
+    $"<tr><td id='r{i}c0'>{i}x</td><td id='r{i}c1'>{i}y</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table!.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+            var segments = headerProxy.SourceBox.CollapsedBorderSegments;
+            Assert.NotNull(segments);
+
+            var col0 = LayoutHarness.FindById(rootBox, "r1c0")!;
+            var col1 = LayoutHarness.FindById(rootBox, "r1c1")!;
+
+            // Column 0 also has its own row 0-to-row 1 *internal* line (B's border-bottom, since B - unlike
+            // A - does not span into row 1), so filtering by X alone finds two candidates there; the
+            // boundary is always the group's own last line, i.e. the largest Y among a header's segments.
+            var boundarySegments = segments!.Where(s => s.IsHorizontal).ToList();
+
+            var col0Segment = boundarySegments
+                .Where(s => s.Rect.X + s.Rect.Width / 2 >= col0.Location.X && s.Rect.X + s.Rect.Width / 2 < col0.ActualRight)
+                .OrderByDescending(s => s.Rect.Y)
+                .FirstOrDefault();
+            var col1Segment = boundarySegments
+                .Where(s => s.Rect.X + s.Rect.Width / 2 >= col1.Location.X && s.Rect.X + s.Rect.Width / 2 < col1.ActualRight)
+                .OrderByDescending(s => s.Rect.Y)
+                .FirstOrDefault();
+
+            // 3px/9px resolve to 2.25pt/6.75pt (1px = 0.75pt).
+            Assert.Equal(2.25, col0Segment.Width, 1);
+            Assert.Equal(6.75, col1Segment.Width, 1);
+        }
+
+        [Fact]
+        public async Task RepeatedTfoot_BoundaryToBody_ResolvesFreshPerPage_NotReusedFromTheLastPage()
+        {
+            // The mirror of RepeatedThead_BoundaryToBody_ResolvesFreshPerPage_NotReusedFromPage1 for a
+            // repeating <tfoot>: only the table's actual LAST body row (its true DOM/visual neighbor on
+            // the final page) gets a distinctive border; every earlier row keeps an ordinary one. A
+            // resolution that reused the last page's answer on every earlier page would wrongly show the
+            // huge border repeated at every page's footer boundary too.
+            var pageHeight = 400.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;'>
+        <tbody>
+" + string.Join("", Enumerable.Range(1, 30).Select(i =>
+    i == 30
+        ? "<tr><td style='border:9px solid red;padding:5px;'>Last row</td></tr>"
+        : $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+        <tfoot>
+            <tr><td style='border:1px solid black;padding:5px;'>Footer</td></tr>
+        </tfoot>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
+            Assert.True(lastPageIndex >= 2, "Table should span at least 3 pages for this test to be meaningful.");
+
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+
+            // The last page: the footer's true DOM/visual neighbor (the last row's huge red border)
+            // drives the boundary - a thick (>=4pt) roughly-horizontal segment must appear.
+            var lastPageRecording = new RecordingGraphics(adapter);
+            FragmentPaintHarness.PaintPage(container, lastPageRecording, lastPageIndex);
+            Assert.Contains(lastPageRecording.Log, IsThickHorizontalSegment);
+
+            // Every earlier page: the footer repeats below a *different* row (an ordinary 1px border),
+            // so no page before the last should show that same thick segment anywhere.
+            for (var page = 0; page < lastPageIndex; page++)
+            {
+                var recording = new RecordingGraphics(adapter);
+                FragmentPaintHarness.PaintPage(container, recording, page);
+                Assert.DoesNotContain(recording.Log, IsThickHorizontalSegment);
+            }
+        }
+
+        [Fact]
+        public async Task RepeatedThead_BoundaryAgainstABorderedTbody_TbodysOwnBorderCanWin()
+        {
+            // ResolveRepeatedGroupBoundary must weigh the adjacent side's own row-group (an explicit
+            // <tbody>'s border-top), not just its row/cell - CollapsedBorderOrigin.RowGroup is a real,
+            // independently-competing tier (CollapsedBorder.cs), not merely a tiebreak, so a <tbody>
+            // border wider than anything the header or the first row itself declares must still win.
+            var pageHeight = 1200.0;
+
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+    <table style='width:100%;border-collapse:collapse;'>
+        <thead>
+            <tr><th style='border-bottom:1px solid black;padding:5px;'>Header</th></tr>
+        </thead>
+        <tbody style='border-top:8px solid green'>
+" + string.Join("", Enumerable.Range(1, 60).Select(i =>
+    $"<tr><td style='padding:5px;'>Row {i}</td></tr>")) + @"
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
+            var recording = new RecordingGraphics(adapter);
+            FragmentPaintHarness.PaintPage(container, recording, 0);
+
+            // 8px resolves to 6pt - between the 0.75pt header border and page 1's thead test's own 6.75pt
+            // threshold band, so >=5 unambiguously catches only the tbody's own border winning.
+            Assert.Contains(recording.Log, op =>
+                op.Kind is PaintOpKind.Polygon or PaintOpKind.Line &&
+                op.Bounds.Width > op.Bounds.Height && op.Bounds.Height >= 5);
+        }
+
         #endregion
 
         #region Helper Methods
@@ -772,110 +1062,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
         #endregion
 
-        #region Recording Graphics Adapter
-
-        /// <summary>
-        /// Minimal RGraphics implementation that records PushClip/PopClip calls and drawn lines
-        /// so tests can verify page-break border behavior without a full PDF rendering stack.
-        /// </summary>
-        private sealed class RecordingGraphics : PeachPDF.Html.Adapters.RGraphics
-        {
-            /// <summary>All rects passed to PushClip during this paint pass.</summary>
-            public List<PeachPDF.Html.Adapters.Entities.RRect> PushedClips { get; } = [];
-            /// <summary>Total PushClip invocations.</summary>
-            public int PushCount { get; private set; }
-            /// <summary>Total PopClip invocations.</summary>
-            public int PopCount { get; private set; }
-            /// <summary>Y-coordinates of horizontal lines drawn (where y1 ≈ y2).</summary>
-            public List<double> HorizontalLines { get; } = [];
-            /// <summary>Every word string passed to DrawString during this paint pass, with the Y it was drawn at.</summary>
-            public List<(string Text, double Y)> DrawnStrings { get; } = [];
-
-            public RecordingGraphics(PeachPDF.Html.Adapters.RAdapter adapter)
-                : base(adapter, new PeachPDF.Html.Adapters.Entities.RRect(0, 0, double.MaxValue, double.MaxValue)) { }
-
-            public override void DrawLine(PeachPDF.Html.Adapters.RPen pen, double x1, double y1, double x2, double y2)
-            {
-                if (Math.Abs(y1 - y2) < 0.5)
-                    HorizontalLines.Add(y1);
-            }
-
-            /// <summary>
-            /// Solid borders paint as a mitered quad (BordersDrawHandler.SetInOutsetRectanglePoints),
-            /// not a DrawLine call - a wide-and-thin quad (wider in X than in Y) is a horizontal border
-            /// stripe; record its vertical center the same way DrawLine's y1/y2 would, so callers don't
-            /// need to know which draw method a given border style happens to use.
-            /// </summary>
-            public override void DrawPolygon(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.Entities.RPoint[] points)
-            {
-                if (points.Length == 0) return;
-                var minY = points.Min(p => p.Y);
-                var maxY = points.Max(p => p.Y);
-                var minX = points.Min(p => p.X);
-                var maxX = points.Max(p => p.X);
-                if (maxX - minX > maxY - minY)
-                    HorizontalLines.Add((minY + maxY) / 2);
-            }
-
-            public override void PushClip(PeachPDF.Html.Adapters.Entities.RRect rect)
-            {
-                _clipStack.Push(rect);
-                PushedClips.Add(rect);
-                PushCount++;
-            }
-
-            public override void PopClip()
-            {
-                if (_clipStack.Count > 1)
-                    _clipStack.Pop();
-                PopCount++;
-            }
-
-            public override void PushClip(PeachPDF.Html.Adapters.RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
-            public override void PushClipExclude(PeachPDF.Html.Adapters.Entities.RRect rect) { }
-            public override void PushTransform(PeachPDF.Html.Adapters.Entities.RMatrix matrix) { }
-            public override void PopTransform() { }
-            public override void PushBlendMode(PeachPDF.Html.Adapters.Entities.RBlendMode mode) { }
-            public override void PopBlendMode() { }
-            public override object SetAntiAliasSmoothingMode() => new object();
-            public override void ReturnPreviousSmoothingMode(object? prevMode) { }
-            public override PeachPDF.Html.Adapters.Entities.RSize MeasureString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Text.TextShapingFeatures? features = null) => new(0, 12);
-            public override int CountShapedGlyphs(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Text.TextShapingFeatures? features = null) => str?.Length ?? 0;
-            public override void MeasureString(string str, PeachPDF.Html.Adapters.RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
-            public override void DrawString(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RColor color, PeachPDF.Html.Adapters.Entities.RPoint point, PeachPDF.Html.Adapters.Entities.RSize size, double letterSpacing = 0, PeachPDF.Html.Adapters.Entities.RFontPalette? fontPalette = null, PeachPDF.Text.TextShapingFeatures? features = null) => DrawnStrings.Add((str, point.Y));
-            public override void DrawRectangle(PeachPDF.Html.Adapters.RPen pen, double x, double y, double width, double height) { }
-            public override void DrawRectangle(PeachPDF.Html.Adapters.RBrush brush, double x, double y, double width, double height) { }
-            public override void DrawImage(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect, PeachPDF.Html.Adapters.Entities.RRect srcRect) { }
-            public override void DrawImage(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect) { }
-            public override void DrawPath(PeachPDF.Html.Adapters.RPen pen, PeachPDF.Html.Adapters.RGraphicsPath path) { }
-            public override void DrawPath(PeachPDF.Html.Adapters.RBrush brush, PeachPDF.Html.Adapters.RGraphicsPath path) { }
-            public override PeachPDF.Html.Adapters.RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
-
-            public override PeachPDF.Html.Adapters.RGraphicsPath? GetTextOutline(string str, PeachPDF.Html.Adapters.RFont font, PeachPDF.Html.Adapters.Entities.RPoint baselineOrigin, double letterSpacing = 0, PeachPDF.Text.TextShapingFeatures? features = null) => null;
-            public override (PeachPDF.Html.Adapters.RGraphics Graphics, PeachPDF.Html.Adapters.RImage Image)? CreateTile(double width, double height) => null;
-            public override void DrawImageMasked(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.RImage maskImage, PeachPDF.Html.Adapters.Entities.RRect destRect) { }
-            public override void DrawImageWithOpacity(PeachPDF.Html.Adapters.RImage image, PeachPDF.Html.Adapters.Entities.RRect destRect, double opacity) { }
-            public override void BeginMarkedContent(string structureType, int mcid) { }
-            public override void EndMarkedContent() { }
-            public override void BeginArtifact() { }
-            public override void Dispose() { }
-        }
-
-        private sealed class RecordingGraphicsPath : PeachPDF.Html.Adapters.RGraphicsPath
-        {
-            public override void Start(double x, double y) { }
-            public override void LineTo(double x, double y) { }
-            public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) { }
-            public override void AddMove(double x, double y) { }
-            public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
-            public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
-            public override void CloseFigure() { }
-            public override void Transform(PeachPDF.Html.Adapters.Entities.RMatrix matrix) { }
-            public override void AddPath(PeachPDF.Html.Adapters.RGraphicsPath path) { }
-            public override PeachPDF.Html.Adapters.Entities.RFillMode FillMode { get; set; }
-            public override void Dispose() { }
-        }
-
-        #endregion
+        // RecordingGraphics/RecordingGraphicsPath moved to PeachPDF.Tests.TestSupport (shared with
+        // CollapsedBorderPaintTests.cs) - see that file rather than adding a parallel copy here.
     }
 }

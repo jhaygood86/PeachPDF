@@ -430,6 +430,28 @@ namespace PeachPDF.Html.Core.Dom
         internal Dictionary<int, double>? PageBreakBottoms { get; set; }
 
         /// <summary>
+        /// A <c>border-collapse: collapse</c> table's own logical row×column grid. Set on the table box by
+        /// <see cref="CssLayoutEngineTable"/> every pass (deterministic from markup + computed style, so -
+        /// unlike <see cref="TableSetup"/> - never needs carrying across a resumed pass); null for a
+        /// <c>separate</c> table, which builds neither this nor <see cref="CollapsedBorders"/>.
+        /// </summary>
+        internal TableGrid? CollapsedBorderGrid { get; set; }
+
+        /// <summary>CSS 2.1 §17.6.2's resolution of <see cref="CollapsedBorderGrid"/> - see its own remarks.</summary>
+        internal CollapsedBorderModel? CollapsedBorders { get; set; }
+
+        /// <summary>The edges of this box's own border stroke that <c>FragmentPainter</c> must not paint - see <see cref="BorderEdges"/>.</summary>
+        internal BorderEdges SuppressedBorderEdges { get; set; }
+
+        /// <summary>
+        /// Set on a <c>border-collapse: collapse</c> table's own box, mirroring
+        /// <see cref="ColumnRuleSegments"/>'s pattern for cross-fragment paint data carried on the box
+        /// rather than derivable from one box's own geometry - one entry per resolved grid-line run, see
+        /// <see cref="CollapsedBorderSegment"/>.
+        /// </summary>
+        internal List<CollapsedBorderSegment>? CollapsedBorderSegments { get; set; }
+
+        /// <summary>
         /// Where this table's row loop stopped, or null when it reached the end of its body rows. Null on
         /// every box that is not a table.
         /// </summary>

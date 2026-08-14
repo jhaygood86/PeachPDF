@@ -59,21 +59,123 @@ namespace PeachPDF.Html.Core.Handlers
         {
             if (rect is not { Width: > 0, Height: > 0 }) return;
 
-            if (hasTopEdge && box.BorderTopStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderTopWidth > 0)
+            // A collapse participant's own stroke on an edge CollapsedBorderModel resolved is drawn once,
+            // later, from CssBox.CollapsedBorderSegments instead (issue #735) - see BorderEdges' own remarks.
+            var suppressed = box.SuppressedBorderEdges;
+
+            if (hasTopEdge && !suppressed.HasFlag(BorderEdges.Top) && box.BorderTopStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderTopWidth > 0)
             {
                 DrawBorder(Border.Top, box, g, rect, hasLeftEdge, hasRightEdge, true, hasBottomEdge);
             }
-            if (hasLeftEdge && box.BorderLeftStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderLeftWidth > 0)
+            if (hasLeftEdge && !suppressed.HasFlag(BorderEdges.Left) && box.BorderLeftStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderLeftWidth > 0)
             {
                 DrawBorder(Border.Left, box, g, rect, true, hasRightEdge, hasTopEdge, hasBottomEdge);
             }
-            if (hasBottomEdge && box.BorderBottomStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderBottomWidth > 0)
+            if (hasBottomEdge && !suppressed.HasFlag(BorderEdges.Bottom) && box.BorderBottomStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderBottomWidth > 0)
             {
                 DrawBorder(Border.Bottom, box, g, rect, hasLeftEdge, hasRightEdge, hasTopEdge, true);
             }
-            if (hasRightEdge && box.BorderRightStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderRightWidth > 0)
+            if (hasRightEdge && !suppressed.HasFlag(BorderEdges.Right) && box.BorderRightStyle.Value is not (LineStyle.None or LineStyle.Hidden) && box.ActualBorderRightWidth > 0)
             {
                 DrawBorder(Border.Right, box, g, rect, hasLeftEdge, true, hasTopEdge, hasBottomEdge);
+            }
+        }
+
+        /// <summary>
+        /// Draws one CSS 2.1 §17.6.2 collapsed-border segment - a plain axis-aligned stripe with no
+        /// mitre, since a collapsed segment butts against its neighbors at grid intersections rather than
+        /// mitring into them the way one box's own four edges do (<see cref="SetInOutsetRectanglePoints"/>
+        /// is what a real box's corner needs; a segment has no corner of its own to cut).
+        /// </summary>
+        /// <param name="g">the device to draw into</param>
+        /// <param name="isHorizontal">Whether this is a horizontal (row) grid-line segment rather than a vertical (column) one - decides stripe orientation for double/groove/ridge and dash direction.</param>
+        /// <param name="rect">the segment's own bounding rectangle</param>
+        /// <param name="style">the resolved border style</param>
+        /// <param name="color">the resolved border color</param>
+        /// <param name="width">the resolved border width</param>
+        internal static void DrawCollapsedSegment(RGraphics g, bool isHorizontal, RRect rect, LineStyle style, RColor color, double width)
+        {
+            if (rect is not { Width: > 0, Height: > 0 } || width <= 0 || style is LineStyle.None or LineStyle.Hidden) return;
+
+            switch (style)
+            {
+                case LineStyle.Double or LineStyle.Groove or LineStyle.Ridge:
+                    DrawDoubleOrGrooveRidgeSegment(g, isHorizontal, rect, style, color, width);
+                    break;
+
+                case LineStyle.Dotted or LineStyle.Dashed:
+                {
+                    var pen = GetPen(g, style, color, width);
+                    if (isHorizontal)
+                    {
+                        var y = rect.Top + width / 2;
+                        g.DrawLine(pen, rect.Left, y, rect.Right, y);
+                    }
+                    else
+                    {
+                        var x = rect.Left + width / 2;
+                        g.DrawLine(pen, x, rect.Top, x, rect.Bottom);
+                    }
+                    break;
+                }
+
+                default:
+                {
+                    // Solid, Inset, Outset - a collapsed segment has no owning box to shade a bevel
+                    // "into" the way DrawBorder's per-edge convention does, so this approximates with
+                    // the same asymmetry GetColor already uses for a box's own top/left edges (a
+                    // horizontal segment behaves like a top edge, a vertical one like a left edge -
+                    // both darken for Inset, stay normal for Outset).
+                    var resolvedColor = style == LineStyle.Inset ? Darken(color) : color;
+                    g.DrawPolygon(g.GetSolidBrush(resolvedColor),
+                    [
+                        new RPoint(rect.Left, rect.Top),
+                        new RPoint(rect.Right, rect.Top),
+                        new RPoint(rect.Right, rect.Bottom),
+                        new RPoint(rect.Left, rect.Bottom)
+                    ]);
+                    break;
+                }
+            }
+        }
+
+        /// <summary>Value-based twin of <see cref="DrawDoubleOrGrooveRidgeBorder"/> for one collapsed-border segment - see <see cref="DrawCollapsedSegment"/>.</summary>
+        private static void DrawDoubleOrGrooveRidgeSegment(RGraphics g, bool isHorizontal, RRect rect, LineStyle style, RColor color, double width)
+        {
+            double outerWidth;
+            double innerWidth;
+            RColor outerColor;
+            RColor innerColor;
+
+            if (style == LineStyle.Double)
+            {
+                outerWidth = innerWidth = Math.Max(1, Math.Floor(width / 3));
+                outerColor = innerColor = color;
+            }
+            else
+            {
+                outerWidth = innerWidth = width / 2;
+                outerColor = style == LineStyle.Groove ? Darken(color) : color;
+                innerColor = style == LineStyle.Groove ? color : Darken(color);
+            }
+
+            var outerPen = g.GetPen(outerColor);
+            outerPen.Width = outerWidth;
+            outerPen.DashStyle = RDashStyle.Solid;
+
+            var innerPen = g.GetPen(innerColor);
+            innerPen.Width = innerWidth;
+            innerPen.DashStyle = RDashStyle.Solid;
+
+            if (isHorizontal)
+            {
+                g.DrawLine(outerPen, rect.Left, rect.Top + outerWidth / 2, rect.Right, rect.Top + outerWidth / 2);
+                g.DrawLine(innerPen, rect.Left, rect.Top + width - innerWidth / 2, rect.Right, rect.Top + width - innerWidth / 2);
+            }
+            else
+            {
+                g.DrawLine(outerPen, rect.Left + outerWidth / 2, rect.Top, rect.Left + outerWidth / 2, rect.Bottom);
+                g.DrawLine(innerPen, rect.Left + width - innerWidth / 2, rect.Top, rect.Left + width - innerWidth / 2, rect.Bottom);
             }
         }
 
