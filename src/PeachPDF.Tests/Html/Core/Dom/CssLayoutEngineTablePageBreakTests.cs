@@ -864,16 +864,13 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // scanning the last row's own Boxes list by hand (which held only D, and would either
             // misattribute column 1 to it or miss it depending on where in the row the span falls).
             //
-            // The rowspan cell is placed LAST in row 0 (not first) deliberately: a rowspan cell reaching
-            // into a later row from earlier in the *same* row deliberately leaves that later row's own
-            // Boxes list non-dense (CssLayoutEngineTable.InsertEmptyBoxes, which pads exactly this gap
-            // with a CssSpacingBox placeholder, never touches a detached header's own rows - only
-            // _bodyRows) - tracked separately as
-            // https://github.com/jhaygood86/PeachPDF/issues/736, since TableGrid.Build's own column-index
-            // computation mis-places a cell after such a gap regardless of which resolver reads the grid
-            // afterward. Putting the rowspan cell last avoids that unrelated, pre-existing gap: row 1's
-            // only real cell (D) is then genuinely its own first Boxes entry, so its column index is
-            // right either way, and only column 1 depends on rowspan-aware occupancy at all.
+            // The rowspan cell is placed LAST in row 0 rather than first - a arrangement that used to
+            // matter (a rowspan cell reaching into a later row from earlier in the *same* row left that
+            // later row's own Boxes list non-dense, since CssLayoutEngineTable.InsertEmptyBoxes's
+            // CssSpacingBox placeholders never touch a detached header's own rows - only _bodyRows) but
+            // no longer does: TableGrid.Build now works out each cell's real column from rowspan
+            // occupancy itself rather than trusting a row's own Boxes-list order (issue #736). Kept in
+            // this shape anyway since it still exercises the same boundary-resolution path.
             var pageHeight = 400.0;
 
             var html = @"

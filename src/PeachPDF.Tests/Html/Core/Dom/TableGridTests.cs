@@ -11,10 +11,12 @@ namespace PeachPDF.Tests.Html.Core.Dom
     /// <summary>
     /// <see cref="TableGrid.Build"/> tested against real, laid-out box trees (so rowspan placeholders -
     /// <see cref="CssSpacingBox"/> - already exist, exactly as <see cref="CssLayoutEngineTable"/> would
-    /// hand them in) but with hand-rolled span primitives standing in for
-    /// <see cref="CssLayoutEngineTable"/>'s own (which are private) - simple sum-of-colspan/rowspan
-    /// arithmetic, not the visibility:collapse-aware row remapping <c>GetEffectiveEndRowIndex</c> does,
-    /// which is exercised instead once this is wired into the real engine.
+    /// hand them in) but with hand-rolled colspan/rowspan/last-row primitives standing in for
+    /// <see cref="CssLayoutEngineTable"/>'s own (which are private) - simple sum-of-colspan arithmetic,
+    /// not the visibility:collapse-aware row remapping <c>GetEffectiveEndRowIndex</c> does, which is
+    /// exercised instead once this is wired into the real engine. Column placement itself is not an
+    /// injected primitive - <see cref="TableGrid.Build"/> works it out internally from rowspan
+    /// occupancy, so there is nothing to stand in for here.
     /// </summary>
     public class TableGridTests
     {
@@ -28,17 +30,6 @@ namespace PeachPDF.Tests.Html.Core.Dom
         {
             var att = b.GetAttribute("rowspan", "1");
             return !int.TryParse(att, out var span) ? 1 : span;
-        }
-
-        private static int GetRealColumnIndex(CssBox row, CssBox cell)
-        {
-            var i = 0;
-            foreach (var b in row.Boxes)
-            {
-                if (ReferenceEquals(b, cell)) break;
-                i += GetColSpan(b);
-            }
-            return i;
         }
 
         private static int GetLastRow(int gridRow, CssBox cell, int rowSpan) => gridRow + rowSpan - 1;
@@ -124,7 +115,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 
             var grid = TableGrid.Build(
                 AllRows(table), AllColumns(table),
-                GetRealColumnIndex, GetRowSpan, GetColSpan, GetLastRow);
+                GetRowSpan, GetColSpan, GetLastRow);
 
             return (table, grid);
         }

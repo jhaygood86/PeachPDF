@@ -91,7 +91,6 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="rows">Row-group-ordered, <c>visibility: collapse</c>-filtered rows (<c>_allRows</c>).</param>
         /// <param name="columns">One entry per column, repeated across a <c>span</c> (<c>_columns</c>).</param>
-        /// <param name="getRealColumnIndex">A cell's starting column within its own row.</param>
         /// <param name="getRowSpan">A cell's raw <c>rowspan</c> (already clamped to at least 1).</param>
         /// <param name="getColSpan">A cell's raw <c>colspan</c> (already clamped to at least 1).</param>
         /// <param name="getLastRow">
@@ -103,7 +102,6 @@ namespace PeachPDF.Html.Core.Dom
         internal static TableGrid Build(
             IReadOnlyList<CssBox> rows,
             IReadOnlyList<CssBox?> columns,
-            Func<CssBox, CssBox, int> getRealColumnIndex,
             Func<CssBox, int> getRowSpan,
             Func<CssBox, int> getColSpan,
             Func<int, CssBox, int, int> getLastRow)
@@ -111,14 +109,60 @@ namespace PeachPDF.Html.Core.Dom
             var rowCount = rows.Count;
             var columnCount = 0;
             foreach (var box in columns) columnCount++;
-            // _columns may under-count columns implied by cells beyond the declared <col>s - take the
-            // wider of the two so no cell's own span is ever truncated.
+
+            // Each cell's real starting column is worked out here, one row at a time, tracking which
+            // columns an earlier row's rowspan has already claimed and through which row - the standard
+            // HTML table grid "downward-growing cell" placement algorithm. This has to be self-contained
+            // rather than asking the caller for a cell's column (as a plain sum of its row's own
+            // preceding cells' colspans would): that sum is only correct when every rowspan gap in the
+            // row has a placeholder standing in for it, which CssLayoutEngineTable.InsertEmptyBoxes only
+            // ever arranges for CssLayoutEngineTable._bodyRows - a detached <thead>/<tfoot> group's own
+            // rows never get one, so a rowspan starting in one header/footer row and reaching into a
+            // later row of the same group left every later cell in that row placed one or more columns
+            // short of where it actually belongs (issue #736).
+            //
+            // Placement is cached per cell (column, colSpan, lastRow) rather than recomputed in the
+            // second pass below - getColSpan/getRowSpan/getLastRow are cheap callbacks here, but
+            // getLastRow forwards to CssLayoutEngineTable.GetEffectiveEndRowIndex, which is an O(rows)
+            // scan for any cell with rowSpan > 1, so paying it twice per such cell is real, avoidable work.
+            List<int> columnOccupiedThroughRow = [];
+            var placements = new Dictionary<CssBox, (int Column, int ColSpan, int LastRow)>(ReferenceEqualityComparer.Instance);
+
             for (var r = 0; r < rowCount; r++)
             {
+                var nextColumn = 0;
+
                 foreach (var cell in rows[r].Boxes)
                 {
                     if (cell is CssSpacingBox) continue;
-                    columnCount = Math.Max(columnCount, getRealColumnIndex(rows[r], cell) + getColSpan(cell));
+
+                    var colSpan = Math.Max(1, getColSpan(cell));
+                    var rowSpan = Math.Max(1, getRowSpan(cell));
+                    var lastRow = Math.Max(r, getLastRow(r, cell, rowSpan));
+
+                    var start = nextColumn;
+                    while (true)
+                    {
+                        while (columnOccupiedThroughRow.Count < start + colSpan) columnOccupiedThroughRow.Add(-1);
+
+                        var conflictAt = -1;
+                        for (var c = start; c < start + colSpan; c++)
+                        {
+                            if (columnOccupiedThroughRow[c] < r) continue;
+                            conflictAt = c;
+                            break;
+                        }
+
+                        if (conflictAt < 0) break;
+                        start = conflictAt + 1;
+                    }
+
+                    for (var c = start; c < start + colSpan; c++)
+                        columnOccupiedThroughRow[c] = Math.Max(columnOccupiedThroughRow[c], lastRow);
+
+                    placements[cell] = (start, colSpan, lastRow);
+                    nextColumn = start + colSpan;
+                    columnCount = Math.Max(columnCount, start + colSpan);
                 }
             }
 
@@ -133,10 +177,7 @@ namespace PeachPDF.Html.Core.Dom
                     // nothing new to record, the origin row already computed the full span.
                     if (cell is CssSpacingBox) continue;
 
-                    var c = getRealColumnIndex(rows[r], cell);
-                    var colSpan = Math.Max(1, getColSpan(cell));
-                    var rowSpan = Math.Max(1, getRowSpan(cell));
-                    var lastRow = Math.Max(r, getLastRow(r, cell, rowSpan));
+                    var (c, colSpan, lastRow) = placements[cell];
 
                     spans[cell] = new CellSpan(r, c, lastRow - r + 1, colSpan);
 
