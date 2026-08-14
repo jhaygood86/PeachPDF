@@ -646,12 +646,12 @@ namespace PeachPDF.Html.Core.Dom
             for (var line = lineStart; line <= lineEnd; line++)
             {
                 if (model.HorizontalLineWidth[line] <= 0) continue;
-                var y = GetGridLineY(grid, line);
+                var y = GetGridLineY(grid, line, model);
 
                 EmitRuns(grid.ColumnCount, col => model.Horizontal(line, col), (start, end, border) =>
                 {
-                    var x0 = GetGridLineX(grid, start);
-                    var x1 = GetGridLineX(grid, end);
+                    var x0 = GetGridLineX(grid, start, model);
+                    var x1 = GetGridLineX(grid, end, model);
                     if (x0 is null || x1 is null) return;
 
                     segments.Add(new CollapsedBorderSegment(true,
@@ -666,13 +666,13 @@ namespace PeachPDF.Html.Core.Dom
             for (var line = 0; line <= grid.ColumnCount; line++)
             {
                 if (model.VerticalLineWidth[line] <= 0) continue;
-                var x = GetGridLineX(grid, line);
+                var x = GetGridLineX(grid, line, model);
                 if (x is null) continue;
 
                 EmitRuns(rowEnd - rowStart, i => model.Vertical(rowStart + i, line), (start, end, border) =>
                 {
-                    var y0 = GetGridLineY(grid, rowStart + start);
-                    var y1 = GetGridLineY(grid, rowStart + end);
+                    var y0 = GetGridLineY(grid, rowStart + start, model);
+                    var y1 = GetGridLineY(grid, rowStart + end, model);
 
                     segments.Add(new CollapsedBorderSegment(false,
                         new RRect(x.Value - border.Width / 2, y0, border.Width, y1 - y0),
@@ -742,14 +742,40 @@ namespace PeachPDF.Html.Core.Dom
 
                 var segments = isHeader ? headerSegments! : footerSegments!;
 
+                // boundaryLine/boundaryIsInterior need to be known before SnapshotLineY is defined, since
+                // SnapshotLineY's own two "outer" branches also cover the group's boundary-to-body line
+                // (whichever of them is reached when line == boundaryLine) - see the remarks below.
+                var boundaryLine = isHeader ? sourceStart + sourceCount : sourceStart;
+
+                // Whether the boundary line is genuinely interior to the whole table (a real opposing row
+                // exists on the other side somewhere) - as opposed to the table's own true outer edge. Only
+                // an interior line's reported position needs the overlap-band-to-center correction; see
+                // GetGridLineY's remarks.
+                var boundaryIsInterior = boundaryLine > 0 && boundaryLine < grid.RowCount;
+                var boundaryHalfWidth = boundaryIsInterior ? model.HorizontalLineWidth[boundaryLine] / 2.0 : 0.0;
+
                 double? SnapshotLineY(int line)
                 {
                     if (line <= sourceStart)
-                        return snapshot.TryGetGeometry(grid.RowAt(sourceStart), out var top) ? top.Location.Y : null;
+                    {
+                        if (!snapshot.TryGetGeometry(grid.RowAt(sourceStart), out var top)) return null;
+                        // The group's own top is the table's true outer edge (header) or the boundary to
+                        // the body (footer) - only the latter needs the correction, and only when line is
+                        // actually that boundary (line == boundaryLine can only hold for a footer here,
+                        // since a header's boundary sits at its own *bottom*, the other branch below).
+                        return line == boundaryLine ? top.Location.Y + boundaryHalfWidth : top.Location.Y;
+                    }
                     if (line >= sourceStart + sourceCount)
-                        return snapshot.TryGetGeometry(grid.RowAt(sourceStart + sourceCount - 1), out var bottom)
-                            ? bottom.ActualBottom : null;
-                    return snapshot.TryGetGeometry(grid.RowAt(line - 1), out var above) ? above.ActualBottom : null;
+                    {
+                        if (!snapshot.TryGetGeometry(grid.RowAt(sourceStart + sourceCount - 1), out var bottom)) return null;
+                        return line == boundaryLine ? bottom.ActualBottom - boundaryHalfWidth : bottom.ActualBottom;
+                    }
+                    // Interior to the group's own row range - see GetGridLineY's remarks: the row above's
+                    // ActualBottom names the overlap band's bottom edge, not its center, so half the
+                    // resolved line width has to come back off it.
+                    return snapshot.TryGetGeometry(grid.RowAt(line - 1), out var above)
+                        ? above.ActualBottom - model.HorizontalLineWidth[line] / 2.0
+                        : null;
                 }
 
                 // The group's own internal lines and whichever of its two outer edges is not the
@@ -765,8 +791,8 @@ namespace PeachPDF.Html.Core.Dom
 
                     EmitRuns(grid.ColumnCount, col => model.Horizontal(line, col), (start, end, border) =>
                     {
-                        var x0 = GetGridLineX(grid, start);
-                        var x1 = GetGridLineX(grid, end);
+                        var x0 = GetGridLineX(grid, start, model);
+                        var x1 = GetGridLineX(grid, end, model);
                         if (x0 is null || x1 is null) return;
 
                         segments.Add(new CollapsedBorderSegment(true,
@@ -778,7 +804,7 @@ namespace PeachPDF.Html.Core.Dom
                 for (var line = 0; line <= grid.ColumnCount; line++)
                 {
                     if (model.VerticalLineWidth[line] <= 0) continue;
-                    var x = GetGridLineX(grid, line);
+                    var x = GetGridLineX(grid, line, model);
                     if (x is null) continue;
 
                     EmitRuns(sourceCount, i => model.Vertical(sourceStart + i, line), (start, end, border) =>
@@ -796,7 +822,6 @@ namespace PeachPDF.Html.Core.Dom
                 var proxyTop = proxy.Location.Y;
                 var proxyBottom = proxy.ActualBottom;
                 var groupRow = isHeader ? sourceStart + sourceCount - 1 : sourceStart;
-                var boundaryLine = isHeader ? sourceStart + sourceCount : sourceStart;
 
                 // The row whose *span* reaches this boundary, not the first one whose own Location.Y is
                 // past it: border-collapse overlaps adjacent boxes by (up to) the resolved line width, so
@@ -815,12 +840,21 @@ namespace PeachPDF.Html.Core.Dom
                         grid, groupRow, groupRowGroup, HeaderRowCountInGrid + adjacentRowIndex,
                         groupIsAbove: isHeader, IsLeftToRight());
 
-                    var boundaryY = isHeader ? proxyBottom : proxyTop;
+                    // proxyBottom/proxyTop each name one edge of the overlap band, exactly like
+                    // GetGridLineY's raw row.ActualBottom (header, band's bottom edge) and GetGridLineX's
+                    // primary-branch cell.Location.X (footer, band's top edge, same "the row after this
+                    // line" convention) - so the same half-width correction applies here. This has to
+                    // agree exactly with SnapshotLineY(boundaryLine)'s own now-corrected value (used by the
+                    // vertical-divider loop above for any run spanning the group's full row range) - both
+                    // read from the same proxyBottom/bottom.ActualBottom (equivalently proxyTop/top.Location.Y)
+                    // and the same model.HorizontalLineWidth[boundaryLine], so a divider that reaches this
+                    // line still meets the boundary segment exactly, not offset by half its width.
+                    var boundaryY = isHeader ? proxyBottom - boundaryHalfWidth : proxyTop + boundaryHalfWidth;
 
                     EmitRuns(grid.ColumnCount, col => resolved[col], (start, end, border) =>
                     {
-                        var x0 = GetGridLineX(grid, start);
-                        var x1 = GetGridLineX(grid, end);
+                        var x0 = GetGridLineX(grid, start, model);
+                        var x1 = GetGridLineX(grid, end, model);
                         if (x0 is null || x1 is null) return;
 
                         segments.Add(new CollapsedBorderSegment(true,
@@ -837,14 +871,16 @@ namespace PeachPDF.Html.Core.Dom
                     // resolution already models correctly (Column/ColumnGroup/Table origins apply exactly
                     // at line 0/RowCount - see CollectHorizontal), unlike the fresh per-page resolution
                     // above, which deliberately excludes those origins because they don't apply to a
-                    // genuinely interior line.
+                    // genuinely interior line. SnapshotLineY(boundaryLine) already carries the correction
+                    // (see its own definition above), so its value is used directly with no further
+                    // adjustment here.
                     var y = SnapshotLineY(boundaryLine);
                     if (y is not null)
                     {
                         EmitRuns(grid.ColumnCount, col => model.Horizontal(boundaryLine, col), (start, end, border) =>
                         {
-                            var x0 = GetGridLineX(grid, start);
-                            var x1 = GetGridLineX(grid, end);
+                            var x0 = GetGridLineX(grid, start, model);
+                            var x1 = GetGridLineX(grid, end, model);
                             if (x0 is null || x1 is null) return;
 
                             segments.Add(new CollapsedBorderSegment(true,
@@ -894,30 +930,48 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The document-space Y of horizontal grid line <paramref name="line"/> (0..RowCount), read from
-        /// this pass's real, laid-out row geometry rather than derived arithmetically - a boundary's two
-        /// neighboring rows already agree on it exactly (that agreement is the whole point of the
-        /// border-collapse overlap), so the row above's own <c>ActualBottom</c> stands for the shared line.
+        /// The document-space Y of horizontal grid line <paramref name="line"/>'s <i>center</i>
+        /// (0..RowCount), read from this pass's real, laid-out row geometry rather than derived
+        /// arithmetically. At an outer edge (<c>line &lt;= 0</c> or <c>line &gt;= RowCount</c>) a row's own
+        /// half-border reservation and the table's own separately-applied half sit on non-overlapping
+        /// sides of one point, so that row's own <c>Location.Y</c>/<c>ActualBottom</c> already <i>is</i>
+        /// the center. At an <b>interior</b> line the two neighboring rows instead overlap by the <i>whole</i>
+        /// resolved line width (border-collapse's overlap-then-paint-border-last model - see
+        /// <see cref="VerticalSpacingAt"/>), so the row above's own <c>ActualBottom</c> names only the
+        /// overlap band's bottom edge, not its center - halving <paramref name="model"/>'s resolved width
+        /// back off it is what recovers the true center a segment must be built around.
         /// </summary>
-        private static double GetGridLineY(TableGrid grid, int line)
+        private static double GetGridLineY(TableGrid grid, int line, CollapsedBorderModel model)
         {
             if (line <= 0) return grid.RowAt(0).Location.Y;
             if (line >= grid.RowCount) return grid.RowAt(grid.RowCount - 1).ActualBottom;
-            return grid.RowAt(line - 1).ActualBottom;
+            return grid.RowAt(line - 1).ActualBottom - model.HorizontalLineWidth[line] / 2.0;
         }
 
         /// <summary>
-        /// The document-space X of vertical grid line <paramref name="line"/> (0..ColumnCount) - read off
-        /// the first real cell anywhere in the grid whose own edge is that line, since a ragged row can
-        /// leave some rows with no cell there at all. Null only for a column with no real cell in any row
-        /// on either side of it (a fully empty column), which has no geometry to draw a segment at.
+        /// The document-space X of vertical grid line <paramref name="line"/>'s <i>center</i>
+        /// (0..ColumnCount) - read off the first real cell anywhere in the grid whose own edge is that
+        /// line, since a ragged row can leave some rows with no cell there at all. Null only for a column
+        /// with no real cell in any row on either side of it (a fully empty column), which has no geometry
+        /// to draw a segment at.
         /// </summary>
-        private static double? GetGridLineX(TableGrid grid, int line)
+        /// <remarks>
+        /// See <see cref="GetGridLineY"/>'s own remarks for why an outer edge needs no adjustment while an
+        /// interior one does. Unlike the row axis, an interior line's two branches here return <i>opposite</i>
+        /// edges of the overlap band - the first branch (a real cell starting at this column) names the
+        /// band's left/min-X edge, so recovering the center means <i>adding</i> half the resolved width;
+        /// the fallback (a cell ending at this column, found only when no row starts one here - e.g. a
+        /// colspan crossing the line from the left) names the band's right/max-X edge, so recovering the
+        /// center means <i>subtracting</i> it instead.
+        /// </remarks>
+        private static double? GetGridLineX(TableGrid grid, int line, CollapsedBorderModel model)
         {
+            var halfWidth = line > 0 && line < grid.ColumnCount ? model.VerticalLineWidth[line] / 2.0 : 0.0;
+
             for (var r = 0; r < grid.RowCount; r++)
             {
-                if (line < grid.ColumnCount && grid.CellAt(r, line) is { } right) return right.Location.X;
-                if (line > 0 && grid.CellAt(r, line - 1) is { } left) return left.ActualRight;
+                if (line < grid.ColumnCount && grid.CellAt(r, line) is { } right) return right.Location.X + halfWidth;
+                if (line > 0 && grid.CellAt(r, line - 1) is { } left) return left.ActualRight - halfWidth;
             }
 
             return null;
