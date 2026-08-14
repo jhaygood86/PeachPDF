@@ -225,5 +225,45 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal(LineStyle.Solid, sharedEdgeColumn0.Style);
             Assert.True(sharedEdgeColumn1.IsPainted);
         }
+
+        [Fact]
+        public async Task Issue736Repro_RowspanInMultiRowThead_LaterRowCellPlacedInCorrectColumn()
+        {
+            // https://github.com/jhaygood86/PeachPDF/issues/736: a rowspan cell (A) starting in a
+            // detached <thead>'s first row and reaching into its second row left that second row's
+            // own remaining cell (D) computed at the wrong starting column - InsertEmptyBoxes pads
+            // exactly this kind of gap with a CssSpacingBox placeholder for an ordinary body row,
+            // but never touches a detached header/footer group's own rows, so D's naive
+            // Boxes-list-summing column index came out one column short (0 instead of 1) and
+            // TableGrid.Build's first-writer-wins slot fill silently dropped D from the grid.
+            var table = await LayoutTable(@"
+                <table style='border-collapse:collapse'>
+                    <thead>
+                        <tr><th rowspan='2'>A</th><th style='border-bottom:1px solid black'>B</th></tr>
+                        <tr><th style='border-bottom:9px solid red'>D</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>x</td><td>y</td></tr>
+                    </tbody>
+                </table>");
+
+            var grid = table.CollapsedBorderGrid!;
+            Assert.Equal(3, grid.RowCount);
+            Assert.Equal(2, grid.ColumnCount);
+
+            var a = grid.CellAt(0, 0);
+            var b = grid.CellAt(0, 1);
+            var d = grid.CellAt(1, 1);
+
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+            Assert.NotNull(d);
+            Assert.Same(a, grid.CellAt(1, 0)); // A's rowspan reaches row 1, column 0.
+            Assert.NotSame(d, b);
+
+            // D's own border-bottom (9px = 6.75pt) should win the header-to-body boundary at column 1.
+            var resolved = table.CollapsedBorders!.Horizontal(2, 1);
+            Assert.Equal(6.75, resolved.Width, 2);
+        }
     }
 }

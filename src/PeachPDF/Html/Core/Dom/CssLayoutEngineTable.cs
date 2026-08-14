@@ -1156,7 +1156,7 @@ namespace PeachPDF.Html.Core.Dom
                 return gridRow + rowSpan - 1;
             }
 
-            return TableGrid.Build(_allRows, _columns, GetCellRealColumnIndex, GetRowSpan, GetColSpan, GetLastRow);
+            return TableGrid.Build(_allRows, _columns, GetRowSpan, GetColSpan, GetLastRow);
         }
 
         /// <summary>The table's own <c>direction</c> (not any cell's) - CSS 2.1 §17.6.2's position tiebreak reads this, not the writing direction of whatever happens to be adjacent.</summary>
