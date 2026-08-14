@@ -57,7 +57,7 @@ namespace PeachPDF.Html.Core.Dom
         /// source order - counting <c>visibility: collapse</c> rows that <see cref="AssignBoxKinds"/>
         /// left out of <see cref="_bodyRows"/> (CSS 2.1 §17.6.1) too. A cell's <c>rowspan</c> counts rows
         /// of that original grid, not of the shorter filtered list, so mapping a span onto
-        /// <see cref="_bodyRows"/> needs both numbers - see <see cref="GetEffectiveEndRowIndex"/>.
+        /// <see cref="_bodyRows"/> needs both numbers - see <see cref="GetEffectiveEndRowIndex(int, int)"/>.
         /// </summary>
         private readonly List<int> _bodyRowOriginalIndices = [];
 
@@ -112,6 +112,21 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>CSS 2.1 §17.6.2's resolution of <see cref="_grid"/> - see <see cref="_grid"/>.</summary>
         private CollapsedBorderModel? _collapsedBorders;
+
+        /// <summary>
+        /// Every real cell's grid column - unlike <see cref="_grid"/>, populated for every table
+        /// regardless of <c>border-collapse</c>, since <see cref="GetCellRealColumnIndex"/>'s callers are
+        /// cell positioning/width distribution, not border resolution. See
+        /// <see cref="ComputeColumnPlacements"/> for when this is populated.
+        /// </summary>
+        private Dictionary<CssBox, CellPlacement>? _columnPlacements;
+
+        /// <summary>
+        /// The column count <see cref="_columnPlacements"/> itself needed - every real cell's rowspan-
+        /// occupancy-aware placement, not just what any single row's own <c>Boxes</c> list happens to
+        /// declare. <see cref="DetermineColumnCount"/> folds this in as a floor.
+        /// </summary>
+        private int _columnPlacementsColumnCount;
 
         // Header/Footer repetition fields
         private double _headerHeight;
@@ -360,6 +375,10 @@ namespace PeachPDF.Html.Core.Dom
 
             // get the table boxes into the proper fields
             AssignBoxKinds();
+
+            // Every real cell's grid column, needed before InsertEmptyBoxes' own first call to
+            // GetCellRealColumnIndex - see ComputeColumnPlacements' own remarks.
+            ComputeColumnPlacements();
 
             // Before anything below captures an index into _tableBox.Boxes (RemoveHeaderFooterFromTree's
             // _headerIndex/_footerIndex, baked into a proxy and consumed by a later pass's
@@ -1059,7 +1078,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var cell = row.Boxes[k];
                     var rowSpan = GetRowSpan(cell);
-                    var realColumnIndex = GetCellRealColumnIndex(row, cell); //Real column of the cell
+                    var realColumnIndex = GetCellRealColumnIndex(cell); //Real column of the cell
                     var endRowIndex = GetEffectiveEndRowIndex(currentRow, rowSpan);
 
                     for (var i = currentRow + 1; i <= endRowIndex; i++)
@@ -1109,21 +1128,59 @@ namespace PeachPDF.Html.Core.Dom
         /// group being measured on its own cursor, whose rows are not in <see cref="_bodyRows"/> at all.
         /// </param>
         /// <param name="rowSpan">the cell's raw <c>rowspan</c> value</param>
-        private int GetEffectiveEndRowIndex(int startRowIndex, int rowSpan)
+        private int GetEffectiveEndRowIndex(int startRowIndex, int rowSpan) =>
+            GetEffectiveEndRowIndex(startRowIndex, rowSpan, _bodyRowOriginalIndices, _bodyRows.Count);
+
+        /// <summary>
+        /// The general form of the mapping above, parameterized over <paramref name="originalIndices"/>/
+        /// <paramref name="rowCount"/> rather than reaching for <see cref="_bodyRowOriginalIndices"/>/
+        /// <see cref="_bodyRows"/> directly, so <see cref="DetachAndMeasureRepeatedRowGroups"/>'s
+        /// header/footer loops can apply the identical collapsed-row remapping against their own
+        /// row-group-local numbering (<see cref="ComputeRowGroupOriginalIndices"/>) instead of the body's
+        /// - a header/footer rowspan crossing one of the group's own <c>visibility: collapse</c> rows has
+        /// exactly the same off-by-one-per-collapsed-row failure mode issue #665 fixed for body rows, and
+        /// issue #742's own review is what found it unfixed here.
+        /// </summary>
+        private static int GetEffectiveEndRowIndex(
+            int startRowIndex, int rowSpan, IReadOnlyList<int> originalIndices, int rowCount)
         {
-            // A header/footer measurement row has nothing here to map collapsed rows against - fall
-            // back to the raw span arithmetic CssSpacingBox used before this mapping existed, which is
-            // also correct whenever rowSpan is 1 or startRowIndex is otherwise out of range.
-            if (startRowIndex < 0 || rowSpan <= 1 || startRowIndex >= _bodyRowOriginalIndices.Count)
+            // Nothing here to map collapsed rows against - fall back to the raw span arithmetic
+            // CssSpacingBox used before this mapping existed, which is also correct whenever rowSpan is 1
+            // or startRowIndex is otherwise out of range.
+            if (startRowIndex < 0 || rowSpan <= 1 || startRowIndex >= originalIndices.Count)
                 return startRowIndex + rowSpan - 1;
 
-            var targetOriginalIndex = _bodyRowOriginalIndices[startRowIndex] + rowSpan - 1;
+            var targetOriginalIndex = originalIndices[startRowIndex] + rowSpan - 1;
 
             var endRowIndex = startRowIndex;
-            for (var i = startRowIndex + 1; i < _bodyRows.Count && _bodyRowOriginalIndices[i] <= targetOriginalIndex; i++)
+            for (var i = startRowIndex + 1; i < rowCount && originalIndices[i] <= targetOriginalIndex; i++)
                 endRowIndex = i;
 
             return endRowIndex;
+        }
+
+        /// <summary>
+        /// <paramref name="groupBox"/>'s own row-group-local twin of <see cref="_bodyRowOriginalIndices"/>:
+        /// for each of its rows kept after <c>visibility: collapse</c> filtering, in order, the raw index
+        /// (collapsed rows counted too) it had among <paramref name="groupBox"/>'s own children alone - a
+        /// detached header's/footer's own rows are never part of <see cref="_bodyRows"/>' numbering, so
+        /// they need this same mapping computed fresh, against only their own group's rows.
+        /// </summary>
+        private static List<int> ComputeRowGroupOriginalIndices(CssBox? groupBox)
+        {
+            var indices = new List<int>();
+            if (groupBox is null) return indices;
+
+            var originalRowIndex = 0;
+            foreach (var row in groupBox.Boxes)
+            {
+                if (row.DerivedStyle.ActualDisplay != Keywords.TableRow) continue;
+
+                if (!IsRowCollapsed(row)) indices.Add(originalRowIndex);
+                originalRowIndex++;
+            }
+
+            return indices;
         }
 
         /// <summary>How many of <see cref="_allRows"/>'s leading entries are the (filtered) header rows - the offset into it <see cref="_bodyRows"/> starts at.</summary>
@@ -1133,30 +1190,63 @@ namespace PeachPDF.Html.Core.Dom
         private int FooterRowCountInGrid => _footerBox?.Boxes.Count(r => !IsRowCollapsed(r)) ?? 0;
 
         /// <summary>
-        /// Builds <see cref="_grid"/> from <see cref="_allRows"/>/<see cref="_columns"/>, wiring this
-        /// engine's own span primitives into <see cref="TableGrid.Build"/>'s injected delegates.
+        /// The last grid row (inclusive, 0-based into <see cref="_allRows"/>) a cell starting at grid row
+        /// <paramref name="gridRow"/> with the given <paramref name="rowSpan"/> actually reaches - needs
+        /// the same body-row visibility:collapse remapping (<see cref="GetEffectiveEndRowIndex(int, int)"/>,
+        /// issue #665) whether the caller wants it for the collapsed-border grid or for
+        /// <see cref="GetCellRealColumnIndex"/>'s own cache, so <see cref="ComputeColumnPlacements"/> (the
+        /// one caller left - <see cref="BuildTableGrid"/> reuses its output rather than asking again) is
+        /// the single place this has to be right. Neither a header nor a footer row's rowspan needs the
+        /// remapping (<see cref="InsertEmptyBoxes"/> never touches them).
         /// </summary>
-        private TableGrid BuildTableGrid()
+        private int GetLastRowInGrid(int gridRow, CssBox cell, int rowSpan)
         {
             var headerRowCount = HeaderRowCountInGrid;
             var bodyRowCount = _bodyRows.Count;
 
-            int GetLastRow(int gridRow, CssBox cell, int rowSpan)
+            if (gridRow >= headerRowCount && gridRow < headerRowCount + bodyRowCount)
             {
-                // A body row's rowspan counts against the original (pre-visibility-filter) grid -
-                // GetEffectiveEndRowIndex is the one place that mapping happens (issue #665). A
-                // header/footer row's does not (InsertEmptyBoxes never touches them either - see
-                // BuildTableGrid's own remarks), so the raw arithmetic stands for those.
-                if (gridRow >= headerRowCount && gridRow < headerRowCount + bodyRowCount)
-                {
-                    var bodyIndex = gridRow - headerRowCount;
-                    return GetEffectiveEndRowIndex(bodyIndex, rowSpan) + headerRowCount;
-                }
-
-                return gridRow + rowSpan - 1;
+                var bodyIndex = gridRow - headerRowCount;
+                return GetEffectiveEndRowIndex(bodyIndex, rowSpan) + headerRowCount;
             }
 
-            return TableGrid.Build(_allRows, _columns, GetRowSpan, GetColSpan, GetLastRow);
+            return gridRow + rowSpan - 1;
+        }
+
+        /// <summary>
+        /// Builds <see cref="_grid"/> from <see cref="_allRows"/>/<see cref="_columns"/> and this table's
+        /// own <see cref="_columnPlacements"/>/<see cref="_columnPlacementsColumnCount"/>
+        /// (<see cref="ComputeColumnPlacements"/> has already computed both by the time this runs) rather
+        /// than asking <see cref="TableGrid.Build(IReadOnlyList{CssBox}, IReadOnlyList{CssBox}, Dictionary{CssBox, CellPlacement}, int)"/>'s
+        /// other overload to recompute them - the placement algorithm running twice per layout pass for
+        /// every collapsed-border table was real, avoidable work.
+        /// </summary>
+        private TableGrid BuildTableGrid() =>
+            TableGrid.Build(_allRows, _columns, _columnPlacements!, _columnPlacementsColumnCount);
+
+        /// <summary>
+        /// Populates <see cref="_columnPlacements"/>/<see cref="_columnPlacementsColumnCount"/> - every
+        /// real cell's grid column via <see cref="TableGrid.ComputeColumnPlacements"/> - so
+        /// <see cref="GetCellRealColumnIndex"/> no longer has to sum a row's own preceding <c>Boxes</c>,
+        /// which - for a detached header's/footer's own row - under-counts past a rowspan gap
+        /// <see cref="InsertEmptyBoxes"/> never pads (issue #740). <see cref="BuildTableGrid"/> reuses this
+        /// same output for the collapsed-border grid rather than recomputing it. Must run after
+        /// <see cref="AssignBoxKinds"/> (needs <see cref="_allRows"/>/
+        /// <see cref="_headerBox"/>/<see cref="_bodyRows"/>) and before <see cref="InsertEmptyBoxes"/>,
+        /// whose own first call to <see cref="GetCellRealColumnIndex"/> depends on it - computed once
+        /// regardless of <c>border-collapse</c>, since cell positioning (unlike <see cref="_grid"/>) isn't
+        /// a collapse-only concern.
+        /// </summary>
+        private void ComputeColumnPlacements()
+        {
+            var initialColumnCount = 0;
+            foreach (var _ in _columns) initialColumnCount++;
+
+            var (placements, columnCount) = TableGrid.ComputeColumnPlacements(
+                _allRows, initialColumnCount, GetRowSpan, GetColSpan, GetLastRowInGrid);
+
+            _columnPlacements = placements;
+            _columnPlacementsColumnCount = columnCount;
         }
 
         /// <summary>The table's own <c>direction</c> (not any cell's) - CSS 2.1 §17.6.2's position tiebreak reads this, not the writing direction of whatever happens to be adjacent.</summary>
@@ -1181,6 +1271,15 @@ namespace PeachPDF.Html.Core.Dom
                     _columnCount = Math.Max(_columnCount, rowColumnCount);
                 }
             }
+
+            // Neither branch above can be narrower than every real cell's own rowspan-occupancy-aware
+            // column - a header/footer row following a rowspan gap has fewer Boxes entries (so a smaller
+            // naive sum) than real columns it needs, and a <col>-declared count can likewise under-declare
+            // relative to actual cell content (the same "take the wider of the two" TableGrid.Build's own
+            // column-count computation already applies). Without this floor, GetCellRealColumnIndex could
+            // return a column _columnWidths (sized off _columnCount) is too short to index - LayoutBodyRow's
+            // column-skip loop has no bound check of its own, unlike GetCellWidth's (issue #740).
+            _columnCount = Math.Max(_columnCount, _columnPlacementsColumnCount);
         }
 
         /// <summary>
@@ -1509,7 +1608,7 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var cell in row.Boxes)
                 {
                     var colspan = GetColSpan(cell);
-                    var col = GetCellRealColumnIndex(row, cell);
+                    var col = GetCellRealColumnIndex(cell);
                     var affectColumn = col + colspan - 1;
 
                     if (_columnWidths!.Length <= col || !(_columnWidths[col] < GetColumnMinWidths()[col])) continue;
@@ -2067,6 +2166,9 @@ namespace PeachPDF.Html.Core.Dom
                 // own ordinal is that row's grid row index too - line rowIndex+1 is the boundary right
                 // after it.
                 var rowIndex = 0;
+                var headerRows = new List<CssBox>();
+                var headerOriginalRowIndices = ComputeRowGroupOriginalIndices(_headerBox);
+                var headerSpanningCellsEndingOnRow = new Dictionary<int, List<CssBox>>();
 
                 foreach (var row in _headerBox.Boxes)
                 {
@@ -2079,8 +2181,12 @@ namespace PeachPDF.Html.Core.Dom
                     headerCursor.MaxBottom = headerRowsLayoutY;
 
                     await LayoutBodyRow(g, row, startX, headerCursor);
+
+                    RegisterRowSpanCellsEndingRow(row, rowIndex, headerOriginalRowIndices, headerSpanningCellsEndingOnRow);
+                    headerCursor.MaxBottom =
+                        GrowForClosingRowSpanCells(rowIndex, headerSpanningCellsEndingOnRow, headerCursor.MaxBottom);
+
                     headerRowsLayoutY = headerCursor.MaxBottom + VerticalSpacingAt(rowIndex + 1);
-                    rowIndex++;
 
                     // Unlike the regular body-row loop below, this never set the row's own
                     // Location/ActualRight/ActualBottom (only each cell's) - left it at a
@@ -2090,6 +2196,11 @@ namespace PeachPDF.Html.Core.Dom
                     row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                     row.ActualRight = row.Boxes.Max(x => x.ActualRight);
                     row.ActualBottom = headerCursor.MaxBottom;
+
+                    CloseRowSpanCellsEndingOnRow(g, rowIndex, headerSpanningCellsEndingOnRow, row.ActualBottom);
+
+                    rowIndex++;
+                    headerRows.Add(row);
                 }
 
                 cursor.MaxRight = headerCursor.MaxRight;
@@ -2111,6 +2222,9 @@ namespace PeachPDF.Html.Core.Dom
                 // Footer rows are always _allRows' own trailing entries, after every header and body row -
                 // see the header loop above for why the ordinal doubles as the grid row index.
                 var footerRowIndex = HeaderRowCountInGrid + _bodyRows.Count;
+                var footerRows = new List<CssBox>();
+                var footerOriginalRowIndices = ComputeRowGroupOriginalIndices(_footerBox);
+                var footerSpanningCellsEndingOnRow = new Dictionary<int, List<CssBox>>();
 
                 foreach (var row in _footerBox.Boxes)
                 {
@@ -2123,6 +2237,17 @@ namespace PeachPDF.Html.Core.Dom
                     footerCursor.MaxBottom = footerRowsLayoutY;
 
                     await LayoutBodyRow(g, row, startX, footerCursor);
+
+                    // The row-group-local row index this closing pass keys against restarts at 0 here,
+                    // deliberately independent of footerRowIndex (the whole-grid ordinal used for
+                    // VerticalSpacingAt just below) - footerSpanningCellsEndingOnRow only ever has to be
+                    // internally consistent with itself across this one loop, and never needs to agree
+                    // with any other row-numbering scheme.
+                    var footerLocalRowIndex = footerRows.Count;
+                    RegisterRowSpanCellsEndingRow(row, footerLocalRowIndex, footerOriginalRowIndices, footerSpanningCellsEndingOnRow);
+                    footerCursor.MaxBottom = GrowForClosingRowSpanCells(
+                        footerLocalRowIndex, footerSpanningCellsEndingOnRow, footerCursor.MaxBottom);
+
                     footerRowsLayoutY = footerCursor.MaxBottom + VerticalSpacingAt(footerRowIndex + 1);
                     footerRowIndex++;
 
@@ -2130,6 +2255,10 @@ namespace PeachPDF.Html.Core.Dom
                     row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                     row.ActualRight = row.Boxes.Max(x => x.ActualRight);
                     row.ActualBottom = footerCursor.MaxBottom;
+
+                    CloseRowSpanCellsEndingOnRow(g, footerLocalRowIndex, footerSpanningCellsEndingOnRow, row.ActualBottom);
+
+                    footerRows.Add(row);
                 }
 
                 cursor.MaxRight = footerCursor.MaxRight;
@@ -2157,6 +2286,90 @@ namespace PeachPDF.Html.Core.Dom
             _setup.Footer = _footerBox is null
                 ? null
                 : new DetachedRowGroup(_footerBox, _footerIndex, _footerHeight, _footerRepeats);
+        }
+
+        /// <summary>
+        /// Closes every <c>rowSpan &gt; 1</c> cell in a just-measured detached header's/footer's own rows
+        /// the same way <see cref="LayoutBodyRow"/>'s own vertical-alignment loop closes an ordinary body
+        /// row's rowspan cell (<c>cell.ActualBottom = rowMaxBottom; CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);</c>,
+        /// itself reached via a row that grew to fit the cell first) - except that loop keys both the
+        /// growth and the close off <see cref="TableRowCursor.RowIndex"/>, which stays pinned at <c>-1</c>
+        /// for every row of a row-group measurement pass (<see cref="TableRowCursor.ForRowGroupMeasurement"/>'s
+        /// own remarks), so neither ever engages there. Deliberately not reached by giving that cursor real
+        /// per-row indices instead: the close also runs through <see cref="CloseSpanningCell"/>, whose own
+        /// bookkeeping (straddle correction, fragmentainer band geometry) is a pagination concept a
+        /// row-group's own one-shot, never-resumed measurement pass has no analogue for.
+        /// <see cref="DetachAndMeasureRepeatedRowGroups"/>'s header/footer loops instead keep this
+        /// bookkeeping themselves, in a dictionary scoped to that one loop and keyed by a row-group-local
+        /// row index with no meaning outside it, via the three methods below (issue #742). A <c>rowSpan</c>
+        /// declared past the group's own last row (e.g. <c>rowspan="99"</c> in a two-row group) needs no
+        /// special handling here either: <see cref="GetEffectiveEndRowIndex(int, int, IReadOnlyList{int}, int)"/>
+        /// itself never returns past <c>originalRowIndices.Count - 1</c>, so such a cell simply registers
+        /// against the group's own actual last row already.
+        /// </summary>
+        /// <param name="row">the row <see cref="LayoutBodyRow"/> just placed</param>
+        /// <param name="rowIndex">that row's own row-group-local index (0-based, the caller's own counter)</param>
+        /// <param name="originalRowIndices">
+        /// <paramref name="row"/>'s own row-group's <see cref="ComputeRowGroupOriginalIndices"/> - a
+        /// rowspan crossing one of the group's own <c>visibility: collapse</c> rows needs the identical
+        /// remapping <see cref="GetEffectiveEndRowIndex(int, int, IReadOnlyList{int}, int)"/> already
+        /// applies for a body row (issue #665's failure mode, reachable here too).
+        /// </param>
+        /// <param name="spanningCellsEndingOnRow">
+        /// every <c>rowSpan &gt; 1</c> cell seen so far this loop, keyed by the row-group-local row index
+        /// its span ends on - shared by every method here and scoped to one header/footer loop
+        /// </param>
+        private static void RegisterRowSpanCellsEndingRow(
+            CssBox row, int rowIndex, IReadOnlyList<int> originalRowIndices,
+            Dictionary<int, List<CssBox>> spanningCellsEndingOnRow)
+        {
+            foreach (var cell in row.Boxes)
+            {
+                var rowSpan = GetRowSpan(cell);
+                if (rowSpan <= 1) continue;
+
+                var endRow = GetEffectiveEndRowIndex(rowIndex, rowSpan, originalRowIndices, originalRowIndices.Count);
+                if (!spanningCellsEndingOnRow.TryGetValue(endRow, out var endingHere))
+                    spanningCellsEndingOnRow[endRow] = endingHere = [];
+                endingHere.Add(cell);
+            }
+        }
+
+        /// <summary>
+        /// Before <paramref name="rowIndex"/>'s own bottom is finalized, grows <paramref name="rowMaxBottom"/>
+        /// to fit every <c>rowSpan &gt; 1</c> cell ending on it, using each one's own natural (pre-stretch)
+        /// <c>ActualBottom</c> from the row that opened it - the same fold-back <c>LayoutBodyRow</c>'s own
+        /// <c>sb.EndRow == rowIndex</c> branch does for an ordinary body row's <c>CssSpacingBox</c>.
+        /// Without this, a cell taller than every row it spans combined left the header's/footer's own
+        /// total height too short for its own tallest content - the table body (or the next row-group)
+        /// then started overlapping it.
+        /// </summary>
+        private static double GrowForClosingRowSpanCells(
+            int rowIndex, Dictionary<int, List<CssBox>> spanningCellsEndingOnRow, double rowMaxBottom)
+        {
+            if (!spanningCellsEndingOnRow.TryGetValue(rowIndex, out var endingHere)) return rowMaxBottom;
+
+            foreach (var cell in endingHere)
+                rowMaxBottom = Math.Max(rowMaxBottom, cell.ActualBottom);
+
+            return rowMaxBottom;
+        }
+
+        /// <summary>
+        /// Stretches every <c>rowSpan &gt; 1</c> cell ending on <paramref name="rowIndex"/> to
+        /// <paramref name="rowBottom"/> - that row's own now-final bottom, already grown to fit them by
+        /// <see cref="GrowForClosingRowSpanCells"/> if any needed it.
+        /// </summary>
+        private static void CloseRowSpanCellsEndingOnRow(
+            RGraphics g, int rowIndex, Dictionary<int, List<CssBox>> spanningCellsEndingOnRow, double rowBottom)
+        {
+            if (!spanningCellsEndingOnRow.TryGetValue(rowIndex, out var endingHere)) return;
+
+            foreach (var cell in endingHere)
+            {
+                cell.ActualBottom = rowBottom;
+                CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
+            }
         }
 
         /// <summary>
@@ -2656,7 +2869,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (cell is CssSpacingBox) continue;
 
-                    var col = GetCellRealColumnIndex(row, cell);
+                    var col = GetCellRealColumnIndex(cell);
                     var span = GetColSpan(cell);
 
                     if (line == col) return cell.Location.X;
@@ -3439,9 +3652,12 @@ namespace PeachPDF.Html.Core.Dom
             var rowSpannedBoxes = cursor.RowSpannedBoxes;
 
             var currentX = startX;
-            var currentColumn = 0;
             var rowMaxBottom = cursor.MaxBottom;
             var rowMaxRight = cursor.MaxRight;
+
+            // The next grid column this row's own Boxes list is expected to reach, absent any gap - see
+            // the skip-forward below for why this can fall behind columnIndex.
+            var expectedColumn = 0;
 
             // The cells of this row that ran out of fragmentainer, which the two steps below have to leave
             // alone: a cell whose content continues elsewhere has no leftover room in this fragment to
@@ -3457,21 +3673,38 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var cell in row.Boxes)
             {
-                if (currentColumn >= _columnWidths!.Length)
+                var rowSpan = GetRowSpan(cell);
+                var columnIndex = GetCellRealColumnIndex(cell);
+
+                if (columnIndex >= _columnWidths!.Length)
                     break;
 
-                var rowSpan = GetRowSpan(cell);
-                var columnIndex = GetCellRealColumnIndex(row, cell);
+                var colSpan = GetColSpan(cell);
                 var width = GetCellWidth(columnIndex, cell);
+
+                // A rowspan cell opened by an earlier row of this same row-group can occupy a column this
+                // row's own Boxes list has no entry for at all - no CssSpacingBox placeholder stands in
+                // for it, since InsertEmptyBoxes never pads a detached header's/footer's own rows (see
+                // GetCellRealColumnIndex's own remarks, issue #740). currentX otherwise only ever advances
+                // one Boxes-list entry at a time and would never account for that column's width, so any
+                // gap between where the row loop expected to be and this cell's real column is walked here
+                // first - the same width-plus-trailing-spacing a real cell in that column would have
+                // advanced by, one column at a time.
+                for (var skipped = expectedColumn; skipped < columnIndex; skipped++)
+                {
+                    currentX += _columnWidths![skipped];
+                    currentX += IsColumnCollapsed(skipped) ? 0 : HorizontalSpacingAt(skipped + 1);
+                }
+                expectedColumn = columnIndex + colSpan;
 
                 // A cell contributes no border-spacing slot of its own when the last column it spans
                 // is collapsed - GetWidthSum leaves that same slot out of the table's own width. This
                 // is keyed on the span's last column rather than CellOccupiesOnlyCollapsedColumns so a
                 // colspan cell straddling a collapsed and a visible column (issue #667) is handled too:
                 // the slot is owed only when the cell's own trailing edge lands on a visible column.
-                var spacingAfterCell = IsColumnCollapsed(columnIndex + GetColSpan(cell) - 1)
+                var spacingAfterCell = IsColumnCollapsed(columnIndex + colSpan - 1)
                     ? 0
-                    : HorizontalSpacingAt(columnIndex + GetColSpan(cell));
+                    : HorizontalSpacingAt(columnIndex + colSpan);
 
                 // A cell an earlier pass finished has its whole content in the fragment that pass emitted,
                 // so this one places nothing for it: not its position, not its content, not its alignment.
@@ -3493,7 +3726,6 @@ namespace PeachPDF.Html.Core.Dom
                         finishedCells.Add((cell, currentX, width));
 
                     rowMaxRight = Math.Max(rowMaxRight, currentX + width);
-                    currentColumn++;
                     currentX += width + spacingAfterCell;
                     continue;
                 }
@@ -3606,7 +3838,6 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 rowMaxRight = Math.Max(rowMaxRight, cell.ActualRight);
-                currentColumn++;
                 currentX = cell.ActualRight + spacingAfterCell;
             }
 
@@ -3978,23 +4209,17 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Gets the cell column index checking its position and other cells colspans
+        /// The real column <paramref name="cell"/> occupies - <see cref="_columnPlacements"/>'s
+        /// rowspan-occupancy-aware placement (see <see cref="ComputeColumnPlacements"/>'s own remarks for
+        /// why summing a row's own preceding <c>Boxes</c> isn't enough for a detached header/footer row -
+        /// issue #740). A <see cref="CssSpacingBox"/> has no placement of its own -
+        /// <see cref="InsertEmptyBoxes"/> only ever creates one after <see cref="_columnPlacements"/> is
+        /// built - so it stands in for <see cref="CssSpacingBox.ExtendedBox"/>, whose column it shares.
         /// </summary>
-        /// <param name="row"></param>
-        /// <param name="cell"></param>
-        /// <returns></returns>
-        private static int GetCellRealColumnIndex(CssBox row, CssBox cell)
+        private int GetCellRealColumnIndex(CssBox cell)
         {
-            int i = 0;
-
-            foreach (CssBox b in row.Boxes)
-            {
-                if (b.Equals(cell))
-                    break;
-                i += GetColSpan(b);
-            }
-
-            return i;
+            var target = cell is CssSpacingBox spacer ? spacer.ExtendedBox : cell;
+            return _columnPlacements![target].Column;
         }
 
         /// <summary>
@@ -4158,7 +4383,7 @@ namespace PeachPDF.Html.Core.Dom
                 for (var i = 0; i < row.Boxes.Count; i++)
                 {
                     var cell = row.Boxes[i];
-                    var realCol = GetCellRealColumnIndex(row, cell);
+                    var realCol = GetCellRealColumnIndex(cell);
                     var colSpan = GetColSpan(cell);
 
                     // A cell that lands entirely inside collapsed column(s) is itself invisible (CSS 2.1
@@ -4229,7 +4454,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (!CssValueParser.IsValidLength(cell.MaxWidth)) continue;
 
-                    var col = GetCellRealColumnIndex(row, cell);
+                    var col = GetCellRealColumnIndex(cell);
                     col = explicitMaxWidths.Length > col ? col : explicitMaxWidths.Length - 1;
                     var colSpan = GetColSpan(cell);
                     var cellMaxWidth = CssValueParser.ParseLength(cell.MaxWidth, availCellWidth, cell) / colSpan;
@@ -4310,7 +4535,7 @@ namespace PeachPDF.Html.Core.Dom
                 foreach (var cell in row.Boxes)
                 {
                     var colspan = GetColSpan(cell);
-                    var col = GetCellRealColumnIndex(row, cell);
+                    var col = GetCellRealColumnIndex(cell);
 
                     // See the matching skip in GetColumnsMinMaxWidthByContent (issue #665): a cell
                     // confined to collapsed column(s) must not size those columns up from its own
