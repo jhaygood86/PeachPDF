@@ -1,0 +1,146 @@
+using PeachPDF.Html.Adapters;
+using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Text;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace PeachPDF.Tests.TestSupport
+{
+    /// <summary>What kind of draw operation a <see cref="PaintOp"/> records.</summary>
+    internal enum PaintOpKind
+    {
+        FillRect,
+        Polygon,
+        Line,
+        PushClip,
+        PopClip
+    }
+
+    /// <summary>One paint call, in the order it happened - the single ordered log <see cref="RecordingGraphics.Log"/> keeps, per this repo's own preference (CLAUDE.md's testing conventions) for one ordered log over parallel per-call-type counts/lists when order across different call types matters.</summary>
+    internal readonly record struct PaintOp(PaintOpKind Kind, RRect Bounds);
+
+    /// <summary>
+    /// Minimal <see cref="RGraphics"/> implementation that records paint calls so tests can verify paint
+    /// order/behavior without a full PDF rendering stack. Shared across test files (originally private to
+    /// <c>CssLayoutEngineTablePageBreakTests</c>) - extend this one rather than adding a parallel copy.
+    /// </summary>
+    internal sealed class RecordingGraphics : RGraphics
+    {
+        /// <summary>Every fill/stroke/clip operation, in the order it was made.</summary>
+        public List<PaintOp> Log { get; } = [];
+
+        /// <summary>All rects passed to PushClip during this paint pass.</summary>
+        public List<RRect> PushedClips { get; } = [];
+
+        /// <summary>Total PushClip invocations.</summary>
+        public int PushCount { get; private set; }
+
+        /// <summary>Total PopClip invocations.</summary>
+        public int PopCount { get; private set; }
+
+        /// <summary>Y-coordinates of horizontal lines drawn (where y1 ≈ y2).</summary>
+        public List<double> HorizontalLines { get; } = [];
+
+        /// <summary>Every word string passed to DrawString during this paint pass, with the Y it was drawn at.</summary>
+        public List<(string Text, double Y)> DrawnStrings { get; } = [];
+
+        public RecordingGraphics(RAdapter adapter)
+            : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
+
+        public override void DrawLine(RPen pen, double x1, double y1, double x2, double y2)
+        {
+            if (Math.Abs(y1 - y2) < 0.5)
+                HorizontalLines.Add(y1);
+
+            var left = Math.Min(x1, x2);
+            var top = Math.Min(y1, y2);
+            Log.Add(new PaintOp(PaintOpKind.Line, new RRect(left, top, Math.Abs(x2 - x1), Math.Abs(y2 - y1))));
+        }
+
+        /// <summary>
+        /// Solid borders paint as a mitered quad (BordersDrawHandler.SetInOutsetRectanglePoints),
+        /// not a DrawLine call - a wide-and-thin quad (wider in X than in Y) is a horizontal border
+        /// stripe; record its vertical center the same way DrawLine's y1/y2 would, so callers don't
+        /// need to know which draw method a given border style happens to use.
+        /// </summary>
+        public override void DrawPolygon(RBrush brush, RPoint[] points)
+        {
+            if (points.Length == 0) return;
+
+            var minY = points.Min(p => p.Y);
+            var maxY = points.Max(p => p.Y);
+            var minX = points.Min(p => p.X);
+            var maxX = points.Max(p => p.X);
+
+            if (maxX - minX > maxY - minY)
+                HorizontalLines.Add((minY + maxY) / 2);
+
+            Log.Add(new PaintOp(PaintOpKind.Polygon, new RRect(minX, minY, maxX - minX, maxY - minY)));
+        }
+
+        public override void PushClip(RRect rect)
+        {
+            _clipStack.Push(rect);
+            PushedClips.Add(rect);
+            PushCount++;
+            Log.Add(new PaintOp(PaintOpKind.PushClip, rect));
+        }
+
+        public override void PopClip()
+        {
+            if (_clipStack.Count > 1)
+                _clipStack.Pop();
+            PopCount++;
+            Log.Add(new PaintOp(PaintOpKind.PopClip, default));
+        }
+
+        public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
+        public override void PushClipExclude(RRect rect) { }
+        public override void PushTransform(RMatrix matrix) { }
+        public override void PopTransform() { }
+        public override void PushBlendMode(RBlendMode mode) { }
+        public override void PopBlendMode() { }
+        public override object SetAntiAliasSmoothingMode() => new object();
+        public override void ReturnPreviousSmoothingMode(object? prevMode) { }
+        public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new(0, 12);
+        public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
+        public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) => DrawnStrings.Add((str, point.Y));
+
+        public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
+
+        public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) =>
+            Log.Add(new PaintOp(PaintOpKind.FillRect, new RRect(x, y, width, height)));
+
+        public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
+        public override void DrawImage(RImage image, RRect destRect) { }
+        public override void DrawPath(RPen pen, RGraphicsPath path) { }
+        public override void DrawPath(RBrush brush, RGraphicsPath path) { }
+        public override RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
+
+        public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
+        public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
+        public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
+        public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
+        public override void BeginMarkedContent(string structureType, int mcid) { }
+        public override void EndMarkedContent() { }
+        public override void BeginArtifact() { }
+        public override void Dispose() { }
+    }
+
+    internal sealed class RecordingGraphicsPath : RGraphicsPath
+    {
+        public override void Start(double x, double y) { }
+        public override void LineTo(double x, double y) { }
+        public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) { }
+        public override void AddMove(double x, double y) { }
+        public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
+        public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
+        public override void CloseFigure() { }
+        public override void Transform(RMatrix matrix) { }
+        public override void AddPath(RGraphicsPath path) { }
+        public override RFillMode FillMode { get; set; }
+        public override void Dispose() { }
+    }
+}

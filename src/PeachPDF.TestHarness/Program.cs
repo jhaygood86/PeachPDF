@@ -7467,6 +7467,97 @@ await SaveShowcaseAsync("table_caption", "Layout", "Table Captions (caption-side
     + "<table>'s own border/background wrapping the row grid only.",
     tableCaptionHtml, pdfConfig);
 
+// --- collapsed border conflict resolution showcase (issue #735) ---
+//
+// border-collapse: collapse previously overlapped adjacent rows/columns by a flat, hardcoded 1pt
+// regardless of the borders actually declared, and every participating box painted its own border
+// independently - so a later row's opaque background could paint over and erase the border it shared
+// with the row above (#735). This exercises the real CSS 2.1 §17.6.2 resolution that replaced it: width
+// wins, then style priority, then origin priority (cell > row > row-group > column > column-group >
+// table), then position - plus <col>/<colgroup> border/background participation and a repeated <thead>
+// whose boundary to the body re-resolves correctly on every page, not just the first.
+var collapsedBorderRepeatRows = string.Join("\n", Enumerable.Range(1, 24).Select(i =>
+    i == 1
+        ? "<tr class=\"first\"><td>Row 1</td><td>The first body row's own border wins here - it's the true DOM neighbor of the header.</td></tr>"
+        : $"<tr><td>Row {i}</td><td>An ordinary row - every later page's header boundary resolves against whichever row actually starts that page, not row 1's.</td></tr>"));
+
+var collapsedBorderHtml = $$"""
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4 portrait; margin: 15mm }
+    body { font: 10pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 11pt; margin: 1.2em 0 0.4em }
+    p.intro { color: #6b7280; font-size: 9pt; margin: 0 0 0.6em; max-width: 34em }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 0.8em }
+    td, th { padding: 5pt 8pt; text-align: left }
+
+    /* Conflict matrix: three adjacent cells whose shared edges are contested by a different origin
+       each time, so the resolved border visibly differs edge to edge. */
+    #matrix td, #matrix th { border: 1pt solid #cbd5e1 }
+    #matrix tr { border-bottom: 4pt solid #f59e0b }               /* row-origin: medium, orange */
+    #matrix td.cell-wins { border-bottom: 8pt double #0b4f6c }      /* cell-origin: widest, wins outright */
+    #matrix { border: 2pt solid #7c3aed }                          /* table-origin: only at the outer edge */
+
+    /* <col>/<colgroup> participation: a colgroup border/background competing with (and losing to) a
+       narrower <col>-level border, and both painting behind the cells' own backgrounds. */
+    #cols colgroup.grp { border: 3pt solid #059669; background: #ecfdf5 }
+    #cols col.narrow { border-right: 1pt solid #dc2626; background: #fef2f2 }
+    #cols td, #cols th { border: 0.75pt solid #94a3b8; background: white }
+
+    /* border-style: hidden suppresses an edge outright, regardless of what competes for it. */
+    #hidden td, #hidden th { border: 2pt solid #0b4f6c }
+    #hidden td.gap { border-right-style: hidden }
+
+    #repeat thead th { border: 1pt solid #0b4f6c; background: #0b4f6c; color: white; padding: 6pt 8pt }
+    #repeat tbody td { border: 1pt solid #94a3b8; padding: 5pt 8pt }
+    #repeat tr.first td { border-top: 6pt solid #dc2626 }
+    </style></head><body>
+    <h1>Collapsed Table Borders: CSS 2.1 §17.6.2 Conflict Resolution</h1>
+    <p class="intro">A <code>border-collapse: collapse</code> table resolves exactly one border per shared
+    grid line - the widest declared border wins, ties break by style priority, further ties by how
+    specific the declaring box is (cell &gt; row &gt; row-group &gt; column &gt; column-group &gt; table),
+    and finally by position. Every other participant's own border at that edge is suppressed rather than
+    separately painted.</p>
+
+    <h2>Width, then origin, decide each edge</h2>
+    <table id="matrix">
+    <tr><td>A</td><td>B</td></tr>
+    <tr><td class="cell-wins">The 8pt double border on this cell's own bottom edge outranks the row's 4pt orange border below - cell beats row regardless of which one is wider here.</td><td>Where no cell states an opinion, the row's own 4pt orange border wins instead.</td></tr>
+    </table>
+
+    <h2>&lt;col&gt;/&lt;colgroup&gt; border and background participation</h2>
+    <table id="cols">
+    <colgroup class="grp"><col class="narrow"><col></colgroup>
+    <tr><th>Column A</th><th>Column B</th></tr>
+    <tr><td>The colgroup's 3pt green border frames both columns; column A's own narrower red border wins the shared edge between them.</td><td>Column backgrounds layer under the cells' own white background, per CSS 2.1 §17.5.1's table &rarr; column-group &rarr; column &rarr; row &rarr; cell order.</td></tr>
+    </table>
+
+    <h2>border-style: hidden suppresses an edge outright</h2>
+    <table id="hidden">
+    <tr><th>Left</th><th class="gap">Right</th></tr>
+    <tr><td>No border here</td><td class="gap">or here - hidden always wins, whatever else competes for this edge</td></tr>
+    </table>
+
+    <h2>A repeated &lt;thead&gt;'s boundary resolves fresh on every page</h2>
+    <p class="intro">Only row 1 - the header's real DOM neighbor - has the bold red top border. On the
+    first page the header sits directly above it, so that border is what's resolved and drawn. On every
+    later page the header repeats above a different row instead, and the boundary is re-resolved against
+    <em>that</em> row - not reused from page 1 - so only the first page shows the red border.</p>
+    <table id="repeat">
+    <thead><tr><th>Row</th><th>Note</th></tr></thead>
+    <tbody>
+    {{collapsedBorderRepeatRows}}
+    </tbody>
+    </table>
+    </body></html>
+    """;
+await SaveShowcaseAsync("table_collapsed_border_resolution", "Layout", "Collapsed Table Border Resolution",
+    "CSS 2.1 §17.6.2's full border-conflict resolution for border-collapse: collapse - width, then style "
+    + "priority, then cell/row/row-group/column/column-group/table origin, then position - plus "
+    + "<col>/<colgroup> border/background participation and a repeated <thead> whose boundary to the body "
+    + "re-resolves correctly on every page (issue #735).",
+    collapsedBorderHtml, pdfConfig);
+
 // --- interactive PDF forms showcase ---
 //
 // See docs/html-css-support.md#interactive-pdf-forms-support. EnableInteractivePdfForms turns

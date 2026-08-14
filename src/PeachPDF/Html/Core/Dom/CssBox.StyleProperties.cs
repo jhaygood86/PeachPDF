@@ -252,6 +252,11 @@ namespace PeachPDF.Html.Core.Dom
         public double ActualBorderBottomWidth => DerivedStyle.ActualBorderBottomWidth;
         public double ActualBorderLeftWidth => DerivedStyle.ActualBorderLeftWidth;
 
+        internal double NaturalBorderTopWidth => DerivedStyle.NaturalBorderTopWidth;
+        internal double NaturalBorderRightWidth => DerivedStyle.NaturalBorderRightWidth;
+        internal double NaturalBorderBottomWidth => DerivedStyle.NaturalBorderBottomWidth;
+        internal double NaturalBorderLeftWidth => DerivedStyle.NaturalBorderLeftWidth;
+
         /// <summary>Gets the actual column-rule width (the line drawn between columns in a multi-column container).</summary>
         public double ActualColumnRuleWidth => DerivedStyle.ActualColumnRuleWidth;
 

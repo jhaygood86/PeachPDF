@@ -16,6 +16,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
+using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -102,6 +103,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Cache for <see cref="CollapsedColumnCount"/>.</summary>
         private int? _collapsedColumnCount;
 
+        /// <summary>
+        /// The table's logical row×column grid, built (and <see cref="_collapsedBorders"/> resolved from
+        /// it) only when <c>border-collapse: collapse</c> is set - null for a <c>separate</c> table,
+        /// which needs neither.
+        /// </summary>
+        private TableGrid? _grid;
+
+        /// <summary>CSS 2.1 §17.6.2's resolution of <see cref="_grid"/> - see <see cref="_grid"/>.</summary>
+        private CollapsedBorderModel? _collapsedBorders;
+
         // Header/Footer repetition fields
         private double _headerHeight;
         private double _footerHeight;
@@ -174,9 +185,9 @@ namespace PeachPDF.Html.Core.Dom
         /// §6.2 declines is still measured, so subtracting the raw height would keep charging every band
         /// for a footer that is not there — which is the whole cost §6.2's conditions exist to remove.
         /// <para>
-        /// Clamped at zero because an empty <c>&lt;tfoot&gt;&lt;/tfoot&gt;</c> measures
-        /// <c>-GetVerticalSpacing()</c>, and a negative reservation would <i>add</i> room to a band rather
-        /// than take it. The expression this replaced carried the same guard.
+        /// Clamped at zero because an empty <c>&lt;tfoot&gt;&lt;/tfoot&gt;</c> measures a negative
+        /// <see cref="VerticalSpacingAt"/>, and a negative reservation would <i>add</i> room to a band
+        /// rather than take it. The expression this replaced carried the same guard.
         /// </para>
         /// </remarks>
         private double RepeatedFooterHeight => _footerRepeats && _footerHeight > 0 ? _footerHeight : 0;
@@ -186,7 +197,7 @@ namespace PeachPDF.Html.Core.Dom
         /// included, or zero where nothing repeats.
         /// </summary>
         private double RepeatedHeaderRoom =>
-            _headerRepeats && _headerHeight > 0 ? _headerHeight + GetVerticalSpacing() : 0;
+            _headerRepeats && _headerHeight > 0 ? _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid) : 0;
 
         /// <summary>
         /// Whether this run continues a table layout an earlier fragmentainer pass began, rather than
@@ -292,8 +303,14 @@ namespace PeachPDF.Html.Core.Dom
                     break;
             }
 
+            // Collapse: no grid exists yet at this pre-layout estimation point (this is a static
+            // estimator with no CssLayoutEngineTable instance to build one), so there is nothing to
+            // resolve against - 0 is a strictly better estimate than a flat per-boundary guess would be,
+            // and every real caller re-derives the true spacing once the engine actually runs.
+            if (tableBox.BorderCollapse == Keywords.Collapse) return 0;
+
             // +1 columns because padding is between the cell and table borders
-            return (columns + 1) * GetHorizontalSpacing(tableBox);
+            return (columns + 1) * tableBox.ActualBorderSpacingHorizontal;
         }
 
         /// <summary>
@@ -353,8 +370,34 @@ namespace PeachPDF.Html.Core.Dom
             // Insert EmptyBoxes for vertical cell spanning.
             InsertEmptyBoxes();
 
-            // Determine Row and Column Count, and ColumnWidths
-            var availCellSpace = CalculateCountAndWidth();
+            // Determine Row and Column Count
+            DetermineColumnCount();
+
+            // CSS 2.1 §17.6.2's border-conflict resolution needs only topology (the grid) and computed
+            // border styles, not geometry - so it can run here, before any width/height math, and its
+            // output (HorizontalLineWidth/VerticalLineWidth) then feeds that math instead of the old
+            // flat border-spacing constant. Table-topology-only cost for a `separate` table: none, since
+            // neither field is ever set.
+            if (_tableBox.BorderCollapse == Keywords.Collapse)
+            {
+                _grid = BuildTableGrid();
+                _collapsedBorders = CollapsedBorderModel.Resolve(_grid, _tableBox, IsColumnCollapsed, IsLeftToRight());
+            }
+            else
+            {
+                _grid = null;
+                _collapsedBorders = null;
+            }
+
+            _tableBox.CollapsedBorderGrid = _grid;
+            _tableBox.CollapsedBorders = _collapsedBorders;
+
+            // Must run before any cell is measured/laid out (CalculateColumnWidths/GetAvailableCellWidth
+            // read the table's own used border widths; cell content insets read each cell's own).
+            ApplyCollapsedUsedBorderWidths();
+
+            // Determine ColumnWidths
+            var availCellSpace = CalculateColumnWidths();
 
             DetermineMissingColumnWidths(availCellSpace);
 
@@ -398,9 +441,467 @@ namespace PeachPDF.Html.Core.Dom
             //Actually layout cells!
             await LayoutCells(g);
 
+            // Issue #735's actual fix: every collapse participant's own border paint is suppressed here,
+            // and CollapsedBorderSegments - built from this pass's real row/cell geometry, after it is
+            // final - is what FragmentPainter draws instead, once, after every table-internal background.
+            // Boxes paint in tree order, so a later row's opaque cell background otherwise lands on top of
+            // (and erases) an earlier row's border - suppressing the independent per-box draws and
+            // painting the resolved borders late is what stops that regardless of paint order elsewhere.
+            SuppressParticipantBorderPaint();
+            EmitCollapsedBorderSegments();
+            EmitHeaderFooterBorderSegments();
+
             // Published only now that the run has finished - see the constructor for what a half-settled
             // setup would cost a later continuation. A continuation re-publishes the instance it inherited.
             _tableBox.TableSetup = _setup;
+        }
+
+        /// <summary>
+        /// States every collapse participant's <i>used</i> border widths - half the resolved grid-line
+        /// width per edge - via <see cref="DerivedStyle.SetCollapsedUsedBorderWidths"/>, so
+        /// <c>ClientLeft</c>/<c>ClientTop</c>/content insets and the width-sum math all agree with the
+        /// spacing model <see cref="HorizontalSpacingAt"/>/<see cref="VerticalSpacingAt"/> implement. A
+        /// row/row-group/column/column-group owns no box-model space of its own under this model - the
+        /// grid line's room is charged entirely to the cells that actually border it - so those get all
+        /// zeros. A cell spanning multiple segments takes the max resolved width across its own span on
+        /// each edge, so its inset clears the thickest segment it touches.
+        /// </summary>
+        private void ApplyCollapsedUsedBorderWidths()
+        {
+            if (_grid is not { } grid || _collapsedBorders is not { } model)
+            {
+                // Not (or no longer) a collapsed table - undo whatever an earlier pass over this same
+                // table (ShrinkToFit, a §4.3 relocation, a per-page-width reflow) may have stated.
+                _tableBox.DerivedStyle.ClearCollapsedUsedBorderWidths();
+                foreach (var box in _tableBox.Boxes)
+                {
+                    if (box.DerivedStyle.ActualDisplay == Keywords.TableRowGroup)
+                        box.DerivedStyle.ClearCollapsedUsedBorderWidths();
+                }
+                _headerBox?.DerivedStyle.ClearCollapsedUsedBorderWidths();
+                _footerBox?.DerivedStyle.ClearCollapsedUsedBorderWidths();
+                foreach (var column in _columns) column.DerivedStyle.ClearCollapsedUsedBorderWidths();
+                foreach (var box in _tableBox.Boxes)
+                {
+                    if (box.DerivedStyle.ActualDisplay == Keywords.TableColumnGroup)
+                        box.DerivedStyle.ClearCollapsedUsedBorderWidths();
+                }
+                foreach (var row in _allRows)
+                {
+                    row.DerivedStyle.ClearCollapsedUsedBorderWidths();
+                    foreach (var cell in row.Boxes) cell.DerivedStyle.ClearCollapsedUsedBorderWidths();
+                }
+                return;
+            }
+
+            var rowCount = grid.RowCount;
+            var columnCount = grid.ColumnCount;
+
+            _tableBox.DerivedStyle.SetCollapsedUsedBorderWidths(
+                top: model.HorizontalLineWidth[0] / 2,
+                right: model.VerticalLineWidth[columnCount] / 2,
+                bottom: model.HorizontalLineWidth[rowCount] / 2,
+                left: model.VerticalLineWidth[0] / 2);
+
+            foreach (var box in _tableBox.Boxes)
+            {
+                if (box.DerivedStyle.ActualDisplay == Keywords.TableRowGroup)
+                    box.DerivedStyle.SetCollapsedUsedBorderWidths(0, 0, 0, 0);
+            }
+            _headerBox?.DerivedStyle.SetCollapsedUsedBorderWidths(0, 0, 0, 0);
+            _footerBox?.DerivedStyle.SetCollapsedUsedBorderWidths(0, 0, 0, 0);
+            foreach (var column in _columns) column.DerivedStyle.SetCollapsedUsedBorderWidths(0, 0, 0, 0);
+            foreach (var box in _tableBox.Boxes)
+            {
+                if (box.DerivedStyle.ActualDisplay == Keywords.TableColumnGroup)
+                    box.DerivedStyle.SetCollapsedUsedBorderWidths(0, 0, 0, 0);
+            }
+
+            var seen = new HashSet<CssBox>(ReferenceEqualityComparer.Instance);
+
+            foreach (var row in _allRows)
+            {
+                row.DerivedStyle.SetCollapsedUsedBorderWidths(0, 0, 0, 0);
+
+                foreach (var cell in row.Boxes)
+                {
+                    if (cell is CssSpacingBox spacer)
+                    {
+                        spacer.DerivedStyle.SetCollapsedUsedBorderWidths(0, 0, 0, 0);
+                        continue;
+                    }
+
+                    if (!seen.Add(cell)) continue;
+                    if (!grid.TryGetSpan(cell, out var span)) continue;
+
+                    double top = 0, right = 0, bottom = 0, left = 0;
+
+                    for (var c = span.Column; c <= span.LastColumn && c < columnCount; c++)
+                    {
+                        top = Math.Max(top, model.Horizontal(span.Row, c).UsedWidth / 2);
+                        bottom = Math.Max(bottom, model.Horizontal(span.LastRow + 1, c).UsedWidth / 2);
+                    }
+                    for (var r = span.Row; r <= span.LastRow && r < rowCount; r++)
+                    {
+                        left = Math.Max(left, model.Vertical(r, span.Column).UsedWidth / 2);
+                        right = Math.Max(right, model.Vertical(r, span.LastColumn + 1).UsedWidth / 2);
+                    }
+
+                    cell.DerivedStyle.SetCollapsedUsedBorderWidths(top, right, bottom, left);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Suppresses every collapse participant's own independent border paint - see the call site's
+        /// own remarks. Idempotent and safe to call unconditionally: a <c>separate</c> table (or one that
+        /// somehow changed collapse mode since a previous pass) is explicitly cleared back to
+        /// <see cref="BorderEdges.None"/> rather than left however an earlier pass set it.
+        /// </summary>
+        private void SuppressParticipantBorderPaint()
+        {
+            var edges = _tableBox.BorderCollapse == Keywords.Collapse ? BorderEdges.All : BorderEdges.None;
+
+            _tableBox.SuppressedBorderEdges = edges;
+
+            foreach (var box in _tableBox.Boxes)
+            {
+                if (box.DerivedStyle.ActualDisplay == Keywords.TableRowGroup)
+                    box.SuppressedBorderEdges = edges;
+            }
+
+            if (_headerBox is not null) _headerBox.SuppressedBorderEdges = edges;
+            if (_footerBox is not null) _footerBox.SuppressedBorderEdges = edges;
+
+            // <col>/<colgroup> - their own border paint (they are never painted at all otherwise; see
+            // SetColumnBoxDimensions) is suppressed the same way once they participate in resolution.
+            foreach (var column in _columns) column.SuppressedBorderEdges = edges;
+            foreach (var box in _tableBox.Boxes)
+            {
+                if (box.DerivedStyle.ActualDisplay == Keywords.TableColumnGroup)
+                    box.SuppressedBorderEdges = edges;
+            }
+
+            foreach (var row in _allRows)
+            {
+                row.SuppressedBorderEdges = edges;
+
+                // Includes CssSpacingBox - harmless, it paints nothing of its own regardless.
+                foreach (var cell in row.Boxes) cell.SuppressedBorderEdges = edges;
+            }
+        }
+
+        /// <summary>
+        /// Builds <see cref="CssBox.CollapsedBorderSegments"/> from this pass's real, final row/cell
+        /// geometry - one merged run per grid line per contiguous stretch of identically-resolved
+        /// segments (a colspan/rowspan cell's own differing per-column/per-row resolution, from
+        /// <see cref="CollapsedBorderModel"/> resolving on the unit grid, is what makes the runs
+        /// naturally split where the resolved border actually changes, with no special-casing here).
+        /// </summary>
+        /// <remarks>
+        /// Excludes every line inside a detached header's/footer's own row range (including its own
+        /// outer edge and its boundary to the body) - a repeated group is shown through one
+        /// <see cref="CssProxyBox"/> per page, each repositioning the <i>same</i> shared row objects
+        /// (<see cref="CssProxyBox.PerformLayoutImp"/>), so by the time this runs those rows' own
+        /// <c>Location</c>/<c>ActualBottom</c> reflect only whichever proxy happened to lay out last -
+        /// not any particular page. <see cref="EmitHeaderFooterBorderSegments"/> is what emits those
+        /// lines instead, once per proxy, from that proxy's own captured
+        /// <see cref="CssProxyBox.SourceGeometry"/> snapshot.
+        /// </remarks>
+        private void EmitCollapsedBorderSegments()
+        {
+            if (_grid is not { } grid || _collapsedBorders is not { } model)
+            {
+                _tableBox.CollapsedBorderSegments = null;
+                return;
+            }
+
+            var segments = new List<CollapsedBorderSegment>();
+
+            var headerRowCount = _headerBox != null ? HeaderRowCountInGrid : 0;
+            var footerRowCount = _footerBox != null ? FooterRowCountInGrid : 0;
+
+            var lineStart = _headerBox != null ? headerRowCount + 1 : 0;
+            var lineEnd = _footerBox != null ? grid.RowCount - footerRowCount - 1 : grid.RowCount;
+
+            for (var line = lineStart; line <= lineEnd; line++)
+            {
+                if (model.HorizontalLineWidth[line] <= 0) continue;
+                var y = GetGridLineY(grid, line);
+
+                EmitRuns(grid.ColumnCount, col => model.Horizontal(line, col), (start, end, border) =>
+                {
+                    var x0 = GetGridLineX(grid, start);
+                    var x1 = GetGridLineX(grid, end);
+                    if (x0 is null || x1 is null) return;
+
+                    segments.Add(new CollapsedBorderSegment(true,
+                        new RRect(x0.Value, y - border.Width / 2, x1.Value - x0.Value, border.Width),
+                        border.Style, border.Width, border.Color));
+                });
+            }
+
+            var rowStart = headerRowCount;
+            var rowEnd = grid.RowCount - footerRowCount;
+
+            for (var line = 0; line <= grid.ColumnCount; line++)
+            {
+                if (model.VerticalLineWidth[line] <= 0) continue;
+                var x = GetGridLineX(grid, line);
+                if (x is null) continue;
+
+                EmitRuns(rowEnd - rowStart, i => model.Vertical(rowStart + i, line), (start, end, border) =>
+                {
+                    var y0 = GetGridLineY(grid, rowStart + start);
+                    var y1 = GetGridLineY(grid, rowStart + end);
+
+                    segments.Add(new CollapsedBorderSegment(false,
+                        new RRect(x.Value - border.Width / 2, y0, border.Width, y1 - y0),
+                        border.Style, border.Width, border.Color));
+                });
+            }
+
+            _tableBox.CollapsedBorderSegments = segments;
+        }
+
+        /// <summary>
+        /// Builds each detached header's/footer's own <see cref="CssBox.CollapsedBorderSegments"/> -
+        /// once per <see cref="CssProxyBox"/>, i.e. once per page it is shown on (every occurrence goes
+        /// through a proxy, including a group's only appearance when it does not repeat - see
+        /// <see cref="CreateHeaderProxy"/>/<see cref="CreateFooterProxy"/>'s call sites). Two things a
+        /// repeated group needs that a plain body row never does:
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Its own internal grid lines translate per page</b>, read from the proxy's own captured
+        /// <see cref="CssProxyBox.SourceGeometry"/> rather than the shared source rows' live geometry -
+        /// see <see cref="EmitCollapsedBorderSegments"/>'s remarks for why the live geometry is not
+        /// trustworthy here. A group's own topology (which cells/rows exist) is page-invariant, so
+        /// <see cref="TableGrid"/>/<see cref="CollapsedBorderModel"/>'s already-resolved values are still
+        /// used for style/width/color - only position is re-read per proxy. X does not need the same
+        /// treatment: a repeat's <c>startX</c> is always <see cref="_tableBox"/>'s own <c>ClientLeft</c>,
+        /// identical on every page, so the existing live-geometry <see cref="GetGridLineX"/> is safe to
+        /// reuse for every segment this method emits, including the boundary one below.
+        /// </para>
+        /// <para>
+        /// <b>The line where the group meets the body is genuinely different per page</b> - CSS 2.1
+        /// §17.6.2 resolves a border against whichever row is visually adjacent, and a repeat's neighbor
+        /// is whatever row starts/ends <i>that page</i>, not the header/footer's original DOM neighbor.
+        /// This is why that one line is excluded from the "own outer edge" loop below and resolved fresh
+        /// via <see cref="CollapsedBorderModel.ResolveRepeatedGroupBoundary"/> against the real adjacent
+        /// row instead of <see cref="_collapsedBorders"/>'s single, DOM-order-based resolution for it.
+        /// </para>
+        /// </remarks>
+        private void EmitHeaderFooterBorderSegments()
+        {
+            if (_headerBox is not null) _headerBox.CollapsedBorderSegments = null;
+            if (_footerBox is not null) _footerBox.CollapsedBorderSegments = null;
+
+            if (_grid is not { } grid || _collapsedBorders is not { } model) return;
+
+            // Accumulated across every proxy of the same source, exactly like _tableBox's own segments
+            // span every page it's on: FragmentEmitter gives a repeated group's fragment the *source*
+            // box's identity on every page (ChildrenOf yields proxy.SourceBox, not the proxy itself), so
+            // paint's box.CollapsedBorderSegments check reads _headerBox/_footerBox - one property, not
+            // one per proxy - and relies on each page's own fragment.OriginY/clip to show only the
+            // segments actually on that page (see PaintCollapsedTableBorders' IsRectVisible culling).
+            var headerSegments = _headerBox is null ? null : new List<CollapsedBorderSegment>();
+            var footerSegments = _footerBox is null ? null : new List<CollapsedBorderSegment>();
+
+            foreach (var proxy in _tableBox.Boxes.OfType<CssProxyBox>())
+            {
+                var isHeader = ReferenceEquals(proxy.SourceBox, _headerBox);
+                var isFooter = !isHeader && ReferenceEquals(proxy.SourceBox, _footerBox);
+                if (!isHeader && !isFooter) continue;
+
+                var snapshot = proxy.SourceGeometry;
+                if (snapshot is null) continue;
+
+                var sourceStart = isHeader ? 0 : grid.RowCount - FooterRowCountInGrid;
+                var sourceCount = isHeader ? HeaderRowCountInGrid : FooterRowCountInGrid;
+                if (sourceCount <= 0) continue;
+
+                var segments = isHeader ? headerSegments! : footerSegments!;
+
+                double? SnapshotLineY(int line)
+                {
+                    if (line <= sourceStart)
+                        return snapshot.TryGetGeometry(grid.RowAt(sourceStart), out var top) ? top.Location.Y : null;
+                    if (line >= sourceStart + sourceCount)
+                        return snapshot.TryGetGeometry(grid.RowAt(sourceStart + sourceCount - 1), out var bottom)
+                            ? bottom.ActualBottom : null;
+                    return snapshot.TryGetGeometry(grid.RowAt(line - 1), out var above) ? above.ActualBottom : null;
+                }
+
+                // The group's own internal lines and whichever of its two outer edges is not the
+                // boundary to the body (the other is resolved fresh, below).
+                var ownLineStart = isHeader ? sourceStart : sourceStart + 1;
+                var ownLineEnd = isHeader ? sourceStart + sourceCount - 1 : sourceStart + sourceCount;
+
+                for (var line = ownLineStart; line <= ownLineEnd; line++)
+                {
+                    if (model.HorizontalLineWidth[line] <= 0) continue;
+                    var y = SnapshotLineY(line);
+                    if (y is null) continue;
+
+                    EmitRuns(grid.ColumnCount, col => model.Horizontal(line, col), (start, end, border) =>
+                    {
+                        var x0 = GetGridLineX(grid, start);
+                        var x1 = GetGridLineX(grid, end);
+                        if (x0 is null || x1 is null) return;
+
+                        segments.Add(new CollapsedBorderSegment(true,
+                            new RRect(x0.Value, y.Value - border.Width / 2, x1.Value - x0.Value, border.Width),
+                            border.Style, border.Width, border.Color));
+                    });
+                }
+
+                for (var line = 0; line <= grid.ColumnCount; line++)
+                {
+                    if (model.VerticalLineWidth[line] <= 0) continue;
+                    var x = GetGridLineX(grid, line);
+                    if (x is null) continue;
+
+                    EmitRuns(sourceCount, i => model.Vertical(sourceStart + i, line), (start, end, border) =>
+                    {
+                        var y0 = SnapshotLineY(sourceStart + start);
+                        var y1 = SnapshotLineY(sourceStart + end);
+                        if (y0 is null || y1 is null) return;
+
+                        segments.Add(new CollapsedBorderSegment(false,
+                            new RRect(x.Value - border.Width / 2, y0.Value, border.Width, y1.Value - y0.Value),
+                            border.Style, border.Width, border.Color));
+                    });
+                }
+
+                var proxyTop = proxy.Location.Y;
+                var proxyBottom = proxy.ActualBottom;
+                var groupRow = isHeader ? sourceStart + sourceCount - 1 : sourceStart;
+                var boundaryLine = isHeader ? sourceStart + sourceCount : sourceStart;
+
+                // The row whose *span* reaches this boundary, not the first one whose own Location.Y is
+                // past it: border-collapse overlaps adjacent boxes by (up to) the resolved line width, so
+                // a row with a thick border-top can legitimately start a little before proxyBottom while
+                // still being the row the header sits directly above - filtering on Location.Y alone would
+                // skip it and wrongly land on the row after.
+                var adjacentRowIndex = isHeader
+                    ? _bodyRows.FindIndex(r => r.ActualBottom >= proxyBottom - 0.5)
+                    : _bodyRows.FindLastIndex(r => r.Location.Y <= proxyTop + 0.5);
+
+                if (adjacentRowIndex >= 0)
+                {
+                    var groupRowGroup = isHeader ? _headerBox : _footerBox;
+
+                    var resolved = CollapsedBorderModel.ResolveRepeatedGroupBoundary(
+                        grid, groupRow, groupRowGroup, HeaderRowCountInGrid + adjacentRowIndex,
+                        groupIsAbove: isHeader, IsLeftToRight());
+
+                    var boundaryY = isHeader ? proxyBottom : proxyTop;
+
+                    EmitRuns(grid.ColumnCount, col => resolved[col], (start, end, border) =>
+                    {
+                        var x0 = GetGridLineX(grid, start);
+                        var x1 = GetGridLineX(grid, end);
+                        if (x0 is null || x1 is null) return;
+
+                        segments.Add(new CollapsedBorderSegment(true,
+                            new RRect(x0.Value, boundaryY - border.Width / 2, x1.Value - x0.Value, border.Width),
+                            border.Style, border.Width, border.Color));
+                    });
+                }
+                else if (model.HorizontalLineWidth[boundaryLine] > 0)
+                {
+                    // No opposing row exists at all on either side of this line (a <thead>-only/<tfoot>-only
+                    // table, or a header immediately followed by a footer with no body rows in between) -
+                    // this boundary is then either the table's own true outer edge or a fixed header/footer
+                    // adjacency that doesn't vary per page either way, both of which the whole-table static
+                    // resolution already models correctly (Column/ColumnGroup/Table origins apply exactly
+                    // at line 0/RowCount - see CollectHorizontal), unlike the fresh per-page resolution
+                    // above, which deliberately excludes those origins because they don't apply to a
+                    // genuinely interior line.
+                    var y = SnapshotLineY(boundaryLine);
+                    if (y is not null)
+                    {
+                        EmitRuns(grid.ColumnCount, col => model.Horizontal(boundaryLine, col), (start, end, border) =>
+                        {
+                            var x0 = GetGridLineX(grid, start);
+                            var x1 = GetGridLineX(grid, end);
+                            if (x0 is null || x1 is null) return;
+
+                            segments.Add(new CollapsedBorderSegment(true,
+                                new RRect(x0.Value, y.Value - border.Width / 2, x1.Value - x0.Value, border.Width),
+                                border.Style, border.Width, border.Color));
+                        });
+                    }
+                }
+            }
+
+            if (_headerBox is not null) _headerBox.CollapsedBorderSegments = headerSegments;
+            if (_footerBox is not null) _footerBox.CollapsedBorderSegments = footerSegments;
+        }
+
+        /// <summary>
+        /// Walks <paramref name="count"/> unit segments (columns for a horizontal line, rows for a
+        /// vertical one), merging consecutive ones with an identical resolved border into one run and
+        /// reporting each run via <paramref name="emit"/> - the [start, end) index range and the shared
+        /// <see cref="CollapsedBorder"/>. A segment that doesn't paint (<see cref="CollapsedBorder.IsPainted"/>
+        /// false) ends whatever run precedes it without starting a new one.
+        /// </summary>
+        private static void EmitRuns(int count, Func<int, CollapsedBorder> resolvedAt, Action<int, int, CollapsedBorder> emit)
+        {
+            var runStart = -1;
+            var current = CollapsedBorder.None;
+
+            for (var i = 0; i <= count; i++)
+            {
+                var resolved = i < count ? resolvedAt(i) : CollapsedBorder.None;
+                var continuesRun = runStart >= 0 && resolved.IsPainted &&
+                    resolved.Style == current.Style && resolved.Width == current.Width && resolved.Color == current.Color;
+
+                if (continuesRun) continue;
+
+                if (runStart >= 0) emit(runStart, i, current);
+
+                if (i < count && resolved.IsPainted)
+                {
+                    runStart = i;
+                    current = resolved;
+                }
+                else
+                {
+                    runStart = -1;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The document-space Y of horizontal grid line <paramref name="line"/> (0..RowCount), read from
+        /// this pass's real, laid-out row geometry rather than derived arithmetically - a boundary's two
+        /// neighboring rows already agree on it exactly (that agreement is the whole point of the
+        /// border-collapse overlap), so the row above's own <c>ActualBottom</c> stands for the shared line.
+        /// </summary>
+        private static double GetGridLineY(TableGrid grid, int line)
+        {
+            if (line <= 0) return grid.RowAt(0).Location.Y;
+            if (line >= grid.RowCount) return grid.RowAt(grid.RowCount - 1).ActualBottom;
+            return grid.RowAt(line - 1).ActualBottom;
+        }
+
+        /// <summary>
+        /// The document-space X of vertical grid line <paramref name="line"/> (0..ColumnCount) - read off
+        /// the first real cell anywhere in the grid whose own edge is that line, since a ragged row can
+        /// leave some rows with no cell there at all. Null only for a column with no real cell in any row
+        /// on either side of it (a fully empty column), which has no geometry to draw a segment at.
+        /// </summary>
+        private static double? GetGridLineX(TableGrid grid, int line)
+        {
+            for (var r = 0; r < grid.RowCount; r++)
+            {
+                if (line < grid.ColumnCount && grid.CellAt(r, line) is { } right) return right.Location.X;
+                if (line > 0 && grid.CellAt(r, line - 1) is { } left) return left.ActualRight;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -625,13 +1126,49 @@ namespace PeachPDF.Html.Core.Dom
             return endRowIndex;
         }
 
+        /// <summary>How many of <see cref="_allRows"/>'s leading entries are the (filtered) header rows - the offset into it <see cref="_bodyRows"/> starts at.</summary>
+        private int HeaderRowCountInGrid => _headerBox?.Boxes.Count(r => !IsRowCollapsed(r)) ?? 0;
+
+        /// <summary>How many of <see cref="_allRows"/>'s trailing entries are the (filtered) footer rows.</summary>
+        private int FooterRowCountInGrid => _footerBox?.Boxes.Count(r => !IsRowCollapsed(r)) ?? 0;
+
         /// <summary>
-        /// Determine Row and Column Count, and ColumnWidths
+        /// Builds <see cref="_grid"/> from <see cref="_allRows"/>/<see cref="_columns"/>, wiring this
+        /// engine's own span primitives into <see cref="TableGrid.Build"/>'s injected delegates.
         /// </summary>
-        /// <returns></returns>
-        private double CalculateCountAndWidth()
+        private TableGrid BuildTableGrid()
         {
-            //Columns
+            var headerRowCount = HeaderRowCountInGrid;
+            var bodyRowCount = _bodyRows.Count;
+
+            int GetLastRow(int gridRow, CssBox cell, int rowSpan)
+            {
+                // A body row's rowspan counts against the original (pre-visibility-filter) grid -
+                // GetEffectiveEndRowIndex is the one place that mapping happens (issue #665). A
+                // header/footer row's does not (InsertEmptyBoxes never touches them either - see
+                // BuildTableGrid's own remarks), so the raw arithmetic stands for those.
+                if (gridRow >= headerRowCount && gridRow < headerRowCount + bodyRowCount)
+                {
+                    var bodyIndex = gridRow - headerRowCount;
+                    return GetEffectiveEndRowIndex(bodyIndex, rowSpan) + headerRowCount;
+                }
+
+                return gridRow + rowSpan - 1;
+            }
+
+            return TableGrid.Build(_allRows, _columns, GetCellRealColumnIndex, GetRowSpan, GetColSpan, GetLastRow);
+        }
+
+        /// <summary>The table's own <c>direction</c> (not any cell's) - CSS 2.1 §17.6.2's position tiebreak reads this, not the writing direction of whatever happens to be adjacent.</summary>
+        private bool IsLeftToRight() => _tableBox.Direction.Value == DirectionMode.Ltr;
+
+        /// <summary>
+        /// Determines <see cref="_columnCount"/> alone - split out from column-width calculation so the
+        /// column count (and so <see cref="_allRows"/>/<see cref="_columns"/>) is known before
+        /// <see cref="BuildTableGrid"/> needs it, without the width math running first.
+        /// </summary>
+        private void DetermineColumnCount()
+        {
             if (_columns.Count > 0)
             {
                 _columnCount = _columns.Count;
@@ -643,9 +1180,15 @@ namespace PeachPDF.Html.Core.Dom
                     var rowColumnCount = b.Boxes.Sum(GetColSpan);
                     _columnCount = Math.Max(_columnCount, rowColumnCount);
                 }
-
             }
+        }
 
+        /// <summary>
+        /// Determine ColumnWidths, once <see cref="_columnCount"/> is already known.
+        /// </summary>
+        /// <returns></returns>
+        private double CalculateColumnWidths()
+        {
             //Initialize column widths array with NaNs
             _columnWidths = new double[_columnCount];
             for (var i = 0; i < _columnWidths.Length; i++)
@@ -1074,7 +1617,7 @@ namespace PeachPDF.Html.Core.Dom
 
             for (var i = columnIndex; i < columnIndex + colspan - 1; i++)
             {
-                if (!IsColumnCollapsed(i)) spacing += GetHorizontalSpacing();
+                if (!IsColumnCollapsed(i)) spacing += HorizontalSpacingAt(i + 1);
             }
 
             return spacing;
@@ -1166,7 +1709,7 @@ namespace PeachPDF.Html.Core.Dom
                 return null;
 
             var proxy = new CssProxyBox(_tableBox, _headerBox, _headerIndex);
-            var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
+            var startX = Math.Max(_tableBox.ClientLeft + StartXSpacing(), 0);
             proxy.Location = new RPoint(startX, yPosition);
             return proxy;
         }
@@ -1180,7 +1723,7 @@ namespace PeachPDF.Html.Core.Dom
                 return null;
 
             var proxy = new CssProxyBox(_tableBox, _footerBox, _footerIndex);
-            var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
+            var startX = Math.Max(_tableBox.ClientLeft + StartXSpacing(), 0);
             proxy.Location = new RPoint(startX, yPosition);
             return proxy;
         }
@@ -1316,7 +1859,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g"></param>
         private async ValueTask LayoutCells(RGraphics g)
         {
-            var startX = Math.Max(_tableBox.ClientLeft + GetHorizontalSpacing(), 0);
+            var startX = Math.Max(_tableBox.ClientLeft + StartXSpacing(), 0);
 
             // Lay the top caption(s) out above the row grid before anything else claims this
             // coordinate - once, on the pass that starts the row loop from the top. A continuation
@@ -1339,17 +1882,18 @@ namespace PeachPDF.Html.Core.Dom
                 _topCaptionsHeight = topCaptionsBottom - _tableBox.Location.Y;
             }
 
-            var startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + GetVerticalSpacing(), 0);
+            var startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + StartYSpacing(), 0);
 
             var container = _tableBox.HtmlContainer;
             var pageHeight = container?.PageSize.Height ?? double.MaxValue;
 
             // Which fragmentainer the table begins in is a question about the table's own top edge, not
-            // about startY: startY is a row cursor, and GetVerticalSpacing() is -1 for a collapsed-border
-            // table, so it sits one point *above* the box for exactly the tables whose top lands flush on
-            // a page boundary. Reading it there names the page the table just left, and the pre-check
-            // below then nudges the table one point onto the next one - which is what a table relocated
-            // by CssBox's own §4.3 mover, and so placed exactly at a page top, does every time.
+            // about startY: startY is a row cursor, and VerticalSpacingAt(0) is negative (half the
+            // table's own resolved top border) for a collapsed-border table, so it sits above the box for
+            // exactly the tables whose top lands flush on a page boundary. Reading it there names the
+            // page the table just left, and the pre-check below then nudges the table onto the next one -
+            // which is what a table relocated by CssBox's own §4.3 mover, and so placed exactly at a page
+            // top, does every time.
             //
             // A continuation resumes the cursor the pass before it left; every other run starts one. The
             // two differ in what only the earlier pass knows - which row to re-enter and which of its
@@ -1519,6 +2063,11 @@ namespace PeachPDF.Html.Core.Dom
                 var headerRowsLayoutY = cursor.CurrentY;
                 var headerCursor = cursor.ForRowGroupMeasurement(headerRowsLayoutY);
 
+                // Header rows are always _allRows' own leading entries (AssignBoxKinds), so this loop's
+                // own ordinal is that row's grid row index too - line rowIndex+1 is the boundary right
+                // after it.
+                var rowIndex = 0;
+
                 foreach (var row in _headerBox.Boxes)
                 {
                     if (row.DerivedStyle.ActualDisplay != Keywords.TableRow)
@@ -1530,7 +2079,8 @@ namespace PeachPDF.Html.Core.Dom
                     headerCursor.MaxBottom = headerRowsLayoutY;
 
                     await LayoutBodyRow(g, row, startX, headerCursor);
-                    headerRowsLayoutY = headerCursor.MaxBottom + GetVerticalSpacing();
+                    headerRowsLayoutY = headerCursor.MaxBottom + VerticalSpacingAt(rowIndex + 1);
+                    rowIndex++;
 
                     // Unlike the regular body-row loop below, this never set the row's own
                     // Location/ActualRight/ActualBottom (only each cell's) - left it at a
@@ -1547,7 +2097,7 @@ namespace PeachPDF.Html.Core.Dom
                 // Set header box dimensions
                 _headerBox.Location = new RPoint(startX, cursor.CurrentY);
                 _headerBox.ActualRight = cursor.MaxRight;
-                _headerBox.ActualBottom = headerRowsLayoutY - GetVerticalSpacing();
+                _headerBox.ActualBottom = headerRowsLayoutY - VerticalSpacingAt(rowIndex);
                 _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
             }
 
@@ -1557,6 +2107,10 @@ namespace PeachPDF.Html.Core.Dom
                 // Layout footer rows directly
                 var footerRowsLayoutY = 0d;
                 var footerCursor = cursor.ForRowGroupMeasurement(footerRowsLayoutY);
+
+                // Footer rows are always _allRows' own trailing entries, after every header and body row -
+                // see the header loop above for why the ordinal doubles as the grid row index.
+                var footerRowIndex = HeaderRowCountInGrid + _bodyRows.Count;
 
                 foreach (var row in _footerBox.Boxes)
                 {
@@ -1569,7 +2123,8 @@ namespace PeachPDF.Html.Core.Dom
                     footerCursor.MaxBottom = footerRowsLayoutY;
 
                     await LayoutBodyRow(g, row, startX, footerCursor);
-                    footerRowsLayoutY = footerCursor.MaxBottom + GetVerticalSpacing();
+                    footerRowsLayoutY = footerCursor.MaxBottom + VerticalSpacingAt(footerRowIndex + 1);
+                    footerRowIndex++;
 
                     // See the identical fix in the header-rows loop above for why this is needed.
                     row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
@@ -1590,7 +2145,7 @@ namespace PeachPDF.Html.Core.Dom
                 // assignment above. See GitHub issue #124.
                 _footerBox.Location = new RPoint(startX, 0);
                 _footerBox.ActualRight = cursor.MaxRight;
-                _footerBox.ActualBottom = footerRowsLayoutY - GetVerticalSpacing();
+                _footerBox.ActualBottom = footerRowsLayoutY - VerticalSpacingAt(footerRowIndex);
                 _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
             }
 
@@ -1700,7 +2255,7 @@ namespace PeachPDF.Html.Core.Dom
 
                     _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
                     foreach (var caption in _topCaptions) caption.OffsetTop(pageBreakOffset);
-                    startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + GetVerticalSpacing(), 0);
+                    startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + StartYSpacing(), 0);
                     // startY is a fresh restart point at the table's own content-top edge on the new
                     // page, not an arbitrary interior coordinate - the same "top edge flush on a
                     // boundary" case HtmlContainerInt.SlotStartingAt exists for (see the identical fix in
@@ -1731,7 +2286,7 @@ namespace PeachPDF.Html.Core.Dom
                 var slot = cursor.SlotIndex;
                 var firstRowHeight = EstimateRowHeight(_bodyRows[0]);
                 var availableHeight = container.PageBandHeightOf(slot) - RepeatedFooterHeight;
-                var afterHeaderY = startY + _headerHeight + GetVerticalSpacing();
+                var afterHeaderY = startY + _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
 
                 if (WillCrossPageBoundary(container, afterHeaderY + firstRowHeight, availableHeight, slot))
                 {
@@ -1743,7 +2298,7 @@ namespace PeachPDF.Html.Core.Dom
                     _headerBox.OffsetTop(pageBreakOffset);
                     foreach (var caption in _topCaptions) caption.OffsetTop(pageBreakOffset);
 
-                    startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + GetVerticalSpacing(), 0);
+                    startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + StartYSpacing(), 0);
                     // startY is a fresh restart point at the table's own content-top edge on the new
                     // page, not an arbitrary interior coordinate - the same "top edge flush on a
                     // boundary" case HtmlContainerInt.SlotStartingAt exists for (see the identical fix in
@@ -1776,7 +2331,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     await headerProxy.PerformLayout(g);
 
-                    var headerRoom = _headerHeight + GetVerticalSpacing();
+                    var headerRoom = _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
                     if (_continuesAPreviousPass) resumedHeaderRoom = headerRoom;
 
                     cursor.CurrentY += headerRoom;
@@ -1908,7 +2463,7 @@ namespace PeachPDF.Html.Core.Dom
                 // correction moved fits the band it was moved to and has nothing to slice.
                 var slicedRowBottom = SliceARowAcrossTheBandsItOverflows(container, row, cursor, rowTop);
 
-                cursor.CurrentY = cursor.MaxBottom + GetVerticalSpacing();
+                cursor.CurrentY = cursor.MaxBottom + VerticalSpacingAt(HeaderRowCountInGrid + i + 1);
 
                 row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
                 row.ActualRight = row.Boxes.Max(x => x.ActualRight);
@@ -1994,7 +2549,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (finalFooterProxy != null)
                 {
                     await finalFooterProxy.PerformLayout(g);
-                    cursor.CurrentY += _footerHeight + GetVerticalSpacing();
+                    cursor.CurrentY += _footerHeight + VerticalSpacingAt(_grid?.RowCount ?? 0);
                     cursor.MaxBottom = Math.Max(cursor.MaxBottom, finalFooterProxy.ActualBottom);
                     cursor.MaxRight = Math.Max(cursor.MaxRight, finalFooterProxy.ActualRight);
                 }
@@ -2014,17 +2569,18 @@ namespace PeachPDF.Html.Core.Dom
             // perfectly valid, already-computed position. Give every row-group box a real bounding
             // rect spanning its own row children so it participates in that check correctly.
             SetRowGroupBoxDimensions(placedRows);
+            SetColumnBoxDimensions();
 
             // Step 7: Set final table dimensions
             var tableRight = Math.Max(cursor.MaxRight, _tableBox.Location.X + _tableBox.ActualWidth);
-            _tableBox.ActualRight = tableRight + GetHorizontalSpacing() + _tableBox.ActualBorderRightWidth;
+            _tableBox.ActualRight = tableRight + HorizontalSpacingAt(_columnCount) + _tableBox.ActualBorderRightWidth;
 
             // Computed ahead of ActualBottom rather than only assigned to TableContinuation below,
             // because a bottom caption's placement depends on it: the caption belongs after the
             // table's very last row, never stitched into the middle of a table still spanning
             // fragmentainers, so it may only be laid out on the pass that finishes the row loop.
             var tableContinuation = cursor.Continuation(_tableBox);
-            var contentBottom = Math.Max(cursor.MaxBottom, startY) + GetVerticalSpacing();
+            var contentBottom = Math.Max(cursor.MaxBottom, startY) + VerticalSpacingAt(_grid?.RowCount ?? 0);
 
             // CSS 2.1 §17.4: the row grid's own border-box bottom - where FinalizeGridDecorationBoxGeometry
             // sizes the grid's own paint rect to (issue #721) - sits here, before any bottom caption is
@@ -2081,6 +2637,104 @@ namespace PeachPDF.Html.Core.Dom
             // recorded no break inside itself, so it did not fragment, and a box that did not fragment
             // is moved whole or left alone. The engine states the fact (PageBreakBottoms) and the
             // epilogue takes the decision - see CssBox.PaginatedItsOwnContentWithoutBreaking.
+        }
+
+        /// <summary>
+        /// Real document-space X of vertical grid line <paramref name="line"/> (0..ColumnCount), read off
+        /// any real cell anywhere in the table whose own edge is that line - independent of
+        /// <see cref="_grid"/> (unlike <see cref="GetGridLineX"/>), so this works for a <c>separate</c>
+        /// table too, since <see cref="SetColumnBoxDimensions"/> - CSS 2.1 §17.5.1 column/column-group
+        /// background layering - is not itself a collapse-only feature. Null only when no row has a real
+        /// cell on either side of the line (every row is shorter than it, a legitimately empty column).
+        /// </summary>
+        /// <param name="line">vertical grid line index, 0..ColumnCount</param>
+        private double? GetColumnLineX(int line)
+        {
+            foreach (var row in _allRows)
+            {
+                foreach (var cell in row.Boxes)
+                {
+                    if (cell is CssSpacingBox) continue;
+
+                    var col = GetCellRealColumnIndex(row, cell);
+                    var span = GetColSpan(cell);
+
+                    if (line == col) return cell.Location.X;
+                    if (line == col + span) return cell.ActualRight;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Gives every <c>&lt;col&gt;</c>/<c>&lt;colgroup&gt;</c> box a real
+        /// <c>Location</c>/<c>ActualRight</c>/<c>ActualBottom</c> spanning its own column range's
+        /// X-extent and the full row grid's Y-extent - the exact twin of
+        /// <see cref="SetRowGroupBoxDimensions"/> for the same reason: these boxes are otherwise never
+        /// laid out at all, so <c>CssBox</c>'s paint-time visibility-culling optimization (intersecting a
+        /// still-default <c>(0,0,0,0)</c> <c>Bounds</c> against the current clip) silently drops them from
+        /// painting - which, since neither box has painted anything at all until now, has hidden the fact
+        /// that they never got real geometry in the first place. Once they have it, their own background
+        /// paints through the ordinary <c>FragmentPainter</c> path with no new mechanism (their border
+        /// paint still goes through <see cref="CssBox.CollapsedBorderSegments"/> like every other collapse
+        /// participant, gated on <c>border-collapse: collapse</c> the same way) - CSS 2.1 §17.5.1's
+        /// column-group-then-column-then-row-group-then-row-then-cell background layering falls out of
+        /// DOM tree order for free, since a <c>&lt;colgroup&gt;</c> structurally always precedes its own
+        /// <c>&lt;col&gt;</c> children and both always precede <c>&lt;tbody&gt;</c>/<c>&lt;tr&gt;</c>/
+        /// <c>&lt;td&gt;</c>. Runs for every table, not just <c>collapse</c> ones - unlike border
+        /// participation, background layering is an ordinary CSS 2.1 feature this gap affected regardless
+        /// of <c>border-collapse</c>.
+        /// </summary>
+        private void SetColumnBoxDimensions()
+        {
+            if (_columns.Count == 0 || _allRows.Count == 0) return;
+
+            var top = _allRows[0].Location.Y;
+            var bottom = _allRows[^1].ActualBottom;
+
+            var i = 0;
+            while (i < _columns.Count)
+            {
+                var box = _columns[i];
+                var j = i;
+                while (j < _columns.Count && ReferenceEquals(_columns[j], box)) j++;
+
+                var left = GetColumnLineX(i);
+                var right = GetColumnLineX(j);
+                if (left is { } l && right is { } r)
+                {
+                    box.Location = new RPoint(l, top);
+                    box.ActualRight = r;
+                    box.ActualBottom = bottom;
+                }
+
+                i = j;
+            }
+
+            // A <colgroup> with real <col> children never appears in _columns itself (only its children
+            // do) - it still needs its own geometry, spanning the union of its children's columns, so its
+            // own background paints beneath theirs.
+            foreach (var box in _tableBox.Boxes)
+            {
+                if (box.DerivedStyle.ActualDisplay != Keywords.TableColumnGroup) continue;
+
+                var childCols = box.Boxes.Where(c => c.DerivedStyle.ActualDisplay == Keywords.TableColumn).ToList();
+                if (childCols.Count == 0) continue;
+
+                var firstIndex = _columns.IndexOf(childCols[0]);
+                var lastIndex = _columns.LastIndexOf(childCols[^1]);
+                if (firstIndex < 0 || lastIndex < 0) continue;
+
+                var left = GetColumnLineX(firstIndex);
+                var right = GetColumnLineX(lastIndex + 1);
+                if (left is { } l && right is { } r)
+                {
+                    box.Location = new RPoint(l, top);
+                    box.ActualRight = r;
+                    box.ActualBottom = bottom;
+                }
+            }
         }
 
         /// <summary>
@@ -2210,7 +2864,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (headerProxy != null)
                 {
                     await headerProxy.PerformLayout(g);
-                    cursor.CurrentY += _headerHeight + GetVerticalSpacing();
+                    cursor.CurrentY += _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
                     cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
                 }
             }
@@ -2261,7 +2915,7 @@ namespace PeachPDF.Html.Core.Dom
             if (container.CurrentFragmentainer is { HasOwnBand: true }) return;
 
             var slot = cursor.BandReached(container);
-            var room = _footerHeight + GetVerticalSpacing();
+            var room = _footerHeight + VerticalSpacingAt(_grid?.RowCount ?? 0);
 
             if (!HtmlContainerInt.FallsPast(cursor.CurrentY + room, container.BandOfSlot(slot))) return;
             if (room > container.PageBandHeightOf(slot + 1)) return;
@@ -2286,7 +2940,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (headerProxy != null)
                 {
                     await headerProxy.PerformLayout(g);
-                    cursor.CurrentY += _headerHeight + GetVerticalSpacing();
+                    cursor.CurrentY += _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
                     cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
                 }
             }
@@ -2817,7 +3471,7 @@ namespace PeachPDF.Html.Core.Dom
                 // the slot is owed only when the cell's own trailing edge lands on a visible column.
                 var spacingAfterCell = IsColumnCollapsed(columnIndex + GetColSpan(cell) - 1)
                     ? 0
-                    : GetHorizontalSpacing();
+                    : HorizontalSpacingAt(columnIndex + GetColSpan(cell));
 
                 // A cell an earlier pass finished has its whole content in the fragment that pass emitted,
                 // so this one places nothing for it: not its position, not its content, not its alignment.
@@ -3597,7 +4251,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private double GetAvailableCellWidth()
         {
-            return GetAvailableTableWidth() - GetHorizontalSpacing() * (_columnCount + 1) - _tableBox.ActualBorderLeftWidth - _tableBox.ActualBorderRightWidth;
+            return GetAvailableTableWidth() - SumHorizontalSpacing() - _tableBox.ActualBorderLeftWidth - _tableBox.ActualBorderRightWidth;
         }
 
         /// <summary>
@@ -3622,7 +4276,7 @@ namespace PeachPDF.Html.Core.Dom
             // slot of its own, matching LayoutBodyRow's cursor advance not spacing past it either.
             // Without this a table with a collapsed column measured one border-spacing unit wider
             // than a table genuinely built with one fewer column.
-            f += GetHorizontalSpacing() * (_columnWidths.Length + 1 - CollapsedColumnCount());
+            f += SumHorizontalSpacingExcludingCollapsedColumns();
 
             //Take table borders
             f += _tableBox.ActualBorderLeftWidth + _tableBox.ActualBorderRightWidth;
@@ -3687,27 +4341,101 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Gets the actual horizontal spacing of the table
+        /// The gap between <c>ClientLeft</c> and the first column's own start (<c>startX</c>) - zero
+        /// under <c>collapse</c>, unlike every other use of <see cref="HorizontalSpacingAt"/> at line 0:
+        /// <c>ClientLeft</c> already reserves the table's own half of the outer edge via
+        /// <see cref="DerivedStyle.SetCollapsedUsedBorderWidths"/>, so adding
+        /// <c>HorizontalSpacingAt(0)</c> (also half that same width, negative) here would double-count
+        /// it. Every other line-0/line-ColumnCount use pairs the spacing term with a matching border-width
+        /// term that cancels it the same way (<c>_tableBox.ActualRight</c>'s
+        /// <c>tableRight + HorizontalSpacingAt(columnCount) + ActualBorderRightWidth</c>, and
+        /// <c>contentBottom</c>/<c>gridBorderBoxBottom</c>'s two-statement equivalent on the row axis) -
+        /// <c>startX</c>/<c>startY</c> are the one case with no such partner, because <c>ClientLeft</c>/
+        /// <c>ClientTop</c> already folded the border term in directly.
         /// </summary>
-        private double GetHorizontalSpacing()
+        /// <remarks>
+        /// Under <c>collapse</c> this is <c>-ActualBorderLeftWidth</c>, not 0: <c>ClientLeft</c> already
+        /// added that same <c>VW[0]/2</c> once (it is <c>Location.X + ActualBorderLeftWidth</c>, and
+        /// padding is always zero on a table), so this cancels it back to bare <c>Location.X</c>. That is
+        /// deliberate, not a second double-count - per <see cref="CollapsedBorderModel"/>'s own geometric
+        /// model, the table's border box and the first cell's own border box are <i>the same edge</i>
+        /// (<c>X_0 − VW[0]/2</c> both), not two edges VW[0]/2 apart the way a normal (non-collapsed) box's
+        /// border-then-content layering would suggest. Verified by hand against <c>GetWidthSum</c>'s own
+        /// (independently-derived, and already-correct) total: a first cell placed at
+        /// <c>ClientLeft + HorizontalSpacingAt(0)</c> instead - reusing the interior formula's shape -
+        /// measured 200.375pt against 200.000pt of column width for a 3-column, 1px-bordered fixture, an
+        /// exact one-outer-edge (VW[0]/2 = 0.375pt) residual.
+        /// </remarks>
+        private double StartXSpacing() =>
+            _tableBox.BorderCollapse == Keywords.Collapse ? -_tableBox.ActualBorderLeftWidth : _tableBox.ActualBorderSpacingHorizontal;
+
+        /// <summary>The row-axis twin of <see cref="StartXSpacing"/> - see its own remarks.</summary>
+        private double StartYSpacing() =>
+            _tableBox.BorderCollapse == Keywords.Collapse ? -_tableBox.ActualBorderTopWidth : _tableBox.ActualBorderSpacingVertical;
+
+        /// <summary>
+        /// The gap a row/column cursor advances by when it crosses vertical grid line
+        /// <paramref name="line"/> (0..ColumnCount) - negative under <c>collapse</c>, since adjacent
+        /// cells' border boxes overlap there by the resolved border width instead of being held apart by
+        /// <c>border-spacing</c>. Borders are centered on their grid line (see
+        /// <see cref="CollapsedBorderModel"/>'s own remarks), so an <b>interior</b> line's cells overlap
+        /// by the whole resolved width, while the table's own two <b>outer</b> edges (line 0 and
+        /// <see cref="_columnCount"/>) only give up half of it - the other half is the table's own used
+        /// border width, applied separately via the table's own used-border-width override.
+        /// </summary>
+        private double HorizontalSpacingAt(int line)
         {
-            return _tableBox.BorderCollapse == Keywords.Collapse ? -1f : _tableBox.ActualBorderSpacingHorizontal;
+            if (_tableBox.BorderCollapse != Keywords.Collapse) return _tableBox.ActualBorderSpacingHorizontal;
+            if (_collapsedBorders is not { } model || model.VerticalLineWidth.Length == 0) return 0;
+
+            var width = model.VerticalLineWidth[Math.Clamp(line, 0, model.VerticalLineWidth.Length - 1)];
+            return line <= 0 || line >= _columnCount ? -width / 2 : -width;
+        }
+
+        /// <summary>The gap a row cursor advances by when it crosses horizontal grid line <paramref name="line"/> (0..RowCount) - see <see cref="HorizontalSpacingAt"/>'s own remarks, which apply identically on this axis.</summary>
+        private double VerticalSpacingAt(int line)
+        {
+            if (_tableBox.BorderCollapse != Keywords.Collapse) return _tableBox.ActualBorderSpacingVertical;
+            if (_collapsedBorders is not { } model || model.HorizontalLineWidth.Length == 0) return 0;
+
+            var rowCount = _grid?.RowCount ?? 0;
+            var width = model.HorizontalLineWidth[Math.Clamp(line, 0, model.HorizontalLineWidth.Length - 1)];
+            return line <= 0 || line >= rowCount ? -width / 2 : -width;
         }
 
         /// <summary>
-        /// Gets the actual horizontal spacing of the table
+        /// Sums <see cref="HorizontalSpacingAt"/> over every vertical grid line - what
+        /// <see cref="GetAvailableCellWidth"/>'s own pre-existing flat-spacing formula summed without
+        /// ever excluding a collapsed column's own boundary (only <see cref="GetWidthSum"/> did that);
+        /// preserved here rather than reconciling the two, since fixing that asymmetry is unrelated to
+        /// replacing the flat spacing constant with resolved widths.
         /// </summary>
-        private static double GetHorizontalSpacing(CssBox box)
+        private double SumHorizontalSpacing()
         {
-            return box.BorderCollapse == Keywords.Collapse ? -1f : box.ActualBorderSpacingHorizontal;
+            double total = 0;
+            for (var line = 0; line <= _columnCount; line++) total += HorizontalSpacingAt(line);
+            return total;
         }
 
         /// <summary>
-        /// Gets the actual vertical spacing of the table
+        /// <see cref="SumHorizontalSpacing"/>, minus one boundary per collapsed column - the per-line
+        /// translation of <see cref="GetWidthSum"/>'s own pre-existing
+        /// <c>(columnCount + 1 - CollapsedColumnCount())</c> removal: a collapsed column contributes
+        /// neither its own width (already zeroed by <see cref="CollapseColumnWidths"/>) nor a
+        /// border-spacing slot of its own, matching <see cref="LayoutBodyRow"/>'s cursor advance not
+        /// spacing past it either. The boundary immediately after each collapsed column is the one
+        /// skipped, mirroring <see cref="GetInteriorSpacing"/>'s and <c>LayoutBodyRow</c>'s own choice of
+        /// which side of a collapsed column carries no spacing.
         /// </summary>
-        private double GetVerticalSpacing()
+        private double SumHorizontalSpacingExcludingCollapsedColumns()
         {
-            return _tableBox.BorderCollapse == Keywords.Collapse ? -1f : _tableBox.ActualBorderSpacingVertical;
+            double total = 0;
+            for (var line = 0; line <= _columnCount; line++)
+            {
+                if (line > 0 && IsColumnCollapsed(line - 1)) continue;
+                total += HorizontalSpacingAt(line);
+            }
+            return total;
         }
 
         /// <summary>
@@ -3741,6 +4469,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Phase 3: Estimates the height a row will need (for page break detection)
         /// </summary>
+        /// <remarks>
+        /// A heuristic, not exact geometry - already known to undershoot a row holding block content by
+        /// roughly 2x (see the pre-check callers' own remarks), with real layout correcting the answer
+        /// afterward. Passed as a method group in one caller (<c>_bodyRows.Sum(EstimateRowHeight)</c>), so
+        /// this deliberately does not take a grid-row index the way the real (non-estimated) row-advance
+        /// call sites do; <see cref="VerticalSpacingAt"/> at an arbitrary interior line (1) stands in for
+        /// "whatever this row's own boundary resolves to", which is exact for the overwhelmingly common
+        /// case of uniform border widths across a table and only approximate otherwise - acceptable for an
+        /// estimate real layout supersedes.
+        /// </remarks>
         private double EstimateRowHeight(CssBox row)
         {
             double maxHeight = 0;
@@ -3756,7 +4494,7 @@ namespace PeachPDF.Html.Core.Dom
                 maxHeight = Math.Max(maxHeight, estimatedHeight);
             }
 
-            return maxHeight + GetVerticalSpacing();
+            return maxHeight + VerticalSpacingAt(1);
         }
 
         /// <summary>

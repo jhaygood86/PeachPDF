@@ -900,14 +900,15 @@ Assert.NotNull(tbody);
         #region Border-collapse Tests
 
         [Theory]
-        [InlineData("collapse", -1)]
+        [InlineData("collapse", -2)]
         [InlineData("separate", 8)]
         public async Task TableLayout_BorderCollapse_ControlsGapBetweenAdjacentCells(string borderCollapse, double expectedGap)
         {
-            // CssLayoutEngineTable.GetHorizontalSpacing() returns -1pt (cells overlap by 1pt, merging
-            // their shared border) under "collapse", or the real border-spacing under "separate" - this
-            // asserts the actual per-cell X gap that value produces, not just that BorderCollapse is
-            // stored on the box.
+            // Under "collapse", CSS 2.1 §17.6.2 resolves the shared edge's border once (both cells
+            // declare an identical 2pt solid black border there, so the resolved width is 2pt) and
+            // adjacent cells overlap by exactly that resolved width, not a flat 1pt - this asserts the
+            // actual per-cell X gap that produces, not just that BorderCollapse is stored on the box.
+            // Under "separate", the real border-spacing applies instead.
             var html = $@"
 <!DOCTYPE html>
 <html>

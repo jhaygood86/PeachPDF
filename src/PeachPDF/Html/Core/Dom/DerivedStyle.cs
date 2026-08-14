@@ -111,10 +111,70 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
-        internal void InvalidateBorderTopWidth() => _actualBorderTopWidth = double.NaN;
-        internal void InvalidateBorderRightWidth() => _actualBorderRightWidth = double.NaN;
-        internal void InvalidateBorderBottomWidth() => _actualBorderBottomWidth = double.NaN;
-        internal void InvalidateBorderLeftWidth() => _actualBorderLeftWidth = double.NaN;
+        /// <summary>
+        /// The declared border width CSS 2.1 §17.6.2 resolution itself needs as an input - deliberately
+        /// bypassing <see cref="_actualBorderTopWidth"/>'s cache, which <see cref="SetCollapsedUsedBorderWidths"/>
+        /// overwrites with the box-model *used* half-width for the rest of a collapsed table's layout
+        /// pass. <see cref="CollapsedBorderModel.Resolve"/> itself runs before that override is applied
+        /// (safe to read <see cref="ActualBorderTopWidth"/> directly), but
+        /// <see cref="CollapsedBorderModel.ResolveRepeatedGroupBoundary"/> runs at the very end of the
+        /// pass, once a repeated group's final per-page geometry exists - by then the override is
+        /// already active, and reading the cached property there would resolve against half of an
+        /// earlier, unrelated resolution instead of this cell's real declared border.
+        /// </summary>
+        internal double NaturalBorderTopWidth =>
+            Style.Border.BorderTopStyle.Value == LineStyle.None
+                ? 0d : CssValueParser.GetActualBorderWidth(Style.Border.BorderTopWidth, Owner);
+
+        internal double NaturalBorderRightWidth =>
+            Style.Border.BorderRightStyle.Value == LineStyle.None
+                ? 0d : CssValueParser.GetActualBorderWidth(Style.Border.BorderRightWidth, Owner);
+
+        internal double NaturalBorderBottomWidth =>
+            Style.Border.BorderBottomStyle.Value == LineStyle.None
+                ? 0d : CssValueParser.GetActualBorderWidth(Style.Border.BorderBottomWidth, Owner);
+
+        internal double NaturalBorderLeftWidth =>
+            Style.Border.BorderLeftStyle.Value == LineStyle.None
+                ? 0d : CssValueParser.GetActualBorderWidth(Style.Border.BorderLeftWidth, Owner);
+
+        internal void InvalidateBorderTopWidth() { if (!_hasCollapsedUsedBorderWidths) _actualBorderTopWidth = double.NaN; }
+        internal void InvalidateBorderRightWidth() { if (!_hasCollapsedUsedBorderWidths) _actualBorderRightWidth = double.NaN; }
+        internal void InvalidateBorderBottomWidth() { if (!_hasCollapsedUsedBorderWidths) _actualBorderBottomWidth = double.NaN; }
+        internal void InvalidateBorderLeftWidth() { if (!_hasCollapsedUsedBorderWidths) _actualBorderLeftWidth = double.NaN; }
+
+        private bool _hasCollapsedUsedBorderWidths;
+
+        /// <summary>
+        /// States this box's <i>used</i> border widths under CSS 2.1 §17.6.2's collapsing model - half the
+        /// resolved grid-line width on each edge, rather than the box's own computed <c>border-*-width</c>
+        /// (which <see cref="CollapsedBorderModel"/> still needs to read as a resolver *input*, so this
+        /// overrides the derived <c>Actual*Width</c> family only, never the declared style itself). Every
+        /// existing reader of <c>ActualBorderTopWidth</c>/etc - <c>ClientLeft</c>/<c>ClientTop</c>, content
+        /// insets, <c>GetAvailableCellWidth</c>, <c>GetWidthSum</c> - then sees the used value with no
+        /// call-site change. Set once per table per layout pass by <c>CssLayoutEngineTable</c>, before any
+        /// cell is measured or laid out; <see cref="InvalidateBorderTopWidth"/> and its three siblings
+        /// become no-ops while this is active, so an incidental style re-application mid-pass cannot wipe
+        /// a stated value back to "recompute from the declared border".
+        /// </summary>
+        internal void SetCollapsedUsedBorderWidths(double top, double right, double bottom, double left)
+        {
+            _actualBorderTopWidth = top;
+            _actualBorderRightWidth = right;
+            _actualBorderBottomWidth = bottom;
+            _actualBorderLeftWidth = left;
+            _hasCollapsedUsedBorderWidths = true;
+        }
+
+        /// <summary>Undoes <see cref="SetCollapsedUsedBorderWidths"/> - called on every box that no longer participates in a collapsed table (or never did), so its border widths resolve normally again.</summary>
+        internal void ClearCollapsedUsedBorderWidths()
+        {
+            _hasCollapsedUsedBorderWidths = false;
+            _actualBorderTopWidth = double.NaN;
+            _actualBorderRightWidth = double.NaN;
+            _actualBorderBottomWidth = double.NaN;
+            _actualBorderLeftWidth = double.NaN;
+        }
 
         #endregion
 

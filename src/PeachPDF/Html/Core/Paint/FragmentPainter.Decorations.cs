@@ -590,6 +590,24 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
+        /// Draws a <c>border-collapse: collapse</c> table's resolved borders - see
+        /// <see cref="CssBox.CollapsedBorderSegments"/> and the call site's own remarks for why this runs
+        /// where it does.
+        /// </summary>
+        private static void PaintCollapsedTableBorders(RGraphics g, CssBox box, double originY, RRect clip)
+        {
+            // Segments are recorded in document space, same as ColumnRuleSegments - see PaintColumnRules.
+            foreach (var segment in box.CollapsedBorderSegments!)
+            {
+                var visualRect = new RRect(segment.Rect.X, segment.Rect.Y - originY, segment.Rect.Width, segment.Rect.Height);
+
+                if (!IsRectVisible(visualRect, clip)) continue;
+
+                BordersDrawHandler.DrawCollapsedSegment(g, segment.IsHorizontal, visualRect, segment.Style, segment.Color, segment.Width);
+            }
+        }
+
+        /// <summary>
         /// Draws a box's resolved <c>content: url(...)</c> image, once per decoration rectangle.
         /// </summary>
         private static void PaintContentImage(RGraphics g, CssBox box, BoxFragment fragment)
