@@ -116,7 +116,7 @@ namespace PeachPDF.Tests.Integration
                     "<div style='height:120pt'></div>" +
                     "<p id='p' style='margin:0;line-height:12pt;font-size:10pt'>" +
                     "short words before " +
-                    "<img src='data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==' " +
+                    $"<img src='{RasterPngFixture.OnePixelDataUri}' " +
                     "style='width:10pt;height:60pt'> after</p>"),
                 pageHeight: PageHeight, margin: Margin);
 
@@ -145,8 +145,7 @@ namespace PeachPDF.Tests.Integration
             // content (§2): it overflows its band rather than being moved forever.
             var (root, _) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(
-                    "<p id='p' style='margin:0'>before<img src='data:image/gif;base64," +
-                    "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==' " +
+                    $"<p id='p' style='margin:0'>before<img src='{RasterPngFixture.OnePixelDataUri}' " +
                     "style='width:10pt;height:400pt'></p>"),
                 pageHeight: PageHeight, margin: Margin);
 

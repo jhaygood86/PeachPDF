@@ -1,7 +1,7 @@
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
-using StbImageWriteSharp;
+using PeachPDF.Tests.TestSupport;
 
 using PeachPDF.Fonts;
 
@@ -22,17 +22,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
                 if (File.Exists(f)) File.Delete(f);
         }
 
-        static byte[] MakePngBytes(int width = 8, int height = 8)
-        {
-            var pixels = new byte[width * height * 4];
-            for (int i = 0; i < pixels.Length; i += 4)
-            {
-                pixels[i] = 255; pixels[i + 1] = 0; pixels[i + 2] = 0; pixels[i + 3] = 255;
-            }
-            using var ms = new MemoryStream();
-            new ImageWriter().WritePng(pixels, width, height, ColorComponents.RedGreenBlueAlpha, ms);
-            return ms.ToArray();
-        }
+        static byte[] MakePngBytes(int width = 8, int height = 8) =>
+            RasterPngFixture.MakeSolidRgbaPngBytes(width, height, 255, 0, 0);
 
         string WriteTempPngFile()
         {

@@ -264,8 +264,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = LayoutHarness.Wrap(
                 "<div style='height:140pt'>filler</div>" +
-                "<p id='p' style='margin:0;orphans:1;widows:1'><img src='data:image/gif;base64," +
-                "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==' " +
+                $"<p id='p' style='margin:0;orphans:1;widows:1'><img src='{RasterPngFixture.OnePixelDataUri}' " +
                 "style='width:20pt;height:60pt'></p>");
 
             var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
@@ -282,7 +281,7 @@ namespace PeachPDF.Tests.Integration
 
         [Theory]
         [InlineData("<div id='t' style='overflow:hidden'>text</div>", true)]
-        [InlineData("<img id='t' src='data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==' style='width:10pt;height:10pt'>", true)]
+        [InlineData("<img id='t' src='" + RasterPngFixture.OnePixelDataUri + "' style='width:10pt;height:10pt'>", true)]
         [InlineData("<div id='t'>text</div>", false)]
         [InlineData("<div id='t' style='display:flex'><span>text</span></div>", false)]
         public async Task Fragment_CarriesWhetherItsBoxIsMonolithic(string markup, bool expected)

@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
         // ── replaced elements ─────────────────────────────────────────────────
 
         [Theory]
-        [InlineData("<img id='t' src='data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==' style='width:10pt;height:10pt'>")]
+        [InlineData("<img id='t' src='" + RasterPngFixture.OnePixelDataUri + "' style='width:10pt;height:10pt'>")]
         [InlineData("<svg id='t' width='10' height='10'><rect width='10' height='10'/></svg>")]
         [InlineData("<iframe id='t' style='width:10pt;height:10pt'></iframe>")]
         public async Task ReplacedElement_IsMonolithic(string markup)

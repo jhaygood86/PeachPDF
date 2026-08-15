@@ -1,3 +1,4 @@
+#if !NET10_0_OR_GREATER
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachPDF.PdfSharpCore.Utils;
 using StbImageWriteSharp;
@@ -208,3 +209,4 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         }
     }
 }
+#endif

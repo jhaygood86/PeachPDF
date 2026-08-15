@@ -1,3 +1,4 @@
+#if !NET10_0_OR_GREATER
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using StbImageSharp;
 using System;
@@ -33,11 +34,6 @@ namespace PeachPDF.PdfSharpCore.Utils
             return new StbImageSourceImpl(name, image, quality ?? 75, IsPng(bytes));
         }
 
-        // PNG magic bytes: 89 50 4E 47
-        private static bool IsPng(byte[] bytes) =>
-            bytes.Length >= 4 &&
-            bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47;
-
         private sealed class StbImageSourceImpl : IImageSource
         {
             private readonly ImageResult _image;
@@ -71,3 +67,4 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
     }
 }
+#endif
