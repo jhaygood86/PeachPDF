@@ -35,6 +35,8 @@ using PeachPDF.Html.Core.Fragments;
 // same name within this file - alias it so the enum stays referenceable (same trick ComputedStyleAreas
 // uses for WritingMode).
 using ContainerTypeEnum = PeachPDF.CSS.ContainerType;
+// Same shadowing as ContainerTypeEnum above, for the WritingMode property/enum pair.
+using WritingModeEnum = PeachPDF.CSS.WritingMode;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -2833,6 +2835,15 @@ namespace PeachPDF.Html.Core.Dom
                     // box's epilogue - which judges a complete table - waits for the pass that completes it.
                     if (PendingBreakToken is not null) return;
                 }
+                else if (WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr && DomUtils.ContainsInlinesOnly(this))
+                {
+                    // A vertical-writing-mode box holding only inline content gets real vertical line
+                    // flow instead of ordinary horizontal FlowBox - see
+                    // MonolithicContent.IsUnresumableOrthogonalFlow for why this box is treated as
+                    // indivisible by its parent's own fragmentation rather than threading a resume record
+                    // through here the way CreateLineBoxes below does.
+                    await CssLayoutEngine.CreateVerticalLineBoxes(g, this);
+                }
                 else
                 {
                     //If there's just inline boxes, create LineBoxes
@@ -2928,7 +2939,7 @@ namespace PeachPDF.Html.Core.Dom
             !IsOutOfFlow
             && PlacesItselfAsBlockBox
             && HtmlContainer is { IsFragmenting: true }
-            && MonolithicContent.IsMonolithic(this);
+            && MonolithicContent.IsMonolithicForFragmentation(this);
 
         /// <summary>
         /// Whether this box paginates its own content but recorded no break inside itself on this pass,

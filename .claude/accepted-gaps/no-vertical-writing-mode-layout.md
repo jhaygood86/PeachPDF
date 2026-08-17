@@ -1,34 +1,66 @@
-# `writing-mode` doesn't affect real layout (line flow, glyph rotation, table/flex axis)
+# `writing-mode` real layout is partial: inline content only, no block children, table/flex/columns unaffected
 
 Tracking issue: [#547](https://github.com/jhaygood86/PeachPDF/issues/547).
 
 CSS Writing Modes Level 4 defines `writing-mode: vertical-rl` / `vertical-lr` / `sideways-rl` /
 `sideways-lr` as rotating which axis is inline and which is block for a box's whole layout: line boxes
-stack along a vertical block axis, glyphs orient per
+stack along the block axis, glyphs orient per
 [§text-orientation](https://www.w3.org/TR/css-writing-modes-4/#text-orientation), and both
 [flex](https://www.w3.org/TR/css-flexbox-1/#writing-mode) and
 [table](https://www.w3.org/TR/css-tables-3/) layout reinterpret their main/cross axes accordingly.
 
-`writing-mode` parses, cascades, and inherits correctly (`WritingModeProperty`), and correctly drives CSS
-Logical Properties resolution (`LogicalPropertyResolver`, `CssBox.ResolveLogicalProperties`) — a
-`margin-block-start` under `writing-mode: vertical-rl` resolves to the physical right edge, matching the
-spec's abstract-to-physical mapping table exactly. `text-orientation` (`TextOrientationProperty`) parses,
-cascades, and inherits the same way. But no layout or paint code branches on a box's resolved
-`WritingMode`/`TextOrientation` value: line-box flow (`CssLayoutEngine`), table row/column layout
-(`CssLayoutEngineTable`), flex main/cross axis selection (`CssLayoutEngineFlex`), and glyph rendering all
-stay unconditionally `horizontal-tb`-oriented regardless of the value.
+## What now works
 
-A `WritingModeFrame` geometry utility (`src/PeachPDF/Html/Core/Utils/WritingModeFrame.cs`) and real
-OpenType `vhea`/`vmtx`/`VORG` vertical-metrics table parsing (`src/PeachPDF/Fonts/OpenType/`) exist as
-foundational plumbing for closing this gap, but neither is wired into any layout or paint code yet.
+`writing-mode`/`text-orientation` parse, cascade, and inherit correctly, and `writing-mode` correctly
+drives CSS Logical Properties resolution (unchanged from before). Beyond that, a block box whose
+`writing-mode` is `vertical-rl`/`vertical-lr` and whose content is inline-only (plain text and simple
+nested inline elements — `DomUtils.ContainsInlinesOnly`, no block-level children) now gets real vertical
+line flow: `CssBox.LayoutContents` dispatches such a box to
+`CssLayoutEngine.CreateVerticalLineBoxes` instead of the ordinary horizontal `CreateLineBoxes`/`FlowBox`.
+Lines ("columns") stack along the block axis (right-to-left for `vertical-rl`, left-to-right for
+`vertical-lr`, via `WritingModeFrame`'s logical-to-physical conversion), text runs top-to-bottom within
+each column, auto height shrinks to the content's own inline-axis extent, and glyphs paint rotated 90°
+(`FragmentPainter.Text.cs`'s `SidewaysRotation`, reusing the `RGraphics.PushTransform`/`RMatrix` mechanism
+already proven by `SvgRenderer.PaintGlyphs`). Such a box is treated as monolithic with respect to its
+parent's own page fragmentation (`MonolithicContent.IsUnresumableOrthogonalFlow`) — it lays out its whole
+subtree in one pass and is moved (not sliced) if it doesn't fit the current page, the same way a replaced
+element is.
 
-A document with `writing-mode: vertical-rl` therefore gets a spec-correct computed value and spec-correct
-logical-property resolution, but its content still lays out in ordinary horizontal lines — no vertical
-line-box stacking, no glyph rotation/uprightness, no flipped table/flex axis interpretation.
+## What's still out of scope
 
-**Deliberately out of scope.** This was an explicit, scoped-down decision made when `writing-mode` support
-was added: implement cascade + logical-property correctness only, not real vertical text layout — the
-latter is a large, separate layout-engine project touching `CssLayoutEngine`, `CssLayoutEngineTable`,
-`CssLayoutEngineFlex`, fragmentation, and the paint layer, not a CSS-OM/cascade fix.
+- **Block children inside a vertical box.** `CreateVerticalLineBoxes` only runs for inline-only content;
+  a vertical-writing-mode box containing a nested block element (or itself containing another vertical- or
+  horizontal-writing-mode block child — orthogonal flow) still lays out as ordinary `horizontal-tb`.
+- **Auto width is not content-driven.** An auto-width vertical box's width still comes from the ordinary
+  (writing-mode-unaware) `GetBoxWidth` fill-available default, not from shrinking to the number of columns
+  the content actually needs.
+- **Floats, absolute positioning, hyphenation, bidi reordering, `text-align`, and
+  `box-decoration-break: clone`** are not honored inside a vertical box's own content.
+- **A nested inline element's own border/padding/margin does not reserve inline-axis (physical left/right,
+  for `vertical-rl`/`vertical-lr`) space**, and its block-axis (physical top/bottom) padding/border is
+  applied once per column it spans rather than once total — `CreateVerticalLineBoxes` never sets
+  `CssBox.FirstHostingLineBox`/`LastHostingLineBox`, the bookkeeping `CssLineBox.UpdateRectangle` needs to
+  gate leading/trailing inset correctly, so a bordered/padded `<span>` inside vertical text paints with the
+  wrong decoration box.
+- **An explicit `writing-mode` override on a non-atomic nested inline element** (e.g. a `<span>`, not an
+  `inline-block`/`inline-table`) is laid out using its containing block's writing-mode (correct — a plain
+  inline never establishes its own flow) but may paint using its own, different, cascaded `WritingMode`
+  value, producing a rotation mismatch. Per CSS Writing Modes, `writing-mode` has no defined effect on a
+  non-atomic inline in the first place, so this is a narrow, spec-consistent-to-ignore edge case rather
+  than a behavior authors should rely on either way.
+- **Real per-character `text-orientation`.** Every glyph currently paints rotated 90° regardless of
+  `text-orientation`'s value (equivalent to `sideways` always) — `mixed`'s real per-character
+  upright/rotated split (Unicode's Vertical_Orientation property) is not implemented.
+- **`sideways-rl`/`sideways-lr`** still render as `horizontal-tb` throughout (`WritingModeFrame.IsVertical`
+  is true only for `vertical-rl`/`vertical-lr`).
+- **Table, Flexbox, and Multi-column** layout engines don't read `writing-mode` at all — a vertical-writing-
+  mode table/flex/multicol container still lays out its own rows/columns/items as `horizontal-tb`.
+- **A vertical box's own content never fragments across a page boundary** — being monolithic, it is moved
+  whole to the next page if it doesn't fit the current one, or displaced-per-band (never resized) if it
+  fits nowhere; it cannot yet split its own content the way ordinary horizontal flow does.
+- **True OpenType vertical metrics (`vhea`/`vmtx`/`VORG`) are parsed but not yet consulted** by layout or
+  paint — glyph advance/positioning under vertical writing modes still uses the same horizontal-advance
+  metrics as `horizontal-tb`, just reinterpreted geometrically (rotated), not real vertical typesetting
+  metrics.
 
-The reader-facing note is in `docs/html-css-support.md`'s `writing-mode` row.
+The reader-facing note is in `docs/html-css-support.md`'s `writing-mode`/`text-orientation` rows.

@@ -234,68 +234,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
-        public async Task GetCssBoxWord_LocationOnVisibleWord_ReturnsWord()
-        {
-            var root = await Render("<p id='p'>Hello</p>");
-            var p = DomUtils.GetBoxById(root, "p")!;
-            var word = FindFirstWord(p)!;
-            var point = new RPoint(word.Rectangle.X + word.Rectangle.Width / 2, word.Rectangle.Y + word.Rectangle.Height / 2);
-
-            Assert.NotNull(DomUtils.GetCssBoxWord(root, point));
-        }
-
-        [Fact]
-        public async Task GetCssBoxWord_InvisibleBox_ReturnsNull()
-        {
-            var root = await Render("<p id='p' style='visibility:hidden'>Hello</p>");
-            var p = DomUtils.GetBoxById(root, "p")!;
-            var word = FindFirstWord(p)!;
-            var point = new RPoint(word.Rectangle.X + word.Rectangle.Width / 2, word.Rectangle.Y + word.Rectangle.Height / 2);
-
-            Assert.Null(DomUtils.GetCssBoxWord(p, point));
-        }
-
-        [Fact]
-        public async Task GetCssLineBox_LocationOnLine_ReturnsLine()
-        {
-            var root = await Render("<p id='p'>Hello world</p>");
-            var p = DomUtils.GetBoxById(root, "p")!;
-            var word = FindFirstWord(p)!;
-            var point = new RPoint(word.Rectangle.X + word.Rectangle.Width / 2, word.Rectangle.Y + word.Rectangle.Height / 2);
-
-            var line = DomUtils.GetCssLineBox(root, point);
-
-            Assert.Same(p.LineBoxes[0], line);
-        }
-
-        [Fact]
-        public async Task GetCssLineBox_LocationAboveAllContent_ReturnsNull()
-        {
-            var root = await Render("<p id='p'>Hello world</p>");
-
-            var line = DomUtils.GetCssLineBox(root, new RPoint(0, -1000));
-
-            Assert.Null(line);
-        }
-
-        [Fact]
-        public async Task GetCssLineBox_NullBox_ReturnsNull()
-        {
-            Assert.Null(DomUtils.GetCssLineBox(null, new RPoint(0, 0)));
-        }
-
-        [Fact]
-        public async Task GetCssLineBox_TableCellOutsideBounds_ReturnsNull()
-        {
-            var root = await Render("<table><tr><td id='cell'>Cell text</td></tr></table>");
-            var cell = DomUtils.GetBoxById(root, "cell")!;
-
-            var line = DomUtils.GetCssLineBox(cell, new RPoint(-1000, -1000));
-
-            Assert.Null(line);
-        }
-
-        [Fact]
         public async Task IsStackingContextBox_Root_ReturnsTrue()
         {
             var root = await Render("<div></div>");

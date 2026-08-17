@@ -5179,6 +5179,63 @@ await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
     "text-indent's plain, hanging, and each-line forms (CSS Text 3), including their combination and interaction with text-align: center.",
     textIndentHtml, pdfConfig);
 
+// --- writing-mode (vertical-rl/vertical-lr) showcase ---
+// Real vertical line flow (issue #547): lines stack along the block axis (right-to-left for
+// vertical-rl, left-to-right for vertical-lr), text runs top-to-bottom within each line, and
+// glyphs paint rotated 90°. Scoped to plain inline text for this milestone - see
+// .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's still deferred (auto-width
+// content-driven sizing, block children, real per-character text-orientation, table/flex/column
+// axis awareness).
+
+const string WritingModeCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    .row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 0.5em }
+    .vbox { border: 2px solid #1a6b8a; padding: 8px; background: #eef6fb }
+    .label { font-size: 7pt; color: #444; margin-top: 4px }
+    </style>
+    """;
+
+var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><body>" +
+
+    "<h1>CSS writing-mode Test Page</h1>" +
+
+    "<h2>1 &mdash; vertical-rl: columns stack right-to-left</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 260px; height: 140px\">" +
+    "This paragraph flows in real vertical-rl columns, wrapping to a new column to the left of the previous one as each fills up." +
+    "</div><div class=\"label\">writing-mode: vertical-rl</div></div>" +
+    "</div>" +
+
+    "<h2>2 &mdash; vertical-lr: columns stack left-to-right</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-lr; width: 260px; height: 140px\">" +
+    "This paragraph flows in real vertical-lr columns, wrapping to a new column to the right of the previous one as each fills up." +
+    "</div><div class=\"label\">writing-mode: vertical-lr</div></div>" +
+    "</div>" +
+
+    "<h2>3 &mdash; forced line break starts a fresh column</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 260px; height: 120px\">" +
+    "First column.<br>Second column, even though the first had room to spare." +
+    "</div><div class=\"label\">writing-mode: vertical-rl with &lt;br&gt;</div></div>" +
+    "</div>" +
+
+    "<h2>4 &mdash; auto height shrinks to the content's own extent</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 260px\">Short auto-height line.</div>" +
+    "<div class=\"label\">height: auto</div></div>" +
+    "</div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, and glyphs painted rotated 90 degrees.",
+    writingModeHtml, pdfConfig);
+
 // --- CSS1 canvas background showcase ---
 
 var canvasBackgroundHtml = "<!DOCTYPE html><html><head><style>" +

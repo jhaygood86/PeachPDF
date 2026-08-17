@@ -422,6 +422,203 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Real <c>vertical-rl</c>/<c>vertical-lr</c> line flow for a block box holding only inline
+        /// content: lines ("columns") stack along the block axis, text within a line runs along the
+        /// inline axis, using <see cref="WritingModeFrame"/> to convert the logical placement to physical
+        /// coordinates. <see cref="FlowBox"/>'s counterpart, written fresh rather than made
+        /// writing-mode-aware in place, because a vertical box is
+        /// <see cref="MonolithicContent.IsUnresumableOrthogonalFlow">monolithic w.r.t. its parent's
+        /// fragmentation</see> and so never needs <see cref="CssLineBoxCoordinates"/>'s fragmentation-resume
+        /// machinery (word ordinals, a fragmentainer, an in-progress break) at all - this lays out the
+        /// whole box in one pass, always.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately scoped down for this milestone (see the no-vertical-writing-mode-layout accepted
+        /// gap): plain text and simple nested inline boxes only (no leading/trailing inline spacing from
+        /// their own border/padding/margin), no floats, no absolute positioning, no hyphenation, no bidi
+        /// reordering, no <c>text-align</c>, no <c>box-decoration-break: clone</c>. Glyphs are painted
+        /// rotated 90° regardless of <c>text-orientation</c> (the "everything rotates" interim
+        /// simplification - real per-character upright/rotated splitting is a later phase), so each word's
+        /// own natural (horizontal) <see cref="CssRect.Width"/>/<see cref="CssRect.Height"/> already are
+        /// its inline-size/block-size; only their arrangement, not their own measurement, needs to change
+        /// here. Width auto-sizing (fill-available, unaware of writing-mode) is unchanged; only auto
+        /// height becomes genuinely content-driven, mirroring <see cref="CreateLineBoxes"/>'s own auto-height
+        /// growth.
+        /// </remarks>
+        internal static async ValueTask CreateVerticalLineBoxes(RGraphics g, CssBox blockBox)
+        {
+            blockBox.LineBoxes.Clear();
+
+            var words = new List<CssRect>();
+            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words);
+
+            var clientTop = blockBox.ClientTop;
+            var clientLeft = blockBox.ClientLeft;
+            var clientRight = blockBox.ClientRight;
+
+            // The inline axis's own extent (physical height, for vertical-rl/vertical-lr) is what content
+            // wraps against. IsHeightCalculated is never usable here - it is only ever set true by
+            // ApplyHeight, in the epilogue, well after this runs, for an explicit height exactly as much
+            // as an auto one - so a definite height has to be resolved directly from the box's own CSS
+            // Height string instead. An auto height has nothing else to consult (height is resolved
+            // bottom-up), so it falls back to one full page's own depth - deliberately NOT "whatever
+            // remains between this box's own (document-continuous, not page-relative) ClientTop and the
+            // bottom of whichever page it currently lands on": that would make an auto-height box near the
+            // bottom of a page self-limit to a sliver of remaining space instead of the fresh page's worth
+            // the monolithic-content mover (CssBox.PerformLayoutEpilogue) would otherwise relocate it to.
+            // A position-independent fallback keeps sizing consistent regardless of where the box lands,
+            // so that mover's own "does this fit here, else move to the next page" check still gets a
+            // real chance to fire.
+            var heightIsAuto = !CssValueParser.IsValidLength(blockBox.Height);
+            var wrapLimit = heightIsAuto
+                ? Math.Max(1, blockBox.HtmlContainer?.PageSize.Height ?? 1)
+                : Math.Max(1, DefiniteContentHeight(blockBox));
+
+            var frame = WritingModeFrame.ForContentBox(
+                clientLeft, clientTop, clientRight, clientTop + wrapLimit, blockBox.WritingMode.Value, blockBox.Direction.Value);
+
+            if (words.Count == 0)
+            {
+                if (heightIsAuto) blockBox.ActualBottom = clientTop;
+                return;
+            }
+
+            var line = new CssLineBox(blockBox);
+            double inlineOffset = 0;
+            double blockOffset = 0;
+            double lineThickness = 0;
+            double maxInlineExtentUsed = 0;
+
+            void StartNewLine()
+            {
+                maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
+                blockOffset += lineThickness;
+                inlineOffset = 0;
+                lineThickness = 0;
+                line = new CssLineBox(blockBox);
+            }
+
+            foreach (var word in words)
+            {
+                if (word.IsLineBreak)
+                {
+                    StartNewLine();
+                    continue;
+                }
+
+                // Re-measured fresh, never read off word.Width/Height directly: this box's own content
+                // layout can run more than once (a flex/table/shrink-to-fit ancestor's provisional sizing
+                // pass, a monolithic relocation to a later page) and the geometry commit below overwrites
+                // word.Width/Height with the *physical* (rotated) footprint - trusting them as "natural"
+                // on a second entry would compound that rotation instead of redoing it from source.
+                var (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
+                var wordRectInline = naturalWidth; // the word's own glyph footprint, no trailing space
+                var wordAdvance = naturalWidth + word.ActualWordSpacing; // + spacing, what the next word's placement clears
+                var wordBlock = naturalHeight; // natural line-height - the line's own cross-axis thickness
+
+                if (inlineOffset > 0 && inlineOffset + wordAdvance > wrapLimit)
+                    StartNewLine();
+
+                var physical = frame.ToPhysical(new RRect(inlineOffset, blockOffset, wordRectInline, wordBlock));
+                word.Left = physical.X;
+                word.Top = physical.Y;
+                word.Width = physical.Width;
+                word.Height = physical.Height;
+                line.ReportExistanceOf(word);
+
+                inlineOffset += wordAdvance;
+                lineThickness = Math.Max(lineThickness, wordBlock);
+            }
+
+            maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
+
+            foreach (var lineBox in blockBox.LineBoxes)
+            {
+                BubbleRectangles(blockBox, lineBox);
+                lineBox.AssignRectanglesToBoxes();
+            }
+
+            if (heightIsAuto)
+            {
+                blockBox.ActualBottom = clientTop + Math.Min(maxInlineExtentUsed, wrapLimit)
+                    + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
+            }
+        }
+
+        /// <summary>
+        /// A word's natural (horizontal, pre-rotation) size, re-derived the same way
+        /// <see cref="CssBox.MeasureWordsSize"/> itself computes it - deliberately not read off
+        /// <see cref="CssRect.Width"/>/<see cref="CssRect.Height"/>, which <see cref="CreateVerticalLineBoxes"/>
+        /// overwrites with the word's *physical* (rotated) footprint once placed.
+        /// </summary>
+        private static (double Width, double Height) NaturalWordSize(RGraphics g, CssRect word)
+        {
+            // Cached once per word (see CssRect.NaturalSize's own remarks): both to avoid re-shaping the
+            // same text on every repeated layout pass, and because an image/leader word's Width/Height -
+            // read as-is below, the same as MeasureWordsSize itself does for them - are only trustworthy
+            // as "natural" the first time this runs, before this box's own placement loop below has had a
+            // chance to overwrite them with the physical (rotated) footprint.
+            if (word.NaturalSize is { } cached) return cached;
+
+            (double Width, double Height) natural;
+            if (word.IsImage || word is CssRectLeader)
+            {
+                natural = (word.Width, word.Height);
+            }
+            else
+            {
+                var styleSource = word.FirstLineStyle ?? word.OwnerBox;
+                var font = CssBox.ResolveWordFont(word, styleSource);
+                var width = word.Text != "\n" ? g.MeasureString(word.Text!, font, styleSource.ActualTextShapingFeatures).Width : 0;
+                if (word.Text != "\n" && styleSource.ActualLetterSpacing != 0)
+                    width += g.CountShapedGlyphs(word.Text!, font, styleSource.ActualTextShapingFeatures) * styleSource.ActualLetterSpacing;
+
+                natural = (width, styleSource.ActualFont.Height);
+            }
+
+            word.NaturalSize = natural;
+            return natural;
+        }
+
+        /// <summary>
+        /// A box's own definite (non-auto) CSS <c>height</c>, resolved to a real content-height number -
+        /// mirroring <see cref="GetBoxHeight"/>'s own definite-length branch (percentage-against-containing-
+        /// block resolution, then the box-sizing conversion) rather than a second, independently-derived
+        /// formula, then converted from that branch's border-box result down to the content height
+        /// <see cref="CreateVerticalLineBoxes"/>'s wrap limit actually needs.
+        /// </summary>
+        private static double DefiniteContentHeight(CssBox box)
+        {
+            var borderBoxHeight = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+
+            return borderBoxHeight - box.ActualPaddingTop - box.ActualPaddingBottom
+                - box.ActualBorderTopWidth - box.ActualBorderBottomWidth;
+        }
+
+        /// <summary>
+        /// Words are parsed into placeholder <see cref="CssRect"/>s during DOM construction, but only
+        /// measured (given a real <see cref="CssRect.Width"/>/<see cref="CssRect.Height"/>) lazily, once
+        /// per box, just before use - the same on-demand measurement <see cref="FlowBox"/> itself performs
+        /// per child as it recurses (see its own <c>await b.MeasureWordsSize(g)</c> call), since a block
+        /// box's own <see cref="CssBox.MeasureWordsSize"/> call in its prologue only measures its own
+        /// direct words, not its descendants'.
+        /// </summary>
+        private static async ValueTask MeasureAndCollectWordsInDocumentOrder(RGraphics g, CssBox box, List<CssRect> words)
+        {
+            if (box.Words.Count > 0)
+            {
+                box.RectanglesReset();
+                await box.MeasureWordsSize(g);
+                words.AddRange(box.Words);
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                await MeasureAndCollectWordsInDocumentOrder(g, child, words);
+            }
+        }
+
+        /// <summary>
         /// Aligns and bubbles the line boxes this pass produced, starting at
         /// <paramref name="firstLine"/>. Lines below that index were emitted into an earlier
         /// fragmentainer; re-running alignment over them would re-align and re-bubble geometry that has

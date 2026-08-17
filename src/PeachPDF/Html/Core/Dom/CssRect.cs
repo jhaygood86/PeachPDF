@@ -150,6 +150,18 @@ namespace PeachPDF.Html.Core.Dom
         public CssBox? FirstLineStyle { get; set; }
 
         /// <summary>
+        /// This word's natural (pre-rotation) size, cached once by
+        /// <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>'s <c>NaturalWordSize</c> helper - kept
+        /// independent of <see cref="Width"/>/<see cref="Height"/>, which that same layout overwrites with
+        /// the word's physical (rotated) footprint once placed, so a repeated layout pass (a flex/table
+        /// ancestor's provisional sizing, a monolithic relocation to a later page) reads the real natural
+        /// size back instead of re-shaping the text - or, absent this cache, instead of compounding an
+        /// already-rotated value. Null until first computed; never cleared, on the same assumption
+        /// <see cref="CssBox.MeasureWordsSize"/>'s own once-per-layout guard already makes.
+        /// </summary>
+        internal (double Width, double Height)? NaturalSize { get; set; }
+
+        /// <summary>
         /// Height of the rectangle
         /// </summary>
         public double Height

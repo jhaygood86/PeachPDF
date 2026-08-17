@@ -1564,7 +1564,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 new FragmentKey(root, null, 0), root, slot, PageRegionOf(isFixed: false, slot),
                 snapshot: null, slot.LocalOriginY);
 
-            draft.IsMonolithic = MonolithicContent.IsMonolithic(root);
+            draft.IsMonolithic = MonolithicContent.IsMonolithicForFragmentation(root);
 
             return draft;
         }
@@ -1791,7 +1791,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.Words.AddRange(words);
             draft.Children.AddRange(children);
             draft.IsFixed = isFixed;
-            draft.IsMonolithic = MonolithicContent.IsMonolithic(box);
+            draft.IsMonolithic = MonolithicContent.IsMonolithicForFragmentation(box);
             draft.UsesOwnBounds = usesOwnBounds;
             draft.ShellRect = shellRect;
             draft.ConfinedTo = displacement?.Band;

@@ -1,3 +1,4 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -60,11 +61,51 @@ namespace PeachPDF.Html.Core.Paint
                 // word (font == ActualFont), so it is a no-op there.
                 var font = CssBox.ResolveWordFont(word, styleSource);
                 var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
-                var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
                 var text = word.FirstLineText ?? word.Text!;
-                g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+
+                if (box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr)
+                {
+                    // "Everything rotates" - the interim text-orientation simplification (issue #547):
+                    // wordFragment.Rect is already the word's true physical (rotated) footprint, set by
+                    // CssLayoutEngine.CreateVerticalLineBoxes via WritingModeFrame, which swaps width/height
+                    // for a vertical box - so the glyph run's own natural (pre-rotation) size is that swap
+                    // undone.
+                    var naturalSize = new RSize(wordFragment.Rect.Height, wordFragment.Rect.Width);
+                    var rotation = SidewaysRotation(wordFragment.Rect);
+                    g.PushTransform(rotation);
+                    g.DrawString(text, font, styleSource.ActualColor, new RPoint(0, baselineAdjust), naturalSize,
+                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                    g.PopTransform();
+                }
+                else
+                {
+                    var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
+                    g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                }
             }
         }
+
+        /// <summary>
+        /// The matrix that rotates a glyph run 90° clockwise from its natural (horizontal) orientation so
+        /// it exactly fills <paramref name="physicalFootprint"/> - the proven rotate-about-a-point
+        /// mechanism <c>SvgRenderer.PaintGlyphs</c> already uses for arbitrary angles
+        /// (<c>PushTransform</c>/draw at the natural origin/<c>PopTransform</c>), specialized to the one
+        /// fixed angle and target-rect shape vertical text needs, rather than forcing the two together:
+        /// SVG rotates an arbitrary angle around a point it already has: this always rotates 90° to fill a
+        /// footprint it is handed instead, a different enough shape that sharing more than the underlying
+        /// <see cref="RGraphics.PushTransform"/> primitive would cost more than it saves.
+        /// </summary>
+        /// <remarks>
+        /// Derivation: rotating a natural top-left-origin box of size (w, h) by 90° clockwise
+        /// ((x, y) → (-y, x), the same convention CSS <c>rotate(90deg)</c> uses in a Y-down space) sends
+        /// its corners to X ∈ [-h, 0], Y ∈ [0, w] - i.e. a box of the swapped size (h, w), whose own
+        /// top-left corner is the rotated image of the natural box's bottom-left corner, (0, h) ↦ (-h, 0).
+        /// Translating that corner onto <paramref name="physicalFootprint"/>'s own top-left
+        /// (<c>X</c>, <c>Y</c>) is what <c>OffsetX</c>/<c>OffsetY</c> below do; drawing then happens at the
+        /// natural, untranslated origin, exactly as <c>SvgRenderer.PaintGlyphs</c> already does.
+        /// </remarks>
+        private static RMatrix SidewaysRotation(RRect physicalFootprint) =>
+            new(0, 1, -1, 0, physicalFootprint.X + physicalFootprint.Width, physicalFootprint.Y);
 
         /// <summary>
         /// Paints a <c>leader()</c> content-list item (css-content-3 §6) - the "Chapter One ..........
