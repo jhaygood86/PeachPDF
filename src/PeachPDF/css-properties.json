@@ -1945,6 +1945,24 @@
       }
     },
     {
+      "name": "text-orientation",
+      "comment": "Parses, cascades, and inherits correctly; only meaningful under a vertical writing-mode (see the no-vertical-writing-mode-layout accepted gap, issue #547) - no layout/paint code reads it yet.",
+      "inherited": true,
+      "initialValue": "mixed",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextOrientation",
+        "keywordMap": "Map.TextOrientations",
+        "fallback": "TextOrientation.Mixed"
+      },
+      "html": {
+        "propertyPath": "TextOrientation",
+        "csharpDataType": "CssProperty<TextOrientation>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextOrientation.ToString()"
+      }
+    },
+    {
       "name": "unicode-bidi",
       "inherited": false,
       "initialValue": "normal",

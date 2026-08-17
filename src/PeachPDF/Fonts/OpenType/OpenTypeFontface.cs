@@ -156,8 +156,9 @@ namespace PeachPDF.Fonts.OpenType
         internal GlyphSubstitutionTable gsub = null!;
         internal ColrTable colr = null!;
         internal CpalTable cpal = null!;
-        internal VerticalHeaderTable vhea = null!; // TODO
-        internal VerticalMetricsTable vmtx = null!; // TODO
+        internal VerticalHeaderTable vhea = null!; // optional - absent on purely-horizontal fonts
+        internal VerticalMetricsTable vmtx = null!; // optional - absent on purely-horizontal fonts
+        internal VerticalOriginTable vorg = null!; // optional - mainly CFF-flavored CJK fonts
         // ReSharper restore InconsistentNaming
 
         public bool CanRead
@@ -321,6 +322,20 @@ namespace PeachPDF.Fonts.OpenType
 
                 if (TableDictionary.ContainsKey(TableTagNames.Colr))
                     colr = new ColrTable(this);
+
+                // Optional vertical-writing-mode tables. Absent on purely-horizontal fonts. Unlike
+                // COLR/CPAL above (which self-position from their own DirectoryEntry.Offset), these read
+                // sequentially from the font reader's current position - like hhea/hmtx above - so each
+                // needs its own Seek first. vhea must be read before vmtx (VerticalMetricsTable.Read
+                // reads vhea.numOfLongVerMetrics).
+                if (Seek(VerticalHeaderTable.Tag) != -1)
+                    vhea = new VerticalHeaderTable(this);
+
+                if (vhea != null && Seek(VerticalMetricsTable.Tag) != -1)
+                    vmtx = new VerticalMetricsTable(this);
+
+                if (Seek(VerticalOriginTable.Tag) != -1)
+                    vorg = new VerticalOriginTable(this);
             }
             catch (Exception)
             {

@@ -289,6 +289,7 @@ namespace PeachPDF.CSS
         public static readonly string TextDecorationStyle = "text-decoration-style";
         public static readonly string TextIndent = "text-indent";
         public static readonly string TextJustify = "text-justify";
+        public static readonly string TextOrientation = "text-orientation";
         public static readonly string TextOverflow = "text-overflow";
         public static readonly string TextShadow = "text-shadow";
         public static readonly string TextTransform = "text-transform";

@@ -421,5 +421,58 @@ namespace PeachPDF.Fonts.OpenType
                 throw;
             }
         }
+
+        /// <summary>
+        /// Converts a glyph's vertical advance (the axis a <c>vertical-rl</c>/<c>vertical-lr</c> glyph
+        /// run stacks along) to font design units, using <c>vmtx</c> when the font has one. Falls back to
+        /// the OpenType-spec-sanctioned default of one em (<see cref="FontDescriptor.UnitsPerEm"/>) for
+        /// the common case - the large majority of fonts, Latin-oriented ones especially - of a font
+        /// shipping no vertical metrics at all.
+        /// </summary>
+        public int GlyphIndexToVerticalAdvance(int glyphIndex)
+        {
+            VerticalHeaderTable vhea = FontFace.vhea;
+            VerticalMetricsTable vmtx = FontFace.vmtx;
+
+            if (vhea == null || vmtx == null || vmtx.Metrics == null || vmtx.Metrics.Length == 0)
+                return FontFace.head.unitsPerEm;
+
+            int numMetrics = vhea.numOfLongVerMetrics;
+
+            // glyphIndex >= numMetrics means every remaining glyph shares the last metric's advance
+            // height - the same "monospaced tail" convention GlyphIndexToWidth's hmtx lookup uses.
+            if (glyphIndex >= numMetrics)
+                glyphIndex = numMetrics - 1;
+
+            return vmtx.Metrics[glyphIndex].advanceHeight;
+        }
+
+        /// <summary>
+        /// A glyph's vertical origin, in font design units relative to its horizontal origin. X has no
+        /// dedicated OpenType table (a conformant reader would consult <c>BASE</c>, which PeachPDF does
+        /// not parse) - half the glyph's own advance width is the common implementation fallback, used
+        /// unconditionally since <c>VORG</c> only ever overrides Y. Y comes from <c>VORG</c> when the font
+        /// has one, else <c>vhea</c>'s own vertical typographic ascender (the most on-topic value when
+        /// present), else the font's general typographic ascender, falling back further to one em when
+        /// even that is unavailable.
+        /// </summary>
+        public (int X, int Y) GlyphIndexToVerticalOrigin(int glyphIndex)
+        {
+            int originX = GlyphIndexToWidth(glyphIndex) / 2;
+
+            VerticalOriginTable vorg = FontFace.vorg;
+            if (vorg != null)
+                return (originX, vorg.VertOriginYFor(glyphIndex));
+
+            VerticalHeaderTable vhea = FontFace.vhea;
+            if (vhea != null && vhea.ascent != 0)
+                return (originX, vhea.ascent);
+
+            OS2Table os2 = FontFace.os2;
+            if (os2 != null && os2.sTypoAscender != 0)
+                return (originX, os2.sTypoAscender);
+
+            return (originX, FontFace.head.unitsPerEm);
+        }
     }
 }

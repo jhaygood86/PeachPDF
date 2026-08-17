@@ -30,56 +30,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// </summary>
     public class GsubAlternateSubstitutionSyntheticTests
     {
-        private sealed class Builder
-        {
-            private readonly List<byte> _bytes = [];
-            public int Position => _bytes.Count;
-
-            public void U16(int v)
-            {
-                _bytes.Add((byte)(v >> 8));
-                _bytes.Add((byte)v);
-            }
-
-            public void U32(uint v)
-            {
-                _bytes.Add((byte)(v >> 24));
-                _bytes.Add((byte)(v >> 16));
-                _bytes.Add((byte)(v >> 8));
-                _bytes.Add((byte)v);
-            }
-
-            public void PatchU32(int at, uint value)
-            {
-                _bytes[at] = (byte)(value >> 24);
-                _bytes[at + 1] = (byte)(value >> 16);
-                _bytes[at + 2] = (byte)(value >> 8);
-                _bytes[at + 3] = (byte)value;
-            }
-
-            public void Tag(string fourChars)
-            {
-                foreach (char c in fourChars)
-                    _bytes.Add((byte)c);
-            }
-
-            public int PlaceholderU16()
-            {
-                int at = _bytes.Count;
-                U16(0);
-                return at;
-            }
-
-            public void PatchU16(int at, int value)
-            {
-                _bytes[at] = (byte)(value >> 8);
-                _bytes[at + 1] = (byte)value;
-            }
-
-            public byte[] ToArray() => _bytes.ToArray();
-        }
-
-        private static void WriteAlternateSubtable(Builder b, ushort[] coverageGlyphs, ushort[][] alternateSets)
+        private static void WriteAlternateSubtable(SfntByteBuilder b, ushort[] coverageGlyphs, ushort[][] alternateSets)
         {
             int subtableStart = b.Position;
             b.U16(1); // substFormat
@@ -104,7 +55,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             foreach (ushort g in coverageGlyphs) b.U16(g);
         }
 
-        private static void WriteType1Format1Subtable(Builder b, ushort firstGlyph, short delta)
+        private static void WriteType1Format1Subtable(SfntByteBuilder b, ushort firstGlyph, short delta)
         {
             int subtableStart = b.Position;
             b.U16(1); // substFormat
@@ -120,7 +71,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         private static byte[] BuildSyntheticGsub()
         {
-            var b = new Builder();
+            var b = new SfntByteBuilder();
 
             // ---- Header ----
             b.U16(1); b.U16(0);

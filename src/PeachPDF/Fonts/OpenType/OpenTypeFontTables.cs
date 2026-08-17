@@ -513,29 +513,32 @@ namespace PeachPDF.Fonts.OpenType
         }
     }
 
-    // UNDONE
+    /// <summary>
+    /// This table contains information for vertical layout - the <c>vhea</c> counterpart to
+    /// <see cref="HorizontalHeaderTable"/> (<c>hhea</c>), field-for-field, but along the vertical
+    /// advance axis a <c>vertical-rl</c>/<c>vertical-lr</c> glyph run uses instead.
+    /// </summary>
     internal class VerticalHeaderTable : OpenTypeFontTable
     {
         public const string Tag = TableTagNames.VHea;
 
-        // code comes from HorizontalHeaderTable
-        public Fixed Version; // 0x00010000 for Version 1.0.
-        public FWord Ascender; // Typographic ascent. (Distance from baseline of highest Ascender) 
-        public FWord Descender; // Typographic descent. (Distance from baseline of lowest Descender) 
-        public FWord LineGap; // Typographic line gap. Negative LineGap values are treated as zero in Windows 3.1, System 6, and System 7.
-        public UFWord AdvanceWidthMax;
-        public FWord MinLeftSideBearing;
-        public FWord MinRightSideBearing;
-        public FWord xMaxExtent;
+        public Fixed version; // 0x00011000 for Version 1.1, 0x00010000 for Version 1.0.
+        public FWord ascent; // Typographic ascent (distance from the vertical center line to the right edge of the em box, for horizontal text baselines).
+        public FWord descent; // Typographic descent (distance from the vertical center line to the left edge of the em box).
+        public FWord lineGap;
+        public UFWord advanceHeightMax;
+        public FWord minTopSideBearing;
+        public FWord minBottomSideBearing;
+        public FWord yMaxExtent;
         public short caretSlopeRise;
         public short caretSlopeRun;
+        public short caretOffset;
         public short reserved1;
         public short reserved2;
         public short reserved3;
         public short reserved4;
-        public short reserved5;
         public short metricDataFormat;
-        public ushort numberOfHMetrics;
+        public ushort numOfLongVerMetrics;
 
         public VerticalHeaderTable(OpenTypeFontface fontData)
             : base(fontData, Tag)
@@ -547,23 +550,23 @@ namespace PeachPDF.Fonts.OpenType
         {
             try
             {
-                Version = _fontData.ReadFixed();
-                Ascender = _fontData.ReadFWord();
-                Descender = _fontData.ReadFWord();
-                LineGap = _fontData.ReadFWord();
-                AdvanceWidthMax = _fontData.ReadUFWord();
-                MinLeftSideBearing = _fontData.ReadFWord();
-                MinRightSideBearing = _fontData.ReadFWord();
-                xMaxExtent = _fontData.ReadFWord();
+                version = _fontData.ReadFixed();
+                ascent = _fontData.ReadFWord();
+                descent = _fontData.ReadFWord();
+                lineGap = _fontData.ReadFWord();
+                advanceHeightMax = _fontData.ReadUFWord();
+                minTopSideBearing = _fontData.ReadFWord();
+                minBottomSideBearing = _fontData.ReadFWord();
+                yMaxExtent = _fontData.ReadFWord();
                 caretSlopeRise = _fontData.ReadShort();
                 caretSlopeRun = _fontData.ReadShort();
+                caretOffset = _fontData.ReadShort();
                 reserved1 = _fontData.ReadShort();
                 reserved2 = _fontData.ReadShort();
                 reserved3 = _fontData.ReadShort();
                 reserved4 = _fontData.ReadShort();
-                reserved5 = _fontData.ReadShort();
                 metricDataFormat = _fontData.ReadShort();
-                numberOfHMetrics = _fontData.ReadUShort();
+                numOfLongVerMetrics = _fontData.ReadUShort();
             }
             catch (Exception ex)
             {
@@ -572,13 +575,13 @@ namespace PeachPDF.Fonts.OpenType
         }
     }
 
+    /// <summary>One glyph's vertical metric record: advance height plus top side bearing.</summary>
     internal class VerticalMetrics : OpenTypeFontTable
     {
         public const string Tag = "----";
 
-        // code comes from HorizontalMetrics
-        public ushort advanceWidth;
-        public short lsb;
+        public ushort advanceHeight;
+        public short topSideBearing;
 
         public VerticalMetrics(OpenTypeFontface fontData)
             : base(fontData, Tag)
@@ -590,8 +593,8 @@ namespace PeachPDF.Fonts.OpenType
         {
             try
             {
-                advanceWidth = _fontData.ReadUFWord();
-                lsb = _fontData.ReadFWord();
+                advanceHeight = _fontData.ReadUFWord();
+                topSideBearing = _fontData.ReadFWord();
             }
             catch (Exception ex)
             {
@@ -608,43 +611,40 @@ namespace PeachPDF.Fonts.OpenType
     /// </summary>
     internal class VerticalMetricsTable : OpenTypeFontTable
     {
-        // UNDONE
         public const string Tag = TableTagNames.VMtx;
 
-        // code comes from HorizontalMetricsTable
-        public HorizontalMetrics[] metrics;
-        public FWord[] leftSideBearing;
+        public VerticalMetrics[] Metrics = null!;
+        public FWord[] TopSideBearing = null!;
 
         public VerticalMetricsTable(OpenTypeFontface fontData)
             : base(fontData, Tag)
         {
             Read();
-            throw new NotImplementedException("VerticalMetricsTable");
         }
 
         public void Read()
         {
             try
             {
-                HorizontalHeaderTable hhea = _fontData.hhea;
+                VerticalHeaderTable vhea = _fontData.vhea;
                 MaximumProfileTable maxp = _fontData.maxp;
-                if (hhea != null && maxp != null)
+                if (vhea != null && maxp != null)
                 {
-                    int numMetrics = hhea.numberOfHMetrics; //->NumberOfHMetrics();
-                    int numLsbs = maxp.numGlyphs - numMetrics;
+                    int numMetrics = vhea.numOfLongVerMetrics;
+                    int numTsbs = maxp.numGlyphs - numMetrics;
 
                     Debug.Assert(numMetrics != 0);
-                    Debug.Assert(numLsbs >= 0);
+                    Debug.Assert(numTsbs >= 0);
 
-                    metrics = new HorizontalMetrics[numMetrics];
+                    Metrics = new VerticalMetrics[numMetrics];
                     for (int idx = 0; idx < numMetrics; idx++)
-                        metrics[idx] = new HorizontalMetrics(_fontData);
+                        Metrics[idx] = new VerticalMetrics(_fontData);
 
-                    if (numLsbs > 0)
+                    if (numTsbs > 0)
                     {
-                        leftSideBearing = new FWord[numLsbs];
-                        for (int idx = 0; idx < numLsbs; idx++)
-                            leftSideBearing[idx] = _fontData.ReadFWord();
+                        TopSideBearing = new FWord[numTsbs];
+                        for (int idx = 0; idx < numTsbs; idx++)
+                            TopSideBearing[idx] = _fontData.ReadFWord();
                     }
                 }
             }
@@ -652,6 +652,78 @@ namespace PeachPDF.Fonts.OpenType
             {
                 throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
             }
+        }
+    }
+
+    /// <summary>One glyph's explicit vertical origin Y override, keyed by glyph index.</summary>
+    internal readonly struct VertOriginYMetric
+    {
+        public readonly ushort glyphIndex;
+        public readonly short vertOriginY;
+
+        public VertOriginYMetric(ushort glyphIndex, short vertOriginY)
+        {
+            this.glyphIndex = glyphIndex;
+            this.vertOriginY = vertOriginY;
+        }
+    }
+
+    /// <summary>
+    /// The vertical origin table (<c>VORG</c>) gives the Y coordinate, in the glyph's own outline space,
+    /// that a vertical glyph run's per-glyph origin sits at - mainly relevant to CFF-flavored CJK fonts.
+    /// Optional: most fonts (including every purely-horizontal font) omit it entirely, in which case a
+    /// glyph's vertical origin Y falls back to <see cref="VerticalOriginTable.defaultVertOriginY"/> here,
+    /// or, absent even this table, to the OpenType-spec-sanctioned default of the font's typographic
+    /// ascender (see <see cref="OpenTypeDescriptor.GlyphIndexToVerticalOrigin"/>).
+    /// </summary>
+    internal class VerticalOriginTable : OpenTypeFontTable
+    {
+        public const string Tag = TableTagNames.VOrg;
+
+        public ushort majorVersion;
+        public ushort minorVersion;
+        public short defaultVertOriginY;
+        public VertOriginYMetric[] vertOriginYMetrics = null!;
+
+        public VerticalOriginTable(OpenTypeFontface fontData)
+            : base(fontData, Tag)
+        {
+            Read();
+        }
+
+        public void Read()
+        {
+            try
+            {
+                majorVersion = _fontData.ReadUShort();
+                minorVersion = _fontData.ReadUShort();
+                defaultVertOriginY = _fontData.ReadShort();
+                var numVertOriginYMetrics = _fontData.ReadUShort();
+
+                vertOriginYMetrics = new VertOriginYMetric[numVertOriginYMetrics];
+                for (var idx = 0; idx < numVertOriginYMetrics; idx++)
+                {
+                    var glyphIndex = _fontData.ReadUShort();
+                    var vertOriginY = _fontData.ReadShort();
+                    vertOriginYMetrics[idx] = new VertOriginYMetric(glyphIndex, vertOriginY);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+            }
+        }
+
+        /// <summary>The explicit vertical origin Y for <paramref name="glyphIndex"/>, or <see cref="defaultVertOriginY"/> when it has none.</summary>
+        public short VertOriginYFor(int glyphIndex)
+        {
+            foreach (var metric in vertOriginYMetrics)
+            {
+                if (metric.glyphIndex == glyphIndex)
+                    return metric.vertOriginY;
+            }
+
+            return defaultVertOriginY;
         }
     }
 

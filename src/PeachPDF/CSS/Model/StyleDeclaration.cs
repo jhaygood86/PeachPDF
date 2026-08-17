@@ -1585,6 +1585,12 @@ namespace PeachPDF.CSS
             set => SetPropertyValue(PropertyNames.TextJustify, value);
         }
 
+        public string TextOrientation
+        {
+            get => GetPropertyValue(PropertyNames.TextOrientation);
+            set => SetPropertyValue(PropertyNames.TextOrientation, value);
+        }
+
         public string TextOverflow
         {
             get => GetPropertyValue(PropertyNames.TextOverflow);
