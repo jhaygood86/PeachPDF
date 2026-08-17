@@ -444,7 +444,7 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 |----------|--------------|-------|
 | `display` | [display](https://developer.mozilla.org/en-US/docs/Web/CSS/display) | `block`, `inline`, `inline-block`, `none`, `flex`, `inline-flex`, `grid`, `inline-grid`, `table`, `table-row`, `table-cell`, `table-header-group`, `table-footer-group`, `table-row-group`, `table-column`, `table-column-group`, `table-caption`, `list-item` |
 | `position` | [position](https://developer.mozilla.org/en-US/docs/Web/CSS/position) | `static`, `relative`, `absolute`, `fixed` (renders ignoring page margins). `sticky` is treated as `relative` with a zero offset, since there is no scroll to ever cross a sticky threshold against — it participates in normal flow and in stacking/z-index like a positioned box, but its `top`/`right`/`bottom`/`left` values (the scroll-threshold parameters, not a static offset) never shift it. `running(<custom-ident>)` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#running-syntax)) removes the element from normal flow entirely, making it available to a page margin box via `content: element(<custom-ident>)` — see [Running elements](#running-elements-position-running--element) |
-| `float` | [float](https://developer.mozilla.org/en-US/docs/Web/CSS/float) | `left`, `right`, `none` |
+| `float` | [float](https://developer.mozilla.org/en-US/docs/Web/CSS/float) | `left`, `right`, `none`, `footnote` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#footnotes)) — removes an inline-level element from normal flow entirely and routes its content to the page's footnote area, the same "remove from flow" idea `position: running()` uses for margin boxes; see [Footnotes](#footnotes-float-footnote) |
 | `clear` | [clear](https://developer.mozilla.org/en-US/docs/Web/CSS/clear) | `left`, `right`, `both`, `none` |
 | `overflow` | [overflow](https://developer.mozilla.org/en-US/docs/Web/CSS/overflow) | Affects clipping regions; there is no interactive scrolling in PDF output |
 | `visibility` | [visibility](https://developer.mozilla.org/en-US/docs/Web/CSS/visibility) | `visible`, `hidden`, `collapse` — on a table row, row group, column, or column group, `collapse` removes it from the table's geometry entirely (the rows/columns after it shift in to fill the gap), distinct from `hidden`, which reserves the element's layout space and only omits painting it |
@@ -876,7 +876,7 @@ A nested selector is resolved against its parent (`&` takes the parent's specifi
 
 ### Pseudo-elements
 
-`::before`, `::after`, `::marker`, `::first-letter`, and `::first-line` are supported. All other pseudo-elements are parsed but have no effect — see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for which names are recognized and why that matters for the rest of their selector list.
+`::before`, `::after`, `::marker`, `::first-letter`, `::first-line`, and (css-gcpm-3's) `::footnote-call`/`::footnote-marker` are supported. All other pseudo-elements are parsed but have no effect — see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for which names are recognized and why that matters for the rest of their selector list.
 
 | Pseudo-element | Notes |
 |----------------|-------|
@@ -885,6 +885,8 @@ A nested selector is resolved against its parent (`&` takes the parent's specifi
 | `::marker` | Full support for every property the spec allows on markers — see below |
 | `::first-letter` | Full support — see below |
 | `::first-line` | Full support for every property CSS2.1 allows — see below |
+| `::footnote-call` | The in-flow numbered footnote reference; see [Footnotes](#footnotes-float-footnote) |
+| `::footnote-marker` | The leading number inside a footnote's own body; see [Footnotes](#footnotes-float-footnote) |
 | All others | Parsed but ignored |
 
 Both the single-colon legacy syntax (`:before`, `:after`) and the modern double-colon syntax (`::before`, `::after`) are accepted. `::marker` has no legacy single-colon form, matching the spec.
@@ -1288,6 +1290,36 @@ The `<h1>` no longer appears at its original position in the document; instead, 
 **Limitations:**
 - `position: running()` is honored for elements in normal block flow and for flex/grid/multi-column item children. It is not currently honored on a table row or cell.
 - Content painted via `content: element()` does not currently respect its own internal stacking order (`z-index`) among its descendants — it paints in document order. This only matters for a running element that itself contains absolutely-positioned, `z-index`-stacked content, not for ordinary text/image headers and footers.
+
+### Footnotes (`float: footnote`)
+
+[css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#footnotes) footnotes: give an inline-level element `float: footnote` and PeachPDF pulls it out of normal flow, leaves a numbered in-flow reference in its place, and renders the element's own content in a note area at the bottom of the page the reference landed on. Unlike a fixed-height `@page` margin box, the note area's height is reserved dynamically, based on how many footnotes actually land on a given page.
+
+```html
+<p>PeachPDF renders footnotes<sup style="float: footnote">
+  This note's content moves to the bottom of this page automatically.
+</sup> without any manual positioning.</p>
+```
+
+- **Source element** — the element carrying `float: footnote` must be inline-level (`inline`, `inline-block`, `inline-table`, `inline-flex`, or `inline-grid`) — the common case is a `<sup>` or `<span>` reference inside running text. A block-level source is left alone (behaves as `float: none`).
+- **Numbering** — footnotes are numbered automatically, in document order, resetting to 1 at the start of each page. There is no author-facing way to change the numbering (an explicit `counter-reset`/`counter-increment: footnote`, or `content: counter(footnote)`, has no effect).
+- **The call** (`::footnote-call`) — the numbered in-flow reference left at the footnote's original position. By default it renders as a small superscript number; style it like any other pseudo-element:
+  ```css
+  ::footnote-call { color: #2563eb; }
+  ```
+- **The marker** (`::footnote-marker`) — the leading number PeachPDF prepends to the footnote's own body once it's shown in the note area (e.g. "1."). Style it the same way:
+  ```css
+  ::footnote-marker { font-weight: bold; }
+  ```
+  Both pseudo-elements support the same style properties `::marker` does (`color`, font properties, `direction`) — see [`::marker`](#pseudo-elements) above. An explicit `content` override on either replaces the automatic number (a literal string, `attr()`, or an image all work; `counter(footnote)` does not — see the numbering note above).
+- **The note area** — a thin divider rule above the stacked footnote bodies, in document order. Its own appearance (the divider, spacing) is a fixed PeachPDF default and isn't currently styled by author CSS.
+
+**Limitations:**
+- `float: inline-footnote` and column-scoped footnote areas (multi-column containers) are not supported.
+- `float: footnote` inside a table cell, flex item, or grid item is untested and not a supported combination in this version.
+- A footnote authored inside another footnote's body is inert — it renders as ordinary text rather than becoming a second footnote.
+- A footnote body taller than a whole page's content band overflows the note area rather than splitting across pages.
+- Links and bookmark-candidate headings inside a footnote body are not collected into the PDF's outline or link annotations.
 
 ### Headers and footers — complete example
 

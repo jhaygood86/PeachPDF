@@ -40,8 +40,52 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <summary>How tall <see cref="Fragmentainer"/>'s own band is, or unbounded where there is none.</summary>
         internal double NextBandHeight => Fragmentainer?.BandHeight ?? double.MaxValue;
 
-        /// <summary>How much of <see cref="Fragmentainer"/>'s band remains below <see cref="BlockOffset"/>.</summary>
-        internal double RemainingBlockSize => NextBandHeight - BlockOffset;
+        /// <summary>
+        /// How far above <see cref="Fragmentainer"/>'s own band bottom content has to stop because
+        /// something has reserved that room at this slot's foot - a repeating table <c>&lt;tfoot&gt;</c>
+        /// (<see href="https://www.w3.org/TR/css-tables-3/#repeated-headers">css-tables-3 §6.2</see>) or a
+        /// page's footnote area (<see href="https://www.w3.org/TR/css-gcpm-3/#footnotes">css-gcpm-3's
+        /// <c>float: footnote</c></see>) are the two reservations <see cref="FragmentainerContext.ReserveBandEnd"/>
+        /// exists for today. Deliberately read from the <b>live</b> pass's own context
+        /// (<see cref="HtmlContainerInt.CurrentFragmentainer"/>), not <see cref="Fragmentainer"/> itself -
+        /// <see cref="For"/>/<see cref="AtSlot"/>/<see cref="EndingAt"/> each construct a fresh
+        /// <see cref="FragmentainerContext"/> for the slot in question (see this type's own remarks on why),
+        /// so it never itself carries a reservation.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Only answered for the slot the live pass is actually filling</b> - <see cref="Fragmentainer"/>'s
+        /// own <c>SlotIndex</c> must equal the live context's, or this reads zero rather than asking
+        /// <see cref="FragmentainerContext.BandEndInsetOf"/> about a different one. A repeating
+        /// <c>&lt;tfoot&gt;</c>'s reservation is a genuine constant across every slot the table spans, so
+        /// <c>BandEndInsetOf</c>'s own "composes forward from <c>fromSlot</c>" contract is correct for it
+        /// even when asked about a slot the live pass hasn't reached yet - but a page's own footnote area
+        /// (<see cref="HtmlContainerInt.FootnoteAreaHeightsBySlot"/>) is seeded fresh, per slot, with a
+        /// genuinely different amount each time <see cref="HtmlContainerInt.LayoutDocument"/> enters a new
+        /// one; the live context only ever remembers the amount it was itself seeded with, for its own
+        /// slot. Without this guard, a §4.3 mover asking about a *different* slot via <see cref="AtNextSlot"/>/
+        /// <see cref="AtSlot"/> (e.g. "would this box fit if pushed to the next page") would read the
+        /// live page's own footnote reservation and misapply it to a page whose own footnotes may be a
+        /// different height, or none at all - measured as a `break-inside: avoid` box being told a
+        /// footnote-free next page has less room than it really does. This is a strictly narrower answer
+        /// than a `&lt;tfoot&gt;`-only reservation would need (it also declines to compose the `&lt;tfoot&gt;`
+        /// case forward the way <see cref="Dom.CssRect.WouldStraddleFragmentainer"/>'s per-word check
+        /// already correctly does), never a wrong one - see
+        /// <c>.claude/accepted-gaps/footnote-reservation-not-honored-by-every-4-3-mover.md</c>.
+        /// </para>
+        /// <para>
+        /// Zero during a measurement pass, where there is no live fragmentainer to ask at all.
+        /// </para>
+        /// </remarks>
+        internal double BandEndInset =>
+            Fragmentainer is null
+                ? 0
+                : Fragmentainer.Container.CurrentFragmentainer is { } live && live.SlotIndex == Fragmentainer.SlotIndex
+                    ? live.BandEndInsetOf(Fragmentainer.SlotIndex)
+                    : 0;
+
+        /// <summary>How much of <see cref="Fragmentainer"/>'s band remains below <see cref="BlockOffset"/>, after <see cref="BandEndInset"/>.</summary>
+        internal double RemainingBlockSize => NextBandHeight - BlockOffset - BandEndInset;
 
         /// <summary>
         /// Whether content <paramref name="blockExtent"/> tall, starting at <see cref="BlockOffset"/>,

@@ -89,6 +89,36 @@ namespace PeachPDF.Html.Core
         private readonly List<RunningElement> _runningElements = new();
 
         /// <summary>
+        /// Every css-gcpm-3 <c>float: footnote</c> call in the document, in document order - built once
+        /// by <c>DomParser.DetachFootnoteBodies</c> when the tree is parsed (unlike
+        /// <see cref="_runningElements"/>, footnote calls are a structural, parse-time fact about the
+        /// tree, not something re-registered live on every layout pass, since a footnote body's own
+        /// content never moves in the tree once detached). Cleared and rebuilt on every
+        /// <see cref="SetHtml"/>/re-parse, never mid-layout.
+        /// </summary>
+        internal List<CssBoxFootnoteCall> FootnoteCalls { get; } = [];
+
+        /// <summary>
+        /// Whether this document has any <c>float: footnote</c> call at all - gates
+        /// <see cref="PerformLayout"/>'s footnote convergence loop so a document that doesn't use the
+        /// feature pays nothing for it. A plain list-count check, not a tree walk, since
+        /// <see cref="FootnoteCalls"/> is already maintained.
+        /// </summary>
+        internal bool HasFootnotes => FootnoteCalls.Count > 0;
+
+        /// <summary>
+        /// This layout attempt's discovered footnote-area reservation, in points of layout space, per
+        /// pagination slot that has at least one footnote landing on it - the amount
+        /// <see cref="LayoutDocument"/> seeds into that slot's <see cref="Fragmentation.FragmentainerContext"/>
+        /// via <c>ReserveBandEnd</c> before laying its content out. Empty (not merely absent) for a
+        /// document that has never resolved footnotes yet, so <see cref="ResolveFootnotesForThisAttempt"/>'s
+        /// very first call - seeded from nothing, per the "layout depends on layout" convergence shape
+        /// this shares with the <c>target-counter(_, page)</c> loop in <see cref="PerformLayout"/> - reads
+        /// zero for every slot rather than throwing.
+        /// </summary>
+        internal Dictionary<int, double> FootnoteAreaHeightsBySlot { get; private set; } = [];
+
+        /// <summary>
         /// Lazily-built id -&gt; box index backing <see cref="GetBoxById(CssBox, string)"/>
         /// (<c>target-counter()</c>/<c>target-text()</c> resolution, which can look up many ids across
         /// one document - see <see cref="DomUtils.BuildIdIndex"/>). Rebuilt whenever the tree's topmost
@@ -790,6 +820,9 @@ namespace PeachPDF.Html.Core
             ClearNamedStrings();
             ClearRunningElements();
             ClearNamedPageElements();
+            FootnoteCalls.Clear();
+            FootnoteAreaHeightsBySlot = [];
+            _footnoteCallsBySlot = [];
             // New content means new @page rules: drop cached slot geometry, the vertical-override
             // scan, and the captured relative-unit context so nothing consults the previous
             // document's bands before the next layout pass (which resets again defensively).
@@ -1060,6 +1093,39 @@ namespace PeachPDF.Html.Core
                 await LayoutDocument(g);
             }
 
+            // css-gcpm-3's float: footnote needs each page's footnote-area height fed back into that same
+            // page's own available content band before the flow content there is judged to fit - the same
+            // "layout depends on layout" shape as UseVariablePageWidth's reflow loop above, solved the same
+            // way: resolve every page's footnotes against the geometry the layout above already produced
+            // (ResolveFootnotesForThisAttempt), re-run layout with the newly-discovered reservation seeded
+            // in (see LayoutDocument's own ReserveBandEnd seed), and repeat until a round's per-page totals
+            // stop changing. Runs before the target-counter(_, page)/ReapplyPseudoElementContent work below
+            // so those resolve against footnotes' own, already-settled page breaks rather than the other
+            // way around. Only entered for documents that actually use float: footnote - HasFootnotes is a
+            // plain list-count check, not a tree walk, so it costs nothing for the common case.
+            if (HasFootnotes)
+            {
+                var footnoteRootWidth = MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width);
+                const int maxFootnotePasses = 6;
+
+                for (var pass = 0; pass < maxFootnotePasses; pass++)
+                {
+                    var changed = await ResolveFootnotesForThisAttempt(g);
+
+                    // The bound below is a last resort, not the ordinary exit - resolving must always be
+                    // the last thing this loop does before FootnoteAreaHeightsBySlot/_footnoteCallsBySlot
+                    // are read by AttachFootnoteAreas, or they describe a Root tree an earlier LayoutDocument
+                    // call already left behind: reaching the cap with changed still true and relaying out
+                    // one further time, unresolved, is exactly what would do that.
+                    if (!changed || pass == maxFootnotePasses - 1) break;
+
+                    Root.Size = new RSize(footnoteRootWidth, 0);
+                    Root.Location = Location;
+                    ActualSize = RSize.Empty;
+                    await LayoutDocument(g);
+                }
+            }
+
             // After layout, re-apply content to pseudo-elements now that named strings are set
             ReapplyPseudoElementContent(Root);
 
@@ -1134,7 +1200,11 @@ namespace PeachPDF.Html.Core
             // css-gcpm-3's content: element() needs the final page list/count (first/start/last/first-except
             // selection is page-index-based), so it runs here, after the tree above is built, rather than
             // as part of the emitter's own per-pass work.
-            FragmentTree = await LayoutMarginBoxes(g, tree);
+            var treeWithMarginBoxes = await LayoutMarginBoxes(g, tree);
+
+            // Pure bookkeeping (the footnote convergence loop above already produced final geometry) - see
+            // AttachFootnoteAreas's own remarks for why this runs here, alongside LayoutMarginBoxes.
+            FragmentTree = AttachFootnoteAreas(treeWithMarginBoxes);
         }
 
         /// <summary>
@@ -1200,6 +1270,63 @@ namespace PeachPDF.Html.Core
                 }
 
                 updated.Add(marginBoxes is null ? fragmentainer : fragmentainer with { MarginBoxes = marginBoxes });
+            }
+
+            return tree with { Fragmentainers = updated };
+        }
+
+        /// <summary>
+        /// Attaches each page's css-gcpm-3 <c>float: footnote</c> note area to the fragment tree, from
+        /// bodies the footnote convergence loop in <see cref="PerformLayout"/> already laid out (see
+        /// <see cref="ResolveFootnotesForThisAttempt"/>) - pure fragment-tree bookkeeping, no layout of its
+        /// own, the same division of labor <see cref="LayoutMarginBoxes"/> has relative to
+        /// <see cref="RunningElementLayout.LayoutRunningElementFor"/>. Called alongside
+        /// <see cref="LayoutMarginBoxes"/> from <see cref="PerformLayout"/>, once the final page list is
+        /// known.
+        /// </summary>
+        private FragmentTree AttachFootnoteAreas(FragmentTree tree)
+        {
+            if (FootnoteAreaHeightsBySlot.Count == 0) return tree;
+
+            var updated = new List<FragmentainerFragment>(tree.Fragmentainers.Count);
+
+            foreach (var fragmentainer in tree.Fragmentainers)
+            {
+                if (!FootnoteAreaHeightsBySlot.TryGetValue(fragmentainer.SlotIndex, out var totalHeight)
+                    || !_footnoteCallsBySlot.TryGetValue(fragmentainer.SlotIndex, out var calls) || calls.Count == 0)
+                {
+                    updated.Add(fragmentainer);
+                    continue;
+                }
+
+                var contentLeft = MarginLeft;
+                var contentWidth = PageContentRightOf(PageTopOf(fragmentainer.SlotIndex)) - contentLeft;
+                // Mirrors ResolveFootnotesForThisAttempt's own areaTop/finalBodiesTop geometry exactly:
+                // the divider sits after the top padding, before the gap that precedes the first body.
+                var areaTop = PageBottomOf(fragmentainer.SlotIndex) - totalHeight;
+                var dividerTop = areaTop + FootnoteAreaTopPadding;
+
+                // Bodies were laid out (and are still positioned) in document space - the coordinate
+                // space ReserveBandEnd/PageBottomOf's own reservation math needs, since it has to agree
+                // with ordinary flow content's own document-space geometry. Painting, unlike layout, gets
+                // a fresh XGraphics per page with its own page-local origin (matching how the emitter
+                // makes every *other* fragment's rectangles fragmentainer-local - "local.Y = documentY -
+                // (PageTopOf(k) - MarginTop)", see Fragment.cs's own remarks) - MarginBoxFragment content
+                // never hits this because MarginBoxRenderer.GetMarginBoxRect computes a page-local rect
+                // directly, with no document-space coordinate ever entering the picture. Translate once,
+                // here, right before building the paint-facing fragments - this runs exactly once (unlike
+                // ResolveFootnotesForThisAttempt, which the convergence loop can call several times), so a
+                // permanent OffsetTop on each detached body is safe.
+                var localOriginY = fragmentainer.LocalOriginY;
+                foreach (var call in calls)
+                {
+                    call.Body.OffsetTop(-localOriginY);
+                }
+
+                var dividerRect = new RRect(contentLeft, dividerTop - localOriginY, contentWidth, FootnoteDividerThickness);
+                var bodies = calls.Select(call => MarginBoxContentFragmentBuilder.Build(call.Body)).ToList();
+
+                updated.Add(fragmentainer with { FootnoteArea = new FootnoteAreaFragment(dividerRect, bodies) });
             }
 
             return tree with { Fragmentainers = updated };
@@ -1329,6 +1456,17 @@ namespace PeachPDF.Html.Core
                 {
                     var context = new FragmentainerContext(this, Root!, slot);
                     CurrentFragmentainer = context;
+
+                    // Seeded from the previous attempt's own resolution (ResolveFootnotesForThisAttempt) -
+                    // a footnote's presence on this slot is discovered only once its call's Location has
+                    // already settled, so the very first attempt always seeds zero here; the footnote
+                    // convergence loop in PerformLayout re-enters LayoutDocument with the newly-discovered
+                    // amount until it stops changing. No RestoreBandEnd: this context is fresh, discarded
+                    // when the pass ends, so there is nothing to unwind.
+                    if (FootnoteAreaHeightsBySlot.TryGetValue(slot, out var footnoteAreaHeight) && footnoteAreaHeight > 0)
+                    {
+                        context.ReserveBandEnd(slot, footnoteAreaHeight);
+                    }
 
                     // A translation, refill, or rectangle reset since the last iteration may have reopened an
                     // already-frozen slot behind this one without moving the driver back to it (see
@@ -1469,6 +1607,14 @@ namespace PeachPDF.Html.Core
 
             var relaxed = new FragmentainerContext(this, Root!, slot, suppressed: true);
             CurrentFragmentainer = relaxed;
+
+            // A fresh context starts with no reservation of its own - without this, content laid out by
+            // this last-resort fallback would be unaware of a footnote area reserved for this same slot
+            // (see LayoutDocument's own identical seed) and could overlap it.
+            if (FootnoteAreaHeightsBySlot.TryGetValue(slot, out var footnoteAreaHeight) && footnoteAreaHeight > 0)
+            {
+                relaxed.ReserveBandEnd(slot, footnoteAreaHeight);
+            }
 
             Root!.ResumeAt(token, resumeTopOverride: null);
             await Root.PerformLayout(g);
@@ -2030,6 +2176,149 @@ namespace PeachPDF.Html.Core
                 }
                 ReapplyPseudoElementContent(childBox);
             }
+        }
+
+        /// <summary>
+        /// This attempt's footnote calls grouped by the pagination slot they landed on, in document
+        /// order within each group - the same grouping <see cref="ResolveFootnotesForThisAttempt"/> uses
+        /// to lay out and stack each page's bodies, kept around so <see cref="AttachFootnoteAreas"/> can
+        /// build each page's <see cref="FootnoteAreaFragment"/> from bodies already laid out rather than
+        /// re-deriving which calls landed where.
+        /// </summary>
+        private Dictionary<int, List<CssBoxFootnoteCall>> _footnoteCallsBySlot = [];
+
+        /// <summary>Space (layout px, i.e. points) above a page's footnote-area divider rule.</summary>
+        private const double FootnoteAreaTopPadding = 4;
+
+        /// <summary>Thickness of the footnote area's top divider rule.</summary>
+        private const double FootnoteDividerThickness = 1;
+
+        /// <summary>Space between the divider rule and the first footnote body.</summary>
+        private const double FootnoteAreaDividerToBodyGap = 4;
+
+        /// <summary>Space between two stacked footnote bodies on the same page.</summary>
+        private const double FootnoteBodySpacing = 4;
+
+        /// <summary>
+        /// This layout attempt's per-page footnote resolution. For every pagination slot at least one
+        /// <see cref="CssBoxFootnoteCall"/> landed on (by its own, now-settled <c>Location.Y</c>):
+        /// numbers its footnotes in document order starting at 1 (the UA default's implicit per-page
+        /// reset - author <c>counter-reset</c>/<c>counter-increment: footnote</c> aren't supported, see
+        /// the "Footnotes" section of docs/html-css-support.md), lays each footnote's body out against
+        /// that page's own content width via <see cref="FootnoteBodyLayout.LayoutFootnoteBodyFor"/>
+        /// stacked in document order, and positions the stacked group flush with that page's content-band
+        /// bottom. Records the total reserved height per slot into <see cref="FootnoteAreaHeightsBySlot"/>
+        /// for <see cref="LayoutDocument"/> to seed into that slot's own
+        /// <see cref="Fragmentation.FragmentainerContext.ReserveBandEnd"/> on the *next* attempt - the
+        /// same "resolve once layout settles, feed the result back in, repeat" shape
+        /// <see cref="ResolveTargetPageContent"/>'s target-counter(_, page) loop already uses, and for the
+        /// same reason: a footnote's own page assignment (this method's input) depends on how much room
+        /// earlier footnotes on the same page already reserved (this method's output). Returns whether any
+        /// slot's reserved height changed since the previous call, for <see cref="PerformLayout"/>'s
+        /// footnote convergence loop to check.
+        /// </summary>
+        private async ValueTask<bool> ResolveFootnotesForThisAttempt(RGraphics g)
+        {
+            var previous = FootnoteAreaHeightsBySlot;
+            var current = new Dictionary<int, double>();
+
+            if (HasRealPageGrid)
+            {
+                var bySlot = new Dictionary<int, List<CssBoxFootnoteCall>>();
+                foreach (var call in FootnoteCalls)
+                {
+                    if (!IsInRenderedTree(call)) continue;
+
+                    // Not call.Location.Y - an in-flow inline box's own Location stays at a bogus
+                    // line-local value layout never updates; its real document position lives in its
+                    // per-line Rectangles (CssBox.OwnGeometryTop's own remarks).
+                    var slot = PageIndexOf(call.OwnGeometryTop());
+                    if (!bySlot.TryGetValue(slot, out var list))
+                        bySlot[slot] = list = [];
+                    list.Add(call);
+                }
+
+                _footnoteCallsBySlot = bySlot;
+
+                foreach (var (slot, calls) in bySlot)
+                {
+                    var contentLeft = MarginLeft;
+                    var contentWidth = PageContentRightOf(PageTopOf(slot)) - contentLeft;
+
+                    var y = 0d;
+                    var number = 1;
+                    foreach (var call in calls)
+                    {
+                        call.ApplyNumber(number);
+                        call.ParseToWords();
+
+                        var marker = (CssBoxFootnoteMarker)call.Body.Boxes[0];
+                        marker.ApplyNumber(number);
+                        marker.ParseToWords();
+                        number++;
+
+                        // Unconstrained height (a large finite sentinel, not double.MaxValue - the running-
+                        // element layout path does incidental arithmetic on this rect that a true MaxValue
+                        // could push to Infinity): a footnote body never fragments in this codebase (an
+                        // accepted gap - see docs), so its natural, single-pass content height is exactly
+                        // what's reserved, however tall that turns out to be.
+                        var bodyRect = new RRect(contentLeft, y, contentWidth, 100_000);
+                        await FootnoteBodyLayout.LayoutFootnoteBodyFor(g, call.Body, bodyRect, this);
+
+                        y += (call.Body.ActualBottom - call.Body.Location.Y) + FootnoteBodySpacing;
+                    }
+
+                    var totalHeight = y - FootnoteBodySpacing + FootnoteAreaTopPadding + FootnoteDividerThickness + FootnoteAreaDividerToBodyGap;
+                    if (totalHeight <= 0) continue;
+
+                    // The stacking loop above laid every body out relative to a y=0 baseline; translate the
+                    // whole group down so the last body's own bottom edge lands flush with this slot's real
+                    // content-band bottom, the same "measure first, then place at the real position" shape
+                    // CssLayoutEngineColumns already uses for column-fill balancing.
+                    var areaTop = PageBottomOf(slot) - totalHeight;
+                    var finalBodiesTop = areaTop + FootnoteAreaTopPadding + FootnoteDividerThickness + FootnoteAreaDividerToBodyGap;
+                    foreach (var call in calls)
+                    {
+                        call.Body.OffsetTop(finalBodiesTop);
+                    }
+
+                    current[slot] = totalHeight;
+                }
+            }
+            else
+            {
+                _footnoteCallsBySlot = [];
+            }
+
+            FootnoteAreaHeightsBySlot = current;
+
+            if (current.Count != previous.Count) return true;
+            foreach (var (slot, height) in current)
+            {
+                if (!previous.TryGetValue(slot, out var previousHeight) || Math.Abs(previousHeight - height) > 0.01)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> and every one of its ancestors are actually rendered (no
+        /// <c>display: none</c> between it and the document root, and not on the box's own computed
+        /// display either - an author <c>::footnote-call { display: none }</c> override reaches this too)
+        /// - a footnote call that never lays out at all would otherwise have its stale/default
+        /// <c>Location</c> misread as landing on whatever pagination slot that default coordinate happens
+        /// to fall in.
+        /// </summary>
+        private static bool IsInRenderedTree(CssBox box)
+        {
+            if (box.DerivedStyle.ActualDisplay == Keywords.None) return false;
+
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.DerivedStyle.ActualDisplay == Keywords.None) return false;
+            }
+
+            return true;
         }
 
         /// <summary>

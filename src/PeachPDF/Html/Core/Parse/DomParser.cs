@@ -155,6 +155,14 @@ namespace PeachPDF.Html.Core.Parse
 
             CorrectAnonymousTables(root);
 
+            // Last, deliberately: a float:footnote box must first ride through every correction pass
+            // above as an ordinary tree member - an author can put arbitrary HTML (nested inline markup,
+            // tables, its own generated content/counters) inside a footnote body, and those passes need
+            // real ancestor context to do their job. Detaching earlier risks them misbehaving against an
+            // already-detached subtree with no live parent. See DetachFootnoteBodies's own remarks.
+            htmlContainer.FootnoteCalls.Clear();
+            DetachFootnoteBodies(root, htmlContainer, cssValueParser, cssData, media, containerSizes);
+
             return (root, cssData, metadata);
         }
 
@@ -934,6 +942,103 @@ namespace PeachPDF.Html.Core.Parse
                     ApplyFirstLetterPseudoElements(valueParser, childBox, cssData, media, containerSizes);
                 }
             }
+        }
+
+        /// <summary>
+        /// Implements css-gcpm-3's <c>float: footnote</c>: every inline-level box with a computed
+        /// <c>float: footnote</c> is pulled out of the box tree entirely and replaced, at its own
+        /// position, with a synthesized <see cref="CssBoxFootnoteCall"/> - the in-flow numbered
+        /// reference. The detached box itself becomes the footnote's body, with a synthesized
+        /// <see cref="CssBoxFootnoteMarker"/> inserted as its own first child; both new boxes are
+        /// registered on <see cref="HtmlContainerInt.FootnoteCalls"/> for the per-page numbering/
+        /// reservation step layout runs later (see <c>HtmlContainerInt.ResolveFootnotesForThisAttempt</c>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Only an inline-level source qualifies</b> (<see cref="CssBox.IsInline"/>, matching
+        /// <see cref="DerivedStyle.ActualDisplay"/>'s own float:footnote blockification exclusion) - the
+        /// dominant real case is a <c>&lt;sup&gt;</c>/<c>&lt;span&gt;</c> reference inside running text.
+        /// A block-level <c>float: footnote</c> source is left entirely alone here (an accepted gap,
+        /// behaving as <c>float: none</c>) rather than being detached, since supporting it would need the
+        /// same anonymous-block-wrapper reasoning <see cref="CorrectInlineBoxesParent"/> already owns,
+        /// re-run selectively - out of scope.
+        /// </para>
+        /// <para>
+        /// <b>A qualifying box's own descendants are never recursed into</b> once it is detached (the
+        /// <c>continue</c> below) - this is also what makes a nested <c>float: footnote</c> (one footnote
+        /// body containing another) inert rather than a crash: nothing ever walks into an already-detached
+        /// body looking for more footnotes, so a nested one simply renders as ordinary content in place
+        /// (never floated - <see cref="CssBox.IsFloated"/> only recognizes <c>left</c>/<c>right</c> - and
+        /// never blockified, per <see cref="DerivedStyle.ActualDisplay"/>'s own exclusion).
+        /// </para>
+        /// </remarks>
+        private static void DetachFootnoteBodies(CssBox box, HtmlContainerInt htmlContainer, CssValueParser valueParser, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
+        {
+            foreach (var child in box.Boxes.ToArray())
+            {
+                if (child.Float.Value == Floating.Footnote && child.IsInline)
+                {
+                    DetachOneFootnoteBody(box, child, htmlContainer, valueParser, cssData, media, containerSizes);
+                    continue;
+                }
+
+                DetachFootnoteBodies(child, htmlContainer, valueParser, cssData, media, containerSizes);
+            }
+        }
+
+        private static void DetachOneFootnoteBody(CssBox container, CssBox sourceBox, HtmlContainerInt htmlContainer, CssValueParser valueParser, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
+        {
+            var index = container.Boxes.IndexOf(sourceBox);
+
+            // CssBox's constructor auto-appends a non-null parent's Boxes list - remove-then-reinsert at
+            // the source's own index, the same pattern CssData's ::before/::after/::marker synthesis and
+            // EnsureListItemMarkers above both already use.
+            var callBox = new CssBoxFootnoteCall(container, sourceBox);
+            container.Boxes.Remove(callBox);
+            container.Boxes.Insert(index, callBox);
+
+            // Fully detach the body - it is never reachable via ordinary CssBox.Boxes walks again, the
+            // same carve-out FragmentEmitter already documents for a repeating table <thead>/<tfoot>'s
+            // CssProxyBox source subtree.
+            sourceBox.ParentBox = null;
+
+            // The source is very often inline-level (the dominant real case, a <sup>/<span> reference -
+            // see the IsInline gate above), but per css-gcpm-3 a footnote's own body always renders as a
+            // block-level note in the footnote area, regardless of its source's display. This isn't just
+            // presentational: an inline box's real per-fragment position lives in its Rectangles map, only
+            // ever populated by an *enclosing* inline formatting context's own line-building - which the
+            // detached, single-child synthetic container FootnoteBodyLayout lays this out against never
+            // establishes for it. Location/ActualBottom (what block layout - and everything downstream,
+            // MarginBoxContentFragmentBuilder included - actually reads) would stay at their unset default
+            // forever otherwise. Forcing Block here is safe: the source has already been fully detached
+            // and never renders at its original inline position again.
+            sourceBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
+
+            var markerBox = new CssBoxFootnoteMarker(sourceBox, callBox);
+            sourceBox.Boxes.Remove(markerBox);
+            sourceBox.Boxes.Insert(0, markerBox);
+
+            // No InheritStyle() call here: CascadeApplyStyles unconditionally re-defaults (its own step 1)
+            // and re-inherits (step 2) as soon as it starts, so a pre-emptive inherit would just be
+            // immediately discarded and redone - same as EnsureListItemMarkers's own synthesis above.
+            CascadeApplyStyles(valueParser, callBox, cssData, media, containerSizes);
+            CascadeApplyStyles(valueParser, markerBox, cssData, media, containerSizes);
+
+            // These two boxes didn't exist yet when CorrectTextBoxes ran its own ApplyContent/ParseToWords
+            // pass over the rest of the tree - do the same resolution for them here. ApplyNumber's own
+            // guard leaves an author's explicit `content` override on ::footnote-call/::footnote-marker
+            // alone; "1" is a placeholder pending the first real layout attempt's page assignment (see
+            // HtmlContainerInt.ResolveFootnotesForThisAttempt), self-correcting on convergence like any
+            // other provisional digit-width estimate in this codebase.
+            CssContentEngine.ApplyContent(callBox);
+            callBox.ApplyNumber(1);
+            if (!string.IsNullOrEmpty(callBox.Text)) callBox.ParseToWords();
+
+            CssContentEngine.ApplyContent(markerBox);
+            markerBox.ApplyNumber(1);
+            if (!string.IsNullOrEmpty(markerBox.Text)) markerBox.ParseToWords();
+
+            htmlContainer.FootnoteCalls.Add(callBox);
         }
 
         /// <summary>

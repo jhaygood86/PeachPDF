@@ -21,8 +21,9 @@ namespace PeachPDF.CSS
         private readonly FrozenDictionary<string, ISelector> _selectors =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    // ::before/::after/::marker/::first-line/::first-letter are the ones that generate a
-                    // real box; ::selection and ::content parse and paint nothing, like everything in
+                    // ::before/::after/::marker/::first-line/::first-letter/::footnote-call/
+                    // ::footnote-marker are the ones that generate a real box; ::selection and
+                    // ::content parse and paint nothing, like everything in
                     // UnmatchableSelectors.PseudoElements below them.
                     PseudoElementNames.Before,
                     PseudoElementNames.After,
@@ -31,6 +32,8 @@ namespace PeachPDF.CSS
                     PseudoElementNames.FirstLine,
                     PseudoElementNames.FirstLetter,
                     PseudoElementNames.Content,
+                    PseudoElementNames.FootnoteCall,
+                    PseudoElementNames.FootnoteMarker,
                 }
                 .Union(UnmatchableSelectors.PseudoElements, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(x => x, PseudoElementSelector.Create, StringComparer.OrdinalIgnoreCase)

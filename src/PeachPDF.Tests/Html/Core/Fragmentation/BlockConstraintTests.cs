@@ -274,5 +274,73 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
             // No band means nothing to cross out of - the same refusal Straddles makes.
             Assert.False(BlockConstraint.Measurement.FallsPast(double.MaxValue / 2));
         }
+
+        // BandEndInset/RemainingBlockSize: the fix that makes every §4.3 mover asking through
+        // RemainingBlockSize/Straddles (break-inside: avoid, orphans/widows, monolithic overflow) respect
+        // a live FragmentainerContext.ReserveBandEnd reservation - a repeating table <tfoot>, or a page's
+        // css-gcpm-3 float: footnote area. Before this, BlockConstraint.For/AtSlot/EndingAt each
+        // constructed a *fresh* FragmentainerContext for the slot in question (never the live pass's own
+        // container.CurrentFragmentainer), so RemainingBlockSize always read a reservation of zero
+        // regardless of what the live pass had actually reserved.
+        [Fact]
+        public void RemainingBlockSize_SubtractsTheLiveContextsBandEndReservation()
+        {
+            var container = CreateContainer();
+            var box = CreateBox(container, MarginTop + 30);
+
+            container.CurrentFragmentainer!.ReserveBandEnd(0, 50);
+
+            var constraint = BlockConstraint.For(box);
+
+            Assert.Equal(50, constraint.BandEndInset, 9);
+            Assert.Equal(BandHeight - 30 - 50, constraint.RemainingBlockSize, 9);
+        }
+
+        [Fact]
+        public void RemainingBlockSize_IgnoresAReservationMadeForADifferentSlot()
+        {
+            var container = CreateContainer();
+            var box = CreateBox(container, MarginTop + 30);
+
+            // Reserved for slot 1, but the box's own constraint is for slot 0.
+            container.CurrentFragmentainer!.ReserveBandEnd(1, 50);
+
+            var constraint = BlockConstraint.For(box);
+
+            Assert.Equal(0, constraint.BandEndInset, 9);
+            Assert.Equal(BandHeight - 30, constraint.RemainingBlockSize, 9);
+        }
+
+        [Fact]
+        public void BandEndInset_IsZero_WhenNoReservationIsInForce()
+        {
+            var container = CreateContainer();
+            var box = CreateBox(container, MarginTop + 30);
+
+            var constraint = BlockConstraint.For(box);
+
+            Assert.Equal(0, constraint.BandEndInset);
+        }
+
+        [Fact]
+        public void BandEndInset_IsZeroDuringAMeasurementPass()
+        {
+            Assert.Equal(0, BlockConstraint.Measurement.BandEndInset);
+        }
+
+        [Fact]
+        public void Straddles_RespectsTheLiveContextsBandEndReservation()
+        {
+            var container = CreateContainer();
+            var box = CreateBox(container, MarginTop + 30);
+            container.CurrentFragmentainer!.ReserveBandEnd(0, 50);
+
+            var constraint = BlockConstraint.For(box);
+
+            // Remaining room is BandHeight - 30 - 50 = 720; content exactly that tall does not straddle,
+            // one unit taller does.
+            Assert.False(constraint.Straddles(BandHeight - 30 - 50));
+            Assert.True(constraint.Straddles(BandHeight - 30 - 50 + 0.01));
+        }
     }
 }

@@ -648,7 +648,8 @@ namespace PeachPDF.CSS
             {
                 {Keywords.None, Floating.None},
                 {Keywords.Left, Floating.Left},
-                {Keywords.Right, Floating.Right}
+                {Keywords.Right, Floating.Right},
+                {Keywords.Footnote, Floating.Footnote}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, DisplayMode> DisplayModes =
             new Dictionary<string, DisplayMode>(StringComparer.OrdinalIgnoreCase)
