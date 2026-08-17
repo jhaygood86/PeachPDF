@@ -34,16 +34,13 @@
 		<PackageReference Include="MimeKit" Version="4.17.0" />
 	</ItemGroup>
 	<!--
-		StbImageSharp/StbImageWriteSharp remain the raster image codec on net8.0. On net10.0 they're
-		replaced by PeachImage (see PdfSharpCore/Utils/PeachImageSource.cs) - an experimental,
-		pure-.NET port that only targets net10.0 itself, so it can only be referenced there.
+		Raster image decode/encode (PdfSharpCore/Utils/PeachImageSource.cs). Replaced
+		StbImageSharp/StbImageWriteSharp on both target frameworks once PeachImage 0.2.0 added a
+		net8.0 target alongside net10.0 (0.1.x was net10.0-only, which is why this port started out
+		net10.0-conditioned - see .claude/recent-fixes/2026-08-15-net10-image-codec-ported-to-peachimage.md).
 	-->
-	<ItemGroup Condition="'$(TargetFramework)' != 'net10.0'">
-		<PackageReference Include="StbImageSharp" Version="2.30.15" />
-		<PackageReference Include="StbImageWriteSharp" Version="1.16.7" />
-	</ItemGroup>
-	<ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-		<PackageReference Include="PeachImage" Version="0.1.2" />
+	<ItemGroup>
+		<PackageReference Include="PeachImage" Version="0.2.2" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove="PdfSharpCore\Resources\Messages.restext" />

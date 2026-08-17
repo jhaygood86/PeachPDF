@@ -1326,8 +1326,8 @@ namespace PeachPDF.Tests.Integration
 
         /// <summary>
         /// Same technique as <c>ImageDrawingTests.MakePngBytes</c> - a hand-picked minimal PNG isn't
-        /// reliably decodable by either raster codec this fork uses (StbImageSharp on net8.0,
-        /// PeachImage on net10.0); writing one with the matching real encoder is.
+        /// reliably decodable by the raster codec this fork uses (PeachImage); writing one with the
+        /// matching real encoder is.
         /// </summary>
         private static string OnePixelPngDataUri() =>
             "data:image/png;base64," + Convert.ToBase64String(RasterPngFixture.MakeSolidRgbaPngBytes(1, 1, 255, 0, 0));

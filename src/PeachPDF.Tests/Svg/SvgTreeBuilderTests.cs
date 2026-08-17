@@ -1005,9 +1005,8 @@ namespace PeachPDF.Tests.Svg
 
         /// <summary>
         /// A tiny synthesized PNG, same technique as <c>ImageDrawingTests.MakePngBytes</c> (a
-        /// hand-picked minimal PNG isn't reliably decodable by either raster codec this fork uses -
-        /// StbImageSharp on net8.0, PeachImage on net10.0 - so writing one with the matching real
-        /// encoder is).
+        /// hand-picked minimal PNG isn't reliably decodable by the raster codec this fork uses -
+        /// PeachImage - so writing one with the matching real encoder is).
         /// </summary>
         private static readonly string OnePixelPngDataUri = "data:image/png;base64," + System.Convert.ToBase64String(MakePngBytes());
 

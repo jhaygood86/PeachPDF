@@ -109,24 +109,17 @@ namespace PeachPDF.PdfSharpCore.Drawing
         }
 
         /// <summary>
-        /// The built-in raster image source used when no caller has set <see cref="ImageSource.ImageSourceImpl"/>:
-        /// PeachImage on net10.0, StbImageSharp on net8.0. See PeachImageSource.cs/StbImageSource.cs.
+        /// The built-in raster image source used when no caller has set <see cref="ImageSource.ImageSourceImpl"/>.
+        /// See PeachImageSource.cs.
         /// </summary>
-        private static ImageSource CreateDefaultImageSourceImpl()
-        {
-#if NET10_0_OR_GREATER
-            return new PeachImageSource();
-#else
-            return new StbImageSharpImageSource();
-#endif
-        }
+        private static ImageSource CreateDefaultImageSourceImpl() => new PeachImageSource();
 
         /// <summary>
         /// Creates an image from the specified file.
         /// Requires that an instance of an implementation of <see cref="T:MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
-        /// If this property is null at this point, the built-in default is used (PeachImage on net10.0, StbImageSharp on net8.0; see <see cref="CreateDefaultImageSourceImpl"/>).
+        /// If this property is null at this point, the built-in default is used (see <see cref="CreateDefaultImageSourceImpl"/>).
         /// </summary>
-        /// <param name="path">The path to a BMP, PNG, or JPEG file (GIF too on net8.0 - PeachImage's net10.0 codec set doesn't cover it yet).</param>
+        /// <param name="path">The path to a BMP, PNG, JPEG, or GIF file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
         public static XImage FromFile(string path)
         {
             return new XImage(path);
@@ -135,9 +128,9 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <summary>
         /// Creates an image from the specified stream.<br/>
         /// For non-pdf files, this requires that an instance of an implementation of <see cref="T:MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
-        /// If this property is null at this point, the built-in default is used (PeachImage on net10.0, StbImageSharp on net8.0; see <see cref="CreateDefaultImageSourceImpl"/>).
+        /// If this property is null at this point, the built-in default is used (see <see cref="CreateDefaultImageSourceImpl"/>).
         /// </summary>
-        /// <param name="stream">The stream containing a BMP, PNG, JPEG, or PDF file (GIF too on net8.0 - PeachImage's net10.0 codec set doesn't cover it yet).</param>
+        /// <param name="stream">The stream containing a BMP, PNG, JPEG, GIF, or PDF file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
         public static XImage FromStream(Func<Stream> stream)
         {
             if (stream == null)

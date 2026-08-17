@@ -38,9 +38,8 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
         /// <inheritdoc cref="FromFileImpl"/>
         protected abstract IImageSource FromStreamImpl(string name, Func<Stream> imageStream, int? quality = 75);
 
-        // PNG magic bytes: 89 50 4E 47. Shared by both TFM-exclusive ImageSource implementations
-        // (StbImageSharpImageSource on net8.0, PeachImageSource on net10.0) so the PNG-sniff-as-
-        // "Transparent" heuristic can't drift between them.
+        // PNG magic bytes: 89 50 4E 47. Used by PeachImageSource to compute the PNG-sniff-as-
+        // "Transparent" heuristic.
         protected static bool IsPng(byte[] bytes) =>
             bytes.Length >= 4 &&
             bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47;

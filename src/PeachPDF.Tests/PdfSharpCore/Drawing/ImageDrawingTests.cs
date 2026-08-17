@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
     // Adapted from upstream PDFsharp's Drawing/images/ImageTests.cs. Upstream loads real
     // sample JPEG/BMP/PNG files from an external, non-git asset archive; this fork has no
     // such archive, so a tiny image is synthesized in-memory instead (same approach as
-    // StbImageSharpImageSourceTests.cs). Tests requiring PdfReader.Open (round-tripping a
+    // PeachImageSourceTests.cs). Tests requiring PdfReader.Open (round-tripping a
     // saved PDF) were dropped, since this fork has no PDF reader.
     public class ImageDrawingTests : IDisposable
     {

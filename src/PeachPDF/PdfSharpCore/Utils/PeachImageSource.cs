@@ -1,4 +1,3 @@
-#if NET10_0_OR_GREATER
 using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachImage;
 using PeachImage.Formats.Bmp;
@@ -9,9 +8,7 @@ using System.IO;
 namespace PeachPDF.PdfSharpCore.Utils
 {
     /// <summary>
-    /// The default net10.0 raster image source, backed by the PeachImage NuGet package instead of
-    /// StbImageSharp/StbImageWriteSharp, which remain the net8.0 implementation
-    /// (<c>StbImageSharpImageSource</c> exists only there).
+    /// The default raster image source, backed by the PeachImage NuGet package.
     /// </summary>
     internal class PeachImageSource : ImageSource
     {
@@ -54,25 +51,29 @@ namespace PeachPDF.PdfSharpCore.Utils
             return Decode(name, ms, quality, isPng);
         }
 
+        // PeachImage 0.2.1+ guarantees Image.Load(stream, options) converts to TargetPixelFormat in one
+        // hop for every native PixelFormat any of its decoders can produce (Gray8/Rgb24/Rgba32/Cmyk32/
+        // Gray16/Rgb48/Rgba64) - see Rgba32ConversionCompletenessTests.cs in PeachImage's own repo. See
+        // DecoderOptions.TargetPixelFormat's own doc remarks for why a plain DecoderOptions (rather than
+        // a per-format subtype) is correct here even though Image.Load auto-detects the format from the
+        // stream's content, not from anything this class knows up front.
+        private static readonly DecoderOptions Rgba32DecoderOptions = new() { TargetPixelFormat = PixelFormat.Rgba32 };
+
         private static PeachImageSourceImpl Decode(string name, Stream stream, int quality, bool isPng)
         {
             try
             {
-                var decoded = Image.Load(stream);
-                var rgba = PixelFormatNormalizer.ToRgba32(decoded);
-                return new PeachImageSourceImpl(name, rgba, quality, isPng);
+                var decoded = Image.Load(stream, Rgba32DecoderOptions);
+                return new PeachImageSourceImpl(name, decoded, quality, isPng);
             }
-            catch (Exception ex) when (ex is ImageFormatException or NotSupportedException)
+            catch (ImageFormatException ex)
             {
-                // ImageLoadHandler.LoadImageFromStream and SvgTreeBuilder.DecodeRasterImage both treat a
-                // non-fatal decode failure as an InvalidOperationException to swallow (an unresolved
-                // image, not an aborted render) - StbImageSharp (the net8.0 codec) already throws that
-                // type for a bad/unrecognized image, so this normalizes both PeachImage's own decode
-                // failures (ImageFormatException: unrecognized/unsupported format, malformed bytes -
-                // including GIF, which this net10.0 codec doesn't implement yet) and
-                // PixelFormatNormalizer.ToRgba32's defensive NotSupportedException (a PixelFormat this
-                // build doesn't know how to normalize - would only fire on a future PeachImage upgrade
-                // that adds one) to that same contract, rather than letting either crash the whole render.
+                // ImageLoadHandler.LoadImageFromStream and SvgTreeBuilder.DecodeRasterImage both catch
+                // exactly InvalidOperationException to treat a decode failure as non-fatal (leaves the
+                // image unresolved rather than aborting the render). This normalizes PeachImage's own
+                // decode failures (unrecognized/unsupported format - e.g. TGA/PSD/HDR, which PeachImage
+                // doesn't implement, see .claude/accepted-gaps/tga-psd-hdr-unsupported.md - or malformed
+                // bytes) to that contract, rather than letting it crash the whole render.
                 throw new InvalidOperationException(ex.Message, ex);
             }
         }
@@ -97,7 +98,7 @@ namespace PeachPDF.PdfSharpCore.Utils
 
             public void SaveAsJpeg(MemoryStream ms)
             {
-                // JPEG ignores the alpha channel of a Rgba32 source - same behavior stb had.
+                // JPEG ignores the alpha channel of a Rgba32 source.
                 _rgba.Save(ms, "jpeg", new JpegEncoderOptions { Quality = _quality });
             }
 
@@ -106,11 +107,10 @@ namespace PeachPDF.PdfSharpCore.Utils
                 _rgba.Save(ms, "bmp", new BmpEncoderOptions());
             }
 
-            // IImageSource doesn't declare IDisposable (XImage never disposes its IImageSource), matching
-            // StbImageSharpImageSource's equivalent no-op - the backing Image's Dispose() is itself a
-            // near no-op today (see PeachImage.Image.Dispose's remarks), so nothing is actually leaked.
+            // IImageSource doesn't declare IDisposable (XImage never disposes its IImageSource) - the
+            // backing Image's Dispose() is itself a near no-op today (see PeachImage.Image.Dispose's
+            // remarks), so nothing is actually leaked.
             public void Dispose() { }
         }
     }
 }
-#endif

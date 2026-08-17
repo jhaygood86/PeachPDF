@@ -1,25 +1,28 @@
-# net10.0 raster image decode/encode ported from StbImageSharp to PeachImage; net8.0 unchanged
+# Raster image decode/encode ported from StbImageSharp to PeachImage, on both target frameworks
 
-Experimental, TFM-gated port: on net10.0, `PdfSharpCore/Utils/PeachImageSource.cs` (new,
-`#if NET10_0_OR_GREATER`) implements `ImageSource` via the PeachImage NuGet package (0.1.2) instead of
-StbImageSharp/StbImageWriteSharp. `StbImageSource.cs` (the existing implementation) is now itself
-`#if !NET10_0_OR_GREATER`-guarded and remains the net8.0 codec unchanged. `PeachPDF.csproj` conditions
-both package sets by `$(TargetFramework)` so neither dependency ships in the wrong TFM's package.
-`XImage.cs`'s two `ImageSourceImpl ??= ...` default-wiring sites pick the TFM-appropriate type via a new
-`CreateDefaultImageSourceImpl()` helper.
+`PdfSharpCore/Utils/PeachImageSource.cs` (new) implements `ImageSource` via the PeachImage NuGet
+package instead of StbImageSharp/StbImageWriteSharp, which it fully replaces - `StbImageSource.cs` (the
+former implementation) is deleted. This landed in three stages within the same body of work: PeachImage
+0.1.x only targeted net10.0, so the port started out `#if NET10_0_OR_GREATER`-gated with StbImageSharp
+kept as the net8.0 codec; once PeachImage 0.2.0 added a net8.0 target alongside net10.0, the TFM guards
+were removed and StbImageSharp/StbImageWriteSharp were dropped from `PeachPDF.csproj` entirely; then
+PeachImage 0.2.1 closed the pixel-format-conversion gap described below, letting `PixelFormatNormalizer.cs`
+be deleted outright (see "PeachImage 0.2.1 closed this gap" further down). `XImage.cs`'s two
+`ImageSourceImpl ??= ...` default-wiring sites go through a `CreateDefaultImageSourceImpl()` helper that
+now just returns `new PeachImageSource()` unconditionally.
 
-## Why PeachImage decode always normalizes to Rgba32 itself
+## Why PeachImage decode used to normalize to Rgba32 itself (superseded - see below)
 
 PeachImage's own `DecoderOptions.TargetPixelFormat` converter (`PixelFormatConverter.ConvertIfNeeded`)
-only covers Gray8/Rgb24/Rgba32 conversions - it doesn't handle Cmyk32 (Adobe CMYK JPEG) or the
-16-bit-per-channel formats (Gray16/Rgb48/Rgba64, producible by PNG) at all, and throws if asked to. Since
-`IImageSource.SaveAsJpeg`/`SaveAsPdfBitmap` need a single uniform RGBA8 buffer regardless of the source
-format (matching what StbImageSharp always produced by decoding straight to
-`ColorComponents.RedGreenBlueAlpha`), a new `PixelFormatNormalizer.ToRgba32` (also net10.0-only) handles
-the full `PixelFormat` matrix itself: Gray8/Rgb24/Cmyk32 expand directly, Gray16/Rgb48/Rgba64 downsample
-each channel via `BitConverter.ToUInt16(...) >> 8`. Cmyk32→RGB uses the common naive
-`255 - min(255, channel + K)` formula (not colorimetrically accurate, but consistent with what a rough
-approximation needs here).
+only covered Gray8/Rgb24/Rgba32 conversions as of 0.1.x/0.2.0 - it didn't handle Cmyk32 (Adobe CMYK
+JPEG) or the 16-bit-per-channel formats (Gray16/Rgb48/Rgba64, producible by PNG) at all, and threw if
+asked to. Since `IImageSource.SaveAsJpeg`/`SaveAsPdfBitmap` need a single uniform RGBA8 buffer regardless
+of the source format (matching what StbImageSharp always produced by decoding straight to
+`ColorComponents.RedGreenBlueAlpha`), `PixelFormatNormalizer.ToRgba32` handled the full `PixelFormat`
+matrix itself: Gray8/Rgb24/Cmyk32 expanded directly, Gray16/Rgb48/Rgba64 downsampled each channel via
+`BitConverter.ToUInt16(...) >> 8`. Cmyk32→RGB used the common naive `255 - min(255, channel + K)`
+formula (not colorimetrically accurate, but consistent with what a rough approximation needs). This
+class and its dedicated test file no longer exist - see the next section.
 
 ## The BMP round-trip had to be checked byte-for-byte, not assumed
 
@@ -80,17 +83,29 @@ dimensions and its alpha survives the BMP round trip), plus an end-to-end raster
 - within JPEG-lossy tolerance of the source color, confirming GIF goes through the same non-transparent
 JPEG-embed path a BMP/JPEG source would, since the pre-existing PNG-magic-byte-sniff `Transparent`
 heuristic doesn't specially detect GIF transparency - a pre-existing property of that heuristic, not
-something this port changed). TGA and HDR remain net8.0-only; PeachImage has no codec for either.
+something this port changed).
+
+## TGA/PSD/HDR: a real, permanent gap once net8.0 switched too
+
+Unlike GIF, TGA/PSD/HDR were never on PeachImage's roadmap. While the port was still net10.0-only, this
+was invisible on net8.0 (StbImageSharp still handled them there). Once PeachImage 0.2.0 made a net8.0
+target possible and StbImageSharp was dropped entirely, TGA/PSD/HDR decoding disappeared from every
+PeachPDF build - and unlike the GIF gap, this one shipped in a released version (v0.9.12) with working
+StbImageSharp-based TGA/HDR/PSD support, so it's a genuine migration, not just an in-flight regression
+caught before release. See
+[tga-psd-hdr-unsupported](../accepted-gaps/tga-psd-hdr-unsupported.md) and the matching
+`.claude/migration-notes/` entry.
 
 ## Evidence
 
-Full suite green on both TFMs: net8.0 8838 passed, net10.0 8854 passed (net10.0 has more - new
-`PeachImageSourceTests`/`PixelFormatNormalizerTests`, including the GIF-specific ones), zero warnings on
-`dotnet build PeachPDF.slnx -t:Rebuild`. Diff coverage 98% (`diff-cover` against `origin/main`, net10.0
-run, before the 0.1.2 bump) - the only two uncovered lines are a genuinely-unreachable
+Full suite green on both TFMs (net8.0 now shares the same `PeachImageSourceTests`/
+`PixelFormatNormalizerTests` net10.0 used to run alone, including the GIF-specific ones - all pass
+unchanged since PeachImage's public API is identical across its two TFM builds), zero warnings on
+`dotnet build PeachPDF.slnx -t:Rebuild`. Diff coverage 98% (`diff-cover` against `origin/main`, measured
+during the net10.0-only stage of this change) - the only two uncovered lines are a genuinely-unreachable
 `default: throw NotSupportedException` defensive branch in the pixel format switch, and a no-op
-`Dispose()` that mirrors `StbImageSharpImageSource`'s equivalent (neither `IImageSource` nor any caller
-ever invokes it - `XImage` never disposes its `_source`).
+`Dispose()` (neither `IImageSource` nor any caller ever invokes it - `XImage` never disposes its
+`_source`).
 
 A post-change review pass (8 parallel finder angles + verification, per this repo's convention) turned up
 and fixed: the `PixelFormatNormalizer.ToRgba32`/decode-failure exception-normalization gap and the missing
@@ -102,18 +117,75 @@ Gray16/Rgb48/Rgba64 cases in `PixelFormatNormalizer` collapsed into one parametr
 test-fixture helper in `PeachImageSourceTests` pointed at the shared `RasterPngFixture` instead; and the
 stale StbImageSharp/GIF/TGA/HDR/PSD claims in `docs/architecture.md`, `docs/usage-examples.md`, and
 `docs/html-css-support.md` corrected for the TFM split. One suggested simplification was considered and
-rejected on inspection: relying on PeachImage's own `TargetPixelFormat` decode-time converter instead of
-`PixelFormatNormalizer`'s hand-written matrix looks appealing, but reading its actual per-format source
-(`PeachImage.Formats.{Png,Bmp,Jpeg}.Decoding.PixelFormatConverter`) shows it has no direct single-hop
-conversion from `Gray16`/`Rgb48` to `Rgba32` and no `Cmyk32` handling at all - and distinguishing "this
-conversion just isn't supported" from "the file is genuinely corrupt" by exception type alone isn't safe,
-so the custom normalizer stays as the single, uniform, always-correct path.
+rejected on inspection at the time: relying on PeachImage's own `TargetPixelFormat` decode-time converter
+instead of `PixelFormatNormalizer`'s hand-written matrix looked appealing, but reading its actual
+per-format source (`PeachImage.Formats.{Png,Bmp,Jpeg}.Decoding.PixelFormatConverter`) showed it had no
+direct single-hop conversion from `Gray16`/`Rgb48` to `Rgba32` and no `Cmyk32` handling at all - and
+distinguishing "this conversion just isn't supported" from "the file is genuinely corrupt" by exception
+type alone wasn't safe. This was fixed upstream, not worked around here - see the next section.
 
-Performance: a throwaway scratch console app (ProjectReference to `PeachPDF.csproj`, temporarily added to
-its `InternalsVisibleTo` and removed again afterward - not committed) timed decode + `AsJpeg()`/`AsBitmap()`
-encode of the same 640x480 PNG/JPEG/BMP fixture files, 200 iterations each, `dotnet run -c Release` on
-both TFMs. PeachImage (net10.0) was faster overall - roughly 23% less total wall-clock across all 9
-decode/encode combinations than StbImageSharp (net8.0) - with PNG→JPEG encoding the one exception at
-~11% slower; every other combination was at parity or meaningfully faster (BMP encode ~70-75% faster,
-PNG/BMP decode ~25-45% faster). Not a tracked CI benchmark - a one-time sanity check confirming the port
-isn't a performance regression, per the porting request.
+## PeachImage 0.2.1 closed this gap; `PixelFormatNormalizer.cs` is deleted
+
+Asked PeachImage's maintainer directly for exactly the guarantee the rejected-simplification note above
+was missing (see the prompt in this repo's session history around 2026-08-16/17); PeachImage 0.2.1
+shipped it in commit `83cbfa4` ("Guarantee Rgba32 conversion for every native pixel format"), with its
+own `Rgba32ConversionCompletenessTests.cs` explicitly naming PeachPDF as the motivating consumer and
+pinning the exact contract needed: requesting `TargetPixelFormat = PixelFormat.Rgba32` now succeeds in
+one hop for every native `PixelFormat` any of its six decoders can produce (verified by reading that
+test file directly, and independently re-verified with a throwaway scratch program before touching
+`PeachPDF`'s code - Gray16/Rgb48/Rgba64 PNGs and a CMYK-shaped case all convert correctly; the CMYK
+formula matches the naive one `PixelFormatNormalizer` used to use). The same commit also fixed a latent
+bug in the old converter that would have thrown `IndexOutOfRangeException` for every *opaque* `Rgb24`
+PNG requesting `Rgba32` - never hit here since PeachPDF never requested a conversion before this change.
+
+`PeachImageSource.Decode` now just calls `Image.Load(stream, Rgba32DecoderOptions)` directly;
+`PixelFormatNormalizer.cs` and `PixelFormatNormalizerTests.cs` are deleted, and the `NotSupportedException`
+half of `Decode`'s catch clause (previously needed for that class's own defensive default-case throw) is
+gone too - it's back to just `catch (ImageFormatException ex)`. `PeachImageSourceTests.
+FromBinary_Png16Bit_RoundTripsExactly` is this repo's own spot-check that the guarantee holds through
+PeachPDF's real pipeline, not a full re-test of PeachImage's conversion matrix (that lives upstream now).
+
+One API wrinkle surfaced along the way, also fixed upstream rather than worked around here: `Image.Load
+(stream)` auto-detects the format from content, so a generic caller can't know which concrete
+`XyzDecoderOptions` subtype to construct ahead of time, yet `DecoderOptions` (as of 0.2.1) was abstract -
+forcing an arbitrary, format-mismatched-looking subtype pick (e.g. constructing `PngDecoderOptions` for a
+call that might decode a JPEG) purely to set `TargetPixelFormat`. Verified this actually worked correctly
+regardless of the mismatch (each decoder reads `options?.TargetPixelFormat` via simple property access on
+the base-typed parameter, never a downcast) before flagging it upstream as a real ergonomics/discoverability
+problem rather than a correctness one. PeachImage 0.2.2 (commit `b6e76d7`) made `DecoderOptions` itself
+directly constructible and documented the polymorphic-read guarantee directly on `TargetPixelFormat`, so
+`PeachImageSource.cs` now constructs a plain `new DecoderOptions { TargetPixelFormat = PixelFormat.Rgba32 }`
+- no per-format subtype, no `PeachImage.Formats.Png` import, no comment justifying why an unrelated
+subtype is safe to use here.
+
+## Performance
+
+A throwaway scratch console app (ProjectReference to `PeachPDF.csproj`, temporarily added to its
+`InternalsVisibleTo` and removed again afterward - not committed) timed decode + `AsJpeg()`/`AsBitmap()`
+encode of the same 640x480 PNG/JPEG/BMP fixture files, 200 iterations each, `dotnet run -c Release`. Not
+a tracked CI benchmark - a one-time sanity check confirming the port isn't a performance regression, per
+the porting request.
+
+**Stage 1 (net10.0-only, PeachImage 0.1.x vs. StbImageSharp on net8.0 - different runtimes, not a clean
+A/B):** PeachImage was faster overall - roughly 23% less total wall-clock across all 9 decode/encode
+combinations - with PNG→JPEG encoding the one exception at ~11% slower; every other combination was at
+parity or meaningfully faster (BMP encode ~70-75% faster, PNG/BMP decode ~25-45% faster).
+
+**Stage 2 (PeachImage 0.2.0 on both net8.0 and net10.0 - same code, clean A/B against the runtime):**
+re-running the identical fixtures/harness against net8.0 (now also PeachImage) surfaced a real, clean,
+reproduced-twice finding that stage 1 couldn't have seen at all - **PNG decode is roughly 15x slower on
+the net8.0 runtime than on net10.0** (~12ms vs. ~0.8ms per 640x480 PNG; every other operation - JPEG/BMP
+decode, all three encode paths - stays within a few percent between the two runtimes, matching PeachImage
+0.1.x's net10.0 numbers). PeachImage's PNG decoder has no `#if NET10_0_OR_GREATER`/TFM-conditional code
+at all (checked directly), so this isn't a code-path difference; PeachImage's PNG codec uses
+`System.IO.Compression` (`ZLibStream`/`DeflateStream`) for the DEFLATE stream, so the most likely
+explanation is a real difference in .NET 8 vs .NET 10's underlying native compression library
+performance for this workload - a runtime characteristic, not something fixable in `PeachPDF` or
+`PeachImage` source. In absolute terms 12ms/image is still fast for a handful of embedded images, but a
+document embedding many PNGs (dozens+) on the net8.0 build would see this add up in a way it didn't
+before (StbImageSharp's net8.0 PNG decode was ~1.6ms/image, i.e. PeachImage's net8.0 PNG decode is
+also ~7x slower than the *previous* net8.0 codec, not just slower than PeachImage's own net10.0 build)
+- with every other operation (JPEG/BMP decode, all encode paths) still measurably faster than the old
+StbImageSharp net8.0 baseline, matching net10.0's improvement. Worth knowing if PNG-heavy-document
+performance on the net8.0 build ever gets reported as regressed; not something this change attempts to
+work around.
