@@ -96,6 +96,10 @@ namespace PeachPDF.Html.Core
             ol, ul, dir,
             menu            { counter-reset: list-item }
             li::marker      { margin-right: 5px }
+            *::footnote-call
+                            { vertical-align: super; font-size: .7em }
+            *::footnote-marker
+                            { margin-right: 0.3em }
             ol ul, ul ol,
             ul ul, ol ol    { margin-top: 0; margin-bottom: 0 }
             ol ul, ul ul    { list-style-type: circle }

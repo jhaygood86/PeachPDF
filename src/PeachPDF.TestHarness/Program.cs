@@ -1447,6 +1447,63 @@ await SaveShowcaseAsync("paged_media_running_elements", "Paged Media", "Running 
     "Running headers with full formatting fidelity via position: running() and content: element() - unlike string-set/string(), the margin box shows a real, laid-out element (colors, badges, nested spans), not just captured text.",
     runningElementsHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ─── CSS GCPM showcase — footnotes (float: footnote) ──
+// Demonstrates: multiple footnotes stacking on one page in document order, a page-boundary case
+// where the dynamically-reserved footnote area shrinks how much ordinary flow content that page
+// can hold, a break-inside:avoid paragraph correctly avoiding the reserved strip, per-page
+// numbering reset, and author styling of ::footnote-call/::footnote-marker.
+var footnotesHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+      size: A4 portrait;
+      margin: 25mm 20mm;
+      @bottom-center { content: counter(page); font-size: 8pt; font-family: Arial; color: #888; }
+    }
+    body { font: 11pt Georgia, serif; margin: 0; color: #222; }
+    h1 { font-size: 20pt; margin: 0 0 14pt; }
+    p { line-height: 1.6; margin: 0 0 10pt; }
+    .keep { break-inside: avoid; border-left: 3pt solid #2563eb; padding-left: 10pt; }
+    .spacer { height: 640pt; }
+
+    /* Author styling of the two footnote pseudo-elements - a colored, bracketed call and a
+       bold, colored leading number in the note area, instead of the plain UA default. */
+    ::footnote-call { color: #2563eb; font-weight: bold; }
+    ::footnote-marker { color: #2563eb; font-weight: bold; }
+    </style>
+    </head>
+    <body>
+
+    <h1>Footnotes</h1>
+    <p>float: footnote pulls an element out of normal flow entirely<span style="float:footnote">css-gcpm-3 defines this alongside float: inline-footnote and column-scoped variants; PeachPDF supports the page-level case.</span>,
+    leaving a numbered in-flow reference behind and routing the element's own content to a note area
+    at the bottom of the page the reference landed on<span style="float:footnote">The note area's height is reserved dynamically, based on how many footnotes actually land on a given page - not a fixed-height margin box.</span>.</p>
+
+    <p>Because the reservation is dynamic, content already flowing down the page correctly stops
+    above it even when a paragraph asks to stay together as one unit:</p>
+
+    <div class="spacer"></div>
+
+    <p class="keep">This paragraph carries break-inside: avoid. Once the footnote area above claims
+    room at the foot of the page, this whole paragraph is kept together and, if it no longer fits,
+    moves to the next page as a unit rather than splitting across the reserved strip<span style="float:footnote">A third footnote, to show the reservation composing across every footnote that lands on the same page.</span>.</p>
+
+    <p>Numbering resets per page - the next page starts back at 1:</p>
+
+    <div style="break-before: page;">
+    <p>A fresh page, a fresh footnote<span style="float:footnote">This is footnote 1 again, not 4 - the footnote counter resets per page.</span>.</p>
+    </div>
+
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_footnotes", "Paged Media", "Footnotes",
+    "css-gcpm-3's float: footnote: a numbered in-flow reference, a note area whose height is reserved dynamically per page based on how many footnotes land there, and break-inside: avoid content correctly kept clear of the reserved strip.",
+    footnotesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ─── CSS Content Module 3 showcase — target-counter()/target-text()/leader() ──
 // The classic hand-authored table of contents: leader() fills the gap between a chapter
 // title and its page number with a dotted rule, and target-counter(attr(href), page)

@@ -399,6 +399,19 @@ namespace PeachPDF
 
                 container.PerformPaint(g, fragmentainer);
 
+                // The footnote area's own geometry (AttachFootnoteAreas) is built the same
+                // fragmentainer-local way every other content fragment's is - content stays anchored at
+                // the base MarginLeft/MarginTop in layout space, with this page's own deltaX/deltaY
+                // translate (above) the only thing that maps it onto a page whose own @page margins
+                // differ from the base. It must therefore paint here, inside that transform, alongside
+                // ordinary content - not after the restore below, which is what a true page-absolute rect
+                // (a plain string/counter/element() margin box's own rect, computed directly from this
+                // page's own margins) needs instead.
+                if (fragmentainer.FootnoteArea is { } footnoteArea)
+                {
+                    PaintFootnoteArea(g, _pdfSharpAdapter, container.HtmlContainerInt, footnoteArea);
+                }
+
                 // Restore to pre-content state so margin boxes render in absolute page coordinates
                 g.Restore(preContentState);
 
@@ -562,6 +575,31 @@ namespace PeachPDF
             foreach (var marginBox in marginBoxes)
             {
                 painter.PaintFragment(graphicsAdapter, marginBox.Content);
+            }
+        }
+
+        /// <summary>
+        /// Paints one page's css-gcpm-3 <c>float: footnote</c> note area - a hard-coded UA divider rule
+        /// (no author styling of the area itself in this version; see docs/html-css-support.md's
+        /// "Footnotes" section), then each footnote body. Mirrors <see cref="PaintElementMarginBoxes"/>
+        /// exactly for the bodies (real, laid-out <see cref="CssBox"/> subtrees reused unmodified through
+        /// <see cref="FragmentPainter.PaintFragment"/> - backgrounds/borders/nested styling and tagged-PDF
+        /// structure attach for free, same reasoning) - the divider alone is drawn directly, the same
+        /// simple filled-rectangle primitive <see cref="PeachPDF.Html.Core.Paint.Content.HrFragmentPainter"/>
+        /// uses for <c>&lt;hr&gt;</c>.
+        /// </summary>
+        private static void PaintFootnoteArea(XGraphics g, RAdapter adapter, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
+        {
+            var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
+
+            var rect = footnoteArea.DividerRect;
+            graphicsAdapter.DrawRectangle(graphicsAdapter.GetSolidBrush(RColor.Black), rect.X, rect.Y, rect.Width, rect.Height);
+
+            var painter = new FragmentPainter(htmlContainer);
+            foreach (var body in footnoteArea.Bodies)
+            {
+                painter.PaintFragment(graphicsAdapter, body);
             }
         }
 

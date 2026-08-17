@@ -247,13 +247,21 @@ namespace PeachPDF.Html.Core.Fragments
     /// pipeline (<c>MarginBoxRenderer</c>) - only <c>element()</c>'s genuine box-subtree content needs
     /// real layout, so only it is threaded through the fragment tree.
     /// </param>
+    /// <param name="FootnoteArea">
+    /// This page's css-gcpm-3 <c>float: footnote</c> note area, if any footnote landed here - attached by
+    /// <c>HtmlContainerInt.AttachFootnoteAreas</c> alongside <paramref name="MarginBoxes"/>'s own
+    /// attachment (both run once the final page list is known), from bodies the footnote convergence loop
+    /// in <c>HtmlContainerInt.PerformLayout</c> already laid out. Null (never an empty placeholder) for a
+    /// page with no footnotes, and always null on the draft this record is first constructed with.
+    /// </param>
     internal sealed record FragmentainerFragment(
         RRect Rect,
         int SlotIndex,
         PageBandGeometry Geometry,
         double LocalOriginY,
         BoxFragment Root,
-        IReadOnlyList<MarginBoxFragment> MarginBoxes) : Fragment(Rect);
+        IReadOnlyList<MarginBoxFragment> MarginBoxes,
+        FootnoteAreaFragment? FootnoteArea = null) : Fragment(Rect);
 
     /// <summary>
     /// One page margin box's <c>content: element(name)</c> content (css-gcpm-3) - the box-subtree
@@ -269,6 +277,22 @@ namespace PeachPDF.Html.Core.Fragments
     /// informational only, not consulted by paint.</param>
     /// <param name="Content">The selected running element's own laid-out subtree.</param>
     internal sealed record MarginBoxFragment(string BoxName, BoxFragment Content) : Fragment(Content.Rect);
+
+    /// <summary>
+    /// One page's css-gcpm-3 <c>float: footnote</c> note area - a divider rule above one or more stacked
+    /// footnote bodies, in document order. Unlike <see cref="MarginBoxFragment"/> (a page-absolute rect
+    /// computed directly from that page's own margins, needing no further translation), a footnote area
+    /// sits inside the ordinary content band, so its coordinates follow the same fragmentainer-local
+    /// convention every other content fragment's do ("local.Y = documentY - LocalOriginY", see this file's
+    /// own remarks) - <see cref="HtmlContainerInt.AttachFootnoteAreas"/> translates each body from the
+    /// document-space position <see cref="Dom.FootnoteBodyLayout.LayoutFootnoteBodyFor"/> laid it out at
+    /// into this page's own local origin before building it. It is laid out once, directly at its final
+    /// page position, and never fragments (an accepted gap, see docs/html-css-support.md's "Footnotes"
+    /// section).
+    /// </summary>
+    /// <param name="DividerRect">The thin rule painted above the first body.</param>
+    /// <param name="Bodies">Each footnote's own laid-out body, in document (and so numbering) order.</param>
+    internal sealed record FootnoteAreaFragment(RRect DividerRect, IReadOnlyList<BoxFragment> Bodies) : Fragment(DividerRect);
 
     /// <summary>
     /// The complete immutable result of laying out one document: its fragmentainers, in page order.

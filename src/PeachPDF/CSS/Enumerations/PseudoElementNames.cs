@@ -5,6 +5,8 @@ namespace PeachPDF.CSS
         public const string Before = "before";
         public const string After = "after";
         public const string Marker = "marker";
+        public const string FootnoteCall = "footnote-call";
+        public const string FootnoteMarker = "footnote-marker";
         public const string Selection = "selection";
         public const string FirstLine = "first-line";
         public const string FirstLetter = "first-letter";

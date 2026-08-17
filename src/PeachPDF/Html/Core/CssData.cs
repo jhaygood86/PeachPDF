@@ -816,6 +816,7 @@ namespace PeachPDF.Html.Core
             if (lastSelector is PseudoElementSelector pseudoElementSelector)
             {
                 var referenceBox = box.IsFirstLetterPseudoElement ? box.FirstLetterOriginatingBox
+                    : box.IsFootnoteCallPseudoElement || box.IsFootnoteMarkerPseudoElement ? box.FootnoteSourceBox
                     : box.IsPseudoElement ? box.ParentBox : box;
 
                 var isMatchWithoutPseudoElement = compoundSelector
@@ -1021,6 +1022,8 @@ namespace PeachPDF.Html.Core
                 case PseudoElementNames.After when box.IsAfterPseudoElement:
                 case PseudoElementNames.Marker when box.IsMarkerPseudoElement:
                 case PseudoElementNames.FirstLetter when box.IsFirstLetterPseudoElement:
+                case PseudoElementNames.FootnoteCall when box.IsFootnoteCallPseudoElement:
+                case PseudoElementNames.FootnoteMarker when box.IsFootnoteMarkerPseudoElement:
                     return true;
                 default:
                     return false;

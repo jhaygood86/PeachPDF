@@ -1244,7 +1244,14 @@ namespace PeachPDF.Html.Core.Dom
             get
             {
                 var area = Style.DisplayPositioning;
-                if (area.Float.Value is Floating.None) return area.Display.ToString();
+                // Floating.Footnote is excluded from blockification too: css-gcpm-3's float:footnote
+                // pulls a box out of flow entirely (see DomParser.DetachFootnoteBodies), rather than
+                // floating it beside its siblings the way left/right do, and the common case is an
+                // inline source (a <sup> reference) that must still read as inline everywhere upstream
+                // of detachment - CorrectAnonymousTables and friends, which run before detachment, would
+                // otherwise see it as an ordinary block-level float and correct the tree around that
+                // false premise.
+                if (area.Float.Value is Floating.None or Floating.Footnote) return area.Display.ToString();
 
                 return area.Display.Value switch
                 {

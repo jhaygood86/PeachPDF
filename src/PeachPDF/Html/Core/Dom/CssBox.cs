@@ -241,6 +241,39 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsMarkerPseudoElement { get; set; }
 
         /// <summary>
+        /// Is this box a synthesized <c>::footnote-call</c> pseudo-element - the numbered in-flow
+        /// reference css-gcpm-3's <c>float: footnote</c> leaves behind at a footnote's original
+        /// position (see <c>DomParser.DetachFootnoteBodies</c>). Always a
+        /// <see cref="CssBoxFootnoteCall"/>. Unlike <see cref="IsMarkerPseudoElement"/> boxes it is
+        /// never excluded from its owner's ordinary inline flow - it *is* the owner's in-flow content,
+        /// standing in for the detached footnote body.
+        /// </summary>
+        public bool IsFootnoteCallPseudoElement { get; set; }
+
+        /// <summary>
+        /// Is this box a synthesized <c>::footnote-marker</c> pseudo-element - the leading number
+        /// css-gcpm-3 prepends inside a footnote's own body content once it is rendered in the page's
+        /// footnote area (see <c>DomParser.DetachFootnoteBodies</c>). Always a
+        /// <see cref="CssBoxFootnoteMarker"/>, inserted as the detached footnote body's first child so
+        /// it flows ahead of the body's own content like an <c>inside</c> list marker.
+        /// </summary>
+        public bool IsFootnoteMarkerPseudoElement { get; set; }
+
+        /// <summary>
+        /// For an <see cref="IsFootnoteCallPseudoElement"/> or <see cref="IsFootnoteMarkerPseudoElement"/>
+        /// box, the real, detached <c>float: footnote</c> element <c>E</c> that
+        /// <c>E::footnote-call</c>/<c>E::footnote-marker</c> matches - used only for selector re-matching
+        /// (see <c>CssData.DoesSelectorMatch</c>'s <c>referenceBox</c> logic), the same role
+        /// <see cref="FirstLetterOriginatingBox"/> plays for <c>::first-letter</c>. Needed because, unlike
+        /// <see cref="IsBeforePseudoElement"/>/<see cref="IsAfterPseudoElement"/>/<see cref="IsMarkerPseudoElement"/>
+        /// (inserted as a child of the matched element itself, so <see cref="ParentBox"/> already is the
+        /// owner), a footnote call/marker's structural <see cref="ParentBox"/> is <c>E</c>'s own former
+        /// container, not <c>E</c> - <c>E</c> itself is fully detached from the tree once
+        /// <c>DomParser.DetachFootnoteBodies</c> runs.
+        /// </summary>
+        public CssBox? FootnoteSourceBox { get; set; }
+
+        /// <summary>
         /// Is this box a synthesized <c>::first-letter</c> pseudo-element - unlike
         /// <see cref="IsBeforePseudoElement"/>/<see cref="IsAfterPseudoElement"/>/
         /// <see cref="IsMarkerPseudoElement"/> (all inserted as a new child of the matched element
@@ -355,7 +388,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal bool HasOwnBackground => RenderUtils.IsColorVisible(ActualBackgroundColor) || BackgroundImages is { Count: > 0 };
 
-        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement || IsFirstLetterPseudoElement;
+        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement || IsFirstLetterPseudoElement
+            || IsFootnoteCallPseudoElement || IsFootnoteMarkerPseudoElement;
 
         /// <summary>
         /// is the box "Display" is "Inline", is this is an inline box and not block.
@@ -2935,8 +2969,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             var (clonedStart, clonedEnd) = MonolithicContent.ClonedBlockInsets(this, HtmlContainer!);
 
+            // RemainingBlockSize, not the raw NextBandHeight: destination is always a fresh band-top
+            // constraint (BlockOffset 0) from a caller's own AtNextSlot(), so this already accounts for
+            // whatever destination's own BandEndInset reserves (a repeating table <tfoot>, a page's
+            // footnote area) - the room actually available there, not the band's nominal height.
             return MonolithicContent.FitsInBand(
-                ActualBottom - Location.Y, clonedStart, clonedEnd, destination.NextBandHeight);
+                ActualBottom - Location.Y, clonedStart, clonedEnd, destination.RemainingBlockSize);
         }
 
         /// <summary>
@@ -6242,7 +6280,7 @@ namespace PeachPDF.Html.Core.Dom
         /// it has them, since an inline box's own <see cref="CssBox.Location"/> stays at a
         /// line-local value layout never updates.
         /// </summary>
-        private double OwnGeometryTop()
+        internal double OwnGeometryTop()
         {
             if (Rectangles.Count == 0 && Words.Count == 0) return Location.Y;
 
