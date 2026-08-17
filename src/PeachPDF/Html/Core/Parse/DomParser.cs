@@ -130,6 +130,10 @@ namespace PeachPDF.Html.Core.Parse
             // descending into a CssBoxSvg - see their `if (box is CssBoxSvg) return;` and issue #159.
             CascadeApplyStyles(cssValueParser, root, cssData, media, containerSizes);
 
+            // Must run after the whole tree's cascade above, not from inside it - see
+            // ApplyTablePresentationalAttributesToCells's remarks / issue #636.
+            ApplyTablePresentationalAttributesToCells(root);
+
             EnsureListItemMarkers(cssValueParser, root, cssData, media, containerSizes);
 
             ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media, containerSizes);
@@ -1550,9 +1554,8 @@ namespace PeachPDF.Html.Core.Parse
                     case HtmlConstants.Cellspacing:
                         box.BorderSpacing = TranslateLength(value);
                         break;
-                    case HtmlConstants.Cellpadding:
-                        ApplyTablePadding(box, value);
-                        break;
+                    // Cellpadding's per-cell cascade (ApplyTablePadding) is applied later, in
+                    // ApplyTablePresentationalAttributesToCells - see its remarks / issue #636.
                     case HtmlConstants.Color:
                         box.Color = value.ToLower();
                         break;
@@ -1659,8 +1662,10 @@ namespace PeachPDF.Html.Core.Parse
 
         /// <summary>
         /// Translates the <c>border</c> attribute: sets the border width (and, unless "0", a solid
-        /// style) on the element itself, additionally cascading a 1px solid border to every cell when
-        /// the element is a <c>table</c>.
+        /// style) on the element itself. For a <c>table</c>, the per-cell 1px solid border cascade
+        /// (<see cref="ApplyTableBorder"/>) is applied later, in <see cref="ApplyTablePresentationalAttributesToCells"/>
+        /// - not here, since it must run after the whole tree's cascade has finished (see that method's
+        /// remarks / issue #636).
         /// </summary>
         private static void TranslateBorder(HtmlTag tag, CssBox box, string value)
         {
@@ -1668,12 +1673,7 @@ namespace PeachPDF.Html.Core.Parse
                 box.BorderLeftStyle = box.BorderTopStyle = box.BorderRightStyle = box.BorderBottomStyle = SolidBorderStyle;
             box.BorderLeftWidth = box.BorderTopWidth = box.BorderRightWidth = box.BorderBottomWidth = TranslateLength(value);
 
-            if (tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
-            {
-                if (value != "0")
-                    ApplyTableBorder(box, "1px");
-            }
-            else
+            if (!tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
             {
                 box.BorderTopStyle = box.BorderLeftStyle = box.BorderRightStyle = box.BorderBottomStyle = SolidBorderStyle;
             }
@@ -1824,6 +1824,46 @@ namespace PeachPDF.Html.Core.Parse
             var len = new CssLength(htmlLength);
 
             return len.HasError ? string.Format(NumberFormatInfo.InvariantInfo, "{0}px", htmlLength) : htmlLength;
+        }
+
+        /// <summary>
+        /// Applies the deprecated presentational <c>border</c>/<c>cellpadding</c> table attributes' TD
+        /// cascade (<see cref="ApplyTableBorder"/>/<see cref="ApplyTablePadding"/>), for every
+        /// <c>table</c> in the tree, directly from the element's own attributes.
+        /// </summary>
+        /// <remarks>
+        /// This must run as its own pass, after <see cref="CascadeApplyStyles"/> has finished for the
+        /// *entire* tree - not from inside <see cref="TranslateAttributes"/>, which runs mid-cascade for
+        /// the table box itself, before a cell descendant's own <see cref="CascadeApplyStyles"/> call has
+        /// run. Setting a cell's property that early diverges its <c>ComputedStyle</c> away from the
+        /// shared <c>Default</c> singleton, which then makes that cell's own (still-pending)
+        /// <see cref="CascadeApplyStyles"/> call take its defaulting-loop's non-fast-path branch and
+        /// re-assert every property's initial value - silently clobbering the value just cascaded from
+        /// the table. Running this pass only after the whole tree's cascade has completed avoids that
+        /// entirely (issue #636). It runs before <see cref="CorrectAnonymousTables"/> so the tree still
+        /// has its as-authored shape, matching what <see cref="SetForAllCells"/>'s traversal expects.
+        /// </remarks>
+        private static void ApplyTablePresentationalAttributesToCells(CssBox box)
+        {
+            if (box.HtmlTag is { } tag && tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
+            {
+                var border = tag.TryGetAttribute(HtmlConstants.Border);
+                if (!string.IsNullOrEmpty(border) && border != "0")
+                {
+                    ApplyTableBorder(box, "1px");
+                }
+
+                var cellpadding = tag.TryGetAttribute(HtmlConstants.Cellpadding);
+                if (!string.IsNullOrEmpty(cellpadding))
+                {
+                    ApplyTablePadding(box, cellpadding);
+                }
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                ApplyTablePresentationalAttributesToCells(childBox);
+            }
         }
 
         /// <summary>
