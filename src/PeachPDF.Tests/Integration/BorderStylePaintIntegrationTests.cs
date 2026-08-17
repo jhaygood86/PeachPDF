@@ -286,12 +286,9 @@ namespace PeachPDF.Tests.Integration
         // ─── deprecated presentational `border` HTML attribute always resolves solid ──
         // DomParser.CascadeApplyStyles' HtmlConstants.Border case: a non-zero `border` attribute forces
         // every side's style to solid (CssProperty<LineStyle>.FromValue(Keywords.Solid, LineStyle.Solid)
-        // / the shared SolidBorderStyle constant). Only the plain-element path is covered here -
-        // ApplyTableBorder's TD-cascading path (SetForAllCells) was found, while writing this test, to
-        // already not actually reach the cells regardless of this PR's changes (the same pre-existing gap
-        // affects cellpadding/ApplyTablePadding, which uses the identical SetForAllCells mechanism) - a
-        // pre-existing issue unrelated to the border-style/LineStyle conversion, out of scope here and
-        // tracked separately (issue #636).
+        // / the shared SolidBorderStyle constant). Only the plain-element path is covered here - the
+        // table-to-cell cascade (ApplyTableBorder/SetForAllCells, issue #636) is covered by
+        // PresentationalAttributeIntegrationTests.BorderAttribute_OnTable_CascadesASolidBorderToCells.
 
         [Fact]
         public async Task PresentationalBorderAttribute_OnAPlainElement_ForcesSolidOnAllSides()

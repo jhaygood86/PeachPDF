@@ -203,16 +203,50 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BorderAttribute_OnTable_SetsSolidBorderOnTheTableItself()
         {
-            // Exercises TranslateBorder's tag.Name == "table" branch, which (attempts to) cascade a 1px
-            // solid border onto every cell via ApplyTableBorder/SetForAllCells - which has the same
-            // pre-existing #636 gap as CellpaddingAttribute_DoesNotYetReachTableCells above and
-            // PresentationalBorderAttribute_OnAPlainElement_ForcesSolidOnAllSides's comment in
-            // BorderStylePaintIntegrationTests, so only the table's own border is asserted here.
+            // Exercises TranslateBorder's tag.Name == "table" branch. See BorderAttribute_OnTable_CascadesASolidBorderToCells
+            // below for the per-cell cascade (issue #636).
             var (root, _) = await BuildAndLayout(Wrap("<table id='t' border='1'><tr><td>x</td></tr></table>"));
             var table = FindById(root, "t")!;
 
             Assert.Equal(LineStyle.Solid, table.BorderTopStyle.Value);
             Assert.Equal("1px", table.BorderTopWidth);
+        }
+
+        [Fact]
+        public async Task BorderAttribute_OnTable_CascadesASolidBorderToCells()
+        {
+            // Regression for issue #636: ApplyTableBorder's SetForAllCells call used to run mid-cascade
+            // (from inside the table's own TranslateAttributes), before the cell's own CascadeApplyStyles
+            // pass ran - which then reset the cell's just-set border back to its initial value (see
+            // CascadeApplyStyles's "defaulting" step, which re-runs once a box's ComputedStyle diverges
+            // from the shared Default singleton). The cascade to cells now happens after the whole tree's
+            // cascade has completed, so it survives.
+            var (root, _) = await BuildAndLayout(Wrap("<table border='1'><tr><td id='c'>x</td></tr></table>"));
+            var cell = FindById(root, "c")!;
+
+            Assert.Equal(LineStyle.Solid, cell.BorderTopStyle.Value);
+            Assert.Equal("1px", cell.BorderTopWidth);
+            Assert.Equal("1px", cell.BorderLeftWidth);
+            Assert.Equal("1px", cell.BorderRightWidth);
+            Assert.Equal("1px", cell.BorderBottomWidth);
+        }
+
+        [Fact]
+        public async Task BorderAttributeZero_OnTable_DoesNotCascadeABorderToCells()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<table border='0'><tr><td id='c'>x</td></tr></table>"));
+            var cell = FindById(root, "c")!;
+
+            Assert.Equal(LineStyle.None, cell.BorderTopStyle.Value);
+        }
+
+        [Fact]
+        public async Task BorderAttribute_OnATableWithATbody_StillCascadesToCells()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<table border='1'><tbody><tr><td id='c'>x</td></tr></tbody></table>"));
+            var cell = FindById(root, "c")!;
+
+            Assert.Equal(LineStyle.Solid, cell.BorderTopStyle.Value);
         }
 
         [Fact]
@@ -237,19 +271,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task CellpaddingAttribute_DoesNotYetReachTableCells()
+        public async Task CellpaddingAttribute_CascadesToTableCells()
         {
-            // ApplyTablePadding's TD-cascading path (SetForAllCells) has the same pre-existing gap as
-            // ApplyTableBorder's (see PresentationalBorderAttribute_OnAPlainElement_ForcesSolidOnAllSides's
-            // comment in BorderStylePaintIntegrationTests): it doesn't traverse the anonymous
-            // table-row-group box CSS inserts around a bare <tr>, so cellpadding never actually reaches
-            // the cell today - tracked separately as issue #636, out of scope here. This documents the
-            // current (pre-existing) behavior rather than silently leaving the `cellpadding` switch-case
-            // uncovered.
+            // Regression for issue #636: ApplyTablePadding's SetForAllCells call used to run mid-cascade
+            // (from inside the table's own TranslateAttributes), before the cell's own CascadeApplyStyles
+            // pass ran - which then reset the cell's just-set padding back to its initial value. The
+            // cascade to cells now happens after the whole tree's cascade has completed, so it survives.
             var (root, _) = await BuildAndLayout(Wrap("<table id='t' cellpadding='5'><tr><td id='c'>x</td></tr></table>"));
             var cell = FindById(root, "c")!;
 
-            Assert.Equal("0", cell.PaddingLeft);
+            Assert.Equal("5px", cell.PaddingLeft);
+            Assert.Equal("5px", cell.PaddingTop);
+            Assert.Equal("5px", cell.PaddingRight);
+            Assert.Equal("5px", cell.PaddingBottom);
+        }
+
+        [Fact]
+        public async Task CellpaddingAttribute_OnATableWithATbody_StillCascadesToCells()
+        {
+            var (root, _) = await BuildAndLayout(Wrap("<table cellpadding='5'><tbody><tr><td id='c'>x</td></tr></tbody></table>"));
+            var cell = FindById(root, "c")!;
+
+            Assert.Equal("5px", cell.PaddingLeft);
         }
 
         [Fact]
