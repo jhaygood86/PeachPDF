@@ -1,7 +1,7 @@
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
-using StbImageWriteSharp;
+using PeachPDF.Tests.TestSupport;
 
 using PeachPDF.Fonts;
 
@@ -9,17 +9,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
 {
     public class XGraphicsTests
     {
-        static byte[] MakePngBytes(int width = 4, int height = 4)
-        {
-            var pixels = new byte[width * height * 4];
-            for (int i = 0; i < pixels.Length; i += 4)
-            {
-                pixels[i] = 10; pixels[i + 1] = 20; pixels[i + 2] = 30; pixels[i + 3] = 255;
-            }
-            using var ms = new MemoryStream();
-            new ImageWriter().WritePng(pixels, width, height, ColorComponents.RedGreenBlueAlpha, ms);
-            return ms.ToArray();
-        }
+        static byte[] MakePngBytes(int width = 4, int height = 4) =>
+            RasterPngFixture.MakeSolidRgbaPngBytes(width, height, 10, 20, 30);
 
         static (PdfDocument Document, PdfPage Page) NewPage()
         {

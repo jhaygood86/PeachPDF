@@ -3166,9 +3166,9 @@ var parityMarkup =
 var parityDataUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(parityMarkup));
 
 // Small synthesized raster PNG (8x8 colorful checker) for the <image> element showcase. A
-// hand-picked minimal PNG isn't reliably decodable by the StbImageSharp-based decoder PeachPDF
-// uses internally - writing one with the matching StbImageWriteSharp encoder (already a transitive
-// dependency via the PeachPDF project reference) is.
+// hand-picked minimal PNG isn't reliably decodable by the raster codec PeachPDF uses internally
+// (PeachImage, a transitive dependency via the PeachPDF project reference) - writing one with the
+// matching real encoder is.
 static string MakeRasterDataUri()
 {
     const int size = 8;
@@ -3187,8 +3187,10 @@ static string MakeRasterDataUri()
         }
     }
 
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Rgba32);
+    pixels.CopyTo(image.GetPixelSpan());
     using var ms = new MemoryStream();
-    new StbImageWriteSharp.ImageWriter().WritePng(pixels, size, size, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, ms);
+    image.Save(ms, "png");
     return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
 }
 var rasterDataUri = MakeRasterDataUri();

@@ -19,7 +19,7 @@ namespace PeachPDF.Network
     /// <remarks>
     /// An OS-provided mechanism is consulted first — the Windows shell association API, the Apple
     /// Uniform Type Identifiers C API, or the Linux <c>/etc/mime.types</c> database — falling back to a
-    /// built-in static map covering HTML, CSS, SVG and the raster formats StbImageSharp decodes. Every
+    /// built-in static map covering HTML, CSS, SVG and common raster image extensions. Every
     /// OS lookup is best-effort and fail-soft: any failure (missing library on a platform, an
     /// unregistered extension, an interop error) falls through to the static map, so the formats PeachPDF
     /// itself renders resolve even on a host whose OS registrations are missing. Results are memoized per
@@ -105,8 +105,9 @@ namespace PeachPDF.Network
         }
 
         /// <summary>
-        /// The built-in fallback map. Covers the document formats PeachPDF parses (HTML/CSS/SVG), every
-        /// raster format <c>StbImageSharpImageSource</c> decodes, and the <c>@font-face</c> font formats
+        /// The built-in fallback map. Covers the document formats PeachPDF parses (HTML/CSS/SVG), common
+        /// raster image extensions (see <c>PeachImageSource</c> for what's actually decodable), and the
+        /// <c>@font-face</c> font formats
         /// PeachPDF loads (TTF/OTF/WOFF/WOFF2), so these always resolve regardless of the host OS's own
         /// registrations. Exposed <c>internal</c> for direct testing.
         /// </summary>
@@ -119,6 +120,8 @@ namespace PeachPDF.Network
             "jpg" or "jpeg" => "image/jpeg",
             "bmp" => "image/bmp",
             "gif" => "image/gif",
+            "webp" => "image/webp",
+            "avif" => "image/avif",
             "tga" => "image/x-tga",
             "psd" => "image/vnd.adobe.photoshop",
             "hdr" => "image/vnd.radiance",

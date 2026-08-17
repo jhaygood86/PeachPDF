@@ -1005,18 +1005,12 @@ namespace PeachPDF.Tests.Svg
 
         /// <summary>
         /// A tiny synthesized PNG, same technique as <c>ImageDrawingTests.MakePngBytes</c> (a
-        /// hand-picked minimal PNG isn't reliably decodable by the StbImageSharp-based decoder this
-        /// fork uses - writing one with the matching StbImageWriteSharp encoder is).
+        /// hand-picked minimal PNG isn't reliably decodable by the raster codec this fork uses -
+        /// PeachImage - so writing one with the matching real encoder is).
         /// </summary>
         private static readonly string OnePixelPngDataUri = "data:image/png;base64," + System.Convert.ToBase64String(MakePngBytes());
 
-        private static byte[] MakePngBytes()
-        {
-            var pixels = new byte[] { 255, 0, 0, 255 };
-            using var ms = new System.IO.MemoryStream();
-            new StbImageWriteSharp.ImageWriter().WritePng(pixels, 1, 1, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, ms);
-            return ms.ToArray();
-        }
+        private static byte[] MakePngBytes() => RasterPngFixture.MakeSolidRgbaPngBytes(1, 1, 255, 0, 0);
 
         [Fact]
         public void Image_XYWidthHeight_AreParsed()

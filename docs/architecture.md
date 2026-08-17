@@ -86,9 +86,9 @@ The default loader when no `NetworkLoader` is set in `PdfGenerateConfig`. It han
 
 Serves the root document and referenced resources from the local file system via `file:` URIs. Constructed with no arguments, its `BaseUri` is the current working directory; constructed with a file path, its `BaseUri` is that file's own `file:` URI and `GetPrimaryContents()` reads the file — the way a browser bases a locally-opened document. `GetResourceStream` reads the file and synthesizes a `Content-Type` header from `MimeTypeResolver`.
 
-`MimeTypeResolver` uses the **operating system's own MIME mechanism by default** — the Windows shell file-association API on Windows, the Uniform Type Identifiers API on macOS/iOS, and the `/etc/mime.types` database on Linux — validating the result is a real `type/subtype` value (so a shell "no content type registered" property descriptor is rejected rather than used). When the OS provides nothing usable, it falls back to a **built-in map** covering HTML, CSS, SVG, the raster formats StbImageSharp decodes (PNG, JPEG, BMP, GIF, TGA, PSD, HDR), and the TTF/OTF/WOFF/WOFF2 font formats, and finally `application/octet-stream`. Results are memoized per extension. If a local file uses an extension outside the built-in set, register its MIME type with the OS (e.g. the shell `Content Type` association on Windows, or an `/etc/mime.types` / `~/.local/share/mime` entry on Linux) so the OS lookup can resolve it.
+`MimeTypeResolver` uses the **operating system's own MIME mechanism by default** — the Windows shell file-association API on Windows, the Uniform Type Identifiers API on macOS/iOS, and the `/etc/mime.types` database on Linux — validating the result is a real `type/subtype` value (so a shell "no content type registered" property descriptor is rejected rather than used). When the OS provides nothing usable, it falls back to a **built-in map** covering HTML, CSS, SVG, common raster image extensions (PNG, JPEG, BMP, GIF, TGA, PSD, HDR — this map only resolves an extension to a MIME type string; it is unrelated to which of those formats PeachPDF can actually decode, see below), and the TTF/OTF/WOFF/WOFF2 font formats, and finally `application/octet-stream`. Results are memoized per extension. If a local file uses an extension outside the built-in set, register its MIME type with the OS (e.g. the shell `Content Type` association on Windows, or an `/etc/mime.types` / `~/.local/share/mime` entry on Linux) so the OS lookup can resolve it. (TGA/PSD/HDR resolve a MIME type either way but aren't decodable — see below.)
 
-Consistent with browsers, PeachPDF gates only *stylesheets* on MIME type — a linked stylesheet body is accepted only with a `text/css` `Content-Type` — while images and fonts are identified by their bytes (StbImageSharp decoding; `FontFormatConverter` sniffing), not their declared type.
+Consistent with browsers, PeachPDF gates only *stylesheets* on MIME type — a linked stylesheet body is accepted only with a `text/css` `Content-Type` — while images and fonts are identified by their bytes (raster decoding via PeachImage; `FontFormatConverter` sniffing), not their declared type.
 
 #### `MimeKitNetworkLoader` ([Network/MimeKitNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/MimeKitNetworkLoader.cs))
 
@@ -569,7 +569,7 @@ This paint-order correctness — together with the pagination fixes above (blank
 
 ### Image loading and decoding
 
-Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding is handled by **StbImageSharp**, which supports JPEG, PNG, BMP, GIF, TGA, and HDR. Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
+Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding is handled by **PeachImage** (JPEG, PNG, BMP, GIF, WebP, and AVIF — TGA, PSD, and HDR aren't implemented there and so aren't decodable). Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
 
 `ImageLoadHandler` is an implementation detail of `CssImage.Url`: each URL image owns its handler and exposes `EnsureLoadedAsync(HtmlContainerInt)` for lazy loading and `Dispose()` for cleanup. Callers (background layer loops, list marker painting) interact only with `CssImage` and never touch `ImageLoadHandler` directly.
 
@@ -640,7 +640,7 @@ Font resolution maps each codepoint 1:1 to a glyph through the `cmap`; there is 
 
 ### Image pipeline
 
-PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageImporterBmp`) formats. Other formats (PNG, GIF, etc.) arrive as pre-decoded RGBA bitmaps from StbImageSharp and are written as PDF image XObjects using `XBitmapImage`.
+PdfSharpCore includes importers for JPEG (`ImageImporterJpeg`) and BMP (`ImageImporterBmp`) formats. Other formats (PNG, GIF) arrive as pre-decoded RGBA bitmaps from PeachImage (see [Image loading and decoding](#image-loading-and-decoding)) and are written as PDF image XObjects using `XBitmapImage`.
 
 ### Graphics context
 

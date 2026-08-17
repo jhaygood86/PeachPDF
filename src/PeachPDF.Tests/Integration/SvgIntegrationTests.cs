@@ -1326,16 +1326,11 @@ namespace PeachPDF.Tests.Integration
 
         /// <summary>
         /// Same technique as <c>ImageDrawingTests.MakePngBytes</c> - a hand-picked minimal PNG isn't
-        /// reliably decodable by the StbImageSharp-based decoder this fork uses; writing one with the
-        /// matching StbImageWriteSharp encoder is.
+        /// reliably decodable by the raster codec this fork uses (PeachImage); writing one with the
+        /// matching real encoder is.
         /// </summary>
-        private static string OnePixelPngDataUri()
-        {
-            var pixels = new byte[] { 255, 0, 0, 255 };
-            using var ms = new MemoryStream();
-            new StbImageWriteSharp.ImageWriter().WritePng(pixels, 1, 1, StbImageWriteSharp.ColorComponents.RedGreenBlueAlpha, ms);
-            return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
-        }
+        private static string OnePixelPngDataUri() =>
+            "data:image/png;base64," + Convert.ToBase64String(RasterPngFixture.MakeSolidRgbaPngBytes(1, 1, 255, 0, 0));
 
         [Fact]
         public async Task InlineSvg_ImageDataUriPng_RendersImageXObject()
