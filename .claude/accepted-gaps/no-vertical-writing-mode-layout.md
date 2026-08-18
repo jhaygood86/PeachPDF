@@ -57,6 +57,49 @@ identity is tied to `flex-direction`, not the physical axis it lands on). Verifi
 MuPDF rasterization (byte-identical layout) per this repo's paint-verification convention, and the existing
 481 horizontal-tb Flexbox tests all still pass unchanged.
 
+Table (`display: table`) is also writing-mode-aware now for the simple case: `CssLayoutEngineTable`
+resolves `_isVertical`/`_rowAxisStartIsAtMax` from `LogicalPropertyResolver.BlockStart` and reinterprets
+its column/row-sizing pipeline, cell placement, and final table-dimension settling through that axis
+mapping rather than assuming rows always stack along physical Y and columns along physical X. Rows always
+stack along the block axis and columns always run along the inline axis per
+[css-tables-3](https://www.w3.org/TR/css-tables-3/) — for a vertical table that means rows stack along
+physical X (right-to-left for `vertical-rl`, left-to-right for `vertical-lr`) and columns run top-to-bottom
+along physical Y, using each cell's own `height` (not `width`) as its column-sizing hint. Cell placement
+uses a "layout everything forward, then reflect once" design for `vertical-rl` specifically: the row loop
+always places rows growing left-to-right (`vertical-lr`'s own natural shape, since a row's own row-axis
+thickness isn't known until after its cells are placed — a chicken-and-egg problem the single-pass
+measure-and-place loop can't otherwise resolve), and a table already laid out this way gets one whole-table
+mirror pass (`ReflectRowAxisForVerticalRl`) when `vertical-rl` actually wants right-to-left growth. This
+also required fixing a real, previously-unknown bug in `CssBox.ResolveOwnInlineSize`, which unconditionally
+skipped physical-width resolution for every table cell (correct for `horizontal-tb`, where width is the
+table-controlled column axis, but wrong for a vertical cell, where width is the cell's own content-driven
+row-axis extent — the same role physical height already plays for an ordinary horizontal cell via
+`CssLayoutEngine.ApplyHeight`). A vertical table is treated as monolithic with respect to its parent's own
+page fragmentation (`MonolithicContent.IsUnresumableVerticalTable`), the same "moved whole, not sliced"
+treatment `IsUnresumableOrthogonalFlow` already gives a vertical inline-only box — the table engine forces
+`pageHeight` to `double.MaxValue` for a vertical table's own row loop (routing it through the pre-existing
+unpaginated fallback path rather than real per-row pagination), so the outer driver must never try to slice
+one mid-row. Getting that guarantee to actually hold took two more fixes beyond the pageHeight override
+itself: `WillCrossPageBoundary`/`StraddleCorrectionAppliesTo` (the per-row and straddle-correction checks)
+compared this table's own row-axis (physical-X) cursor against the *container's* real physical-Y page
+size rather than the table's own `pageHeight` override, so a vertical table with enough rows for its
+row-axis extent to exceed one page's band height could still trip a spurious internal break — both now
+take `pageHeight` as a parameter and check that instead; and a bottom `<caption>` left `_tableBox
+.ActualRight` (the row-axis-max edge `ReflectRowAxisForVerticalRl` mirrors every row against) unset,
+corrupting every row's position rather than only the caption's own already-disclosed-as-unconverted one —
+Step 7 now settles `ActualRight` in that branch too. A third, pre-existing bug surfaced along the way:
+`DetermineMissingColumnWidths`'s auto-width "spread extra width between columns" step could shrink a
+column below its own already-computed content width whenever `availCellSpace` (the column axis's
+available space, for a vertical table) came out smaller than the columns' combined content size — the
+common case for a vertical table with no definite height anywhere up its containing-block chain — instead
+of leaving a column at its content-driven width the way an indefinite/auto containing block should;
+guarded so the spread only ever grows a column, never shrinks one. Verified with `CssBox`-property
+assertions (row/column stacking direction and spacing, column-sizing-from-height and its uniformity across
+rows, the page-break and caption regressions above), fragment-level `IsMonolithic`/page-straddle
+assertions, and the existing 544 horizontal-tb Table tests all still pass unchanged (the column-width
+guard, in particular, only ever removes a shrink no horizontal-tb test relied on). Scoped to simple tables
+only — see below for what `display: table` still doesn't handle under a vertical writing mode.
+
 ## What's still out of scope
 
 - **Block children inside a vertical box** ([#760](https://github.com/jhaygood86/PeachPDF/issues/760)).
@@ -90,10 +133,23 @@ MuPDF rasterization (byte-identical layout) per this repo's paint-verification c
   property) is not implemented.
 - **`sideways-rl`/`sideways-lr`** ([#766](https://github.com/jhaygood86/PeachPDF/issues/766)) still render
   as `horizontal-tb` throughout (`WritingModeFrame.IsVertical` is true only for `vertical-rl`/`vertical-lr`).
-- **Table** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762)) and **Multi-column**
-  ([#764](https://github.com/jhaygood86/PeachPDF/issues/764)) layout engines don't read `writing-mode` at
-  all — a vertical-writing-mode table/multicol container still lays out its own rows/columns as
-  `horizontal-tb`. (Flexbox closed this gap - see "What now works" above.)
+- **Table remaining gaps** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762), stays open for
+  these): collapsed borders (`CollapsedBorderResolver`'s candidate collection still hardcodes physical
+  top/bottom/left/right edge reads), `<thead>`/`<tfoot>` repetition, `<caption>` (beyond the narrow
+  `_tableBox.ActualRight` fix above, which only stops a bottom caption from corrupting the *other* rows'
+  positions — the caption's own placement stays physical-Y, unconverted), a `rowspan` cell's own row-axis
+  sizing (it is not yet computed as the combined row-axis extent of every row it spans, the way
+  `GetCellWidth` already sums a `colspan` cell's extent across the *column* axis — a `rowspan` cell
+  currently sizes and can end up overflowing past the table's own row-axis bound; the row-tracking
+  bookkeeping around it — `rowMaxBottom`, `CloseSpanningCell` — is axis-aware and no longer corrupts its
+  *non-spanning* row siblings' positions, but the spanning cell's own extent is still wrong), `colspan`
+  straddling a vertical table's row axis, real per-row pagination of a vertical table's own content (it is
+  monolithic instead — see "What now works" above and the general per-vertical-content-fragmentation gap
+  below), and `vertical-align`'s content-alignment-*within*-a-cell behavior (cell *size* is
+  writing-mode-aware; `CssLayoutEngine.ApplyCellVerticalAlignment`'s own internal positioning of a cell's
+  content is not yet).
+- **Multi-column** ([#764](https://github.com/jhaygood86/PeachPDF/issues/764)) doesn't read `writing-mode`
+  at all — a vertical-writing-mode multicol container still lays out its own columns as `horizontal-tb`.
 - **A vertical-writing-mode Flexbox container's own top-level definite-main-size resolution has no
   aspect-ratio-on-width fallback** ([#772](https://github.com/jhaygood86/PeachPDF/issues/772)). The
   pre-existing `aspect-ratio`-driven auto-height fallback

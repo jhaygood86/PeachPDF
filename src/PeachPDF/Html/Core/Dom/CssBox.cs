@@ -4057,8 +4057,19 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private async ValueTask ResolveOwnInlineSize(RGraphics g, double blockTop)
         {
-            // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid
-            if (DerivedStyle.ActualDisplay != Keywords.TableCell && DerivedStyle.ActualDisplay != Keywords.Table && DerivedStyle.ActualDisplay != Keywords.Flex && DerivedStyle.ActualDisplay != Keywords.InlineFlex && DerivedStyle.ActualDisplay != Keywords.Grid && DerivedStyle.ActualDisplay != Keywords.InlineGrid)
+            // Because their width and height are set by CssTable, CssLayoutEngineFlex or CssLayoutEngineGrid -
+            // except a table cell under a vertical writing mode, where physical width is the table's row
+            // axis (the cell's own content-driven extent, the same role physical height already plays for
+            // an ordinary horizontal-tb cell - see CssLayoutEngine.ApplyHeight's own remarks on that) rather
+            // than the table-engine-controlled column axis, so it has to resolve normally here exactly the
+            // way height already does for every table cell regardless of writing-mode. The table box itself
+            // (and flex/grid) always skip this in every writing mode - each of those already resolves its
+            // own inline size entirely internally, unlike a cell whose own natural width/height genuinely
+            // depends on writing-mode.
+            var isVerticalTableCell = DerivedStyle.ActualDisplay == Keywords.TableCell
+                && WritingMode.Value is CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr;
+
+            if (isVerticalTableCell || (DerivedStyle.ActualDisplay != Keywords.TableCell && DerivedStyle.ActualDisplay != Keywords.Table && DerivedStyle.ActualDisplay != Keywords.Flex && DerivedStyle.ActualDisplay != Keywords.InlineFlex && DerivedStyle.ActualDisplay != Keywords.Grid && DerivedStyle.ActualDisplay != Keywords.InlineGrid))
             {
                 var width = await CssLayoutEngine.GetBoxWidth(g, this, blockTop);
                 ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;

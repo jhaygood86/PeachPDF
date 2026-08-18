@@ -5182,10 +5182,10 @@ await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
 // --- writing-mode (vertical-rl/vertical-lr) showcase ---
 // Real vertical line flow (issue #547): lines stack along the block axis (right-to-left for
 // vertical-rl, left-to-right for vertical-lr), text runs top-to-bottom within each line, and
-// glyphs paint rotated 90°. Scoped to plain inline text for this milestone - see
-// .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's still deferred (auto-width
-// content-driven sizing, block children, real per-character text-orientation, table/flex/column
-// axis awareness).
+// glyphs paint rotated 90°. Flexbox and simple Table layout are also writing-mode-aware now - see
+// .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's still deferred (block
+// children, real per-character text-orientation, Multi-column axis awareness, and Table's own
+// collapsed borders/headers-footers/captions/rowspan-colspan/per-row pagination).
 
 const string WritingModeCss = """
     <style>
@@ -5261,10 +5261,26 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</div><div class=\"label\">vertical-lr flex column: left-to-right</div></div>" +
     "</div>" +
 
+    "<h2>7 &mdash; table under vertical-rl/vertical-lr (rows = block axis, columns = inline axis)</h2>" +
+    "<div class=\"row\">" +
+    "<div><table style=\"writing-mode: vertical-rl; border-spacing: 4px\">" +
+    "<tr><td style=\"width: 60px; height: 40px; background: #1a6b8a; color: #fff; text-align: center\">R1C1</td>" +
+    "<td style=\"width: 60px; height: 40px; background: #4a9bc4; color: #fff; text-align: center\">R1C2</td></tr>" +
+    "<tr><td style=\"width: 60px; height: 40px; background: #7cc0e0; text-align: center\">R2C1</td>" +
+    "<td style=\"width: 60px; height: 40px; background: #cfe9f5; text-align: center\">R2C2</td></tr>" +
+    "</table><div class=\"label\">vertical-rl table: rows stack right-to-left, columns run top-to-bottom</div></div>" +
+    "<div><table style=\"writing-mode: vertical-lr; border-spacing: 4px\">" +
+    "<tr><td style=\"width: 60px; height: 40px; background: #1a6b8a; color: #fff; text-align: center\">R1C1</td>" +
+    "<td style=\"width: 60px; height: 40px; background: #4a9bc4; color: #fff; text-align: center\">R1C2</td></tr>" +
+    "<tr><td style=\"width: 60px; height: 40px; background: #7cc0e0; text-align: center\">R2C1</td>" +
+    "<td style=\"width: 60px; height: 40px; background: #cfe9f5; text-align: center\">R2C2</td></tr>" +
+    "</table><div class=\"label\">vertical-lr table: rows stack left-to-right, columns run top-to-bottom</div></div>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
-    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, glyphs painted rotated 90 degrees, and writing-mode-aware Flexbox row/column layout.",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, glyphs painted rotated 90 degrees, and writing-mode-aware Flexbox and Table layout.",
     writingModeHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---

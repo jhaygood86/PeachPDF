@@ -1546,14 +1546,25 @@ namespace PeachPDF.Html.Core.Dom
                     occupiedSpace += _columnWidths[i];
                 }
 
-                // spread extra width between all columns
-                for (var i = 0; i < _columnWidths.Length; i++)
+                // spread extra width between all columns - only when there is a genuine surplus
+                // (availCellSpace > occupiedSpace) to distribute. Without this guard, an indefinite/zero
+                // availCellSpace - most commonly a vertical table with no definite height anywhere up its
+                // containing-block chain, since availCellSpace maps to the column axis's available space
+                // there (GetAvailableCellWidth) - made (availCellSpace - occupiedSpace) negative, and the
+                // loop below silently SHRANK a column already sized to its own content's explicit width
+                // toward zero. This loop's only job is to grow a column toward maxFullWidths when there is
+                // real spare room; it must never shrink one below the content-based width already computed
+                // above it.
+                if (availCellSpace > occupiedSpace)
                 {
-                    if (!(maxFullWidths[i] > _columnWidths[i])) continue;
+                    for (var i = 0; i < _columnWidths.Length; i++)
+                    {
+                        if (!(maxFullWidths[i] > _columnWidths[i])) continue;
 
-                    var temp = _columnWidths[i];
-                    _columnWidths[i] = Math.Min(_columnWidths[i] + (availCellSpace - occupiedSpace) / Convert.ToSingle(_columnWidths.Length - i), maxFullWidths[i]);
-                    occupiedSpace = occupiedSpace + _columnWidths[i] - temp;
+                        var temp = _columnWidths[i];
+                        _columnWidths[i] = Math.Min(_columnWidths[i] + (availCellSpace - occupiedSpace) / Convert.ToSingle(_columnWidths.Length - i), maxFullWidths[i]);
+                        occupiedSpace = occupiedSpace + _columnWidths[i] - temp;
+                    }
                 }
             }
         }
@@ -2060,7 +2071,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g"></param>
         private async ValueTask LayoutCells(RGraphics g)
         {
-            var startX = Math.Max(_tableBox.ClientLeft + StartXSpacing(), 0);
+            // Column-axis start: always physical-min-forward (no rtl support - see the axis-mapping
+            // fields' own remarks), so ClientTop for a vertical table (columns run along physical Y),
+            // ClientLeft otherwise.
+            var startX = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), 0);
 
             // Lay the top caption(s) out above the row grid before anything else claims this
             // coordinate - once, on the pass that starts the row loop from the top. A continuation
@@ -2083,10 +2097,28 @@ namespace PeachPDF.Html.Core.Dom
                 _topCaptionsHeight = topCaptionsBottom - _tableBox.Location.Y;
             }
 
-            var startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + StartYSpacing(), 0);
+            // Row-axis start: forward-growing (vertical-lr's own shape) even for vertical-rl, whose rows
+            // actually grow from the opposite (physical-max) edge - ReflectRowAxisForVerticalRl applies
+            // that correction in one pass once every row's final position is known, rather than solving
+            // it here where a row's own row-axis thickness isn't yet knowable (see the axis-mapping
+            // fields' own remarks). ClientLeft for a vertical table (rows run along physical X), ClientTop
+            // otherwise. _topCaptionsHeight is 0 for a vertical table (captions aren't yet writing-mode-
+            // aware - out of scope here, same as headers/footers/collapsed borders), so including the
+            // term unconditionally is harmless for the caption-less tables this covers.
+            var startY = Math.Max((_isVertical ? _tableBox.ClientLeft : _tableBox.ClientTop) + _topCaptionsHeight + StartYSpacing(), 0);
 
             var container = _tableBox.HtmlContainer;
-            var pageHeight = container?.PageSize.Height ?? double.MaxValue;
+            // A vertical table's own rows advance along physical X, not physical Y, so they have no
+            // relationship to the page's own (always physical-Y) fragmentation bands - "does this row
+            // cross a page boundary" is not a question a vertical table's row loop can answer. Reporting
+            // an unbounded page height here routes the whole row loop through its own pre-existing
+            // unpaginated fallback path (every page-break decision point below is gated on
+            // `pageHeight < double.MaxValue - 1`), the same way a measurement pass with no live
+            // fragmentainer already does - not a new bypass, reuse of an already-tested path. The table's
+            // own box is separately made monolithic (MonolithicContent) so the *whole* table still moves
+            // to a later page as a unit if it doesn't fit; real per-cell pagination of a vertical table's
+            // content is tracked as a follow-up (#762).
+            var pageHeight = _isVertical ? double.MaxValue : container?.PageSize.Height ?? double.MaxValue;
 
             // Which fragmentainer the table begins in is a question about the table's own top edge, not
             // about startY: startY is a row cursor, and VerticalSpacingAt(0) is negative (half the
@@ -2561,7 +2593,7 @@ namespace PeachPDF.Html.Core.Dom
                 var availableHeight = container!.PageBandHeightOf(slot) - RepeatedFooterHeight;
                 var estimatedBodyHeight = _bodyRows.Sum(EstimateRowHeight);
 
-                if (WillCrossPageBoundary(container, cursor.CurrentY + firstRowHeight, availableHeight, slot)
+                if (WillCrossPageBoundary(container, cursor.CurrentY + firstRowHeight, availableHeight, slot, pageHeight)
                     && estimatedBodyHeight <= availableHeight)
                 {
                     var pageBreakOffset = CalculatePageBreakOffset(container, cursor.CurrentY, slot);
@@ -2603,7 +2635,7 @@ namespace PeachPDF.Html.Core.Dom
                 var availableHeight = container.PageBandHeightOf(slot) - RepeatedFooterHeight;
                 var afterHeaderY = startY + _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
 
-                if (WillCrossPageBoundary(container, afterHeaderY + firstRowHeight, availableHeight, slot))
+                if (WillCrossPageBoundary(container, afterHeaderY + firstRowHeight, availableHeight, slot, pageHeight))
                 {
                     var pageBreakOffset = CalculatePageBreakOffset(container, startY, slot);
                     pageBreakOffset = PullKeepWithNextRun(container, startY, pageBreakOffset,
@@ -2719,9 +2751,19 @@ namespace PeachPDF.Html.Core.Dom
                 // The prediction is EstimateRowHeight's, which undershoots a row holding block content by
                 // roughly 2x - so this arm is the cheap one that catches an ordinary text row before it
                 // is ever placed straddling, and the correction below is what makes the answer right.
-                if (i > ResumeRowIndex && container != null
+                // A vertical table's row loop never takes a page break of its own - TakeBreakBeforeRow
+                // repositions the cursor against container.PageTopOf, a physical-Y page-top, but this
+                // table's own cursor.CurrentY tracks the row axis (physical X - see the pageHeight
+                // override's own remarks above), so honoring ForcedBreakFallsBeforeRow here as well
+                // (not just the WillCrossPageBoundary estimate) would feed a physical-Y value into a
+                // physical-X accumulator. The whole table already moves as a unit if it doesn't fit
+                // (MonolithicContent.IsUnresumableVerticalTable); an explicit break-before/-after on a row
+                // inside one is deferred along with the rest of real per-row vertical-table pagination
+                // (#762) rather than partially honored here.
+                if (pageHeight < double.MaxValue - 1
+                    && i > ResumeRowIndex && container != null
                     && (ForcedBreakFallsBeforeRow(i)
-                        || WillCrossPageBoundary(container, cursor.CurrentY + estimatedRowHeight, availableHeight, slot)))
+                        || WillCrossPageBoundary(container, cursor.CurrentY + estimatedRowHeight, availableHeight, slot, pageHeight)))
                 {
                     slot = await TakeBreakBeforeRow(g, container, cursor, slot);
                 }
@@ -2741,7 +2783,7 @@ namespace PeachPDF.Html.Core.Dom
                 // real bottom is readable: did it cross out of the band it began in? Where it did, the
                 // break belongs before it (§4.3), so the placement is taken back and the row is placed
                 // again on the other side of it. At most one correction per row, so this cannot loop.
-                if (StraddleCorrectionAppliesTo(i, container, cursor, rowTop, slot))
+                if (StraddleCorrectionAppliesTo(i, container, cursor, rowTop, slot, pageHeight))
                 {
                     // A placement that closed a spanning cell also stated the geometry that cell occupies
                     // in the bands after its own (CloseSpanningCell), and that is keyed by (box, slot) -
@@ -2886,15 +2928,28 @@ namespace PeachPDF.Html.Core.Dom
             SetRowGroupBoxDimensions(placedRows);
             SetColumnBoxDimensions();
 
-            // Step 7: Set final table dimensions
-            var tableRight = Math.Max(cursor.MaxRight, _tableBox.Location.X + _tableBox.ActualWidth);
-            _tableBox.ActualRight = tableRight + HorizontalSpacingAt(_columnCount) + _tableBox.ActualBorderRightWidth;
+            // Step 7: Set final table dimensions. cursor.MaxRight tracks the column axis (physical Y for
+            // a vertical table, per its own tracking in LayoutBodyRow), so it settles ActualBottom there
+            // instead of ActualRight - the column-axis twin of the row-axis settling below.
+            if (_isVertical)
+            {
+                var tableBottom = Math.Max(cursor.MaxRight, _tableBox.Location.Y + _tableBox.ActualHeight);
+                _tableBox.ActualBottom = tableBottom + HorizontalSpacingAt(_columnCount) + TableInlineBorderEnd;
+            }
+            else
+            {
+                var tableRight = Math.Max(cursor.MaxRight, _tableBox.Location.X + _tableBox.ActualWidth);
+                _tableBox.ActualRight = tableRight + HorizontalSpacingAt(_columnCount) + TableInlineBorderEnd;
+            }
 
             // Computed ahead of ActualBottom rather than only assigned to TableContinuation below,
             // because a bottom caption's placement depends on it: the caption belongs after the
             // table's very last row, never stitched into the middle of a table still spanning
             // fragmentainers, so it may only be laid out on the pass that finishes the row loop.
             var tableContinuation = cursor.Continuation(_tableBox);
+            // cursor.MaxBottom/startY are already row-axis (physical X for a vertical table, per their
+            // own tracking above) - only the final assignment target and the border-width term below need
+            // the axis swap.
             var contentBottom = Math.Max(cursor.MaxBottom, startY) + VerticalSpacingAt(_grid?.RowCount ?? 0);
 
             // CSS 2.1 §17.4: the row grid's own border-box bottom - where FinalizeGridDecorationBoxGeometry
@@ -2903,10 +2958,12 @@ namespace PeachPDF.Html.Core.Dom
             // border, mirroring the top caption's own flush-above positioning in LayoutCells) rather than
             // from the bare contentBottom a caption used to start from, which put the caption where the
             // grid's own border still had to be drawn beneath it.
-            var gridBorderBoxBottom = contentBottom + _tableBox.ActualBorderBottomWidth;
+            var gridBorderBoxBottom = contentBottom + TableRowAxisBorderEnd;
 
             if (tableContinuation is null && _bottomCaptions.Count > 0)
             {
+                // Captions are not yet writing-mode-aware (out of scope here, same as headers/footers/
+                // collapsed borders - see the axis-mapping fields' own remarks) - left physical-Y as-is.
                 // The caption's own returned bottom (its ActualBottom plus its own bottom margin)
                 // already includes the grid's border-bottom width once, via gridBorderBoxBottom above
                 // - adding ActualBorderBottomWidth again below would double-count it, extending
@@ -2915,6 +2972,21 @@ namespace PeachPDF.Html.Core.Dom
                 contentBottom = await LayoutCaptionGroup(
                     g, _bottomCaptions, _tableBox.Location.X, gridBorderBoxBottom, GetWidthSum());
                 _tableBox.ActualBottom = contentBottom;
+
+                // The caption itself stays physical-Y (unconverted, per the remark above), but the
+                // table's own row-axis-max edge still has to be settled here for a vertical table
+                // regardless - ReflectRowAxisForVerticalRl below reads _tableBox.ActualRight as the
+                // row-axis-max edge every row is mirrored against, and this branch is the only one of
+                // the three Step-7-dimension arms that previously left it unset, corrupting every row's
+                // (not just the caption's) mirrored position rather than only the caption's own.
+                if (_isVertical)
+                {
+                    _tableBox.ActualRight = gridBorderBoxBottom;
+                }
+            }
+            else if (_isVertical)
+            {
+                _tableBox.ActualRight = gridBorderBoxBottom;
             }
             else
             {
@@ -2922,6 +2994,19 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             FinalizeGridDecorationBoxGeometry(gridBorderBoxBottom);
+
+            // vertical-rl's rows actually grow from the physical-max (right) edge, not the physical-min
+            // (left) edge every row/cell above was just placed against (see the axis-mapping fields' own
+            // remarks on why this pass, rather than solving it during placement, is the correct fix) - now
+            // that the table's own final row-axis bounds are settled (_tableBox.ActualRight above), mirror
+            // every row's (and its cells', and their content's) row-axis position within them, then
+            // recompute each row-group's bounding box from the rows' new positions - SetRowGroupBoxDimensions
+            // above ran before the reflection and so captured each row-group's pre-reflection bounds.
+            if (_isVertical && _rowAxisStartIsAtMax)
+            {
+                ReflectRowAxisForVerticalRl(_tableBox, _bodyRows.Take(placedRows));
+                SetRowGroupBoxDimensions(placedRows);
+            }
 
             // Publish where the row loop stopped, as a copy of the cursor's own state rather than the
             // cursor: a caller that kept one alive past this point would otherwise mutate what it has
@@ -3081,6 +3166,48 @@ namespace PeachPDF.Html.Core.Dom
                 box.Location = new RPoint(rows.Min(r => r.Location.X), rows.Min(r => r.Location.Y));
                 box.ActualRight = rows.Max(r => r.ActualRight);
                 box.ActualBottom = rows.Max(r => r.ActualBottom);
+            }
+        }
+
+        /// <summary>
+        /// Mirrors every placed row's row-axis (physical X) position within the table's own now-final
+        /// row-axis bounds - the correction every row was placed assuming it would <i>not</i> need,
+        /// growing forward from the physical-min edge the way <c>vertical-lr</c> genuinely does. Called
+        /// only for <c>vertical-rl</c>, once <see cref="_tableBox"/>'s own <see cref="CssBox.ActualRight"/>
+        /// names the true row-axis-max edge every reflection is taken about. See the axis-mapping fields'
+        /// own remarks for why a reflection pass, rather than placing rows backward to begin with, is the
+        /// tractable fix. The caller must re-run <see cref="SetRowGroupBoxDimensions"/> afterward, since
+        /// its bounding box was computed from each row's pre-reflection position.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Column-axis (physical Y) geometry is untouched - reflecting swaps which end of the row axis a
+        /// box's own edges face, not its column-axis position, which vertical-rl and vertical-lr already
+        /// share (both grow their columns top-to-bottom).
+        /// </para>
+        /// <para>
+        /// Each row is moved through <see cref="CssBox.OffsetLeft(double)"/> - a real subtree translation,
+        /// not a bare <c>Location</c>/<c>ActualRight</c> rewrite - because a row-axis reflection is
+        /// equivalent, for the row itself, to a plain shift by a fixed delta: the row's own row-axis
+        /// <i>extent</i> does not change, only its position within the table does. A cell within a row
+        /// shares that same row-axis footprint exactly (no colspan/rowspan in this simple-table scope), so
+        /// letting <c>OffsetLeft</c> cascade the one delta down through the row's own <c>Boxes</c> moves
+        /// every cell, and every cell's own content (its words, line-box rectangles, and any nested boxes),
+        /// by the same amount - a bare <c>Location</c>/<c>ActualRight</c> mutation on the row and cell
+        /// boxes alone left their already-laid-out content behind at its pre-reflection position, which is
+        /// what actually happened here before this fix: the row/cell rectangles moved but their text did
+        /// not, so cell text painted outside the reflected cell's own bounds.
+        /// </para>
+        /// </remarks>
+        private static void ReflectRowAxisForVerticalRl(CssBox tableBox, IEnumerable<CssBox> placedRows)
+        {
+            var min = tableBox.Location.X;
+            var max = tableBox.ActualRight;
+
+            foreach (var row in placedRows)
+            {
+                var delta = (min + max - row.ActualRight) - row.Location.X;
+                if (delta != 0) row.OffsetLeft(delta);
             }
         }
 
@@ -3327,11 +3454,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="cursor">this pass's row cursor, holding the row's real bottom</param>
         /// <param name="rowTop">where the row was placed</param>
         /// <param name="slot">the band it was placed in</param>
+        /// <param name="pageHeight">
+        /// this table's own effective page height - see <see cref="WillCrossPageBoundary"/>'s own remarks
+        /// on why this, not <c>container.PageSize.Height</c>, is the check that actually says whether this
+        /// table's row loop paginates at all.
+        /// </param>
         private bool StraddleCorrectionAppliesTo(
-            int rowIndex, HtmlContainerInt? container, TableRowCursor cursor, double rowTop, int slot)
+            int rowIndex, HtmlContainerInt? container, TableRowCursor cursor, double rowTop, int slot, double pageHeight)
         {
             if (rowIndex <= ResumeRowIndex || cursor.Stopped) return false;
-            if (container is null || container.PageSize.Height >= double.MaxValue - 1) return false;
+            if (container is null || pageHeight >= double.MaxValue - 1) return false;
             if (container.CurrentFragmentainer is { HasOwnBand: true }) return false;
 
             if (!HtmlContainerInt.FallsPast(cursor.MaxBottom, container.BandOfSlot(slot))) return false;
@@ -3850,10 +3982,17 @@ namespace PeachPDF.Html.Core.Dom
                 if (!cursor.ResumedFromAnEarlierPass(cell)
                     || _tableBox.HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true })
                 {
-                    cell.Location = new RPoint(currentX, currentY);
+                    // currentX is always the column axis (physical Y for a vertical table), currentY
+                    // always the row axis (physical X) - swapped into the correct RPoint slot here, the
+                    // one place logical and physical coordinates actually meet. See the axis-mapping
+                    // fields' own remarks for why this assumes forward growth even for vertical-rl.
+                    cell.Location = _isVertical ? new RPoint(currentY, currentX) : new RPoint(currentX, currentY);
                 }
 
-                cell.ActualRight = cell.Location.X + width;
+                // width is the cell's column-axis extent (from _columnWidths[], physical Y for a vertical
+                // table) - ActualBottom for a vertical table, ActualRight otherwise.
+                if (_isVertical) cell.ActualBottom = cell.Location.Y + width;
+                else cell.ActualRight = cell.Location.X + width;
 
                 // A cell an earlier pass stopped part-way through continues from its own record rather
                 // than from the start - the cells of one row are §2.1 parallel flows, so each has its own
@@ -3912,7 +4051,10 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (sb.EndRow == rowIndex)
                     {
-                        rowMaxBottom = Math.Max(rowMaxBottom, sb.ExtendedBox.ActualBottom);
+                        // rowMaxBottom is the row's own row-axis extent (physical X for a vertical
+                        // table, matching the non-spanning case's own _isVertical branch right below) -
+                        // ActualRight, not ActualBottom, is that extent there too.
+                        rowMaxBottom = Math.Max(rowMaxBottom, _isVertical ? sb.ExtendedBox.ActualRight : sb.ExtendedBox.ActualBottom);
                     }
                 }
                 else
@@ -3920,7 +4062,10 @@ namespace PeachPDF.Html.Core.Dom
                     switch (rowSpan)
                     {
                         case 1:
-                            rowMaxBottom = Math.Max(rowMaxBottom, cell.ActualBottom);
+                            // rowMaxBottom tracks the row's own row-axis extent (physical X for a
+                            // vertical table, since rows run along physical X) - ActualRight, not
+                            // ActualBottom, is that extent there.
+                            rowMaxBottom = Math.Max(rowMaxBottom, _isVertical ? cell.ActualRight : cell.ActualBottom);
                             break;
                         case > 1:
                             {
@@ -3939,8 +4084,11 @@ namespace PeachPDF.Html.Core.Dom
                     }
                 }
 
-                rowMaxRight = Math.Max(rowMaxRight, cell.ActualRight);
-                currentX = cell.ActualRight + spacingAfterCell;
+                // rowMaxRight/currentX track the column-axis extent within this row (physical Y for a
+                // vertical table) - ActualBottom, not ActualRight, is that extent there.
+                var cellColumnAxisEdge = _isVertical ? cell.ActualBottom : cell.ActualRight;
+                rowMaxRight = Math.Max(rowMaxRight, cellColumnAxisEdge);
+                currentX = cellColumnAxisEdge + spacingAfterCell;
             }
 
             // Vertical alignment
@@ -4031,7 +4179,15 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (GetRowSpan(cell) == 1)
                 {
-                    cell.ActualBottom = rowMaxBottom;
+                    // rowMaxBottom is the row's own settled row-axis extent (physical X for a vertical
+                    // table - see its own tracking above), so growing the cell to match is ActualRight
+                    // there, not ActualBottom. ApplyCellVerticalAlignment itself is left unconverted - CSS
+                    // vertical-align repositions a cell's content along the row's own cross axis, which
+                    // needs its own axis-aware treatment this pass doesn't attempt (tracked with the rest
+                    // of Table's remaining writing-mode gaps in #762); a vertical table's cells keep their
+                    // correct final SIZE either way, just not necessarily correctly content-aligned within it.
+                    if (_isVertical) cell.ActualRight = rowMaxBottom;
+                    else cell.ActualBottom = rowMaxBottom;
                     CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
                 }
             }
@@ -4164,7 +4320,7 @@ namespace PeachPDF.Html.Core.Dom
             // caller already settled this question for a cell ending its span on the current row.
             if (!skipFinishedGuard && cursor.FinishedOnAnEarlierPass(cell)) return;
 
-            var previousBottom = cell.ActualBottom;
+            var previousBottom = _isVertical ? cell.ActualRight : cell.ActualBottom;
             var bottom = rowMaxBottom;
             var container = _tableBox.HtmlContainer;
             var slot = cursor.SlotIndex;
@@ -4175,7 +4331,17 @@ namespace PeachPDF.Html.Core.Dom
             // measurement pass a flex or grid item's layout runs behind, at a provisional position it is
             // about to be translated away from, so a close decided there would state continuation
             // geometry at coordinates nothing ends up at and no later run sweeps.
-            if (container is { HasRealPageGrid: true }
+            //
+            // A vertical table's row loop never fragments internally - its constructor forces pageHeight
+            // to double.MaxValue for exactly this (see the axis-mapping fields' own remarks) - so this
+            // whole block's band/slot reasoning has nothing to apply to: rowMaxBottom here is the row
+            // axis (physical X), which has no analog in the page grid's physical-Y bands this block
+            // walks. Skipping it, rather than axis-converting logic that fundamentally describes a
+            // physical-Y pagination question, is the correct scope boundary - real per-cell pagination of
+            // a vertical table's rowspan cells is tracked with the rest of Table's remaining
+            // writing-mode gaps (#762).
+            if (!_isVertical
+                && container is { HasRealPageGrid: true }
                 && container.CurrentFragmentainer is { HasOwnBand: false })
             {
                 var (cellSlot, contentBottom, contentSlot) = SpanningCellBandGeometry(cell, container);
@@ -4230,7 +4396,11 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            cell.ActualBottom = bottom;
+            // bottom is the row-axis extent this cell's span closes at (physical X for a vertical
+            // table, matching every other row-axis-tracking site in this file) - ActualRight, not
+            // ActualBottom, is that extent there.
+            if (_isVertical) cell.ActualRight = bottom;
+            else cell.ActualBottom = bottom;
 
             var applied = CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
 
@@ -4754,6 +4924,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>The table's own border width consumed at the row axis's start edge - see <see cref="TableInlineBorderStart"/>.</summary>
         private double TableRowAxisBorderStart => _isVertical ? _tableBox.ActualBorderLeftWidth : _tableBox.ActualBorderTopWidth;
 
+        private double TableRowAxisBorderEnd => _isVertical ? _tableBox.ActualBorderRightWidth : _tableBox.ActualBorderBottomWidth;
+
         /// <summary>
         /// The gap a row/column cursor advances by when it crosses vertical grid line
         /// <paramref name="line"/> (0..ColumnCount) - negative under <c>collapse</c>, since adjacent
@@ -4820,11 +4992,26 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Determines if a row would cross a page boundary
+        /// Determines if a row would cross a page boundary.
         /// </summary>
-        private static bool WillCrossPageBoundary(HtmlContainerInt? container, double estimatedBottom, double availableHeight, int currentPageNumber)
+        /// <param name="container">the container whose page grid <paramref name="estimatedBottom"/> is checked against, or null</param>
+        /// <param name="estimatedBottom">the row's estimated far edge along this table's row axis</param>
+        /// <param name="availableHeight">the current band's usable height, net of any repeated footer</param>
+        /// <param name="currentPageNumber">the band <paramref name="estimatedBottom"/> is measured from</param>
+        /// <param name="pageHeight">
+        /// This table's own effective page height - <see cref="double.MaxValue"/> when this table's row
+        /// loop doesn't paginate (a measurement pass, or a vertical table's forced-unpaged row loop - see
+        /// its own call site's remarks). Checked instead of <c>container.PageSize.Height</c> directly:
+        /// the container's real page size stays finite for a vertical table in an ordinary multi-page
+        /// document even though this table's own <paramref name="estimatedBottom"/> is a row-axis
+        /// (physical-X) quantity that has no relationship to the container's physical-Y page bands - so
+        /// checking the container's page size here compared a row-axis coordinate against a column-axis
+        /// boundary and could fire a spurious mid-table break, contradicting the whole-table monolithic
+        /// treatment <see cref="MonolithicContent.IsUnresumableVerticalTable"/> gives a vertical table.
+        /// </param>
+        private static bool WillCrossPageBoundary(HtmlContainerInt? container, double estimatedBottom, double availableHeight, int currentPageNumber, double pageHeight)
         {
-            if (container is null || container.PageSize.Height >= double.MaxValue - 1)
+            if (container is null || pageHeight >= double.MaxValue - 1)
                 return false;
 
             var currentPageBottom = container.PageTopOf(currentPageNumber) + availableHeight;
