@@ -26,6 +26,17 @@ parent's own page fragmentation (`MonolithicContent.IsUnresumableOrthogonalFlow`
 subtree in one pass and is moved (not sliced) if it doesn't fit the current page, the same way a replaced
 element is.
 
+Auto width also shrinks to the content's own block-axis extent now (issue #761), the direct counterpart
+of auto height's own inline-axis shrink above: `CreateVerticalLineBoxes` tracks the total block-axis
+extent the wrap loop actually used (`blockOffset + lineThickness`, the last line's own thickness folded
+in) and, for an auto (non-explicit) `width`, moves the box's block-end edge to match — `Location.X` for
+`vertical-rl` (block-start is the right edge, which stays fixed, matching how `ClientTop` stays fixed for
+auto height), `ActualRight` for `vertical-lr` (block-start is the left edge, the same shape the height
+case already has). `CssBox.ActualRight` is a *written* property whose getter is `Location.X + Size.Width`,
+so the `vertical-rl` case has to capture the true (pre-shrink) right edge and re-apply it after moving
+`Location.X`, or the getter reports a moved edge Size.Width was never told to give up — verified against
+both PDFium and MuPDF rasterization (matching output) and the full test suite.
+
 Flexbox (`display: flex`/`inline-flex`) is also writing-mode-aware now: `CssLayoutEngineFlex` resolves
 which physical axis is its main axis (`_mainAxisIsPhysicalX`) and which physical end main-start/cross-start
 land on (`_mainStartIsAtMax`/`_crossStartIsAtMax`) from `LogicalPropertyResolver` — the same abstract-to-
@@ -47,9 +58,6 @@ MuPDF rasterization (byte-identical layout) per this repo's paint-verification c
   `CreateVerticalLineBoxes` only runs for inline-only content; a vertical-writing-mode box containing a
   nested block element (or itself containing another vertical- or horizontal-writing-mode block child —
   orthogonal flow) still lays out as ordinary `horizontal-tb`.
-- **Auto width is not content-driven** ([#761](https://github.com/jhaygood86/PeachPDF/issues/761)). An
-  auto-width vertical box's width still comes from the ordinary (writing-mode-unaware) `GetBoxWidth`
-  fill-available default, not from shrinking to the number of columns the content actually needs.
 - **Floats, absolute positioning, hyphenation, bidi reordering, `text-align`, and
   `box-decoration-break: clone`** are not honored inside a vertical box's own content
   ([#768](https://github.com/jhaygood86/PeachPDF/issues/768)).

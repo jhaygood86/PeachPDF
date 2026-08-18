@@ -5230,6 +5230,14 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "<div class=\"label\">height: auto</div></div>" +
     "</div>" +
 
+    "<h2>4b &mdash; auto width shrinks to the content's own extent (issue #761)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; height: 60px\">One Two Three</div>" +
+    "<div class=\"label\">vertical-rl, width: auto</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-lr; height: 60px\">One Two Three</div>" +
+    "<div class=\"label\">vertical-lr, width: auto</div></div>" +
+    "</div>" +
+
     "<h2>5 &mdash; flex-direction: row under vertical-rl (main axis = inline = physical Y)</h2>" +
     "<div class=\"row\">" +
     "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; display: flex; width: 220px; height: 160px\">" +

@@ -294,6 +294,49 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_AutoWidth_ShrinksToTheContentsBlockExtent_NotTheFullAvailableWidth()
+        {
+            // No explicit width, and a short explicit height forces two columns - issue #761. Block-start
+            // for vertical-rl is the right edge, so the box's own Location.X (not ActualRight) is what
+            // moves to shrink it.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; height: 20px">Alpha Beta</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            Assert.NotNull(el);
+
+            Assert.True(el!.LineBoxes.Count >= 2, "a 20pt-tall box should force at least two columns for two words");
+
+            var contentWidth = el.ActualRight - el.Location.X;
+            // Two columns of default-size text, nowhere near the ~555pt available content width a
+            // fill-available box would take.
+            Assert.True(contentWidth is > 0 and < 100,
+                $"expected auto width to shrink to content (~two columns), got {contentWidth}");
+        }
+
+        [Fact]
+        public async Task VerticalLr_AutoWidth_ShrinksToTheContentsBlockExtent()
+        {
+            // Same as the vertical-rl case, but block-start is the left edge for vertical-lr, so
+            // ActualRight (not Location.X) is what moves.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-lr; height: 20px">Alpha Beta</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            Assert.NotNull(el);
+
+            Assert.True(el!.LineBoxes.Count >= 2, "a 20pt-tall box should force at least two columns for two words");
+
+            var contentWidth = el.ActualRight - el.Location.X;
+            Assert.True(contentWidth is > 0 and < 100,
+                $"expected auto width to shrink to content (~two columns), got {contentWidth}");
+        }
+
+        [Fact]
         public async Task HorizontalTb_UnaffectedByTheNewVerticalDispatchBranch()
         {
             var html = LayoutHarness.Wrap("""<div id="el" style="width: 200px">plain horizontal text</div>""");
