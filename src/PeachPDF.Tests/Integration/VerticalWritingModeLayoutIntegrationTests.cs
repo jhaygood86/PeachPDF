@@ -197,9 +197,16 @@ namespace PeachPDF.Tests.Integration
             // block-start for vertical-rl is the right edge: the (only) column sits at the box's own
             // client-right edge, not the left.
             Assert.True(first.Left + first.Width <= el.ClientRight + 0.5, "column must not exceed the box's right edge");
-            Assert.True(first.Left > el.ClientLeft + (el.ClientRight - el.ClientLeft) / 2,
-                "the one column should sit in the right half of the box (block-start = right edge under vertical-rl)");
+            AssertColumnInRightHalf(first.Left, el, "the one column should sit in the right half of the box (block-start = right edge under vertical-rl)");
         }
+
+        /// <summary>
+        /// Shared by every test asserting a vertical-rl column's block-start position: under vertical-rl
+        /// the block axis grows from the box's own right edge leftward, so a column at (or near) block-start
+        /// sits in the right half of the box's own client area.
+        /// </summary>
+        private static void AssertColumnInRightHalf(double columnLeft, CssBox box, string because) =>
+            Assert.True(columnLeft > box.ClientLeft + (box.ClientRight - box.ClientLeft) / 2, because);
 
         [Fact]
         public async Task VerticalRl_Wrapping_SecondColumnSitsToTheLeftOfTheFirst()
@@ -356,6 +363,98 @@ namespace PeachPDF.Tests.Integration
 
             Assert.DoesNotContain(recording.Log, op => op.Kind is PaintOpKind.PushTransform or PaintOpKind.PopTransform);
             Assert.Contains(recording.Log, op => op.Kind == PaintOpKind.DrawString && op.Text == "Hi");
+        }
+
+        [Fact]
+        public async Task VerticalRl_NestedInlineBlock_IsFlattenedInsteadOfTreatedAsAnAtomicUnit()
+        {
+            // Documents a known gap (see .claude/accepted-gaps/no-vertical-writing-mode-layout.md,
+            // issue #771): MeasureAndCollectWordsInDocumentOrder walks every descendant box with no
+            // formatting-context check, so an inline-block child's own words get flattened straight into
+            // the parent's flat word list instead of being measured/placed as one atomic unit (the way
+            // FlowBox's ApplyAtomicInlineVerticalInsets does for the horizontal engine). The inline-block
+            // box itself never gets positioned, so its own border/padding/background never paint.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; width: 300px; height: 400px">before <span id="ib" style="display: inline-block; border: 1px solid red; padding: 4px;">nested block</span> after</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            var ib = LayoutHarness.FindById(root, "ib");
+            Assert.NotNull(el);
+            Assert.NotNull(ib);
+
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).Select(w => w.Text).ToList();
+            // The inline-block's own text ("nested", "block") shows up as ordinary flat words alongside
+            // the surrounding plain text ("before", "after") - not aggregated into one atomic placement.
+            Assert.Equal(["before", "nested", "block", "after"], words);
+
+            // The inline-block box itself was never positioned by the flattening walk (no analog of
+            // FlowBox's atomic-inline placement/inset bookkeeping exists in the vertical engine yet).
+            Assert.Equal(0, ib!.Location.X);
+            Assert.Equal(0, ib.Location.Y);
+        }
+
+        [Fact]
+        public async Task HorizontalAncestor_WithVerticalRlBlockChild_BothFlowCorrectlyInTheirOwnWritingMode()
+        {
+            // The composition claim behind WritingModeFrame's design: a box's own content-box bounds are
+            // already fully resolved, true-physical values by the time its own content phase runs, so a
+            // child never needs to know or undo an ancestor's writing mode. Here an ordinary horizontal-tb
+            // document (normal top-to-bottom block flow) contains a vertical-rl block-level child - the
+            // outer box places the inner one as an ordinary physical block (unaffected by the child's own
+            // writing mode), and the inner box gets its own real vertical line flow, independently.
+            var html = LayoutHarness.Wrap("""
+                <p id="before">Leading horizontal paragraph.</p>
+                <div id="vert" style="writing-mode: vertical-rl; width: 200px; height: 300px">AB CD</div>
+                <p id="after">Trailing horizontal paragraph.</p>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var before = LayoutHarness.FindById(root, "before");
+            var vert = LayoutHarness.FindById(root, "vert");
+            var after = LayoutHarness.FindById(root, "after");
+            Assert.NotNull(before);
+            Assert.NotNull(vert);
+            Assert.NotNull(after);
+
+            // Ordinary top-to-bottom physical block stacking around the vertical child, unaffected by its
+            // writing mode.
+            Assert.True(vert!.Location.Y >= before!.ActualBottom, "the vertical box should sit below the leading paragraph");
+            Assert.True(after!.Location.Y >= vert.ActualBottom, "the trailing paragraph should sit below the vertical box");
+
+            // The vertical child's own content still gets real vertical line flow: words stack along the
+            // block axis (right-to-left), not ordinary horizontal placement.
+            var words = vert.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).OrderBy(w => w.Top).ToList();
+            Assert.True(words.Count >= 2, "expected at least two words ('AB', 'CD')");
+            Assert.Equal(words[0].Left, words[1].Left, 1);
+            AssertColumnInRightHalf(words[0].Left, vert, "the vertical child's own column should still sit in the right half of its own box");
+        }
+
+        [Fact]
+        public async Task VerticalRl_NestedInsideAnotherVerticalRlBlockChild_BothLayersFlowCorrectly()
+        {
+            // Two levels of vertical-rl nesting (an inline-only vertical box as a block-level child of
+            // another vertical-rl ancestor that itself has block children, so the outer box does NOT go
+            // through CreateVerticalLineBoxes itself - only the inner, inline-only one does). Verifies the
+            // per-box independent-dispatch model composes for same-writing-mode nesting too, not just the
+            // mixed horizontal/vertical case above.
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-rl">
+                  <div id="inner" style="width: 200px; height: 300px">Alpha Beta</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var inner = LayoutHarness.FindById(root, "inner");
+            Assert.NotNull(inner);
+
+            // The inner box inherits vertical-rl and is itself inline-only, so it gets real vertical line
+            // flow regardless of the outer box's own (block-children) dispatch.
+            Assert.Equal(WritingMode.VerticalRl, inner!.WritingMode.Value);
+            var words = inner.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.True(words.Count >= 2, "expected at least two words ('Alpha', 'Beta')");
+            AssertColumnInRightHalf(words[0].Left, inner, "the inner box's own column should sit in the right half of its own box");
         }
     }
 }

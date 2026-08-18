@@ -44,6 +44,12 @@ element is.
   total — `CreateVerticalLineBoxes` never sets `CssBox.FirstHostingLineBox`/`LastHostingLineBox`, the
   bookkeeping `CssLineBox.UpdateRectangle` needs to gate leading/trailing inset correctly, so a
   bordered/padded `<span>` inside vertical text paints with the wrong decoration box.
+- **Atomic inline-level content (`inline-block`/`inline-table`) is flattened, not treated as one atomic
+  unit** ([#771](https://github.com/jhaygood86/PeachPDF/issues/771)). `MeasureAndCollectWordsInDocumentOrder`
+  recurses into every descendant box with no formatting-context check, so a nested inline-block's own words
+  get placed as ordinary flat words indistinguishable from its surrounding text, and the inline-block box
+  itself is never positioned (its own border/padding/background never paint). `<img>` (a genuinely atomic
+  replaced element with no nested word-bearing subtree) is unaffected.
 - **An explicit `writing-mode` override on a non-atomic nested inline element** (e.g. a `<span>`, not an
   `inline-block`/`inline-table`) is laid out using its containing block's writing-mode (correct — a plain
   inline never establishes its own flow) but may paint using its own, different, cascaded `WritingMode`
