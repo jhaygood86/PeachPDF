@@ -173,10 +173,17 @@ pipeline's own converters use — `SvgElement.WritingMode`/`TextOrientation` now
 not strings); and every glyph was shaped twice (once in `LayoutGlyphs` to prime metrics and compute
 `Advance`, again independently in `PaintUprightGlyph`/`PaintRotatedGlyph` at paint time) — `GlyphInfo` now
 caches its measured `Size` once in layout for paint to read back. The review also flagged a real
-architectural question worth tracking separately rather than fixing inline: `FontAdapter.Height`/`.Ascent`
-being lazily primed at all — rather than eagerly valid from construction, given the underlying `XFont`
-descriptor is already fully resolved by then — is the root cause behind three independent workarounds now
-(the two above plus this SVG one); closing it at the source would remove the need for all three.
+architectural question, fixed as an immediate follow-up rather than left as a tracked issue:
+`FontAdapter.Height`/`.Ascent`/`.UnderlineOffset` are now resolved eagerly in `FontAdapter`'s own
+constructor instead of lazily on that font's first `MeasureString` call — the underlying `XFont`'s
+descriptor/metrics are already fully resolved by the time its own constructor returns
+(`XFont.Initialize`/`CreateDescriptorAndInitializeFontMetrics` run synchronously), so the old lazy
+`SetMetrics`-on-first-measure design was never a real data dependency, only an accident of where the
+arithmetic happened to live. This closes the underlying bug class at its one true source: `GlyphInfo.Size`
+in SVG's `LayoutGlyphs` remains (real, necessary work — every consumer downstream needs the measured
+width/size regardless of orientation), but the SVG `MeasureTextBounds` fix above was pure priming with no
+other purpose and is now removed as dead code, and neither pipeline has to remember "measure before
+reading Height" as an unenforced convention going forward.
 
 ## What's still out of scope
 

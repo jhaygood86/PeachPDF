@@ -551,15 +551,10 @@ namespace PeachPDF.Svg
                     gi.Px = penX;
                     gi.Py = penY;
 
-                    // Always measured, even though only the rotated branch below needs the width: RFont's
-                    // own Height/Ascent are lazily primed by a font's first-ever MeasureString call
-                    // (GraphicsAdapter.MeasureString only calls FontAdapter.SetMetrics the first time it
-                    // runs for a given font instance - before that, Height/Ascent read back a -1
-                    // sentinel). CssLayoutEngine.NaturalWordSize never hits this because
-                    // CssBox.MeasureWordsSize always measures a word's natural horizontal size earlier in
-                    // layout, priming the font before NaturalWordSize's own upright branch ever reads
-                    // Height - LayoutGlyphs has no equivalent earlier pass, so it has to prime the font
-                    // itself before reading Height below.
+                    // Always measured (not just for the rotated branch below): PaintUprightGlyph's own
+                    // cross-axis centering needs this same width too, cached on GlyphInfo.Size so paint
+                    // reads it back instead of re-measuring (real glyph shaping) a second time - see
+                    // GlyphInfo.Size's own remarks.
                     var measured = g.MeasureString(gi.Glyph, gi.Font);
                     gi.Size = measured;
 
@@ -1212,14 +1207,6 @@ namespace PeachPDF.Svg
                 if (geometry.IsEmpty)
                     continue;
 
-                // A <text> whose only content is a <textPath> never enters the glyphs.Count > 0 block
-                // above, so nothing has necessarily primed pathFont's metrics yet - see LayoutGlyphs's
-                // own remarks on RFont.Height/Ascent's first-MeasureString-call lazy priming. Priming
-                // unconditionally here (even when some other glyph already primed this exact font
-                // instance, in which case GraphicsAdapter.MeasureString's own font.Height < 0 guard
-                // makes this a cheap no-op) is simpler and safer than trying to prove some other call
-                // site always ran first for every possible document shape.
-                g.MeasureString(" ", pathFont);
                 var inflate = pathFont.Ascent;
                 var pathBox = geometry.Bounds;
                 var runBox = new RRect(pathBox.X - inflate, pathBox.Y - inflate, pathBox.Width + 2 * inflate, pathBox.Height + 2 * inflate);
