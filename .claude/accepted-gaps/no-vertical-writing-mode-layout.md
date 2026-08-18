@@ -28,39 +28,46 @@ element is.
 
 ## What's still out of scope
 
-- **Block children inside a vertical box.** `CreateVerticalLineBoxes` only runs for inline-only content;
-  a vertical-writing-mode box containing a nested block element (or itself containing another vertical- or
-  horizontal-writing-mode block child — orthogonal flow) still lays out as ordinary `horizontal-tb`.
-- **Auto width is not content-driven.** An auto-width vertical box's width still comes from the ordinary
-  (writing-mode-unaware) `GetBoxWidth` fill-available default, not from shrinking to the number of columns
-  the content actually needs.
+- **Block children inside a vertical box** ([#760](https://github.com/jhaygood86/PeachPDF/issues/760)).
+  `CreateVerticalLineBoxes` only runs for inline-only content; a vertical-writing-mode box containing a
+  nested block element (or itself containing another vertical- or horizontal-writing-mode block child —
+  orthogonal flow) still lays out as ordinary `horizontal-tb`.
+- **Auto width is not content-driven** ([#761](https://github.com/jhaygood86/PeachPDF/issues/761)). An
+  auto-width vertical box's width still comes from the ordinary (writing-mode-unaware) `GetBoxWidth`
+  fill-available default, not from shrinking to the number of columns the content actually needs.
 - **Floats, absolute positioning, hyphenation, bidi reordering, `text-align`, and
-  `box-decoration-break: clone`** are not honored inside a vertical box's own content.
+  `box-decoration-break: clone`** are not honored inside a vertical box's own content
+  ([#768](https://github.com/jhaygood86/PeachPDF/issues/768)).
 - **A nested inline element's own border/padding/margin does not reserve inline-axis (physical left/right,
-  for `vertical-rl`/`vertical-lr`) space**, and its block-axis (physical top/bottom) padding/border is
-  applied once per column it spans rather than once total — `CreateVerticalLineBoxes` never sets
-  `CssBox.FirstHostingLineBox`/`LastHostingLineBox`, the bookkeeping `CssLineBox.UpdateRectangle` needs to
-  gate leading/trailing inset correctly, so a bordered/padded `<span>` inside vertical text paints with the
-  wrong decoration box.
+  for `vertical-rl`/`vertical-lr`) space** ([#769](https://github.com/jhaygood86/PeachPDF/issues/769)), and
+  its block-axis (physical top/bottom) padding/border is applied once per column it spans rather than once
+  total — `CreateVerticalLineBoxes` never sets `CssBox.FirstHostingLineBox`/`LastHostingLineBox`, the
+  bookkeeping `CssLineBox.UpdateRectangle` needs to gate leading/trailing inset correctly, so a
+  bordered/padded `<span>` inside vertical text paints with the wrong decoration box.
 - **An explicit `writing-mode` override on a non-atomic nested inline element** (e.g. a `<span>`, not an
   `inline-block`/`inline-table`) is laid out using its containing block's writing-mode (correct — a plain
   inline never establishes its own flow) but may paint using its own, different, cascaded `WritingMode`
   value, producing a rotation mismatch. Per CSS Writing Modes, `writing-mode` has no defined effect on a
   non-atomic inline in the first place, so this is a narrow, spec-consistent-to-ignore edge case rather
   than a behavior authors should rely on either way.
-- **Real per-character `text-orientation`.** Every glyph currently paints rotated 90° regardless of
-  `text-orientation`'s value (equivalent to `sideways` always) — `mixed`'s real per-character
-  upright/rotated split (Unicode's Vertical_Orientation property) is not implemented.
-- **`sideways-rl`/`sideways-lr`** still render as `horizontal-tb` throughout (`WritingModeFrame.IsVertical`
-  is true only for `vertical-rl`/`vertical-lr`).
-- **Table, Flexbox, and Multi-column** layout engines don't read `writing-mode` at all — a vertical-writing-
-  mode table/flex/multicol container still lays out its own rows/columns/items as `horizontal-tb`.
-- **A vertical box's own content never fragments across a page boundary** — being monolithic, it is moved
-  whole to the next page if it doesn't fit the current one, or displaced-per-band (never resized) if it
-  fits nowhere; it cannot yet split its own content the way ordinary horizontal flow does.
-- **True OpenType vertical metrics (`vhea`/`vmtx`/`VORG`) are parsed but not yet consulted** by layout or
-  paint — glyph advance/positioning under vertical writing modes still uses the same horizontal-advance
-  metrics as `horizontal-tb`, just reinterpreted geometrically (rotated), not real vertical typesetting
-  metrics.
+- **Real per-character `text-orientation`** ([#765](https://github.com/jhaygood86/PeachPDF/issues/765)).
+  Every glyph currently paints rotated 90° regardless of `text-orientation`'s value (equivalent to
+  `sideways` always) — `mixed`'s real per-character upright/rotated split (Unicode's Vertical_Orientation
+  property) is not implemented.
+- **`sideways-rl`/`sideways-lr`** ([#766](https://github.com/jhaygood86/PeachPDF/issues/766)) still render
+  as `horizontal-tb` throughout (`WritingModeFrame.IsVertical` is true only for `vertical-rl`/`vertical-lr`).
+- **Table** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762)), **Flexbox**
+  ([#763](https://github.com/jhaygood86/PeachPDF/issues/763)), and **Multi-column**
+  ([#764](https://github.com/jhaygood86/PeachPDF/issues/764)) layout engines don't read `writing-mode` at
+  all — a vertical-writing-mode table/flex/multicol container still lays out its own rows/columns/items as
+  `horizontal-tb`.
+- **A vertical box's own content never fragments across a page boundary**
+  ([#767](https://github.com/jhaygood86/PeachPDF/issues/767)) — being monolithic, it is moved whole to the
+  next page if it doesn't fit the current one, or displaced-per-band (never resized) if it fits nowhere; it
+  cannot yet split its own content the way ordinary horizontal flow does.
+- **True OpenType vertical metrics (`vhea`/`vmtx`/`VORG`) are parsed but not yet consulted**
+  ([#770](https://github.com/jhaygood86/PeachPDF/issues/770)) by layout or paint — glyph advance/positioning
+  under vertical writing modes still uses the same horizontal-advance metrics as `horizontal-tb`, just
+  reinterpreted geometrically (rotated), not real vertical typesetting metrics.
 
 The reader-facing note is in `docs/html-css-support.md`'s `writing-mode`/`text-orientation` rows.
