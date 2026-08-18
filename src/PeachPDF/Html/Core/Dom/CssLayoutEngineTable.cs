@@ -37,6 +37,49 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private readonly CssBox _tableBox;
 
+        // ─── Writing-mode axis mapping (IN PROGRESS - see remarks) ────────────────
+        //
+        // Unlike Flexbox's row/column (which flex-direction can point at either logical axis), a
+        // table's rows ALWAYS stack along the block axis and its columns ALWAYS run along the inline
+        // axis (css-tables-3) - there is no "reverse" keyword that swaps which end either starts at,
+        // so this table only ever needs two flags rather than Flex's three. Columns (inline axis,
+        // assumed ltr - this engine has no direction: rtl support for either axis, matching Flex's
+        // and the vertical-line-flow engine's own scope) always run from physical-min forward, so
+        // only the row axis's start side needs a flag at all: LogicalPropertyResolver.InlineStart
+        // under ltr is Left (horizontal-tb) or Top (vertical-rl/vertical-lr) - never Right/Bottom.
+        //
+        // CURRENT STATE: only the column/row SIZING pipeline reads these two flags so far (available
+        // table/cell width, border-spacing/border-width axis selection, content-driven auto-sizing's
+        // safe fallback for the missing vertical-flow content-intrinsic-size measurement). Cell/row/
+        // caption/column-box PHYSICAL PLACEMENT (LayoutBodyRow's cell.Location assembly and everything
+        // downstream of it) still unconditionally uses the pre-existing physical-X-is-column-axis
+        // logic, gated on neither flag - so a vertical-writing-mode table today computes correctly
+        // axis-aware column widths/row heights but still PLACES every cell as if horizontal-tb. This
+        // is a deliberately incomplete, in-progress step, not a finished feature: _isVertical is only
+        // ever true for a table that was already completely unsupported before this work started (see
+        // the Table row of .claude/accepted-gaps/no-vertical-writing-mode-layout.md, and issue #762),
+        // so nothing regresses - but placement, collapsed-border resolution, and a vertical-rl-specific
+        // structural issue (a row's own row-axis thickness isn't known until after its cells are laid
+        // out, which conflicts with placing it at a physical-max-anchored start before that - the
+        // planned fix is a single whole-table reflection pass after an otherwise-uniform "grows
+        // forward" layout, mirroring vertical-lr, rather than reworking the row loop's own single-pass
+        // measure-and-place order) all still need finishing before this flag pair does anything
+        // user-visible. Tracked in #762 pending a dedicated continuation.
+        private readonly bool _isVertical;
+        private readonly bool _rowAxisStartIsAtMax;
+
+        /// <summary>A cell's own CSS property that constrains its column-axis (inline) extent.</summary>
+        private string CellInlineSize(CssBox cell) => _isVertical ? cell.Height : cell.Width;
+
+        private string CellInlineMaxSize(CssBox cell) => _isVertical ? cell.MaxHeight : cell.MaxWidth;
+
+        private string CellInlineMinSize(CssBox cell) => _isVertical ? cell.MinHeight : cell.MinWidth;
+
+        /// <summary>The table's own border width consumed at the column axis's start/end edge.</summary>
+        private double TableInlineBorderStart => _isVertical ? _tableBox.ActualBorderTopWidth : _tableBox.ActualBorderLeftWidth;
+
+        private double TableInlineBorderEnd => _isVertical ? _tableBox.ActualBorderBottomWidth : _tableBox.ActualBorderRightWidth;
+
         private CssBox? _headerBox;
 
         /// <summary>Where <see cref="_headerBox"/> sat among the table's children before it was detached.</summary>
@@ -252,6 +295,10 @@ namespace PeachPDF.Html.Core.Dom
         private CssLayoutEngineTable(CssBox tableBox, BreakToken? resume)
         {
             _tableBox = tableBox;
+
+            var writingMode = tableBox.WritingMode.Value;
+            _isVertical = writingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
+            _rowAxisStartIsAtMax = LogicalPropertyResolver.BlockStart(writingMode) is PhysicalSide.Right or PhysicalSide.Bottom;
 
             // Cleared before anything can throw, for the reason the setup is: a run that dies part-way
             // must leave no answer rather than the previous run's. A record naming a row of a layout that
@@ -1354,13 +1401,14 @@ namespace PeachPDF.Html.Core.Dom
                 // Fill ColumnWidths array by scanning column widths
                 for (var i = 0; i < _columns.Count; i++)
                 {
-                    CssLength len = new(_columns[i].Width); //Get specified width
+                    var columnInlineSize = CellInlineSize(_columns[i]);
+                    CssLength len = new(columnInlineSize); //Get specified width
 
                     if (!(len.Number > 0)) continue; //If some width specified
 
                     if (len.IsPercentage) //Get width as a percentage
                     {
-                        _columnWidths[i] = CssValueParser.ParseNumber(_columns[i].Width, availCellSpace);
+                        _columnWidths[i] = CssValueParser.ParseNumber(columnInlineSize, availCellSpace);
                     }
                     else if (len.Unit is CssUnit.Pixels or CssUnit.None)
                     {
@@ -1382,7 +1430,7 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (i >= row.Boxes.Count || row.Boxes[i].DerivedStyle.ActualDisplay != Keywords.TableCell) continue;
 
-                        var len = CssValueParser.ParseLength(row.Boxes[i].Width, availCellSpace, row.Boxes[i]);
+                        var len = CssValueParser.ParseLength(CellInlineSize(row.Boxes[i]), availCellSpace, row.Boxes[i]);
 
                         if (!(len > 0)) continue; //If some width specified
 
@@ -4385,12 +4433,22 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private double GetAvailableTableWidth()
         {
-            CssLength tableBoxLength = new(_tableBox.Width);
+            // "Available table width" here means the table's own extent along its column axis - the
+            // inline axis, physical Y under a vertical writing mode - which reads the table's Height
+            // property (still physically Y, per CSS: writing-mode never changes what Width/Height mean)
+            // rather than Width. See ComputeAxisMapping's own remarks for why this is the same pattern
+            // Flexbox's _mainAxisIsPhysicalX-gated Width/Height reads use, just for a table's column
+            // (always-inline) axis rather than a flex container's main axis (which flex-direction can
+            // point at either logical axis).
+            var inlineSizeCss = _isVertical ? _tableBox.Height : _tableBox.Width;
+            var containingBlockInlineSize = _isVertical ? _tableBox.ContainingBlock.Size.Height : _tableBox.ContainingBlock.Size.Width;
 
-            if (!(tableBoxLength.Number > 0)) return _tableBox.ContainingBlock.Size.Width;
+            CssLength tableBoxLength = new(inlineSizeCss);
+
+            if (!(tableBoxLength.Number > 0)) return containingBlockInlineSize;
 
             _widthSpecified = true;
-            return CssValueParser.ParseLength(_tableBox.Width, _tableBox.ContainingBlock.Size.Width, _tableBox);
+            return CssValueParser.ParseLength(inlineSizeCss, containingBlockInlineSize, _tableBox);
 
         }
 
@@ -4400,16 +4458,24 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <returns></returns>
         /// <remarks>
-        /// The table's width can be larger than the result of this method, because of the minimum 
+        /// The table's width can be larger than the result of this method, because of the minimum
         /// size that individual boxes.
         /// </remarks>
         private double GetMaxTableWidth()
         {
-            var tblen = new CssLength(_tableBox.MaxWidth);
+            // See GetAvailableTableWidth's own remarks - MaxWidth/MaxHeight are still physical
+            // properties; only which one plays the "column axis" role changes with writing-mode.
+            var maxInlineSizeCss = _isVertical ? _tableBox.MaxHeight : _tableBox.MaxWidth;
+            var parentAvailableInlineSize = _isVertical
+                ? _tableBox.ParentBox!.ActualBoxSizingHeight - _tableBox.ParentBox.ActualBorderTopWidth
+                    - _tableBox.ParentBox.ActualPaddingTop - _tableBox.ParentBox.ActualPaddingBottom - _tableBox.ParentBox.ActualBorderBottomWidth
+                : _tableBox.ParentBox!.AvailableWidth;
+
+            var tblen = new CssLength(maxInlineSizeCss);
             if (tblen.Number > 0)
             {
                 _widthSpecified = true;
-                return CssValueParser.ParseLength(_tableBox.MaxWidth, _tableBox.ParentBox!.AvailableWidth, _tableBox);
+                return CssValueParser.ParseLength(maxInlineSizeCss, parentAvailableInlineSize, _tableBox);
             }
             else
             {
@@ -4429,6 +4495,21 @@ namespace PeachPDF.Html.Core.Dom
         {
             maxFullWidths = new double[_columnWidths!.Length];
             minFullWidths = new double[_columnWidths.Length];
+
+            // CssBox.GetMinMaxWidth/GetMinimumWidth measure a box's own content-intrinsic size by
+            // walking its (horizontal) word wrapping - there is no writing-mode-aware equivalent that
+            // measures a vertical-writing-mode cell's own inline-axis (physical Y) content extent the
+            // way CreateVerticalLineBoxes lays it out. Building one is real, separate feature work
+            // (tracked as a follow-up), not a mechanical remap, so a vertical table's auto (unspecified-
+            // width) columns fall back to splitting the available inline space evenly instead: min=0,
+            // max=+Infinity for every applicable column skips this method's whole content-measurement
+            // loop and lets DetermineMissingColumnWidths' own "spread extra width between all columns"
+            // step (which needs no content-based bound to work) do the actual distribution.
+            if (_isVertical)
+            {
+                for (var i = 0; i < maxFullWidths.Length; i++) maxFullWidths[i] = double.PositiveInfinity;
+                return;
+            }
 
             var availCellWidth = GetAvailableCellWidth();
 
@@ -4506,12 +4587,13 @@ namespace PeachPDF.Html.Core.Dom
             {
                 foreach (var cell in row.Boxes)
                 {
-                    if (!CssValueParser.IsValidLength(cell.MaxWidth)) continue;
+                    var cellInlineMaxSize = CellInlineMaxSize(cell);
+                    if (!CssValueParser.IsValidLength(cellInlineMaxSize)) continue;
 
                     var col = GetCellRealColumnIndex(cell);
                     col = explicitMaxWidths.Length > col ? col : explicitMaxWidths.Length - 1;
                     var colSpan = GetColSpan(cell);
-                    var cellMaxWidth = CssValueParser.ParseLength(cell.MaxWidth, availCellWidth, cell) / colSpan;
+                    var cellMaxWidth = CssValueParser.ParseLength(cellInlineMaxSize, availCellWidth, cell) / colSpan;
 
                     for (var j = 0; j < colSpan && col + j < explicitMaxWidths.Length; j++)
                         explicitMaxWidths[col + j] = Math.Min(explicitMaxWidths[col + j], cellMaxWidth);
@@ -4530,7 +4612,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private double GetAvailableCellWidth()
         {
-            return GetAvailableTableWidth() - SumHorizontalSpacing() - _tableBox.ActualBorderLeftWidth - _tableBox.ActualBorderRightWidth;
+            return GetAvailableTableWidth() - SumHorizontalSpacing() - TableInlineBorderStart - TableInlineBorderEnd;
         }
 
         /// <summary>
@@ -4558,7 +4640,7 @@ namespace PeachPDF.Html.Core.Dom
             f += SumHorizontalSpacingExcludingCollapsedColumns();
 
             //Take table borders
-            f += _tableBox.ActualBorderLeftWidth + _tableBox.ActualBorderRightWidth;
+            f += TableInlineBorderStart + TableInlineBorderEnd;
 
             return f;
         }
@@ -4606,10 +4688,16 @@ namespace PeachPDF.Html.Core.Dom
 
                     var spannedWidth = GetSpannedMinWidth(row, col, colspan) + GetInteriorSpacing(col, colspan);
 
-                    var cellMinWidth = cell.GetMinimumWidth();
-                    if (cell.MinWidth != "0" && CssValueParser.IsValidLength(cell.MinWidth))
+                    // CssBox.GetMinimumWidth has no vertical-writing-mode-aware equivalent - see
+                    // GetColumnsMinMaxWidthByContent's own remarks - so a vertical table's content-
+                    // driven minimum falls back to 0 (only an explicit min-width/min-height still
+                    // constrains the column) rather than measuring horizontal word-wrap content that
+                    // does not describe this cell's own (vertical) flow.
+                    var cellMinWidth = _isVertical ? 0 : cell.GetMinimumWidth();
+                    var cellInlineMinSize = CellInlineMinSize(cell);
+                    if (cellInlineMinSize != "0" && CssValueParser.IsValidLength(cellInlineMinSize))
                     {
-                        cellMinWidth = Math.Max(cellMinWidth, CssValueParser.ParseLength(cell.MinWidth, availCellWidth, cell));
+                        cellMinWidth = Math.Max(cellMinWidth, CssValueParser.ParseLength(cellInlineMinSize, availCellWidth, cell));
                     }
 
                     _columnMinWidths[affectColumn] = Math.Max(_columnMinWidths[affectColumn], cellMinWidth - spannedWidth);
@@ -4646,11 +4734,25 @@ namespace PeachPDF.Html.Core.Dom
         /// exact one-outer-edge (VW[0]/2 = 0.375pt) residual.
         /// </remarks>
         private double StartXSpacing() =>
-            _tableBox.BorderCollapse == Keywords.Collapse ? -_tableBox.ActualBorderLeftWidth : _tableBox.ActualBorderSpacingHorizontal;
+            _tableBox.BorderCollapse == Keywords.Collapse ? -TableInlineBorderStart : ColumnAxisBorderSpacing;
 
         /// <summary>The row-axis twin of <see cref="StartXSpacing"/> - see its own remarks.</summary>
         private double StartYSpacing() =>
-            _tableBox.BorderCollapse == Keywords.Collapse ? -_tableBox.ActualBorderTopWidth : _tableBox.ActualBorderSpacingVertical;
+            _tableBox.BorderCollapse == Keywords.Collapse ? -TableRowAxisBorderStart : RowAxisBorderSpacing;
+
+        /// <summary>
+        /// CSS <c>border-spacing</c>'s two values are physical (horizontal = X gaps, vertical = Y gaps),
+        /// unaffected by writing-mode - so which one is the *column*-axis spacing (the role
+        /// <see cref="HorizontalSpacingAt"/>/<see cref="StartXSpacing"/> need) swaps with
+        /// <see cref="_isVertical"/> the same way <see cref="TableInlineBorderStart"/> does for border
+        /// width.
+        /// </summary>
+        private double ColumnAxisBorderSpacing => _isVertical ? _tableBox.ActualBorderSpacingVertical : _tableBox.ActualBorderSpacingHorizontal;
+
+        private double RowAxisBorderSpacing => _isVertical ? _tableBox.ActualBorderSpacingHorizontal : _tableBox.ActualBorderSpacingVertical;
+
+        /// <summary>The table's own border width consumed at the row axis's start edge - see <see cref="TableInlineBorderStart"/>.</summary>
+        private double TableRowAxisBorderStart => _isVertical ? _tableBox.ActualBorderLeftWidth : _tableBox.ActualBorderTopWidth;
 
         /// <summary>
         /// The gap a row/column cursor advances by when it crosses vertical grid line
@@ -4664,7 +4766,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private double HorizontalSpacingAt(int line)
         {
-            if (_tableBox.BorderCollapse != Keywords.Collapse) return _tableBox.ActualBorderSpacingHorizontal;
+            if (_tableBox.BorderCollapse != Keywords.Collapse) return ColumnAxisBorderSpacing;
             if (_collapsedBorders is not { } model || model.VerticalLineWidth.Length == 0) return 0;
 
             var width = model.VerticalLineWidth[Math.Clamp(line, 0, model.VerticalLineWidth.Length - 1)];
@@ -4674,7 +4776,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>The gap a row cursor advances by when it crosses horizontal grid line <paramref name="line"/> (0..RowCount) - see <see cref="HorizontalSpacingAt"/>'s own remarks, which apply identically on this axis.</summary>
         private double VerticalSpacingAt(int line)
         {
-            if (_tableBox.BorderCollapse != Keywords.Collapse) return _tableBox.ActualBorderSpacingVertical;
+            if (_tableBox.BorderCollapse != Keywords.Collapse) return RowAxisBorderSpacing;
             if (_collapsedBorders is not { } model || model.HorizontalLineWidth.Length == 0) return 0;
 
             var rowCount = _grid?.RowCount ?? 0;
