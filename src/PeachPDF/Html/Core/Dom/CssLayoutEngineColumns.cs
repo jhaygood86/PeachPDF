@@ -98,7 +98,27 @@ namespace PeachPDF.Html.Core.Dom
             var gap = columnsBox.FlexColumnGap.Value is { IsValue: true, Value: { } columnGapLength }
                 ? CssValueParser.ParseLength(columnGapLength, containerWidth, columnsBox)
                 : CssValueParser.ParseLength(new Length(1f, Length.Unit.Em), containerWidth, columnsBox);
-            var (columnCount, columnWidth) = ResolveColumns(columnsBox, containerWidth, gap);
+
+            // A vertical-writing-mode container's own columns would need to differ along the *inline*
+            // axis - physical Y under vertical-rl/vertical-lr - while every column still has to share
+            // one band along the *block* axis for this engine's whole "columns differ only in the inline
+            // axis" design (this class's own doc comment, above) to keep reusing the page driver's
+            // fragmentation machinery untouched. That shared band (FragmentainerContext's own (Top,
+            // Bottom) tuple) is hardcoded to physical Y at the type level - the same primitive the
+            // page-level driver uses - so a genuinely vertical container's columns would need to differ
+            // along the very axis every column is required to share. Real column arrangement therefore
+            // is not a narrower, separable half of this problem the way it first looked (unlike Table's
+            // rows/columns, where only cell *placement* needed axis-awareness and pagination could stay
+            // deferred independently) - it would need the shared band itself to become axis-agnostic,
+            // rippling into the page-level pagination invariants ~50 other files document. Deferred
+            // whole; column-count/column-width are inert here for now and this container falls back to
+            // the same single-column block-flow path columnCount <= 1 already takes, which already
+            // supports real pagination via the ordinary block-flow machinery. Tracked as #764.
+            var isVertical = columnsBox.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
+
+            var (columnCount, columnWidth) = isVertical
+                ? (1, containerWidth)
+                : ResolveColumns(columnsBox, containerWidth, gap);
 
             if (columnCount <= 1)
             {

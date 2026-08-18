@@ -148,8 +148,18 @@ only — see below for what `display: table` still doesn't handle under a vertic
   below), and `vertical-align`'s content-alignment-*within*-a-cell behavior (cell *size* is
   writing-mode-aware; `CssLayoutEngine.ApplyCellVerticalAlignment`'s own internal positioning of a cell's
   content is not yet).
-- **Multi-column** ([#764](https://github.com/jhaygood86/PeachPDF/issues/764)) doesn't read `writing-mode`
-  at all — a vertical-writing-mode multicol container still lays out its own columns as `horizontal-tb`.
+- **Multi-column** ([#764](https://github.com/jhaygood86/PeachPDF/issues/764)) has no real column
+  arrangement under a vertical writing mode — `column-count`/`column-width` are inert there, and a
+  vertical-writing-mode multicol container falls back to ordinary single-column block flow (`CssLayoutEngineColumns.Layout`
+  takes the same path a `column-count: 1`/auto-width container already does). Unlike Table's rows/columns,
+  this isn't a narrower "arrangement now, fragmentation later" split: every column in this engine has to
+  share one band along the block axis (`FragmentainerContext`'s own `(Top, Bottom)` tuple, hardcoded to
+  physical Y at the type level — the same primitive the page-level pagination driver uses), while columns
+  differ along the inline axis — physical Y for `vertical-rl`/`vertical-lr`, the very axis the shared band
+  is pinned to. Real column arrangement would need that shared band to become axis-agnostic, which ripples
+  into the page-level pagination invariants ~50 other files document — out of scope here. The fallback
+  needs no `MonolithicContent` treatment of its own (unlike a vertical table's row loop): ordinary
+  single-column block flow already supports real pagination.
 - **A vertical-writing-mode Flexbox container's own top-level definite-main-size resolution has no
   aspect-ratio-on-width fallback** ([#772](https://github.com/jhaygood86/PeachPDF/issues/772)). The
   pre-existing `aspect-ratio`-driven auto-height fallback
