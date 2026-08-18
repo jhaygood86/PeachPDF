@@ -19,6 +19,7 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
@@ -530,7 +531,11 @@ namespace PeachPDF.Html.Core.Dom
                 var wordAdvance = naturalWidth + word.ActualWordSpacing; // + spacing, what the next word's placement clears
                 var wordBlock = naturalHeight; // natural line-height - the line's own cross-axis thickness
 
-                if (inlineOffset > 0 && inlineOffset + wordAdvance > wrapLimit)
+                // A fragment split from what was one word - a per-codepoint-font run, or (since this
+                // phase) a Vertical_Orientation run - must never itself be treated as a wrap opportunity,
+                // the same guard FlowBox's own wrap check already applies. Without it, a split landing
+                // right at the wrap boundary could visibly break one word across two columns.
+                if (!word.SuppressWrapBefore && inlineOffset > 0 && inlineOffset + wordAdvance > wrapLimit)
                     StartNewLine();
 
                 var physical = frame.ToPhysical(new RRect(inlineOffset, blockOffset, wordRectInline, wordBlock));
@@ -624,17 +629,90 @@ namespace PeachPDF.Html.Core.Dom
             }
             else
             {
-                var styleSource = word.FirstLineStyle ?? word.OwnerBox;
-                var font = CssBox.ResolveWordFont(word, styleSource);
-                var width = word.Text != "\n" ? g.MeasureString(word.Text!, font, styleSource.ActualTextShapingFeatures).Width : 0;
-                if (word.Text != "\n" && styleSource.ActualLetterSpacing != 0)
-                    width += g.CountShapedGlyphs(word.Text!, font, styleSource.ActualTextShapingFeatures) * styleSource.ActualLetterSpacing;
+                // Mirrors FragmentPainter.Text.cs's PaintWords isUpright decision exactly: upright/
+                // sideways force one answer for every word on the box; mixed (the default) defers to
+                // the word's own per-fragment IsUprightOrientation, set at word-split time (CssBox
+                // .AddWord/EmitPerCodepointFragments). Branching on word.IsUprightOrientation alone -
+                // which CssBox only ever sets true under mixed orientation - would size an
+                // upright-forced box's words with the rotated-run formula below while paint always
+                // takes the per-character upright path for that box, reserving the wrong extent for
+                // what's actually painted (the same class of layout/paint desync issue #770's
+                // per-character advance fix addressed on the other axis).
+                var isUpright = word.OwnerBox.TextOrientation.Value switch
+                {
+                    TextOrientation.Upright => true,
+                    TextOrientation.Sideways => false,
+                    _ => word.IsUprightOrientation
+                };
 
-                natural = (width, styleSource.ActualFont.Height);
+                if (isUpright)
+                {
+                    // An upright run paints each character individually, stacked down the column
+                    // (FragmentPainter.Text.cs's PaintUprightVerticalRun) rather than as one natural
+                    // horizontal glyph run reoriented as a whole (the rotated case below) - so the
+                    // down-the-column extent reserved for it here has to match what paint actually steps
+                    // by. That step is the font's own line height (ascender + descender), not each
+                    // character's individually-measured horizontal advance width: RGraphics.DrawString
+                    // always renders a glyph across the font's full line-height span from its anchor
+                    // (XGraphicsPdfRenderer.DrawString's XLineAlignment.Near branch adds cyAscent above the
+                    // baseline and leaves cyDescent below it - a fixed span, independent of the specific
+                    // glyph's own ink), while a codepoint's own hmtx advance width can be narrower (a real
+                    // subsetted CJK font measured ~9pt advance against a ~13pt line height at the same
+                    // size) - stepping by the narrower value then visibly overlapped each character with
+                    // the next, and overran into whatever followed once the run finished. No true vmtx
+                    // vertical-advance table is consulted yet (issue #770); the font's own line height is
+                    // the closest available per-character constant that can never under-advance.
+                    var styleSource = word.FirstLineStyle ?? word.OwnerBox;
+                    var font = CssBox.ResolveWordFont(word, styleSource);
+                    // A plain rune count, not MeasureUprightRunCharacters: the per-character advance
+                    // below is a flat font.Height step, independent of each character's own measured
+                    // size, so running every character through real glyph shaping here just to discard
+                    // the result would be pure waste - MeasureUprightRunCharacters stays reserved for
+                    // PaintUprightVerticalRun, which does need each character's own width for centering.
+                    var runeCount = (word.Text ?? "").EnumerateRunes().Count();
+                    var width = runeCount * (font.Height + styleSource.ActualLetterSpacing);
+
+                    // The cross-axis (column-thickness) reservation has to come from this same resolved
+                    // font, not styleSource.ActualFont: PaintUprightVerticalRun centers each character
+                    // using widths measured through this exact font (FragmentPainter.Text.cs resolves the
+                    // identical CssBox.ResolveWordFont(word, styleSource) before calling it), and a
+                    // per-codepoint fallback face (UsesPerCodepointFont) can have a materially different
+                    // line height than the box's own default font.
+                    natural = (width, font.Height);
+                }
+                else
+                {
+                    var styleSource = word.FirstLineStyle ?? word.OwnerBox;
+                    var font = CssBox.ResolveWordFont(word, styleSource);
+                    var width = word.Text != "\n" ? g.MeasureString(word.Text!, font, styleSource.ActualTextShapingFeatures).Width : 0;
+                    if (word.Text != "\n" && styleSource.ActualLetterSpacing != 0)
+                        width += g.CountShapedGlyphs(word.Text!, font, styleSource.ActualTextShapingFeatures) * styleSource.ActualLetterSpacing;
+
+                    natural = (width, styleSource.ActualFont.Height);
+                }
             }
 
             word.NaturalSize = natural;
             return natural;
+        }
+
+        /// <summary>
+        /// Measures each codepoint of an upright vertical-writing-mode run individually - the single
+        /// shared basis both this file's own <see cref="NaturalWordSize"/> and
+        /// <see cref="Paint.FragmentPainter.PaintUprightVerticalRun">FragmentPainter.PaintUprightVerticalRun</see>
+        /// iterate to agree on the run's character sequence and count. The down-the-column *advance*
+        /// per character is not this measurement's own <c>Size.Width</c> (see <see cref="NaturalWordSize"/>'s
+        /// remarks for why) - each yielded <c>Size</c> is used only for the glyph's cross-axis
+        /// (column-thickness) centering, which legitimately does vary per character.
+        /// </summary>
+        internal static IEnumerable<(string Text, RSize Size)> MeasureUprightRunCharacters(
+            RGraphics g, string text, RFont font, TextShapingFeatures? features)
+        {
+            foreach (var rune in text.EnumerateRunes())
+            {
+                var charText = rune.ToString();
+                yield return (charText, g.MeasureString(charText, font, features));
+            }
         }
 
         /// <summary>

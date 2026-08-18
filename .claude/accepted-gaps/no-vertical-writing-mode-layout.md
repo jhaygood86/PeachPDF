@@ -100,6 +100,34 @@ assertions, and the existing 544 horizontal-tb Table tests all still pass unchan
 guard, in particular, only ever removes a shrink no horizontal-tb test relied on). Scoped to simple tables
 only — see below for what `display: table` still doesn't handle under a vertical writing mode.
 
+**Real per-character `text-orientation`** ([#765](https://github.com/jhaygood86/PeachPDF/issues/765)) now
+works: `mixed` (the default) classifies each codepoint by Unicode's Vertical_Orientation property (UAX
+#50 — `U`/`Tu` upright, `R`/`Tr` rotated, `Tu`/`Tr`'s own "transformed" fallback collapsed to plain
+upright/rotated since this engine has no vertical-form GSUB substitution) via a compact, Brotli-compressed,
+run-length-encoded lookup table (`VerticalOrientationTable`, mirroring the existing `BidiClassTable`
+pattern) generated from the real UCD `VerticalOrientation.txt` data file. `CssBox.AddWord`/
+`EmitPerCodepointFragments` split a word into maximal same-orientation runs (composing as a third axis
+alongside the pre-existing small-caps-case-run and per-codepoint-font-run splits) and tag each fragment
+`CssRect.IsUprightOrientation`; `text-orientation: upright`/`sideways` instead force one answer for every
+word on the box, skipping the split entirely. `FragmentPainter.Text.cs`'s `PaintUprightVerticalRun` paints
+an upright run one character at a time, stacked down the column and centered across it, rather than
+rotating the whole run as one natural horizontal glyph run the way the (still-default-for-non-upright-runs)
+rotated path does. Finding the right per-character down-the-column *advance* took two attempts: the first
+(each character's own individually-measured horizontal advance width) kept layout and paint mutually
+consistent with each other, but both were consistently wrong versus what `RGraphics.DrawString` actually
+paints — a glyph always renders across the font's full line height (ascent+descent) from its anchor,
+independent of that glyph's own hmtx advance, and a real subsetted CJK font's advance width measured
+narrower than its line height, so every character visibly overlapped the next and the run's own reserved
+extent under-ran into whatever followed. The advance is now the font's own line height instead — the
+closest available per-character constant that can never under-advance, given no true vmtx table is
+consulted yet (see below). Verified with `VerticalOrientationTableTests` (table lookups against real UCD
+data), `TextOrientationIntegrationTests` (word-splitting via a `CssBox`+layout harness, and
+`RGraphics`-call-sequence assertions for both the per-character upright paint path and the rotated path via
+a `RecordingGraphics` mock — 5 of 10 tests confirmed meaningful by failing when the feature was temporarily
+disabled), and both PDFium and MuPDF rasterization of the `writing_mode` showcase's section 8 (mixed CJK
+upright next to rotated Latin/digits, upright-forced, and sideways-forced examples, all agreeing between
+renderers with no overlapping or garbled glyphs).
+
 ## What's still out of scope
 
 - **Block children inside a vertical box** ([#760](https://github.com/jhaygood86/PeachPDF/issues/760)).

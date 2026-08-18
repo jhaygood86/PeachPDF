@@ -48,6 +48,15 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Hebrew => Path.Combine(AppContext.BaseDirectory, "NotoSansHebrewSubset.ttf");
 
         /// <summary>
+        /// A subset of "Noto Sans JP" (see NotoSansJPSubset.LICENSE.txt): a handful of CJK ideographs
+        /// plus the full basic-Latin alphabet/digits/punctuation, all in one face - a real font covering
+        /// both scripts <see cref="Ttf"/> (Source Sans 3, Latin-only) does not, so tests can embed this
+        /// one font and have every character resolve to it, isolating whatever they're testing from
+        /// <c>NeedsPerCodepointFont</c>'s own unrelated missing-glyph-fallback split.
+        /// </summary>
+        internal static string Cjk => Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf");
+
+        /// <summary>
         /// A hand-authored COLR <b>version 0</b> test font (public domain, see
         /// ColorTestFonts.LICENSE.txt): layered outline color glyphs backed by a CPAL palette.
         /// 'A' is a red box under a green triangle, 'B' a blue circle; 'X'/'Y'/'Z' are the plain

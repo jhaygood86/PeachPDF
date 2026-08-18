@@ -37,6 +37,8 @@ using PeachPDF.Html.Core.Fragments;
 using ContainerTypeEnum = PeachPDF.CSS.ContainerType;
 // Same shadowing as ContainerTypeEnum above, for the WritingMode property/enum pair.
 using WritingModeEnum = PeachPDF.CSS.WritingMode;
+// Same shadowing as ContainerTypeEnum above, for the TextOrientation property/enum pair.
+using TextOrientationEnum = PeachPDF.CSS.TextOrientation;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -1180,11 +1182,14 @@ namespace PeachPDF.Html.Core.Dom
 
             if (!synthesisApplies)
             {
-                if (!needsPerCodepoint)
+                var needsOrientationSplit = NeedsOrientationSplit(text);
+
+                if (!needsPerCodepoint && !needsOrientationSplit)
                 {
                     Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText)
                     {
-                        HyphenationCandidates = hyphenationCandidates
+                        HyphenationCandidates = hyphenationCandidates,
+                        IsUprightOrientation = WholeTextOrientationIsUpright(text)
                     });
                     return;
                 }
@@ -1221,19 +1226,20 @@ namespace PeachPDF.Html.Core.Dom
                 var runSpaceBefore = i == 0 && hasSpaceBefore;
                 var runSpaceAfter = i == runs.Count - 1 && hasSpaceAfter;
 
-                if (!needsPerCodepoint)
+                if (!needsPerCodepoint && !NeedsOrientationSplit(displayText))
                 {
                     Words.Add(new CssRectWord(this, displayText, runSpaceBefore, runSpaceAfter, runOriginalText)
                     {
                         FontSizeScale = scale,
-                        SuppressWrapBefore = i > 0
+                        SuppressWrapBefore = i > 0,
+                        IsUprightOrientation = WholeTextOrientationIsUpright(displayText)
                     });
                 }
                 else
                 {
-                    // Per-codepoint splitting composes inside each small-caps case-run. Every fragment
-                    // after the very first of the whole word suppresses wrap: run i>0 is never first, and
-                    // within run 0 only its own first fragment is.
+                    // Per-codepoint/per-orientation splitting composes inside each small-caps case-run.
+                    // Every fragment after the very first of the whole word suppresses wrap: run i>0 is
+                    // never first, and within run 0 only its own first fragment is.
                     EmitPerCodepointFragments(displayText, runOriginalText, runSpaceBefore, runSpaceAfter, scale, alwaysSuppressWrap: i > 0);
                 }
             }
@@ -1241,16 +1247,22 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Splits <paramref name="text"/> into maximal runs of consecutive codepoints that resolve to the
-        /// same face (via <see cref="DerivedStyle.ActualFontForCodepoint"/>) and adds one
-        /// <see cref="CssRectWord"/> per run, each marked <see cref="CssRect.UsesPerCodepointFont"/>. The
-        /// split is glued back together for line-breaking (<see cref="CssRect.SuppressWrapBefore"/> on every
-        /// fragment after the first) and only the boundary fragments carry the surrounding whitespace flags,
-        /// exactly like the small-caps split it composes with.
+        /// same face (via <see cref="DerivedStyle.ActualFontForCodepoint"/>) <i>and</i> - only under a
+        /// vertical writing mode whose <c>text-orientation</c> resolves to <c>mixed</c> - the same
+        /// effective Unicode <c>Vertical_Orientation</c> (<see cref="IsEffectivelyUpright"/>), and adds
+        /// one <see cref="CssRectWord"/> per run, each marked <see cref="CssRect.UsesPerCodepointFont"/>
+        /// (every fragment this method emits shares one face by construction, whichever boundary split
+        /// it) and carrying its own <see cref="CssRect.IsUprightOrientation"/>. The split is glued back
+        /// together for line-breaking (<see cref="CssRect.SuppressWrapBefore"/> on every fragment after
+        /// the first) and only the boundary fragments carry the surrounding whitespace flags, exactly
+        /// like the small-caps split it composes with.
         /// </summary>
         private void EmitPerCodepointFragments(string text, string originalText, bool hasSpaceBefore, bool hasSpaceAfter, double fontSizeScale, bool alwaysSuppressWrap)
         {
             if (originalText.Length != text.Length)
                 originalText = text;
+
+            var checkOrientation = IsVerticalMixedOrientation();
 
             var index = 0;
             var first = true;
@@ -1259,6 +1271,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 Rune.DecodeFromUtf16(text.AsSpan(index), out var rune, out var consumed);
                 var faceKey = ActualFontForCodepoint(rune, fontSizeScale).FaceKey;
+                var upright = checkOrientation && IsEffectivelyUpright(rune);
                 var start = index;
                 index += consumed;
 
@@ -1267,19 +1280,84 @@ namespace PeachPDF.Html.Core.Dom
                     Rune.DecodeFromUtf16(text.AsSpan(index), out var next, out var nextConsumed);
                     if (ActualFontForCodepoint(next, fontSizeScale).FaceKey != faceKey)
                         break;
+                    if (checkOrientation && IsEffectivelyUpright(next) != upright)
+                        break;
                     index += nextConsumed;
                 }
 
-                Words.Add(new CssRectWord(this, text.Substring(start, index - start), first && hasSpaceBefore, index >= text.Length && hasSpaceAfter, originalText.Substring(start, index - start))
+                var fragText = text.Substring(start, index - start);
+                Words.Add(new CssRectWord(this, fragText, first && hasSpaceBefore, index >= text.Length && hasSpaceAfter, originalText.Substring(start, index - start))
                 {
                     FontSizeScale = fontSizeScale,
                     SuppressWrapBefore = !first || alwaysSuppressWrap,
-                    UsesPerCodepointFont = true
+                    UsesPerCodepointFont = true,
+                    IsUprightOrientation = upright
                 });
 
                 first = false;
             }
         }
+
+        /// <summary>
+        /// Whether this box's <c>writing-mode</c> is vertical and its <c>text-orientation</c> resolves to
+        /// <c>mixed</c> - the one combination under which per-character Unicode <c>Vertical_Orientation</c>
+        /// classification is meaningful at all. <c>upright</c>/<c>sideways</c> apply one box-wide decision
+        /// instead (read directly off <see cref="TextOrientation"/> at paint time, not per fragment), and a
+        /// <c>horizontal-tb</c> box has no vertical orientation to classify in the first place.
+        /// </summary>
+        private bool IsVerticalMixedOrientation() =>
+            WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr
+            && TextOrientation.Value == TextOrientationEnum.Mixed;
+
+        /// <summary>
+        /// Whether <paramref name="text"/> contains codepoints of more than one effective orientation
+        /// (<see cref="IsEffectivelyUpright"/>) - i.e. whether it actually needs splitting into per-run
+        /// <see cref="CssRectWord"/> fragments rather than staying one whole word. False whenever
+        /// <see cref="IsVerticalMixedOrientation"/> is false, which keeps the overwhelmingly common
+        /// horizontal-tb (or non-<c>mixed</c>) case on the single-word fast path with no per-character
+        /// table lookups at all.
+        /// </summary>
+        private bool NeedsOrientationSplit(string text)
+        {
+            if (!IsVerticalMixedOrientation()) return false;
+
+            var first = true;
+            var uniform = false;
+            foreach (var rune in text.EnumerateRunes())
+            {
+                var upright = IsEffectivelyUpright(rune);
+                if (first) { uniform = upright; first = false; }
+                else if (upright != uniform) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// <paramref name="text"/>'s single shared effective orientation, for a caller that has already
+        /// established (<see cref="NeedsOrientationSplit"/> returning false) that every codepoint in it
+        /// agrees - read from the first codepoint alone. False (this repo's prior "everything rotates"
+        /// default) whenever <see cref="IsVerticalMixedOrientation"/> is false or <paramref name="text"/>
+        /// is empty, matching <see cref="CssRect.IsUprightOrientation"/>'s own "meaningless when not
+        /// applicable" default.
+        /// </summary>
+        private bool WholeTextOrientationIsUpright(string text)
+        {
+            if (!IsVerticalMixedOrientation() || text.Length == 0) return false;
+
+            Rune.DecodeFromUtf16(text.AsSpan(), out var rune, out _);
+            return IsEffectivelyUpright(rune);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="rune"/>'s Unicode <c>Vertical_Orientation</c>
+        /// (<see cref="VerticalOrientationTable"/>) is effectively upright for a renderer with no
+        /// vertical-form GSUB substitution (<c>vert</c>/<c>vrt2</c>) - <see cref="VerticalOrientationClass.U"/>
+        /// and <see cref="VerticalOrientationClass.Tu"/> both fall back to plain upright without one;
+        /// <see cref="VerticalOrientationClass.R"/>/<see cref="VerticalOrientationClass.Tr"/> both fall
+        /// back to rotated. See <see cref="VerticalOrientationClass"/>'s own remarks.
+        /// </summary>
+        private static bool IsEffectivelyUpright(Rune rune) =>
+            VerticalOrientationTable.Of(rune) is VerticalOrientationClass.U or VerticalOrientationClass.Tu;
 
         /// <summary>
         /// Whether <paramref name="text"/> must be resolved per-codepoint: an <c>@font-face</c>

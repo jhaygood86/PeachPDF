@@ -5182,10 +5182,17 @@ await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
 // --- writing-mode (vertical-rl/vertical-lr) showcase ---
 // Real vertical line flow (issue #547): lines stack along the block axis (right-to-left for
 // vertical-rl, left-to-right for vertical-lr), text runs top-to-bottom within each line, and
-// glyphs paint rotated 90°. Flexbox and simple Table layout are also writing-mode-aware now - see
-// .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's still deferred (block
-// children, real per-character text-orientation, Multi-column axis awareness, and Table's own
-// collapsed borders/headers-footers/captions/rowspan-colspan/per-row pagination).
+// glyphs paint rotated 90° by default (text-orientation: sideways/mixed's rotated runs) or
+// upright without rotation (text-orientation: upright/mixed's upright runs, real Unicode
+// Vertical_Orientation classification - issue #765). Flexbox and simple Table layout are also
+// writing-mode-aware now - see .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's
+// still deferred (block children, Multi-column axis awareness, and Table's own collapsed
+// borders/headers-footers/captions/rowspan-colspan/per-row pagination).
+
+// A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK
+// characters section 8 below uses, so mixed text-orientation renders real upright glyphs rather
+// than .notdef boxes - the vast majority of real-world text-orientation: mixed content is CJK.
+var writingModeCjkFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf")));
 
 const string WritingModeCss = """
     <style>
@@ -5277,10 +5284,21 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</table><div class=\"label\">vertical-lr table: rows stack left-to-right, columns run top-to-bottom</div></div>" +
     "</div>" +
 
+    $"<h2>8 &mdash; text-orientation: real per-character upright/rotated splitting (issue #765)</h2>" +
+    $"<style>@font-face {{ font-family: 'CJK'; src: url('data:font/truetype;base64,{writingModeCjkFontB64}') format('truetype'); }} .cjk {{ font-family: 'CJK', Arial, sans-serif }}</style>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox cjk\" style=\"writing-mode: vertical-rl; text-orientation: mixed; width: 60px; height: 260px\">縦書きテキストPDF2024</div>" +
+    "<div class=\"label\">mixed (default): CJK upright, Latin/digits rotated</div></div>" +
+    "<div><div class=\"vbox cjk\" style=\"writing-mode: vertical-rl; text-orientation: upright; width: 60px; height: auto\">縦書きテキストPDF2024</div>" +
+    "<div class=\"label\">upright: every character upright</div></div>" +
+    "<div><div class=\"vbox cjk\" style=\"writing-mode: vertical-rl; text-orientation: sideways; width: 60px; height: 260px\">縦書きテキストPDF2024</div>" +
+    "<div class=\"label\">sideways: every character rotated</div></div>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
-    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, glyphs painted rotated 90 degrees, and writing-mode-aware Flexbox and Table layout.",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), and writing-mode-aware Flexbox and Table layout.",
     writingModeHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---

@@ -279,6 +279,22 @@ namespace PeachPDF.Html.Core.Dom
         public bool UsesPerCodepointFont { get; set; }
 
         /// <summary>
+        /// This fragment's effective Unicode <c>Vertical_Orientation</c> under <c>text-orientation:
+        /// mixed</c> - true when every codepoint in it classifies as
+        /// <see cref="PeachPDF.Text.VerticalOrientationClass.U"/> or
+        /// <see cref="PeachPDF.Text.VerticalOrientationClass.Tu"/> (upright, painted without rotation),
+        /// false for <see cref="PeachPDF.Text.VerticalOrientationClass.R"/>/
+        /// <see cref="PeachPDF.Text.VerticalOrientationClass.Tr"/> (rotated 90°, this repo's prior
+        /// "everything rotates" behavior). Set in <see cref="CssBox.ParseToWords"/> only for a box under
+        /// a vertical writing mode whose <c>text-orientation</c> actually resolves to <c>mixed</c> and
+        /// whose text mixes both orientations; every fragment in such a split shares one orientation by
+        /// construction. Meaningless - and never consulted - for <c>text-orientation:
+        /// upright</c>/<c>sideways</c>, which apply one box-wide decision instead of a per-fragment one,
+        /// and for a <c>horizontal-tb</c> box, where orientation has no meaning at all.
+        /// </summary>
+        public bool IsUprightOrientation { get; set; }
+
+        /// <summary>
         /// When true, this fragment must never be treated as a line-break opportunity even if it would
         /// otherwise overflow — used to glue synthesized small-caps case-run fragments (which together
         /// make up what was originally one word) back together so splitting a word into runs never

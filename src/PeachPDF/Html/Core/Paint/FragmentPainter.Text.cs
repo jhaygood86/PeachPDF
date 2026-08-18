@@ -65,23 +65,81 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr)
                 {
-                    // "Everything rotates" - the interim text-orientation simplification (issue #547):
-                    // wordFragment.Rect is already the word's true physical (rotated) footprint, set by
-                    // CssLayoutEngine.CreateVerticalLineBoxes via WritingModeFrame, which swaps width/height
-                    // for a vertical box - so the glyph run's own natural (pre-rotation) size is that swap
-                    // undone.
-                    var naturalSize = new RSize(wordFragment.Rect.Height, wordFragment.Rect.Width);
-                    var rotation = SidewaysRotation(wordFragment.Rect);
-                    g.PushTransform(rotation);
-                    g.DrawString(text, font, styleSource.ActualColor, new RPoint(0, baselineAdjust), naturalSize,
-                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
-                    g.PopTransform();
+                    // text-orientation decides per this box (upright/sideways force one answer for
+                    // every word) or per fragment (mixed, the default - CssBox.AddWord/
+                    // EmitPerCodepointFragments already split the word into maximal same-orientation
+                    // runs, so word.IsUprightOrientation is a real per-fragment fact here, not a guess).
+                    var isUpright = box.TextOrientation.Value switch
+                    {
+                        TextOrientation.Upright => true,
+                        TextOrientation.Sideways => false,
+                        _ => word.IsUprightOrientation
+                    };
+
+                    if (isUpright)
+                    {
+                        PaintUprightVerticalRun(g, text, font, styleSource, wordFragment.Rect, baselineAdjust);
+                    }
+                    else
+                    {
+                        // wordFragment.Rect is already the word's true physical (rotated) footprint, set
+                        // by CssLayoutEngine.CreateVerticalLineBoxes via WritingModeFrame, which swaps
+                        // width/height for a vertical box - so the glyph run's own natural (pre-rotation)
+                        // size is that swap undone.
+                        var naturalSize = new RSize(wordFragment.Rect.Height, wordFragment.Rect.Width);
+                        var rotation = SidewaysRotation(wordFragment.Rect);
+                        g.PushTransform(rotation);
+                        g.DrawString(text, font, styleSource.ActualColor, new RPoint(0, baselineAdjust), naturalSize,
+                            styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                        g.PopTransform();
+                    }
                 }
                 else
                 {
                     var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
                     g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Paints an upright (unrotated) run within a vertical writing mode - one or more codepoints
+        /// classified <see cref="PeachPDF.Text.VerticalOrientationClass.U"/>/
+        /// <see cref="PeachPDF.Text.VerticalOrientationClass.Tu"/> (<see cref="CssRect.IsUprightOrientation"/>),
+        /// stacked top-to-bottom down <paramref name="rect"/>'s
+        /// own physical extent rather than rotated to fill it, since - unlike a rotated run, which is one
+        /// natural horizontal glyph run reoriented as a whole (<see cref="SidewaysRotation"/>) - upright
+        /// text has no single natural horizontal layout to reuse: each character keeps its own reading
+        /// orientation and simply advances along the column instead of along a line.
+        /// </summary>
+        /// <remarks>
+        /// No true OpenType vertical metrics (<c>vmtx</c>) are consulted yet (issue #770) - each
+        /// character's own down-the-column advance is <paramref name="font"/>'s own line height
+        /// (ascender + descender), the exact same basis <see cref="CssLayoutEngine.NaturalWordSize"/>
+        /// already reserved this run's own <paramref name="rect"/> extent from. This is deliberately
+        /// not each character's individually-measured horizontal advance width
+        /// (<see cref="CssLayoutEngine.MeasureUprightRunCharacters"/>'s own per-character <c>Size</c>,
+        /// still used below for cross-axis centering only): <see cref="RGraphics.DrawString"/> always
+        /// renders a glyph across the font's full line-height span from its anchor regardless of that
+        /// glyph's own advance width, so stepping by a narrower advance (a real CJK codepoint can
+        /// measure a materially narrower hmtx advance than its font's line height) visibly overlapped
+        /// each character with the next, and overran into whatever followed once the run finished. Each
+        /// character is centered across the column (<paramref name="rect"/>'s own thickness) rather than
+        /// left-aligned, matching CJK vertical typesetting convention.
+        /// </remarks>
+        private static void PaintUprightVerticalRun(RGraphics g, string text, RFont font, CssBox styleSource, RRect rect, double baselineAdjust)
+        {
+            double offset = 0;
+
+            foreach (var (charText, charSize) in CssLayoutEngine.MeasureUprightRunCharacters(g, text, font, styleSource.ActualTextShapingFeatures))
+            {
+                var x = rect.X + Math.Max(0, (rect.Width - charSize.Width) / 2);
+                var y = rect.Y + offset + baselineAdjust;
+
+                g.DrawString(charText, font, styleSource.ActualColor, new RPoint(x, y), charSize,
+                    styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+
+                offset += font.Height + styleSource.ActualLetterSpacing;
             }
         }
 
