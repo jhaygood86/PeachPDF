@@ -35,7 +35,12 @@ auto height), `ActualRight` for `vertical-lr` (block-start is the left edge, the
 case already has). `CssBox.ActualRight` is a *written* property whose getter is `Location.X + Size.Width`,
 so the `vertical-rl` case has to capture the true (pre-shrink) right edge and re-apply it after moving
 `Location.X`, or the getter reports a moved edge Size.Width was never told to give up — verified against
-both PDFium and MuPDF rasterization (matching output) and the full test suite.
+both PDFium and MuPDF rasterization (matching output) and the full test suite. One narrow follow-up:
+`width: auto; max-width: Npx; margin: 0 auto` on a vertical box computes centering margins against the
+pre-shrink (max-width-clamped) width, and the content-driven shrink afterward doesn't re-center against
+the final, smaller width, leaving the box off-center — tracked as
+[#773](https://github.com/jhaygood86/PeachPDF/issues/773). Plain `width: auto` (no `max-width`) is
+unaffected, since auto margins already resolve to 0 whenever width itself is auto.
 
 Flexbox (`display: flex`/`inline-flex`) is also writing-mode-aware now: `CssLayoutEngineFlex` resolves
 which physical axis is its main axis (`_mainAxisIsPhysicalX`) and which physical end main-start/cross-start

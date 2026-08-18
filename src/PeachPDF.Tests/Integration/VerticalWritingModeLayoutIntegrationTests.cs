@@ -307,13 +307,25 @@ namespace PeachPDF.Tests.Integration
             var el = LayoutHarness.FindById(root, "el");
             Assert.NotNull(el);
 
-            Assert.True(el!.LineBoxes.Count >= 2, "a 20pt-tall box should force at least two columns for two words");
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.True(el.LineBoxes.Count >= 2, "a 20pt-tall box should force at least two columns for two words");
 
             var contentWidth = el.ActualRight - el.Location.X;
             // Two columns of default-size text, nowhere near the ~555pt available content width a
             // fill-available box would take.
             Assert.True(contentWidth is > 0 and < 100,
                 $"expected auto width to shrink to content (~two columns), got {contentWidth}");
+
+            // Every word's own physical rect must still fall inside the shrunk box - a regression that
+            // moved the box without correctly re-anchoring word positions would pass the aggregate-width
+            // assertion above while actually clipping or overhanging content.
+            foreach (var word in words)
+            {
+                Assert.True(word.Left >= el.Location.X - 0.5 && word.Left + word.Width <= el.ActualRight + 0.5,
+                    $"word '{word.Text}' (Left={word.Left}, Width={word.Width}) falls outside the shrunk box [{el.Location.X}, {el.ActualRight}]");
+            }
+            // Block-start for vertical-rl is the right edge, so the first column should sit flush there.
+            Assert.Equal(el.ActualRight, words[0].Left + words[0].Width, 1);
         }
 
         [Fact]
@@ -329,11 +341,37 @@ namespace PeachPDF.Tests.Integration
             var el = LayoutHarness.FindById(root, "el");
             Assert.NotNull(el);
 
-            Assert.True(el!.LineBoxes.Count >= 2, "a 20pt-tall box should force at least two columns for two words");
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.True(el.LineBoxes.Count >= 2, "a 20pt-tall box should force at least two columns for two words");
 
             var contentWidth = el.ActualRight - el.Location.X;
             Assert.True(contentWidth is > 0 and < 100,
                 $"expected auto width to shrink to content (~two columns), got {contentWidth}");
+
+            foreach (var word in words)
+            {
+                Assert.True(word.Left >= el.Location.X - 0.5 && word.Left + word.Width <= el.ActualRight + 0.5,
+                    $"word '{word.Text}' (Left={word.Left}, Width={word.Width}) falls outside the shrunk box [{el.Location.X}, {el.ActualRight}]");
+            }
+            // Block-start for vertical-lr is the left edge, so the first column should sit flush there.
+            Assert.Equal(el.Location.X, words[0].Left, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_AutoWidth_NoContent_ShrinksToZeroRatherThanFillingAvailableSpace()
+        {
+            // The words.Count == 0 early-return branch of CreateVerticalLineBoxes - a box with no text
+            // content at all still needs its auto width settled rather than left at the fill-available
+            // default GetBoxWidth assigned before this method ran.
+            var html = LayoutHarness.Wrap("""<div id="el" style="writing-mode: vertical-rl; height: 20px"></div>""");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            Assert.NotNull(el);
+
+            var contentWidth = el!.ActualRight - el.Location.X;
+            Assert.True(contentWidth is >= 0 and < 10,
+                $"expected an empty auto-width vertical box to shrink to ~zero content width, got {contentWidth}");
         }
 
         [Fact]

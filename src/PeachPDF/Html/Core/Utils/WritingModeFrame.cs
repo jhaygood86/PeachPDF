@@ -79,6 +79,17 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         public bool IsVertical { get; }
 
+        /// <summary>
+        /// Whether this box's own block-start edge is the physical-right one (<c>vertical-rl</c>) rather
+        /// than physical-left (<c>vertical-lr</c>, or non-vertical) - exposed so a caller that needs to
+        /// know which edge <see cref="ToPhysical(RRect)"/> is already anchoring block-axis geometry to
+        /// (e.g. to decide which edge stays fixed when shrinking an auto block-size to content) reads the
+        /// one derivation this frame already made, rather than calling
+        /// <see cref="LogicalPropertyResolver.BlockStart"/> a second time and risking the two drifting
+        /// apart under a future writing-mode addition.
+        /// </summary>
+        public bool BlockStartIsRight => _blockStartIsRight;
+
         /// <summary>The box's own content-box extent along its inline axis (physical height, when vertical).</summary>
         public double LogicalContentWidth { get; }
 

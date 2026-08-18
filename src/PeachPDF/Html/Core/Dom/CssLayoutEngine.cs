@@ -481,19 +481,19 @@ namespace PeachPDF.Html.Core.Dom
             // auto height (inline axis) shrinking above - CSS Writing Modes doesn't special-case either
             // axis, so a vertical box's auto block-size shrinking to content is exactly as spec-required
             // as horizontal-tb's auto height already shrinking is (issue #761). Block-start (physical
-            // Right for vertical-rl, physical Left for vertical-lr - see LogicalPropertyResolver.BlockStart)
-            // is the edge every word position below is already anchored to (WritingModeFrame.ToPhysical's
-            // own _blockStartIsRight branch), so it stays fixed exactly the way ClientTop stays fixed for
-            // auto height, and only the block-end edge moves - Location.X for vertical-rl (mirroring
-            // ActualBottom's own "move the end edge" shape flipped onto the other physical axis),
-            // ActualRight for vertical-lr (identical shape to the height case, just on X).
+            // Right for vertical-rl, physical Left for vertical-lr) is the edge every word position below
+            // is already anchored to (frame.ToPhysical's own BlockStartIsRight branch), so it stays fixed
+            // exactly the way ClientTop stays fixed for auto height, and only the block-end edge moves -
+            // Location.X for vertical-rl (mirroring ActualBottom's own "move the end edge" shape flipped
+            // onto the other physical axis), ActualRight for vertical-lr (identical shape to the height
+            // case, just on X). Reads frame.BlockStartIsRight rather than re-deriving
+            // LogicalPropertyResolver.BlockStart a second time for the same box.
             var widthIsAuto = !CssValueParser.IsValidLength(blockBox.Width);
-            var blockStartIsRight = LogicalPropertyResolver.BlockStart(blockBox.WritingMode.Value) == PhysicalSide.Right;
 
             if (words.Count == 0)
             {
                 if (heightIsAuto) blockBox.ActualBottom = clientTop;
-                if (widthIsAuto) ShrinkAutoWidthTo(blockBox, clientLeft, clientRight, 0, blockStartIsRight);
+                if (widthIsAuto) ShrinkAutoWidthTo(blockBox, frame, 0);
                 return;
             }
 
@@ -563,34 +563,41 @@ namespace PeachPDF.Html.Core.Dom
                 // blockOffset only folds in a *finished* line's own thickness (StartNewLine's job) - the
                 // last line's is still sitting in lineThickness, unmoved, when the loop above ends.
                 var contentBlockExtent = blockOffset + lineThickness;
-                ShrinkAutoWidthTo(blockBox, clientLeft, clientRight, contentBlockExtent, blockStartIsRight);
+                ShrinkAutoWidthTo(blockBox, frame, contentBlockExtent);
             }
         }
 
         /// <summary>
         /// Shrinks <paramref name="blockBox"/>'s auto width to <paramref name="contentBlockExtent"/> (the
         /// content's own block-axis extent under a vertical writing mode - see the caller's own remarks on
-        /// why block-start stays fixed and only the block-end edge moves). <see cref="CssBox.ActualRight"/>
-        /// is a <em>written</em> property whose getter is <c>Location.X + Size.Width</c> - moving
-        /// <see cref="CssBox.Location"/> alone (the vertical-rl branch) would silently drag ActualRight
-        /// along with it, since Size.Width doesn't change on its own, so the true (pre-shrink) right edge
-        /// has to be captured and re-applied *after* Location moves, which re-derives Size.Width against
-        /// the new Location.X through the normal setter rather than leaving it stale.
+        /// why block-start stays fixed and only the block-end edge moves). Reuses <paramref name="frame"/>'s
+        /// own <see cref="WritingModeFrame.ToPhysical(double, double)"/>/<see cref="WritingModeFrame.BlockStartIsRight"/>
+        /// rather than re-deriving the rl/lr edge arithmetic a second time - the exact edge every word
+        /// position was already placed against. <see cref="CssBox.ActualRight"/> is a <em>written</em>
+        /// property whose getter is <c>Location.X + Size.Width</c> - moving <see cref="CssBox.Location"/>
+        /// alone (the vertical-rl branch) would silently drag ActualRight along with it, since Size.Width
+        /// doesn't change on its own, so the true (pre-shrink) right edge has to be captured and re-applied
+        /// *after* Location moves, which re-derives Size.Width against the new Location.X through the
+        /// normal setter rather than leaving it stale.
         /// </summary>
-        private static void ShrinkAutoWidthTo(CssBox blockBox, double clientLeft, double clientRight, double contentBlockExtent, bool blockStartIsRight)
+        private static void ShrinkAutoWidthTo(CssBox blockBox, WritingModeFrame frame, double contentBlockExtent)
         {
-            if (blockStartIsRight)
+            // The content-box edge the block axis has reached, in the same physical coordinate
+            // ToPhysical already anchors every word to - independent of which side is block-start.
+            var contentFarEdgeX = frame.ToPhysical(0, contentBlockExtent).X;
+
+            if (frame.BlockStartIsRight)
             {
                 var trueRight = blockBox.ActualRight;
                 blockBox.Location = blockBox.Location with
                 {
-                    X = clientRight - contentBlockExtent - blockBox.ActualPaddingLeft - blockBox.ActualBorderLeftWidth
+                    X = contentFarEdgeX - blockBox.ActualPaddingLeft - blockBox.ActualBorderLeftWidth
                 };
                 blockBox.ActualRight = trueRight;
             }
             else
             {
-                blockBox.ActualRight = clientLeft + contentBlockExtent
+                blockBox.ActualRight = contentFarEdgeX
                     + blockBox.ActualPaddingRight + blockBox.ActualBorderRightWidth;
             }
         }
