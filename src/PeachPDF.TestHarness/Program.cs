@@ -5230,10 +5230,33 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "<div class=\"label\">height: auto</div></div>" +
     "</div>" +
 
+    "<h2>5 &mdash; flex-direction: row under vertical-rl (main axis = inline = physical Y)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; display: flex; width: 220px; height: 160px\">" +
+    "<div style=\"width: 60px; height: 40px; background: #1a6b8a; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #4a9bc4; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #7cc0e0; margin: 4px\"></div>" +
+    "</div><div class=\"label\">flex row: items stack top-to-bottom</div></div>" +
+    "</div>" +
+
+    "<h2>6 &mdash; flex-direction: column under vertical-rl/vertical-lr (main axis = block = physical X)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; display: flex; flex-direction: column; width: 220px; height: 160px\">" +
+    "<div style=\"width: 60px; height: 40px; background: #1a6b8a; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #4a9bc4; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #7cc0e0; margin: 4px\"></div>" +
+    "</div><div class=\"label\">vertical-rl flex column: right-to-left</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-lr; display: flex; flex-direction: column; width: 220px; height: 160px\">" +
+    "<div style=\"width: 60px; height: 40px; background: #1a6b8a; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #4a9bc4; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #7cc0e0; margin: 4px\"></div>" +
+    "</div><div class=\"label\">vertical-lr flex column: left-to-right</div></div>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
-    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, and glyphs painted rotated 90 degrees.",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, glyphs painted rotated 90 degrees, and writing-mode-aware Flexbox row/column layout.",
     writingModeHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---

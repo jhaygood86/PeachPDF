@@ -1,4 +1,4 @@
-# `writing-mode` real layout is partial: inline content only, no block children, table/flex/columns unaffected
+# `writing-mode` real layout is partial: inline content only, no block children, table/columns unaffected
 
 Tracking issue: [#547](https://github.com/jhaygood86/PeachPDF/issues/547).
 
@@ -25,6 +25,21 @@ already proven by `SvgRenderer.PaintGlyphs`). Such a box is treated as monolithi
 parent's own page fragmentation (`MonolithicContent.IsUnresumableOrthogonalFlow`) — it lays out its whole
 subtree in one pass and is moved (not sliced) if it doesn't fit the current page, the same way a replaced
 element is.
+
+Flexbox (`display: flex`/`inline-flex`) is also writing-mode-aware now: `CssLayoutEngineFlex` resolves
+which physical axis is its main axis (`_mainAxisIsPhysicalX`) and which physical end main-start/cross-start
+land on (`_mainStartIsAtMax`/`_crossStartIsAtMax`) from `LogicalPropertyResolver` — the same abstract-to-
+physical table `WritingModeFrame` reuses — rather than assuming `row` always means physical-X. A `row`
+container's items stack along the container's own inline axis (physical Y under `vertical-rl`/`vertical-lr`)
+and a `column` container's along the block axis (right-to-left for `vertical-rl`, left-to-right for
+`vertical-lr`); sizing (`Width`/`Height`, min/max, margins), alignment (`justify-content`'s physical
+`left`/`right` fallback, `align-items`/`align-self` stretch and cross-axis positioning), and which of the
+two page-fragmentation models applies (row's "parallel flows sharing one physical-Y band" vs. column's
+"sequential flow along physical Y") all follow the resolved physical axis rather than the `row`/`column`
+keyword. `row-gap`/`column-gap` selection is deliberately unaffected (CSS Flexbox 1's own row/column gap
+identity is tied to `flex-direction`, not the physical axis it lands on). Verified against both PDFium and
+MuPDF rasterization (byte-identical layout) per this repo's paint-verification convention, and the existing
+481 horizontal-tb Flexbox tests all still pass unchanged.
 
 ## What's still out of scope
 
@@ -62,11 +77,18 @@ element is.
   property) is not implemented.
 - **`sideways-rl`/`sideways-lr`** ([#766](https://github.com/jhaygood86/PeachPDF/issues/766)) still render
   as `horizontal-tb` throughout (`WritingModeFrame.IsVertical` is true only for `vertical-rl`/`vertical-lr`).
-- **Table** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762)), **Flexbox**
-  ([#763](https://github.com/jhaygood86/PeachPDF/issues/763)), and **Multi-column**
+- **Table** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762)) and **Multi-column**
   ([#764](https://github.com/jhaygood86/PeachPDF/issues/764)) layout engines don't read `writing-mode` at
-  all — a vertical-writing-mode table/flex/multicol container still lays out its own rows/columns/items as
-  `horizontal-tb`.
+  all — a vertical-writing-mode table/multicol container still lays out its own rows/columns as
+  `horizontal-tb`. (Flexbox closed this gap - see "What now works" above.)
+- **A vertical-writing-mode Flexbox container's own top-level definite-main-size resolution has no
+  aspect-ratio-on-width fallback** ([#772](https://github.com/jhaygood86/PeachPDF/issues/772)). The
+  pre-existing `aspect-ratio`-driven auto-height fallback
+  (`CssLayoutEngine.TryGetAspectRatioHeight`) stays scoped to the physical Y dimension; a `column`-direction
+  container under a vertical writing mode (main axis physical X) has no equivalent width-driven fallback,
+  since the width-side helper (`TryGetAspectRatioWidth`) is documented as unsafe for a stretch-fit block-
+  level box, which a flex container's own auto width already is. A narrow, deliberate boundary matching an
+  already-narrow pre-existing feature's own scope, not a general Flexbox regression.
 - **A vertical box's own content never fragments across a page boundary**
   ([#767](https://github.com/jhaygood86/PeachPDF/issues/767)) — being monolithic, it is moved whole to the
   next page if it doesn't fit the current one, or displaced-per-band (never resized) if it fits nowhere; it
