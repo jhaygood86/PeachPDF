@@ -1349,15 +1349,11 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether <paramref name="rune"/>'s Unicode <c>Vertical_Orientation</c>
-        /// (<see cref="VerticalOrientationTable"/>) is effectively upright for a renderer with no
-        /// vertical-form GSUB substitution (<c>vert</c>/<c>vrt2</c>) - <see cref="VerticalOrientationClass.U"/>
-        /// and <see cref="VerticalOrientationClass.Tu"/> both fall back to plain upright without one;
-        /// <see cref="VerticalOrientationClass.R"/>/<see cref="VerticalOrientationClass.Tr"/> both fall
-        /// back to rotated. See <see cref="VerticalOrientationClass"/>'s own remarks.
+        /// Whether <paramref name="rune"/>'s Unicode <c>Vertical_Orientation</c> is effectively upright -
+        /// delegates to <see cref="VerticalOrientationTable.IsEffectivelyUpright"/>, the single shared
+        /// decision the SVG text pipeline (<c>SvgRenderer</c>) also classifies by.
         /// </summary>
-        private static bool IsEffectivelyUpright(Rune rune) =>
-            VerticalOrientationTable.Of(rune) is VerticalOrientationClass.U or VerticalOrientationClass.Tu;
+        private static bool IsEffectivelyUpright(Rune rune) => VerticalOrientationTable.IsEffectivelyUpright(rune);
 
         /// <summary>
         /// Whether <paramref name="text"/> must be resolved per-codepoint: an <c>@font-face</c>

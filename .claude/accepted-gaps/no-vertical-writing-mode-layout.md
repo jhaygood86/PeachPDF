@@ -128,6 +128,56 @@ disabled), and both PDFium and MuPDF rasterization of the `writing_mode` showcas
 upright next to rotated Latin/digits, upright-forced, and sideways-forced examples, all agreeing between
 renderers with no overlapping or garbled glyphs).
 
+**SVG `<text>`/`<tspan>` `writing-mode`/`text-orientation`** now work too, via SVG's own independent
+text-layout pipeline (`SvgRenderer.LayoutGlyphs`/`PaintGlyphs`) — no `WritingModeFrame` needed here, since a
+`<tspan>` never establishes its own formatting context the way an HTML box does. `writing-mode` is
+resolved once from the `<text>` root (threaded through `SvgTreeBuilder`'s existing `InheritedPaint`
+carrier, the same mechanism `direction` already uses) and decides which axis the pen advances along — X
+for `horizontal-tb`, Y for `vertical-rl`/`vertical-lr` (`sideways-rl`/`sideways-lr` and SVG 1.1's legacy
+`tb`/`tb-rl` keywords fall back to `horizontal-tb`, matching the HTML pipeline's own scope).
+`text-orientation` is genuinely per-glyph, unlike `writing-mode` — a `<tspan>` can override it — and
+`mixed` classifies each glyph by the same shared `VerticalOrientationTable.IsEffectivelyUpright` the HTML
+pipeline uses (extracted out of `CssBox` into the shared table itself so the two pipelines can never
+disagree on the classification). SVG already operates one glyph at a time (no HTML-style word-splitting
+needed), so `GlyphInfo.IsUpright` is just an added field; painting reuses the exact rotation matrix
+construction explicit `rotate=""` has always used (`PaintRotatedGlyph`, extracted from that pre-existing
+code), just defaulted to 90° instead of an author-specified angle — an explicit `rotate=""` still wins
+over the orientation-driven default when both apply. `ApplyBidiReordering`'s own reflection-about-content-
+span math was made axis-aware too (reorders along `Py` instead of `Px` under a vertical writing mode).
+Verified with `SvgTextWritingModeIntegrationTests` (paint-call-sequence assertions against a real adapter,
+mirroring `SvgTextBidiTests`'s established pattern — 6 of 8 tests confirmed meaningful by failing when the
+feature was temporarily disabled) and both PDFium and MuPDF rasterization of the new `svg_vertical_text`
+showcase.
+
+Finding this working took one non-obvious fix: `RFont.Height`/`.Ascent` are lazily primed by that font's
+own *first-ever* `MeasureString` call (`GraphicsAdapter.MeasureString` only calls `FontAdapter.SetMetrics`
+the first time it runs for a given font instance — before that, both properties read back a `-1`
+sentinel). HTML's `CssLayoutEngine.NaturalWordSize` never hits this because `CssBox.MeasureWordsSize`
+always measures a word's natural horizontal size earlier in layout, priming the font before
+`NaturalWordSize`'s own upright branch ever reads `Height`; `LayoutGlyphs` has no earlier pass, and its
+upright branch read `Font.Height` directly without measuring anything first whenever a run started with
+upright-classified glyphs — so a freshly-resolved (never-yet-measured) font's leading upright run advanced
+by `-1` per character, landing the following rotated run back near the text's own start rather than below
+the upright run, visually overlapping it. Fixed by always calling `g.MeasureString` before reading
+`Font.Height`, regardless of which branch actually needs the measured value.
+
+An 8-angle post-change review pass turned up five more real issues, all fixed before this landed: the same
+font-priming gap recurred in `MeasureTextBounds`'s `<textPath>` bounds loop (`pathFont.Ascent` read with
+nothing on that code path ever measuring `pathFont` first); an explicit `rotate="0"` was indistinguishable
+from no `rotate` attribute at all, so it couldn't override automatic vertical rotation the way any other
+explicit angle could; `GlyphInfo.IsUpright` was classified once from a glyph's pre-bidi-mirroring codepoint
+and never refreshed after `ApplyBidiReordering` rewrites `Glyph` to its mirror codepoint for an RTL run;
+`writing-mode`/`text-orientation` attribute parsing in `SvgTreeBuilder` was a hand-rolled string switch
+instead of reusing `Map.WritingModes`/`Map.TextOrientations` (the same keyword tables the HTML CSS-OM
+pipeline's own converters use — `SvgElement.WritingMode`/`TextOrientation` now store the real enum values,
+not strings); and every glyph was shaped twice (once in `LayoutGlyphs` to prime metrics and compute
+`Advance`, again independently in `PaintUprightGlyph`/`PaintRotatedGlyph` at paint time) — `GlyphInfo` now
+caches its measured `Size` once in layout for paint to read back. The review also flagged a real
+architectural question worth tracking separately rather than fixing inline: `FontAdapter.Height`/`.Ascent`
+being lazily primed at all — rather than eagerly valid from construction, given the underlying `XFont`
+descriptor is already fully resolved by then — is the root cause behind three independent workarounds now
+(the two above plus this SVG one); closing it at the source would remove the need for all three.
+
 ## What's still out of scope
 
 - **Block children inside a vertical box** ([#760](https://github.com/jhaygood86/PeachPDF/issues/760)).
@@ -201,8 +251,13 @@ renderers with no overlapping or garbled glyphs).
   next page if it doesn't fit the current one, or displaced-per-band (never resized) if it fits nowhere; it
   cannot yet split its own content the way ordinary horizontal flow does.
 - **True OpenType vertical metrics (`vhea`/`vmtx`/`VORG`) are parsed but not yet consulted**
-  ([#770](https://github.com/jhaygood86/PeachPDF/issues/770)) by layout or paint — glyph advance/positioning
-  under vertical writing modes still uses the same horizontal-advance metrics as `horizontal-tb`, just
-  reinterpreted geometrically (rotated), not real vertical typesetting metrics.
+  ([#770](https://github.com/jhaygood86/PeachPDF/issues/770)) by layout or paint, in either the HTML or SVG
+  text pipeline — glyph advance/positioning under vertical writing modes still uses an approximation (the
+  font's own line height for an upright glyph's advance, that glyph's own natural pre-rotation width for a
+  rotated one), not real per-glyph vertical typesetting metrics.
+- **SVG `<textPath>` always flows horizontally along its path**, ignoring the `<text>` root's own
+  `writing-mode` — there is no vertical variant of path-following text (matches real browser behavior; not
+  tracked as a gap to close, since the combination has no well-defined vertical layout to begin with).
 
-The reader-facing note is in `docs/html-css-support.md`'s `writing-mode`/`text-orientation` rows.
+The reader-facing note is in `docs/html-css-support.md`'s `writing-mode`/`text-orientation` rows and
+`docs/supported-svg-features.md`'s Text section.

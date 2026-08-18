@@ -57,6 +57,19 @@ namespace PeachPDF.Text
 
         public static VerticalOrientationClass Of(System.Text.Rune rune) => Of(rune.Value);
 
+        /// <summary>
+        /// Whether <paramref name="rune"/> should render upright (unrotated) rather than rotated under
+        /// vertical writing modes' <c>text-orientation: mixed</c> - the single "effectively upright"
+        /// decision both the HTML (<c>CssBox.IsEffectivelyUpright</c>) and SVG (<c>SvgRenderer</c>) text
+        /// pipelines classify a character by, kept in one place since both pipelines share PeachPDF's
+        /// only Vertical_Orientation table. <see cref="VerticalOrientationClass.Tu"/>/<see cref="VerticalOrientationClass.Tr"/>
+        /// ("transformed" - meaning a dedicated vertical glyph form exists) collapse to their own
+        /// fallback (upright/rotated respectively) since PeachPDF has no vertical-form GSUB substitution
+        /// (<c>vert</c>/<c>vrt2</c>) to render the dedicated form itself.
+        /// </summary>
+        public static bool IsEffectivelyUpright(System.Text.Rune rune) =>
+            Of(rune) is VerticalOrientationClass.U or VerticalOrientationClass.Tu;
+
         private static Run[] LoadRuns()
         {
             var assembly = typeof(VerticalOrientationTable).Assembly;

@@ -3904,6 +3904,75 @@ await SaveShowcaseAsync("svg_text_advanced", "Graphics & Effects", "SVG Text: Gr
     "SVG text with gradient/pattern fill, stroke, and glyphs laid along a path (textPath) - all rendered as real vector PDF content.",
     svgTextAdvancedHtml, pdfConfig);
 
+// --- SVG vertical writing-mode text showcase ---
+
+// A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK/Latin
+// characters this showcase uses, so mixed text-orientation renders real upright glyphs rather than
+// .notdef boxes.
+var svgWritingModeCjkFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf")));
+
+var svgWritingModeHtml = "<!DOCTYPE html><html><head>" + SvgTextCss + "</head><body>" +
+
+    "<h1>SVG &lt;text&gt;: writing-mode &amp; text-orientation</h1>" +
+    "<p class=\"intro\">writing-mode: vertical-rl/vertical-lr on an SVG &lt;text&gt; root advances the pen down the column instead of along a line; text-orientation classifies each glyph (mixed, the default) or forces one answer for every glyph (upright/sideways) - CJK reads upright, Latin/digits rotate 90°, the same Unicode Vertical_Orientation classification the HTML pipeline uses. (docs/supported-svg-features.md)</p>" +
+
+    "<h2>1 — text-orientation: mixed, upright &amp; sideways</h2>" +
+    $"<defs><style>@font-face {{ font-family: 'CJK'; src: url('data:font/truetype;base64,{svgWritingModeCjkFontB64}') format('truetype'); }}</style></defs>" +
+    "<table class=\"sw\"><tr>" +
+    TextPanel("mixed (default): CJK upright, Latin/digits rotated",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <rect x="1" y="1" width="30" height="128" fill="none" stroke="#1a6b8a" stroke-width="2"/>
+          <text x="16" y="14" font-family="CJK" font-size="11" writing-mode="vertical-rl" fill="#2c3e50">縦書きPDF24</text>
+        </svg>
+        """) +
+    TextPanel("upright: every glyph upright",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <rect x="1" y="1" width="30" height="128" fill="none" stroke="#1a6b8a" stroke-width="2"/>
+          <text x="16" y="14" font-family="CJK" font-size="11" writing-mode="vertical-rl" text-orientation="upright" fill="#2c3e50">縦書きPDF24</text>
+        </svg>
+        """) +
+    TextPanel("sideways: every glyph rotated",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <rect x="1" y="1" width="30" height="128" fill="none" stroke="#1a6b8a" stroke-width="2"/>
+          <text x="16" y="14" font-family="CJK" font-size="11" writing-mode="vertical-rl" text-orientation="sideways" fill="#2c3e50">縦書きPDF24</text>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "<h2>2 — vertical-rl vs vertical-lr, and a rotated fill gradient</h2>" +
+    "<table class=\"sw\"><tr>" +
+    TextPanel("vertical-rl",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <defs><style>@font-face { font-family: 'CJK2'; src: url('data:font/truetype;base64,FONTPLACEHOLDER') format('truetype'); }</style></defs>
+          <text x="50" y="14" font-family="CJK2" font-size="12" writing-mode="vertical-rl" fill="#8e44ad">縦書き</text>
+        </svg>
+        """.Replace("FONTPLACEHOLDER", svgWritingModeCjkFontB64)) +
+    TextPanel("vertical-lr",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <defs><style>@font-face { font-family: 'CJK3'; src: url('data:font/truetype;base64,FONTPLACEHOLDER') format('truetype'); }</style></defs>
+          <text x="50" y="14" font-family="CJK3" font-size="12" writing-mode="vertical-lr" fill="#16a085">縦書き</text>
+        </svg>
+        """.Replace("FONTPLACEHOLDER", svgWritingModeCjkFontB64)) +
+    TextPanel("gradient fill on a rotated (Latin) run",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <defs><linearGradient id="vwg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e11"/><stop offset="1" stop-color="#14e"/></linearGradient></defs>
+          <text x="50" y="14" font-size="18" font-weight="bold" writing-mode="vertical-rl" text-orientation="sideways" fill="url(#vwg)">PEACH</text>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("svg_vertical_text", "Graphics & Effects", "SVG Text: Vertical Writing Mode",
+    "SVG &lt;text&gt; under writing-mode: vertical-rl/vertical-lr with real per-character text-orientation (issue #765's SVG counterpart) - CJK glyphs upright, Latin/digits rotated, composing with gradient fill.",
+    svgWritingModeHtml, pdfConfig);
+
 // --- opacity showcase ---
 
 static string OpacitySwatch(string desc, string bodyHtml, string cssLabel) =>
