@@ -312,6 +312,13 @@ namespace PeachPDF.Svg
             /// rather than rotated, under a vertical writing mode. Always false when the text root's
             /// <c>writing-mode</c> is <c>horizontal-tb</c>.</summary>
             public bool IsUpright { get; set; }
+
+            /// <summary>Set by <see cref="LayoutGlyphs"/> for an upright glyph whose font carries a real
+            /// <c>VORG</c> table (<see cref="RFont.HasVerticalOrigin"/>, issue #775) - the anchor
+            /// correction <see cref="PaintUprightGlyph"/> applies, <c>GetVerticalOriginY(rune) -
+            /// Font.Ascent</c>. Zero for a font without a real <c>VORG</c> table, reproducing the plain
+            /// top-of-cell anchor exactly.</summary>
+            public double OriginYOffset { get; set; }
         }
 
         /// <summary>
@@ -408,6 +415,19 @@ namespace PeachPDF.Svg
                             // real mirror pairs - brackets, parens - don't, but nothing guarantees it),
                             // so re-classify against what's actually going to be painted.
                             gi.IsUpright = isVertical && IsUprightGlyph(gi);
+
+                            // Same reasoning for OriginYOffset (issue #775): it was only ever computed
+                            // for a pre-mirror upright glyph against the pre-mirror codepoint, so an
+                            // IsUpright reclassification above needs a fresh VORG lookup against the
+                            // mirrored codepoint too - unlike Advance/Size, which deliberately stay
+                            // stale across mirroring (their own remarks - "a mirror pair's two glyphs
+                            // are practically always the same width"), a newly-upright glyph's offset
+                            // was never computed at all, not just outdated, so leaving it would silently
+                            // drop real VORG positioning for exactly the reordering case this file
+                            // already re-derives IsUpright to handle.
+                            gi.OriginYOffset = gi.IsUpright && gi.Font.HasVerticalOrigin
+                                ? gi.Font.GetVerticalOriginY(new System.Text.Rune(mirrored)) - gi.Font.Ascent
+                                : 0;
                         }
 
                         var offsetFromRunStart = originalPos[idx] - runOldStart;
@@ -558,14 +578,34 @@ namespace PeachPDF.Svg
                     var measured = g.MeasureString(gi.Glyph, gi.Font);
                     gi.Size = measured;
 
-                    // An upright glyph's down-the-column advance is the font's own line height, not its
-                    // measured width, for the exact same reason CssLayoutEngine.NaturalWordSize's own
-                    // upright branch does (RGraphics.DrawString always renders a glyph across the font's
-                    // full line-height span regardless of that glyph's own narrower advance width - see
-                    // its remarks for the visual-overlap failure mode this avoids). A rotated glyph's
-                    // down-the-column footprint is its own natural (pre-rotation) width, the same swap
-                    // FragmentPainter.Text.cs's SidewaysRotation performs for HTML.
-                    gi.Advance = gi.IsUpright ? gi.Font.Height : measured.Width;
+                    // An upright glyph's down-the-column advance is its real vmtx advance height when
+                    // its font carries real OpenType vertical metrics (issue #770), same as
+                    // CssLayoutEngine.NaturalWordSize's own upright branch. Otherwise it falls back to
+                    // the font's own line height, not its measured width (RGraphics.DrawString always
+                    // renders a glyph across the font's full line-height span regardless of that glyph's
+                    // own narrower advance width - see NaturalWordSize's remarks for the visual-overlap
+                    // failure mode this avoids). A rotated glyph's down-the-column footprint is its own
+                    // natural (pre-rotation) width, the same swap FragmentPainter.Text.cs's
+                    // SidewaysRotation performs for HTML - untouched by real vertical metrics, since
+                    // rotated/sideways orientation is spec-correct using rotated horizontal metrics.
+                    if (gi.IsUpright)
+                    {
+                        // HasVerticalMetrics (vhea/vmtx, advance) and HasVerticalOrigin (a real VORG
+                        // table specifically, issue #775) are independent capabilities - a CFF font can
+                        // carry a real VORG table without vhea/vmtx (VORG doesn't require them), so the
+                        // origin check must not be nested inside the metrics one, matching
+                        // FragmentPainter.Text.cs's PaintUprightVerticalRun (HTML) exactly; nesting it
+                        // here previously meant such a font's real per-glyph origin was silently dropped
+                        // whenever it lacked vhea/vmtx.
+                        var rune = System.Text.Rune.GetRuneAt(gi.Glyph, 0);
+                        gi.Advance = gi.Font.HasVerticalMetrics ? gi.Font.GetVerticalAdvance(rune) : gi.Font.Height;
+                        if (gi.Font.HasVerticalOrigin)
+                            gi.OriginYOffset = gi.Font.GetVerticalOriginY(rune) - gi.Font.Ascent;
+                    }
+                    else
+                    {
+                        gi.Advance = measured.Width;
+                    }
 
                     penY += gi.Advance;
                 }
@@ -736,12 +776,56 @@ namespace PeachPDF.Svg
         /// <see cref="GlyphInfo.Py"/> is this glyph's own down-the-column box top (not a baseline - see
         /// <see cref="LayoutGlyphs"/>'s remarks on how the pen assigns it before advancing), so it needs
         /// no ascent adjustment the way the horizontal/rotated paths' baseline-relative <c>Py</c> does.
+        ///
+        /// A real <c>vmtx</c> advance is legitimately, routinely *smaller* than the font's line height
+        /// (see <c>FragmentPainter.Text.cs</c>'s <c>PaintUprightVerticalRun</c> remarks, the identical
+        /// HTML-side situation) - once <see cref="GlyphInfo.Advance"/> reflects real metrics,
+        /// <see cref="PaintTextGlyphs"/>'s own "paint a full line-height-tall glyph" behavior would bleed
+        /// into whatever paints next down the column unless this glyph's paint is confined to its own
+        /// reserved cell, the same clip-per-cell fix that file applies.
+        ///
+        /// When the font also carries a real <c>VORG</c> table (<see cref="RFont.HasVerticalOrigin"/> -
+        /// issue #775), <see cref="GlyphInfo.OriginYOffset"/> (computed in <see cref="LayoutGlyphs"/>,
+        /// same derivation as <c>FragmentPainter.Text.cs</c>'s <c>PaintUprightVerticalRun</c> - see its
+        /// remarks) nudges the anchor away from the plain top-of-cell position. Added, not subtracted -
+        /// matching that file's corrected sign, even though the pre-existing convention here for
+        /// baseline-relative paths (<see cref="PaintRotatedGlyph"/>) subtracts <c>font.Ascent</c>; this
+        /// path's anchor is a top-of-cell position, not a baseline, so the two aren't the same kind of
+        /// offset and shouldn't share a sign by default.
+        ///
+        /// The clip window is deliberately **not** shifted along with the anchor - see
+        /// <c>PaintUprightVerticalRun</c>'s own remarks on why (the unshifted per-cell reservation, not
+        /// the origin-adjusted anchor, is what actually prevents bleed into neighboring cells; a
+        /// self-consistent <c>VORG</c> table keeps ink inside it by construction). The clip is pushed
+        /// whenever either <see cref="RFont.HasVerticalMetrics"/> or <see cref="RFont.HasVerticalOrigin"/>
+        /// is true, not just the former: a VORG-shifted anchor can push the painted span past the
+        /// reserved cell even when <see cref="GlyphInfo.Advance"/> is the line-height fallback (its "the
+        /// advance already equals the full painted span" guarantee assumes an unshifted anchor).
         /// </summary>
         private static void PaintUprightGlyph(RGraphics g, SvgDocument document, GlyphInfo start, RFont font, double opacity)
         {
             var glyphSize = start.Size;
             var drawX = start.Px - glyphSize.Width / 2;
-            PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, start.Py, glyphSize, opacity * start.Opacity);
+            var y = start.Py + start.OriginYOffset;
+
+            if (font.HasVerticalMetrics || font.HasVerticalOrigin)
+            {
+                // Only the block (Y) axis needs bounding - the cross axis has no overlap risk to guard
+                // against, so this just needs to be generous enough to never itself clip real glyph ink.
+                // An actually-unbounded RRect (double.MinValue/MaxValue) breaks under the viewBox-to-
+                // viewport transform PushTransform/RenderInto already has active here (the extreme
+                // coordinates overflow through that matrix multiply), which silently produced an empty
+                // effective clip and made every upright glyph invisible - a finite, merely-generous margin
+                // avoids that without reintroducing any real cross-axis clipping risk.
+                var crossAxisMargin = Math.Max(glyphSize.Width, font.Size) * 8;
+                g.PushClip(new RRect(start.Px - crossAxisMargin, start.Py, crossAxisMargin * 2, start.Advance));
+                PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, y, glyphSize, opacity * start.Opacity);
+                g.PopClip();
+            }
+            else
+            {
+                PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, y, glyphSize, opacity * start.Opacity);
+            }
         }
 
         /// <summary>

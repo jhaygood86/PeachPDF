@@ -113,11 +113,15 @@ namespace PeachPDF.Html.Core.Paint
         /// orientation and simply advances along the column instead of along a line.
         /// </summary>
         /// <remarks>
-        /// No true OpenType vertical metrics (<c>vmtx</c>) are consulted yet (issue #770) - each
-        /// character's own down-the-column advance is <paramref name="font"/>'s own line height
-        /// (ascender + descender), the exact same basis <see cref="CssLayoutEngine.NaturalWordSize"/>
-        /// already reserved this run's own <paramref name="rect"/> extent from. This is deliberately
-        /// not each character's individually-measured horizontal advance width
+        /// When <paramref name="font"/> carries real OpenType vertical metrics
+        /// (<see cref="RFont.HasVerticalMetrics"/>, backed by <c>vhea</c>/<c>vmtx</c> - issue #770), each
+        /// character's own down-the-column advance is its real <see cref="RFont.GetVerticalAdvance"/>.
+        /// Otherwise each character's advance is <paramref name="font"/>'s own line height (ascender +
+        /// descender), the exact same basis <see cref="CssLayoutEngine.NaturalWordSize"/> already
+        /// reserved this run's own <paramref name="rect"/> extent from - both branches must stay in
+        /// lockstep with that method's own gate on the same <see cref="RFont.HasVerticalMetrics"/> flag,
+        /// or layout's reservation and paint's actual step disagree. The line-height fallback is
+        /// deliberately not each character's individually-measured horizontal advance width
         /// (<see cref="CssLayoutEngine.MeasureUprightRunCharacters"/>'s own per-character <c>Size</c>,
         /// still used below for cross-axis centering only): <see cref="RGraphics.DrawString"/> always
         /// renders a glyph across the font's full line-height span from its anchor regardless of that
@@ -126,20 +130,82 @@ namespace PeachPDF.Html.Core.Paint
         /// each character with the next, and overran into whatever followed once the run finished. Each
         /// character is centered across the column (<paramref name="rect"/>'s own thickness) rather than
         /// left-aligned, matching CJK vertical typesetting convention.
+        ///
+        /// A real <c>vmtx</c> advance is legitimately, routinely *smaller* than the font's line height (a
+        /// CJK vertical font typically advances by one em; ascent+descent is usually well over one em) -
+        /// so once real metrics make the per-character step narrower than <see cref="RFont.Height"/>
+        /// again, <see cref="RGraphics.DrawString"/>'s own "always paints a full line-height-tall span"
+        /// behavior reintroduces precisely the bleed-into-the-next-character overlap the line-height
+        /// fallback above exists to avoid, unless each character's paint is confined to its own reserved
+        /// cell. <see cref="RGraphics.PushClip(RRect)"/>/<see cref="RGraphics.PopClip"/> around each
+        /// <see cref="RGraphics.DrawString"/> call does exactly that when real metrics are in play; the
+        /// line-height fallback needs no clip, since its advance already equals the full painted span by
+        /// construction.
+        ///
+        /// When <paramref name="font"/> additionally carries a real <c>VORG</c> table
+        /// (<see cref="RFont.HasVerticalOrigin"/> - issue #775), the anchor is nudged by
+        /// <see cref="RFont.GetVerticalOriginY"/> instead of staying at the plain top-of-cell position:
+        /// <see cref="RGraphics.DrawString"/> always renders <paramref name="font"/>'s baseline at
+        /// <c>point.Y + font.Ascent</c> (traced through <c>XGraphicsPdfRenderer.DrawString</c>'s own
+        /// <c>cyAscent</c> shift, which uses the exact same <c>Ascender</c> field <see cref="RFont.Ascent"/>
+        /// is built from), while the OpenType spec defines a glyph's vertical origin as a baseline-relative,
+        /// Y-up design-space coordinate - so placing that origin at this cell's own pen position
+        /// (<c>rect.Y + offset</c>, the same position the advance/clip above already treat as "where this
+        /// glyph's vertical origin belongs," per the spec's own "advance height starts from the vertical
+        /// origin" wording) means solving <c>point.Y + Ascent = (rect.Y+offset) + originY</c> for
+        /// <c>point.Y</c>: <c>y = (rect.Y+offset) + (originY - Ascent)</c>, added, not subtracted. (An
+        /// earlier attempt at this exact shift used the opposite sign and was reverted for visibly
+        /// cropping every glyph - the derivation above is what the corrected version follows.) Gated on
+        /// <see cref="RFont.HasVerticalOrigin"/> rather than <see cref="RFont.HasVerticalMetrics"/>
+        /// because a font with vmtx/vhea but no real VORG only offers <c>vhea.ascent</c> as a Y fallback,
+        /// a value not designed to mean "vertical origin" the way a real VORG entry is - extending this
+        /// shift to that weaker signal is out of scope here.
+        ///
+        /// The clip window itself is deliberately **not** shifted along with the anchor - it stays pinned
+        /// to <c>[rect.Y + offset, +advance]</c>, the same unshifted per-cell reservation
+        /// <see cref="CssLayoutEngine.NaturalWordSize"/> computed at layout time. That reservation, not the
+        /// origin-adjusted anchor, is what actually prevents this character's ink from bleeding into its
+        /// neighbors' cells - shifting the clip to track the anchor would just relocate the bleed risk
+        /// (open up the *other* edge) rather than remove it. A real, self-consistent <c>VORG</c> table
+        /// keeps a glyph's ink within its own reserved cell once correctly positioned by construction (the
+        /// spec's own `vertOriginY = topSideBearing + yMax` definition ties the origin to the ink's own
+        /// top edge, and advance is measured downward from that same origin) - confirmed visually (PDFium
+        /// and MuPDF) against a deliberately mismatched synthetic fixture whose shift crops only the empty
+        /// margin above a glyph's cap-height, never real ink. Do not "fix" this by shifting the clip to
+        /// track the anchor without re-verifying against real rendered output first.
         /// </remarks>
         private static void PaintUprightVerticalRun(RGraphics g, string text, RFont font, CssBox styleSource, RRect rect, double baselineAdjust)
         {
             double offset = 0;
+            var hasVerticalMetrics = font.HasVerticalMetrics;
+            var hasVerticalOrigin = font.HasVerticalOrigin;
 
-            foreach (var (charText, charSize) in CssLayoutEngine.MeasureUprightRunCharacters(g, text, font, styleSource.ActualTextShapingFeatures))
+            foreach (var (charText, rune, charSize) in CssLayoutEngine.MeasureUprightRunCharacters(g, text, font, styleSource.ActualTextShapingFeatures))
             {
                 var x = rect.X + Math.Max(0, (rect.Width - charSize.Width) / 2);
                 var y = rect.Y + offset + baselineAdjust;
+                if (hasVerticalOrigin)
+                    y += font.GetVerticalOriginY(rune) - font.Ascent;
+                var advance = hasVerticalMetrics ? font.GetVerticalAdvance(rune) : font.Height;
 
-                g.DrawString(charText, font, styleSource.ActualColor, new RPoint(x, y), charSize,
-                    styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                // A VORG-shifted anchor can push the painted span past the reserved cell even when the
+                // line-height fallback advance is in play (its "advance already equals the full painted
+                // span" guarantee assumes an unshifted anchor) - so the clip is needed whenever either
+                // real data source is active, not just when HasVerticalMetrics narrowed the advance.
+                if (hasVerticalMetrics || hasVerticalOrigin)
+                {
+                    g.PushClip(new RRect(rect.X, rect.Y + offset, rect.Width, advance));
+                    g.DrawString(charText, font, styleSource.ActualColor, new RPoint(x, y), charSize,
+                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                    g.PopClip();
+                }
+                else
+                {
+                    g.DrawString(charText, font, styleSource.ActualColor, new RPoint(x, y), charSize,
+                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                }
 
-                offset += font.Height + styleSource.ActualLetterSpacing;
+                offset += advance + styleSource.ActualLetterSpacing;
             }
         }
 

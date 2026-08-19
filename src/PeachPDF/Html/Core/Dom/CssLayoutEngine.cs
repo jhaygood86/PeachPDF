@@ -24,6 +24,7 @@ using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -651,33 +652,50 @@ namespace PeachPDF.Html.Core.Dom
                     // (FragmentPainter.Text.cs's PaintUprightVerticalRun) rather than as one natural
                     // horizontal glyph run reoriented as a whole (the rotated case below) - so the
                     // down-the-column extent reserved for it here has to match what paint actually steps
-                    // by. That step is the font's own line height (ascender + descender), not each
-                    // character's individually-measured horizontal advance width: RGraphics.DrawString
-                    // always renders a glyph across the font's full line-height span from its anchor
-                    // (XGraphicsPdfRenderer.DrawString's XLineAlignment.Near branch adds cyAscent above the
-                    // baseline and leaves cyDescent below it - a fixed span, independent of the specific
-                    // glyph's own ink), while a codepoint's own hmtx advance width can be narrower (a real
-                    // subsetted CJK font measured ~9pt advance against a ~13pt line height at the same
-                    // size) - stepping by the narrower value then visibly overlapped each character with
-                    // the next, and overran into whatever followed once the run finished. No true vmtx
-                    // vertical-advance table is consulted yet (issue #770); the font's own line height is
-                    // the closest available per-character constant that can never under-advance.
+                    // by. When the resolved font carries real OpenType vertical metrics (vhea/vmtx -
+                    // RFont.HasVerticalMetrics), that step is each character's own real vmtx advance
+                    // height (issue #770). Otherwise it falls back to the font's own line height
+                    // (ascender + descender), not each character's individually-measured horizontal
+                    // advance width: RGraphics.DrawString always renders a glyph across the font's full
+                    // line-height span from its anchor (XGraphicsPdfRenderer.DrawString's
+                    // XLineAlignment.Near branch adds cyAscent above the baseline and leaves cyDescent
+                    // below it - a fixed span, independent of the specific glyph's own ink), while a
+                    // codepoint's own hmtx advance width can be narrower (a real subsetted CJK font
+                    // measured ~9pt advance against a ~13pt line height at the same size) - stepping by
+                    // the narrower value then visibly overlapped each character with the next, and
+                    // overran into whatever followed once the run finished. This fallback is the closest
+                    // available per-character constant that can never under-advance for the large
+                    // majority of fonts, which carry no real vertical metrics at all.
                     var styleSource = word.FirstLineStyle ?? word.OwnerBox;
                     var font = CssBox.ResolveWordFont(word, styleSource);
-                    // A plain rune count, not MeasureUprightRunCharacters: the per-character advance
-                    // below is a flat font.Height step, independent of each character's own measured
-                    // size, so running every character through real glyph shaping here just to discard
-                    // the result would be pure waste - MeasureUprightRunCharacters stays reserved for
-                    // PaintUprightVerticalRun, which does need each character's own width for centering.
-                    var runeCount = (word.Text ?? "").EnumerateRunes().Count();
-                    var width = runeCount * (font.Height + styleSource.ActualLetterSpacing);
+                    var text = word.Text ?? "";
+                    double width;
+
+                    if (font.HasVerticalMetrics)
+                    {
+                        width = 0;
+                        foreach (var rune in text.EnumerateRunes())
+                            width += font.GetVerticalAdvance(rune) + styleSource.ActualLetterSpacing;
+                    }
+                    else
+                    {
+                        // A plain rune count, not MeasureUprightRunCharacters: the per-character advance
+                        // here is a flat font.Height step, independent of each character's own measured
+                        // size, so running every character through real glyph shaping here just to
+                        // discard the result would be pure waste - MeasureUprightRunCharacters stays
+                        // reserved for PaintUprightVerticalRun, which does need each character's own
+                        // width for centering.
+                        var runeCount = text.EnumerateRunes().Count();
+                        width = runeCount * (font.Height + styleSource.ActualLetterSpacing);
+                    }
 
                     // The cross-axis (column-thickness) reservation has to come from this same resolved
                     // font, not styleSource.ActualFont: PaintUprightVerticalRun centers each character
                     // using widths measured through this exact font (FragmentPainter.Text.cs resolves the
                     // identical CssBox.ResolveWordFont(word, styleSource) before calling it), and a
                     // per-codepoint fallback face (UsesPerCodepointFont) can have a materially different
-                    // line height than the box's own default font.
+                    // line height than the box's own default font. vmtx/VORG govern only the down-the-
+                    // column advance above, not this cell-width sizing.
                     natural = (width, font.Height);
                 }
                 else
@@ -705,13 +723,13 @@ namespace PeachPDF.Html.Core.Dom
         /// remarks for why) - each yielded <c>Size</c> is used only for the glyph's cross-axis
         /// (column-thickness) centering, which legitimately does vary per character.
         /// </summary>
-        internal static IEnumerable<(string Text, RSize Size)> MeasureUprightRunCharacters(
+        internal static IEnumerable<(string Text, Rune Rune, RSize Size)> MeasureUprightRunCharacters(
             RGraphics g, string text, RFont font, TextShapingFeatures? features)
         {
             foreach (var rune in text.EnumerateRunes())
             {
                 var charText = rune.ToString();
-                yield return (charText, g.MeasureString(charText, font, features));
+                yield return (charText, rune, g.MeasureString(charText, font, features));
             }
         }
 

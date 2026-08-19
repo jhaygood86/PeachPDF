@@ -1,7 +1,11 @@
 using PeachPDF.Adapters;
+using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
+using System.IO;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
@@ -180,6 +184,169 @@ namespace PeachPDF.Tests.Svg
             // Both chunks share the same start (text-anchor:start, the default) so the second chunk's
             // own explicit y=150 - not an accumulated advance from the first - determines its position.
             Assert.NotEqual(g.DrawStringCalls[0].Point.Y, g.DrawStringCalls[1].Point.Y);
+        }
+
+        [Fact]
+        public async Task Upright_PaintsAtRealVmtxAdvanceStep_WhenFontHasVerticalMetrics()
+        {
+            // Registers the same bundled CJK font (real vhea/vmtx data - see
+            // VerticalMetricsTablesTests.RealBundledCjkFont_HasVerticalMetrics_AdvanceComesFromARealVmtxEntry)
+            // on the real Adapter that SvgTreeBuilder.Build resolves <text font-family> against, so
+            // gi.Font here (unlike this file's other tests, which deliberately don't assert on exact
+            // font metrics) is a real FontAdapter with real vertical metrics to consult - proving
+            // LayoutGlyphs/PaintUprightGlyph's real-vmtx path (issue #770) actually drives SVG's own
+            // pen advance, not just HTML's.
+            await using var stream = File.OpenRead(BundledFonts.Cjk);
+            await Adapter.AddFont(stream, "CjkVerticalMetricsTest");
+
+            var g = Render($"""<text x="10" y="50" font-size="20" font-family="CjkVerticalMetricsTest" writing-mode="vertical-rl" text-orientation="upright">{Upright}{Upright}</text>""");
+
+            Assert.Equal(2, g.DrawStringCalls.Count);
+            var font = g.DrawStringCalls[0].Font;
+            Assert.True(font.HasVerticalMetrics);
+
+            var rune = System.Text.Rune.GetRuneAt(Upright, 0);
+            var expectedStep = font.GetVerticalAdvance(rune);
+            var actualStep = g.DrawStringCalls[1].Point.Y - g.DrawStringCalls[0].Point.Y;
+
+            Assert.Equal(expectedStep, actualStep, precision: 6);
+        }
+
+        [Fact]
+        public async Task Upright_ClipsEachGlyphToItsOwnCell_WhenFontHasVerticalMetrics()
+        {
+            // A real vmtx advance is routinely narrower than the font's own line height (see
+            // FragmentPainter.Text.cs's PaintUprightVerticalRun remarks) - RGraphics.DrawString still
+            // paints across that full line-height span regardless, so without confining each glyph's
+            // paint to its own reserved cell, consecutive glyphs bleed into each other. Verifies the
+            // push/pop clip actually brackets the draw call (order, not just count, per this repo's own
+            // painting-test convention) and that a font without real vertical metrics needs no clip at
+            // all (its advance already equals its own painted span).
+            await using var stream = File.OpenRead(BundledFonts.Cjk);
+            await Adapter.AddFont(stream, "CjkClipTest");
+
+            var real = Render($"""<text x="10" y="50" font-size="20" font-family="CjkClipTest" writing-mode="vertical-rl" text-orientation="upright">{Upright}</text>""");
+            var draw = Assert.Single(real.DrawStringCalls);
+            Assert.True(draw.Font.HasVerticalMetrics);
+
+            var drawIndex = real.Log.IndexOf(draw);
+            Assert.IsType<TestRecordingGraphics.PushClipCall>(real.Log[drawIndex - 1]);
+            Assert.IsType<TestRecordingGraphics.PopClipCall>(real.Log[drawIndex + 1]);
+
+            // RenderInto itself always pushes one clip for the viewBox-to-viewport mapping (see this
+            // file's own remarks on GlyphTransformPushes/Pops for the analogous baseline transform case),
+            // so a font without real vertical metrics is verified by the draw call itself not being
+            // freshly bracketed - not by the total clip count being zero.
+            var fallback = Render($"""<text x="10" y="50" font-size="20" writing-mode="vertical-rl" text-orientation="upright">{Upright}</text>""");
+            var fallbackDraw = Assert.Single(fallback.DrawStringCalls);
+            Assert.False(fallbackDraw.Font.HasVerticalMetrics);
+
+            var fallbackDrawIndex = fallback.Log.IndexOf(fallbackDraw);
+            Assert.IsNotType<TestRecordingGraphics.PushClipCall>(fallback.Log[fallbackDrawIndex - 1]);
+            Assert.IsNotType<TestRecordingGraphics.PopClipCall>(fallback.Log[fallbackDrawIndex + 1]);
+        }
+
+        [Fact]
+        public async Task Upright_AppliesRealVorgOrigin_WhenFontHasRealVorgTable()
+        {
+            // BundledFonts.Otf (Source Code Pro) is confirmed CFF-flavored (no glyf), so a real VORG
+            // table spliced onto it is actually trusted (issue #775) - BundledFonts.Cjk is TrueType and
+            // would have its VORG ignored (see the companion test below), so this needs the CFF font
+            // instead, which means Latin text (Source Code Pro has no CJK coverage) and its own
+            // synthetic vhea/vmtx too (unlike Cjk, it has neither natively). defaultVertOriginY=700 is
+            // deliberately different from this font's own Ascender (984, confirmed directly via
+            // OpenTypeDescriptor - see TextOrientationIntegrationTests's identical HTML-side fixture)
+            // so the resulting shift is real and provably non-zero. Compared against a plain (no-VORG)
+            // rendering of the same text/position rather than an internal layout property, since
+            // GlyphInfo.Py isn't exposed to this test the way CssRect.Top is to the HTML-side
+            // equivalent.
+            var plainBytes = File.ReadAllBytes(BundledFonts.Otf);
+            var numGlyphs = XFontSource.GetOrCreateFrom(plainBytes).Fontface.maxp.numGlyphs;
+            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VHea, SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
+            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, TableTagNames.VMtx, SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
+            vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(vorgBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));
+
+            await using (var vorgStream = new MemoryStream(vorgBytes))
+                await Adapter.AddFont(vorgStream, "OtfVorgTest");
+            var g = Render($"""<text x="10" y="50" font-size="20" font-family="OtfVorgTest" writing-mode="vertical-rl" text-orientation="upright">{Latin}</text>""");
+            var draw = g.DrawStringCalls[0];
+            Assert.True(draw.Font.HasVerticalOrigin);
+
+            var rune = System.Text.Rune.GetRuneAt(Latin, 0);
+            var expectedShift = draw.Font.GetVerticalOriginY(rune) - draw.Font.Ascent;
+            Assert.NotEqual(0, expectedShift, precision: 3); // the shift is actually nonzero for this fixture
+
+            await using (var plainStream = new MemoryStream(plainBytes))
+                await Adapter.AddFont(plainStream, "OtfPlainForVorgCompare");
+            var plainG = Render($"""<text x="10" y="50" font-size="20" font-family="OtfPlainForVorgCompare" writing-mode="vertical-rl" text-orientation="upright">{Latin}</text>""");
+            var plainDraw = plainG.DrawStringCalls[0];
+            Assert.False(plainDraw.Font.HasVerticalOrigin);
+
+            Assert.Equal(plainDraw.Point.Y + expectedShift, draw.Point.Y, precision: 6);
+        }
+
+        [Fact]
+        public async Task Upright_IgnoresVorg_OnTrueTypeFont_RendersIdenticallyToNoVorg()
+        {
+            // The same synthetic VORG bytes on BundledFonts.Cjk - a real TrueType/glyf font - must be
+            // ignored per the OpenType spec's CFF-only restriction (issue #775), rendering
+            // byte-for-byte identically to the plain no-VORG case (issue #770's already-shipped
+            // behavior), not merely "no crash."
+            var plainBytes = File.ReadAllBytes(BundledFonts.Cjk);
+            var vorgBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));
+
+            await using (var vorgStream = new MemoryStream(vorgBytes))
+                await Adapter.AddFont(vorgStream, "CjkVorgIgnoredTest");
+            var withVorg = Render($"""<text x="10" y="50" font-size="20" font-family="CjkVorgIgnoredTest" writing-mode="vertical-rl" text-orientation="upright">{Upright}</text>""");
+            var withVorgDraw = Assert.Single(withVorg.DrawStringCalls);
+            Assert.False(withVorgDraw.Font.HasVerticalOrigin);
+
+            await using (var plainStream = new MemoryStream(plainBytes))
+                await Adapter.AddFont(plainStream, "CjkPlainForIgnoreCompare");
+            var plain = Render($"""<text x="10" y="50" font-size="20" font-family="CjkPlainForIgnoreCompare" writing-mode="vertical-rl" text-orientation="upright">{Upright}</text>""");
+            var plainDraw = Assert.Single(plain.DrawStringCalls);
+
+            Assert.Equal(plainDraw.Point.Y, withVorgDraw.Point.Y, precision: 6);
+            Assert.Equal(plainDraw.Point.X, withVorgDraw.Point.X, precision: 6);
+        }
+
+        [Fact]
+        public async Task Upright_AppliesVorgOrigin_AndClipsGlyph_OnFontWithVorgButNoVerticalMetrics()
+        {
+            // Regression test for a bug the post-change review pass caught: LayoutGlyphs originally
+            // computed OriginYOffset *inside* the HasVerticalMetrics branch, so a font with a real VORG
+            // table but no vhea/vmtx (unlike the fixture above, which synthesizes both) silently got no
+            // origin shift at all - HasVerticalOrigin and HasVerticalMetrics are independent capability
+            // flags (see RFont's own remarks) and must be checked independently. BundledFonts.Otf (CFF)
+            // has neither vhea nor vmtx natively, so appending only a synthetic VORG table (no vhea/vmtx)
+            // exercises exactly that combination. This also covers PaintUprightGlyph's clip gate, which
+            // the same review pass found needed extending from HasVerticalMetrics alone to
+            // "HasVerticalMetrics || HasVerticalOrigin" - without it, this glyph would paint unclipped.
+            var plainBytes = File.ReadAllBytes(BundledFonts.Otf);
+            var vorgOnlyBytes = SyntheticFontTables.InsertTableDirectoryEntry(plainBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(700));
+
+            await using (var vorgStream = new MemoryStream(vorgOnlyBytes))
+                await Adapter.AddFont(vorgStream, "OtfVorgOnlyTest");
+            var g = Render($"""<text x="10" y="50" font-size="20" font-family="OtfVorgOnlyTest" writing-mode="vertical-rl" text-orientation="upright">{Latin}</text>""");
+            var draw = g.DrawStringCalls[0];
+            Assert.True(draw.Font.HasVerticalOrigin);
+            Assert.False(draw.Font.HasVerticalMetrics);
+
+            var drawIndex = g.Log.IndexOf(draw);
+            Assert.IsType<TestRecordingGraphics.PushClipCall>(g.Log[drawIndex - 1]);
+            Assert.IsType<TestRecordingGraphics.PopClipCall>(g.Log[drawIndex + 1]);
+
+            var rune = System.Text.Rune.GetRuneAt(Latin, 0);
+            var expectedShift = draw.Font.GetVerticalOriginY(rune) - draw.Font.Ascent;
+            Assert.NotEqual(0, expectedShift, precision: 3);
+
+            await using (var plainStream = new MemoryStream(plainBytes))
+                await Adapter.AddFont(plainStream, "OtfPlainForVorgOnlyCompare");
+            var plainG = Render($"""<text x="10" y="50" font-size="20" font-family="OtfPlainForVorgOnlyCompare" writing-mode="vertical-rl" text-orientation="upright">{Latin}</text>""");
+            var plainDraw = plainG.DrawStringCalls[0];
+            Assert.False(plainDraw.Font.HasVerticalOrigin);
+
+            Assert.Equal(plainDraw.Point.Y + expectedShift, draw.Point.Y, precision: 6);
         }
 
         [Fact]

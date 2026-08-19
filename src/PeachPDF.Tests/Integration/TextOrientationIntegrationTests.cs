@@ -1,4 +1,5 @@
 using PeachPDF.Adapters;
+using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
@@ -137,6 +138,258 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(mixedBox.Words[0].IsUprightOrientation);
             Assert.Equal(mixedBox.Words[0].Height, uprightBox.Words[0].Height, precision: 6);
+        }
+
+        // ── Real vertical metrics (issue #770): vhea/vmtx/VORG, not the line-height approximation ──
+
+        [Fact]
+        public async Task Upright_ReservesRealVmtxAdvance_NotFlatLineHeight()
+        {
+            // BundledFonts.Cjk (embedded above as the "CJK" family) genuinely carries real vhea/vmtx
+            // data (VerticalMetricsTablesTests.RealBundledCjkFont_HasVerticalMetrics_AdvanceDiffersFromFallback),
+            // so the upright run's reserved down-the-column extent must now be the real per-character
+            // vmtx advance sum, not the pre-#770 flat font.Height*runeCount approximation.
+            var box = await LayoutVerticalWord(Upright, TextOrientationValue.Upright);
+            var font = box.ActualFont;
+
+            Assert.True(font.HasVerticalMetrics);
+
+            double expectedRealAdvance = 0;
+            double expectedFlatAdvance = 0;
+            foreach (var rune in Upright.EnumerateRunes())
+            {
+                expectedRealAdvance += font.GetVerticalAdvance(rune) + box.ActualLetterSpacing;
+                expectedFlatAdvance += font.Height + box.ActualLetterSpacing;
+            }
+
+            Assert.Equal(expectedRealAdvance, box.Words[0].Height, precision: 6);
+            Assert.NotEqual(expectedFlatAdvance, box.Words[0].Height);
+        }
+
+        [Fact]
+        public async Task Upright_FallsBackToLineHeight_WhenFontHasNoVerticalMetrics()
+        {
+            // A Latin-only bundled font (no vhea/vmtx table at all) forced upright via
+            // text-orientation:upright must keep the pre-#770 flat font.Height step unchanged - the
+            // real-metrics path in NaturalWordSize/PaintUprightVerticalRun is gated on
+            // RFont.HasVerticalMetrics precisely so the overwhelming majority of fonts (which have no
+            // vertical metrics) see zero behavior change.
+            var latinFontBase64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.Ttf));
+            var html = $@"<!DOCTYPE html><html><head><style>
+@font-face {{ font-family: 'LatinOnly'; src: url('data:font/truetype;base64,{latinFontBase64}') format('truetype'); }}
+body {{ font-family: 'LatinOnly'; margin: 0 }}
+#w {{ text-orientation: upright }}
+</style></head><body><div id=""w"" style=""writing-mode:vertical-rl;height:200px"">{Latin}</div></body></html>";
+
+            var container = await LayoutHtml(html);
+            var box = FindWordsBox(container.Root!, "w");
+            var font = box.ActualFont;
+
+            Assert.False(font.HasVerticalMetrics);
+            Assert.Equal(Latin.Length * (font.Height + box.ActualLetterSpacing), box.Words[0].Height, precision: 6);
+        }
+
+        [Fact]
+        public async Task Mixed_PaintsUprightRun_StepsByRealVmtxAdvance_MatchingLayoutReservation()
+        {
+            // The paint-side counterpart of Upright_ReservesRealVmtxAdvance_NotFlatLineHeight: paint's
+            // actual down-the-column step between consecutive upright characters must equal layout's
+            // real-vmtx reservation, not just "some positive step" (already covered structurally by
+            // Mixed_PaintsUprightRunPerCharacter_RotatedRunAsOneTransformedCall's Y-ordering check).
+            var html = Wrap($"<div id=\"w\" style=\"writing-mode:vertical-rl;height:200px\">{Upright}</div>", "mixed");
+            var container = await LayoutHtml(html);
+            var elementBox = FindById(container.Root!, "w")!;
+            var wordsBox = FindWordsBox(container.Root!, "w");
+            var font = wordsBox.ActualFont;
+
+            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(container, elementBox, recorder);
+
+            Assert.True(font.HasVerticalMetrics);
+            Assert.Equal(2, recorder.DrawStringCalls.Count);
+
+            var firstRune = System.Text.Rune.GetRuneAt(Upright, 0);
+            var expectedStep = font.GetVerticalAdvance(firstRune) + wordsBox.ActualLetterSpacing;
+            var actualStep = recorder.DrawStringCalls[1].Point.Y - recorder.DrawStringCalls[0].Point.Y;
+
+            Assert.Equal(expectedStep, actualStep, precision: 6);
+        }
+
+        [Fact]
+        public async Task Upright_ClipsEachCharacterToItsOwnCell_WhenFontHasVerticalMetrics()
+        {
+            // A real vmtx advance is routinely narrower than the font's own line height (see
+            // PaintUprightVerticalRun's remarks), so RGraphics.DrawString would still paint each
+            // character across its full line-height span unless confined to its own reserved cell -
+            // verifies the push/pop clip actually brackets the draw call (order, not just count, per
+            // this repo's own painting-test convention), and that the no-real-metrics fallback path
+            // needs no clip at all (its advance already equals its own painted span).
+            var realHtml = Wrap($"<div id=\"w\" style=\"writing-mode:vertical-rl;height:200px\">{Upright}</div>", "mixed");
+            var realContainer = await LayoutHtml(realHtml);
+            var realBox = FindById(realContainer.Root!, "w")!;
+            var realRecorder = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(realContainer, realBox, realRecorder);
+
+            Assert.Equal(2, realRecorder.DrawStringCalls.Count); // Upright = "テキ", one call per character
+            foreach (var draw in realRecorder.DrawStringCalls)
+            {
+                Assert.True(draw.Font.HasVerticalMetrics);
+
+                var drawIndex = realRecorder.Log.IndexOf(draw);
+                Assert.IsType<RecordingGraphics.PushClipMarker>(realRecorder.Log[drawIndex - 1]);
+                Assert.IsType<RecordingGraphics.PopClipMarker>(realRecorder.Log[drawIndex + 1]);
+            }
+
+            var fallbackFontBase64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.Ttf));
+            var fallbackHtml = $@"<!DOCTYPE html><html><head><style>
+@font-face {{ font-family: 'LatinOnly'; src: url('data:font/truetype;base64,{fallbackFontBase64}') format('truetype'); }}
+body {{ font-family: 'LatinOnly'; margin: 0 }}
+#w {{ text-orientation: upright }}
+</style></head><body><div id=""w"" style=""writing-mode:vertical-rl;height:200px"">{Latin}</div></body></html>";
+            var fallbackContainer = await LayoutHtml(fallbackHtml);
+            var fallbackBox = FindById(fallbackContainer.Root!, "w")!;
+            var fallbackRecorder = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(fallbackContainer, fallbackBox, fallbackRecorder);
+
+            Assert.False(fallbackRecorder.DrawStringCalls[0].Font.HasVerticalMetrics);
+            Assert.DoesNotContain(fallbackRecorder.Log, entry => entry is RecordingGraphics.PushClipMarker);
+        }
+
+        [Fact]
+        public async Task Upright_AppliesRealVorgOrigin_WhenFontHasRealVorgTable()
+        {
+            // BundledFonts.Otf (Source Code Pro) is confirmed CFF-flavored (no glyf), so a real VORG
+            // table spliced onto it is actually trusted (issue #775) - unlike the TrueType case in the
+            // companion test below. defaultVertOriginY=700 is deliberately different from this font's
+            // own Ascender (984, confirmed directly via OpenTypeDescriptor) so the resulting shift is
+            // real and provably non-zero, not just coincidentally near-zero.
+            var fontBase64 = Convert.ToBase64String(BuildFontWithSyntheticVerticalTables(BundledFonts.Otf, vertOriginY: 700, baseFontNeedsVheaVmtx: true));
+            var html = $@"<!DOCTYPE html><html><head><style>
+@font-face {{ font-family: 'VorgTest'; src: url('data:font/truetype;base64,{fontBase64}') format('truetype'); }}
+body {{ font-family: 'VorgTest'; margin: 0 }}
+#w {{ text-orientation: upright }}
+</style></head><body><div id=""w"" style=""writing-mode:vertical-rl;height:200px"">{Latin}</div></body></html>";
+
+            var container = await LayoutHtml(html);
+            var box = FindById(container.Root!, "w")!;
+            var wordsBox = FindWordsBox(container.Root!, "w");
+            var font = wordsBox.ActualFont;
+            Assert.True(font.HasVerticalOrigin);
+
+            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(container, box, recorder);
+
+            var rune = System.Text.Rune.GetRuneAt(Latin, 0);
+            var expectedShift = font.GetVerticalOriginY(rune) - font.Ascent;
+            Assert.NotEqual(0, expectedShift, precision: 3); // the shift is actually nonzero for this fixture
+
+            // word.Top is the unshifted top-of-cell anchor CreateVerticalLineBoxes already placed this
+            // word at, before FragmentPainter (and its VORG shift) ever runs - the same "+= (originY -
+            // Ascent)" derivation PaintUprightVerticalRun's own remarks work through.
+            var unshiftedY = wordsBox.Words[0].Top;
+            var actualY = recorder.DrawStringCalls[0].Point.Y;
+            Assert.Equal(unshiftedY + expectedShift, actualY, precision: 6);
+        }
+
+        [Fact]
+        public async Task Upright_IgnoresVorg_OnTrueTypeFont_RendersIdenticallyToNoVorg()
+        {
+            // The same synthetic VORG bytes as the CFF test above, spliced onto a TrueType font instead
+            // (BundledFonts.Cjk) - per the OpenType spec, VORG "must be ignored" on TrueType-outline
+            // fonts, so this must render byte-for-byte identically to the plain no-VORG case (issue
+            // #770's already-shipped behavior), not merely "no crash."
+            var withVorgBase64 = Convert.ToBase64String(BuildFontWithSyntheticVerticalTables(BundledFonts.Cjk, vertOriginY: 700, baseFontNeedsVheaVmtx: false));
+            var withVorgHtml = $@"<!DOCTYPE html><html><head><style>
+@font-face {{ font-family: 'VorgOnTtf'; src: url('data:font/truetype;base64,{withVorgBase64}') format('truetype'); }}
+body {{ font-family: 'VorgOnTtf'; margin: 0 }}
+#w {{ text-orientation: upright }}
+</style></head><body><div id=""w"" style=""writing-mode:vertical-rl;height:200px"">{Upright}</div></body></html>";
+            var withVorgContainer = await LayoutHtml(withVorgHtml);
+            var withVorgBox = FindById(withVorgContainer.Root!, "w")!;
+            var withVorgWordsBox = FindWordsBox(withVorgContainer.Root!, "w");
+            Assert.False(withVorgWordsBox.ActualFont.HasVerticalOrigin);
+            var withVorgRecorder = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(withVorgContainer, withVorgBox, withVorgRecorder);
+
+            var plainBase64 = Convert.ToBase64String(File.ReadAllBytes(BundledFonts.Cjk));
+            var plainHtml = $@"<!DOCTYPE html><html><head><style>
+@font-face {{ font-family: 'PlainCjk'; src: url('data:font/truetype;base64,{plainBase64}') format('truetype'); }}
+body {{ font-family: 'PlainCjk'; margin: 0 }}
+#w {{ text-orientation: upright }}
+</style></head><body><div id=""w"" style=""writing-mode:vertical-rl;height:200px"">{Upright}</div></body></html>";
+            var plainContainer = await LayoutHtml(plainHtml);
+            var plainBox = FindById(plainContainer.Root!, "w")!;
+            var plainRecorder = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(plainContainer, plainBox, plainRecorder);
+
+            Assert.Equal(plainRecorder.DrawStringCalls.Count, withVorgRecorder.DrawStringCalls.Count);
+            for (var i = 0; i < plainRecorder.DrawStringCalls.Count; i++)
+            {
+                Assert.Equal(plainRecorder.DrawStringCalls[i].Point.Y, withVorgRecorder.DrawStringCalls[i].Point.Y, precision: 6);
+                Assert.Equal(plainRecorder.DrawStringCalls[i].Point.X, withVorgRecorder.DrawStringCalls[i].Point.X, precision: 6);
+            }
+        }
+
+        [Fact]
+        public async Task Upright_AppliesVorgOrigin_AndClipsCharacter_OnFontWithVorgButNoVerticalMetrics()
+        {
+            // Regression test for a bug the post-change review pass caught: PaintUprightVerticalRun's
+            // clip gate originally only fired on HasVerticalMetrics, so a font with a real VORG table but
+            // no vhea/vmtx got its origin shifted with no clip protecting the shifted glyph from bleeding
+            // into its neighbor's cell. BundledFonts.Otf (CFF) has neither vhea nor vmtx natively, so
+            // baseFontNeedsVheaVmtx: false here (unlike the companion VORG test above, which needs both
+            // synthesized to also exercise the clip-per-cell path) exercises exactly the VORG-only
+            // combination: HasVerticalOrigin true, HasVerticalMetrics false.
+            var fontBase64 = Convert.ToBase64String(BuildFontWithSyntheticVerticalTables(BundledFonts.Otf, vertOriginY: 700, baseFontNeedsVheaVmtx: false));
+            var html = $@"<!DOCTYPE html><html><head><style>
+@font-face {{ font-family: 'VorgOnlyTest'; src: url('data:font/truetype;base64,{fontBase64}') format('truetype'); }}
+body {{ font-family: 'VorgOnlyTest'; margin: 0 }}
+#w {{ text-orientation: upright }}
+</style></head><body><div id=""w"" style=""writing-mode:vertical-rl;height:200px"">{Latin}</div></body></html>";
+
+            var container = await LayoutHtml(html);
+            var box = FindById(container.Root!, "w")!;
+            var wordsBox = FindWordsBox(container.Root!, "w");
+            var font = wordsBox.ActualFont;
+            Assert.True(font.HasVerticalOrigin);
+            Assert.False(font.HasVerticalMetrics);
+
+            var recorder = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(container, box, recorder);
+
+            var draw = recorder.DrawStringCalls[0];
+            var drawIndex = recorder.Log.IndexOf(draw);
+            Assert.IsType<RecordingGraphics.PushClipMarker>(recorder.Log[drawIndex - 1]);
+            Assert.IsType<RecordingGraphics.PopClipMarker>(recorder.Log[drawIndex + 1]);
+
+            var rune = System.Text.Rune.GetRuneAt(Latin, 0);
+            var expectedShift = font.GetVerticalOriginY(rune) - font.Ascent;
+            Assert.NotEqual(0, expectedShift, precision: 3);
+
+            var unshiftedY = wordsBox.Words[0].Top;
+            Assert.Equal(unshiftedY + expectedShift, draw.Point.Y, precision: 6);
+        }
+
+        /// <summary>Splices a synthetic <c>VORG</c> onto <paramref name="basePath"/>'s own bytes (see
+        /// <see cref="SyntheticFontTables"/>), adding real <c>vhea</c>/<c>vmtx</c> too when
+        /// <paramref name="baseFontNeedsVheaVmtx"/> is true - <see cref="BundledFonts.Otf"/> has neither
+        /// and needs both to make <see cref="RFont.HasVerticalMetrics"/> true (so the clip-per-cell path
+        /// is exercised alongside the origin shift), while <see cref="BundledFonts.Cjk"/> already has
+        /// real ones (that's what makes #770's own tests work) and would collide with a second, synthetic
+        /// pair. <paramref name="vertOriginY"/> is this suite's only varying input.</summary>
+        private static byte[] BuildFontWithSyntheticVerticalTables(string basePath, short vertOriginY, bool baseFontNeedsVheaVmtx)
+        {
+            var fontBytes = File.ReadAllBytes(basePath);
+
+            if (baseFontNeedsVheaVmtx)
+            {
+                var numGlyphs = XFontSource.GetOrCreateFrom(fontBytes).Fontface.maxp.numGlyphs;
+                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VHea, SyntheticFontTables.BuildVhea(ascent: 900, descent: -200, numOfLongVerMetrics: numGlyphs));
+                fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VMtx, SyntheticFontTables.BuildVmtxUniform(1000, numGlyphs));
+            }
+
+            fontBytes = SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, TableTagNames.VOrg, SyntheticFontTables.BuildVorg(vertOriginY));
+            return fontBytes;
         }
 
         // ── Painting: actual RGraphics call sequence ────────────────────────────
@@ -288,19 +541,31 @@ body {{ font-family: 'CJK'; margin: 0 }}
             public int PushTransformCount { get; private set; }
             public int PopTransformCount { get; private set; }
 
+            /// <summary>Ordered log of draw/clip calls only - a minimal parallel to <see cref="DrawStringCalls"/>,
+            /// added so a test can assert a clip push/pop actually brackets a specific draw call (order,
+            /// not just count) without disturbing every existing assertion built against the untyped
+            /// tuple list above.</summary>
+            public List<object> Log { get; } = [];
+            public sealed record PushClipMarker;
+            public sealed record PopClipMarker;
+
             public RecordingGraphics(RAdapter adapter)
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
-                => DrawStringCalls.Add((str, font, point));
+            {
+                var call = (str, font, point);
+                DrawStringCalls.Add(call);
+                Log.Add(call);
+            }
 
             public override void PushTransform(RMatrix matrix) => PushTransformCount++;
             public override void PopTransform() => PopTransformCount++;
             public override void PushBlendMode(RBlendMode mode) { }
             public override void PopBlendMode() { }
-            public override void PushClip(RRect rect) => _clipStack.Push(rect);
-            public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
-            public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
+            public override void PushClip(RRect rect) { _clipStack.Push(rect); Log.Add(new PushClipMarker()); }
+            public override void PushClip(RGraphicsPath path) { _clipStack.Push(_clipStack.Peek()); Log.Add(new PushClipMarker()); }
+            public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); Log.Add(new PopClipMarker()); }
             public override void PushClipExclude(RRect rect) { }
             public override object SetAntiAliasSmoothingMode() => new object();
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }

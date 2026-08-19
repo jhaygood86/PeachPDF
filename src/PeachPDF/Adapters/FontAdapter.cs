@@ -139,5 +139,36 @@ namespace PeachPDF.Adapters
             color = RColor.Empty;
             return false;
         }
+
+        // ---- Vertical metrics query surface -----------------------------------------------------
+        // Backed by the font's OpenTypeDescriptor's real vhea/vmtx/VORG parsing, converted through the
+        // same design-units-to-pixels formula the constructor above already uses for _ascent/_height.
+
+        public override bool HasVerticalMetrics => Font.Descriptor?.HasVerticalMetrics ?? false;
+
+        public override double GetVerticalAdvance(System.Text.Rune rune) =>
+            ScaleDesignUnits(rune, Height, static (descriptor, glyphIndex) => descriptor.GlyphIndexToVerticalAdvance(glyphIndex));
+
+        public override bool HasVerticalOrigin => Font.Descriptor?.HasVerticalOrigin ?? false;
+
+        public override double GetVerticalOriginY(System.Text.Rune rune) =>
+            ScaleDesignUnits(rune, Ascent, static (descriptor, glyphIndex) => descriptor.GlyphIndexToVerticalOrigin(glyphIndex).Y);
+
+        /// <summary>
+        /// Shared by <see cref="GetVerticalAdvance"/>/<see cref="GetVerticalOriginY"/> - both resolve
+        /// <paramref name="rune"/> to a glyph index and scale a raw design-units value from
+        /// <see cref="OpenTypeDescriptor"/> by the exact same formula the constructor above already uses
+        /// for <c>_ascent</c>/<c>_height</c> (<c>Font.Size * designUnits / UnitsPerEm * PixelsPerPoint</c>);
+        /// only which descriptor accessor supplies the design-units value, and the no-descriptor
+        /// fallback, differ between the two callers.
+        /// </summary>
+        private double ScaleDesignUnits(System.Text.Rune rune, double fallback, System.Func<OpenTypeDescriptor, int, int> designUnits)
+        {
+            var descriptor = Font.Descriptor;
+            if (descriptor is null) return fallback;
+
+            var glyphIndex = descriptor.CharCodeToGlyphIndex(rune);
+            return Font.Size * designUnits(descriptor, glyphIndex) / descriptor.UnitsPerEm * PixelsPerPoint;
+        }
     }
 }

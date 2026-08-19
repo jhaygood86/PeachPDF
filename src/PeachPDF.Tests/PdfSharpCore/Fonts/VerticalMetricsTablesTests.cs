@@ -29,10 +29,18 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             return combined;
         }
 
-        /// <summary>Loads a real font and registers <paramref name="tag"/> against the appended synthetic bytes.</summary>
+        /// <summary>Loads the bundled TrueType font and registers <paramref name="tag"/> against the
+        /// appended synthetic bytes.</summary>
         private static (OpenTypeFontface Face, int TableStart) BuildFaceWithSyntheticTable(string tag, byte[] tableBytes)
+            => BuildFaceWithSyntheticTable(BundledFonts.Ttf, tag, tableBytes);
+
+        /// <summary>Loads <paramref name="basePath"/> and registers <paramref name="tag"/> against the
+        /// appended synthetic bytes - the base-font-path parameter lets a caller choose a CFF-flavored
+        /// base (<see cref="BundledFonts.Otf"/>) instead of the default TrueType one, needed to exercise
+        /// <c>VORG</c>'s CFF-only restriction (<see cref="OpenTypeDescriptor.HasVerticalOrigin"/>).</summary>
+        private static (OpenTypeFontface Face, int TableStart) BuildFaceWithSyntheticTable(string basePath, string tag, byte[] tableBytes)
         {
-            byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            byte[] fontBytes = File.ReadAllBytes(basePath);
             int tableStart = fontBytes.Length;
             byte[] combined = Concat(fontBytes, tableBytes);
             var face = XFontSource.GetOrCreateFrom(combined).Fontface;
@@ -57,74 +65,18 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         /// <summary>
         /// Splices one new table directory entry into a real, already-valid font file's own SFNT header -
-        /// unlike <see cref="BuildFaceWithSyntheticTable"/>, which registers the appended bytes only in the
-        /// in-memory <see cref="OpenTypeFontface.TableDictionary"/> AFTER the font has already been parsed.
-        /// This is needed to exercise <see cref="OpenTypeFontface.Read"/>'s own table-detection branches
-        /// (the <c>Seek(...)  != -1</c> checks), which only see tables present in the file's real directory
-        /// at parse time. Table data is expected to start immediately after the last existing directory
-        /// entry (true of every well-formed SFNT font, including all bundled fixtures) - inserting one more
-        /// 16-byte entry there shifts every existing table's offset by 16, so each is rewritten accordingly.
+        /// unlike <see cref="BuildFaceWithSyntheticTable(string,byte[])"/>, which registers the appended
+        /// bytes only in the in-memory <see cref="OpenTypeFontface.TableDictionary"/> AFTER the font has
+        /// already been parsed. This is needed to exercise <see cref="OpenTypeFontface.Read"/>'s own
+        /// table-detection branches (the <c>Seek(...) != -1</c> checks), which only see tables present in
+        /// the file's real directory at parse time. See <see cref="SyntheticFontTables"/> for the shared
+        /// implementation (also used by integration tests that embed the resulting bytes for real).
         /// </summary>
         private static byte[] InsertTableDirectoryEntry(byte[] fontBytes, string tag, byte[] tableBytes)
-        {
-            int numTables = (fontBytes[4] << 8) | fontBytes[5];
-            int directoryEnd = 12 + numTables * 16;
-
-            var result = new SfntByteBuilder();
-            for (int i = 0; i < 4; i++) // sfnt version, unchanged
-                result.Byte(fontBytes[i]);
-            result.U16(numTables + 1);
-            for (int i = 6; i < 12; i++) // searchRange/entrySelector/rangeShift, unchanged (unvalidated on read)
-                result.Byte(fontBytes[i]);
-
-            for (int i = 0; i < numTables; i++)
-            {
-                int entryStart = 12 + i * 16;
-                for (int j = 0; j < 8; j++) // tag + checksum, unchanged
-                    result.Byte(fontBytes[entryStart + j]);
-
-                int offset = (fontBytes[entryStart + 8] << 24) | (fontBytes[entryStart + 9] << 16) |
-                             (fontBytes[entryStart + 10] << 8) | fontBytes[entryStart + 11];
-                result.U32((uint)(offset + 16));
-
-                for (int j = 12; j < 16; j++) // length, unchanged
-                    result.Byte(fontBytes[entryStart + j]);
-            }
-
-            foreach (char c in tag)
-                result.Byte((byte)c);
-            result.U32(0); // checksum - unvalidated on read, see TableDirectoryEntry.ReadFrom
-            result.U32((uint)(fontBytes.Length + 16));
-            result.U32((uint)tableBytes.Length);
-
-            for (int i = directoryEnd; i < fontBytes.Length; i++)
-                result.Byte(fontBytes[i]);
-
-            foreach (byte b in tableBytes)
-                result.Byte(b);
-
-            return result.ToArray();
-        }
+            => SyntheticFontTables.InsertTableDirectoryEntry(fontBytes, tag, tableBytes);
 
         private static byte[] BuildVhea(short ascent, short descent, ushort numOfLongVerMetrics)
-        {
-            var b = new SfntByteBuilder();
-            b.U32(0x00010000); // version
-            b.S16(ascent);
-            b.S16(descent);
-            b.S16(0); // lineGap
-            b.U16(0); // advanceHeightMax
-            b.S16(0); // minTopSideBearing
-            b.S16(0); // minBottomSideBearing
-            b.S16(0); // yMaxExtent
-            b.S16(0); // caretSlopeRise
-            b.S16(0); // caretSlopeRun
-            b.S16(0); // caretOffset
-            b.S16(0); b.S16(0); b.S16(0); b.S16(0); // reserved1-4
-            b.S16(0); // metricDataFormat
-            b.U16(numOfLongVerMetrics);
-            return b.ToArray();
-        }
+            => SyntheticFontTables.BuildVhea(ascent, descent, numOfLongVerMetrics);
 
         [Fact]
         public void VerticalHeaderTable_ParsesFieldsCorrectly()
@@ -321,23 +273,73 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             }
         }
 
-        [Fact]
-        public void GlyphIndexToVerticalOrigin_UsesVorgWhenPresent()
+        /// <summary>Builds the <c>VORG</c> synthetic bytes shared by the honored/ignored pair below:
+        /// <c>defaultVertOriginY = 880</c>, one per-glyph override (<c>glyph 0 -&gt; 950</c>).</summary>
+        private static byte[] BuildVorg()
         {
             var b = new SfntByteBuilder();
             b.U16(1); b.U16(0);
             b.S16(880);
             b.U16(1);
             b.U16(0); b.S16(950); // glyph 0 -> 950
+            return b.ToArray();
+        }
 
-            var (face, _) = BuildFaceWithSyntheticTable(TableTagNames.VOrg, b.ToArray());
+        [Fact]
+        public void GlyphIndexToVerticalOrigin_UsesVorgWhenPresent_OnCffFont()
+        {
+            // VORG "may only be used in CFF or CFF2 OpenType fonts" (OpenType spec) - BundledFonts.Otf
+            // (Source Code Pro) is confirmed CFF-flavored (a real CFF table, no glyf), so this is the
+            // case where a real VORG table is actually trusted.
+            var (face, _) = BuildFaceWithSyntheticTable(BundledFonts.Otf, TableTagNames.VOrg, BuildVorg());
             face.Seek(VerticalOriginTable.Tag);
             face.vorg = new VerticalOriginTable(face);
 
             var descriptor = Descriptor(face);
-            var (_, y) = descriptor.GlyphIndexToVerticalOrigin(0);
+            Assert.True(descriptor.HasVerticalOrigin);
 
+            var (_, y) = descriptor.GlyphIndexToVerticalOrigin(0);
             Assert.Equal(950, y);
+        }
+
+        [Fact]
+        public void GlyphIndexToVerticalOrigin_IgnoresVorgOnTrueTypeFonts()
+        {
+            // "If present in OpenType fonts containing TrueType outline data, it must be ignored" - a
+            // VORG table spliced onto a real glyf font (BundledFonts.Ttf) must not be consulted;
+            // GlyphIndexToVerticalOrigin falls through to its vhea/os2 chain exactly as it would for a
+            // font with no VORG table at all.
+            var (face, _) = BuildFaceWithSyntheticTable(TableTagNames.VOrg, BuildVorg());
+            face.Seek(VerticalOriginTable.Tag);
+            face.vorg = new VerticalOriginTable(face);
+            Assert.NotNull(face.vorg); // the table did parse - it's the *consulting* of it that must stop
+
+            var descriptor = Descriptor(face);
+            Assert.False(descriptor.HasVerticalOrigin);
+
+            var (_, y) = descriptor.GlyphIndexToVerticalOrigin(0);
+            Assert.NotEqual(950, y);
+            Assert.NotEqual(880, y); // not even VORG's own default - the table is ignored altogether
+        }
+
+        [Fact]
+        public void HasVerticalOrigin_TrueOnlyForCffFontWithRealVorg()
+        {
+            var (cffWithVorg, _) = BuildFaceWithSyntheticTable(BundledFonts.Otf, TableTagNames.VOrg, BuildVorg());
+            cffWithVorg.Seek(VerticalOriginTable.Tag);
+            cffWithVorg.vorg = new VerticalOriginTable(cffWithVorg);
+            Assert.True(Descriptor(cffWithVorg).HasVerticalOrigin);
+
+            var (ttfWithVorg, _) = BuildFaceWithSyntheticTable(TableTagNames.VOrg, BuildVorg());
+            ttfWithVorg.Seek(VerticalOriginTable.Tag);
+            ttfWithVorg.vorg = new VerticalOriginTable(ttfWithVorg);
+            Assert.False(Descriptor(ttfWithVorg).HasVerticalOrigin); // real VORG, but TrueType-flavored
+
+            var cffWithoutVorg = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Otf)).Fontface;
+            Assert.False(Descriptor(cffWithoutVorg).HasVerticalOrigin); // CFF-flavored, but no VORG
+
+            var ttfWithoutVorg = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            Assert.False(Descriptor(ttfWithoutVorg).HasVerticalOrigin);
         }
 
         [Fact]
@@ -366,6 +368,65 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var (_, y) = descriptor.GlyphIndexToVerticalOrigin(0);
 
             Assert.Equal(face.os2.sTypoAscender, y);
+        }
+
+        [Fact]
+        public void HasVerticalMetrics_TrueOnlyWhenVheaAndVmtxBothPresent()
+        {
+            byte[] vheaBytes = BuildVhea(ascent: 880, descent: -120, numOfLongVerMetrics: 1);
+            var vmtxBuilder = new SfntByteBuilder();
+            vmtxBuilder.U16(1000); vmtxBuilder.S16(0);
+
+            var withBoth = BuildFaceWithVheaAndVmtxTables(vheaBytes, vmtxBuilder.ToArray());
+            withBoth.Seek(VerticalHeaderTable.Tag);
+            withBoth.vhea = new VerticalHeaderTable(withBoth);
+            ushort realNumGlyphs = withBoth.maxp.numGlyphs;
+            withBoth.maxp.numGlyphs = 1;
+            try
+            {
+                withBoth.Seek(VerticalMetricsTable.Tag);
+                withBoth.vmtx = new VerticalMetricsTable(withBoth);
+
+                Assert.True(Descriptor(withBoth).HasVerticalMetrics);
+            }
+            finally
+            {
+                withBoth.maxp.numGlyphs = realNumGlyphs;
+            }
+
+            var withNeither = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Ttf)).Fontface;
+            Assert.False(Descriptor(withNeither).HasVerticalMetrics);
+        }
+
+        /// <summary>
+        /// Confirms the repo's own bundled production CJK font (used by
+        /// <c>TextOrientationIntegrationTests</c>'s upright-run coverage) genuinely carries real
+        /// <c>vhea</c>/<c>vmtx</c> data - not a synthetic fixture - so issue #770's real-metrics path is
+        /// exercised by an actual font PeachPDF ships. Checks provenance (the returned value traces back
+        /// to a real parsed <c>vmtx.Metrics</c> entry, via the same monospaced-tail clamp
+        /// <see cref="OpenTypeDescriptor.GlyphIndexToVerticalAdvance"/> itself documents) rather than a
+        /// specific numeric value, since a CJK ideograph's real vertical advance height commonly
+        /// coincides numerically with the no-vmtx one-em fallback (both being close to one em) - a raw
+        /// value-vs-fallback comparison would be a fragile, misleading proof.
+        /// </summary>
+        [Fact]
+        public void RealBundledCjkFont_HasVerticalMetrics_AdvanceComesFromARealVmtxEntry()
+        {
+            var face = XFontSource.GetOrCreateFrom(File.ReadAllBytes(BundledFonts.Cjk)).Fontface;
+            Assert.NotNull(face.vhea);
+            Assert.NotNull(face.vmtx);
+
+            var descriptor = Descriptor(face);
+            Assert.True(descriptor.HasVerticalMetrics);
+
+            // U+30C6 "テ" (katakana TE) - the same upright character TextOrientationIntegrationTests uses.
+            var glyphIndex = descriptor.CharCodeToGlyphIndex(new System.Text.Rune(0x30C6));
+            Assert.NotEqual(0, glyphIndex); // the font actually has a glyph for this character
+
+            var advance = descriptor.GlyphIndexToVerticalAdvance(glyphIndex);
+            var clampedIndex = System.Math.Min(glyphIndex, face.vhea.numOfLongVerMetrics - 1);
+            Assert.Equal(face.vmtx.Metrics[clampedIndex].advanceHeight, advance);
+            Assert.True(advance > 0);
         }
 
         [Fact]
