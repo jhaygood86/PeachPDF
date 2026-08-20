@@ -421,5 +421,77 @@ namespace PeachPDF.Fonts.OpenType
                 throw;
             }
         }
+
+        /// <summary>
+        /// Whether this font has real <c>vhea</c> + <c>vmtx</c> data to consult, as opposed to
+        /// <see cref="GlyphIndexToVerticalAdvance"/>'s own one-em fallback (a real but different value
+        /// from whatever approximation a caller used before consulting this font at all - a caller that
+        /// needs to know whether the *real* metrics are actually available checks this first).
+        /// </summary>
+        public bool HasVerticalMetrics => FontFace.vhea != null && FontFace.vmtx?.Metrics is { Length: > 0 };
+
+        /// <summary>
+        /// Converts a glyph's vertical advance (the axis a <c>vertical-rl</c>/<c>vertical-lr</c> glyph
+        /// run stacks along) to font design units, using <c>vmtx</c> when the font has one. Falls back to
+        /// the OpenType-spec-sanctioned default of one em (<see cref="FontDescriptor.UnitsPerEm"/>) for
+        /// the common case - the large majority of fonts, Latin-oriented ones especially - of a font
+        /// shipping no vertical metrics at all.
+        /// </summary>
+        public int GlyphIndexToVerticalAdvance(int glyphIndex)
+        {
+            VerticalHeaderTable vhea = FontFace.vhea;
+            VerticalMetricsTable vmtx = FontFace.vmtx;
+
+            if (!HasVerticalMetrics)
+                return FontFace.head.unitsPerEm;
+
+            int numMetrics = vhea.numOfLongVerMetrics;
+
+            // glyphIndex >= numMetrics means every remaining glyph shares the last metric's advance
+            // height - the same "monospaced tail" convention GlyphIndexToWidth's hmtx lookup uses.
+            if (glyphIndex >= numMetrics)
+                glyphIndex = numMetrics - 1;
+
+            return vmtx.Metrics[glyphIndex].advanceHeight;
+        }
+
+        /// <summary>
+        /// Whether this font has a real <c>VORG</c> table this reader will actually trust. Per the
+        /// OpenType spec, <c>VORG</c> "may only be used in CFF or CFF2 OpenType fonts" and "if present in
+        /// OpenType fonts containing TrueType outline data, it must be ignored" - a font with real
+        /// <c>glyf</c> outlines has to derive its vertical origin from <c>vmtx</c>'s top-side-bearing plus
+        /// the glyph's own bounding-box top instead, which this reader does not implement, so a
+        /// TrueType-flavored font's <c>VORG</c> table (spurious as it would be) is never consulted -
+        /// <see cref="GlyphIndexToVerticalOrigin"/> falls through to its own <c>vhea</c>/<c>os2</c>/
+        /// one-em chain for such a font exactly as it would for one with no <c>VORG</c> at all.
+        /// </summary>
+        public bool HasVerticalOrigin => FontFace.vorg != null && FontFace.glyf == null;
+
+        /// <summary>
+        /// A glyph's vertical origin, in font design units relative to its horizontal origin. X has no
+        /// dedicated OpenType table (a conformant reader would consult <c>BASE</c>, which PeachPDF does
+        /// not parse) - half the glyph's own advance width is the common implementation fallback, used
+        /// unconditionally since <c>VORG</c> only ever overrides Y. Y comes from <c>VORG</c> when
+        /// <see cref="HasVerticalOrigin"/> is true, else <c>vhea</c>'s own vertical typographic ascender
+        /// (the most on-topic value when present), else the font's general typographic ascender, falling
+        /// back further to one em when even that is unavailable.
+        /// </summary>
+        public (int X, int Y) GlyphIndexToVerticalOrigin(int glyphIndex)
+        {
+            int originX = GlyphIndexToWidth(glyphIndex) / 2;
+
+            if (HasVerticalOrigin)
+                return (originX, FontFace.vorg.VertOriginYFor(glyphIndex));
+
+            VerticalHeaderTable vhea = FontFace.vhea;
+            if (vhea != null && vhea.ascent != 0)
+                return (originX, vhea.ascent);
+
+            OS2Table os2 = FontFace.os2;
+            if (os2 != null && os2.sTypoAscender != 0)
+                return (originX, os2.sTypoAscender);
+
+            return (originX, FontFace.head.unitsPerEm);
+        }
     }
 }

@@ -141,6 +141,73 @@ namespace PeachPDF.Html.Core.Fragmentation
                     or Keywords.Grid or Keywords.InlineGrid
                     or Keywords.Table or Keywords.InlineTable;
 
+        // ── A third, PeachPDF-only reason - not §2, not "runs its own engine" ─
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is a box <c>CssBox.LayoutContents</c> actually routes to
+        /// <c>CssLayoutEngine.CreateVerticalLineBoxes</c> - a vertical-writing-mode block box holding only
+        /// inline content - and must therefore be treated as an indivisible unit by its parent's
+        /// fragmentation.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Not a spec claim</b> (like <see cref="PaginatesItsOwnContent"/>, not <see cref="IsMonolithic"/>'s
+        /// §2 set): nothing in css-break-3 forbids fragmenting a vertical-writing-mode box's content across a
+        /// page boundary. This is a PeachPDF implementation limitation — <c>CreateVerticalLineBoxes</c> lays
+        /// out its whole subtree in one pass with no ability to hand back a resumption record, the same
+        /// practical constraint a replaced element has for a genuinely different (spec) reason. See the
+        /// no-vertical-writing-mode-layout accepted gap for the tracked follow-up that lifts this.
+        /// </para>
+        /// <para>
+        /// <b>Deliberately not just <c>box.WritingMode.Value is VerticalRl/VerticalLr</c></b> — that alone
+        /// is not this box's own dispatch fact, it's every one of its descendants' too, since
+        /// <c>writing-mode</c> inherits: a whole multi-paragraph <c>&lt;body style="writing-mode:
+        /// vertical-rl"&gt;</c> would otherwise report every one of its ordinarily-paginating block
+        /// children (each laid out through the ordinary, resumable per-child block-flow path, not
+        /// <c>CreateVerticalLineBoxes</c>) as unresumable too, breaking normal multi-page pagination for
+        /// the common case this feature does not touch. The extra conditions here mirror
+        /// <c>CssBox.LayoutContents</c>'s own dispatch gate exactly, so this predicate can never disagree
+        /// with what actually ran.
+        /// </para>
+        /// </remarks>
+        internal static bool IsUnresumableOrthogonalFlow(CssBox box) =>
+            box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
+            && box.PlacesItselfAsBlockBox
+            && !RunsAnEngineOfItsOwn(box.DerivedStyle.ActualDisplay)
+            && DomUtils.ContainsInlinesOnly(box);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is a table box under a vertical writing mode. Unlike an
+        /// ordinary <c>horizontal-tb</c> table — which hands the driver a real per-row resumption record
+        /// (issue #464) — <c>CssLayoutEngineTable</c> lays out a vertical table's row axis monolithically
+        /// (its constructor forces <c>pageHeight</c> to <see cref="double.MaxValue"/> for exactly this
+        /// case, routing the whole row loop through the pre-existing unpaginated fallback path), so the
+        /// outer fragmentation driver must move the whole table to a later fragmentainer as one unit
+        /// rather than slice it mid-row.
+        /// </summary>
+        /// <remarks>
+        /// Not a spec claim, the same way <see cref="IsUnresumableOrthogonalFlow"/> isn't: css-tables-3
+        /// does not forbid fragmenting a vertical table's rows across a page boundary. This is the same
+        /// practical constraint that predicate already tracks for vertical-writing-mode block content,
+        /// extended to the one remaining engine (<c>CssLayoutEngineTable</c>) that still lacks real
+        /// per-row pagination under a vertical writing mode. See the no-vertical-writing-mode-layout
+        /// accepted gap and issue #762 for the tracked follow-up that lifts this.
+        /// </remarks>
+        internal static bool IsUnresumableVerticalTable(CssBox box) =>
+            box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
+            && box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable;
+
+        /// <summary>
+        /// Whether <paramref name="box"/> must be treated as an indivisible unit by its parent's own
+        /// fragmentation, for any of the reasons this file tracks separately — <see cref="IsMonolithic"/>'s
+        /// §2 set, <see cref="IsUnresumableOrthogonalFlow"/>'s PeachPDF-only one, or
+        /// <see cref="IsUnresumableVerticalTable"/>'s. The combinator every "may this be sliced" call site
+        /// should consult, so a future reason is added once here rather than at each of this predicate's
+        /// own call sites individually.
+        /// </summary>
+        internal static bool IsMonolithicForFragmentation(CssBox box) =>
+            IsMonolithic(box) || IsUnresumableOrthogonalFlow(box) || IsUnresumableVerticalTable(box);
+
         // ── §2's "overflows rather than being sliced", as a fitting question ──
 
         /// <summary>

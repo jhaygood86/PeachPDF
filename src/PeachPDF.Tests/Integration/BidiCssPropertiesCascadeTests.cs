@@ -122,5 +122,49 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(el);
             Assert.Equal(WritingMode.HorizontalTb, el!.WritingMode.Value);
         }
+
+        [Theory]
+        [InlineData("mixed", (int)TextOrientation.Mixed)]
+        [InlineData("upright", (int)TextOrientation.Upright)]
+        [InlineData("sideways", (int)TextOrientation.Sideways)]
+        public async Task TextOrientation_AllValues_ParseAndCascade(string value, int expected)
+        {
+            var html = LayoutHarness.Wrap($"""<span id="el" style="text-orientation: {value}">hello</span>""");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal((TextOrientation)expected, el!.TextOrientation.Value);
+        }
+
+        [Fact]
+        public async Task TextOrientation_InheritsFromParentToChild()
+        {
+            // text-orientation is CSS-spec Inherited: yes.
+            var html = LayoutHarness.Wrap("""
+                <div id="parent" style="text-orientation: upright">
+                  <span id="child">hello</span>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var child = LayoutHarness.FindById(root, "child");
+
+            Assert.NotNull(child);
+            Assert.Equal(TextOrientation.Upright, child!.TextOrientation.Value);
+        }
+
+        [Fact]
+        public async Task TextOrientation_DefaultsToMixed()
+        {
+            var html = LayoutHarness.Wrap("""<span id="el">hello</span>""");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+
+            Assert.NotNull(el);
+            Assert.Equal(TextOrientation.Mixed, el!.TextOrientation.Value);
+        }
     }
 }

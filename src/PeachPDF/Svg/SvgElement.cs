@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using System.Collections.Generic;
@@ -168,6 +169,18 @@ namespace PeachPDF.Svg
 
         /// <summary>The resolved (inherited) <c>direction</c> - <c>"ltr"</c> or <c>"rtl"</c>.</summary>
         public string Direction { get; set; } = "ltr";
+
+        /// <summary>The resolved (inherited) <c>writing-mode</c>, parsed through the same
+        /// <see cref="Map.WritingModes"/> table the HTML CSS-OM pipeline uses (see
+        /// <c>SvgTreeBuilder.ApplyCommon</c>). <see cref="PeachPDF.CSS.WritingMode.SidewaysRl"/>/
+        /// <see cref="PeachPDF.CSS.WritingMode.SidewaysLr"/> render as <see cref="PeachPDF.CSS.WritingMode.HorizontalTb"/>,
+        /// matching the HTML pipeline's own scope (<c>WritingModeFrame.IsVertical</c>).</summary>
+        public WritingMode WritingMode { get; set; } = WritingMode.HorizontalTb;
+
+        /// <summary>The resolved (inherited) <c>text-orientation</c>, parsed through
+        /// <see cref="Map.TextOrientations"/>. Only meaningful when <see cref="WritingMode"/> is
+        /// vertical.</summary>
+        public TextOrientation TextOrientation { get; set; } = TextOrientation.Mixed;
 
         /// <summary>The resolved <c>unicode-bidi</c> - not inherited (CSS Writing Modes 3 §5.2), so
         /// resolved fresh per run rather than threaded down like <see cref="Direction"/>.</summary>

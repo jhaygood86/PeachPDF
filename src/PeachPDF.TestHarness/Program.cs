@@ -3904,6 +3904,75 @@ await SaveShowcaseAsync("svg_text_advanced", "Graphics & Effects", "SVG Text: Gr
     "SVG text with gradient/pattern fill, stroke, and glyphs laid along a path (textPath) - all rendered as real vector PDF content.",
     svgTextAdvancedHtml, pdfConfig);
 
+// --- SVG vertical writing-mode text showcase ---
+
+// A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK/Latin
+// characters this showcase uses, so mixed text-orientation renders real upright glyphs rather than
+// .notdef boxes.
+var svgWritingModeCjkFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf")));
+
+var svgWritingModeHtml = "<!DOCTYPE html><html><head>" + SvgTextCss + "</head><body>" +
+
+    "<h1>SVG &lt;text&gt;: writing-mode &amp; text-orientation</h1>" +
+    "<p class=\"intro\">writing-mode: vertical-rl/vertical-lr on an SVG &lt;text&gt; root advances the pen down the column instead of along a line; text-orientation classifies each glyph (mixed, the default) or forces one answer for every glyph (upright/sideways) - CJK reads upright, Latin/digits rotate 90°, the same Unicode Vertical_Orientation classification the HTML pipeline uses. (docs/supported-svg-features.md)</p>" +
+
+    "<h2>1 — text-orientation: mixed, upright &amp; sideways</h2>" +
+    $"<defs><style>@font-face {{ font-family: 'CJK'; src: url('data:font/truetype;base64,{svgWritingModeCjkFontB64}') format('truetype'); }}</style></defs>" +
+    "<table class=\"sw\"><tr>" +
+    TextPanel("mixed (default): CJK upright, Latin/digits rotated",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <rect x="1" y="1" width="30" height="128" fill="none" stroke="#1a6b8a" stroke-width="2"/>
+          <text x="16" y="14" font-family="CJK" font-size="11" writing-mode="vertical-rl" fill="#2c3e50">縦書きPDF24</text>
+        </svg>
+        """) +
+    TextPanel("upright: every glyph upright",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <rect x="1" y="1" width="30" height="128" fill="none" stroke="#1a6b8a" stroke-width="2"/>
+          <text x="16" y="14" font-family="CJK" font-size="11" writing-mode="vertical-rl" text-orientation="upright" fill="#2c3e50">縦書きPDF24</text>
+        </svg>
+        """) +
+    TextPanel("sideways: every glyph rotated",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <rect x="1" y="1" width="30" height="128" fill="none" stroke="#1a6b8a" stroke-width="2"/>
+          <text x="16" y="14" font-family="CJK" font-size="11" writing-mode="vertical-rl" text-orientation="sideways" fill="#2c3e50">縦書きPDF24</text>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "<h2>2 — vertical-rl vs vertical-lr, and a rotated fill gradient</h2>" +
+    "<table class=\"sw\"><tr>" +
+    TextPanel("vertical-rl",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <defs><style>@font-face { font-family: 'CJK2'; src: url('data:font/truetype;base64,FONTPLACEHOLDER') format('truetype'); }</style></defs>
+          <text x="50" y="14" font-family="CJK2" font-size="12" writing-mode="vertical-rl" fill="#8e44ad">縦書き</text>
+        </svg>
+        """.Replace("FONTPLACEHOLDER", svgWritingModeCjkFontB64)) +
+    TextPanel("vertical-lr",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <defs><style>@font-face { font-family: 'CJK3'; src: url('data:font/truetype;base64,FONTPLACEHOLDER') format('truetype'); }</style></defs>
+          <text x="50" y="14" font-family="CJK3" font-size="12" writing-mode="vertical-lr" fill="#16a085">縦書き</text>
+        </svg>
+        """.Replace("FONTPLACEHOLDER", svgWritingModeCjkFontB64)) +
+    TextPanel("gradient fill on a rotated (Latin) run",
+        """
+        <svg viewBox="0 0 100 130" width="90" height="117">
+          <defs><linearGradient id="vwg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e11"/><stop offset="1" stop-color="#14e"/></linearGradient></defs>
+          <text x="50" y="14" font-size="18" font-weight="bold" writing-mode="vertical-rl" text-orientation="sideways" fill="url(#vwg)">PEACH</text>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("svg_vertical_text", "Graphics & Effects", "SVG Text: Vertical Writing Mode",
+    "SVG &lt;text&gt; under writing-mode: vertical-rl/vertical-lr with real per-character text-orientation (issue #765's SVG counterpart) - CJK glyphs upright, Latin/digits rotated, composing with gradient fill.",
+    svgWritingModeHtml, pdfConfig);
+
 // --- opacity showcase ---
 
 static string OpacitySwatch(string desc, string bodyHtml, string cssLabel) =>
@@ -5178,6 +5247,128 @@ var textIndentHtml = "<!DOCTYPE html><html><head>" + TextIndentCss + "</head><bo
 await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
     "text-indent's plain, hanging, and each-line forms (CSS Text 3), including their combination and interaction with text-align: center.",
     textIndentHtml, pdfConfig);
+
+// --- writing-mode (vertical-rl/vertical-lr) showcase ---
+// Real vertical line flow (issue #547): lines stack along the block axis (right-to-left for
+// vertical-rl, left-to-right for vertical-lr), text runs top-to-bottom within each line, and
+// glyphs paint rotated 90° by default (text-orientation: sideways/mixed's rotated runs) or
+// upright without rotation (text-orientation: upright/mixed's upright runs, real Unicode
+// Vertical_Orientation classification - issue #765). Flexbox and simple Table layout are also
+// writing-mode-aware now - see .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's
+// still deferred (block children, Multi-column axis awareness, and Table's own collapsed
+// borders/headers-footers/captions/rowspan-colspan/per-row pagination).
+
+// A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK
+// characters section 8 below uses, so mixed text-orientation renders real upright glyphs rather
+// than .notdef boxes - the vast majority of real-world text-orientation: mixed content is CJK.
+var writingModeCjkFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf")));
+
+const string WritingModeCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    .row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 0.5em }
+    .vbox { border: 2px solid #1a6b8a; padding: 8px; background: #eef6fb }
+    .label { font-size: 7pt; color: #444; margin-top: 4px }
+    </style>
+    """;
+
+var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><body>" +
+
+    "<h1>CSS writing-mode Test Page</h1>" +
+
+    "<h2>1 &mdash; vertical-rl: columns stack right-to-left</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 260px; height: 140px\">" +
+    "This paragraph flows in real vertical-rl columns, wrapping to a new column to the left of the previous one as each fills up." +
+    "</div><div class=\"label\">writing-mode: vertical-rl</div></div>" +
+    "</div>" +
+
+    "<h2>2 &mdash; vertical-lr: columns stack left-to-right</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-lr; width: 260px; height: 140px\">" +
+    "This paragraph flows in real vertical-lr columns, wrapping to a new column to the right of the previous one as each fills up." +
+    "</div><div class=\"label\">writing-mode: vertical-lr</div></div>" +
+    "</div>" +
+
+    "<h2>3 &mdash; forced line break starts a fresh column</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 260px; height: 120px\">" +
+    "First column.<br>Second column, even though the first had room to spare." +
+    "</div><div class=\"label\">writing-mode: vertical-rl with &lt;br&gt;</div></div>" +
+    "</div>" +
+
+    "<h2>4 &mdash; auto height shrinks to the content's own extent</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 260px\">Short auto-height line.</div>" +
+    "<div class=\"label\">height: auto</div></div>" +
+    "</div>" +
+
+    "<h2>4b &mdash; auto width shrinks to the content's own extent (issue #761)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; height: 60px\">One Two Three</div>" +
+    "<div class=\"label\">vertical-rl, width: auto</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-lr; height: 60px\">One Two Three</div>" +
+    "<div class=\"label\">vertical-lr, width: auto</div></div>" +
+    "</div>" +
+
+    "<h2>5 &mdash; flex-direction: row under vertical-rl (main axis = inline = physical Y)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; display: flex; width: 220px; height: 160px\">" +
+    "<div style=\"width: 60px; height: 40px; background: #1a6b8a; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #4a9bc4; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #7cc0e0; margin: 4px\"></div>" +
+    "</div><div class=\"label\">flex row: items stack top-to-bottom</div></div>" +
+    "</div>" +
+
+    "<h2>6 &mdash; flex-direction: column under vertical-rl/vertical-lr (main axis = block = physical X)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; display: flex; flex-direction: column; width: 220px; height: 160px\">" +
+    "<div style=\"width: 60px; height: 40px; background: #1a6b8a; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #4a9bc4; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #7cc0e0; margin: 4px\"></div>" +
+    "</div><div class=\"label\">vertical-rl flex column: right-to-left</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-lr; display: flex; flex-direction: column; width: 220px; height: 160px\">" +
+    "<div style=\"width: 60px; height: 40px; background: #1a6b8a; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #4a9bc4; margin: 4px\"></div>" +
+    "<div style=\"width: 60px; height: 40px; background: #7cc0e0; margin: 4px\"></div>" +
+    "</div><div class=\"label\">vertical-lr flex column: left-to-right</div></div>" +
+    "</div>" +
+
+    "<h2>7 &mdash; table under vertical-rl/vertical-lr (rows = block axis, columns = inline axis)</h2>" +
+    "<div class=\"row\">" +
+    "<div><table style=\"writing-mode: vertical-rl; border-spacing: 4px\">" +
+    "<tr><td style=\"width: 60px; height: 40px; background: #1a6b8a; color: #fff; text-align: center\">R1C1</td>" +
+    "<td style=\"width: 60px; height: 40px; background: #4a9bc4; color: #fff; text-align: center\">R1C2</td></tr>" +
+    "<tr><td style=\"width: 60px; height: 40px; background: #7cc0e0; text-align: center\">R2C1</td>" +
+    "<td style=\"width: 60px; height: 40px; background: #cfe9f5; text-align: center\">R2C2</td></tr>" +
+    "</table><div class=\"label\">vertical-rl table: rows stack right-to-left, columns run top-to-bottom</div></div>" +
+    "<div><table style=\"writing-mode: vertical-lr; border-spacing: 4px\">" +
+    "<tr><td style=\"width: 60px; height: 40px; background: #1a6b8a; color: #fff; text-align: center\">R1C1</td>" +
+    "<td style=\"width: 60px; height: 40px; background: #4a9bc4; color: #fff; text-align: center\">R1C2</td></tr>" +
+    "<tr><td style=\"width: 60px; height: 40px; background: #7cc0e0; text-align: center\">R2C1</td>" +
+    "<td style=\"width: 60px; height: 40px; background: #cfe9f5; text-align: center\">R2C2</td></tr>" +
+    "</table><div class=\"label\">vertical-lr table: rows stack left-to-right, columns run top-to-bottom</div></div>" +
+    "</div>" +
+
+    $"<h2>8 &mdash; text-orientation: real per-character upright/rotated splitting (issue #765)</h2>" +
+    $"<style>@font-face {{ font-family: 'CJK'; src: url('data:font/truetype;base64,{writingModeCjkFontB64}') format('truetype'); }} .cjk {{ font-family: 'CJK', Arial, sans-serif }}</style>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox cjk\" style=\"writing-mode: vertical-rl; text-orientation: mixed; width: 60px; height: 260px\">縦書きテキストPDF2024</div>" +
+    "<div class=\"label\">mixed (default): CJK upright, Latin/digits rotated</div></div>" +
+    "<div><div class=\"vbox cjk\" style=\"writing-mode: vertical-rl; text-orientation: upright; width: 60px; height: auto\">縦書きテキストPDF2024</div>" +
+    "<div class=\"label\">upright: every character upright</div></div>" +
+    "<div><div class=\"vbox cjk\" style=\"writing-mode: vertical-rl; text-orientation: sideways; width: 60px; height: 260px\">縦書きテキストPDF2024</div>" +
+    "<div class=\"label\">sideways: every character rotated</div></div>" +
+    "</div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), and writing-mode-aware Flexbox and Table layout.",
+    writingModeHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---
 

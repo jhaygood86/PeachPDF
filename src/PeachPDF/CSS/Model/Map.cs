@@ -389,6 +389,13 @@ namespace PeachPDF.CSS
                 {Keywords.SidewaysRl, WritingMode.SidewaysRl},
                 {Keywords.SidewaysLr, WritingMode.SidewaysLr}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, TextOrientation> TextOrientations =
+            new Dictionary<string, TextOrientation>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Mixed, TextOrientation.Mixed},
+                {Keywords.Upright, TextOrientation.Upright},
+                {Keywords.Sideways, TextOrientation.Sideways}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, ListStyle> ListStyles =
             new Dictionary<string, ListStyle>(StringComparer.OrdinalIgnoreCase)
             {

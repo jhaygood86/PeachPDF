@@ -21,9 +21,63 @@ namespace PeachPDF.Html.Core.Dom
         private bool _isWrap;
         private bool _isWrapReverse;
 
+        // ─── Writing-mode axis mapping ────────────────────────────────────────────
+        //
+        // _isRow/_isReverse/_isWrapReverse above are LOGICAL: "row" always means "main axis = inline
+        // axis" and "reverse"/"wrap-reverse" always mean "flow-first item/line renders at the far end",
+        // regardless of writing-mode (CSS Flexbox 1 §3's own definition) - row-gap/column-gap selection
+        // (ParseMainGap/ParseCrossGap) and flow-order reversal (BuildColumnLines/BuildColumnItemGroups)
+        // read them directly for exactly that reason. Everything else in this engine reads or writes a
+        // PHYSICAL CSS property (Width/Height, margins, Client edges) or a physical coordinate, which
+        // needs to know which physical axis is main, not which logical one - that is what these three
+        // fields resolve, once, from the container's own resolved WritingMode (matching WritingModeFrame's
+        // own "resolve once from this box's own edges" composition model, so nested/orthogonal flex
+        // containers need no transform stack here either).
+        private bool _mainAxisIsPhysicalX;
+        // Whichever physical end (of whichever axis) main-start/cross-start actually lands on, from
+        // writing-mode alone - NOT yet combined with _isReverse/_isWrapReverse, matching how
+        // MainMarginBefore/MainMarginAfter already ignored _isReverse before this file understood
+        // writing-mode at all (row-reverse's "before" margin was always ActualMarginLeft, never
+        // ActualMarginRight) - preserved here rather than fixed, since correcting that is a pre-existing,
+        // out-of-scope reverse-margin question, not a writing-mode one.
+        private bool _mainStartIsAtMax;
+        private bool _crossStartIsAtMax;
+        // _mainStartIsAtMax combined with _isReverse: true when the item nearest flow-start (offset 0)
+        // ends up rendering at its axis's physical-max end. Computed once here (both ComputeMainOffsets'
+        // justify-content: left/right handling and AssignLocations' own coordinate formula need exactly
+        // this XOR) rather than re-derived at each call site, so the two can't drift out of sync.
+        private bool _effectiveMainStartIsAtMax;
+
         private CssLayoutEngineFlex(CssBox flexBox)
         {
             _flexBox = flexBox;
+        }
+
+        /// <summary>
+        /// Resolves which physical axis is this container's main axis, and which physical end its
+        /// main-start/cross-start land on, from the container's own resolved <c>writing-mode</c> (assuming
+        /// <c>ltr</c> for the inline axis - this engine has no <c>direction: rtl</c> support at all yet,
+        /// for either axis, so extending only the vertical-writing-mode case to honor it would leave row
+        /// direction inconsistently direction-aware between physical axes). "Row" means main = inline axis
+        /// (CSS Flexbox 1 §3); which physical axis and end that is comes from
+        /// <see cref="LogicalPropertyResolver"/>, the same abstract-to-physical table
+        /// <see cref="WritingModeFrame"/> reuses, rather than a second independently-derived mapping.
+        /// </summary>
+        private void ComputeAxisMapping()
+        {
+            var writingMode = _flexBox.WritingMode.Value;
+            var mainStartSide = _isRow
+                ? LogicalPropertyResolver.InlineStart(writingMode, DirectionMode.Ltr)
+                : LogicalPropertyResolver.BlockStart(writingMode);
+            var crossStartSide = _isRow
+                ? LogicalPropertyResolver.BlockStart(writingMode)
+                : LogicalPropertyResolver.InlineStart(writingMode, DirectionMode.Ltr);
+
+            _mainAxisIsPhysicalX = mainStartSide is PhysicalSide.Left or PhysicalSide.Right;
+            _mainStartIsAtMax = mainStartSide is PhysicalSide.Right or PhysicalSide.Bottom;
+            _crossStartIsAtMax = crossStartSide is PhysicalSide.Right or PhysicalSide.Bottom;
+            // _isReverse is already resolved (ParseFlexDirection runs before this) - safe to combine here.
+            _effectiveMainStartIsAtMax = _mainStartIsAtMax != _isReverse;
         }
 
         /// <param name="g">the graphics context layout is running against</param>
@@ -70,6 +124,7 @@ namespace PeachPDF.Html.Core.Dom
 
             ParseFlexDirection();
             ParseFlexWrap();
+            ComputeAxisMapping();
 
             // Compute container main-axis size
             var containerWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox);
@@ -79,8 +134,16 @@ namespace PeachPDF.Html.Core.Dom
             // Pre-apply a definite height when one exists, so ClientBottom is correct for cross-axis sizing.
             // A definite height comes either from an explicit `height` length or — when the height is auto —
             // from a preferred `aspect-ratio` against the (now-known) definite width (CSS Box Sizing 4 §5).
-            // Both make the container's cross size (row) / main size (column) definite, which stretch and
-            // percentage-height children resolve against — the Charts.css `tbody { aspect-ratio: … }` case.
+            // Both make the container's cross size (main axis physical X) / main size (main axis physical Y)
+            // definite, which stretch and percentage-height children resolve against — the Charts.css
+            // `tbody { aspect-ratio: … }` case. This is unconditionally about the physical Y dimension
+            // (Height/ActualBottom) regardless of which role (main or cross) it plays for this container -
+            // see ComputeAxisMapping's own remarks for why row/column's roles swap under a vertical writing
+            // mode but Width/Height's own physical meaning never does. A main axis that lands on physical X
+            // (horizontal-tb row, or a vertical-writing-mode column) has no aspect-ratio-on-width analogue
+            // here: TryGetAspectRatioWidth exists but is documented as unsafe for a stretch-fit box (which a
+            // block-level flex container's own auto width already is via GetBoxWidth above), so this stays
+            // scoped to the physical-Y case only - a narrow, defensible boundary, not an oversight.
             bool hasExplicitHeight = CssValueParser.IsValidLength(_flexBox.Height);
             bool hasDefiniteHeight = hasExplicitHeight
                 || CssLayoutEngine.TryGetAspectRatioHeight(_flexBox, out _);
@@ -90,17 +153,20 @@ namespace PeachPDF.Html.Core.Dom
                 _flexBox.ActualBottom = _flexBox.Location.Y + fullHeight;
             }
 
-            double mainSize = _isRow
+            double mainSize = _mainAxisIsPhysicalX
                 ? _flexBox.ClientRight - _flexBox.ClientLeft
                 : (_flexBox.ClientBottom - _flexBox.ClientTop);
 
             // Container cross-axis size (0 when auto/unknown until content lays out)
-            double containerCrossSize = _isRow
+            double containerCrossSize = _mainAxisIsPhysicalX
                 ? (hasDefiniteHeight ? _flexBox.ClientBottom - _flexBox.ClientTop : 0)
                 : containerWidth;
 
-            // Whether the main axis has indefinite size (column + auto height = no grow/shrink)
-            bool mainSizeIndefinite = !_isRow && !hasDefiniteHeight;
+            // Whether the main axis has indefinite size (auto height, with main landing on physical Y = no
+            // grow/shrink). A main axis on physical X never is: GetBoxWidth above always resolves Width
+            // definitely (explicit, or fill-available), for both horizontal-tb row and a vertical-writing-
+            // mode column.
+            bool mainSizeIndefinite = !_mainAxisIsPhysicalX && !hasDefiniteHeight;
 
             // A position: running() child (css-gcpm-3) never becomes a flex item - it is excluded from
             // this container's own algorithm the same way it is excluded from plain block flow
@@ -180,7 +246,7 @@ namespace PeachPDF.Html.Core.Dom
             // and stretch a no-op (issue #133). Row items get correct fit-content cross sizing for free
             // because their cross axis is height, which block layout already shrink-wraps. Only non-stretch,
             // auto-width items are shrunk, so the default (stretch) behavior is unchanged.
-            if (!_isRow)
+            if (!_mainAxisIsPhysicalX)
             {
                 foreach (var line in lines)
                     foreach (var item in line.Items)
@@ -204,8 +270,8 @@ namespace PeachPDF.Html.Core.Dom
             double totalCrossGap = lines.Count > 1 ? crossGap * (lines.Count - 1) : 0;
             double totalCross = lines.Sum(l => l.CrossSize);
             double crossFree = Math.Max(0, containerCrossSize - totalCross - totalCrossGap);
-            // A column container's cross axis is the inline one, which is resolved before any of this.
-            DistributeCrossSpace(lines, crossFree, crossGap, containerCrossSize, !_isRow || hasDefiniteHeight);
+            // A main-axis-physical-Y container's cross axis is physical X, which is resolved before any of this.
+            DistributeCrossSpace(lines, crossFree, crossGap, containerCrossSize, !_mainAxisIsPhysicalX || hasDefiniteHeight);
 
             // Phase 7: justify-content — main-axis positions
             foreach (var line in lines)
@@ -215,9 +281,9 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var line in lines)
                 await ComputeCrossOffsets(g, line);
 
-            // For column with auto (indefinite) height: set ActualBottom now so that
-            // containerMainEnd is correct for column-reverse positioning in AssignLocations.
-            if (!_isRow && mainSizeIndefinite)
+            // For an indefinite (auto) main axis landing on physical Y: set ActualBottom now so that
+            // containerMainEnd is correct for -reverse positioning in AssignLocations.
+            if (!_mainAxisIsPhysicalX && mainSizeIndefinite)
             {
                 _flexBox.ActualBottom = _flexBox.ClientTop + mainSize
                     + _flexBox.ActualPaddingBottom + _flexBox.ActualBorderBottomWidth;
@@ -234,12 +300,12 @@ namespace PeachPDF.Html.Core.Dom
 
             if (!hasDefiniteHeight)
             {
-                if (_isRow)
+                if (_mainAxisIsPhysicalX)
                     _flexBox.ActualBottom = _flexBox.ClientTop + maxCrossEnd
                         + _flexBox.ActualPaddingBottom + _flexBox.ActualBorderBottomWidth;
-                // A column container's cross axis is the inline one, and `hasDefiniteHeight` says nothing
-                // about it: a container with a `width` has been sized already, and sizing it again from
-                // where its lines happen to end would *discard* that width wherever the lines do not
+                // A main-axis-physical-Y container's cross axis is physical X, and `hasDefiniteHeight` says
+                // nothing about it: a container with a `width` has been sized already, and sizing it again
+                // from where its lines happen to end would *discard* that width wherever the lines do not
                 // reach the far edge — which is anywhere align-content has free space to distribute.
                 else if (!CssValueParser.IsValidLength(_flexBox.Width))
                     _flexBox.ActualRight = _flexBox.ClientLeft + maxCrossEnd
@@ -255,10 +321,15 @@ namespace PeachPDF.Html.Core.Dom
             RelocateLinesAcrossFragmentainers(lines);
 
             // Phase 9c: fragment each item's own content for real, now that every item sits at the
-            // position it will finally hold. Row/row-reverse lines are parallel flows, committed by
-            // CommitLineContent; column/column-reverse lines are sequential, committed by
-            // CommitColumnContent instead - see each method's own remarks.
-            if (_isRow)
+            // position it will finally hold. A main-axis-physical-X container's lines are parallel flows
+            // (their items share one physical-Y band, exactly like a table row's cells - the page always
+            // fragments along physical Y, regardless of writing-mode), committed by CommitLineContent;
+            // a main-axis-physical-Y container's lines are sequential (their items are stacked along
+            // physical Y themselves), committed by CommitColumnContent instead - see each method's own
+            // remarks. This is the physical axis, not the row/column keyword: a vertical-writing-mode
+            // *column* container's lines sit side by side along physical X exactly like a horizontal-tb
+            // *row* container's do, and need the same parallel-flows fragmentation model.
+            if (_mainAxisIsPhysicalX)
             {
                 var lineOrder = BuildLineOrder(lines);
                 if (lineOrder.Count > 0)
@@ -278,9 +349,15 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // Phase 10b: inline-flex shrinks to content in the main axis (like inline-block).
-            // For row direction with auto width, update ActualRight to the actual content extent.
+            // For a main-axis-physical-X container with auto width, update ActualRight to the actual
+            // content extent. A main-axis-physical-Y container needs no equivalent branch here: its
+            // indefinite-main-size case (mainSizeIndefinite above) already sets ActualBottom from the
+            // items' own hypothetical sizes regardless of inline-flex-ness, before this point ever runs -
+            // the asymmetry is inherent to Width always pre-resolving via GetBoxWidth (needing this later
+            // correction) versus Height computing directly from content when indefinite (needing none),
+            // and holds for either physical axis, not just for the row/column keyword.
             bool hasExplicitWidth = CssValueParser.IsValidLength(_flexBox.Width);
-            if (_flexBox.DerivedStyle.ActualDisplay == Keywords.InlineFlex && _isRow && !hasExplicitWidth && lines.Count > 0)
+            if (_flexBox.DerivedStyle.ActualDisplay == Keywords.InlineFlex && _mainAxisIsPhysicalX && !hasExplicitWidth && lines.Count > 0)
             {
                 double contentMainEnd = lines.Max(l =>
                     l.Items.Count > 0
@@ -308,11 +385,11 @@ namespace PeachPDF.Html.Core.Dom
                 // CSS flex-basis = content size; hypothetical = outer size = content + padding + border
                 hypothetical = CssValueParser.ParseLength(flexBasis.Value!.Value, mainSize, box) + MainPaddingBorder(box);
             }
-            else if (flexBasis.Keyword is not FlexBasisKeyword.Content && _isRow && CssValueParser.IsValidLength(box.Width))
+            else if (flexBasis.Keyword is not FlexBasisKeyword.Content && _mainAxisIsPhysicalX && CssValueParser.IsValidLength(box.Width))
             {
                 hypothetical = CssValueParser.ParseLength(box.Width, mainSize, box) + MainPaddingBorder(box);
             }
-            else if (flexBasis.Keyword is not FlexBasisKeyword.Content && !_isRow && CssValueParser.IsValidLength(box.Height))
+            else if (flexBasis.Keyword is not FlexBasisKeyword.Content && !_mainAxisIsPhysicalX && CssValueParser.IsValidLength(box.Height))
             {
                 hypothetical = CssValueParser.ParseLength(box.Height, mainSize, box) + MainPaddingBorder(box);
             }
@@ -331,17 +408,18 @@ namespace PeachPDF.Html.Core.Dom
                 box.RectanglesReset();
                 await PerformLayoutBlockified(g, box);
 
-                // naturalMain = layout result; for row direction this is the block-fill width (container width).
-                double naturalMain = _isRow ? box.ActualBoxSizingWidth : box.ActualBoxSizingHeight;
+                // naturalMain = layout result; for a physical-X main axis this is the block-fill width
+                // (container width).
+                double naturalMain = _mainAxisIsPhysicalX ? box.ActualBoxSizingWidth : box.ActualBoxSizingHeight;
 
                 if (ParseFloat(box.FlexGrow) > 0)
                 {
                     // flex-grow items: hypothetical=0 so all free space is distributed via growth.
                     hypothetical = 0;
                 }
-                else if (_isRow)
+                else if (_mainAxisIsPhysicalX)
                 {
-                    // Row, no flex-grow: derive max-content width from inline word measurements.
+                    // Main axis physical X, no flex-grow: derive max-content width from inline word measurements.
                     // Block items fill the container on layout, so naturalMain = container width.
                     // For inline-only boxes the actual content width is the sum of word widths per line.
                     double maxContent;
@@ -372,7 +450,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    // Column direction: ActualBoxSizingHeight is the natural content height (not container-fill).
+                    // Main axis physical Y: ActualBoxSizingHeight is the natural content height (not container-fill).
                     hypothetical = naturalMain;
                 }
 
@@ -385,8 +463,8 @@ namespace PeachPDF.Html.Core.Dom
             if (hypothetical > 0)
             {
                 double cssContentSize = Math.Max(0, hypothetical - MainPaddingBorder(box));
-                if (_isRow) { savedDim = box.Width;  box.Width  = FormatLayoutUnits(cssContentSize); }
-                else        { savedDim = box.Height; box.Height = FormatLayoutUnits(cssContentSize); }
+                if (_mainAxisIsPhysicalX) { savedDim = box.Width;  box.Width  = FormatLayoutUnits(cssContentSize); }
+                else                      { savedDim = box.Height; box.Height = FormatLayoutUnits(cssContentSize); }
             }
 
             box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
@@ -397,12 +475,12 @@ namespace PeachPDF.Html.Core.Dom
 
             if (savedDim != null)
             {
-                if (_isRow) box.Width  = savedDim;
-                else        box.Height = savedDim;
+                if (_mainAxisIsPhysicalX) box.Width  = savedDim;
+                else                      box.Height = savedDim;
             }
 
             // NaturalMainSize = what PerformLayout actually produced (used to detect resize need)
-            double naturalMain2 = _isRow ? box.ActualBoxSizingWidth : box.ActualBoxSizingHeight;
+            double naturalMain2 = _mainAxisIsPhysicalX ? box.ActualBoxSizingWidth : box.ActualBoxSizingHeight;
 
             return new FlexItem(box, naturalMain2, hypothetical);
         }
@@ -489,7 +567,7 @@ namespace PeachPDF.Html.Core.Dom
             // finalSize is the outer size (content + padding + border); CSS property takes content size only.
             string saved;
             double cssContentSize = Math.Max(0, finalSize - MainPaddingBorder(item.Box));
-            if (_isRow)
+            if (_mainAxisIsPhysicalX)
             {
                 saved = item.Box.Width;
                 item.Box.Width = FormatLayoutUnits(cssContentSize);
@@ -505,8 +583,8 @@ namespace PeachPDF.Html.Core.Dom
             item.Box.RectanglesReset();
             await PerformLayoutBlockified(g, item.Box);
 
-            if (_isRow) item.Box.Width  = saved;
-            else        item.Box.Height = saved;
+            if (_mainAxisIsPhysicalX) item.Box.Width  = saved;
+            else                      item.Box.Height = saved;
         }
 
         // ─── Phase 4b: column cross-axis (width) shrink-to-fit ────────────────────
@@ -572,7 +650,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (line.Items.Count == 0) return 0;
             return line.Items.Max(i =>
-                _isRow
+                _mainAxisIsPhysicalX
                     ? i.Box.ActualBoxSizingHeight + i.Box.ActualMarginTop  + i.Box.ActualMarginBottom
                     : i.Box.ActualBoxSizingWidth  + i.Box.ActualMarginLeft + i.Box.ActualMarginRight);
         }
@@ -705,15 +783,20 @@ namespace PeachPDF.Html.Core.Dom
                 case JustifyContent.FlexEnd:
                 case JustifyContent.End:
                     startOffset = freeSpace; spacing = 0; break;
-                // `left`/`right` are physical keywords (CSS Box Alignment 3 §8.3), unlike flow-relative
-                // `start`/`end`/`flex-start`/`flex-end` above: they must NOT flip with row-reverse (the
-                // way AssignLocations' `_isReverse` already flips flow-relative offsets for those), and
-                // they fall back to `start` when the main axis isn't parallel to the physical
-                // left/right axis (`flex-direction: column`/`column-reverse`) - issue #645.
+                // `left`/`right` are physical keywords (CSS Box Alignment 3 §8.3): they fall back to
+                // `start` when the main axis isn't parallel to the physical left/right axis at all
+                // (_mainAxisIsPhysicalX false - flex-direction: column under horizontal-tb, or row under
+                // a vertical writing mode - issue #645), and otherwise push toward flow-end exactly when
+                // flow-start does NOT already sit at the requested physical side - _effectiveMainStartIsAtMax
+                // gives flow-start's effective physical side (writing-mode's own raw mapping, corrected for
+                // row-reverse/column-reverse's flow-start/flow-end swap - the same field AssignLocations'
+                // own coordinate formula uses), which composes with the requested side as follows: "Right"
+                // pushes unless effective-start is already at the physical-max end (Right, since this only
+                // fires when the main axis is physical X); "Left" is the mirror image.
                 case JustifyContent.Right:
-                    startOffset = _isRow && !_isReverse ? freeSpace : 0; spacing = 0; break;
+                    startOffset = _mainAxisIsPhysicalX && !_effectiveMainStartIsAtMax ? freeSpace : 0; spacing = 0; break;
                 case JustifyContent.Left:
-                    startOffset = _isRow && _isReverse ? freeSpace : 0; spacing = 0; break;
+                    startOffset = _mainAxisIsPhysicalX && _effectiveMainStartIsAtMax ? freeSpace : 0; spacing = 0; break;
                 case JustifyContent.Center:
                     startOffset = freeSpace / 2; spacing = 0; break;
                 case JustifyContent.SpaceBetween:
@@ -753,7 +836,7 @@ namespace PeachPDF.Html.Core.Dom
             // one furthest from the baseline in that direction — not the one with the largest ascent.
             double maxBaselineTail = 0;
             Dictionary<FlexItem, double>? baselineOffsets = null;
-            if (_isRow)
+            if (_mainAxisIsPhysicalX)
             {
                 foreach (var item in line.Items)
                 {
@@ -774,9 +857,16 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var item in line.Items)
             {
                 var align = item.Box.AlignSelf.Value == AlignItem.Auto ? _flexBox.AlignItems.Value : item.Box.AlignSelf.Value;
-                double crossMarginBefore = _isRow ? item.Box.ActualMarginTop    : item.Box.ActualMarginLeft;
-                double crossMarginAfter  = _isRow ? item.Box.ActualMarginBottom : item.Box.ActualMarginRight;
-                double itemCrossSize = _isRow ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
+                // Cross-start's own physical side, from writing-mode alone (CrossBefore/CrossAfter,
+                // sharing MainBefore/MainAfter's underlying PhysicalBefore rule), deliberately ignoring
+                // _isWrapReverse here too: that swap is handled separately by flushCrossStart/flushCrossEnd
+                // below, exactly mirroring how _isReverse never touched the original (pre-writing-mode)
+                // Left/Top-only version of this pair either.
+                double crossMarginBefore = CrossBefore(item.Box.ActualMarginLeft, item.Box.ActualMarginRight,
+                    item.Box.ActualMarginTop, item.Box.ActualMarginBottom);
+                double crossMarginAfter = CrossAfter(item.Box.ActualMarginLeft, item.Box.ActualMarginRight,
+                    item.Box.ActualMarginTop, item.Box.ActualMarginBottom);
+                double itemCrossSize = _mainAxisIsPhysicalX ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
 
                 // `flex-wrap: wrap-reverse` swaps the cross-start and cross-end directions
                 // (https://www.w3.org/TR/css-flexbox-1/#flex-wrap-property), and that swap applies inside a
@@ -809,16 +899,16 @@ namespace PeachPDF.Html.Core.Dom
                     case AlignItem.Stretch:
                     case AlignItem.Normal:
                     {
-                        bool canStretch = _isRow
+                        bool canStretch = _mainAxisIsPhysicalX
                             ? !CssValueParser.IsValidLength(item.Box.Height)
                             : !CssValueParser.IsValidLength(item.Box.Width);
                         if (canStretch)
                         {
                             double targetCross = line.CrossSize - crossMarginBefore - crossMarginAfter;
-                            double currentCross = _isRow ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
+                            double currentCross = _mainAxisIsPhysicalX ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
                             if (Math.Abs(targetCross - currentCross) > 0.5)
                             {
-                                if (_isRow)
+                                if (_mainAxisIsPhysicalX)
                                 {
                                     var savedHeight = item.Box.Height;
                                     var savedWidth  = item.Box.Width;
@@ -839,7 +929,7 @@ namespace PeachPDF.Html.Core.Dom
                                 {
                                     var savedWidth  = item.Box.Width;
                                     var savedHeight = item.Box.Height;
-                                    // Column direction: lock cross Width and preserve main-axis Height.
+                                    // Main axis physical Y: lock cross Width and preserve main-axis Height.
                                     double crossContent = Math.Max(0, targetCross - item.Box.ActualPaddingLeft - item.Box.ActualPaddingRight
                                                                                   - item.Box.ActualBorderLeftWidth - item.Box.ActualBorderRightWidth);
                                     item.Box.Width  = FormatLayoutUnits(crossContent);
@@ -865,7 +955,7 @@ namespace PeachPDF.Html.Core.Dom
                         // back off the line's own cross size does not land exactly on the margin it started
                         // from. Below the same 0.5 tolerance the re-layout itself uses, take the margin —
                         // otherwise a stretched item moves by ~1e-4 and redraws its whole border.
-                        double stretchedCross = _isRow ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
+                        double stretchedCross = _mainAxisIsPhysicalX ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
                         double stretchedCrossStart = line.CrossSize - stretchedCross - crossMarginAfter;
                         item.CrossOffset = _isWrapReverse && stretchedCrossStart - crossMarginBefore > 0.5
                             ? stretchedCrossStart
@@ -890,22 +980,43 @@ namespace PeachPDF.Html.Core.Dom
 
         private void AssignLocations(List<FlexLine> lines)
         {
-            double containerMainStart = _isRow ? _flexBox.ClientLeft : _flexBox.ClientTop;
-            double containerMainEnd   = _isRow ? _flexBox.ClientRight : _flexBox.ClientBottom;
-            double containerCrossStart = _isRow ? _flexBox.ClientTop : _flexBox.ClientLeft;
+            // Each axis's own physical-min/-max coordinates, independent of which end main-start/
+            // cross-start actually is - that is resolved separately below (_mainStartIsAtMax/
+            // _crossStartIsAtMax), the same split ComputeMainOffsets' justify-content: left/right handling
+            // already uses, rather than trying to fold "which coordinate is start" and "which physical
+            // side that is" into one pair of variables the way this method did before it had to know
+            // about more than horizontal-tb's own ltr Left/Top-is-always-start assumption.
+            double mainPhysicalMin = _mainAxisIsPhysicalX ? _flexBox.ClientLeft : _flexBox.ClientTop;
+            double mainPhysicalMax = _mainAxisIsPhysicalX ? _flexBox.ClientRight : _flexBox.ClientBottom;
+            double crossPhysicalMin = _mainAxisIsPhysicalX ? _flexBox.ClientTop : _flexBox.ClientLeft;
+            double crossPhysicalMax = _mainAxisIsPhysicalX ? _flexBox.ClientBottom : _flexBox.ClientRight;
 
             foreach (var line in lines)
             {
                 foreach (var item in line.Items)
                 {
-                    double mainPos = _isReverse
-                        ? containerMainEnd - item.MainOffset - item.FinalMainSize
-                        : containerMainStart + item.MainOffset;
+                    // _effectiveMainStartIsAtMax (ComputeAxisMapping): true when the item nearest
+                    // flow-start (MainOffset 0) sits at the axis's physical-max end - the same field
+                    // ComputeMainOffsets' justify-content: left/right handling uses - so its position must
+                    // be measured backward from mainPhysicalMax instead of forward from mainPhysicalMin.
+                    double mainPos = _effectiveMainStartIsAtMax
+                        ? mainPhysicalMax - item.MainOffset - item.FinalMainSize
+                        : mainPhysicalMin + item.MainOffset;
 
-                    double crossPos = containerCrossStart + line.CrossOffset + item.CrossOffset;
+                    // line.CrossOffset/item.CrossOffset are already logical distances from cross-start to
+                    // the item's own near (cross-start-side) edge (DistributeCrossSpace's own wrap-reverse
+                    // reflection happens in that logical scale). Location.X/Y always names the item's
+                    // physical-min-corner edge, so when cross-start is at the axis's physical-max end
+                    // (_crossStartIsAtMax), that near edge is the item's physical-*far* edge - subtracting
+                    // the item's own cross size, the same way mainPos above subtracts FinalMainSize, is
+                    // what recovers the min-corner coordinate Location.X/Y actually needs.
+                    double itemCrossSize = _mainAxisIsPhysicalX ? item.Box.ActualBoxSizingHeight : item.Box.ActualBoxSizingWidth;
+                    double crossPos = _crossStartIsAtMax
+                        ? crossPhysicalMax - line.CrossOffset - item.CrossOffset - itemCrossSize
+                        : crossPhysicalMin + line.CrossOffset + item.CrossOffset;
 
-                    double targetX = _isRow ? mainPos : crossPos;
-                    double targetY = _isRow ? crossPos : mainPos;
+                    double targetX = _mainAxisIsPhysicalX ? mainPos : crossPos;
+                    double targetY = _mainAxisIsPhysicalX ? crossPos : mainPos;
 
                     double dx = targetX - item.Box.Location.X;
                     double dy = targetY - item.Box.Location.Y;
@@ -990,7 +1101,7 @@ namespace PeachPDF.Html.Core.Dom
 
             double shift;
 
-            if (_isRow)
+            if (_mainAxisIsPhysicalX)
             {
                 shift = LineRelocation.Relocate(container, BuildLineGroups(flowLines));
             }
@@ -1489,32 +1600,62 @@ namespace PeachPDF.Html.Core.Dom
 
         // ─── Axis helpers ─────────────────────────────────────────────────────────
 
+        // Picks whichever of a box's four physical Left/Right/Top/Bottom values sits at a given axis's
+        // "before" side - the one shared 4-way physical-side-selection rule every before/after pair below
+        // needs, parameterized over the value type so it serves both the double-valued Actual* margins and
+        // the CssProperty-valued raw ones (IsMainMarginBeforeAuto's own keyword check). "After" is just the
+        // same rule with the axis's own two pairs swapped, rather than a second, independently-maintained
+        // copy - one bug fix here (e.g. future direction: rtl work, explicitly out of scope today) reaches
+        // every caller instead of five near-identical siblings.
+        private static T PhysicalBefore<T>(bool axisIsPhysicalX, bool beforeIsAtMax, T left, T right, T top, T bottom) =>
+            axisIsPhysicalX
+                ? (beforeIsAtMax ? right : left)
+                : (beforeIsAtMax ? bottom : top);
+
+        // "Before"/"after" here mean whichever physical side main-start/main-end from writing-mode alone
+        // (_mainStartIsAtMax, NOT combined with _isReverse) actually land on - matching how this pair
+        // ignored _isReverse even before this file understood writing-mode (row-reverse's "before" margin
+        // was always ActualMarginLeft, never ActualMarginRight); see ComputeAxisMapping's own remarks.
+        private T MainBefore<T>(T left, T right, T top, T bottom) =>
+            PhysicalBefore(_mainAxisIsPhysicalX, _mainStartIsAtMax, left, right, top, bottom);
+
+        private T MainAfter<T>(T left, T right, T top, T bottom) =>
+            PhysicalBefore(_mainAxisIsPhysicalX, _mainStartIsAtMax, right, left, bottom, top);
+
+        // Same rule, for the cross axis - which is physical X exactly when the main axis is NOT.
+        private T CrossBefore<T>(T left, T right, T top, T bottom) =>
+            PhysicalBefore(!_mainAxisIsPhysicalX, _crossStartIsAtMax, left, right, top, bottom);
+
+        private T CrossAfter<T>(T left, T right, T top, T bottom) =>
+            PhysicalBefore(!_mainAxisIsPhysicalX, _crossStartIsAtMax, right, left, bottom, top);
+
         private double MainMarginBefore(CssBox box) =>
-            _isRow ? box.ActualMarginLeft : box.ActualMarginTop;
+            MainBefore(box.ActualMarginLeft, box.ActualMarginRight, box.ActualMarginTop, box.ActualMarginBottom);
 
         private double MainMarginAfter(CssBox box) =>
-            _isRow ? box.ActualMarginRight : box.ActualMarginBottom;
+            MainAfter(box.ActualMarginLeft, box.ActualMarginRight, box.ActualMarginTop, box.ActualMarginBottom);
 
         private bool IsMainMarginBeforeAuto(CssBox box) =>
-            (_isRow ? box.MarginLeft : box.MarginTop).Value.IsKeyword;
+            MainBefore(box.MarginLeft, box.MarginRight, box.MarginTop, box.MarginBottom).Value.IsKeyword;
 
         private bool IsMainMarginAfterAuto(CssBox box) =>
-            (_isRow ? box.MarginRight : box.MarginBottom).Value.IsKeyword;
+            MainAfter(box.MarginLeft, box.MarginRight, box.MarginTop, box.MarginBottom).Value.IsKeyword;
 
         private double MainPaddingBorder(CssBox box) =>
-            _isRow
+            _mainAxisIsPhysicalX
                 ? box.ActualPaddingLeft + box.ActualPaddingRight + box.ActualBorderLeftWidth  + box.ActualBorderRightWidth
                 : box.ActualPaddingTop  + box.ActualPaddingBottom + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
 
         // Clamps an outer main-axis size against the item's min/max constraints for the main axis
-        // (min/max-width for row, min/max-height for column). Per spec, min wins over max on conflict.
+        // (min/max-width when main lands on physical X, min/max-height when it lands on physical Y). Per
+        // spec, min wins over max on conflict.
         private double ClampMainAxis(CssBox box, double outerSize, double mainSize)
         {
-            var maxRaw = _isRow ? box.MaxWidth : box.MaxHeight;
+            var maxRaw = _mainAxisIsPhysicalX ? box.MaxWidth : box.MaxHeight;
             if (CssValueParser.IsValidLength(maxRaw))
                 outerSize = Math.Min(outerSize, CssValueParser.ParseLength(maxRaw, mainSize, box) + MainPaddingBorder(box));
 
-            var minRaw = _isRow ? box.MinWidth : box.MinHeight;
+            var minRaw = _mainAxisIsPhysicalX ? box.MinWidth : box.MinHeight;
             if (CssValueParser.IsValidLength(minRaw))
                 outerSize = Math.Max(outerSize, CssValueParser.ParseLength(minRaw, mainSize, box) + MainPaddingBorder(box));
 

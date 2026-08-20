@@ -150,6 +150,18 @@ namespace PeachPDF.Html.Core.Dom
         public CssBox? FirstLineStyle { get; set; }
 
         /// <summary>
+        /// This word's natural (pre-rotation) size, cached once by
+        /// <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>'s <c>NaturalWordSize</c> helper - kept
+        /// independent of <see cref="Width"/>/<see cref="Height"/>, which that same layout overwrites with
+        /// the word's physical (rotated) footprint once placed, so a repeated layout pass (a flex/table
+        /// ancestor's provisional sizing, a monolithic relocation to a later page) reads the real natural
+        /// size back instead of re-shaping the text - or, absent this cache, instead of compounding an
+        /// already-rotated value. Null until first computed; never cleared, on the same assumption
+        /// <see cref="CssBox.MeasureWordsSize"/>'s own once-per-layout guard already makes.
+        /// </summary>
+        internal (double Width, double Height)? NaturalSize { get; set; }
+
+        /// <summary>
         /// Height of the rectangle
         /// </summary>
         public double Height
@@ -265,6 +277,22 @@ namespace PeachPDF.Html.Core.Dom
         /// such a split shares one resolved face by construction. <c>false</c> for ordinary words.
         /// </summary>
         public bool UsesPerCodepointFont { get; set; }
+
+        /// <summary>
+        /// This fragment's effective Unicode <c>Vertical_Orientation</c> under <c>text-orientation:
+        /// mixed</c> - true when every codepoint in it classifies as
+        /// <see cref="PeachPDF.Text.VerticalOrientationClass.U"/> or
+        /// <see cref="PeachPDF.Text.VerticalOrientationClass.Tu"/> (upright, painted without rotation),
+        /// false for <see cref="PeachPDF.Text.VerticalOrientationClass.R"/>/
+        /// <see cref="PeachPDF.Text.VerticalOrientationClass.Tr"/> (rotated 90°, this repo's prior
+        /// "everything rotates" behavior). Set in <see cref="CssBox.ParseToWords"/> only for a box under
+        /// a vertical writing mode whose <c>text-orientation</c> actually resolves to <c>mixed</c> and
+        /// whose text mixes both orientations; every fragment in such a split shares one orientation by
+        /// construction. Meaningless - and never consulted - for <c>text-orientation:
+        /// upright</c>/<c>sideways</c>, which apply one box-wide decision instead of a per-fragment one,
+        /// and for a <c>horizontal-tb</c> box, where orientation has no meaning at all.
+        /// </summary>
+        public bool IsUprightOrientation { get; set; }
 
         /// <summary>
         /// When true, this fragment must never be treated as a line-break opportunity even if it would

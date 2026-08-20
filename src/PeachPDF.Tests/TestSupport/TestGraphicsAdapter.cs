@@ -199,6 +199,8 @@ namespace PeachPDF.Tests.TestSupport
         public sealed record DrawImageCall(RImage Image, RRect DestRect);
         public sealed record PushBlendModeCall(RBlendMode Mode);
         public sealed record PopBlendModeCall;
+        public sealed record PushTransformCall(RMatrix Matrix);
+        public sealed record PopTransformCall;
 
         public List<object> Log { get; } = [];
         public List<DrawStringCall> DrawStringCalls { get; } = [];
@@ -242,8 +244,26 @@ namespace PeachPDF.Tests.TestSupport
         private static IReadOnlyList<RPoint> PointsOf(RGraphicsPath path) =>
             path is TestGraphicsPath testPath ? testPath.Points.ToArray() : [];
 
-        public override void PushTransform(RMatrix matrix) { }
-        public override void PopTransform() { }
+        /// <summary>Every matrix pushed, in order - convenience shortcut for tests that only need the
+        /// matrices/count without filtering <see cref="Log"/> themselves (e.g. asserting a rotation
+        /// happened). Also recorded into <see cref="Log"/> (as <see cref="PushTransformCall"/>/
+        /// <see cref="PopTransformCall"/>, matching <see cref="PushClipCall"/>/<see cref="PopClipCall"/>'s
+        /// own dual-tracking shape) so tests can assert push-before-draw-before-pop ordering per this
+        /// repo's own painting-test convention, not just aggregate counts.</summary>
+        public List<RMatrix> PushTransformCalls { get; } = [];
+        public int PushTransformCount => PushTransformCalls.Count;
+        public int PopTransformCount { get; private set; }
+
+        public override void PushTransform(RMatrix matrix)
+        {
+            PushTransformCalls.Add(matrix);
+            Log.Add(new PushTransformCall(matrix));
+        }
+        public override void PopTransform()
+        {
+            PopTransformCount++;
+            Log.Add(new PopTransformCall());
+        }
         public override void PushClip(RRect rect)
         {
             _clipStack.Push(rect);

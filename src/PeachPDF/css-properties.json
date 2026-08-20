@@ -1945,6 +1945,24 @@
       }
     },
     {
+      "name": "text-orientation",
+      "comment": "Parses, cascades, and inherits correctly; consumed by layout and paint under a vertical writing-mode (mixed/upright/sideways all drive real per-character glyph orientation - see the no-vertical-writing-mode-layout accepted gap, issue #547, for what's still out of scope).",
+      "inherited": true,
+      "initialValue": "mixed",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextOrientation",
+        "keywordMap": "Map.TextOrientations",
+        "fallback": "TextOrientation.Mixed"
+      },
+      "html": {
+        "propertyPath": "TextOrientation",
+        "csharpDataType": "CssProperty<TextOrientation>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextOrientation.ToString()"
+      }
+    },
+    {
       "name": "unicode-bidi",
       "inherited": false,
       "initialValue": "normal",

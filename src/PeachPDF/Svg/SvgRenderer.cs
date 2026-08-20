@@ -13,6 +13,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
@@ -297,6 +298,27 @@ namespace PeachPDF.Svg
             public double Px { get; set; }
             public double Py { get; set; }
             public double Advance { get; set; }
+
+            /// <summary>This glyph's own measured size, set once by <see cref="LayoutGlyphs"/> and read
+            /// back by <see cref="PaintUprightGlyph"/>/<see cref="PaintRotatedGlyph"/> instead of
+            /// re-measuring (real glyph shaping) a second time at paint - the same "measure once, reuse"
+            /// discipline <see cref="Advance"/> already follows. Like <see cref="Advance"/>, not
+            /// recomputed if bidi mirroring later rewrites <see cref="Glyph"/> (see
+            /// <c>ApplyBidiReordering</c>'s own remarks) - a mirror pair's two glyphs are practically
+            /// always the same width in any real font.</summary>
+            public RSize Size { get; set; }
+
+            /// <summary>Set by <see cref="LayoutGlyphs"/> - whether this glyph paints upright (unrotated)
+            /// rather than rotated, under a vertical writing mode. Always false when the text root's
+            /// <c>writing-mode</c> is <c>horizontal-tb</c>.</summary>
+            public bool IsUpright { get; set; }
+
+            /// <summary>Set by <see cref="LayoutGlyphs"/> for an upright glyph whose font carries a real
+            /// <c>VORG</c> table (<see cref="RFont.HasVerticalOrigin"/>, issue #775) - the anchor
+            /// correction <see cref="PaintUprightGlyph"/> applies, <c>GetVerticalOriginY(rune) -
+            /// Font.Ascent</c>. Zero for a font without a real <c>VORG</c> table, reproducing the plain
+            /// top-of-cell anchor exactly.</summary>
+            public double OriginYOffset { get; set; }
         }
 
         /// <summary>
@@ -315,9 +337,13 @@ namespace PeachPDF.Svg
 
             if (glyphs.Count > 0)
             {
-                LayoutGlyphs(g, glyphs);
-                ApplyBidiReordering(text, glyphs, overrides);
-                PaintGlyphs(g, document, glyphs, opacity);
+                // writing-mode is resolved once from the <text> root, not per descendant run: unlike
+                // text-orientation (genuinely meaningful per nested <tspan>, see IsUprightGlyph), a
+                // change of pen-advance axis mid-text has no defined real-world meaning to preserve.
+                var isVertical = IsVerticalWritingMode(text.WritingMode);
+                LayoutGlyphs(g, glyphs, isVertical);
+                ApplyBidiReordering(text, glyphs, overrides, isVertical);
+                PaintGlyphs(g, document, glyphs, opacity, isVertical);
             }
 
             // A <textPath> positions itself entirely along its path; render each in document order after
@@ -338,12 +364,14 @@ namespace PeachPDF.Svg
         /// glyphs are repositioned by reflecting the run about its own content span - each glyph's own
         /// <see cref="GlyphInfo.Advance"/> and its own offset from the run's start (the same fix
         /// <c>CssLayoutEngine.ApplyBidiReordering</c> needed for HTML) - rather than reusing the
-        /// logical-order <c>Px</c> <see cref="LayoutGlyphs"/> assigned to whichever glyph used to occupy
+        /// logical-order position <see cref="LayoutGlyphs"/> assigned to whichever glyph used to occupy
         /// that list index: that only produced correct output when every glyph in a run happened to
-        /// share the same advance, and overlapped or gapped otherwise. <see cref="GlyphInfo.Py"/> is
-        /// never reassigned by reordering - it already belongs to its own glyph, not to a list position.
+        /// share the same advance, and overlapped or gapped otherwise. Reorders along whichever axis is
+        /// the pen's own advance axis (<see cref="GlyphInfo.Px"/> for horizontal-tb,
+        /// <see cref="GlyphInfo.Py"/> for a vertical writing mode) - the cross axis is never reassigned
+        /// by reordering, since it already belongs to its own glyph, not to a list position.
         /// </summary>
-        private static void ApplyBidiReordering(SvgTextElement text, List<GlyphInfo> glyphs, List<BidiIsolateOverride> overrides)
+        private static void ApplyBidiReordering(SvgTextElement text, List<GlyphInfo> glyphs, List<BidiIsolateOverride> overrides, bool isVertical)
         {
             var paragraphText = string.Concat(glyphs.Select(gi => gi.Glyph));
             var direction = Map.DirectionModes.GetValueOrDefault(text.Direction, DirectionMode.Ltr) == DirectionMode.Rtl
@@ -355,15 +383,22 @@ namespace PeachPDF.Svg
 
             if (runs.Count == 1 && !runs[0].IsRtl) return;
 
-            var originalPx = glyphs.Select(gi => gi.Px).ToList();
-            var runNewStart = originalPx[0];
+            // Reordering operates along whichever axis LayoutGlyphs actually advanced the pen on - Px
+            // for horizontal-tb, Py for vertical-rl/vertical-lr (see LayoutGlyphs's own remarks); the
+            // cross axis is untouched by reordering either way, same as GlyphInfo.Py is never reassigned
+            // in the horizontal case below.
+            Func<GlyphInfo, double> getPos = isVertical ? gi => gi.Py : gi => gi.Px;
+            Action<GlyphInfo, double> setPos = isVertical ? (gi, v) => gi.Py = v : (gi, v) => gi.Px = v;
+
+            var originalPos = glyphs.Select(getPos).ToList();
+            var runNewStart = originalPos[0];
 
             var reordered = new List<GlyphInfo>(glyphs.Count);
             foreach (var run in runs)
             {
-                var runOldStart = originalPx[run.Start];
+                var runOldStart = originalPos[run.Start];
                 var lastIndexInRun = run.Start + run.Length - 1;
-                var runContentWidth = originalPx[lastIndexInRun] + glyphs[lastIndexInRun].Advance - runOldStart;
+                var runContentWidth = originalPos[lastIndexInRun] + glyphs[lastIndexInRun].Advance - runOldStart;
 
                 if (run.IsRtl)
                 {
@@ -375,10 +410,28 @@ namespace PeachPDF.Svg
                             && BidiMirroring.TryGetMirror(rune.Value, out var mirrored))
                         {
                             gi.Glyph = char.ConvertFromUtf32(mirrored);
+                            // LayoutGlyphs classified IsUpright from the pre-mirror codepoint; a mirror
+                            // pair could in principle have differing Vertical_Orientation classes (most
+                            // real mirror pairs - brackets, parens - don't, but nothing guarantees it),
+                            // so re-classify against what's actually going to be painted.
+                            gi.IsUpright = isVertical && IsUprightGlyph(gi);
+
+                            // Same reasoning for OriginYOffset (issue #775): it was only ever computed
+                            // for a pre-mirror upright glyph against the pre-mirror codepoint, so an
+                            // IsUpright reclassification above needs a fresh VORG lookup against the
+                            // mirrored codepoint too - unlike Advance/Size, which deliberately stay
+                            // stale across mirroring (their own remarks - "a mirror pair's two glyphs
+                            // are practically always the same width"), a newly-upright glyph's offset
+                            // was never computed at all, not just outdated, so leaving it would silently
+                            // drop real VORG positioning for exactly the reordering case this file
+                            // already re-derives IsUpright to handle.
+                            gi.OriginYOffset = gi.IsUpright && gi.Font.HasVerticalOrigin
+                                ? gi.Font.GetVerticalOriginY(new System.Text.Rune(mirrored)) - gi.Font.Ascent
+                                : 0;
                         }
 
-                        var offsetFromRunStart = originalPx[idx] - runOldStart;
-                        gi.Px = runNewStart + runContentWidth - (offsetFromRunStart + gi.Advance);
+                        var offsetFromRunStart = originalPos[idx] - runOldStart;
+                        setPos(gi, runNewStart + runContentWidth - (offsetFromRunStart + gi.Advance));
                         reordered.Add(gi);
                     }
                 }
@@ -388,7 +441,7 @@ namespace PeachPDF.Svg
                     {
                         var idx = run.Start + k;
                         var gi = glyphs[idx];
-                        gi.Px = runNewStart + (originalPx[idx] - runOldStart);
+                        setPos(gi, runNewStart + (originalPos[idx] - runOldStart));
                         reordered.Add(gi);
                     }
                 }
@@ -479,11 +532,16 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
-        /// Lays out the flattened character stream on the straight baseline: advances a pen, applying each
-        /// character's absolute x/y (starting a new text chunk) and relative dx/dy, then shifts each chunk by
-        /// its start run's <c>text-anchor</c> over the chunk's own extent.
+        /// Lays out the flattened character stream: advances a pen along the writing mode's own inline
+        /// (pen-advance) axis - X for <c>horizontal-tb</c>, Y for <c>vertical-rl</c>/<c>vertical-lr</c> -
+        /// applying each character's absolute x/y on that axis (starting a new text chunk) and relative
+        /// dx/dy on both axes, then shifts each chunk by its start run's <c>text-anchor</c> over the
+        /// chunk's own extent along that same axis. <paramref name="isVertical"/> is resolved once from
+        /// the <c>&lt;text&gt;</c> root (see <see cref="RenderText"/>), not per glyph: unlike
+        /// <c>text-orientation</c> (see <see cref="IsUprightGlyph"/>), the pen-advance axis itself has no
+        /// defined meaning changing mid-text.
         /// </summary>
-        private static void LayoutGlyphs(RGraphics g, List<GlyphInfo> glyphs)
+        private static void LayoutGlyphs(RGraphics g, List<GlyphInfo> glyphs, bool isVertical)
         {
             double penX = 0, penY = 0;
             var chunkStarts = new List<int> { 0 };
@@ -491,24 +549,87 @@ namespace PeachPDF.Svg
             for (var i = 0; i < glyphs.Count; i++)
             {
                 var gi = glyphs[i];
+                gi.IsUpright = isVertical && IsUprightGlyph(gi);
 
-                if (gi.X is { } gx)
+                if (isVertical)
                 {
-                    penX = gx;
-                    if (i > 0)
-                        chunkStarts.Add(i);
+                    // The inline (chunk-advance) axis is Y; X is the cross axis (glyph position across
+                    // the column), the vertical-writing-mode counterpart of horizontal-tb's own roles
+                    // below.
+                    if (gi.Y is { } gy)
+                    {
+                        penY = gy;
+                        if (i > 0)
+                            chunkStarts.Add(i);
+                    }
+                    if (gi.X is { } gx)
+                        penX = gx;
+
+                    penX += gi.Dx ?? 0;
+                    penY += gi.Dy ?? 0;
+
+                    gi.Px = penX;
+                    gi.Py = penY;
+
+                    // Always measured (not just for the rotated branch below): PaintUprightGlyph's own
+                    // cross-axis centering needs this same width too, cached on GlyphInfo.Size so paint
+                    // reads it back instead of re-measuring (real glyph shaping) a second time - see
+                    // GlyphInfo.Size's own remarks.
+                    var measured = g.MeasureString(gi.Glyph, gi.Font);
+                    gi.Size = measured;
+
+                    // An upright glyph's down-the-column advance is its real vmtx advance height when
+                    // its font carries real OpenType vertical metrics (issue #770), same as
+                    // CssLayoutEngine.NaturalWordSize's own upright branch. Otherwise it falls back to
+                    // the font's own line height, not its measured width (RGraphics.DrawString always
+                    // renders a glyph across the font's full line-height span regardless of that glyph's
+                    // own narrower advance width - see NaturalWordSize's remarks for the visual-overlap
+                    // failure mode this avoids). A rotated glyph's down-the-column footprint is its own
+                    // natural (pre-rotation) width, the same swap FragmentPainter.Text.cs's
+                    // SidewaysRotation performs for HTML - untouched by real vertical metrics, since
+                    // rotated/sideways orientation is spec-correct using rotated horizontal metrics.
+                    if (gi.IsUpright)
+                    {
+                        // HasVerticalMetrics (vhea/vmtx, advance) and HasVerticalOrigin (a real VORG
+                        // table specifically, issue #775) are independent capabilities - a CFF font can
+                        // carry a real VORG table without vhea/vmtx (VORG doesn't require them), so the
+                        // origin check must not be nested inside the metrics one, matching
+                        // FragmentPainter.Text.cs's PaintUprightVerticalRun (HTML) exactly; nesting it
+                        // here previously meant such a font's real per-glyph origin was silently dropped
+                        // whenever it lacked vhea/vmtx.
+                        var rune = System.Text.Rune.GetRuneAt(gi.Glyph, 0);
+                        gi.Advance = gi.Font.HasVerticalMetrics ? gi.Font.GetVerticalAdvance(rune) : gi.Font.Height;
+                        if (gi.Font.HasVerticalOrigin)
+                            gi.OriginYOffset = gi.Font.GetVerticalOriginY(rune) - gi.Font.Ascent;
+                    }
+                    else
+                    {
+                        gi.Advance = measured.Width;
+                    }
+
+                    penY += gi.Advance;
                 }
-                if (gi.Y is { } gy)
-                    penY = gy;
+                else
+                {
+                    if (gi.X is { } gx)
+                    {
+                        penX = gx;
+                        if (i > 0)
+                            chunkStarts.Add(i);
+                    }
+                    if (gi.Y is { } gy)
+                        penY = gy;
 
-                penX += gi.Dx ?? 0;
-                penY += gi.Dy ?? 0;
+                    penX += gi.Dx ?? 0;
+                    penY += gi.Dy ?? 0;
 
-                gi.Px = penX;
-                gi.Py = penY;
-                gi.Advance = g.MeasureString(gi.Glyph, gi.Font).Width;
+                    gi.Px = penX;
+                    gi.Py = penY;
+                    gi.Size = g.MeasureString(gi.Glyph, gi.Font);
+                    gi.Advance = gi.Size.Width;
 
-                penX += gi.Advance;
+                    penX += gi.Advance;
+                }
             }
 
             for (var c = 0; c < chunkStarts.Count; c++)
@@ -520,20 +641,60 @@ namespace PeachPDF.Svg
                 if (anchor == SvgTextAnchor.Start)
                     continue;
 
-                var extent = glyphs[end - 1].Px + glyphs[end - 1].Advance - glyphs[start].Px;
-                var shift = anchor == SvgTextAnchor.Middle ? -extent / 2 : -extent;
+                if (isVertical)
+                {
+                    var extent = glyphs[end - 1].Py + glyphs[end - 1].Advance - glyphs[start].Py;
+                    var shift = anchor == SvgTextAnchor.Middle ? -extent / 2 : -extent;
 
-                for (var i = start; i < end; i++)
-                    glyphs[i].Px += shift;
+                    for (var i = start; i < end; i++)
+                        glyphs[i].Py += shift;
+                }
+                else
+                {
+                    var extent = glyphs[end - 1].Px + glyphs[end - 1].Advance - glyphs[start].Px;
+                    var shift = anchor == SvgTextAnchor.Middle ? -extent / 2 : -extent;
+
+                    for (var i = start; i < end; i++)
+                        glyphs[i].Px += shift;
+                }
             }
         }
 
+        /// <summary>Resolves the pen-advance/inline axis for a <c>&lt;text&gt;</c> root's <c>writing-mode</c> -
+        /// true for <c>vertical-rl</c>/<c>vertical-lr</c>, false otherwise (including <c>sideways-rl</c>/
+        /// <c>sideways-lr</c> and any unrecognized value, matching the HTML pipeline's own scope).</summary>
+        private static bool IsVerticalWritingMode(WritingMode writingMode) => writingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
+
         /// <summary>
-        /// Paints the laid-out character stream: a maximal contiguous group of same-run, unrotated,
-        /// in-flow characters is painted as one <see cref="RGraphics.DrawString"/> (kept selectable); a
-        /// rotated character is painted on its own, rotated about its own position.
+        /// Whether one glyph paints upright (unrotated) under a vertical writing mode: <c>upright</c>/
+        /// <c>sideways</c> force one answer for every glyph on <paramref name="gi"/>'s own run (each
+        /// nested <c>&lt;tspan&gt;</c> can genuinely override <c>text-orientation</c>, unlike
+        /// <c>writing-mode</c> - see <see cref="LayoutGlyphs"/>'s own remarks); <c>mixed</c> (the
+        /// default) classifies the glyph's own single codepoint by Unicode's Vertical_Orientation
+        /// property, the same <see cref="VerticalOrientationTable"/> the HTML pipeline shares.
         /// </summary>
-        private static void PaintGlyphs(RGraphics g, SvgDocument document, List<GlyphInfo> glyphs, double opacity)
+        private static bool IsUprightGlyph(GlyphInfo gi) => gi.Run.TextOrientation switch
+        {
+            TextOrientation.Upright => true,
+            TextOrientation.Sideways => false,
+            _ => System.Text.Rune.DecodeFromUtf16(gi.Glyph, out var rune, out _) == System.Buffers.OperationStatus.Done
+                 && VerticalOrientationTable.IsEffectivelyUpright(rune)
+        };
+
+        /// <summary>
+        /// Paints the laid-out character stream. Under <c>horizontal-tb</c>: a maximal contiguous group
+        /// of same-run, unrotated, in-flow characters is painted as one <see cref="RGraphics.DrawString"/>
+        /// (kept selectable); an explicitly-rotated character is painted on its own, rotated about its
+        /// own position (<see cref="PaintRotatedGlyph"/>). Under a vertical writing mode, every glyph
+        /// paints individually - never batched into one string - since consecutive upright glyphs stack
+        /// down the column rather than running side by side (<see cref="PaintUprightGlyph"/>), and a
+        /// glyph classified rotated (or forced <c>sideways</c>) reuses the identical
+        /// <see cref="PaintRotatedGlyph"/> mechanism explicit <c>rotate=""</c> already uses, just at a
+        /// default 90° instead of an author-specified angle - an explicit <c>rotate=""</c> still wins
+        /// over the orientation-driven default when both apply, matching how <c>rotate=""</c> already
+        /// overrides in-flow layout today.
+        /// </summary>
+        private static void PaintGlyphs(RGraphics g, SvgDocument document, List<GlyphInfo> glyphs, double opacity, bool isVertical)
         {
             var i = 0;
             while (i < glyphs.Count)
@@ -541,18 +702,26 @@ namespace PeachPDF.Svg
                 var start = glyphs[i];
                 var font = start.Font;
 
-                if ((start.Rotate ?? 0) != 0)
+                // Under horizontal-tb, rotate="0" is visually identical to no rotate at all, so it's
+                // still left eligible for the batching path below (an unnecessary per-glyph transform
+                // push/pop would only cost efficiency/selectability for a no-op angle). Under a vertical
+                // writing mode, though, 0 is a meaningful explicit override distinct from "unset" - it's
+                // the only way an author can force a rotated-classified glyph to stay unrotated - so any
+                // explicit value, including 0, has to take this branch there.
+                var explicitRotateOverridesOrientation = isVertical ? start.Rotate.HasValue : (start.Rotate ?? 0) != 0;
+                if (explicitRotateOverridesOrientation)
                 {
-                    var glyphSize = g.MeasureString(start.Glyph, font);
-                    var radians = start.Rotate!.Value * (Math.PI / 180.0);
-                    var cos = Math.Cos(radians);
-                    var sin = Math.Sin(radians);
-                    var toOrigin = new RMatrix(1, 0, 0, 1, -start.Px, -start.Py);
-                    var rotate = new RMatrix(cos, sin, -sin, cos, 0, 0);
-                    var fromOrigin = new RMatrix(1, 0, 0, 1, start.Px, start.Py);
-                    g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
-                    PaintTextGlyphs(g, document, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity);
-                    g.PopTransform();
+                    PaintRotatedGlyph(g, document, start, font, start.Rotate!.Value, opacity);
+                    i++;
+                    continue;
+                }
+
+                if (isVertical)
+                {
+                    if (start.IsUpright)
+                        PaintUprightGlyph(g, document, start, font, opacity);
+                    else
+                        PaintRotatedGlyph(g, document, start, font, 90.0, opacity);
                     i++;
                     continue;
                 }
@@ -572,6 +741,90 @@ namespace PeachPDF.Svg
                 var text = builder.ToString();
                 var size = g.MeasureString(text, font);
                 PaintTextGlyphs(g, document, start.Run, text, font, start.Px, start.Py - font.Ascent, size, opacity * start.Opacity);
+            }
+        }
+
+        /// <summary>
+        /// Paints one glyph rotated <paramref name="degrees"/> clockwise about its own <c>(Px, Py)</c>
+        /// pen position - the mechanism explicit <c>rotate=""</c> has always used (SVG 1.1 §10.7),
+        /// reused unchanged for the automatic rotation a <c>text-orientation: mixed</c>-classified
+        /// rotated glyph (or a <c>sideways</c>-forced one) gets under a vertical writing mode, at a fixed
+        /// 90° instead of an author-specified angle. The positive-degrees-is-clockwise sign convention
+        /// matches <c>FragmentPainter.Text.cs</c>'s <c>SidewaysRotation</c> (HTML's equivalent rotation)
+        /// so a 90° rotation makes horizontal-reading text run top-to-bottom, the correct sense for
+        /// <c>vertical-rl</c>/<c>vertical-lr</c>.
+        /// </summary>
+        private static void PaintRotatedGlyph(RGraphics g, SvgDocument document, GlyphInfo start, RFont font, double degrees, double opacity)
+        {
+            var glyphSize = start.Size;
+            var radians = degrees * (Math.PI / 180.0);
+            var cos = Math.Cos(radians);
+            var sin = Math.Sin(radians);
+            var toOrigin = new RMatrix(1, 0, 0, 1, -start.Px, -start.Py);
+            var rotate = new RMatrix(cos, sin, -sin, cos, 0, 0);
+            var fromOrigin = new RMatrix(1, 0, 0, 1, start.Px, start.Py);
+            g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
+            PaintTextGlyphs(g, document, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity);
+            g.PopTransform();
+        }
+
+        /// <summary>
+        /// Paints one upright (unrotated) glyph under a vertical writing mode, centered across the
+        /// column (<see cref="GlyphInfo.Px"/>'s own cross-axis position) rather than left-aligned to it -
+        /// matching CJK vertical typesetting convention, the same choice
+        /// <c>FragmentPainter.Text.cs</c>'s <c>PaintUprightVerticalRun</c> makes for HTML.
+        /// <see cref="GlyphInfo.Py"/> is this glyph's own down-the-column box top (not a baseline - see
+        /// <see cref="LayoutGlyphs"/>'s remarks on how the pen assigns it before advancing), so it needs
+        /// no ascent adjustment the way the horizontal/rotated paths' baseline-relative <c>Py</c> does.
+        ///
+        /// A real <c>vmtx</c> advance is legitimately, routinely *smaller* than the font's line height
+        /// (see <c>FragmentPainter.Text.cs</c>'s <c>PaintUprightVerticalRun</c> remarks, the identical
+        /// HTML-side situation) - once <see cref="GlyphInfo.Advance"/> reflects real metrics,
+        /// <see cref="PaintTextGlyphs"/>'s own "paint a full line-height-tall glyph" behavior would bleed
+        /// into whatever paints next down the column unless this glyph's paint is confined to its own
+        /// reserved cell, the same clip-per-cell fix that file applies.
+        ///
+        /// When the font also carries a real <c>VORG</c> table (<see cref="RFont.HasVerticalOrigin"/> -
+        /// issue #775), <see cref="GlyphInfo.OriginYOffset"/> (computed in <see cref="LayoutGlyphs"/>,
+        /// same derivation as <c>FragmentPainter.Text.cs</c>'s <c>PaintUprightVerticalRun</c> - see its
+        /// remarks) nudges the anchor away from the plain top-of-cell position. Added, not subtracted -
+        /// matching that file's corrected sign, even though the pre-existing convention here for
+        /// baseline-relative paths (<see cref="PaintRotatedGlyph"/>) subtracts <c>font.Ascent</c>; this
+        /// path's anchor is a top-of-cell position, not a baseline, so the two aren't the same kind of
+        /// offset and shouldn't share a sign by default.
+        ///
+        /// The clip window is deliberately **not** shifted along with the anchor - see
+        /// <c>PaintUprightVerticalRun</c>'s own remarks on why (the unshifted per-cell reservation, not
+        /// the origin-adjusted anchor, is what actually prevents bleed into neighboring cells; a
+        /// self-consistent <c>VORG</c> table keeps ink inside it by construction). The clip is pushed
+        /// whenever either <see cref="RFont.HasVerticalMetrics"/> or <see cref="RFont.HasVerticalOrigin"/>
+        /// is true, not just the former: a VORG-shifted anchor can push the painted span past the
+        /// reserved cell even when <see cref="GlyphInfo.Advance"/> is the line-height fallback (its "the
+        /// advance already equals the full painted span" guarantee assumes an unshifted anchor).
+        /// </summary>
+        private static void PaintUprightGlyph(RGraphics g, SvgDocument document, GlyphInfo start, RFont font, double opacity)
+        {
+            var glyphSize = start.Size;
+            var drawX = start.Px - glyphSize.Width / 2;
+            var y = start.Py + start.OriginYOffset;
+
+            if (font.HasVerticalMetrics || font.HasVerticalOrigin)
+            {
+                // Only the block (Y) axis needs bounding - the cross axis has no overlap risk to guard
+                // against, so this just needs to be generous enough to never itself clip real glyph ink.
+                // An actually-unbounded RRect (double.MinValue/MaxValue) breaks under the viewBox-to-
+                // viewport transform PushTransform/RenderInto already has active here (the extreme
+                // coordinates overflow through that matrix multiply), which silently produced an empty
+                // effective clip and made every upright glyph invisible - a finite, merely-generous margin
+                // avoids that without reintroducing any real cross-axis clipping risk.
+                var crossAxisMargin = Math.Max(glyphSize.Width, font.Size) * 8;
+                g.PushClip(new RRect(start.Px - crossAxisMargin, start.Py, crossAxisMargin * 2, start.Advance));
+                PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, y, glyphSize, opacity * start.Opacity);
+                g.PopClip();
+            }
+            else
+            {
+                PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, y, glyphSize, opacity * start.Opacity);
             }
         }
 
@@ -672,7 +925,11 @@ namespace PeachPDF.Svg
             if (glyphs.Count == 0)
                 return;
 
-            ApplyBidiReordering(run, glyphs, overrides);
+            // A <textPath> always flows its glyphs along the path's own tangent, regardless of
+            // writing-mode - there is no vertical variant of this layout (out of scope, matching real
+            // UA behavior: a vertical <text> containing a <textPath> still lays that descendant out
+            // horizontally along the path).
+            ApplyBidiReordering(run, glyphs, overrides, isVertical: false);
 
             double runWidth = 0;
             foreach (var gi in glyphs)
@@ -994,14 +1251,33 @@ namespace PeachPDF.Svg
 
             if (glyphs.Count > 0)
             {
-                LayoutGlyphs(g, glyphs);
-                ApplyBidiReordering(text, glyphs, overrides);
+                var isVertical = IsVerticalWritingMode(text.WritingMode);
+                LayoutGlyphs(g, glyphs, isVertical);
+                ApplyBidiReordering(text, glyphs, overrides, isVertical);
                 foreach (var gi in glyphs)
                 {
-                    var size = g.MeasureString(gi.Glyph, gi.Font);
-                    var box = new RRect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height);
-                    if ((gi.Rotate ?? 0) != 0)
-                        box = RotateRectBounds(box, gi.Rotate!.Value, gi.Px, gi.Py);
+                    var size = gi.Size;
+
+                    // Mirrors PaintGlyphs's own axis-aware explicit-rotate check exactly - see its
+                    // remarks for why rotate="0" only counts as an override under a vertical writing
+                    // mode.
+                    var explicitRotateOverridesOrientation = isVertical ? gi.Rotate.HasValue : (gi.Rotate ?? 0) != 0;
+                    if (explicitRotateOverridesOrientation)
+                    {
+                        var explicitDegrees = gi.Rotate!.Value;
+                        var rotated = new RRect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height);
+                        result = result is { } r1 ? UnionRects(r1, RotateRectBounds(rotated, explicitDegrees, gi.Px, gi.Py)) : RotateRectBounds(rotated, explicitDegrees, gi.Px, gi.Py);
+                        continue;
+                    }
+
+                    // Matches PaintUprightGlyph/PaintRotatedGlyph's own box shapes exactly - see their
+                    // remarks for why Py needs no ascent adjustment in the upright case.
+                    var box = isVertical && gi.IsUpright
+                        ? new RRect(gi.Px - size.Width / 2, gi.Py, size.Width, gi.Font.Height)
+                        : isVertical
+                            ? RotateRectBounds(new RRect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height), 90.0, gi.Px, gi.Py)
+                            : new RRect(gi.Px, gi.Py - gi.Font.Ascent, size.Width, size.Height);
+
                     result = result is { } r ? UnionRects(r, box) : box;
                 }
             }

@@ -19,10 +19,12 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -419,6 +421,354 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Real <c>vertical-rl</c>/<c>vertical-lr</c> line flow for a block box holding only inline
+        /// content: lines ("columns") stack along the block axis, text within a line runs along the
+        /// inline axis, using <see cref="WritingModeFrame"/> to convert the logical placement to physical
+        /// coordinates. <see cref="FlowBox"/>'s counterpart, written fresh rather than made
+        /// writing-mode-aware in place, because a vertical box is
+        /// <see cref="MonolithicContent.IsUnresumableOrthogonalFlow">monolithic w.r.t. its parent's
+        /// fragmentation</see> and so never needs <see cref="CssLineBoxCoordinates"/>'s fragmentation-resume
+        /// machinery (word ordinals, a fragmentainer, an in-progress break) at all - this lays out the
+        /// whole box in one pass, always.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately scoped down for this milestone (see the no-vertical-writing-mode-layout accepted
+        /// gap): plain text and simple nested inline boxes only (no leading/trailing inline spacing from
+        /// their own border/padding/margin), no floats, no absolute positioning, no hyphenation, no bidi
+        /// reordering, no <c>text-align</c>, no <c>box-decoration-break: clone</c>. Glyphs are painted
+        /// rotated 90° regardless of <c>text-orientation</c> (the "everything rotates" interim
+        /// simplification - real per-character upright/rotated splitting is a later phase), so each word's
+        /// own natural (horizontal) <see cref="CssRect.Width"/>/<see cref="CssRect.Height"/> already are
+        /// its inline-size/block-size; only their arrangement, not their own measurement, needs to change
+        /// here. Width auto-sizing (fill-available, unaware of writing-mode) is unchanged; only auto
+        /// height becomes genuinely content-driven, mirroring <see cref="CreateLineBoxes"/>'s own auto-height
+        /// growth.
+        /// </remarks>
+        internal static async ValueTask CreateVerticalLineBoxes(RGraphics g, CssBox blockBox)
+        {
+            blockBox.LineBoxes.Clear();
+
+            var words = new List<CssRect>();
+            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words);
+
+            var clientTop = blockBox.ClientTop;
+            var clientLeft = blockBox.ClientLeft;
+            var clientRight = blockBox.ClientRight;
+
+            // The inline axis's own extent (physical height, for vertical-rl/vertical-lr) is what content
+            // wraps against. IsHeightCalculated is never usable here - it is only ever set true by
+            // ApplyHeight, in the epilogue, well after this runs, for an explicit height exactly as much
+            // as an auto one - so a definite height has to be resolved directly from the box's own CSS
+            // Height string instead. An auto height has nothing else to consult (height is resolved
+            // bottom-up), so it falls back to one full page's own depth - deliberately NOT "whatever
+            // remains between this box's own (document-continuous, not page-relative) ClientTop and the
+            // bottom of whichever page it currently lands on": that would make an auto-height box near the
+            // bottom of a page self-limit to a sliver of remaining space instead of the fresh page's worth
+            // the monolithic-content mover (CssBox.PerformLayoutEpilogue) would otherwise relocate it to.
+            // A position-independent fallback keeps sizing consistent regardless of where the box lands,
+            // so that mover's own "does this fit here, else move to the next page" check still gets a
+            // real chance to fire.
+            var heightIsAuto = !CssValueParser.IsValidLength(blockBox.Height);
+            var wrapLimit = heightIsAuto
+                ? Math.Max(1, blockBox.HtmlContainer?.PageSize.Height ?? 1)
+                : Math.Max(1, DefiniteContentHeight(blockBox));
+
+            var frame = WritingModeFrame.ForContentBox(
+                clientLeft, clientTop, clientRight, clientTop + wrapLimit, blockBox.WritingMode.Value, blockBox.Direction.Value);
+
+            // Auto width (block axis) shrinks to the content's own extent, the direct counterpart of
+            // auto height (inline axis) shrinking above - CSS Writing Modes doesn't special-case either
+            // axis, so a vertical box's auto block-size shrinking to content is exactly as spec-required
+            // as horizontal-tb's auto height already shrinking is (issue #761). Block-start (physical
+            // Right for vertical-rl, physical Left for vertical-lr) is the edge every word position below
+            // is already anchored to (frame.ToPhysical's own BlockStartIsRight branch), so it stays fixed
+            // exactly the way ClientTop stays fixed for auto height, and only the block-end edge moves -
+            // Location.X for vertical-rl (mirroring ActualBottom's own "move the end edge" shape flipped
+            // onto the other physical axis), ActualRight for vertical-lr (identical shape to the height
+            // case, just on X). Reads frame.BlockStartIsRight rather than re-deriving
+            // LogicalPropertyResolver.BlockStart a second time for the same box.
+            var widthIsAuto = !CssValueParser.IsValidLength(blockBox.Width);
+
+            if (words.Count == 0)
+            {
+                if (heightIsAuto) blockBox.ActualBottom = clientTop;
+                if (widthIsAuto) ShrinkAutoWidthTo(blockBox, frame, 0);
+                return;
+            }
+
+            var line = new CssLineBox(blockBox);
+            double inlineOffset = 0;
+            double blockOffset = 0;
+            double lineThickness = 0;
+            double maxInlineExtentUsed = 0;
+
+            void StartNewLine()
+            {
+                maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
+                blockOffset += lineThickness;
+                inlineOffset = 0;
+                lineThickness = 0;
+                line = new CssLineBox(blockBox);
+            }
+
+            foreach (var word in words)
+            {
+                if (word.IsLineBreak)
+                {
+                    StartNewLine();
+                    continue;
+                }
+
+                // Re-measured fresh, never read off word.Width/Height directly: this box's own content
+                // layout can run more than once (a flex/table/shrink-to-fit ancestor's provisional sizing
+                // pass, a monolithic relocation to a later page) and the geometry commit below overwrites
+                // word.Width/Height with the *physical* (rotated) footprint - trusting them as "natural"
+                // on a second entry would compound that rotation instead of redoing it from source.
+                var (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
+                var wordRectInline = naturalWidth; // the word's own glyph footprint, no trailing space
+                var wordAdvance = naturalWidth + word.ActualWordSpacing; // + spacing, what the next word's placement clears
+                var wordBlock = naturalHeight; // natural line-height - the line's own cross-axis thickness
+
+                // A fragment split from what was one word - a per-codepoint-font run, or (since this
+                // phase) a Vertical_Orientation run - must never itself be treated as a wrap opportunity,
+                // the same guard FlowBox's own wrap check already applies. Without it, a split landing
+                // right at the wrap boundary could visibly break one word across two columns.
+                if (!word.SuppressWrapBefore && inlineOffset > 0 && inlineOffset + wordAdvance > wrapLimit)
+                    StartNewLine();
+
+                var physical = frame.ToPhysical(new RRect(inlineOffset, blockOffset, wordRectInline, wordBlock));
+                word.Left = physical.X;
+                word.Top = physical.Y;
+                word.Width = physical.Width;
+                word.Height = physical.Height;
+                line.ReportExistanceOf(word);
+
+                inlineOffset += wordAdvance;
+                lineThickness = Math.Max(lineThickness, wordBlock);
+            }
+
+            maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
+
+            foreach (var lineBox in blockBox.LineBoxes)
+            {
+                BubbleRectangles(blockBox, lineBox);
+                lineBox.AssignRectanglesToBoxes();
+            }
+
+            if (heightIsAuto)
+            {
+                blockBox.ActualBottom = clientTop + Math.Min(maxInlineExtentUsed, wrapLimit)
+                    + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
+            }
+
+            if (widthIsAuto)
+            {
+                // blockOffset only folds in a *finished* line's own thickness (StartNewLine's job) - the
+                // last line's is still sitting in lineThickness, unmoved, when the loop above ends.
+                var contentBlockExtent = blockOffset + lineThickness;
+                ShrinkAutoWidthTo(blockBox, frame, contentBlockExtent);
+            }
+        }
+
+        /// <summary>
+        /// Shrinks <paramref name="blockBox"/>'s auto width to <paramref name="contentBlockExtent"/> (the
+        /// content's own block-axis extent under a vertical writing mode - see the caller's own remarks on
+        /// why block-start stays fixed and only the block-end edge moves). Reuses <paramref name="frame"/>'s
+        /// own <see cref="WritingModeFrame.ToPhysical(double, double)"/>/<see cref="WritingModeFrame.BlockStartIsRight"/>
+        /// rather than re-deriving the rl/lr edge arithmetic a second time - the exact edge every word
+        /// position was already placed against. <see cref="CssBox.ActualRight"/> is a <em>written</em>
+        /// property whose getter is <c>Location.X + Size.Width</c> - moving <see cref="CssBox.Location"/>
+        /// alone (the vertical-rl branch) would silently drag ActualRight along with it, since Size.Width
+        /// doesn't change on its own, so the true (pre-shrink) right edge has to be captured and re-applied
+        /// *after* Location moves, which re-derives Size.Width against the new Location.X through the
+        /// normal setter rather than leaving it stale.
+        /// </summary>
+        private static void ShrinkAutoWidthTo(CssBox blockBox, WritingModeFrame frame, double contentBlockExtent)
+        {
+            // The content-box edge the block axis has reached, in the same physical coordinate
+            // ToPhysical already anchors every word to - independent of which side is block-start.
+            var contentFarEdgeX = frame.ToPhysical(0, contentBlockExtent).X;
+
+            if (frame.BlockStartIsRight)
+            {
+                var trueRight = blockBox.ActualRight;
+                blockBox.Location = blockBox.Location with
+                {
+                    X = contentFarEdgeX - blockBox.ActualPaddingLeft - blockBox.ActualBorderLeftWidth
+                };
+                blockBox.ActualRight = trueRight;
+            }
+            else
+            {
+                blockBox.ActualRight = contentFarEdgeX
+                    + blockBox.ActualPaddingRight + blockBox.ActualBorderRightWidth;
+            }
+        }
+
+        /// <summary>
+        /// A word's natural (horizontal, pre-rotation) size, re-derived the same way
+        /// <see cref="CssBox.MeasureWordsSize"/> itself computes it - deliberately not read off
+        /// <see cref="CssRect.Width"/>/<see cref="CssRect.Height"/>, which <see cref="CreateVerticalLineBoxes"/>
+        /// overwrites with the word's *physical* (rotated) footprint once placed.
+        /// </summary>
+        private static (double Width, double Height) NaturalWordSize(RGraphics g, CssRect word)
+        {
+            // Cached once per word (see CssRect.NaturalSize's own remarks): both to avoid re-shaping the
+            // same text on every repeated layout pass, and because an image/leader word's Width/Height -
+            // read as-is below, the same as MeasureWordsSize itself does for them - are only trustworthy
+            // as "natural" the first time this runs, before this box's own placement loop below has had a
+            // chance to overwrite them with the physical (rotated) footprint.
+            if (word.NaturalSize is { } cached) return cached;
+
+            (double Width, double Height) natural;
+            if (word.IsImage || word is CssRectLeader)
+            {
+                natural = (word.Width, word.Height);
+            }
+            else
+            {
+                // Mirrors FragmentPainter.Text.cs's PaintWords isUpright decision exactly: upright/
+                // sideways force one answer for every word on the box; mixed (the default) defers to
+                // the word's own per-fragment IsUprightOrientation, set at word-split time (CssBox
+                // .AddWord/EmitPerCodepointFragments). Branching on word.IsUprightOrientation alone -
+                // which CssBox only ever sets true under mixed orientation - would size an
+                // upright-forced box's words with the rotated-run formula below while paint always
+                // takes the per-character upright path for that box, reserving the wrong extent for
+                // what's actually painted (the same class of layout/paint desync issue #770's
+                // per-character advance fix addressed on the other axis).
+                var isUpright = word.OwnerBox.TextOrientation.Value switch
+                {
+                    TextOrientation.Upright => true,
+                    TextOrientation.Sideways => false,
+                    _ => word.IsUprightOrientation
+                };
+
+                if (isUpright)
+                {
+                    // An upright run paints each character individually, stacked down the column
+                    // (FragmentPainter.Text.cs's PaintUprightVerticalRun) rather than as one natural
+                    // horizontal glyph run reoriented as a whole (the rotated case below) - so the
+                    // down-the-column extent reserved for it here has to match what paint actually steps
+                    // by. When the resolved font carries real OpenType vertical metrics (vhea/vmtx -
+                    // RFont.HasVerticalMetrics), that step is each character's own real vmtx advance
+                    // height (issue #770). Otherwise it falls back to the font's own line height
+                    // (ascender + descender), not each character's individually-measured horizontal
+                    // advance width: RGraphics.DrawString always renders a glyph across the font's full
+                    // line-height span from its anchor (XGraphicsPdfRenderer.DrawString's
+                    // XLineAlignment.Near branch adds cyAscent above the baseline and leaves cyDescent
+                    // below it - a fixed span, independent of the specific glyph's own ink), while a
+                    // codepoint's own hmtx advance width can be narrower (a real subsetted CJK font
+                    // measured ~9pt advance against a ~13pt line height at the same size) - stepping by
+                    // the narrower value then visibly overlapped each character with the next, and
+                    // overran into whatever followed once the run finished. This fallback is the closest
+                    // available per-character constant that can never under-advance for the large
+                    // majority of fonts, which carry no real vertical metrics at all.
+                    var styleSource = word.FirstLineStyle ?? word.OwnerBox;
+                    var font = CssBox.ResolveWordFont(word, styleSource);
+                    var text = word.Text ?? "";
+                    double width;
+
+                    if (font.HasVerticalMetrics)
+                    {
+                        width = 0;
+                        foreach (var rune in text.EnumerateRunes())
+                            width += font.GetVerticalAdvance(rune) + styleSource.ActualLetterSpacing;
+                    }
+                    else
+                    {
+                        // A plain rune count, not MeasureUprightRunCharacters: the per-character advance
+                        // here is a flat font.Height step, independent of each character's own measured
+                        // size, so running every character through real glyph shaping here just to
+                        // discard the result would be pure waste - MeasureUprightRunCharacters stays
+                        // reserved for PaintUprightVerticalRun, which does need each character's own
+                        // width for centering.
+                        var runeCount = text.EnumerateRunes().Count();
+                        width = runeCount * (font.Height + styleSource.ActualLetterSpacing);
+                    }
+
+                    // The cross-axis (column-thickness) reservation has to come from this same resolved
+                    // font, not styleSource.ActualFont: PaintUprightVerticalRun centers each character
+                    // using widths measured through this exact font (FragmentPainter.Text.cs resolves the
+                    // identical CssBox.ResolveWordFont(word, styleSource) before calling it), and a
+                    // per-codepoint fallback face (UsesPerCodepointFont) can have a materially different
+                    // line height than the box's own default font. vmtx/VORG govern only the down-the-
+                    // column advance above, not this cell-width sizing.
+                    natural = (width, font.Height);
+                }
+                else
+                {
+                    var styleSource = word.FirstLineStyle ?? word.OwnerBox;
+                    var font = CssBox.ResolveWordFont(word, styleSource);
+                    var width = word.Text != "\n" ? g.MeasureString(word.Text!, font, styleSource.ActualTextShapingFeatures).Width : 0;
+                    if (word.Text != "\n" && styleSource.ActualLetterSpacing != 0)
+                        width += g.CountShapedGlyphs(word.Text!, font, styleSource.ActualTextShapingFeatures) * styleSource.ActualLetterSpacing;
+
+                    natural = (width, styleSource.ActualFont.Height);
+                }
+            }
+
+            word.NaturalSize = natural;
+            return natural;
+        }
+
+        /// <summary>
+        /// Measures each codepoint of an upright vertical-writing-mode run individually - the single
+        /// shared basis both this file's own <see cref="NaturalWordSize"/> and
+        /// <see cref="Paint.FragmentPainter.PaintUprightVerticalRun">FragmentPainter.PaintUprightVerticalRun</see>
+        /// iterate to agree on the run's character sequence and count. The down-the-column *advance*
+        /// per character is not this measurement's own <c>Size.Width</c> (see <see cref="NaturalWordSize"/>'s
+        /// remarks for why) - each yielded <c>Size</c> is used only for the glyph's cross-axis
+        /// (column-thickness) centering, which legitimately does vary per character.
+        /// </summary>
+        internal static IEnumerable<(string Text, Rune Rune, RSize Size)> MeasureUprightRunCharacters(
+            RGraphics g, string text, RFont font, TextShapingFeatures? features)
+        {
+            foreach (var rune in text.EnumerateRunes())
+            {
+                var charText = rune.ToString();
+                yield return (charText, rune, g.MeasureString(charText, font, features));
+            }
+        }
+
+        /// <summary>
+        /// A box's own definite (non-auto) CSS <c>height</c>, resolved to a real content-height number -
+        /// mirroring <see cref="GetBoxHeight"/>'s own definite-length branch (percentage-against-containing-
+        /// block resolution, then the box-sizing conversion) rather than a second, independently-derived
+        /// formula, then converted from that branch's border-box result down to the content height
+        /// <see cref="CreateVerticalLineBoxes"/>'s wrap limit actually needs.
+        /// </summary>
+        private static double DefiniteContentHeight(CssBox box)
+        {
+            var borderBoxHeight = CssValueParser.ParseLength(box.Height, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+
+            return borderBoxHeight - box.ActualPaddingTop - box.ActualPaddingBottom
+                - box.ActualBorderTopWidth - box.ActualBorderBottomWidth;
+        }
+
+        /// <summary>
+        /// Words are parsed into placeholder <see cref="CssRect"/>s during DOM construction, but only
+        /// measured (given a real <see cref="CssRect.Width"/>/<see cref="CssRect.Height"/>) lazily, once
+        /// per box, just before use - the same on-demand measurement <see cref="FlowBox"/> itself performs
+        /// per child as it recurses (see its own <c>await b.MeasureWordsSize(g)</c> call), since a block
+        /// box's own <see cref="CssBox.MeasureWordsSize"/> call in its prologue only measures its own
+        /// direct words, not its descendants'.
+        /// </summary>
+        private static async ValueTask MeasureAndCollectWordsInDocumentOrder(RGraphics g, CssBox box, List<CssRect> words)
+        {
+            if (box.Words.Count > 0)
+            {
+                box.RectanglesReset();
+                await box.MeasureWordsSize(g);
+                words.AddRange(box.Words);
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                await MeasureAndCollectWordsInDocumentOrder(g, child, words);
+            }
         }
 
         /// <summary>

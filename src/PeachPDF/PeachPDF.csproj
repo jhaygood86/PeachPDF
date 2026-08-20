@@ -51,6 +51,8 @@
 		<EmbeddedResource Include="Text\Resources\language-tags.txt" />
 		<None Remove="Text\Resources\Bidi\*.br" />
 		<EmbeddedResource Include="Text\Resources\Bidi\*.br" />
+		<None Remove="Text\Resources\VerticalOrientation\*.br" />
+		<EmbeddedResource Include="Text\Resources\VerticalOrientation\*.br" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="PdfSharpCore\Resources\images\" />

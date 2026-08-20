@@ -45,6 +45,9 @@
     <None Include="..\..\assets\fonts\NotoSansHebrewSubset.ttf" Link="NotoSansHebrewSubset.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\NotoSansJPSubset.ttf" Link="NotoSansJPSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

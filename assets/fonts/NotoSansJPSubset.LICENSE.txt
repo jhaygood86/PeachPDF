@@ -1,0 +1,17 @@
+NotoSansJPSubset.ttf is a subset (the CJK characters and Latin/digit/punctuation
+the writing-mode showcase's mixed text-orientation example actually uses) of the
+"Noto Sans JP" font, Copyright 2014-2021 Adobe (http://www.adobe.com/), with
+Reserved Font Name 'Source' - Noto Sans JP's Japanese glyphs derive from
+Adobe's Source Han Sans, packaged by Google as part of the Noto project -
+licensed under the SIL Open Font License, Version 1.1 (OFL-1.1).
+
+The font is bundled solely as a showcase/test asset so the writing-mode
+showcase's `text-orientation: mixed` example renders real, readable upright
+CJK glyphs next to rotated Latin/digits instead of .notdef boxes, without
+depending on whatever fonts happen to be installed on the machine running it.
+Pinned to the Regular (wght=400) static instance of the source variable font;
+only the glyphs the showcase HTML actually uses are retained, and those
+outlines are unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Sans+JP

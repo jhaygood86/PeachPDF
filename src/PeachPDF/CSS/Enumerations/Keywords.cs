@@ -293,6 +293,9 @@
         public const string VerticalLr = "vertical-lr";
         public const string SidewaysRl = "sideways-rl";
         public const string SidewaysLr = "sideways-lr";
+        public const string Mixed = "mixed";
+        public const string Upright = "upright";
+        public const string Sideways = "sideways";
         public const string All = "all";
         public const string Balance = "balance";
         public const string Separate = "separate";

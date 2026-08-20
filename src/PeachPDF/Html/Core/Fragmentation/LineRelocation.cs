@@ -179,7 +179,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private static bool MayNotBeCut(IReadOnlyList<CssBox> boxes) =>
             boxes.Any(box => BreakValues.AvoidsBreak(box.BreakInside, FragmentationContext.Page)
-                             || MonolithicContent.IsMonolithic(box));
+                             || MonolithicContent.IsMonolithicForFragmentation(box));
 
         /// <summary>
         /// How far the line spanning <paramref name="top"/>..<paramref name="bottom"/> must move down,

@@ -15,6 +15,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Text;
+using System;
 
 namespace PeachPDF.Adapters
 {
@@ -26,17 +27,17 @@ namespace PeachPDF.Adapters
         /// <summary>
         /// the vertical offset of the font underline location from the top of the font.
         /// </summary>
-        private double _underlineOffset = -1;
+        private readonly double _underlineOffset;
 
         /// <summary>
         /// Cached font height.
         /// </summary>
-        private double _height = -1;
+        private readonly double _height;
 
         /// <summary>
         /// Cached font ascent.
         /// </summary>
-        private double _ascent = -1;
+        private readonly double _ascent;
 
         /// <summary>
         /// Cached font whitespace width.
@@ -45,12 +46,37 @@ namespace PeachPDF.Adapters
 
 
         /// <summary>
-        /// Init.
+        /// Init. Resolves <see cref="Height"/>/<see cref="Ascent"/>/<see cref="UnderlineOffset"/>
+        /// eagerly, right here, rather than lazily on this font's first <c>RGraphics.MeasureString</c>
+        /// call (as a previous version of this constructor did): <paramref name="font"/>'s own descriptor/
+        /// metrics are already fully resolved by the time <c>XFont</c>'s constructor returns
+        /// (<c>XFont.Initialize</c> calls <c>CreateDescriptorAndInitializeFontMetrics</c> synchronously), so
+        /// there was never a real data dependency on "a string having been measured first" - only an
+        /// accident of where this arithmetic used to live. Reading <see cref="Height"/>/<see cref="Ascent"/>
+        /// before this font's first <c>MeasureString</c> call used to read back a stale, pre-resolution
+        /// sentinel, which cost real debugging time in both the HTML and SVG vertical-writing-mode text
+        /// pipelines (see <c>CssLayoutEngine.NaturalWordSize</c>'s and <c>SvgRenderer.LayoutGlyphs</c>'s own
+        /// remarks) before either pipeline had gotten around to actually measuring a string with this font.
         /// </summary>
         public FontAdapter(XFont font, double pixelsPerPoint)
         {
             Font = font;
             PixelsPerPoint = pixelsPerPoint;
+
+            // Read ascent/descent/em-height directly off the font's OWN already-resolved descriptor
+            // instead of re-deriving them via XFontFamily.GetCellAscent/GetCellDescent/GetEmHeight, which
+            // re-resolve a font by its own internal name (e.g. "Source Code Pro" - not the CSS-facing
+            // family alias that was actually registered) through IFontResolver - for a custom/@font-face-
+            // registered family this can resolve to an entirely unrelated font, and even when it does find
+            // something, it bypasses the per-instance cache routing that keeps two PdfGenerators' same-
+            // named custom fonts from colliding (see XFont.Descriptor and XGlyphTypeface.OwningInstanceResolver).
+            var descriptor = font.Descriptor;
+            var descent = font.Size * descriptor.Descender / descriptor.UnitsPerEm;
+            var ascent = font.Size * descriptor.Ascender / descriptor.UnitsPerEm;
+            var height = font.Height;
+            _height = height;
+            _underlineOffset = Math.Round(height - descent + 1f);
+            _ascent = Math.Round(ascent);
         }
 
         /// <summary>
@@ -114,17 +140,35 @@ namespace PeachPDF.Adapters
             return false;
         }
 
+        // ---- Vertical metrics query surface -----------------------------------------------------
+        // Backed by the font's OpenTypeDescriptor's real vhea/vmtx/VORG parsing, converted through the
+        // same design-units-to-pixels formula the constructor above already uses for _ascent/_height.
+
+        public override bool HasVerticalMetrics => Font.Descriptor?.HasVerticalMetrics ?? false;
+
+        public override double GetVerticalAdvance(System.Text.Rune rune) =>
+            ScaleDesignUnits(rune, Height, static (descriptor, glyphIndex) => descriptor.GlyphIndexToVerticalAdvance(glyphIndex));
+
+        public override bool HasVerticalOrigin => Font.Descriptor?.HasVerticalOrigin ?? false;
+
+        public override double GetVerticalOriginY(System.Text.Rune rune) =>
+            ScaleDesignUnits(rune, Ascent, static (descriptor, glyphIndex) => descriptor.GlyphIndexToVerticalOrigin(glyphIndex).Y);
+
         /// <summary>
-        /// Set font metrics to be cached for the font for future use.
+        /// Shared by <see cref="GetVerticalAdvance"/>/<see cref="GetVerticalOriginY"/> - both resolve
+        /// <paramref name="rune"/> to a glyph index and scale a raw design-units value from
+        /// <see cref="OpenTypeDescriptor"/> by the exact same formula the constructor above already uses
+        /// for <c>_ascent</c>/<c>_height</c> (<c>Font.Size * designUnits / UnitsPerEm * PixelsPerPoint</c>);
+        /// only which descriptor accessor supplies the design-units value, and the no-descriptor
+        /// fallback, differ between the two callers.
         /// </summary>
-        /// <param name="height">the full height of the font</param>
-        /// <param name="underlineOffset">the vertical offset of the font underline location from the top of the font.</param>
-        /// <param name="ascent">the distance from the top of the font's line box down to its baseline</param>
-        internal void SetMetrics(int height, int underlineOffset, int ascent)
+        private double ScaleDesignUnits(System.Text.Rune rune, double fallback, System.Func<OpenTypeDescriptor, int, int> designUnits)
         {
-            _height = height;
-            _underlineOffset = underlineOffset;
-            _ascent = ascent;
+            var descriptor = Font.Descriptor;
+            if (descriptor is null) return fallback;
+
+            var glyphIndex = descriptor.CharCodeToGlyphIndex(rune);
+            return Font.Size * designUnits(descriptor, glyphIndex) / descriptor.UnitsPerEm * PixelsPerPoint;
         }
     }
 }

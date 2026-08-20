@@ -98,5 +98,35 @@ namespace PeachPDF.Html.Adapters
             color = RColor.Empty;
             return false;
         }
+
+        // ---- Vertical metrics query surface (vhea/vmtx/VORG) -----------------------------------
+        // Lets vertical-writing-mode layout/paint consult a font's own real per-glyph vertical
+        // typesetting advance and origin when it has them (mainly professional CJK vertical fonts),
+        // instead of the font.Height-per-character/plain-top-of-cell approximation. A font without real
+        // data reports no support; the defaults below reproduce that approximation exactly, so only the
+        // OpenType-descriptor-backed adapter overrides them - mirroring the CPAL section above.
+
+        /// <summary>Whether this font carries real OpenType vertical metrics (vhea + vmtx) to consult.</summary>
+        public virtual bool HasVerticalMetrics => false;
+
+        /// <summary>
+        /// This rune's real <c>vmtx</c> advance height, in the same pixel units as <see cref="Height"/>.
+        /// Only meaningful when <see cref="HasVerticalMetrics"/> is true; the default reproduces the
+        /// flat per-character line-height step used when it's false.
+        /// </summary>
+        public virtual double GetVerticalAdvance(System.Text.Rune rune) => Height;
+
+        /// <summary>Whether this font carries a real OpenType <c>VORG</c> table this reader trusts (see
+        /// <see cref="PeachPDF.Fonts.OpenType.OpenTypeDescriptor.HasVerticalOrigin"/> for the CFF-only
+        /// restriction that gates this).</summary>
+        public virtual bool HasVerticalOrigin => false;
+
+        /// <summary>
+        /// This rune's real <c>VORG</c> vertical-origin Y, in the same pixel units as <see cref="Ascent"/>
+        /// (baseline-relative, same convention). Only meaningful when <see cref="HasVerticalOrigin"/> is
+        /// true; the default reproduces the plain top-of-cell anchor used when it's false (see
+        /// <c>FragmentPainter.Text.cs</c>'s <c>PaintUprightVerticalRun</c> remarks for the derivation).
+        /// </summary>
+        public virtual double GetVerticalOriginY(System.Text.Rune rune) => Ascent;
     }
 }

@@ -33,60 +33,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// </summary>
     public class GsubTableSyntheticTests
     {
-        private sealed class Builder
-        {
-            private readonly List<byte> _bytes = [];
-            public int Position => _bytes.Count;
-
-            public void U16(int v)
-            {
-                _bytes.Add((byte)(v >> 8));
-                _bytes.Add((byte)v);
-            }
-
-            public void U32(uint v)
-            {
-                _bytes.Add((byte)(v >> 24));
-                _bytes.Add((byte)(v >> 16));
-                _bytes.Add((byte)(v >> 8));
-                _bytes.Add((byte)v);
-            }
-
-            public void Tag(string fourChars)
-            {
-                foreach (char c in fourChars)
-                    _bytes.Add((byte)c);
-            }
-
-            /// <summary>Writes a placeholder u16 and returns its byte index, for <see cref="PatchU16"/>.</summary>
-            public int PlaceholderU16()
-            {
-                int at = _bytes.Count;
-                U16(0);
-                return at;
-            }
-
-            public void PatchU16(int at, int value)
-            {
-                _bytes[at] = (byte)(value >> 8);
-                _bytes[at + 1] = (byte)value;
-            }
-
-            public void PatchU32(int at, uint value)
-            {
-                _bytes[at] = (byte)(value >> 24);
-                _bytes[at + 1] = (byte)(value >> 16);
-                _bytes[at + 2] = (byte)(value >> 8);
-                _bytes[at + 3] = (byte)value;
-            }
-
-            public byte[] ToArray() => _bytes.ToArray();
-        }
-
         /// <summary>Builds one Type 4 (Ligature Substitution, format 1) subtable at the builder's current
         /// position: a single-glyph coverage over <paramref name="firstGlyph"/>, one ligature set with one
         /// ligature merging it with <paramref name="componentGlyph"/> into <paramref name="ligatureGlyph"/>.</summary>
-        private static void WriteType4Subtable(Builder b, ushort firstGlyph, ushort componentGlyph, ushort ligatureGlyph)
+        private static void WriteType4Subtable(SfntByteBuilder b, ushort firstGlyph, ushort componentGlyph, ushort ligatureGlyph)
         {
             int subtableStart = b.Position;
             b.U16(1); // substFormat
@@ -114,7 +64,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         private static byte[] BuildSyntheticGsub()
         {
-            var b = new Builder();
+            var b = new SfntByteBuilder();
 
             // ---- Header ----
             b.U16(1); b.U16(0); // majorVersion, minorVersion
@@ -258,7 +208,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         /// above exercises (both always define at least one script).</summary>
         private static byte[] BuildEmptyScriptListGsub()
         {
-            var b = new Builder();
+            var b = new SfntByteBuilder();
 
             b.U16(1); b.U16(0); // majorVersion, minorVersion
             int scriptListOffsetAt = b.PlaceholderU16();

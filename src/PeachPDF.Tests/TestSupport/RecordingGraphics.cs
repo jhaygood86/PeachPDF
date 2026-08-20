@@ -14,11 +14,14 @@ namespace PeachPDF.Tests.TestSupport
         Polygon,
         Line,
         PushClip,
-        PopClip
+        PopClip,
+        PushTransform,
+        PopTransform,
+        DrawString
     }
 
-    /// <summary>One paint call, in the order it happened - the single ordered log <see cref="RecordingGraphics.Log"/> keeps, per this repo's own preference (CLAUDE.md's testing conventions) for one ordered log over parallel per-call-type counts/lists when order across different call types matters.</summary>
-    internal readonly record struct PaintOp(PaintOpKind Kind, RRect Bounds);
+    /// <summary>One paint call, in the order it happened - the single ordered log <see cref="RecordingGraphics.Log"/> keeps, per this repo's own preference (CLAUDE.md's testing conventions) for one ordered log over parallel per-call-type counts/lists when order across different call types matters. <see cref="Matrix"/> is set only for <see cref="PaintOpKind.PushTransform"/>, <see cref="Text"/> only for <see cref="PaintOpKind.DrawString"/>.</summary>
+    internal readonly record struct PaintOp(PaintOpKind Kind, RRect Bounds, RMatrix? Matrix = null, string? Text = null);
 
     /// <summary>
     /// Minimal <see cref="RGraphics"/> implementation that records paint calls so tests can verify paint
@@ -97,8 +100,12 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
         public override void PushClipExclude(RRect rect) { }
-        public override void PushTransform(RMatrix matrix) { }
-        public override void PopTransform() { }
+
+        public override void PushTransform(RMatrix matrix) =>
+            Log.Add(new PaintOp(PaintOpKind.PushTransform, default, Matrix: matrix));
+
+        public override void PopTransform() => Log.Add(new PaintOp(PaintOpKind.PopTransform, default));
+
         public override void PushBlendMode(RBlendMode mode) { }
         public override void PopBlendMode() { }
         public override object SetAntiAliasSmoothingMode() => new object();
@@ -106,7 +113,12 @@ namespace PeachPDF.Tests.TestSupport
         public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new(0, 12);
         public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) => DrawnStrings.Add((str, point.Y));
+
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
+        {
+            DrawnStrings.Add((str, point.Y));
+            Log.Add(new PaintOp(PaintOpKind.DrawString, new RRect(point.X, point.Y, size.Width, size.Height), Text: str));
+        }
 
         public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }
 

@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using MimeKit;
+using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
@@ -116,7 +117,9 @@ namespace PeachPDF.Svg
             string? MarkerStartRef,
             string? MarkerMidRef,
             string? MarkerEndRef,
-            string Direction)
+            string Direction,
+            WritingMode WritingMode,
+            TextOrientation TextOrientation)
         {
             public static readonly InheritedPaint Initial = new(
                 Fill: SvgPaint.Solid(RColor.Black),
@@ -133,7 +136,9 @@ namespace PeachPDF.Svg
                 MarkerStartRef: null,
                 MarkerMidRef: null,
                 MarkerEndRef: null,
-                Direction: "ltr");
+                Direction: "ltr",
+                WritingMode: WritingMode.HorizontalTb,
+                TextOrientation: TextOrientation.Mixed);
         }
 
         /// <summary>
@@ -962,6 +967,28 @@ namespace PeachPDF.Svg
                 ? inherited.Direction
                 : directionAttr.Trim().Equals("rtl", StringComparison.OrdinalIgnoreCase) ? "rtl" : "ltr";
 
+            // writing-mode/text-orientation are real inherited CSS properties too, carried the same way
+            // direction is - resolved once here and stored only on the SvgTextElement that actually
+            // consumes them (BuildTextRun), not on every SvgElement, since only text has a pen model to
+            // orient. Parsed through the same Map.WritingModes/Map.TextOrientations keyword tables the
+            // HTML CSS-OM pipeline's WritingModeProperty/TextOrientationProperty converters use, rather
+            // than a second, independently-written keyword parser (this repo's own "don't write two
+            // parsers for the same CSS grammar across layers" convention). An unrecognized value
+            // (including SVG 1.1's legacy tb/tb-rl/lr/lr-tb/rl/rl-tb writing-mode keywords, which Map
+            // doesn't define) falls back to the inherited value via GetValueOrDefault, matching every
+            // other inherited property above. sideways-rl/sideways-lr DO parse (Map.WritingModes defines
+            // them) but render as horizontal-tb throughout, same as the HTML pipeline's own scope -
+            // SvgRenderer.IsVerticalWritingMode only recognizes vertical-rl/vertical-lr as vertical.
+            var writingModeAttr = Attr("writing-mode");
+            var writingMode = writingModeAttr is null || writingModeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.WritingMode
+                : Map.WritingModes.GetValueOrDefault(writingModeAttr.Trim(), inherited.WritingMode);
+
+            var textOrientationAttr = Attr("text-orientation");
+            var textOrientation = textOrientationAttr is null || textOrientationAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.TextOrientation
+                : Map.TextOrientations.GetValueOrDefault(textOrientationAttr.Trim(), inherited.TextOrientation);
+
             return new InheritedPaint(
                 element.Fill,
                 element.Stroke,
@@ -977,7 +1004,9 @@ namespace PeachPDF.Svg
                 element.MarkerStartRef,
                 element.MarkerMidRef,
                 element.MarkerEndRef,
-                direction);
+                direction,
+                writingMode,
+                textOrientation);
         }
 
         /// <summary>
@@ -1125,6 +1154,8 @@ namespace PeachPDF.Svg
             };
 
             run.Direction = resolved.Direction;
+            run.WritingMode = resolved.WritingMode;
+            run.TextOrientation = resolved.TextOrientation;
 
             var unicodeBidiAttr = ResolveStyledAttr(node, "unicode-bidi")?.Trim().ToLowerInvariant();
             run.UnicodeBidi = unicodeBidiAttr switch
