@@ -138,16 +138,42 @@ cross-axis start (no cross-axis wrapping); margins between stacked siblings are 
 collapsed ([#776](https://github.com/jhaygood86/PeachPDF/issues/776)); a floated/absolutely/fixed-positioned
 child is routed through the ordinary, physical-Y-oriented `LayoutBlockChild` path unchanged rather than
 given block-axis-aware float/positioning logic of its own (extending the existing #768 scope boundary);
-an orthogonal auto-width child stretch-fills to the parent's available physical width rather than performing
-real CSS Writing Modes 4 §4.3 shrink-to-fit sizing ([#777](https://github.com/jhaygood86/PeachPDF/issues/777));
-and a `direction: rtl` vertical box's block children anchor to the physical top (matching `ltr`) rather than
-the physical bottom CSS Writing Modes 4 would actually place them at
-([#778](https://github.com/jhaygood86/PeachPDF/issues/778), found by a post-change review).
+and an orthogonal auto-width child stretch-fills to the parent's available physical width rather than
+performing real CSS Writing Modes 4 §4.3 shrink-to-fit sizing
+([#777](https://github.com/jhaygood86/PeachPDF/issues/777)).
 Verified with `VerticalWritingModeLayoutIntegrationTests.cs` (block-axis stacking direction for both
 `vertical-rl`/`vertical-lr`, auto width/height shrink, the cheap-margin-sum boundary, an orthogonal
 `horizontal-tb` child's own line flow plus its atomic placement, nested vertical-in-vertical composition,
 the `IsUnresumableOrthogonalFlow` predicate for the has-block-children case, and the monolithic-overflow
 pagination-scope change above) and the existing full test suite passing unchanged.
+
+**A `direction: rtl` vertical box's block children now anchor to the correct physical edge too**
+([#778](https://github.com/jhaygood86/PeachPDF/issues/778), a scope boundary found by a post-change review
+of #760). `LayoutVerticalBlockChildren`'s child loop still always places each child flush against
+`ClientTop`, growing down — the only placement possible before a child's own cross-axis extent (height) is
+knowable, since unlike its block-axis extent (width, resolved up front by `ResolveOwnInlineSize`) a normal
+or orthogonal child's height generally isn't known until its own content lays out. Where `direction: rtl`
+actually wants the physical bottom (CSS Writing Modes 4's own inline-start edge for a vertical box under
+`rtl`, already correctly modeled by `WritingModeFrame`'s own `_inlineStartIsBottom` for word placement in
+`CreateVerticalLineBoxes`, now also exposed as `WritingModeFrame.InlineStartIsBottom`), every stacked child
+is collected into `CssBox._pendingCrossAxisRtlReflection` and reflected within `[ClientTop, ClientBottom]`
+from `PerformLayoutEpilogue`, *after* `CssLayoutEngine.ApplyHeight` has settled this box's own real final
+height — the same "lay out everything forward, then reflect once the far edge is known" shape
+`CssLayoutEngineTable.ReflectRowAxisForVerticalRl` already uses for a `vertical-rl` table's own row axis,
+reusing its exact reflection formula (`delta = (min + max - farEdge) - nearEdge`, then `OffsetTop` to
+deep-translate the child's own already-laid-out words/rectangles/descendants along with it) one axis over.
+Reflecting from the epilogue rather than inline inside `LayoutVerticalBlockChildren` itself is load-bearing,
+not a style choice: a first cut computed the far edge locally (shrink-wrapped content extent for auto
+height, or the raw `height:` value for a definite one) and a post-change review caught that this anchors
+children against a pre-`min-height`/`max-height`-clamp edge — a `min-height` taller than the content-driven
+extent left every child hanging from the wrong edge, reintroducing a version of #778's own symptom. Using
+the box's own live `ClientTop`/`ClientBottom` from the epilogue, once `ApplyHeight` has already resolved
+`min-height`/`max-height`/percentage-against-an-indefinite-containing-block, sidesteps re-deriving any of
+that resolution a second time. Verified with new `VerticalWritingModeLayoutIntegrationTests.cs` cases
+(auto-height reflection with a shorter and a taller sibling, an explicit-height box taller than every
+child, a `min-height` taller than every child's own content — the case the review caught — and
+`vertical-lr` + `direction: rtl` to confirm the cross-axis reflection is independent of which edge the
+block axis itself grows from) and the existing full test suite passing unchanged.
 
 **Real per-character `text-orientation`** ([#765](https://github.com/jhaygood86/PeachPDF/issues/765)) now
 works: `mixed` (the default) classifies each codepoint by Unicode's Vertical_Orientation property (UAX
@@ -335,15 +361,6 @@ reading Height" as an unenforced convention going forward.
   ([#776](https://github.com/jhaygood86/PeachPDF/issues/776)). `LayoutVerticalBlockChildren` sums the
   adjoining physical margins between two stacked siblings instead of performing real CSS 2.1 §8.3.1
   adjoining-margin collapse (max, not sum) — see `VerticalRl_MarginsBetweenBlockChildren_AreSummedNotCollapsed`.
-- **A `direction: rtl` vertical box's block children anchor to the wrong physical edge**
-  ([#778](https://github.com/jhaygood86/PeachPDF/issues/778), found by a post-change review of #760).
-  `LayoutVerticalBlockChildren` anchors every child's cross-axis position to `ClientTop` unconditionally,
-  matching `ltr`; under `direction: rtl` the real inline-start is the physical bottom edge
-  (`WritingModeFrame`'s own `_inlineStartIsBottom`, already correctly consulted by
-  `CreateVerticalLineBoxes`'s word placement), so a child should anchor near the bottom instead. Closing
-  this needs a resolve-then-reposition step on the cross axis (a child's own height isn't known until after
-  its content lays out), the same shape already used for the block axis's own right-edge anchoring under
-  `vertical-rl`.
 - **An orthogonal auto-width child of a vertical box stretch-fills instead of shrink-to-fit**
   ([#777](https://github.com/jhaygood86/PeachPDF/issues/777)). CSS Writing Modes 4 §4.3 requires an
   auto-sized orthogonal child (its own writing-mode perpendicular to its containing block's) to be sized
