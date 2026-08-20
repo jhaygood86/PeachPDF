@@ -100,6 +100,55 @@ assertions, and the existing 544 horizontal-tb Table tests all still pass unchan
 guard, in particular, only ever removes a shrink no horizontal-tb test relied on). Scoped to simple tables
 only — see below for what `display: table` still doesn't handle under a vertical writing mode.
 
+**Block-level and orthogonal-flow children of a vertical box**
+([#760](https://github.com/jhaygood86/PeachPDF/issues/760)) now work too:
+`CssBox.LayoutContents` dispatches a `vertical-rl`/`vertical-lr` box with block-level children (not
+inline-only, so not `CreateVerticalLineBoxes`; not a multi-column container, so not
+`CssLayoutEngineColumns`) to a new `CssBox.LayoutVerticalBlockChildren`, the box-level counterpart of
+`CreateVerticalLineBoxes`'s own word-level column stacking. Each in-flow child runs its own, completely
+untouched, recursive `LayoutContents` dispatch — driven entirely by *its own* `WritingMode.Value`, which
+was already correctly resolved regardless of its parent's own stacking axis — and is then stacked, as one
+atomic already-laid-out unit, along the parent's own block axis (physical X: right-to-left for
+`vertical-rl`, left-to-right for `vertical-lr`, via `WritingModeFrame.BlockStartIsRight`), all at the same
+cross-axis (physical Y) start. This is what lets an **orthogonal-flow child** — one whose own resolved
+`writing-mode` differs from its parent's, per
+[CSS Writing Modes 4 §4.3](https://www.w3.org/TR/css-writing-modes-4/#orthogonal-flows) — "just work" with
+no special case at all: a `horizontal-tb` block nested inside a `vertical-rl` parent lays its own lines out
+along physical Y exactly as it would anywhere else, while the new stacking loop only ever reads back its
+resulting physical width and treats it as one atomic unit, the same way an atomic replaced element
+(`<img>`) already is. Auto width/height on the vertical box itself shrink to the accumulated block-axis/
+cross-axis extent of its children, reusing `CssLayoutEngine.ShrinkAutoWidthTo` (widened to `internal`) —
+the same block-start-stays-fixed mechanism the inline-only case already established.
+
+Such a box is treated as monolithic with respect to its parent's own page fragmentation, the same
+`MonolithicContent.IsUnresumableOrthogonalFlow` treatment the inline-only case and a vertical table already
+get (that predicate no longer requires `DomUtils.ContainsInlinesOnly` — it now covers every box
+`CssBox.LayoutContents` routes to *either* `CreateVerticalLineBoxes` or `LayoutVerticalBlockChildren`,
+excluding only a box that runs an engine of its own or establishes its own multi-column context). This is a
+real, deliberate behavior change from before #760 landed, not an incidental side effect: previously, a
+vertical box with block children silently fell back to ordinary `horizontal-tb` physical-Y block stacking,
+which happened to paginate normally (each child a separate, resumable fragment) purely because the bug
+existed. Once real block-axis stacking landed, that box's own content became genuinely monolithic — moved
+whole to the next page (or displaced-per-band) rather than sliced, exactly like the inline-only case. Real
+per-child fragmentation of a vertical box's block content remains tracked separately
+([#767](https://github.com/jhaygood86/PeachPDF/issues/767)).
+
+Deliberately scoped down, mirroring `CreateVerticalLineBoxes`'s own scope: every child sits at the same
+cross-axis start (no cross-axis wrapping); margins between stacked siblings are summed rather than really
+collapsed ([#776](https://github.com/jhaygood86/PeachPDF/issues/776)); a floated/absolutely/fixed-positioned
+child is routed through the ordinary, physical-Y-oriented `LayoutBlockChild` path unchanged rather than
+given block-axis-aware float/positioning logic of its own (extending the existing #768 scope boundary);
+an orthogonal auto-width child stretch-fills to the parent's available physical width rather than performing
+real CSS Writing Modes 4 §4.3 shrink-to-fit sizing ([#777](https://github.com/jhaygood86/PeachPDF/issues/777));
+and a `direction: rtl` vertical box's block children anchor to the physical top (matching `ltr`) rather than
+the physical bottom CSS Writing Modes 4 would actually place them at
+([#778](https://github.com/jhaygood86/PeachPDF/issues/778), found by a post-change review).
+Verified with `VerticalWritingModeLayoutIntegrationTests.cs` (block-axis stacking direction for both
+`vertical-rl`/`vertical-lr`, auto width/height shrink, the cheap-margin-sum boundary, an orthogonal
+`horizontal-tb` child's own line flow plus its atomic placement, nested vertical-in-vertical composition,
+the `IsUnresumableOrthogonalFlow` predicate for the has-block-children case, and the monolithic-overflow
+pagination-scope change above) and the existing full test suite passing unchanged.
+
 **Real per-character `text-orientation`** ([#765](https://github.com/jhaygood86/PeachPDF/issues/765)) now
 works: `mixed` (the default) classifies each codepoint by Unicode's Vertical_Orientation property (UAX
 #50 — `U`/`Tu` upright, `R`/`Tr` rotated, `Tu`/`Tr`'s own "transformed" fallback collapsed to plain
@@ -282,13 +331,33 @@ reading Height" as an unenforced convention going forward.
 
 ## What's still out of scope
 
-- **Block children inside a vertical box** ([#760](https://github.com/jhaygood86/PeachPDF/issues/760)).
-  `CreateVerticalLineBoxes` only runs for inline-only content; a vertical-writing-mode box containing a
-  nested block element (or itself containing another vertical- or horizontal-writing-mode block child —
-  orthogonal flow) still lays out as ordinary `horizontal-tb`.
+- **Real margin collapsing between block-axis-stacked children of a vertical box**
+  ([#776](https://github.com/jhaygood86/PeachPDF/issues/776)). `LayoutVerticalBlockChildren` sums the
+  adjoining physical margins between two stacked siblings instead of performing real CSS 2.1 §8.3.1
+  adjoining-margin collapse (max, not sum) — see `VerticalRl_MarginsBetweenBlockChildren_AreSummedNotCollapsed`.
+- **A `direction: rtl` vertical box's block children anchor to the wrong physical edge**
+  ([#778](https://github.com/jhaygood86/PeachPDF/issues/778), found by a post-change review of #760).
+  `LayoutVerticalBlockChildren` anchors every child's cross-axis position to `ClientTop` unconditionally,
+  matching `ltr`; under `direction: rtl` the real inline-start is the physical bottom edge
+  (`WritingModeFrame`'s own `_inlineStartIsBottom`, already correctly consulted by
+  `CreateVerticalLineBoxes`'s word placement), so a child should anchor near the bottom instead. Closing
+  this needs a resolve-then-reposition step on the cross axis (a child's own height isn't known until after
+  its content lays out), the same shape already used for the block axis's own right-edge anchoring under
+  `vertical-rl`.
+- **An orthogonal auto-width child of a vertical box stretch-fills instead of shrink-to-fit**
+  ([#777](https://github.com/jhaygood86/PeachPDF/issues/777)). CSS Writing Modes 4 §4.3 requires an
+  auto-sized orthogonal child (its own writing-mode perpendicular to its containing block's) to be sized
+  via shrink-to-fit against a constraint derived from the parent's own definite dimension;
+  `LayoutVerticalBlockChildren` instead gives it ordinary block auto-width behavior (stretch to the
+  parent's available physical width). This codebase has no general min-content/max-content/shrink-to-fit
+  algorithm anywhere yet — only `CssBox.GetMinimumWidth()`, an unrelated longest-unbreakable-word
+  measurement — so implementing real shrink-to-fit is a separate, larger undertaking.
 - **Floats, absolute positioning, hyphenation, bidi reordering, `text-align`, and
   `box-decoration-break: clone`** are not honored inside a vertical box's own content
-  ([#768](https://github.com/jhaygood86/PeachPDF/issues/768)).
+  ([#768](https://github.com/jhaygood86/PeachPDF/issues/768)). This now also covers a block-level
+  out-of-flow (floated/absolutely/fixed-positioned) child of a vertical box's own block children: it is
+  routed through the ordinary, physical-Y-oriented `LayoutBlockChild` path rather than given block-axis-aware
+  float/positioning logic of its own — see `VerticalRl_RunningPositionedAndOutOfFlowChildren_AreSkippedFromStackingButDoNotCrash`.
 - **A nested inline element's own border/padding/margin does not reserve inline-axis (physical left/right,
   for `vertical-rl`/`vertical-lr`) space** ([#769](https://github.com/jhaygood86/PeachPDF/issues/769)), and
   its block-axis (physical top/bottom) padding/border is applied once per column it spans rather than once

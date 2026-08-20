@@ -2952,6 +2952,19 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (PendingBreakToken is not null) return;
                     }
+                    else if (WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr && Boxes.Count > 0)
+                    {
+                        // A vertical-writing-mode box with block-level children (issue #760) - the box-level
+                        // counterpart of CreateVerticalLineBoxes's own word-level column stacking above. Each
+                        // child runs its own, independent LayoutContents dispatch driven by its own
+                        // WritingMode.Value - unaffected by this box's own stacking axis, which is what lets
+                        // an orthogonal-flow child (a different writing-mode than this box) "just work" with
+                        // no special case here - and is then stacked, as one atomic already-laid-out unit,
+                        // along this box's own block axis. See MonolithicContent.IsUnresumableOrthogonalFlow
+                        // for why this box, like the inlines-only case above, is treated as indivisible by
+                        // its parent's own fragmentation.
+                        await LayoutVerticalBlockChildren(g);
+                    }
                     else if (Boxes.Count > 0)
                     {
                         if (await LayoutBlockChildren(g, resume)) return;
@@ -3553,6 +3566,101 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// The box-level counterpart of <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>: stacks each
+        /// in-flow block-level child along this vertical-writing-mode box's own block axis (physical X -
+        /// right to left for <c>vertical-rl</c>, left to right for <c>vertical-lr</c>), using
+        /// <see cref="WritingModeFrame"/> the same way that sibling method stacks words along it. A child's
+        /// own content layout is left completely untouched - it runs its own, independent
+        /// <see cref="LayoutContents"/> dispatch, driven by its own <see cref="WritingMode"/>, so an
+        /// orthogonal-flow child (one whose own writing-mode differs from this box's) needs no special case
+        /// at all: this loop only ever reads back its resulting physical width and treats it as one atomic
+        /// unit, exactly the way an already-laid-out word is treated as atomic above.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately scoped down, mirroring <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>'s own
+        /// scope (see the no-vertical-writing-mode-layout accepted gap): every child sits at the same
+        /// cross-axis (inline-axis) start - <see cref="CssBox.ClientTop"/>, unconditionally, not
+        /// <see cref="WritingModeFrame"/>'s own <c>direction: rtl</c>-aware inline-start edge the way
+        /// <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>'s word placement already is - so there is
+        /// no cross-axis wrapping and a <c>direction: rtl</c> vertical box's block children anchor to the
+        /// physical top exactly as under <c>ltr</c> rather than the physical bottom CSS Writing Modes 4
+        /// would actually place them at; margins between stacked siblings are summed rather than collapsed.
+        /// Floats and absolutely/fixed-positioned children are routed through the ordinary
+        /// <see cref="LayoutBlockChild"/> path unchanged (the existing, physical-Y-oriented placement this
+        /// vertical box's content already accepted as out of scope) rather than given new block-axis-aware
+        /// float/positioning logic of their own.
+        /// </remarks>
+        private async ValueTask LayoutVerticalBlockChildren(RGraphics g)
+        {
+            var clientTop = ClientTop;
+            var frame = WritingModeFrame.For(this);
+
+            var widthIsAuto = !CssValueParser.IsValidLength(Width);
+            var heightIsAuto = !CssValueParser.IsValidLength(Height);
+
+            double logicalBlockOffset = 0;
+            var maxCrossExtent = clientTop;
+
+            foreach (var childBox in Boxes)
+            {
+                if (IsOutsideMarker(childBox)) continue;
+
+                if (childBox.IsRunningPositioned)
+                {
+                    childBox.RegisterAsRunningElement(this);
+                    continue;
+                }
+
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                if (childBox.IsOutOfFlow)
+                {
+                    // Floats/absolute/fixed positioning inside a vertical box's block content are not made
+                    // block-axis-aware in this first cut (the existing #768 scope boundary) - routed
+                    // through the same ordinary, physical-Y-oriented machinery every other block child
+                    // already uses, rather than left entirely unlaid-out.
+                    await LayoutBlockChild(g, childBox);
+                    continue;
+                }
+
+                var startMargin = frame.BlockStartIsRight ? childBox.ActualMarginRight : childBox.ActualMarginLeft;
+                var endMargin = frame.BlockStartIsRight ? childBox.ActualMarginLeft : childBox.ActualMarginRight;
+
+                var marginBoxBlockStart = frame.ToPhysical(0, logicalBlockOffset);
+
+                // A placeholder position so ResolveOwnInlineSize has something to fix Size.Width against;
+                // the true position is written below, once that width is known - moving Location afterward
+                // leaves Size.Width untouched, the same mechanic CssLayoutEngine.ShrinkAutoWidthTo already
+                // relies on for this box's own auto-width shrink further down.
+                childBox.Location = new RPoint(marginBoxBlockStart.X, clientTop);
+                await childBox.ResolveOwnInlineSize(g, clientTop);
+                var childWidth = childBox.ActualRight - childBox.Location.X;
+
+                var trueX = frame.BlockStartIsRight
+                    ? marginBoxBlockStart.X - startMargin - childWidth
+                    : marginBoxBlockStart.X + startMargin;
+
+                childBox.Location = new RPoint(trueX, clientTop);
+                childBox.ActualBottom = clientTop;
+
+                await childBox.LayoutContentAtItsAssignedPosition(g);
+
+                logicalBlockOffset += startMargin + childWidth + endMargin;
+                maxCrossExtent = Math.Max(maxCrossExtent, childBox.ActualBottom);
+            }
+
+            if (widthIsAuto)
+            {
+                CssLayoutEngine.ShrinkAutoWidthTo(this, frame, logicalBlockOffset);
+            }
+
+            if (heightIsAuto)
+            {
+                ActualBottom = maxCrossExtent + ActualPaddingBottom + ActualBorderBottomWidth;
+            }
         }
 
         /// <summary>
