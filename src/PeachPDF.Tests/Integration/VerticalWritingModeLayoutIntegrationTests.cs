@@ -10,59 +10,276 @@ using Xunit;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// End-to-end layout tests for real <c>vertical-rl</c>/<c>vertical-lr</c> line flow
-    /// (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngine.CreateVerticalLineBoxes"/>), asserting actual
+    /// End-to-end layout tests for real <c>vertical-rl</c>/<c>vertical-lr</c> layout: both line flow
+    /// (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngine.CreateVerticalLineBoxes"/>) and block-level
+    /// child placement (<c>CssBox.LayoutVerticalBlockChildren</c>, issue #760), asserting actual
     /// <c>CssBox</c>/word geometry after layout - not just that layout completes - per this repo's testing
     /// conventions for layout-engine changes.
     /// </summary>
     public class VerticalWritingModeLayoutIntegrationTests
     {
         [Fact]
-        public async Task VerticalRl_InheritedByBlockChildren_DoesNotMarkTheBlockAncestorMonolithic()
+        public async Task VerticalRl_BlockChildren_AreTreatedAsMonolithicToo_ButAnEngineOfItsOwnStaysExcluded()
         {
-            // writing-mode inherits, so every descendant of a vertical-rl ancestor reports the same
-            // WritingMode.Value - including block-level ancestors that never go through
-            // CreateVerticalLineBoxes themselves (their own children are block-level <p>s, not inline
-            // content). IsUnresumableOrthogonalFlow must be scoped to boxes CssBox.LayoutContents actually
-            // routes to CreateVerticalLineBoxes, or a whole multi-paragraph vertical document would be
-            // wrongly treated as one indivisible unit, breaking ordinary multi-page pagination.
+            // Issue #760 gave a vertical box with block-level children its own dispatch
+            // (LayoutVerticalBlockChildren), so - unlike before that landed - IsUnresumableOrthogonalFlow
+            // must now report true for the wrapper too, exactly like the inline-only case already did:
+            // the whole subtree is laid out in one unresumable pass. What must still stay excluded is a
+            // box that runs an engine of its own (Flex/Grid/Table), since that engine already hands back
+            // a real, resumable per-item/per-row break record regardless of writing-mode.
             var html = LayoutHarness.Wrap("""
                 <div id="wrapper" style="writing-mode: vertical-rl">
                   <p id="p1">First paragraph.</p>
                   <p>Second paragraph.</p>
+                </div>
+                <div id="flexWrapper" style="writing-mode: vertical-rl; display: flex">
+                  <p>Flex item.</p>
                 </div>
                 """);
 
             var (root, _) = await LayoutHarness.LayoutAsync(html);
             var wrapper = LayoutHarness.FindById(root, "wrapper");
             var firstParagraph = LayoutHarness.FindById(root, "p1");
+            var flexWrapper = LayoutHarness.FindById(root, "flexWrapper");
             Assert.NotNull(wrapper);
             Assert.NotNull(firstParagraph);
+            Assert.NotNull(flexWrapper);
 
             Assert.Equal(WritingMode.VerticalRl, wrapper!.WritingMode.Value);
             Assert.Equal(WritingMode.VerticalRl, firstParagraph!.WritingMode.Value);
-            // The wrapper itself has block (<p>) children, not inline content - it does not go through
-            // CreateVerticalLineBoxes, so it must not be reported as unresumable-orthogonal-flow even
-            // though it inherits the same writing-mode every descendant does.
-            Assert.False(MonolithicContent.IsUnresumableOrthogonalFlow(wrapper));
 
-            // A <p> holding only text IS itself inline-only, so it genuinely goes through
-            // CreateVerticalLineBoxes and is correctly reported as unresumable-orthogonal-flow.
+            // The wrapper's own block (<p>) children now go through LayoutVerticalBlockChildren, so the
+            // wrapper itself is unresumable too.
+            Assert.True(MonolithicContent.IsUnresumableOrthogonalFlow(wrapper));
+
+            // A <p> holding only text is itself inline-only and still goes through CreateVerticalLineBoxes.
             Assert.True(MonolithicContent.IsUnresumableOrthogonalFlow(firstParagraph));
+
+            // A flex container runs an engine of its own, so it stays excluded even under a vertical
+            // writing mode with block-level items.
+            Assert.False(MonolithicContent.IsUnresumableOrthogonalFlow(flexWrapper));
         }
 
         [Fact]
-        public async Task VerticalRl_MultiParagraphDocument_PaginatesNormallyAcrossMultiplePages()
+        public async Task VerticalRl_MultiColumnBox_IsUnresumableOnlyWhenInlineOnly_NotWhenItHasBlockChildren()
         {
-            var paragraphs = string.Join("", Enumerable.Range(0, 40).Select(i => $"<p>Paragraph number {i} with some real text content in it.</p>"));
-            var html = LayoutHarness.Wrap($"""<div style="writing-mode: vertical-rl">{paragraphs}</div>""");
+            // CssBox.LayoutContents checks the inlines-only vertical branch BEFORE the multi-column branch
+            // (CssBox.cs), so a vertical box that is both multi-column AND inline-only still dispatches to
+            // the unresumable CreateVerticalLineBoxes, never to the genuinely resumable
+            // CssLayoutEngineColumns - IsUnresumableOrthogonalFlow must report true for it (a post-change
+            // review caught this as a real regression when the predicate briefly checked only
+            // !EstablishesMultiColumnContext, dropping ContainsInlinesOnly entirely). A multi-column box
+            // with genuine block-level children, by contrast, does reach CssLayoutEngineColumns and must
+            // stay resumable.
+            var html = LayoutHarness.Wrap("""
+                <div id="inlineOnly" style="writing-mode: vertical-rl; column-count: 2; width: 300px; height: 100px">
+                  Plain inline text content, nothing block-level here.
+                </div>
+                <div id="withBlockChildren" style="writing-mode: vertical-rl; column-count: 2; width: 300px; height: 100px">
+                  <p>A block-level paragraph child.</p>
+                </div>
+                """);
 
-            // A short page forces this much content across several pages if pagination works normally.
-            var (_, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 300);
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var inlineOnly = LayoutHarness.FindById(root, "inlineOnly");
+            var withBlockChildren = LayoutHarness.FindById(root, "withBlockChildren");
+            Assert.NotNull(inlineOnly);
+            Assert.NotNull(withBlockChildren);
+
+            Assert.True(inlineOnly!.EstablishesMultiColumnContext);
+            Assert.True(withBlockChildren!.EstablishesMultiColumnContext);
+
+            Assert.True(MonolithicContent.IsUnresumableOrthogonalFlow(inlineOnly));
+            Assert.False(MonolithicContent.IsUnresumableOrthogonalFlow(withBlockChildren));
+        }
+
+        [Fact]
+        public async Task VerticalRl_FewModestBlockChildren_StackAlongTheBlockAxisAndFitOnOnePage()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-rl">
+                  <p id="p1" style="width: 60px">First.</p>
+                  <p id="p2" style="width: 60px">Second.</p>
+                  <p id="p3" style="width: 60px">Third.</p>
+                </div>
+                """);
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var p1 = LayoutHarness.FindById(root, "p1");
+            var p2 = LayoutHarness.FindById(root, "p2");
+            var p3 = LayoutHarness.FindById(root, "p3");
+            Assert.NotNull(p1);
+            Assert.NotNull(p2);
+            Assert.NotNull(p3);
 
             Assert.NotNull(container.FragmentTree);
-            Assert.True(container.FragmentTree!.Fragmentainers.Count > 1,
-                $"40 paragraphs on 300pt pages should span multiple pages if pagination isn't broken by a wrongly-monolithic ancestor; got {container.FragmentTree.Fragmentainers.Count} page(s).");
+            Assert.Single(container.FragmentTree!.Fragmentainers);
+
+            // vertical-rl stacks block children right-to-left along the block axis (physical X), all at
+            // the same cross-axis (physical Y) start.
+            Assert.True(p1!.Location.X > p2!.Location.X, "vertical-rl should stack right-to-left");
+            Assert.True(p2.Location.X > p3!.Location.X, "vertical-rl should stack right-to-left");
+            Assert.Equal(p1.Location.Y, p2.Location.Y, 1);
+            Assert.Equal(p2.Location.Y, p3.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_TallSingleBlockChild_OverflowsMonolithicallyRatherThanBeingSliced()
+        {
+            // Documents the deliberate scope boundary from issue #760: a vertical box's own block-axis
+            // content is monolithic w.r.t. its parent's fragmentation (like the inline-only case already
+            // was), so a child tall enough to exceed one page's own band is not sliced across pages - real
+            // per-child fragmentation of a vertical box's block content is tracked separately (#767).
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl">
+                  <div id="tall" style="width: 60pt; height: 500pt">Tall child.</div>
+                </div>
+                """);
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 200);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var tall = LayoutHarness.FindById(root, "tall");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(tall);
+
+            Assert.True(MonolithicContent.IsUnresumableOrthogonalFlow(wrapper));
+            Assert.Equal(500, tall!.ActualBottom - tall.Location.Y, 1);
+            Assert.NotNull(container.FragmentTree);
+        }
+
+        [Fact]
+        public async Task VerticalLr_BlockChildren_StackLeftToRightAlongThePhysicalBlockAxis()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-lr">
+                  <p id="p1" style="width: 60px">First.</p>
+                  <p id="p2" style="width: 60px">Second.</p>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var p1 = LayoutHarness.FindById(root, "p1");
+            var p2 = LayoutHarness.FindById(root, "p2");
+            Assert.NotNull(p1);
+            Assert.NotNull(p2);
+
+            Assert.True(p1!.Location.X < p2!.Location.X, "vertical-lr should stack left-to-right");
+            Assert.Equal(p1.Location.Y, p2.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_AutoWidthAndHeight_ShrinkToAccumulatedBlockAndCrossAxisExtent()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl">
+                  <div id="a" style="width: 40pt; height: 60pt">A</div>
+                  <div id="b" style="width: 30pt; height: 90pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            Assert.NotNull(wrapper);
+
+            // Auto width shrinks to the combined block-axis extent of both children (40 + 30 = 70, no
+            // margins on either).
+            Assert.Equal(70, wrapper!.ActualRight - wrapper.Location.X, 1);
+
+            // Auto height shrinks to the taller child's own cross-axis (physical Y) extent (90, not
+            // 60 + 90 - the children stack side by side along X, not stacked along Y).
+            Assert.Equal(90, wrapper.ActualBottom - wrapper.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_MarginsBetweenBlockChildren_AreSummedNotCollapsed()
+        {
+            // Deliberate scope boundary (issue #760): margins between block-axis-stacked children are a
+            // cheap sum, not real CSS 2.1 SS8.3.1 adjoining-margin collapse - pinned down explicitly so a
+            // future change to real collapsing shows up as an intentional test update, not a silent
+            // regression.
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-rl">
+                  <div id="a" style="width: 40pt; margin: 0 10pt">A</div>
+                  <div id="b" style="width: 40pt; margin: 0 10pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // vertical-rl: a sits to the right of b. The gap between a's own left edge and b's own right
+            // edge is the sum of a's own left margin and b's own right margin (10 + 10 = 20), not their
+            // max (10, what real collapsing would give).
+            var gap = a!.Location.X - b!.ActualRight;
+            Assert.Equal(20, gap, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_RunningPositionedAndOutOfFlowChildren_AreSkippedFromStackingButDoNotCrash()
+        {
+            // position: running() (css-gcpm-3) and out-of-flow (float/absolute/fixed) children are
+            // excluded from - or, for out-of-flow, routed around - LayoutVerticalBlockChildren's own
+            // block-axis stacking loop, the same way LayoutBlockChildren's ordinary loop already treats
+            // them (issue #768's existing scope boundary for floats/positioning inside vertical content).
+            // Only the two ordinary in-flow children below should participate in the block-axis stacking;
+            // nothing should crash.
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-rl">
+                  <div style="position: running(aside)"><p>Running content.</p></div>
+                  <div style="float: left; width: 20pt; height: 20pt">Float.</div>
+                  <p id="p1" style="width: 40pt">First.</p>
+                  <p id="p2" style="width: 40pt">Second.</p>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var p1 = LayoutHarness.FindById(root, "p1");
+            var p2 = LayoutHarness.FindById(root, "p2");
+            Assert.NotNull(p1);
+            Assert.NotNull(p2);
+
+            // The running-positioned and floated children contribute nothing to the block-axis cursor,
+            // so the two ordinary children still stack immediately adjacent to each other (40pt apart).
+            Assert.Equal(40, p1!.Location.X - p2!.Location.X, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_OrthogonalHorizontalChild_LaysOutOwnContentHorizontally_WhilePlacedAsOneAtomicBlock()
+        {
+            // A writing-mode: horizontal-tb block child nested inside a vertical-rl parent is an
+            // orthogonal flow (CSS Writing Modes 4 SS4.3). Its own recursive LayoutContents dispatch is
+            // driven entirely by its own WritingMode.Value, so it lays its own lines out along physical Y
+            // exactly as it would anywhere else - LayoutVerticalBlockChildren needs no special case for it
+            // at all, and simply places its whole resulting box as one atomic unit along the parent's own
+            // block axis (physical X).
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl">
+                  <div id="ortho" style="writing-mode: horizontal-tb; width: 100px">
+                    One two three four five six seven eight nine ten eleven twelve.
+                  </div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var ortho = LayoutHarness.FindById(root, "ortho");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(ortho);
+
+            Assert.Equal(WritingMode.HorizontalTb, ortho!.WritingMode.Value);
+
+            // The orthogonal child's own content wraps onto multiple physical-Y rows within its own box -
+            // ordinary horizontal-tb line flow, unaffected by the parent's own vertical writing mode.
+            var distinctTops = ortho.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak)
+                .Select(w => System.Math.Round(w.Top)).Distinct().OrderBy(t => t).ToList();
+            Assert.True(distinctTops.Count > 1, "a 100px-wide box should force this sentence to wrap onto multiple lines");
+
+            // The child itself is placed as one atomic block along the parent's own block axis: it sits
+            // flush against the wrapper's own block-start (right, under vertical-rl) edge.
+            Assert.Equal(wrapper!.ClientRight, ortho.ActualRight, 1);
         }
 
         [Fact]
@@ -521,13 +738,15 @@ namespace PeachPDF.Tests.Integration
             // per-box independent-dispatch model composes for same-writing-mode nesting too, not just the
             // mixed horizontal/vertical case above.
             var html = LayoutHarness.Wrap("""
-                <div style="writing-mode: vertical-rl">
+                <div id="outer" style="writing-mode: vertical-rl">
                   <div id="inner" style="width: 200px; height: 300px">Alpha Beta</div>
                 </div>
                 """);
 
             var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var outer = LayoutHarness.FindById(root, "outer");
             var inner = LayoutHarness.FindById(root, "inner");
+            Assert.NotNull(outer);
             Assert.NotNull(inner);
 
             // The inner box inherits vertical-rl and is itself inline-only, so it gets real vertical line
@@ -536,6 +755,10 @@ namespace PeachPDF.Tests.Integration
             var words = inner.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
             Assert.True(words.Count >= 2, "expected at least two words ('Alpha', 'Beta')");
             AssertColumnInRightHalf(words[0].Left, inner, "the inner box's own column should sit in the right half of its own box");
+
+            // The outer box's own LayoutVerticalBlockChildren places its only child flush against the
+            // outer box's own block-start (right, under vertical-rl) edge.
+            Assert.Equal(outer!.ClientRight, inner.ActualRight, 1);
         }
     }
 }

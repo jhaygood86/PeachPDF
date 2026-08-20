@@ -145,36 +145,50 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         /// <summary>
         /// Whether <paramref name="box"/> is a box <c>CssBox.LayoutContents</c> actually routes to
-        /// <c>CssLayoutEngine.CreateVerticalLineBoxes</c> - a vertical-writing-mode block box holding only
-        /// inline content - and must therefore be treated as an indivisible unit by its parent's
-        /// fragmentation.
+        /// <c>CssLayoutEngine.CreateVerticalLineBoxes</c> or <c>CssBox.LayoutVerticalBlockChildren</c> - a
+        /// vertical-writing-mode block box holding inline-only or block-level content - and must therefore
+        /// be treated as an indivisible unit by its parent's fragmentation.
         /// </summary>
         /// <remarks>
         /// <para>
         /// <b>Not a spec claim</b> (like <see cref="PaginatesItsOwnContent"/>, not <see cref="IsMonolithic"/>'s
         /// §2 set): nothing in css-break-3 forbids fragmenting a vertical-writing-mode box's content across a
-        /// page boundary. This is a PeachPDF implementation limitation — <c>CreateVerticalLineBoxes</c> lays
-        /// out its whole subtree in one pass with no ability to hand back a resumption record, the same
-        /// practical constraint a replaced element has for a genuinely different (spec) reason. See the
-        /// no-vertical-writing-mode-layout accepted gap for the tracked follow-up that lifts this.
+        /// page boundary. This is a PeachPDF implementation limitation — neither <c>CreateVerticalLineBoxes</c>
+        /// nor <c>LayoutVerticalBlockChildren</c> (issue #760) can hand back a resumption record, laying out
+        /// their whole subtree in one pass instead, the same practical constraint a replaced element has for
+        /// a genuinely different (spec) reason. See the no-vertical-writing-mode-layout accepted gap for the
+        /// tracked follow-up that lifts this.
         /// </para>
         /// <para>
         /// <b>Deliberately not just <c>box.WritingMode.Value is VerticalRl/VerticalLr</c></b> — that alone
         /// is not this box's own dispatch fact, it's every one of its descendants' too, since
         /// <c>writing-mode</c> inherits: a whole multi-paragraph <c>&lt;body style="writing-mode:
         /// vertical-rl"&gt;</c> would otherwise report every one of its ordinarily-paginating block
-        /// children (each laid out through the ordinary, resumable per-child block-flow path, not
-        /// <c>CreateVerticalLineBoxes</c>) as unresumable too, breaking normal multi-page pagination for
-        /// the common case this feature does not touch. The extra conditions here mirror
-        /// <c>CssBox.LayoutContents</c>'s own dispatch gate exactly, so this predicate can never disagree
-        /// with what actually ran.
+        /// children (each laid out through the ordinary, resumable per-child block-flow path) as
+        /// unresumable too, breaking normal multi-page pagination for the common case this feature does not
+        /// touch. The extra conditions here mirror <c>CssBox.LayoutContents</c>'s own dispatch gate exactly
+        /// - every box satisfying them goes through either <c>CreateVerticalLineBoxes</c> or
+        /// <c>LayoutVerticalBlockChildren</c>, never the ordinary per-child block-flow path - so this
+        /// predicate can never disagree with what actually ran.
+        /// </para>
+        /// <para>
+        /// <b><c>DomUtils.ContainsInlinesOnly(box) || !box.EstablishesMultiColumnContext</c>, not either one
+        /// alone</b> — <c>LayoutContents</c> checks the inlines-only vertical branch <i>before</i> the
+        /// multi-column branch, so a box that is both (an admittedly narrow combination: a vertical,
+        /// multi-column box holding only inline content) still dispatches to the unresumable
+        /// <c>CreateVerticalLineBoxes</c>, never to <c>CssLayoutEngineColumns</c> — dropping the
+        /// <c>ContainsInlinesOnly</c> arm entirely (checking only <c>!EstablishesMultiColumnContext</c>, as
+        /// issue #760's original landing briefly did) wrongly reported that combination as resumable, a real
+        /// regression a post-change review caught. A vertical multi-column box with genuine block-level
+        /// children, by contrast, does reach the resumable <c>CssLayoutEngineColumns</c> path (issue #764),
+        /// which is what <c>!EstablishesMultiColumnContext</c> alone still correctly excludes for that case.
         /// </para>
         /// </remarks>
         internal static bool IsUnresumableOrthogonalFlow(CssBox box) =>
             box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
             && box.PlacesItselfAsBlockBox
             && !RunsAnEngineOfItsOwn(box.DerivedStyle.ActualDisplay)
-            && DomUtils.ContainsInlinesOnly(box);
+            && (DomUtils.ContainsInlinesOnly(box) || !box.EstablishesMultiColumnContext);
 
         /// <summary>
         /// Whether <paramref name="box"/> is a table box under a vertical writing mode. Unlike an

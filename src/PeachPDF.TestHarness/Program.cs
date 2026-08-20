@@ -5254,9 +5254,11 @@ await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
 // glyphs paint rotated 90° by default (text-orientation: sideways/mixed's rotated runs) or
 // upright without rotation (text-orientation: upright/mixed's upright runs, real Unicode
 // Vertical_Orientation classification - issue #765). Flexbox and simple Table layout are also
-// writing-mode-aware now - see .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's
-// still deferred (block children, Multi-column axis awareness, and Table's own collapsed
-// borders/headers-footers/captions/rowspan-colspan/per-row pagination).
+// writing-mode-aware now, and so is a vertical box's own block-level and orthogonal-flow content
+// (issue #760) - see .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's still
+// deferred (Multi-column axis awareness, real margin collapsing/orthogonal shrink-to-fit sizing for
+// block children, and Table's own collapsed borders/headers-footers/captions/rowspan-colspan/per-row
+// pagination).
 
 // A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK
 // characters section 8 below uses, so mixed text-orientation renders real upright glyphs rather
@@ -5364,10 +5366,25 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "<div class=\"label\">sideways: every character rotated</div></div>" +
     "</div>" +
 
+"<div style=\"page-break-before: always\"></div>" +
+    "<h2>9 &mdash; block-level and orthogonal-flow children of a vertical box (issue #760)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 200px; height: 90px\">" +
+    "<div style=\"width: 40px; height: 60px; background: #1a6b8a; color: #fff; padding: 4px\">First.</div>" +
+    "<div style=\"width: 40px; height: 60px; background: #4a9bc4; color: #fff; padding: 4px\">Second.</div>" +
+    "<div style=\"width: 40px; height: 60px; background: #7cc0e0; padding: 4px\">Third.</div>" +
+    "</div><div class=\"label\">vertical-rl: block children stack right-to-left</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 220px; height: 130px\">" +
+    "<div style=\"writing-mode: horizontal-tb; width: 90px; background: #eef6fb; border: 1px solid #1a6b8a; padding: 4px\">" +
+    "This orthogonal child keeps its own horizontal-tb line flow, while the vertical parent places its whole box as one atomic unit." +
+    "</div>" +
+    "</div><div class=\"label\">orthogonal child: horizontal-tb block inside a vertical-rl parent</div></div>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
-    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), and writing-mode-aware Flexbox and Table layout.",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout, and block-level/orthogonal-flow content inside a vertical box.",
     writingModeHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---

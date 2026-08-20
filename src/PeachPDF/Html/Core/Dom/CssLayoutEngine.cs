@@ -586,7 +586,12 @@ namespace PeachPDF.Html.Core.Dom
         /// *after* Location moves, which re-derives Size.Width against the new Location.X through the
         /// normal setter rather than leaving it stale.
         /// </summary>
-        private static void ShrinkAutoWidthTo(CssBox blockBox, WritingModeFrame frame, double contentBlockExtent)
+        /// <remarks>
+        /// Internal rather than private: <see cref="CssBox.LayoutVerticalBlockChildren"/> reuses this
+        /// directly for its own auto-width shrink (issue #760) rather than duplicating the
+        /// <see cref="WritingModeFrame.BlockStartIsRight"/>-vs-<c>Location.X</c> subtlety above.
+        /// </remarks>
+        internal static void ShrinkAutoWidthTo(CssBox blockBox, WritingModeFrame frame, double contentBlockExtent)
         {
             // The content-box edge the block axis has reached, in the same physical coordinate
             // ToPhysical already anchors every word to - independent of which side is block-start.
