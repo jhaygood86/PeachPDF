@@ -605,6 +605,24 @@ td:first-child code {
   gap: 1.25rem;
 }
 
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.footer-pst {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+}
+
+.footer-pst img {
+  display: block;
+}
+
 .site-footer a {
   color: var(--green-leaf);
 }

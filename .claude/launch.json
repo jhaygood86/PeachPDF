@@ -12,6 +12,18 @@
         "http"
       ],
       "port": 5068
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "jekyll",
+      "runtimeArgs": [
+        "serve",
+        "--source",
+        "docs",
+        "--port",
+        "4000"
+      ],
+      "port": 4000
     }
   ]
 }

@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Core.Dom
     /// once this box's own <see cref="CssBox.Direction"/>/<see cref="CssBox.WritingMode"/> are resolved),
     /// which writes it into the corresponding physical field via <see cref="LogicalPropertyResolver"/>'s
     /// abstract-to-physical mapping and is never consulted again - matching the plain-field treatment
-    /// <see cref="CssBox.BidiLevels"/> and <c>CollapsedMarginTop</c> already use for other per-box,
+    /// <see cref="CssBox.BidiLevels"/> and <c>CollapsedBlockStartMargin</c> already use for other per-box,
     /// write-once/read-once cascade facts.
     /// </summary>
     internal partial class CssBox

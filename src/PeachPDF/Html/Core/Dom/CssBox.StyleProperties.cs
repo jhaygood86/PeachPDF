@@ -664,13 +664,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the actual width.</summary>
         public double ActualWidth => ActualBoxSizingWidth;
 
-        private double _collapsedMarginTop = double.NaN;
+        private double _collapsedBlockStartMargin = double.NaN;
 
-        /// <summary>The margin top value if was effected by margin collapse.</summary>
-        public double CollapsedMarginTop
+        /// <summary>The block-start margin value if affected by margin collapse (physical top for
+        /// <c>horizontal-tb</c>; right/left for <c>vertical-rl</c>/<c>vertical-lr</c> - see
+        /// <see cref="LogicalPropertyResolver.BlockStart"/>).</summary>
+        public double CollapsedBlockStartMargin
         {
-            get => double.IsNaN(_collapsedMarginTop) ? 0 : _collapsedMarginTop;
-            set => _collapsedMarginTop = value;
+            get => double.IsNaN(_collapsedBlockStartMargin) ? 0 : _collapsedBlockStartMargin;
+            set => _collapsedBlockStartMargin = value;
         }
 
         #endregion

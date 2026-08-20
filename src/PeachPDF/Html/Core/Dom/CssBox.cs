@@ -377,7 +377,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Checked by every generic "first in-flow child"/"previous sibling" walk that a real content box
         /// occupying that slot would otherwise need to answer for - <see cref="BreakPropagation"/>'s
         /// break-before/after propagation, <see cref="Utils.DomUtils.GetPreviousSibling"/>,
-        /// <see cref="CssCounterEngine"/>'s own sibling walk, and <see cref="FoldOwnAdjoiningTopMargins"/>'s
+        /// <see cref="CssCounterEngine"/>'s own sibling walk, and <see cref="FoldOwnAdjoiningBlockStartMargins"/>'s
         /// margin-collapse lookahead - each of which must see whatever the table's own first *real* child
         /// (its caption) sees, not this box. Issue #721.
         /// </summary>
@@ -3603,16 +3603,23 @@ namespace PeachPDF.Html.Core.Dom
         /// one child before laying out its content.
         /// </summary>
         /// <remarks>
-        /// Deliberately scoped down, mirroring <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>'s own
-        /// scope (see the no-vertical-writing-mode-layout accepted gap): every child sits at the same
-        /// cross-axis (inline-axis) start - so there is no cross-axis wrapping - and margins between
-        /// stacked siblings are summed rather than collapsed. The child loop below always places each
-        /// child flush against <see cref="CssBox.ClientTop"/>, growing down, exactly as <c>direction: ltr</c>
-        /// wants - the only placement possible before a child's own cross-axis extent (height) is known,
-        /// since unlike its block-axis extent (width, resolved up front by <see cref="ResolveOwnInlineSize"/>)
-        /// a normal or orthogonal child's height generally isn't knowable until its own content lays out.
-        /// Where <see cref="WritingModeFrame.InlineStartIsBottom"/> (<c>direction: rtl</c>) actually wants
-        /// the physical bottom instead, every stacked child collected below is handed to
+        /// Mirrors <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>'s own scope in one respect (see
+        /// the no-vertical-writing-mode-layout accepted gap): every child sits at the same cross-axis
+        /// (inline-axis) start - so there is no cross-axis wrapping. Adjoining margins between stacked
+        /// siblings - and between this box's own block-start/block-end edge and its first/last stacked
+        /// child - DO really collapse per CSS2.1 §8.3.1 (issue #776), via
+        /// <see cref="FoldOwnAdjoiningBlockStartMargins"/>/<see cref="IsBlockAxisMarginCollapseThrough"/>/
+        /// <see cref="FoldOwnTrailingBlockMargin"/> - the same primitives <see cref="CollapsedMarginBefore"/>
+        /// and <see cref="MarginBottomCollapse"/> use for ordinary <c>horizontal-tb</c> block flow,
+        /// generalized to read each box's own block-start/block-end physical side via
+        /// <see cref="LogicalPropertyResolver"/> instead of assuming physical top/bottom. The child loop
+        /// below always places each child flush against <see cref="CssBox.ClientTop"/>, growing down,
+        /// exactly as <c>direction: ltr</c> wants - the only placement possible before a child's own
+        /// cross-axis extent (height) is known, since unlike its block-axis extent (width, resolved up
+        /// front by <see cref="ResolveOwnInlineSize"/>) a normal or orthogonal child's height generally
+        /// isn't knowable until its own content lays out. Where
+        /// <see cref="WritingModeFrame.InlineStartIsBottom"/> (<c>direction: rtl</c>) actually wants the
+        /// physical bottom instead, every stacked child collected below is handed to
         /// <see cref="_pendingCrossAxisRtlReflection"/> for <see cref="PerformLayoutEpilogue"/> to reflect
         /// afterward, once this box's own height is truly final (see that field's own remarks for why it
         /// can't happen here) - the same "lay out everything forward, then reflect once the far edge is
@@ -3621,7 +3628,8 @@ namespace PeachPDF.Html.Core.Dom
         /// children are routed through the ordinary <see cref="LayoutBlockChild"/> path unchanged (the
         /// existing, physical-Y-oriented placement this vertical box's content already accepted as out of
         /// scope) rather than given new block-axis-aware float/positioning logic of their own, and never
-        /// take part in the reflection either.
+        /// take part in the reflection or in margin collapse either - per CSS2.1 §8.3.1 an out-of-flow
+        /// box's margin never adjoins anything.
         /// </remarks>
         private async ValueTask LayoutVerticalBlockChildren(RGraphics g)
         {
@@ -3634,6 +3642,15 @@ namespace PeachPDF.Html.Core.Dom
             double logicalBlockOffset = 0;
             var maxCrossExtent = clientTop;
             List<CssBox>? stackedChildren = frame.InlineStartIsBottom ? [] : null;
+
+            // Issue #776: the running adjoining-margin set still open from a run of trailing
+            // self-collapsing siblings (or, before the first real child is placed, empty) - carried
+            // forward one iteration at a time rather than walked backward per child the way
+            // FoldMarginsPrecedingChild does, since this loop (unlike ordinary, resumable/fragmentable
+            // block flow) is a single monolithic forward pass with no per-child pagination to re-derive
+            // positions against.
+            var pendingGroup = new AdjoiningMarginSet();
+            var hasPrecedingSibling = false;
 
             foreach (var childBox in Boxes)
             {
@@ -3657,8 +3674,46 @@ namespace PeachPDF.Html.Core.Dom
                     continue;
                 }
 
-                var startMargin = frame.BlockStartIsRight ? childBox.ActualMarginRight : childBox.ActualMarginLeft;
-                var endMargin = frame.BlockStartIsRight ? childBox.ActualMarginLeft : childBox.ActualMarginRight;
+                // §8.3.1's adjoining-margin set for this child's leading edge: either an ancestor's own
+                // lookahead already resolved it (this child is a non-anchor member of a shared
+                // first-in-flow-child chain - see FoldOwnAdjoiningBlockStartMargins's own remarks, same
+                // override CollapsedMarginBefore consumes for ordinary horizontal-tb flow), or this
+                // child's own block-start margin (and, transitively, its own first-in-flow-child chain)
+                // folds into whatever is still open from a preceding run of self-collapsing siblings.
+                // Kept open (not just its .CollapsedValue) past this point: if this child turns out to be
+                // self-collapsing itself (checked once its width is known, below), its own trailing margin
+                // joins this SAME set rather than starting a fresh one - CSS2.1 §8.3.1 folds a
+                // self-collapsing box's leading and trailing margins into one shared adjoining set with
+                // whatever precedes and follows it, not two separately-resolved pairs.
+                var startSide = frame.BlockStartIsRight ? PhysicalSide.Right : PhysicalSide.Left;
+                var endSide = frame.BlockStartIsRight ? PhysicalSide.Left : PhysicalSide.Right;
+
+                var group = hasPrecedingSibling ? pendingGroup : new AdjoiningMarginSet();
+                var ownEndMargin = frame.BlockStartIsRight ? childBox.ActualMarginLeft : childBox.ActualMarginRight;
+
+                // Always folded (even when an override below supersedes it for THIS child's own
+                // position) - `group`'s true collapsed value is still what a self-collapsing child needs
+                // to hand off to whatever comes after it in THIS frame, a genuinely different question
+                // from "where does this child itself sit relative to its own parent" (see the override
+                // branch's own remarks).
+                childBox.FoldOwnAdjoiningBlockStartMargins(ref group, startSide);
+
+                double startMargin;
+                if (!hasPrecedingSibling && childBox.TryTakeGroupBlockStartMarginOverride(out var overrideValue))
+                {
+                    // An ancestor's own lookahead already resolved this child's TRUE position relative to
+                    // ITS OWN parent (0 - flush - since the full collapsed value was already spent
+                    // positioning that ancestor one or more levels up, per FoldOwnAdjoiningBlockStartMargins's
+                    // own remarks). group's freshly-recomputed value above is only this child's OWN
+                    // isolated view (it can't see the ancestor's larger chain) and would be wrong to use
+                    // for the child's own position here - but it's still the right value to keep folding
+                    // forward into for a following sibling, so `group` itself is left as computed.
+                    startMargin = overrideValue;
+                }
+                else
+                {
+                    startMargin = group.CollapsedValue;
+                }
 
                 var marginBoxBlockStart = frame.ToPhysical(0, logicalBlockOffset);
 
@@ -3723,7 +3778,43 @@ namespace PeachPDF.Html.Core.Dom
 
                 await childBox.LayoutContentAtItsAssignedPosition(g);
 
-                logicalBlockOffset += startMargin + childWidth + endMargin;
+                // IsBlockAxisMarginCollapseThrough mirrors IsMarginCollapseThrough's own recursive
+                // "self-collapsing empty box" definition, gated on this child's already-resolved
+                // block-axis extent rather than a Width style token (see that method's own remarks for
+                // why: width:auto stretches rather than shrinks in this engine, unlike height:auto).
+                if (childBox.IsBlockAxisMarginCollapseThrough(childWidth))
+                {
+                    // A self-collapsing child contributes no real thickness, and startMargin (this
+                    // child's own placeholder position, using whatever partial group value was known so
+                    // far) is deliberately NOT added to logicalBlockOffset here - both of its own margins
+                    // (leading already folded into `group` above, trailing folded here) stay part of the
+                    // SAME open group for whatever follows, so the group's true, fully-collapsed value is
+                    // "spent" exactly once, by the next real child (or this box's own trailing edge,
+                    // below), rather than once per self-collapsing child in a run (mirrors
+                    // FoldMarginsPrecedingChild's own self-collapsing walk-back, which measures a
+                    // following box from the last REAL anchor, not from each self-collapsing box in
+                    // between).
+                    //
+                    // FoldSelfCollapsingBlockMargins, not just ownEndMargin: a self-collapsing child's own
+                    // FoldOwnAdjoiningBlockStartMargins call above only walked its first-in-flow-child
+                    // chain, missing a second (or later) self-collapsing SIBLING descendant - the whole
+                    // self-collapsing subtree's margins (every descendant, not just the first-child chain)
+                    // must join this same set per CSS2.1 §8.3.1, mirroring FoldSelfCollapsingMargins's own
+                    // full-subtree walk for ordinary horizontal-tb flow. Re-folding childBox's own start
+                    // margin here is harmless (folding the same value twice never changes a running
+                    // max/min).
+                    logicalBlockOffset += childWidth;
+                    childBox.FoldSelfCollapsingBlockMargins(ref group, startSide, endSide);
+                    pendingGroup = group;
+                }
+                else
+                {
+                    logicalBlockOffset += startMargin + childWidth;
+                    pendingGroup = new AdjoiningMarginSet();
+                    pendingGroup.Fold(ownEndMargin);
+                }
+
+                hasPrecedingSibling = true;
                 maxCrossExtent = Math.Max(maxCrossExtent, childBox.ActualBottom);
                 stackedChildren?.Add(childBox);
             }
@@ -3732,6 +3823,19 @@ namespace PeachPDF.Html.Core.Dom
             // own remarks. Always (re-)assigned, even when null, so a later pass on this same box can never
             // read back a stale list a fresh LayoutVerticalBlockChildren run since superseded.
             _pendingCrossAxisRtlReflection = stackedChildren is { Count: > 0 } ? stackedChildren : null;
+
+            // Issue #776: fold in whatever is still open from the last stacked child (or a trailing run
+            // of self-collapsing siblings) - and, when this box's own block-end edge qualifies (mirrors
+            // MarginBottomCollapse's own gate), this box's own block-end margin too.
+            if (hasPrecedingSibling)
+            {
+                if (widthIsAuto)
+                {
+                    FoldOwnTrailingBlockMargin(ref pendingGroup);
+                }
+
+                logicalBlockOffset += pendingGroup.CollapsedValue;
+            }
 
             if (widthIsAuto)
             {
@@ -3742,6 +3846,75 @@ namespace PeachPDF.Html.Core.Dom
             {
                 ActualBottom = maxCrossExtent + ActualPaddingBottom + ActualBorderBottomWidth;
             }
+        }
+
+        /// <summary>
+        /// Vertical-block-axis counterpart of <see cref="IsMarginCollapseThrough"/>, asked of an
+        /// already-laid-out stacked child of <see cref="LayoutVerticalBlockChildren"/> to decide whether
+        /// its own margins pass through to whatever follows it (CSS2.1 §8.3.1) rather than reserving real
+        /// block-axis space.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately gated on <paramref name="resolvedBlockExtent"/> (the child's own already-resolved
+        /// border-box width) rather than a <c>Width</c> style token the way <see cref="IsMarginCollapseThrough"/>
+        /// gates on <c>Height == auto</c>: unlike a horizontal box's auto HEIGHT (always content-driven/
+        /// shrink-to-fit in this engine), a vertical child's auto WIDTH (<see cref="CssLayoutEngine.GetBoxWidth"/>)
+        /// STRETCHES to fill the available block-axis space instead of shrinking - so "Width == auto" is
+        /// not itself evidence of zero block-axis extent here. Border/padding/min-width are all
+        /// non-negative and already folded into <paramref name="resolvedBlockExtent"/> by GetBoxWidth, so
+        /// they need no separate check. Safe to ask only about an already-laid-out child (same
+        /// precondition <see cref="IsMarginCollapseThrough"/>'s own call sites already have) - reads
+        /// <see cref="ActualRight"/>/<see cref="CssBox.Location"/> off this child and, recursively, its
+        /// own in-flow children, all of which have already had <see cref="LayoutContentAtItsAssignedPosition"/>
+        /// run by the time a sibling further down <see cref="LayoutVerticalBlockChildren"/>'s loop asks.
+        /// </remarks>
+        private bool IsBlockAxisMarginCollapseThrough(double resolvedBlockExtent, int depth = 0)
+        {
+            if (depth > 500) return false;
+            if (WritingMode.Value is not (CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr)) return false;
+            if (HasDifferentWritingModeFromParent) return false;
+            if (Overflow.Value != PeachPDF.CSS.Overflow.Visible) return false;
+            if (Words.Count > 0) return false;
+            if (resolvedBlockExtent >= 0.1) return false;
+
+            var inFlowChildren = Boxes.Where(b => !b.IsExcludedFromFlow && b.DerivedStyle.ActualDisplay != Keywords.None).ToList();
+            if (inFlowChildren.Count == 0) return true;
+
+            return inFlowChildren.All(c => c.IsBlockAxisMarginCollapseThrough(c.ActualRight - c.Location.X, depth + 1));
+        }
+
+        /// <summary>
+        /// Mirrors <see cref="MarginBottomCollapse"/> for the vertical block axis: folds this box's own
+        /// block-end margin into <paramref name="trailingGroup"/> (already carrying the contribution of
+        /// its own last stacked child, including through any trailing run of self-collapsing children)
+        /// when this box's own block-end edge qualifies to collapse through - so it ends up baked into
+        /// <c>logicalBlockOffset</c> (and, via <see cref="CssLayoutEngine.ShrinkAutoWidthTo"/>, this box's
+        /// own resolved size) exactly the way <see cref="MarginBottomCollapse"/> bakes the equivalent
+        /// value into <see cref="ActualBottom"/> for ordinary <c>horizontal-tb</c> flow.
+        /// </summary>
+        /// <remarks>
+        /// Gated identically to <see cref="MarginBottomCollapse"/>'s own "is this box its own parent's
+        /// last child" condition (see that method's own extensive comment on why the gate is load-bearing
+        /// against double-counting): this box's own margin only ever gets to fold in here when nothing
+        /// else will separately collapse against it afterward - i.e. when this box has no following
+        /// sibling within its own parent, whichever parent that is (an ordinary horizontal-tb block flow,
+        /// or - the case this generalizes to - another <see cref="LayoutVerticalBlockChildren"/> stacking
+        /// loop one level up, which folds every child's own raw margin into ITS OWN running group
+        /// regardless of position, exactly mirroring how an ordinary sibling's own trailing margin is
+        /// read by <see cref="FoldMarginsPrecedingChild"/> for the next box in line).
+        /// </remarks>
+        private void FoldOwnTrailingBlockMargin(ref AdjoiningMarginSet trailingGroup)
+        {
+            if (ParentBox is null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
+                !(ParentBox.BlockEndMargin < 0.1) ||
+                !(BlockEndPadding < 0.1) || !(BlockEndBorderWidth < 0.1) ||
+                Overflow.Value != PeachPDF.CSS.Overflow.Visible ||
+                HasDifferentWritingModeFromParent)
+            {
+                return;
+            }
+
+            trailingGroup.Fold(BlockEndMargin);
         }
 
         /// <summary>
@@ -5854,15 +6027,79 @@ namespace PeachPDF.Html.Core.Dom
         /// Delivers a rectangle for each LineBox related to this box, if inline.
         /// </remarks>
         /// <summary>
-        /// Set by an ancestor's lookahead in <see cref="FoldOwnAdjoiningTopMargins"/> when this box is a
-        /// non-anchor member of a shared chain of adjoining first-in-flow-child margins: always 0,
+        /// Reads a physical margin/border-width/padding value by <see cref="PhysicalSide"/> rather than a
+        /// hardcoded Top/Right/Bottom/Left accessor - the primitive <see cref="FoldOwnAdjoiningBlockStartMargins"/>
+        /// uses to ask "which physical value does this box have on the axis the CALLER cares about" (see
+        /// that method's own remarks for why the axis is caller-supplied rather than re-derived per box),
+        /// and <see cref="BlockEndMargin"/>/<see cref="BlockEndBorderWidth"/>/<see cref="BlockEndPadding"/>
+        /// use for a box's own, always-self-consistent block-end side. Issue #776: before this, the
+        /// margin-collapse cluster only ever read physical Top/Bottom, which is correct for every
+        /// <c>horizontal-tb</c> box but meaningless for a <c>vertical-rl</c>/<c>vertical-lr</c> box's own
+        /// block axis (physical left/right) - these accessors let the SAME algorithm serve both, rather
+        /// than a second, parallel implementation for the vertical axis.
+        /// </summary>
+        private double PhysicalMargin(PhysicalSide side) => side switch
+        {
+            PhysicalSide.Top => ActualMarginTop,
+            PhysicalSide.Right => ActualMarginRight,
+            PhysicalSide.Bottom => ActualMarginBottom,
+            _ => ActualMarginLeft
+        };
+
+        private double PhysicalBorderWidth(PhysicalSide side) => side switch
+        {
+            PhysicalSide.Top => ActualBorderTopWidth,
+            PhysicalSide.Right => ActualBorderRightWidth,
+            PhysicalSide.Bottom => ActualBorderBottomWidth,
+            _ => ActualBorderLeftWidth
+        };
+
+        private double PhysicalPadding(PhysicalSide side) => side switch
+        {
+            PhysicalSide.Top => ActualPaddingTop,
+            PhysicalSide.Right => ActualPaddingRight,
+            PhysicalSide.Bottom => ActualPaddingBottom,
+            _ => ActualPaddingLeft
+        };
+
+        /// <summary>This box's own block-end physical side, per its own resolved <see cref="WritingMode"/>.</summary>
+        /// <remarks>
+        /// Unlike block-START (see <see cref="FoldOwnAdjoiningBlockStartMargins"/>'s own <c>side</c>
+        /// parameter), a box's own block-END is always safe to resolve from ITS OWN writing mode directly
+        /// - <see cref="FoldOwnTrailingBlockMargin"/>, the only caller, is always asking about a box's
+        /// relationship to its own immediate parent (gated on their writing modes matching), never
+        /// walking across a chain of different boxes the way the block-start fold does.
+        /// </remarks>
+        private PhysicalSide BlockEnd => LogicalPropertyResolver.BlockEnd(WritingMode.Value);
+
+        private double BlockEndMargin => PhysicalMargin(BlockEnd);
+        private double BlockEndBorderWidth => PhysicalBorderWidth(BlockEnd);
+        private double BlockEndPadding => PhysicalPadding(BlockEnd);
+
+        /// <summary>
+        /// True when this box's own resolved <see cref="WritingMode"/> differs from its parent's - CSS
+        /// Writing Modes 4 §4.3's orthogonal-flow root, which always establishes a new formatting context.
+        /// A margin-collapse chain must stop here unconditionally (the same way <c>overflow != visible</c>
+        /// already stops it): a <c>vertical-rl</c> box nested in <c>vertical-lr</c> (or vice versa) is
+        /// caught too, not just the horizontal-vs-vertical case - the two have MIRRORED block-start/end
+        /// physical mappings (<see cref="LogicalPropertyResolver.BlockStart"/> is Right for
+        /// <c>vertical-rl</c>, Left for <c>vertical-lr</c>), so continuing a fold across that boundary
+        /// using one fixed physical side would silently mix up which margins are actually adjoining.
+        /// </summary>
+        private bool HasDifferentWritingModeFromParent =>
+            ParentBox is not null && WritingMode.Value != ParentBox.WritingMode.Value;
+
+        /// <summary>
+        /// Set by an ancestor's lookahead in <see cref="FoldOwnAdjoiningBlockStartMargins"/> when this box
+        /// is a non-anchor member of a shared chain of adjoining first-in-flow-child margins: always 0,
         /// because the anchor member (the outermost box in the chain, wherever the chain's resolution
         /// began) already received the group's FULL collapsed value as its own return value, and this
         /// box's position is computed relative to its immediate parent's already-correctly-positioned
-        /// ClientTop - adding the group value again here would double (or triple, ...) count it. See the
-        /// lookahead loop below for why this box must not resolve its own top margin independently.
+        /// content-box block-start edge - adding the group value again here would double (or triple, ...)
+        /// count it. See the lookahead loop below for why this box must not resolve its own block-start
+        /// margin independently.
         /// </summary>
-        private double? _groupTopMarginOverride;
+        private double? _groupBlockStartMarginOverride;
 
         /// <summary>
         /// The collapsed margin between whatever this frame placed before <paramref name="child"/> and
@@ -5877,7 +6114,7 @@ namespace PeachPDF.Html.Core.Dom
         /// self-collapsing predecessors, everything those fold in — which only this frame can see
         /// (<see cref="FoldMarginsPrecedingChild"/>). The other half is the child's own top margin and the
         /// chain of first-in-flow-child margins adjoining it, which is a walk into the child's own subtree
-        /// and stays there (<see cref="FoldOwnAdjoiningTopMargins"/>). §8.3.1 collapses the <i>whole</i> set
+        /// and stays there (<see cref="FoldOwnAdjoiningBlockStartMargins"/>). §8.3.1 collapses the <i>whole</i> set
         /// at once, so the two halves fold into one <see cref="AdjoiningMarginSet"/> rather than being
         /// resolved separately and combined afterwards.
         /// </remarks>
@@ -5898,7 +6135,7 @@ namespace PeachPDF.Html.Core.Dom
             if (child.IsFloated)
             {
                 var floatValue = child.ActualMarginTop + (prevSibling?.GetEffectiveBottomMargin() ?? 0);
-                child.CollapsedMarginTop = floatValue;
+                child.CollapsedBlockStartMargin = floatValue;
                 return floatValue;
             }
 
@@ -5909,9 +6146,9 @@ namespace PeachPDF.Html.Core.Dom
             // exactly what caused a real bug: a 3+-level chain where the outermost box's position was
             // itself fixed by sibling-margin-collapse before a deeper descendant's larger margin was
             // known, silently adding on top instead of properly collapsing into one shared value.
-            if (child.TryTakeGroupTopMarginOverride(out var overrideValue))
+            if (child.TryTakeGroupBlockStartMarginOverride(out var overrideValue))
             {
-                child.CollapsedMarginTop = overrideValue;
+                child.CollapsedBlockStartMargin = overrideValue;
                 return overrideValue;
             }
 
@@ -5923,7 +6160,7 @@ namespace PeachPDF.Html.Core.Dom
 
             var anchor = FoldMarginsPrecedingChild(child, prevSibling, ref margins);
 
-            child.FoldOwnAdjoiningTopMargins(ref margins);
+            child.FoldOwnAdjoiningBlockStartMargins(ref margins, PhysicalSide.Top);
 
             var groupValue = margins.CollapsedValue;
 
@@ -5933,7 +6170,7 @@ namespace PeachPDF.Html.Core.Dom
                 groupValue = child.GetEmHeight() * 1.1f;
             }
 
-            child.CollapsedMarginTop = groupValue;
+            child.CollapsedBlockStartMargin = groupValue;
 
             if (prevSibling == null)
             {
@@ -6023,61 +6260,110 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Folds into <paramref name="margins"/> this box's own top margin and every first-in-flow-child
-        /// margin adjoining it — the half of §8.3.1's set that lives inside this box's own subtree.
+        /// Folds into <paramref name="margins"/> this box's own block-start margin (on
+        /// <paramref name="side"/>) and every first-in-flow-child margin adjoining it — the half of
+        /// §8.3.1's set that lives inside this box's own subtree.
         /// </summary>
-        private void FoldOwnAdjoiningTopMargins(ref AdjoiningMarginSet margins)
+        /// <param name="margins">The running adjoining-margin set to fold into.</param>
+        /// <param name="side">
+        /// The physical side to read as "block-start" for every box in the chain, fixed by the CALLER's
+        /// own orchestration - not re-derived per box. <see cref="CollapsedMarginBefore"/> always passes
+        /// <see cref="PhysicalSide.Top"/> (ordinary <c>horizontal-tb</c> block flow always collapses
+        /// physical top/bottom margins between a box and its children, regardless of any individual
+        /// child's own <see cref="WritingMode"/> - <c>margin-top</c> is a plain physical property, not a
+        /// logical one). <see cref="LayoutVerticalBlockChildren"/> passes whichever physical side its own
+        /// <see cref="WritingModeFrame.BlockStartIsRight"/> names, for the same reason: it is asking
+        /// about ITS OWN stacking axis, not each stacked child's individually-resolved one.
+        /// </param>
+        /// <remarks>
+        /// Generalized for issue #776 so the same method serves both orchestrations, rather than two
+        /// parallel implementations. The chain stops descending (though the child's own margin on
+        /// <paramref name="side"/> still folds in first) the instant a box's own children are stacked
+        /// along a DIFFERENT axis than <paramref name="side"/> - checked by comparing adjacent boxes' own
+        /// <see cref="WritingMode"/> values, since a box's children always share its own writing mode's
+        /// block axis. A box whose writing mode differs from its parent's always establishes a new
+        /// formatting context (CSS Writing Modes 4 §4.3's orthogonal flow root) and nothing may be
+        /// folded past it, the same way <c>overflow != visible</c> already stops the chain. This closes a
+        /// latent gap: before this, a descendant reached via this lookahead could have had its OWN
+        /// first-in-flow child's margin folded in too using a physical side that made no sense for that
+        /// descendant's own children (stacked along a different axis) - meaningless for an orthogonal
+        /// (horizontal-vs-vertical) boundary, and for a mismatched <c>vertical-rl</c>-inside-<c>vertical-lr</c>
+        /// (or vice versa) pairing, actively wrong (their block-start/end physical mappings are mirrored).
+        /// </remarks>
+        private void FoldOwnAdjoiningBlockStartMargins(ref AdjoiningMarginSet margins, PhysicalSide side)
         {
-            // Only this box's own TOP margin joins its own position group - even when this box is
-            // itself self-collapsing. Per CSS2.1 §8.3.1 a collapsed-through box's top border edge
-            // sits where it would "if the element had a non-zero bottom border", i.e. its own bottom
-            // margin positions only what FOLLOWS it (folded there via FoldSelfCollapsingMargins in
-            // the following sibling's walk-back above), never the box itself. (When there is no
-            // prevSibling at all, this is also the whole group: reaching that case means the parent
-            // couldn't fold this box into its own lookahead - see the override in
-            // CollapsedMarginBefore - so this box's top margin is genuinely isolated from anything
-            // above it.)
-            margins.Fold(ActualMarginTop);
+            // Only this box's own block-start margin joins its own position group - even when this box
+            // is itself self-collapsing. Per CSS2.1 §8.3.1 a collapsed-through box's block-start border
+            // edge sits where it would "if the element had a non-zero" opposite-edge border, i.e. its
+            // own block-end margin positions only what FOLLOWS it (folded there via
+            // FoldSelfCollapsingMargins in the following sibling's walk-back above), never the box
+            // itself. (When there is no prevSibling at all, this is also the whole group: reaching that
+            // case means the parent couldn't fold this box into its own lookahead - see the override in
+            // CollapsedMarginBefore - so this box's block-start margin is genuinely isolated from
+            // anything above it.)
+            margins.Fold(PhysicalMargin(side));
 
-            // Lookahead: does this box have a first-in-flow child whose own top margin is ALSO adjoining
-            // (no border/padding/overflow of this box's own blocking it, no clearance on the child) -
-            // and, transitively, that child's first-in-flow child, and so on? CSS2.1 8.3.1 requires the
-            // WHOLE such chain to resolve to one single collapsed value; resolving it top-down without
-            // this lookahead would let each level "lock in" a value before a deeper level's possibly
-            // larger margin is even known. Walk the chain now (all the CSS-value-derived properties
-            // involved - ActualMarginTop, border/padding widths - are independent of Y-position layout,
-            // so reading them before these descendants are positioned is safe) and fold every member's
-            // own top margin into the same running set - folding into the SET (rather than into the
+            // Lookahead: does this box have a first-in-flow child whose own block-start margin is ALSO
+            // adjoining (no border/padding/overflow of this box's own blocking it, no clearance on the
+            // child) - and, transitively, that child's first-in-flow child, and so on? CSS2.1 8.3.1
+            // requires the WHOLE such chain to resolve to one single collapsed value; resolving it
+            // top-down without this lookahead would let each level "lock in" a value before a deeper
+            // level's possibly larger margin is even known. Walk the chain now (all the CSS-value-derived
+            // properties involved - margin/border/padding - are independent of position layout, so
+            // reading them before these descendants are positioned is safe) and fold every member's own
+            // block-start margin into the same running set - folding into the SET (rather than into the
             // final position-corrected return value, as an earlier version did) keeps a chain member's
             // small margin from displacing the group's already-larger collapsed value. THIS box (the
             // anchor, wherever the chain's resolution began) ends up with the group's full collapsed
             // value as the frame's return value. Every deeper chain member instead gets a 0 override:
             // since nothing separates them from their own immediate parent (that parent is either the
             // anchor itself or another 0 member), their position is already exactly right as soon as
-            // it's computed relative to that parent's own (already-correct) ClientTop - giving them the
-            // full group value AGAIN would double/triple/... count it at each level.
+            // it's computed relative to that parent's own (already-correct) content-box block-start edge
+            // - giving them the full group value AGAIN would double/triple/... count it at each level.
+
+            // This box's own margin (just folded above) is always legitimate on `side` regardless of its
+            // own writing mode - that's an ordinary physical value the CALLER's axis cares about. But if
+            // `side` isn't actually THIS box's own block-start (i.e. this box is itself already the far
+            // side of a writing-mode boundary from the caller - e.g. CollapsedMarginBefore's always-Top
+            // axis calling into a vertical-rl box), this box's own CHILDREN are stacked along a different
+            // axis entirely and must not be examined at all - the per-iteration writing-mode check below
+            // only catches a boundary crossed WHILE walking the chain, not one already crossed by `this`
+            // being the chain's own starting point.
+            if (LogicalPropertyResolver.BlockStart(WritingMode.Value) != side) return;
+
             var chainMembers = new List<CssBox>();
             var current = this;
             // Capped defensively (real documents never nest this deep) so a malformed/cyclic box tree
             // degrades to "stop extending the group" instead of hanging or overflowing the stack.
             while (chainMembers.Count < 1000 && current.Overflow.Value == PeachPDF.CSS.Overflow.Visible &&
-                   current.ActualBorderTopWidth < 0.1 && current.ActualPaddingTop < 0.1)
+                   current.PhysicalBorderWidth(side) < 0.1 && current.PhysicalPadding(side) < 0.1)
             {
                 // A captioned table's grid decoration box (TableGridDecorationBox, issue #721) is a
                 // synthetic Boxes[0] with a margin that is always 0 and no children of its own - without
                 // this exclusion it would end the chain right there with a 0 fold, instead of reaching
-                // the table's real first-in-flow child (its caption) and that caption's own top margin.
+                // the table's real first-in-flow child (its caption) and that caption's own block-start
+                // margin.
                 var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsExcludedFromFlow && b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsTableGridDecorationBox);
                 if (firstInFlowChild == null || firstInFlowChild.Clear.Value != ClearMode.None || firstInFlowChild == current) break;
 
-                margins.Fold(firstInFlowChild.ActualMarginTop);
+                // The child's own margin on `side` always legitimately joins the group here - it's an
+                // ordinary physical value on the CALLER's fixed axis, regardless of the child's own
+                // writing mode. Only DESCENDING FURTHER (into the child's own subtree, where `side` would
+                // stop corresponding to that subtree's own block axis) is conditional on the writing mode
+                // matching, below - a box whose writing mode differs from current's establishes a new
+                // formatting context (orthogonal flow root, or - within the vertical family - a mirrored
+                // block-start/end mapping) and nothing may be folded past IT.
+                margins.Fold(firstInFlowChild.PhysicalMargin(side));
                 chainMembers.Add(firstInFlowChild);
+
+                if (firstInFlowChild.HasDifferentWritingModeFromParent) break;
+
                 current = firstInFlowChild;
             }
 
             foreach (var member in chainMembers)
             {
-                member._groupTopMarginOverride = 0;
+                member._groupBlockStartMarginOverride = 0;
             }
         }
 
@@ -6088,15 +6374,15 @@ namespace PeachPDF.Html.Core.Dom
         /// One-shot: the override is consumed, because it describes the chain resolved on the pass that
         /// set it and must not survive into a later one.
         /// </remarks>
-        private bool TryTakeGroupTopMarginOverride(out double value)
+        private bool TryTakeGroupBlockStartMarginOverride(out double value)
         {
-            if (_groupTopMarginOverride is not { } resolved)
+            if (_groupBlockStartMarginOverride is not { } resolved)
             {
                 value = 0;
                 return false;
             }
 
-            _groupTopMarginOverride = null;
+            _groupBlockStartMarginOverride = null;
             value = resolved;
             return true;
         }
@@ -6167,6 +6453,46 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Vertical-block-axis counterpart of <see cref="FoldSelfCollapsingMargins"/>: folds every
+        /// margin adjoining through this self-collapsing box (<see cref="IsBlockAxisMarginCollapseThrough"/>)
+        /// into the running set - its own margins on <paramref name="startSide"/>/<paramref name="endSide"/>
+        /// plus, recursively, those of every in-flow descendant, all of which are themselves
+        /// self-collapsing by definition, so every one of their margins is part of the same adjoining set
+        /// per CSS2.1 §8.3.1 - not just the first-in-flow-child chain <see cref="FoldOwnAdjoiningBlockStartMargins"/>
+        /// itself walks, which would miss a second (or later) self-collapsing sibling descendant.
+        /// </summary>
+        /// <param name="margins">The running adjoining-margin set to fold into.</param>
+        /// <param name="startSide">
+        /// The physical side to read as "block-start" for every box in the subtree - fixed by the
+        /// CALLER's own stacking axis (<see cref="LayoutVerticalBlockChildren"/>'s <c>frame.BlockStartIsRight</c>),
+        /// mirroring <see cref="FoldOwnAdjoiningBlockStartMargins"/>'s own <c>side</c> parameter design.
+        /// </param>
+        /// <param name="endSide">The physical side to read as "block-end", i.e. the opposite of <paramref name="startSide"/>.</param>
+        /// <param name="depth">Recursion guard; do not pass explicitly.</param>
+        /// <remarks>
+        /// No writing-mode guard is needed here, unlike <see cref="FoldOwnAdjoiningBlockStartMargins"/>'s
+        /// own chain walk: reaching this method at all already means the caller verified
+        /// <see cref="IsBlockAxisMarginCollapseThrough"/>, which transitively requires every descendant in
+        /// the subtree to share this box's own writing mode (an orthogonal descendant would have failed
+        /// that check itself and stopped the whole subtree from being self-collapsing in the first place).
+        /// </remarks>
+        private void FoldSelfCollapsingBlockMargins(ref AdjoiningMarginSet margins, PhysicalSide startSide, PhysicalSide endSide, int depth = 0)
+        {
+            // Capped defensively (real documents never nest this deep) so a malformed/cyclic box tree
+            // degrades to "stop folding" instead of a stack overflow.
+            if (depth > 500) return;
+
+            margins.Fold(PhysicalMargin(startSide));
+            margins.Fold(PhysicalMargin(endSide));
+
+            foreach (var childBox in Boxes)
+            {
+                if (childBox.IsOutOfFlow || childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                childBox.FoldSelfCollapsingBlockMargins(ref margins, startSide, endSide, depth + 1);
+            }
+        }
+
+        /// <summary>
         /// Whether this box's own top and bottom margins are adjoining to each other (CSS2.1 8.3.1): the
         /// box has no top/bottom border or padding, resolves to zero/auto height and min-height, doesn't
         /// establish a new block formatting context, is in-flow, and either has no in-flow children or
@@ -6180,6 +6506,14 @@ namespace PeachPDF.Html.Core.Dom
             if (depth > 500) return false;
             if (DerivedStyle.ActualDisplay == Keywords.None) return false;
             if (IsOutOfFlow) return false;
+            // A box whose writing mode differs from its own parent's is an orthogonal-flow root (CSS
+            // Writing Modes 4 §4.3) and always establishes a new formatting context - it always has
+            // "real" (non-collapsing) margins, the same reasoning as the Overflow != Visible check
+            // below. Issue #776: without this, a vertical-rl/vertical-lr descendant reached via this
+            // method's own recursive "all in-flow children collapse-through" check would have been
+            // judged using physical top/bottom border/padding/height on a box whose own children are
+            // actually stacked along its physical left/right block axis - meaningless.
+            if (HasDifferentWritingModeFromParent) return false;
             // A percentage height against an indefinite (not-yet-height-calculated) containing block
             // resolves to auto (CSS2.1 §10.5, the same rule ApplyHeight already applies) - Acid2's own
             // ".empty { margin: 6.25em; height: 10%; }" is written to exercise exactly this: its own
@@ -6277,6 +6611,18 @@ namespace PeachPDF.Html.Core.Dom
             // last child's visual offset must not grow this box's own content-driven height
             // (CSS 2.1 §9.4.3) - Acid2's ".smile div { position: relative; bottom: -1em }" otherwise
             // inflates ".smile" by 1em and pushes ".chin" that much too far down.
+            //
+            // Deliberately NOT gated on this box's own writing-mode relative to ParentBox's (unlike
+            // FoldOwnAdjoiningBlockStartMargins's chain walk, issue #776): this box's own bottom margin
+            // collapsing with ITS OWN last in-flow child is a relationship entirely internal to this
+            // box and its own descendant, governed by THIS box's own writing-mode alone (an orthogonal
+            // horizontal-tb box's own children really are stacked top-to-bottom in its own established
+            // flow, regardless of what writing-mode its own parent happens to use) - unlike the chain
+            // walk's bug, which came from applying ONE frame's fixed axis to a DIFFERENT box's own
+            // descendants. Nor is a vertical ParentBox's own ActualMarginBottom a double-count risk the
+            // way an ordinary horizontal-tb ParentBox's is: LayoutVerticalBlockChildren's own stacking
+            // loop reads a child's LEFT/RIGHT margins for its own sibling gaps, never its top/bottom
+            // ones, so nothing there would ever separately re-fold this box's own ActualMarginBottom.
             if (ParentBox == null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
                 !(_parentBox!.ActualMarginBottom < 0.1) ||
                 !(ActualPaddingBottom < 0.1) || !(ActualBorderBottomWidth < 0.1) ||

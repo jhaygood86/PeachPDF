@@ -136,16 +136,40 @@ per-child fragmentation of a vertical box's block content remains tracked separa
 ([#767](https://github.com/jhaygood86/PeachPDF/issues/767)).
 
 Deliberately scoped down, mirroring `CreateVerticalLineBoxes`'s own scope: every child sits at the same
-cross-axis start (no cross-axis wrapping); margins between stacked siblings are summed rather than really
-collapsed ([#776](https://github.com/jhaygood86/PeachPDF/issues/776)); and a floated/absolutely/fixed-positioned
-child is routed through the ordinary, physical-Y-oriented `LayoutBlockChild` path unchanged rather than
-given block-axis-aware float/positioning logic of its own (extending the existing #768 scope boundary).
-Verified with `VerticalWritingModeLayoutIntegrationTests.cs` (block-axis stacking direction for both
-`vertical-rl`/`vertical-lr`, auto width/height shrink, the cheap-margin-sum boundary, an orthogonal
-`horizontal-tb` child's own line flow plus its atomic placement and shrink-to-fit sizing, nested
-vertical-in-vertical composition, the `IsUnresumableOrthogonalFlow` predicate for the has-block-children
-case, and the monolithic-overflow pagination-scope change above) and the existing full test suite passing
-unchanged.
+cross-axis start (no cross-axis wrapping); and a floated/absolutely/fixed-positioned child is routed
+through the ordinary, physical-Y-oriented `LayoutBlockChild` path unchanged rather than given
+block-axis-aware float/positioning logic of its own (extending the existing #768 scope boundary).
+
+**Margins between block-axis-stacked children — and between a vertical box's own block-start/block-end
+edge and its first/last stacked child — now really collapse per CSS2.1 §8.3.1**
+([#776](https://github.com/jhaygood86/PeachPDF/issues/776), closing the cheap-sum boundary #760 originally
+left). `CssBox.FoldOwnAdjoiningTopMargins`/`IsMarginCollapseThrough`/`MarginBottomCollapse`'s trailing-side
+logic were generalized (not duplicated) to resolve each box's own margin/border/padding by a
+caller-supplied `LogicalPropertyResolver`-derived `PhysicalSide` rather than a hardcoded physical
+top/bottom — `FoldOwnAdjoiningTopMargins` is now `FoldOwnAdjoiningBlockStartMargins(ref margins, side)`,
+always called with `PhysicalSide.Top` from `CollapsedMarginBefore` (ordinary `horizontal-tb` flow always
+collapses physical top/bottom margins, regardless of any individual child's own writing mode — a margin
+value is a plain physical property, not a logical one) and with the vertical box's own
+`WritingModeFrame.BlockStartIsRight`-named side from `LayoutVerticalBlockChildren`. A chain stops
+descending (though the box already reached still has its own margin on that axis folded in first) the
+instant adjacent boxes' `WritingMode` values differ — closing a related latent bug found along the way:
+before this, the chain had no boundary check at all, so it could misapply one physical side across an
+orthogonal-flow boundary, and — a subtler variant — across a `vertical-rl`-inside-`vertical-lr` (or vice
+versa) boundary, whose block-start/end physical mappings are mirrored. `width: auto` on a vertical child
+*stretches* to fill available space in this engine rather than shrinking (unlike `height: auto`, which
+always shrink-wraps) — so the vertical self-collapsing-empty-child check
+(`IsBlockAxisMarginCollapseThrough`) gates on the child's own already-resolved block-axis extent rather
+than a `Width` style token, rather than being a literal reuse of `IsMarginCollapseThrough`. Box-own-edge
+collapse (a vertical box's own margin escaping past its zero-border/padding edge to collapse with its
+first/last stacked child) only has anything to collapse against when the *outer* context shares the same
+block axis — nested `vertical-rl`/`vertical-lr` composition, not a vertical box embedded in ordinary
+`horizontal-tb` flow, where the outer (top/bottom) and inner (left/right) axes are simply unrelated, not
+"blocked." Verified with `VerticalWritingModeLayoutIntegrationTests.cs` (sibling-to-sibling collapse
+including mixed-sign margins and a self-collapsing run with nested self-collapsing children, box-own-edge
+collapse on both the leading and trailing side for nested vertical-in-vertical composition, and the
+writing-mode-boundary fix stopping at a mirrored `vertical-rl`/`vertical-lr` pairing),
+`CollapsedMarginBeforeTests.cs` (the writing-mode-boundary fix for an ordinary `horizontal-tb` box whose
+first child is `vertical-rl`), and the existing full test suite passing unchanged.
 
 **A `direction: rtl` vertical box's block children now anchor to the correct physical edge too**
 ([#778](https://github.com/jhaygood86/PeachPDF/issues/778), a scope boundary found by a post-change review
@@ -357,10 +381,6 @@ reading Height" as an unenforced convention going forward.
 
 ## What's still out of scope
 
-- **Real margin collapsing between block-axis-stacked children of a vertical box**
-  ([#776](https://github.com/jhaygood86/PeachPDF/issues/776)). `LayoutVerticalBlockChildren` sums the
-  adjoining physical margins between two stacked siblings instead of performing real CSS 2.1 §8.3.1
-  adjoining-margin collapse (max, not sum) — see `VerticalRl_MarginsBetweenBlockChildren_AreSummedNotCollapsed`.
 - **Floats, absolute positioning, hyphenation, bidi reordering, `text-align`, and
   `box-decoration-break: clone`** are not honored inside a vertical box's own content
   ([#768](https://github.com/jhaygood86/PeachPDF/issues/768)). This now also covers a block-level

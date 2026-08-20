@@ -191,12 +191,11 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalRl_MarginsBetweenBlockChildren_AreSummedNotCollapsed()
+        public async Task VerticalRl_MarginsBetweenBlockChildren_CollapseToTheLarger()
         {
-            // Deliberate scope boundary (issue #760): margins between block-axis-stacked children are a
-            // cheap sum, not real CSS 2.1 SS8.3.1 adjoining-margin collapse - pinned down explicitly so a
-            // future change to real collapsing shows up as an intentional test update, not a silent
-            // regression.
+            // Issue #776: adjoining margins between block-axis-stacked siblings really collapse per CSS2.1
+            // SS8.3.1 (max, not sum) - closing the deliberate scope boundary #760 left behind (previously
+            // pinned down as a cheap sum by this same test, then named ...AreSummedNotCollapsed).
             var html = LayoutHarness.Wrap("""
                 <div style="writing-mode: vertical-rl">
                   <div id="a" style="width: 40pt; margin: 0 10pt">A</div>
@@ -211,10 +210,230 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(b);
 
             // vertical-rl: a sits to the right of b. The gap between a's own left edge and b's own right
-            // edge is the sum of a's own left margin and b's own right margin (10 + 10 = 20), not their
-            // max (10, what real collapsing would give).
+            // edge is the max of a's own left margin and b's own right margin (10, not their sum, 20).
+            var gap = a!.Location.X - b!.ActualRight;
+            Assert.Equal(10, gap, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_MismatchedSignMarginsBetweenBlockChildren_CollapseToMaxPositivePlusMinNegative()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-rl">
+                  <div id="a" style="width: 40pt; margin-left: 8pt">A</div>
+                  <div id="b" style="width: 40pt; margin-right: -3pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // CSS2.1 SS8.3.1: max positive (8) plus min negative (-3) = 5.
+            var gap = a!.Location.X - b!.ActualRight;
+            Assert.Equal(5, gap, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_BothNegativeMarginsBetweenBlockChildren_CollapseToTheMoreNegative()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-rl">
+                  <div id="a" style="width: 40pt; margin-left: -4pt">A</div>
+                  <div id="b" style="width: 40pt; margin-right: -9pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // CSS2.1 SS8.3.1: both negative - the more-negative (-9) wins, giving a NEGATIVE gap (overlap).
+            var gap = a!.Location.X - b!.ActualRight;
+            Assert.Equal(-9, gap, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_SelfCollapsingEmptyChildBetweenTwoSiblings_FoldsIntoOneSharedGroup()
+        {
+            // A self-collapsing (empty, zero resolved block-axis extent) middle child folds its own two
+            // margins into the SAME adjoining set as its neighbors (CSS2.1 SS8.3.1), rather than resolving
+            // pairwise - the gap between the two REAL siblings should be the max across all three adjoining
+            // margins (a's own 5, empty's own 20 and 3, b's own 8), not just max(a,b).
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-rl">
+                  <div id="a" style="width: 40pt; margin-left: 5pt">A</div>
+                  <div id="empty" style="width: 0; margin-right: 20pt; margin-left: 3pt; overflow: visible"></div>
+                  <div id="b" style="width: 40pt; margin-right: 8pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
             var gap = a!.Location.X - b!.ActualRight;
             Assert.Equal(20, gap, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_NestedSelfCollapsingEmptyChildren_StillCollapseAsOneGroup()
+        {
+            // The self-collapse check recurses into a collapse-through child's own in-flow children
+            // (mirrors IsMarginCollapseThrough's own recursive definition) - a zero-width wrapper around
+            // another zero-width, zero-margin box is still itself self-collapsing, so its own (larger)
+            // margin still joins the shared group between the two real siblings.
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-rl">
+                  <div id="a" style="width: 40pt; margin-left: 5pt">A</div>
+                  <div id="outer" style="width: 0; margin-right: 15pt; overflow: visible">
+                    <div id="inner" style="width: 0; overflow: visible"></div>
+                  </div>
+                  <div id="b" style="width: 40pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            var gap = a!.Location.X - b!.ActualRight;
+            Assert.Equal(15, gap, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_SelfCollapsingWrapperWithTwoSelfCollapsingSiblingChildren_BothChildrensMarginsJoinTheGroup()
+        {
+            // A self-collapsing wrapper's own leading chain-walk (FoldOwnAdjoiningBlockStartMargins) only
+            // follows its FIRST in-flow child - a second (or later) self-collapsing sibling descendant is
+            // reached only via a full self-collapsing-subtree fold (FoldSelfCollapsingBlockMargins,
+            // mirroring FoldSelfCollapsingMargins for ordinary horizontal-tb flow). m2's own 30pt margin
+            // (larger than m1's 9pt) must still dominate the group even though only m1 sits on the
+            // leading chain the wrapper's own positioning walk follows.
+            var html = LayoutHarness.Wrap("""
+                <div style="writing-mode: vertical-rl">
+                  <div id="a" style="width: 40pt; margin-left: 5pt">A</div>
+                  <div id="wrapper" style="width: 0; overflow: visible">
+                    <div id="m1" style="width: 0; margin-right: 9pt; overflow: visible"></div>
+                    <div id="m2" style="width: 0; margin-left: 30pt; overflow: visible"></div>
+                  </div>
+                  <div id="b" style="width: 40pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            var gap = a!.Location.X - b!.ActualRight;
+            Assert.Equal(30, gap, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_NestedVerticalRlWrapper_MultiLevelChainCollapsesTogether()
+        {
+            // Issue #776's box-own-edge case: a vertical-rl wrapper whose own first stacked child is ALSO
+            // a vertical-rl box (non-orthogonal, same writing mode) with a block-start-adjoining margin of
+            // its own further down. Box-own-edge collapse only has anything to fold against when the
+            // OUTER context shares the same block axis (an ordinary horizontal-tb parent's own top/bottom
+            // axis is unrelated to a vertical child's internal left/right one, so there's nothing to
+            // collapse there - see the CollapsedMarginBeforeTests writing-mode-boundary test for that
+            // case) - nested vertical-in-vertical is the case where it applies.
+            //
+            // Exactly mirroring FoldOwnAdjoiningBlockStartMargins's own multi-level chain for ordinary
+            // horizontal-tb flow: the OUTERMOST box in the chain (here, "inner", positioned by "outer")
+            // ends up with the group's FULL collapsed value as ITS OWN gap from its parent, while every
+            // DEEPER chain member (here, "grandchild") sits flush against ITS OWN immediate parent - the
+            // group value is "spent" exactly once, at the outermost level, not re-applied at every level.
+            var html = LayoutHarness.Wrap("""
+                <div id="outer" style="writing-mode: vertical-rl; width: 100pt">
+                  <div id="inner" style="writing-mode: vertical-rl; width: 60pt">
+                    <div id="grandchild" style="width: 30pt; margin-right: 18pt">Grandchild.</div>
+                  </div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var outer = LayoutHarness.FindById(root, "outer");
+            var inner = LayoutHarness.FindById(root, "inner");
+            var grandchild = LayoutHarness.FindById(root, "grandchild");
+            Assert.NotNull(outer);
+            Assert.NotNull(inner);
+            Assert.NotNull(grandchild);
+
+            // "inner" carries the full 18pt collapsed value as its own gap from "outer" (grandchild's
+            // margin escaped past inner's own zero border/padding block-start edge).
+            Assert.Equal(18, outer!.ClientRight - inner!.ActualRight, 1);
+
+            // "grandchild" sits flush against "inner" - its own margin was already "spent" one level up.
+            Assert.Equal(inner.ClientRight, grandchild!.ActualRight, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_NestedVerticalRlWrapper_TrailingEdgeChainCollapsesTogether()
+        {
+            // Issue #776's box-own-edge case, trailing side: mirrors the leading-side test above but for
+            // the block-end (physical left) edge - "inner"'s own trailing margin (30pt) is larger than its
+            // only child "grandchild"'s own trailing margin (12pt), so folding them together (rather than
+            // using grandchild's raw contribution alone) demonstrably changes inner's own shrink-to-fit
+            // width: 30(grandchild's width) + 30(the larger, collapsed value) = 60, not 30 + 12 = 42.
+            var html = LayoutHarness.Wrap("""
+                <div id="outer" style="writing-mode: vertical-rl; width: 100pt">
+                  <div id="inner" style="writing-mode: vertical-rl; margin-left: 30pt">
+                    <div id="grandchild" style="width: 30pt; margin-left: 12pt">Grandchild.</div>
+                  </div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var inner = LayoutHarness.FindById(root, "inner");
+            Assert.NotNull(inner);
+
+            Assert.Equal(60, inner!.ActualRight - inner.Location.X, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_MirroredDirectionFirstChild_BoxOwnEdgeCollapseStopsAtTheBoundary()
+        {
+            // A vertical-rl wrapper whose first child is vertical-lr (mirrored block-start/end physical
+            // mapping) is a writing-mode boundary the chain must stop at - the child's own margin still
+            // collapses once (against the wrapper's own edge), but the chain must not continue into the
+            // mirrored child's own first grandchild, which would otherwise misread the wrong physical side.
+            var html = LayoutHarness.Wrap("""
+                <div id="outer" style="writing-mode: vertical-rl; width: 100pt">
+                  <div id="mirrored" style="writing-mode: vertical-lr; width: 60pt">
+                    <div id="grandchild" style="width: 30pt; margin-left: 18pt">Grandchild.</div>
+                  </div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var outer = LayoutHarness.FindById(root, "outer");
+            var mirrored = LayoutHarness.FindById(root, "mirrored");
+            var grandchild = LayoutHarness.FindById(root, "grandchild");
+            Assert.NotNull(outer);
+            Assert.NotNull(mirrored);
+            Assert.NotNull(grandchild);
+
+            // The mirrored child itself sits flush against the outer wrapper's own block-start edge (its
+            // own margin-right is 0/auto, so the chain resolves to 0 here) ...
+            Assert.Equal(outer!.ClientRight, mirrored!.ActualRight, 1);
+
+            // ... but the grandchild's OWN block-start margin (18pt, on the mirrored child's own physical
+            // left side) must NOT have been folded into that same outer chain - it stays purely internal
+            // to the mirrored child's own (vertical-lr) stacking, leaving a real 18pt gap from the mirrored
+            // child's own block-start (physical left) content edge.
+            Assert.Equal(18, grandchild!.Location.X - mirrored.ClientLeft, 1);
         }
 
         [Fact]

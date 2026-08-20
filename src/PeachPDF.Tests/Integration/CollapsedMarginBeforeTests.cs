@@ -104,5 +104,27 @@ namespace PeachPDF.Tests.Integration
             // predecessor's trailing margin is real space it must sit after.
             Assert.Equal(15, f.Location.Y - a.ActualBottom, 3);
         }
+
+        [Fact]
+        public async Task AVerticalWritingModeFirstChild_JoinsTheChainOnceButBlocksFurtherDescent()
+        {
+            // Issue #776's latent-bug fix: a writing-mode change always establishes a new formatting
+            // context (CSS Writing Modes 4 SS4.3), so the chain must stop at a vertical-rl first child -
+            // its OWN top margin still legitimately joins the outer set (an ordinary physical margin,
+            // regardless of the child's own internal writing mode), but the chain must not continue into
+            // ITS first grandchild, whose own huge top margin is irrelevant (it's stacked along the
+            // vertical child's own block axis, physical left/right, not top/bottom at all).
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='a' style='height:40pt'></div>"
+                + "<div id='outer'>"
+                + "<div id='verticalChild' style='writing-mode:vertical-rl;margin-top:15pt;width:60pt;height:40pt'>"
+                + "<div id='grandchild' style='width:20pt;height:10pt;margin-top:200pt'>G</div>"
+                + "</div></div>"));
+
+            var a = LayoutHarness.FindById(root, "a")!;
+            var outer = LayoutHarness.FindById(root, "outer")!;
+
+            Assert.Equal(15, outer.Location.Y - a.ActualBottom, 3);
+        }
     }
 }
