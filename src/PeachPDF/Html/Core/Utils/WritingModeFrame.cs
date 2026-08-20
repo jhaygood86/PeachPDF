@@ -90,6 +90,18 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         public bool BlockStartIsRight => _blockStartIsRight;
 
+        /// <summary>
+        /// Whether this box's own inline-start edge is the physical-bottom one (vertical +
+        /// <c>direction: rtl</c>) rather than physical-top (vertical + <c>direction: ltr</c>, or
+        /// non-vertical) - exposed for the same reason as <see cref="BlockStartIsRight"/>: a caller that
+        /// needs to know which edge <see cref="ToPhysical(RRect)"/> is already anchoring inline-axis
+        /// (physical Y, when vertical) geometry to - e.g. <see cref="Dom.CssBox.LayoutVerticalBlockChildren"/>,
+        /// deciding whether a block child needs reflecting from its ltr-anchored placement to hang from the
+        /// physical bottom instead - reads the one derivation this frame already made, rather than calling
+        /// <see cref="LogicalPropertyResolver.InlineStart"/> a second time.
+        /// </summary>
+        public bool InlineStartIsBottom => _inlineStartIsBottom;
+
         /// <summary>The box's own content-box extent along its inline axis (physical height, when vertical).</summary>
         public double LogicalContentWidth { get; }
 

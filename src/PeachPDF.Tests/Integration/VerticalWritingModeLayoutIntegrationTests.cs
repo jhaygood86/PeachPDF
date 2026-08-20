@@ -247,6 +247,140 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_Rtl_AutoHeight_BlockChildrenAnchorToBottomEdge_ShorterChildLeavesGapAtTop()
+        {
+            // Issue #778: direction: rtl's inline-start is the physical bottom edge (CSS Writing Modes 4),
+            // not the physical top ltr uses - every stacked child should hang flush from the box's own
+            // (here, shrink-wrapped) bottom, with a shorter child's own unused space appearing as a gap at
+            // the top rather than the bottom.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; direction: rtl">
+                  <div id="a" style="width: 40pt; height: 60pt">A</div>
+                  <div id="b" style="width: 30pt; height: 100pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // Auto height shrinks to the taller child's own extent (100), same as the ltr case.
+            Assert.Equal(100, wrapper!.ActualBottom - wrapper.Location.Y, 1);
+
+            // Both children hang flush from the wrapper's own (shrink-wrapped) bottom edge.
+            Assert.Equal(wrapper.ActualBottom, a!.ActualBottom, 1);
+            Assert.Equal(wrapper.ActualBottom, b!.ActualBottom, 1);
+
+            // The shorter child (a, 60pt tall in a 100pt-tall box) shows its 40pt gap at the top, not the
+            // bottom - its own top sits below the wrapper's own ClientTop.
+            Assert.Equal(wrapper.ClientTop + 40, a.Location.Y, 1);
+            // The tallest child (b) needed no repositioning: its top is already flush with ClientTop.
+            Assert.Equal(wrapper.ClientTop, b.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_Rtl_ExplicitHeight_BlockChildrenAnchorToTheBoxsRealBottomEdge_NotJustTheTallestChild()
+        {
+            // An explicit height taller than every child must still be the edge children hang from - a
+            // naive "reflect around the tallest child" implementation would anchor to 100 (b's own extent)
+            // instead of the box's real 200pt content height, leaving a visible gap at the wrong edge.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; direction: rtl; height: 200pt">
+                  <div id="a" style="width: 40pt; height: 60pt">A</div>
+                  <div id="b" style="width: 30pt; height: 100pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // Both children hang flush from the box's own real (explicit) bottom edge - not just b's own
+            // 100pt extent.
+            Assert.Equal(wrapper!.ClientBottom, a!.ActualBottom, 1);
+            Assert.Equal(wrapper.ClientBottom, b!.ActualBottom, 1);
+
+            // Gaps at the top scale with each child's own shortfall against the real 200pt content height.
+            Assert.Equal(wrapper.ClientTop + 140, a.Location.Y, 1);
+            Assert.Equal(wrapper.ClientTop + 100, b.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalLr_Rtl_BlockChildrenAlsoAnchorToBottom()
+        {
+            // The cross-axis anchor is independent of which physical edge the block axis itself grows
+            // from - vertical-lr + direction: rtl should reflect on the cross axis exactly like vertical-rl
+            // does.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-lr; direction: rtl">
+                  <div id="a" style="width: 40pt; height: 60pt">A</div>
+                  <div id="b" style="width: 30pt; height: 100pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            Assert.Equal(wrapper!.ActualBottom, a!.ActualBottom, 1);
+            Assert.Equal(wrapper.ActualBottom, b!.ActualBottom, 1);
+            Assert.Equal(wrapper.ClientTop + 40, a.Location.Y, 1);
+            Assert.Equal(wrapper.ClientTop, b.Location.Y, 1);
+
+            // vertical-lr still stacks the block axis left-to-right, unaffected by direction.
+            Assert.True(a.Location.X < b.Location.X, "vertical-lr should still stack left-to-right");
+        }
+
+        [Fact]
+        public async Task VerticalRl_Rtl_MinHeightGrowsTheBoxAfterContent_ChildrenStillAnchorToTheRealFinalBottom()
+        {
+            // A post-change review of the first cut of this fix found that reflecting against the
+            // content-driven extent (computed inside LayoutVerticalBlockChildren, before min-height is
+            // applied in the epilogue) would anchor children to a stale, pre-clamp edge whenever min-height
+            // grows the box past its own content - reintroducing a version of #778's own symptom. The fix
+            // defers reflection to PerformLayoutEpilogue, after CssLayoutEngine.ApplyHeight has settled
+            // min-height, so this must anchor to the box's real 300pt min-height bottom, not to 100pt (the
+            // taller child's own content-only extent).
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; direction: rtl; min-height: 300pt">
+                  <div id="a" style="width: 40pt; height: 60pt">A</div>
+                  <div id="b" style="width: 30pt; height: 100pt">B</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var a = LayoutHarness.FindById(root, "a");
+            var b = LayoutHarness.FindById(root, "b");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+
+            // min-height won: the box's own real height is 300pt, not the 100pt its tallest child alone
+            // would content-drive it to.
+            Assert.Equal(300, wrapper!.ActualBottom - wrapper.Location.Y, 1);
+
+            // Both children hang flush from the box's real (min-height-driven) bottom edge, not from the
+            // 100pt content-only edge a pre-clamp reflection would have used.
+            Assert.Equal(wrapper.ClientBottom, a!.ActualBottom, 1);
+            Assert.Equal(wrapper.ClientBottom, b!.ActualBottom, 1);
+            Assert.Equal(wrapper.ClientTop + 240, a.Location.Y, 1);
+            Assert.Equal(wrapper.ClientTop + 200, b.Location.Y, 1);
+        }
+
+        [Fact]
         public async Task VerticalRl_OrthogonalHorizontalChild_LaysOutOwnContentHorizontally_WhilePlacedAsOneAtomicBlock()
         {
             // A writing-mode: horizontal-tb block child nested inside a vertical-rl parent is an

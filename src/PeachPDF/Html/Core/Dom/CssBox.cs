@@ -1983,6 +1983,22 @@ namespace PeachPDF.Html.Core.Dom
         private double? _earlyBreakRetryTop;
 
         /// <summary>
+        /// A <c>direction: rtl</c> vertical box's own block-level children, set by
+        /// <see cref="LayoutVerticalBlockChildren"/> and consumed - then cleared - by
+        /// <see cref="PerformLayoutEpilogue"/>, once this box's own height is truly final.
+        /// </summary>
+        /// <remarks>
+        /// Deferred rather than reflected immediately in <see cref="LayoutVerticalBlockChildren"/>
+        /// itself: this box's own <see cref="ClientBottom"/> is not yet final at that point -
+        /// <c>min-height</c>/<c>max-height</c> clamping (<see cref="CssLayoutEngine.ApplyHeight"/>) only
+        /// runs later, in the epilogue - so reflecting against it early would anchor every child to a
+        /// pre-clamp edge, reintroducing issue #778's own symptom whenever a <c>min-height</c>/
+        /// <c>max-height</c> box's real final bottom differs from its own content-driven or explicit-
+        /// <c>height</c> extent.
+        /// </remarks>
+        private List<CssBox>? _pendingCrossAxisRtlReflection;
+
+        /// <summary>
         /// Whether this box has already taken an <see cref="EarlyBreak"/> on this fragmentainer pass.
         /// </summary>
         /// <remarks>
@@ -3582,16 +3598,23 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// Deliberately scoped down, mirroring <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>'s own
         /// scope (see the no-vertical-writing-mode-layout accepted gap): every child sits at the same
-        /// cross-axis (inline-axis) start - <see cref="CssBox.ClientTop"/>, unconditionally, not
-        /// <see cref="WritingModeFrame"/>'s own <c>direction: rtl</c>-aware inline-start edge the way
-        /// <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>'s word placement already is - so there is
-        /// no cross-axis wrapping and a <c>direction: rtl</c> vertical box's block children anchor to the
-        /// physical top exactly as under <c>ltr</c> rather than the physical bottom CSS Writing Modes 4
-        /// would actually place them at; margins between stacked siblings are summed rather than collapsed.
-        /// Floats and absolutely/fixed-positioned children are routed through the ordinary
-        /// <see cref="LayoutBlockChild"/> path unchanged (the existing, physical-Y-oriented placement this
-        /// vertical box's content already accepted as out of scope) rather than given new block-axis-aware
-        /// float/positioning logic of their own.
+        /// cross-axis (inline-axis) start - so there is no cross-axis wrapping - and margins between
+        /// stacked siblings are summed rather than collapsed. The child loop below always places each
+        /// child flush against <see cref="CssBox.ClientTop"/>, growing down, exactly as <c>direction: ltr</c>
+        /// wants - the only placement possible before a child's own cross-axis extent (height) is known,
+        /// since unlike its block-axis extent (width, resolved up front by <see cref="ResolveOwnInlineSize"/>)
+        /// a normal or orthogonal child's height generally isn't knowable until its own content lays out.
+        /// Where <see cref="WritingModeFrame.InlineStartIsBottom"/> (<c>direction: rtl</c>) actually wants
+        /// the physical bottom instead, every stacked child collected below is handed to
+        /// <see cref="_pendingCrossAxisRtlReflection"/> for <see cref="PerformLayoutEpilogue"/> to reflect
+        /// afterward, once this box's own height is truly final (see that field's own remarks for why it
+        /// can't happen here) - the same "lay out everything forward, then reflect once the far edge is
+        /// known" shape <see cref="CssLayoutEngineTable.ReflectRowAxisForVerticalRl"/> already uses for a
+        /// <c>vertical-rl</c> table's own row axis, one axis over. Floats and absolutely/fixed-positioned
+        /// children are routed through the ordinary <see cref="LayoutBlockChild"/> path unchanged (the
+        /// existing, physical-Y-oriented placement this vertical box's content already accepted as out of
+        /// scope) rather than given new block-axis-aware float/positioning logic of their own, and never
+        /// take part in the reflection either.
         /// </remarks>
         private async ValueTask LayoutVerticalBlockChildren(RGraphics g)
         {
@@ -3603,6 +3626,7 @@ namespace PeachPDF.Html.Core.Dom
 
             double logicalBlockOffset = 0;
             var maxCrossExtent = clientTop;
+            List<CssBox>? stackedChildren = frame.InlineStartIsBottom ? [] : null;
 
             foreach (var childBox in Boxes)
             {
@@ -3650,7 +3674,13 @@ namespace PeachPDF.Html.Core.Dom
 
                 logicalBlockOffset += startMargin + childWidth + endMargin;
                 maxCrossExtent = Math.Max(maxCrossExtent, childBox.ActualBottom);
+                stackedChildren?.Add(childBox);
             }
+
+            // Handed to PerformLayoutEpilogue rather than reflected here - see _pendingCrossAxisRtlReflection's
+            // own remarks. Always (re-)assigned, even when null, so a later pass on this same box can never
+            // read back a stale list a fresh LayoutVerticalBlockChildren run since superseded.
+            _pendingCrossAxisRtlReflection = stackedChildren is { Count: > 0 } ? stackedChildren : null;
 
             if (widthIsAuto)
             {
@@ -4907,6 +4937,24 @@ namespace PeachPDF.Html.Core.Dom
         private async ValueTask PerformLayoutEpilogue(RGraphics g)
         {
             CssLayoutEngine.ApplyHeight(this);
+
+            if (_pendingCrossAxisRtlReflection is { Count: > 0 } stackedChildren)
+            {
+                // Only now - after ApplyHeight has settled min-height/max-height clamping - is
+                // ClientBottom this box's own true final cross-axis far edge. Same reflection formula as
+                // CssLayoutEngineTable.ReflectRowAxisForVerticalRl: delta = (min + max - farEdge) - nearEdge.
+                var min = ClientTop;
+                var max = ClientBottom;
+
+                foreach (var childBox in stackedChildren)
+                {
+                    var delta = (min + max - childBox.ActualBottom) - childBox.Location.Y;
+                    if (delta != 0) childBox.OffsetTop(delta);
+                }
+            }
+
+            _pendingCrossAxisRtlReflection = null;
+
             CssLayoutEngine.ApplyParentHeight(this);
 
             // css-break keep-with-next at the word-flow fragmentation site: word flow moves any line

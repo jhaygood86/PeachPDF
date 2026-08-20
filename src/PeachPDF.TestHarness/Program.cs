@@ -5381,10 +5381,24 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</div><div class=\"label\">orthogonal child: horizontal-tb block inside a vertical-rl parent</div></div>" +
     "</div>" +
 
+    "<h2>9b &mdash; direction: rtl block children anchor to the physical bottom edge (issue #778)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 200px; height: 90px\">" +
+    "<div style=\"width: 40px; height: 60px; background: #1a6b8a; color: #fff; padding: 4px\">First.</div>" +
+    "<div style=\"width: 40px; height: 60px; background: #4a9bc4; color: #fff; padding: 4px\">Second.</div>" +
+    "<div style=\"width: 40px; height: 60px; background: #7cc0e0; padding: 4px\">Third.</div>" +
+    "</div><div class=\"label\">direction: ltr (default): children flush against the top</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; direction: rtl; width: 200px; height: 90px\">" +
+    "<div style=\"width: 40px; height: 60px; background: #1a6b8a; color: #fff; padding: 4px\">First.</div>" +
+    "<div style=\"width: 40px; height: 60px; background: #4a9bc4; color: #fff; padding: 4px\">Second.</div>" +
+    "<div style=\"width: 40px; height: 60px; background: #7cc0e0; padding: 4px\">Third.</div>" +
+    "</div><div class=\"label\">direction: rtl: children flush against the bottom instead</div></div>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
-    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout, and block-level/orthogonal-flow content inside a vertical box.",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout, block-level/orthogonal-flow content inside a vertical box, and direction: rtl block children anchoring to the physical bottom edge.",
     writingModeHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---
