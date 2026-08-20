@@ -5395,10 +5395,23 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</div><div class=\"label\">direction: rtl: children flush against the bottom instead</div></div>" +
     "</div>" +
 
+    "<h2>9c &mdash; real margin collapse between block-axis-stacked children (issue #776)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 200px; height: 90px\">" +
+    "<div style=\"width: 40px; height: 60px; margin: 0 20px; background: #1a6b8a; color: #fff; padding: 4px\">First.</div>" +
+    "<div style=\"width: 40px; height: 60px; margin: 0 20px; background: #4a9bc4; color: #fff; padding: 4px\">Second.</div>" +
+    "</div><div class=\"label\">both children margin: 0 20px &mdash; the gap between them collapses to 20px (the larger margin), not 40px (their sum)</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 200px\">" +
+    "<div style=\"width: 60px; margin-left: 30px; background: #eef6fb; border: 1px solid #1a6b8a; padding: 4px\">" +
+    "Nested vertical-rl wrapper with no border/padding on its own block-start edge: its first child's own margin collapses with the wrapper's own edge instead of leaving an internal gap." +
+    "</div>" +
+    "</div><div class=\"label\">box-own-edge collapse: a nested vertical-rl wrapper's own edge collapsing with its first stacked child's margin</div></div>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
-    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout, block-level/orthogonal-flow content inside a vertical box, and direction: rtl block children anchoring to the physical bottom edge.",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout, block-level/orthogonal-flow content inside a vertical box, direction: rtl block children anchoring to the physical bottom edge, and real CSS2.1 margin collapse (sibling-to-sibling and box-own-edge) between block-axis-stacked children.",
     writingModeHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---
