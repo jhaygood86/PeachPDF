@@ -112,11 +112,13 @@ atomic already-laid-out unit, along the parent's own block axis (physical X: rig
 `vertical-rl`, left-to-right for `vertical-lr`, via `WritingModeFrame.BlockStartIsRight`), all at the same
 cross-axis (physical Y) start. This is what lets an **orthogonal-flow child** — one whose own resolved
 `writing-mode` differs from its parent's, per
-[CSS Writing Modes 4 §4.3](https://www.w3.org/TR/css-writing-modes-4/#orthogonal-flows) — "just work" with
-no special case at all: a `horizontal-tb` block nested inside a `vertical-rl` parent lays its own lines out
-along physical Y exactly as it would anywhere else, while the new stacking loop only ever reads back its
-resulting physical width and treats it as one atomic unit, the same way an atomic replaced element
-(`<img>`) already is. Auto width/height on the vertical box itself shrink to the accumulated block-axis/
+[CSS Writing Modes 4 §4.3](https://www.w3.org/TR/css-writing-modes-4/#orthogonal-flows) — "just work" for
+its own content layout with no special case at all: a `horizontal-tb` block nested inside a `vertical-rl`
+parent lays its own lines out along physical Y exactly as it would anywhere else, while the new stacking
+loop only ever reads back its resulting physical width and treats it as one atomic unit, the same way an
+atomic replaced element (`<img>`) already is. (Its own *outer width*, when auto, is special-cased instead
+— see [#777](https://github.com/jhaygood86/PeachPDF/issues/777), closed, below.) Auto width/height on the
+vertical box itself shrink to the accumulated block-axis/
 cross-axis extent of its children, reusing `CssLayoutEngine.ShrinkAutoWidthTo` (widened to `internal`) —
 the same block-start-stays-fixed mechanism the inline-only case already established.
 
@@ -135,17 +137,15 @@ per-child fragmentation of a vertical box's block content remains tracked separa
 
 Deliberately scoped down, mirroring `CreateVerticalLineBoxes`'s own scope: every child sits at the same
 cross-axis start (no cross-axis wrapping); margins between stacked siblings are summed rather than really
-collapsed ([#776](https://github.com/jhaygood86/PeachPDF/issues/776)); a floated/absolutely/fixed-positioned
+collapsed ([#776](https://github.com/jhaygood86/PeachPDF/issues/776)); and a floated/absolutely/fixed-positioned
 child is routed through the ordinary, physical-Y-oriented `LayoutBlockChild` path unchanged rather than
-given block-axis-aware float/positioning logic of its own (extending the existing #768 scope boundary);
-and an orthogonal auto-width child stretch-fills to the parent's available physical width rather than
-performing real CSS Writing Modes 4 §4.3 shrink-to-fit sizing
-([#777](https://github.com/jhaygood86/PeachPDF/issues/777)).
+given block-axis-aware float/positioning logic of its own (extending the existing #768 scope boundary).
 Verified with `VerticalWritingModeLayoutIntegrationTests.cs` (block-axis stacking direction for both
 `vertical-rl`/`vertical-lr`, auto width/height shrink, the cheap-margin-sum boundary, an orthogonal
-`horizontal-tb` child's own line flow plus its atomic placement, nested vertical-in-vertical composition,
-the `IsUnresumableOrthogonalFlow` predicate for the has-block-children case, and the monolithic-overflow
-pagination-scope change above) and the existing full test suite passing unchanged.
+`horizontal-tb` child's own line flow plus its atomic placement and shrink-to-fit sizing, nested
+vertical-in-vertical composition, the `IsUnresumableOrthogonalFlow` predicate for the has-block-children
+case, and the monolithic-overflow pagination-scope change above) and the existing full test suite passing
+unchanged.
 
 **A `direction: rtl` vertical box's block children now anchor to the correct physical edge too**
 ([#778](https://github.com/jhaygood86/PeachPDF/issues/778), a scope boundary found by a post-change review
@@ -361,14 +361,6 @@ reading Height" as an unenforced convention going forward.
   ([#776](https://github.com/jhaygood86/PeachPDF/issues/776)). `LayoutVerticalBlockChildren` sums the
   adjoining physical margins between two stacked siblings instead of performing real CSS 2.1 §8.3.1
   adjoining-margin collapse (max, not sum) — see `VerticalRl_MarginsBetweenBlockChildren_AreSummedNotCollapsed`.
-- **An orthogonal auto-width child of a vertical box stretch-fills instead of shrink-to-fit**
-  ([#777](https://github.com/jhaygood86/PeachPDF/issues/777)). CSS Writing Modes 4 §4.3 requires an
-  auto-sized orthogonal child (its own writing-mode perpendicular to its containing block's) to be sized
-  via shrink-to-fit against a constraint derived from the parent's own definite dimension;
-  `LayoutVerticalBlockChildren` instead gives it ordinary block auto-width behavior (stretch to the
-  parent's available physical width). This codebase has no general min-content/max-content/shrink-to-fit
-  algorithm anywhere yet — only `CssBox.GetMinimumWidth()`, an unrelated longest-unbreakable-word
-  measurement — so implementing real shrink-to-fit is a separate, larger undertaking.
 - **Floats, absolute positioning, hyphenation, bidi reordering, `text-align`, and
   `box-decoration-break: clone`** are not honored inside a vertical box's own content
   ([#768](https://github.com/jhaygood86/PeachPDF/issues/768)). This now also covers a block-level

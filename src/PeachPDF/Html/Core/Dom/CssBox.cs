@@ -3592,8 +3592,15 @@ namespace PeachPDF.Html.Core.Dom
         /// own content layout is left completely untouched - it runs its own, independent
         /// <see cref="LayoutContents"/> dispatch, driven by its own <see cref="WritingMode"/>, so an
         /// orthogonal-flow child (one whose own writing-mode differs from this box's) needs no special case
-        /// at all: this loop only ever reads back its resulting physical width and treats it as one atomic
-        /// unit, exactly the way an already-laid-out word is treated as atomic above.
+        /// for its own content layout at all - this loop only ever reads back its resulting physical width
+        /// and treats it as one atomic
+        /// unit, exactly the way an already-laid-out word is treated as atomic above. Its <b>outer width</b>
+        /// is a different matter for such a child when it is auto: <see cref="ResolveOwnInlineSize"/> gives
+        /// every child ordinary stretch-to-containing-block sizing, which is wrong specifically for an
+        /// orthogonal, auto-width, non-replaced block child (per
+        /// <see href="https://www.w3.org/TR/css-writing-modes-4/#orthogonal-flows">CSS Writing Modes 4
+        /// §4.3</see>, such a child is sized by shrink-to-fit instead) - the child loop below corrects that
+        /// one child before laying out its content.
         /// </summary>
         /// <remarks>
         /// Deliberately scoped down, mirroring <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/>'s own
@@ -3662,6 +3669,50 @@ namespace PeachPDF.Html.Core.Dom
                 childBox.Location = new RPoint(marginBoxBlockStart.X, clientTop);
                 await childBox.ResolveOwnInlineSize(g, clientTop);
                 var childWidth = childBox.ActualRight - childBox.Location.X;
+
+                // CSS Writing Modes 4 §4.3: an auto-sized orthogonal flow root (this child's own resolved
+                // writing-mode is horizontal while this always-vertical box is its containing block) is
+                // sized via shrink-to-fit against a constraint derived from the parent's own definite
+                // dimension, not via the ordinary stretch-to-containing-block auto-width ResolveOwnInlineSize
+                // just gave it above. childWidth (that stretch value) IS exactly that constraint - reused
+                // directly rather than re-derived, since GetFitContentWidth already clamps its result to
+                // it, leaving a child whose content fills or overflows the constraint unaffected either way.
+                // Scoped to a plain auto-width block box: excludes a replaced element (Words.Count > 0,
+                // whose intrinsic width was never stretched in the first place) and table/flex/grid
+                // (the same exclusion ResolveOwnInlineSize itself uses - those resolve their own inline
+                // size internally regardless of writing-mode).
+                if (childBox.Words.Count == 0
+                    && !CssValueParser.IsValidLength(childBox.Width)
+                    && childBox.WritingMode.Value is not (CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr)
+                    && childBox.DerivedStyle.ActualDisplay is not (Keywords.Table or Keywords.TableCell
+                        or Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid))
+                {
+                    var fitContentWidth = await CssLayoutEngine.GetFitContentWidth(g, childBox, childWidth);
+
+                    // GetFitContentWidth alone only ever narrows toward the constraint - it has no floor
+                    // of its own, so a constraint narrower than the child's own min-content (its longest
+                    // unbreakable run) would otherwise squeeze it below that per §4.3's own formula
+                    // (min(max-content, max(min-content, constraint))). GetMinContentWidth is the same
+                    // measurement GetFitContentWidth's own max-content pass already primed via MeasureWords,
+                    // so this is a second read of already-computed state, not a second layout pass.
+                    fitContentWidth = Math.Max(fitContentWidth, await CssLayoutEngine.GetMinContentWidth(g, childBox));
+
+                    // Separately, GetFitContentWidth has no notion of this child's own CSS min-width either -
+                    // float the result back up against it too, mirroring
+                    // CssLayoutEngineFlex.ShrinkColumnItemToContentWidth's own clamp after the same call
+                    // (max-width needs no re-check here: childWidth was already max-width-clamped by
+                    // ResolveOwnInlineSize above, and GetFitContentWidth's result can only be <= the
+                    // constraint it was passed).
+                    if (childBox.MinWidth != "0" && CssValueParser.IsValidLength(childBox.MinWidth))
+                    {
+                        var minWidth = CssValueParser.ParseLength(childBox.MinWidth, childBox.ContainingBlock.Size.Width, childBox)
+                            + childBox.ActualBoxSizeIncludedWidth;
+                        fitContentWidth = Math.Max(fitContentWidth, minWidth);
+                    }
+
+                    childWidth = fitContentWidth;
+                    childBox.ActualRight = childBox.Location.X + childWidth;
+                }
 
                 var trueX = frame.BlockStartIsRight
                     ? marginBoxBlockStart.X - startMargin - childWidth

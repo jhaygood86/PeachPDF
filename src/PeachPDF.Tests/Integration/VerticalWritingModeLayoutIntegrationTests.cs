@@ -417,6 +417,149 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_OrthogonalAutoWidthChild_ShrinksToFitInsteadOfStretchingToTheWrapper()
+        {
+            // Issue #777: CSS Writing Modes 4 SS4.3 requires an auto-sized orthogonal flow root (this
+            // child's own writing-mode is horizontal-tb, perpendicular to the vertical-rl wrapper) to be
+            // sized via shrink-to-fit, not ordinary stretch-to-containing-block auto-width. A wrapper much
+            // wider than "Hi" needs, so a stretch-filled child (the pre-#777 bug) would be trivially
+            // distinguishable from a shrink-to-fit one.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 400px">
+                  <div id="ortho" style="writing-mode: horizontal-tb">Hi</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var ortho = LayoutHarness.FindById(root, "ortho");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(ortho);
+
+            var childWidth = ortho!.ActualRight - ortho.Location.X;
+
+            // Shrink-to-fit: the child's own physical width is its content's max-content width, nowhere
+            // near the wrapper's full 300pt (400px) client width.
+            Assert.True(childWidth < 100,
+                $"expected the orthogonal auto-width child to shrink to its content ('Hi'), got {childWidth}pt wide");
+
+            // It still sits flush against the wrapper's own block-start (right, under vertical-rl) edge -
+            // shrink-to-fit changes the child's own width, not where the block-axis stacking anchors it.
+            Assert.Equal(wrapper!.ClientRight, ortho.ActualRight, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_OrthogonalAutoWidthChild_StillFillsTheConstraintWhenContentIsWideEnough()
+        {
+            // The other half of shrink-to-fit's min(max-content, max(min-content, constraint)): content
+            // wide enough to need the whole available block-axis extent still gets it, exactly as ordinary
+            // stretch-to-containing-block auto-width already did before #777 - shrink-to-fit only ever
+            // narrows a child, never widens one past what stretch would have given it.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 200px">
+                  <div id="stretch" style="writing-mode: horizontal-tb">
+                    One two three four five six seven eight nine ten eleven twelve thirteen fourteen.
+                  </div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var stretch = LayoutHarness.FindById(root, "stretch");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(stretch);
+
+            var childWidth = stretch!.ActualRight - stretch.Location.X;
+            var constraint = wrapper!.ClientRight - wrapper.ClientLeft;
+
+            Assert.Equal(constraint, childWidth, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_OrthogonalAutoWidthChild_MinWidthFloorsTheShrunkWidth()
+        {
+            // GetFitContentWidth has no notion of the child's own min-width, so LayoutVerticalBlockChildren
+            // floats the shrunk result back up against it explicitly - a min-width wider than the content
+            // itself ("Hi") must still win, per CSS 2.1 SS10.4 (min-width overrides a smaller computed width).
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 400px">
+                  <div id="ortho" style="writing-mode: horizontal-tb; min-width: 150px">Hi</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var ortho = LayoutHarness.FindById(root, "ortho");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(ortho);
+
+            var childWidth = ortho!.ActualRight - ortho.Location.X;
+
+            // 150px * 0.75pt/px (Length.PointsPerPx) = 112.5pt - the min-width floor, well above "Hi"'s
+            // own shrink-to-fit content width and well below the wrapper's full 300pt (400px) client width.
+            Assert.Equal(112.5, childWidth, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_OrthogonalAutoWidthChild_NeverShrinksBelowItsOwnMinContent()
+        {
+            // The other floor CSS Writing Modes 4 SS4.3's own formula requires - min(max-content,
+            // max(min-content, constraint)) - is the ALGORITHMIC min-content (the longest unbreakable
+            // run), independent of any CSS min-width. A constraint narrower than a single long,
+            // unbreakable word must not squeeze the child below that word's own width - the same floor
+            // CssLayoutEngine.GetMinContentWidth already provides for position:absolute shrink-to-fit.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 20px">
+                  <div id="ortho" style="writing-mode: horizontal-tb">Supercalifragilisticexpialidocious</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var ortho = LayoutHarness.FindById(root, "ortho");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(ortho);
+
+            var childWidth = ortho!.ActualRight - ortho.Location.X;
+            var constraint = wrapper!.ClientRight - wrapper.ClientLeft;
+
+            // The 20px (15pt) wrapper is far narrower than the word needs - the child's own min-content
+            // (this one unbreakable word) must win over that narrow constraint.
+            Assert.True(constraint < 20, $"expected a narrow constraint to set up the test, got {constraint}pt");
+            Assert.True(childWidth > constraint,
+                $"expected the orthogonal child's own min-content to floor its width above the {constraint}pt constraint, got {childWidth}pt");
+        }
+
+        [Fact]
+        public async Task VerticalRl_AutoWidthWrapper_OrthogonalAutoWidthChild_BothShrinkToTheContent()
+        {
+            // The shrink-to-fit constraint this fix reuses (the child's own pre-correction stretch value)
+            // is itself derived from the vertical wrapper's own tentative, not-yet-shrunk width when the
+            // wrapper's own `width` is auto too - exercising that chain end to end: an auto-width wrapper
+            // holding a single short auto-width orthogonal child should have both shrink down to the
+            // content ("Hi"), not have the child's shrink-to-fit constraint stick at the wrapper's own
+            // large, page-width tentative value.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl">
+                  <div id="ortho" style="writing-mode: horizontal-tb">Hi</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var ortho = LayoutHarness.FindById(root, "ortho");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(ortho);
+
+            var wrapperWidth = wrapper!.ClientRight - wrapper.ClientLeft;
+            var childWidth = ortho!.ActualRight - ortho.Location.X;
+
+            Assert.True(wrapperWidth < 100,
+                $"expected the auto-width wrapper to shrink to its single short child's content, got {wrapperWidth}pt wide");
+            Assert.Equal(wrapperWidth, childWidth, 1);
+        }
+
+        [Fact]
         public async Task VerticalRl_AutoHeight_WrapLimitIsPositionIndependent_NotSelfLimitingWhenFarDownThePage()
         {
             // clientTop is document-continuous (grows across page boundaries), not page-relative - a wrap
