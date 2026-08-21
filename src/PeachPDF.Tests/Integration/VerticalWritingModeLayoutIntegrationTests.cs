@@ -1509,18 +1509,35 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task VerticalRl_FloatLeft_NarrowsLaterColumnsAndNoWordOverlapsIt()
         {
-            // Enough columns (width:400px wrapper, ~15-20pt-thick columns) to walk all the way from the
-            // block-start (right) edge over to the float:left's own zone near the box's left edge.
+            // "after" has an explicit width (200pt) giving it a fixed, font-independent physical span of
+            // [wrapper.ClientRight-200, wrapper.ClientRight] - but its actual columns are only created as
+            // content needs them, so how far left they actually reach (and whether they overflow past that
+            // declared span) is column-pitch/word-height dependent, i.e. font-metric dependent. A narrow
+            // float sized to just barely reach into that overflow zone on one font's metrics can miss
+            // entirely on another's (this previously passed locally on Windows but failed in CI on
+            // Ubuntu/macOS, whose default fallback font produces different metrics). Two independent
+            // safety margins remove that dependency: the float is widened/heightened to overlap most of
+            // "after"'s own always-present, font-independent [120,320] span rather than relying on
+            // overflow past it, and the word count is 6x'd so even a compact font's fewer, wider columns
+            // still walk deep into that span.
+            const string words = """
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                """;
             await AssertFloatAvoidance(
-                floated: """
+                floated: $"""
                     <div id="wrapper" style="writing-mode: vertical-rl; width: 400px">
-                      <div id="floatBox" style="float: left; width: 30pt; height: 15pt"></div>
-                      <p id="after" style="width: 200pt; height: 60pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.</p>
+                      <div id="floatBox" style="float: left; width: 200pt; height: 60pt"></div>
+                      <p id="after" style="width: 200pt; height: 60pt">{words}</p>
                     </div>
                     """,
-                unfloated: """
+                unfloated: $"""
                     <div id="wrapper" style="writing-mode: vertical-rl; width: 400px">
-                      <p id="after" style="width: 200pt; height: 60pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.</p>
+                      <p id="after" style="width: 200pt; height: 60pt">{words}</p>
                     </div>
                     """);
         }
