@@ -61,13 +61,21 @@ namespace PeachPDF.Html.Core.Fragmentation
     /// </remarks>
     internal sealed class TableRowCursor
     {
-        internal TableRowCursor(double top, double maxRight, int slotIndex)
+        internal TableRowCursor(double top, double maxRight, int slotIndex, bool isVertical = false)
         {
             CurrentY = top;
             MaxRight = maxRight;
             MaxBottom = 0d;
             SlotIndex = slotIndex;
+            IsVertical = isVertical;
         }
+
+        /// <summary>
+        /// Whether this cursor belongs to a <c>vertical-rl</c>/<c>vertical-lr</c> table, so
+        /// <see cref="Retract"/> knows which physical axis <c>CssLayoutEngine.ApplyCellVerticalAlignment</c>'s
+        /// offset (and a spanning cell's own row-axis extent) was applied along.
+        /// </summary>
+        internal bool IsVertical { get; }
 
         /// <summary>Where the next row starts.</summary>
         internal double CurrentY { get; set; }
@@ -302,9 +310,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// from the table's top, and its deliberate staleness <i>within</i> a pass is untouched.
         /// </para>
         /// </remarks>
-        internal static TableRowCursor Continuing(TableBreakToken carried, double top)
+        internal static TableRowCursor Continuing(TableBreakToken carried, double top, bool isVertical = false)
         {
-            var cursor = new TableRowCursor(top, carried.MaxRight, carried.ResumeSlotIndex)
+            var cursor = new TableRowCursor(top, carried.MaxRight, carried.ResumeSlotIndex, isVertical)
             {
                 MaxBottom = top,
                 RowIndex = carried.ResumeRowIndex
@@ -573,10 +581,19 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                 if (appliedOffset != 0d)
                 {
-                    foreach (var child in cell.Boxes) child.OffsetTop(-appliedOffset);
+                    foreach (var child in cell.Boxes)
+                    {
+                        if (IsVertical) child.OffsetLeft(-appliedOffset);
+                        else child.OffsetTop(-appliedOffset);
+                    }
                 }
 
-                cell.ActualBottom = previousBottom;
+                // previousBottom was captured off whichever physical field is this table's own row axis
+                // (CloseSpanningCell: ActualRight for a vertical table, ActualBottom otherwise) - writing
+                // it back to the other one would leave the cell's real row-axis extent untouched and
+                // instead corrupt its column-axis size.
+                if (IsVertical) cell.ActualRight = previousBottom;
+                else cell.ActualBottom = previousBottom;
             }
 
             _foreignWrites.Clear();
@@ -606,6 +623,6 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// has to resume.
         /// </summary>
         internal TableRowCursor ForRowGroupMeasurement(double top) =>
-            new(top, MaxRight, SlotIndex) { MaxBottom = top };
+            new(top, MaxRight, SlotIndex, IsVertical) { MaxBottom = top };
     }
 }

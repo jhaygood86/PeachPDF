@@ -37,7 +37,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private readonly CssBox _tableBox;
 
-        // ─── Writing-mode axis mapping (IN PROGRESS - see remarks) ────────────────
+        // ─── Writing-mode axis mapping ──────────────────────────────────────────
         //
         // Unlike Flexbox's row/column (which flex-direction can point at either logical axis), a
         // table's rows ALWAYS stack along the block axis and its columns ALWAYS run along the inline
@@ -48,25 +48,43 @@ namespace PeachPDF.Html.Core.Dom
         // only the row axis's start side needs a flag at all: LogicalPropertyResolver.InlineStart
         // under ltr is Left (horizontal-tb) or Top (vertical-rl/vertical-lr) - never Right/Bottom.
         //
-        // CURRENT STATE: only the column/row SIZING pipeline reads these two flags so far (available
-        // table/cell width, border-spacing/border-width axis selection, content-driven auto-sizing's
-        // safe fallback for the missing vertical-flow content-intrinsic-size measurement). Cell/row/
-        // caption/column-box PHYSICAL PLACEMENT (LayoutBodyRow's cell.Location assembly and everything
-        // downstream of it) still unconditionally uses the pre-existing physical-X-is-column-axis
-        // logic, gated on neither flag - so a vertical-writing-mode table today computes correctly
-        // axis-aware column widths/row heights but still PLACES every cell as if horizontal-tb. This
-        // is a deliberately incomplete, in-progress step, not a finished feature: _isVertical is only
-        // ever true for a table that was already completely unsupported before this work started (see
-        // the Table row of .claude/accepted-gaps/no-vertical-writing-mode-layout.md, and issue #762),
-        // so nothing regresses - but placement, collapsed-border resolution, and a vertical-rl-specific
-        // structural issue (a row's own row-axis thickness isn't known until after its cells are laid
-        // out, which conflicts with placing it at a physical-max-anchored start before that - the
-        // planned fix is a single whole-table reflection pass after an otherwise-uniform "grows
-        // forward" layout, mirroring vertical-lr, rather than reworking the row loop's own single-pass
-        // measure-and-place order) all still need finishing before this flag pair does anything
-        // user-visible. Tracked in #762 pending a dedicated continuation.
+        // CURRENT STATE: column/row sizing, cell/row/caption/thead-tfoot placement, collapsed-border
+        // resolution (topology and paint geometry alike), vertical-align's own content alignment
+        // within a cell, and a rowspan cell's own row-axis sizing are all axis-aware now. A
+        // vertical-rl table's own row-axis-max-anchored growth (a row's own row-axis thickness isn't
+        // knowable until after its cells are laid out, which conflicts with placing it at a
+        // physical-max-anchored start before that) is solved by ReflectRowAxisForVerticalRl: every
+        // row/caption/header-footer-proxy grows forward as if vertical-lr, then the whole assembly is
+        // mirrored once its own final row-axis bounds are known - see that method's own remarks. What
+        // remains out of scope: colspan straddling the row axis (reviewed and found already
+        // axis-correct by construction - see GetCellWidth's own remarks) is not itself a gap, but real
+        // per-row pagination of a vertical table's own content is - it stays monolithic
+        // (MonolithicContent.IsUnresumableVerticalTable) because the page-fragmentation system's own
+        // primitives (FragmentainerContext, HtmlContainerInt.SlotStartingAt/PageTopOf/PageBottomOf)
+        // are physical-Y-only at the type level, the same architectural wall #764 (Multi-column) hits
+        // for the identical reason. See .claude/accepted-gaps/no-vertical-writing-mode-layout.md.
         private readonly bool _isVertical;
         private readonly bool _rowAxisStartIsAtMax;
+
+        // The four logical table edges' resolved physical Border sides, computed once from the same
+        // writing-mode LogicalPropertyResolver call _isVertical/_rowAxisStartIsAtMax already derive from
+        // - reused by ApplyCollapsedUsedBorderWidths and threaded into CollapsedBorderModel so neither
+        // hand-rolls a second logical-to-physical mapper (CLAUDE.md's "don't write two independent
+        // mappers for the same grammar" convention). No RTL column/inline axis in this engine (see the
+        // remarks above), so DirectionMode.Ltr is always the right direction to resolve inline-start/end
+        // against, matching every other column-axis site in this file.
+        private readonly Border _blockStartBorder;
+        private readonly Border _blockEndBorder;
+        private readonly Border _inlineStartBorder;
+        private readonly Border _inlineEndBorder;
+
+        private static Border ToBorder(PhysicalSide side) => side switch
+        {
+            PhysicalSide.Top => Border.Top,
+            PhysicalSide.Right => Border.Right,
+            PhysicalSide.Bottom => Border.Bottom,
+            _ => Border.Left,
+        };
 
         /// <summary>A cell's own CSS property that constrains its column-axis (inline) extent.</summary>
         private string CellInlineSize(CssBox cell) => _isVertical ? cell.Height : cell.Width;
@@ -300,6 +318,11 @@ namespace PeachPDF.Html.Core.Dom
             _isVertical = writingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
             _rowAxisStartIsAtMax = LogicalPropertyResolver.BlockStart(writingMode) is PhysicalSide.Right or PhysicalSide.Bottom;
 
+            _blockStartBorder = ToBorder(LogicalPropertyResolver.BlockStart(writingMode));
+            _blockEndBorder = ToBorder(LogicalPropertyResolver.BlockEnd(writingMode));
+            _inlineStartBorder = ToBorder(LogicalPropertyResolver.InlineStart(writingMode, DirectionMode.Ltr));
+            _inlineEndBorder = ToBorder(LogicalPropertyResolver.InlineEnd(writingMode, DirectionMode.Ltr));
+
             // Cleared before anything can throw, for the reason the setup is: a run that dies part-way
             // must leave no answer rather than the previous run's. A record naming a row of a layout that
             // no longer exists is worse than none - it carries CssBox references into a tree that has
@@ -447,7 +470,9 @@ namespace PeachPDF.Html.Core.Dom
             if (_tableBox.BorderCollapse == Keywords.Collapse)
             {
                 _grid = BuildTableGrid();
-                _collapsedBorders = CollapsedBorderModel.Resolve(_grid, _tableBox, IsColumnCollapsed, IsLeftToRight());
+                _collapsedBorders = CollapsedBorderModel.Resolve(
+                    _grid, _tableBox, IsColumnCollapsed, IsLeftToRight(),
+                    _blockStartBorder, _blockEndBorder, _inlineStartBorder, _inlineEndBorder);
             }
             else
             {
@@ -563,11 +588,14 @@ namespace PeachPDF.Html.Core.Dom
             var rowCount = grid.RowCount;
             var columnCount = grid.ColumnCount;
 
-            _tableBox.DerivedStyle.SetCollapsedUsedBorderWidths(
-                top: model.HorizontalLineWidth[0] / 2,
-                right: model.VerticalLineWidth[columnCount] / 2,
-                bottom: model.HorizontalLineWidth[rowCount] / 2,
-                left: model.VerticalLineWidth[0] / 2);
+            {
+                var (top, right, bottom, left) = ResolvePhysicalBorderWidths(
+                    blockStartWidth: model.HorizontalLineWidth[0] / 2,
+                    blockEndWidth: model.HorizontalLineWidth[rowCount] / 2,
+                    inlineStartWidth: model.VerticalLineWidth[0] / 2,
+                    inlineEndWidth: model.VerticalLineWidth[columnCount] / 2);
+                _tableBox.DerivedStyle.SetCollapsedUsedBorderWidths(top, right, bottom, left);
+            }
 
             foreach (var box in _tableBox.Boxes)
             {
@@ -600,20 +628,54 @@ namespace PeachPDF.Html.Core.Dom
                     if (!seen.Add(cell)) continue;
                     if (!grid.TryGetSpan(cell, out var span)) continue;
 
-                    double top = 0, right = 0, bottom = 0, left = 0;
+                    double blockStartWidth = 0, blockEndWidth = 0, inlineStartWidth = 0, inlineEndWidth = 0;
 
                     for (var c = span.Column; c <= span.LastColumn && c < columnCount; c++)
                     {
-                        top = Math.Max(top, model.Horizontal(span.Row, c).UsedWidth / 2);
-                        bottom = Math.Max(bottom, model.Horizontal(span.LastRow + 1, c).UsedWidth / 2);
+                        blockStartWidth = Math.Max(blockStartWidth, model.Horizontal(span.Row, c).UsedWidth / 2);
+                        blockEndWidth = Math.Max(blockEndWidth, model.Horizontal(span.LastRow + 1, c).UsedWidth / 2);
                     }
                     for (var r = span.Row; r <= span.LastRow && r < rowCount; r++)
                     {
-                        left = Math.Max(left, model.Vertical(r, span.Column).UsedWidth / 2);
-                        right = Math.Max(right, model.Vertical(r, span.LastColumn + 1).UsedWidth / 2);
+                        inlineStartWidth = Math.Max(inlineStartWidth, model.Vertical(r, span.Column).UsedWidth / 2);
+                        inlineEndWidth = Math.Max(inlineEndWidth, model.Vertical(r, span.LastColumn + 1).UsedWidth / 2);
                     }
 
+                    var (top, right, bottom, left) =
+                        ResolvePhysicalBorderWidths(blockStartWidth, blockEndWidth, inlineStartWidth, inlineEndWidth);
                     cell.DerivedStyle.SetCollapsedUsedBorderWidths(top, right, bottom, left);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Routes a table participant's own block-start/block-end/inline-start/inline-end used
+        /// half-border-widths to the four physical (top/right/bottom/left) slots
+        /// <see cref="DerivedStyle.SetCollapsedUsedBorderWidths"/> takes, via <see cref="_blockStartBorder"/>/
+        /// <see cref="_blockEndBorder"/>/<see cref="_inlineStartBorder"/>/<see cref="_inlineEndBorder"/> -
+        /// the same resolved mapping <see cref="CollapsedBorderModel"/>'s own candidate collection is
+        /// given, reused here rather than a second, independently-derived mapper.
+        /// </summary>
+        private (double Top, double Right, double Bottom, double Left) ResolvePhysicalBorderWidths(
+            double blockStartWidth, double blockEndWidth, double inlineStartWidth, double inlineEndWidth)
+        {
+            double top = 0, right = 0, bottom = 0, left = 0;
+
+            Assign(_blockStartBorder, blockStartWidth);
+            Assign(_blockEndBorder, blockEndWidth);
+            Assign(_inlineStartBorder, inlineStartWidth);
+            Assign(_inlineEndBorder, inlineEndWidth);
+
+            return (top, right, bottom, left);
+
+            void Assign(Border side, double value)
+            {
+                switch (side)
+                {
+                    case Border.Top: top = value; break;
+                    case Border.Right: right = value; break;
+                    case Border.Bottom: bottom = value; break;
+                    default: left = value; break;
                 }
             }
         }
@@ -693,16 +755,19 @@ namespace PeachPDF.Html.Core.Dom
             for (var line = lineStart; line <= lineEnd; line++)
             {
                 if (model.HorizontalLineWidth[line] <= 0) continue;
-                var y = GetGridLineY(grid, line, model);
+                var rowAxisCenter = GetGridLineY(grid, line, model);
 
                 EmitRuns(grid.ColumnCount, col => model.Horizontal(line, col), (start, end, border) =>
                 {
-                    var x0 = GetGridLineX(grid, start, model);
-                    var x1 = GetGridLineX(grid, end, model);
-                    if (x0 is null || x1 is null) return;
+                    var colAxisStart = GetGridLineX(grid, start, model);
+                    var colAxisEnd = GetGridLineX(grid, end, model);
+                    if (colAxisStart is null || colAxisEnd is null) return;
 
-                    segments.Add(new CollapsedBorderSegment(true,
-                        new RRect(x0.Value, y - border.Width / 2, x1.Value - x0.Value, border.Width),
+                    // !_isVertical: this loop resolves row-axis (block-axis) boundaries, which paint as a
+                    // physically horizontal stripe for horizontal-tb but a physically vertical one for a
+                    // vertical table (rows stack along physical X there) - see RowBoundaryRect's own remarks.
+                    segments.Add(new CollapsedBorderSegment(!_isVertical,
+                        RowBoundaryRect(rowAxisCenter, colAxisStart.Value, colAxisEnd.Value, border.Width),
                         border.Style, border.Width, border.Color));
                 });
             }
@@ -713,22 +778,106 @@ namespace PeachPDF.Html.Core.Dom
             for (var line = 0; line <= grid.ColumnCount; line++)
             {
                 if (model.VerticalLineWidth[line] <= 0) continue;
-                var x = GetGridLineX(grid, line, model);
-                if (x is null) continue;
+                var colAxisCenter = GetGridLineX(grid, line, model);
+                if (colAxisCenter is null) continue;
 
                 EmitRuns(rowEnd - rowStart, i => model.Vertical(rowStart + i, line), (start, end, border) =>
                 {
-                    var y0 = GetGridLineY(grid, rowStart + start, model);
-                    var y1 = GetGridLineY(grid, rowStart + end, model);
+                    var rowAxisStart = GetGridLineY(grid, rowStart + start, model);
+                    var rowAxisEnd = GetGridLineY(grid, rowStart + end, model);
 
-                    segments.Add(new CollapsedBorderSegment(false,
-                        new RRect(x.Value - border.Width / 2, y0, border.Width, y1 - y0),
+                    segments.Add(new CollapsedBorderSegment(_isVertical,
+                        ColumnBoundaryRect(colAxisCenter.Value, rowAxisStart, rowAxisEnd, border.Width),
                         border.Style, border.Width, border.Color));
                 });
             }
 
             _tableBox.CollapsedBorderSegments = segments;
         }
+
+        /// <summary>
+        /// The physical rect a row-axis (block-axis) grid-line segment paints as: a wide, thin stripe
+        /// spanning <paramref name="colAxisStart"/>..<paramref name="colAxisEnd"/> along the column axis
+        /// and centered on <paramref name="rowAxisCenter"/>, <paramref name="width"/> thick, along the row
+        /// axis - physical Y for horizontal-tb (a visually horizontal stripe), physical X for a vertical
+        /// table (a visually vertical one, since rows stack along physical X there).
+        /// </summary>
+        /// <remarks>
+        /// <paramref name="colAxisStart"/>/<paramref name="colAxisEnd"/> (from <see cref="GetGridLineX"/>,
+        /// which has no <c>_rowAxisStartIsAtMax</c> equivalent) are always given in increasing physical
+        /// order. <paramref name="rowAxisCenter"/> alone can't invert a single point, but the two-argument
+        /// overload below normalizes its own row-axis pair regardless, since <see cref="GetGridLineY"/>
+        /// runs <i>decreasing</i> with grid-line index for a <c>vertical-rl</c> table (row 0 sits at the
+        /// physical-max edge there) - a bare <c>end - start</c> would otherwise hand a negative
+        /// width/height to <see cref="RRect"/>, whose own <c>IsEmpty</c>/painting consumers assume
+        /// non-negative extents.
+        /// </remarks>
+        private RRect RowBoundaryRect(double rowAxisCenter, double colAxisStart, double colAxisEnd, double width) =>
+            _isVertical
+                ? new RRect(rowAxisCenter - width / 2, colAxisStart, width, colAxisEnd - colAxisStart)
+                : new RRect(colAxisStart, rowAxisCenter - width / 2, colAxisEnd - colAxisStart, width);
+
+        /// <summary>
+        /// The physical rect a column-axis (inline-axis) grid-line segment paints as: a wide, thin stripe
+        /// spanning <paramref name="rowAxisStart"/>..<paramref name="rowAxisEnd"/> along the row axis and
+        /// centered on <paramref name="colAxisCenter"/>, <paramref name="width"/> thick, along the column
+        /// axis - physical X for horizontal-tb (a visually vertical stripe), physical Y for a vertical
+        /// table (a visually horizontal one, since columns run top-to-bottom along physical Y there for
+        /// both writing modes). Normalizes <paramref name="rowAxisStart"/>/<paramref name="rowAxisEnd"/>'s
+        /// order itself - see <see cref="RowBoundaryRect"/>'s own remarks for why a vertical-rl table can
+        /// hand these in decreasing physical order.
+        /// </summary>
+        private RRect ColumnBoundaryRect(double colAxisCenter, double rowAxisStart, double rowAxisEnd, double width)
+        {
+            var rowAxisMin = Math.Min(rowAxisStart, rowAxisEnd);
+            var rowAxisExtent = Math.Abs(rowAxisEnd - rowAxisStart);
+
+            return _isVertical
+                ? new RRect(rowAxisMin, colAxisCenter - width / 2, rowAxisExtent, width)
+                : new RRect(colAxisCenter - width / 2, rowAxisMin, width, rowAxisExtent);
+        }
+
+        /// <summary>
+        /// A box's own row-axis-start-facing (block-start-facing) physical edge - <c>Location.Y</c> for
+        /// horizontal-tb, and for a vertical table whichever of <c>Location.X</c>/<c>ActualRight</c>
+        /// actually faces block-start, per <see cref="_rowAxisStartIsAtMax"/> (<c>ActualRight</c> for
+        /// <c>vertical-rl</c>, since row-axis-start is the physical-max edge there; <c>Location.X</c> for
+        /// <c>vertical-lr</c>, matching horizontal-tb's own physical-min-is-near-edge shape). Generalizes
+        /// <see cref="GetGridLineY"/>'s own near/far-edge reasoning for
+        /// <see cref="EmitHeaderFooterBorderSegments"/>'s own boundary-row geometry, which reads from a
+        /// live <see cref="CssBox"/> (the proxy) or a captured <see cref="BoxGeometrySnapshot.BoxGeometry"/>
+        /// (a header/footer's own snapshotted rows) - both overloads exist for that reason.
+        /// </summary>
+        private double RowAxisNearEdge(CssBox box) => RowAxisNearEdge(box.Location.Y, box.Location.X, box.ActualRight);
+
+        /// <summary>The row-axis-end-facing (block-end-facing) physical edge - see <see cref="RowAxisNearEdge(CssBox)"/>.</summary>
+        private double RowAxisFarEdge(CssBox box) => RowAxisFarEdge(box.ActualBottom, box.Location.X, box.ActualRight);
+
+        private double RowAxisNearEdge(BoxGeometrySnapshot.BoxGeometry geometry) =>
+            RowAxisNearEdge(geometry.Location.Y, geometry.Location.X, geometry.ActualRight);
+
+        private double RowAxisFarEdge(BoxGeometrySnapshot.BoxGeometry geometry) =>
+            RowAxisFarEdge(geometry.ActualBottom, geometry.Location.X, geometry.ActualRight);
+
+        // The one core the four overloads above unpack their box/geometry's Location.Y/Location.X/
+        // ActualRight into - CssBox and BoxGeometrySnapshot.BoxGeometry expose the same three physical
+        // fields this needs but share no common interface, so the overloads exist only to bridge that,
+        // not to duplicate the axis-selection rule itself.
+        private double RowAxisNearEdge(double locationY, double locationX, double actualRight) =>
+            !_isVertical ? locationY : _rowAxisStartIsAtMax ? actualRight : locationX;
+
+        private double RowAxisFarEdge(double actualBottom, double locationX, double actualRight) =>
+            !_isVertical ? actualBottom : _rowAxisStartIsAtMax ? locationX : actualRight;
+
+        /// <summary>
+        /// The sign a row-axis-far-edge reading needs to recover a shared boundary's true center from the
+        /// overlap band it names (<see cref="GetGridLineY"/>'s own remarks: <c>+1</c> for <c>vertical-rl</c>,
+        /// <c>-1</c> otherwise). A row-axis-near-edge reading needs the <i>opposite</i> sign - by the
+        /// overlap-symmetry argument <see cref="EmitHeaderFooterBorderSegments"/>'s own remarks make for
+        /// its footer-boundary branch (the block-end-ward neighbor's own near edge sits exactly as far past
+        /// the true center, on the opposite side, as the block-start-ward neighbor's far edge does).
+        /// </summary>
+        private int RowAxisFarEdgeCorrectionSign => _rowAxisStartIsAtMax ? 1 : -1;
 
         /// <summary>
         /// Builds each detached header's/footer's own <see cref="CssBox.CollapsedBorderSegments"/> -
@@ -801,27 +950,35 @@ namespace PeachPDF.Html.Core.Dom
                 var boundaryIsInterior = boundaryLine > 0 && boundaryLine < grid.RowCount;
                 var boundaryHalfWidth = boundaryIsInterior ? model.HorizontalLineWidth[boundaryLine] / 2.0 : 0.0;
 
-                double? SnapshotLineY(int line)
+                // The sign a row-axis-far-edge reading needs to recover the true center - see
+                // RowAxisFarEdgeCorrectionSign's own remarks. A near-edge reading needs the opposite sign.
+                var farSign = RowAxisFarEdgeCorrectionSign;
+                var nearSign = -farSign;
+
+                double? SnapshotLine(int line)
                 {
                     if (line <= sourceStart)
                     {
                         if (!snapshot.TryGetGeometry(grid.RowAt(sourceStart), out var top)) return null;
-                        // The group's own top is the table's true outer edge (header) or the boundary to
-                        // the body (footer) - only the latter needs the correction, and only when line is
+                        // The group's own near edge is the table's true outer edge (header) or the boundary
+                        // to the body (footer) - only the latter needs the correction, and only when line is
                         // actually that boundary (line == boundaryLine can only hold for a footer here,
-                        // since a header's boundary sits at its own *bottom*, the other branch below).
-                        return line == boundaryLine ? top.Location.Y + boundaryHalfWidth : top.Location.Y;
+                        // since a header's boundary sits at its own *far* edge, the other branch below).
+                        var near = RowAxisNearEdge(top);
+                        return line == boundaryLine ? near + nearSign * boundaryHalfWidth : near;
                     }
                     if (line >= sourceStart + sourceCount)
                     {
                         if (!snapshot.TryGetGeometry(grid.RowAt(sourceStart + sourceCount - 1), out var bottom)) return null;
-                        return line == boundaryLine ? bottom.ActualBottom - boundaryHalfWidth : bottom.ActualBottom;
+                        var far = RowAxisFarEdge(bottom);
+                        return line == boundaryLine ? far + farSign * boundaryHalfWidth : far;
                     }
-                    // Interior to the group's own row range - see GetGridLineY's remarks: the row above's
-                    // ActualBottom names the overlap band's bottom edge, not its center, so half the
-                    // resolved line width has to come back off it.
+                    // Interior to the group's own row range - see GetGridLineY's remarks: the block-start-
+                    // ward neighbor's own far edge names the overlap band's own far edge, not its center, so
+                    // half the resolved line width has to come back off it (the sign GetGridLineY's own
+                    // interior branch uses, reused here via farSign for exactly the same reason).
                     return snapshot.TryGetGeometry(grid.RowAt(line - 1), out var above)
-                        ? above.ActualBottom - model.HorizontalLineWidth[line] / 2.0
+                        ? RowAxisFarEdge(above) + farSign * model.HorizontalLineWidth[line] / 2.0
                         : null;
                 }
 
@@ -833,17 +990,17 @@ namespace PeachPDF.Html.Core.Dom
                 for (var line = ownLineStart; line <= ownLineEnd; line++)
                 {
                     if (model.HorizontalLineWidth[line] <= 0) continue;
-                    var y = SnapshotLineY(line);
-                    if (y is null) continue;
+                    var rowAxisCenter = SnapshotLine(line);
+                    if (rowAxisCenter is null) continue;
 
                     EmitRuns(grid.ColumnCount, col => model.Horizontal(line, col), (start, end, border) =>
                     {
-                        var x0 = GetGridLineX(grid, start, model);
-                        var x1 = GetGridLineX(grid, end, model);
-                        if (x0 is null || x1 is null) return;
+                        var colAxisStart = GetGridLineX(grid, start, model);
+                        var colAxisEnd = GetGridLineX(grid, end, model);
+                        if (colAxisStart is null || colAxisEnd is null) return;
 
-                        segments.Add(new CollapsedBorderSegment(true,
-                            new RRect(x0.Value, y.Value - border.Width / 2, x1.Value - x0.Value, border.Width),
+                        segments.Add(new CollapsedBorderSegment(!_isVertical,
+                            RowBoundaryRect(rowAxisCenter.Value, colAxisStart.Value, colAxisEnd.Value, border.Width),
                             border.Style, border.Width, border.Color));
                     });
                 }
@@ -851,33 +1008,37 @@ namespace PeachPDF.Html.Core.Dom
                 for (var line = 0; line <= grid.ColumnCount; line++)
                 {
                     if (model.VerticalLineWidth[line] <= 0) continue;
-                    var x = GetGridLineX(grid, line, model);
-                    if (x is null) continue;
+                    var colAxisCenter = GetGridLineX(grid, line, model);
+                    if (colAxisCenter is null) continue;
 
                     EmitRuns(sourceCount, i => model.Vertical(sourceStart + i, line), (start, end, border) =>
                     {
-                        var y0 = SnapshotLineY(sourceStart + start);
-                        var y1 = SnapshotLineY(sourceStart + end);
-                        if (y0 is null || y1 is null) return;
+                        var rowAxisStart = SnapshotLine(sourceStart + start);
+                        var rowAxisEnd = SnapshotLine(sourceStart + end);
+                        if (rowAxisStart is null || rowAxisEnd is null) return;
 
-                        segments.Add(new CollapsedBorderSegment(false,
-                            new RRect(x.Value - border.Width / 2, y0.Value, border.Width, y1.Value - y0.Value),
+                        segments.Add(new CollapsedBorderSegment(_isVertical,
+                            ColumnBoundaryRect(colAxisCenter.Value, rowAxisStart.Value, rowAxisEnd.Value, border.Width),
                             border.Style, border.Width, border.Color));
                     });
                 }
 
-                var proxyTop = proxy.Location.Y;
-                var proxyBottom = proxy.ActualBottom;
+                var proxyNear = RowAxisNearEdge(proxy);
+                var proxyFar = RowAxisFarEdge(proxy);
                 var groupRow = isHeader ? sourceStart + sourceCount - 1 : sourceStart;
 
-                // The row whose *span* reaches this boundary, not the first one whose own Location.Y is
+                // The row whose *span* reaches this boundary, not the first one whose own near edge is
                 // past it: border-collapse overlaps adjacent boxes by (up to) the resolved line width, so
-                // a row with a thick border-top can legitimately start a little before proxyBottom while
-                // still being the row the header sits directly above - filtering on Location.Y alone would
-                // skip it and wrongly land on the row after.
+                // a row with a thick border can legitimately start a little before the proxy's own far edge
+                // while still being the row the header sits directly above - filtering on the raw edge
+                // alone would skip it and wrongly land on the row after. The comparison direction (and the
+                // epsilon's sign) flips with farSign/nearSign: a vertical-rl table's row-axis physical order
+                // runs opposite its topological order (row 0 sits at the physical-max edge), so "the first
+                // row topologically after the header" is the first row whose own far edge has fallen *below*
+                // (not risen above) the header's own far edge.
                 var adjacentRowIndex = isHeader
-                    ? _bodyRows.FindIndex(r => r.ActualBottom >= proxyBottom - 0.5)
-                    : _bodyRows.FindLastIndex(r => r.Location.Y <= proxyTop + 0.5);
+                    ? _bodyRows.FindIndex(r => farSign > 0 ? RowAxisFarEdge(r) <= proxyFar + 0.5 : RowAxisFarEdge(r) >= proxyFar - 0.5)
+                    : _bodyRows.FindLastIndex(r => farSign > 0 ? RowAxisNearEdge(r) >= proxyNear - 0.5 : RowAxisNearEdge(r) <= proxyNear + 0.5);
 
                 if (adjacentRowIndex >= 0)
                 {
@@ -885,27 +1046,25 @@ namespace PeachPDF.Html.Core.Dom
 
                     var resolved = CollapsedBorderModel.ResolveRepeatedGroupBoundary(
                         grid, groupRow, groupRowGroup, HeaderRowCountInGrid + adjacentRowIndex,
-                        groupIsAbove: isHeader, IsLeftToRight());
+                        groupIsAbove: isHeader, IsLeftToRight(), _blockStartBorder, _blockEndBorder);
 
-                    // proxyBottom/proxyTop each name one edge of the overlap band, exactly like
-                    // GetGridLineY's raw row.ActualBottom (header, band's bottom edge) and GetGridLineX's
-                    // primary-branch cell.Location.X (footer, band's top edge, same "the row after this
-                    // line" convention) - so the same half-width correction applies here. This has to
-                    // agree exactly with SnapshotLineY(boundaryLine)'s own now-corrected value (used by the
+                    // proxyFar/proxyNear each name one edge of the overlap band, exactly like GetGridLineY's
+                    // own far/near-edge reasoning - so the same correction applies here. This has to agree
+                    // exactly with SnapshotLine(boundaryLine)'s own now-corrected value (used by the
                     // vertical-divider loop above for any run spanning the group's full row range) - both
-                    // read from the same proxyBottom/bottom.ActualBottom (equivalently proxyTop/top.Location.Y)
+                    // read from the same proxyFar/bottom-far-edge (equivalently proxyNear/top-near-edge)
                     // and the same model.HorizontalLineWidth[boundaryLine], so a divider that reaches this
                     // line still meets the boundary segment exactly, not offset by half its width.
-                    var boundaryY = isHeader ? proxyBottom - boundaryHalfWidth : proxyTop + boundaryHalfWidth;
+                    var boundaryPos = isHeader ? proxyFar + farSign * boundaryHalfWidth : proxyNear + nearSign * boundaryHalfWidth;
 
                     EmitRuns(grid.ColumnCount, col => resolved[col], (start, end, border) =>
                     {
-                        var x0 = GetGridLineX(grid, start, model);
-                        var x1 = GetGridLineX(grid, end, model);
-                        if (x0 is null || x1 is null) return;
+                        var colAxisStart = GetGridLineX(grid, start, model);
+                        var colAxisEnd = GetGridLineX(grid, end, model);
+                        if (colAxisStart is null || colAxisEnd is null) return;
 
-                        segments.Add(new CollapsedBorderSegment(true,
-                            new RRect(x0.Value, boundaryY - border.Width / 2, x1.Value - x0.Value, border.Width),
+                        segments.Add(new CollapsedBorderSegment(!_isVertical,
+                            RowBoundaryRect(boundaryPos, colAxisStart.Value, colAxisEnd.Value, border.Width),
                             border.Style, border.Width, border.Color));
                     });
                 }
@@ -918,20 +1077,20 @@ namespace PeachPDF.Html.Core.Dom
                     // resolution already models correctly (Column/ColumnGroup/Table origins apply exactly
                     // at line 0/RowCount - see CollectHorizontal), unlike the fresh per-page resolution
                     // above, which deliberately excludes those origins because they don't apply to a
-                    // genuinely interior line. SnapshotLineY(boundaryLine) already carries the correction
+                    // genuinely interior line. SnapshotLine(boundaryLine) already carries the correction
                     // (see its own definition above), so its value is used directly with no further
                     // adjustment here.
-                    var y = SnapshotLineY(boundaryLine);
-                    if (y is not null)
+                    var rowAxisCenter = SnapshotLine(boundaryLine);
+                    if (rowAxisCenter is not null)
                     {
                         EmitRuns(grid.ColumnCount, col => model.Horizontal(boundaryLine, col), (start, end, border) =>
                         {
-                            var x0 = GetGridLineX(grid, start, model);
-                            var x1 = GetGridLineX(grid, end, model);
-                            if (x0 is null || x1 is null) return;
+                            var colAxisStart = GetGridLineX(grid, start, model);
+                            var colAxisEnd = GetGridLineX(grid, end, model);
+                            if (colAxisStart is null || colAxisEnd is null) return;
 
-                            segments.Add(new CollapsedBorderSegment(true,
-                                new RRect(x0.Value, y.Value - border.Width / 2, x1.Value - x0.Value, border.Width),
+                            segments.Add(new CollapsedBorderSegment(!_isVertical,
+                                RowBoundaryRect(rowAxisCenter.Value, colAxisStart.Value, colAxisEnd.Value, border.Width),
                                 border.Style, border.Width, border.Color));
                         });
                     }
@@ -977,48 +1136,69 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// The document-space Y of horizontal grid line <paramref name="line"/>'s <i>center</i>
-        /// (0..RowCount), read from this pass's real, laid-out row geometry rather than derived
-        /// arithmetically. At an outer edge (<c>line &lt;= 0</c> or <c>line &gt;= RowCount</c>) a row's own
-        /// half-border reservation and the table's own separately-applied half sit on non-overlapping
-        /// sides of one point, so that row's own <c>Location.Y</c>/<c>ActualBottom</c> already <i>is</i>
-        /// the center. At an <b>interior</b> line the two neighboring rows instead overlap by the <i>whole</i>
-        /// resolved line width (border-collapse's overlap-then-paint-border-last model - see
-        /// <see cref="VerticalSpacingAt"/>), so the row above's own <c>ActualBottom</c> names only the
-        /// overlap band's bottom edge, not its center - halving <paramref name="model"/>'s resolved width
-        /// back off it is what recovers the true center a segment must be built around.
+        /// The document-space row-axis position (physical Y for a horizontal-tb table, physical X for a
+        /// vertical one) of horizontal grid line <paramref name="line"/>'s <i>center</i> (0..RowCount),
+        /// read from this pass's real, laid-out row geometry (post-<see cref="ReflectRowAxisForVerticalRl"/>
+        /// for <c>vertical-rl</c>, which this method runs after) rather than derived arithmetically. At an
+        /// outer edge (<c>line &lt;= 0</c> or <c>line &gt;= RowCount</c>) a row's own half-border
+        /// reservation and the table's own separately-applied half sit on non-overlapping sides of one
+        /// point, so that row's own row-axis-start edge already <i>is</i> the center. At an <b>interior</b>
+        /// line the two neighboring rows instead overlap by the <i>whole</i> resolved line width
+        /// (border-collapse's overlap-then-paint-border-last model - see <see cref="VerticalSpacingAt"/>),
+        /// so the block-start-ward neighbor's own far edge names only the overlap band's own far edge, not
+        /// its center - halving <paramref name="model"/>'s resolved width back off it is what recovers the
+        /// true center a segment must be built around.
         /// </summary>
-        private static double GetGridLineY(TableGrid grid, int line, CollapsedBorderModel model)
+        /// <remarks>
+        /// Row <paramref name="line"/><c>-1</c> is always the <i>topologically</i> block-start-ward
+        /// neighbor - grid indices are a pure topology fact, unaffected by which physical side either
+        /// writing mode's block-start actually is. Which physical edge is its own "far" (overlap-facing)
+        /// edge, and which direction recovers the center from it, is exactly what
+        /// <see cref="_rowAxisStartIsAtMax"/> flips: for <c>horizontal-tb</c>/<c>vertical-lr</c> (row 0
+        /// grows from the physical-min edge forward, matching topological order), that neighbor's far edge
+        /// faces the physical-max direction (<c>ActualBottom</c>/<c>ActualRight</c>), so the center is
+        /// <i>behind</i> it (subtract half). For <c>vertical-rl</c> (mirrored so row 0 sits at the
+        /// physical-max edge instead), the same topologically-block-start-ward neighbor now sits physically
+        /// closer to the table's max edge than the row after it, so its far edge instead faces the
+        /// physical-min direction (<c>Location.X</c>), and the center is reached by <i>adding</i> half.
+        /// </remarks>
+        private double GetGridLineY(TableGrid grid, int line, CollapsedBorderModel model)
         {
-            if (line <= 0) return grid.RowAt(0).Location.Y;
-            if (line >= grid.RowCount) return grid.RowAt(grid.RowCount - 1).ActualBottom;
-            return grid.RowAt(line - 1).ActualBottom - model.HorizontalLineWidth[line] / 2.0;
+            if (line <= 0) return RowAxisNearEdge(grid.RowAt(0));
+            if (line >= grid.RowCount) return RowAxisFarEdge(grid.RowAt(grid.RowCount - 1));
+
+            return RowAxisFarEdge(grid.RowAt(line - 1))
+                   + RowAxisFarEdgeCorrectionSign * model.HorizontalLineWidth[line] / 2.0;
         }
 
         /// <summary>
-        /// The document-space X of vertical grid line <paramref name="line"/>'s <i>center</i>
-        /// (0..ColumnCount) - read off the first real cell anywhere in the grid whose own edge is that
-        /// line, since a ragged row can leave some rows with no cell there at all. Null only for a column
-        /// with no real cell in any row on either side of it (a fully empty column), which has no geometry
-        /// to draw a segment at.
+        /// The document-space column-axis position (physical X for a horizontal-tb table, physical Y for
+        /// a vertical one) of vertical grid line <paramref name="line"/>'s <i>center</i> (0..ColumnCount) -
+        /// read off the first real cell anywhere in the grid whose own edge is that line, since a ragged
+        /// row can leave some rows with no cell there at all. Null only for a column with no real cell in
+        /// any row on either side of it (a fully empty column), which has no geometry to draw a segment at.
         /// </summary>
         /// <remarks>
         /// See <see cref="GetGridLineY"/>'s own remarks for why an outer edge needs no adjustment while an
         /// interior one does. Unlike the row axis, an interior line's two branches here return <i>opposite</i>
         /// edges of the overlap band - the first branch (a real cell starting at this column) names the
-        /// band's left/min-X edge, so recovering the center means <i>adding</i> half the resolved width;
-        /// the fallback (a cell ending at this column, found only when no row starts one here - e.g. a
-        /// colspan crossing the line from the left) names the band's right/max-X edge, so recovering the
-        /// center means <i>subtracting</i> it instead.
+        /// band's own column-axis-min edge, so recovering the center means <i>adding</i> half the resolved
+        /// width; the fallback (a cell ending at this column, found only when no row starts one here - e.g.
+        /// a colspan crossing the line from the column-axis-min side) names the band's own column-axis-max
+        /// edge, so recovering the center means <i>subtracting</i> it instead. No <c>_rowAxisStartIsAtMax</c>
+        /// equivalent here - this engine has no <c>direction: rtl</c> column/inline axis for either writing
+        /// mode, so the column axis always grows physical-min-forward regardless of orientation.
         /// </remarks>
-        private static double? GetGridLineX(TableGrid grid, int line, CollapsedBorderModel model)
+        private double? GetGridLineX(TableGrid grid, int line, CollapsedBorderModel model)
         {
             var halfWidth = line > 0 && line < grid.ColumnCount ? model.VerticalLineWidth[line] / 2.0 : 0.0;
 
             for (var r = 0; r < grid.RowCount; r++)
             {
-                if (line < grid.ColumnCount && grid.CellAt(r, line) is { } right) return right.Location.X + halfWidth;
-                if (line > 0 && grid.CellAt(r, line - 1) is { } left) return left.ActualRight - halfWidth;
+                if (line < grid.ColumnCount && grid.CellAt(r, line) is { } right)
+                    return (_isVertical ? right.Location.Y : right.Location.X) + halfWidth;
+                if (line > 0 && grid.CellAt(r, line - 1) is { } left)
+                    return (_isVertical ? left.ActualBottom : left.ActualRight) - halfWidth;
             }
 
             return null;
@@ -1913,7 +2093,9 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Create a proxy box for the header at the specified Y position
+        /// Create a proxy box for the header at the specified row-axis position (physical Y for a
+        /// horizontal-tb table, physical X - <paramref name="yPosition"/>'s value at every call site
+        /// already is one - for a vertical one).
         /// </summary>
         private CssProxyBox? CreateHeaderProxy(double yPosition)
         {
@@ -1921,13 +2103,14 @@ namespace PeachPDF.Html.Core.Dom
                 return null;
 
             var proxy = new CssProxyBox(_tableBox, _headerBox, _headerIndex);
-            var startX = Math.Max(_tableBox.ClientLeft + StartXSpacing(), 0);
-            proxy.Location = new RPoint(startX, yPosition);
+            var columnAxisStart = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), 0);
+            proxy.Location = _isVertical ? new RPoint(yPosition, columnAxisStart) : new RPoint(columnAxisStart, yPosition);
             return proxy;
         }
 
         /// <summary>
-        /// Create a proxy box for the footer at the specified Y position
+        /// Create a proxy box for the footer at the specified row-axis position - see
+        /// <see cref="CreateHeaderProxy"/>'s own remark.
         /// </summary>
         private CssProxyBox? CreateFooterProxy(double yPosition)
         {
@@ -1935,39 +2118,91 @@ namespace PeachPDF.Html.Core.Dom
                 return null;
 
             var proxy = new CssProxyBox(_tableBox, _footerBox, _footerIndex);
-            var startX = Math.Max(_tableBox.ClientLeft + StartXSpacing(), 0);
-            proxy.Location = new RPoint(startX, yPosition);
+            var columnAxisStart = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), 0);
+            proxy.Location = _isVertical ? new RPoint(yPosition, columnAxisStart) : new RPoint(columnAxisStart, yPosition);
             return proxy;
         }
 
         /// <summary>
-        /// Lays <paramref name="captions"/> out as ordinary full-width blocks, stacked in source order
-        /// starting at (<paramref name="x"/>, <paramref name="y"/>) and sized to <paramref name="width"/>
-        /// - CSS 2.1 §17.4: a caption box takes the full width of the table. Each is placed at its own
-        /// assigned position (<see cref="CssBox.LayoutContentAtItsAssignedPosition"/>) rather than
-        /// through the generic block-flow frame, since this engine - not a block-flow cursor a table box
-        /// does not otherwise keep - owns where it goes.
+        /// Lays <paramref name="captions"/> out stacked in source order along the table's own row axis
+        /// (physical Y for horizontal-tb, physical X for a vertical table), starting at
+        /// <paramref name="rowAxisCursor"/> and sized to the table's full column-axis extent
+        /// (<paramref name="columnAxisStart"/>/<paramref name="columnAxisExtent"/>) - CSS 2.1 §17.4: a
+        /// caption box takes the full width of the table, reinterpreted through css-tables-3's axis
+        /// mapping for a vertical writing mode. Each is placed at its own assigned position
+        /// (<see cref="CssBox.LayoutContentAtItsAssignedPosition"/>) rather than through the generic
+        /// block-flow frame, since this engine - not a block-flow cursor a table box does not otherwise
+        /// keep - owns where it goes.
         /// </summary>
-        /// <returns><paramref name="y"/> unchanged when <paramref name="captions"/> is empty, otherwise
-        /// the bottom edge after the last caption's own bottom margin.</returns>
-        private static async ValueTask<double> LayoutCaptionGroup(
-            RGraphics g, IReadOnlyList<CssBox> captions, double x, double y, double width)
+        /// <remarks>
+        /// Like a row, a caption grows forward from the row-axis-min edge (the <c>vertical-lr</c> shape)
+        /// regardless of orientation - its own final row-axis-max edge isn't known until the whole grid is
+        /// laid out, so a <c>vertical-rl</c> table mirrors it once, together with the rows, via
+        /// <see cref="ReflectRowAxisForVerticalRl"/> rather than here.
+        /// </remarks>
+        /// <returns><paramref name="rowAxisCursor"/> unchanged when <paramref name="captions"/> is empty,
+        /// otherwise the row-axis position after the last caption's own trailing margin.</returns>
+        private async ValueTask<double> LayoutCaptionGroup(
+            RGraphics g, IReadOnlyList<CssBox> captions, double columnAxisStart, double rowAxisCursor, double columnAxisExtent)
         {
-            var currentY = y;
+            var currentPos = rowAxisCursor;
 
             foreach (var caption in captions)
             {
-                currentY += caption.ActualMarginTop;
+                currentPos += _isVertical ? caption.ActualMarginLeft : caption.ActualMarginTop;
 
-                caption.Location = new RPoint(x, currentY);
-                caption.ActualRight = x + width;
+                caption.Location = _isVertical
+                    ? new RPoint(currentPos, columnAxisStart)
+                    : new RPoint(columnAxisStart, currentPos);
 
-                await caption.LayoutContentAtItsAssignedPosition(g);
+                if (_isVertical)
+                {
+                    caption.ActualBottom = columnAxisStart + columnAxisExtent;
 
-                currentY = caption.ActualBottom + caption.ActualMarginBottom;
+                    // A caption bypasses the ordinary block-flow frame (this method's own remarks), so
+                    // nothing else ever resolves its box model before LayoutContentAtItsAssignedPosition
+                    // runs - unlike an ordinary block child, ResolveOwnInlineSize never sees it. For
+                    // horizontal-tb that's fine: ActualRight above is exactly what CreateLineBoxes/FlowBox
+                    // consult for wrap width. But a caption inherits the table's own writing-mode too, so
+                    // for a vertical table its content dispatches to CreateVerticalLineBoxes, which reads
+                    // the CSS Height *string* (not ActualBottom) for its own wrap limit - CSS 2.1 §17.4's
+                    // "full width of the table" is the caption's own inline axis under this reinterpretation
+                    // (physical Y here), so it has to be stated as a real Height value or the caption
+                    // silently falls back to an auto one-page-tall wrap limit and then shrinks to content
+                    // instead of spanning the column axis. Formatted as "pt" (the identity unit for this
+                    // engine's own internal layout units) rather than "px", which resolves at 0.75pt and
+                    // would silently shrink this to 75% of the intended extent.
+                    caption.Height = columnAxisExtent.ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "pt";
+
+                    await caption.LayoutContentAtItsAssignedPosition(g);
+
+                    // CreateVerticalLineBoxes' own auto-width shrink (issue #761) is anchored to whichever
+                    // physical edge is THIS caption's own real block-start - ActualRight for vertical-rl
+                    // (Location.X, set above, is left free to move instead), Location.X for vertical-lr
+                    // (matching the Location assignment above, a no-op delta below). That can disagree with
+                    // the Location.X anchor this method itself wants, since - like a row - a caption grows
+                    // forward as if vertical-lr regardless of the table's real orientation, deferring the
+                    // real vertical-rl direction to the whole-table reflection pass rather than to this
+                    // per-caption shrink. Re-anchoring to currentPos here, via a real subtree translation
+                    // (OffsetLeft - the shrink already positioned nested word content, a bare field rewrite
+                    // would leave it behind exactly the way a bare row/cell rewrite once did), is what keeps
+                    // every caption's own near edge at currentPos regardless of which edge the shrink itself
+                    // preserved.
+                    var forwardGrowthDelta = currentPos - caption.Location.X;
+                    if (forwardGrowthDelta != 0) caption.OffsetLeft(forwardGrowthDelta);
+                }
+                else
+                {
+                    caption.ActualRight = columnAxisStart + columnAxisExtent;
+                    await caption.LayoutContentAtItsAssignedPosition(g);
+                }
+
+                currentPos = _isVertical
+                    ? caption.ActualRight + caption.ActualMarginRight
+                    : caption.ActualBottom + caption.ActualMarginBottom;
             }
 
-            return currentY;
+            return currentPos;
         }
 
         /// <summary>
@@ -2044,24 +2279,40 @@ namespace PeachPDF.Html.Core.Dom
         /// completes. A captionless table never has a decoration box to size; a no-op then.
         /// </summary>
         /// <param name="gridBorderBoxBottom">
-        /// the grid's own border-box bottom edge, in document coordinates - already computed by the
-        /// caller as part of settling _tableBox's own ActualBottom.
+        /// the grid's own border-box row-axis-end edge (physical Y for horizontal-tb, physical X for a
+        /// vertical table) - already computed by the caller as part of settling _tableBox's own row-axis
+        /// dimension.
         /// </param>
         private void FinalizeGridDecorationBoxGeometry(double gridBorderBoxBottom)
         {
             if (_tableBox.TableGridDecorationBox is not { } decorationBox) return;
 
             // The top caption group's own (persistent, set once by the pass that laid it out and never
-            // touched again) geometry, rather than _topCaptionsHeight - a per-engine-instance field that
-            // resets to 0 on a continuation's fresh instance even though the caption above it was laid
-            // out by an earlier one. Reading the caption box itself is correct on every pass alike.
-            var gridBorderBoxTop = _topCaptions.Count > 0
-                ? _topCaptions[^1].ActualBottom + _topCaptions[^1].ActualMarginBottom
-                : _tableBox.Location.Y;
+            // touched again - and, for vertical-rl, already mirrored by the caller's own reflection pass
+            // before this runs) geometry, rather than _topCaptionsHeight - a per-engine-instance field
+            // that resets to 0 on a continuation's fresh instance even though the caption above it was
+            // laid out by an earlier one. Reading the caption box itself is correct on every pass alike.
+            if (_isVertical)
+            {
+                var gridBorderBoxTop = _topCaptions.Count > 0
+                    ? _topCaptions[^1].ActualRight + _topCaptions[^1].ActualMarginRight
+                    : _tableBox.Location.X;
 
-            decorationBox.Location = new RPoint(_tableBox.Location.X, gridBorderBoxTop);
-            decorationBox.ActualRight = _tableBox.ActualRight;
-            decorationBox.ActualBottom = gridBorderBoxBottom;
+                decorationBox.Location = new RPoint(gridBorderBoxTop, _tableBox.Location.Y);
+                decorationBox.ActualRight = gridBorderBoxBottom;
+                decorationBox.ActualBottom = _tableBox.ActualBottom;
+            }
+            else
+            {
+                var gridBorderBoxTop = _topCaptions.Count > 0
+                    ? _topCaptions[^1].ActualBottom + _topCaptions[^1].ActualMarginBottom
+                    : _tableBox.Location.Y;
+
+                decorationBox.Location = new RPoint(_tableBox.Location.X, gridBorderBoxTop);
+                decorationBox.ActualRight = _tableBox.ActualRight;
+                decorationBox.ActualBottom = gridBorderBoxBottom;
+            }
+
             decorationBox.PageBreakBottoms = _tableBox.PageBreakBottoms;
         }
 
@@ -2084,17 +2335,23 @@ namespace PeachPDF.Html.Core.Dom
             if (!_continuesAPreviousPass && _topCaptions.Count > 0)
             {
                 // CSS 2.1 §17.4: a top caption sits flush above the row grid's own border-box, with
-                // nothing (no border, no background) above it - anchored at _tableBox.Location.Y (the
-                // combined assembly's true top) rather than ClientTop (inside the grid's own border),
-                // which would otherwise leave a border-width gap of nothing above the caption where the
-                // border used to visually sit before this box's own border paint was suppressed (issue
-                // #721; see EnsureGridDecorationBoxStructure/FinalizeGridDecorationBoxGeometry). Note
-                // startY below stays anchored at ClientTop unchanged - the two anchors differ by exactly
-                // _tableBox.ActualBorderTopWidth, which startY's own formula already adds back via
-                // ClientTop, so the row grid's own position is unaffected by this.
+                // nothing (no border, no background) above it - anchored at the table's own row-axis-min
+                // edge (Location.Y for horizontal-tb, Location.X for vertical - the combined assembly's
+                // true row-axis-start) rather than the client edge (inside the grid's own border), which
+                // would otherwise leave a border-width gap of nothing above the caption where the border
+                // used to visually sit before this box's own border paint was suppressed (issue #721; see
+                // EnsureGridDecorationBoxStructure/FinalizeGridDecorationBoxGeometry). Note startY below
+                // stays anchored at the client edge unchanged - the two anchors differ by exactly the
+                // table's own row-axis-start border width, which startY's own formula already adds back,
+                // so the row grid's own position is unaffected by this. Grows forward from the row-axis-min
+                // edge regardless of orientation, like a row - LayoutCaptionGroup's own remarks explain why.
                 var topCaptionsBottom = await LayoutCaptionGroup(
-                    g, _topCaptions, _tableBox.Location.X, _tableBox.Location.Y, GetWidthSum());
-                _topCaptionsHeight = topCaptionsBottom - _tableBox.Location.Y;
+                    g,
+                    _topCaptions,
+                    _isVertical ? _tableBox.Location.Y : _tableBox.Location.X,
+                    _isVertical ? _tableBox.Location.X : _tableBox.Location.Y,
+                    GetWidthSum());
+                _topCaptionsHeight = topCaptionsBottom - (_isVertical ? _tableBox.Location.X : _tableBox.Location.Y);
             }
 
             // Row-axis start: forward-growing (vertical-lr's own shape) even for vertical-rl, whose rows
@@ -2102,9 +2359,9 @@ namespace PeachPDF.Html.Core.Dom
             // that correction in one pass once every row's final position is known, rather than solving
             // it here where a row's own row-axis thickness isn't yet knowable (see the axis-mapping
             // fields' own remarks). ClientLeft for a vertical table (rows run along physical X), ClientTop
-            // otherwise. _topCaptionsHeight is 0 for a vertical table (captions aren't yet writing-mode-
-            // aware - out of scope here, same as headers/footers/collapsed borders), so including the
-            // term unconditionally is harmless for the caption-less tables this covers.
+            // otherwise. _topCaptionsHeight is now a real row-axis-thickness scalar for a vertical table
+            // too (LayoutCaptionGroup above is writing-mode-aware), so including it unconditionally here
+            // is correct for both orientations, not merely harmless.
             var startY = Math.Max((_isVertical ? _tableBox.ClientLeft : _tableBox.ClientTop) + _topCaptionsHeight + StartYSpacing(), 0);
 
             var container = _tableBox.HtmlContainer;
@@ -2139,10 +2396,11 @@ namespace PeachPDF.Html.Core.Dom
             // grid), so startY still names the top of the page the table *began* on. The rows this pass
             // places belong to the fragmentainer the break fell in, which is what the record names.
             var cursor = ContinuedRowLoop is { } carried
-                ? TableRowCursor.Continuing(carried, ResumedRowTop(container, carried, startY, pageHeight))
+                ? TableRowCursor.Continuing(carried, ResumedRowTop(container, carried, startY, pageHeight), _isVertical)
                 : new TableRowCursor(
                     startY, startX,
-                    pageHeight < double.MaxValue - 1 ? container!.SlotStartingAt(_tableBox.ClientTop) : 0);
+                    pageHeight < double.MaxValue - 1 ? container!.SlotStartingAt(_tableBox.ClientTop) : 0,
+                    _isVertical);
 
             // Reset page-break tracking so re-layout doesn't accumulate stale entries. A resumed pass is
             // not a re-layout: where the table's slice ended on the pages earlier passes filled is what
@@ -2317,8 +2575,8 @@ namespace PeachPDF.Html.Core.Dom
                     await LayoutBodyRow(g, row, startX, headerCursor);
 
                     RegisterRowSpanCellsEndingRow(row, rowIndex, headerOriginalRowIndices, headerSpanningCellsEndingOnRow);
-                    headerCursor.MaxBottom =
-                        GrowForClosingRowSpanCells(rowIndex, headerSpanningCellsEndingOnRow, headerCursor.MaxBottom);
+                    headerCursor.MaxBottom = GrowForClosingRowSpanCells(
+                        rowIndex, headerSpanningCellsEndingOnRow, headerCursor.MaxBottom, _isVertical);
 
                     headerRowsLayoutY = headerCursor.MaxBottom + VerticalSpacingAt(rowIndex + 1);
 
@@ -2327,11 +2585,15 @@ namespace PeachPDF.Html.Core.Dom
                     // degenerate (0,0,0,0) Bounds, which the paint-time visibility-culling
                     // optimization (see SetRowGroupBoxDimensions's call-site comment for the same
                     // bug at the row-group level) then silently drops from painting entirely.
+                    //
+                    // headerCursor.MaxBottom is the row axis - see AssignRowActualBounds for why it (not
+                    // Boxes.Max) is the safe source for that field on a vertical table.
                     row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
-                    row.ActualRight = row.Boxes.Max(x => x.ActualRight);
-                    row.ActualBottom = headerCursor.MaxBottom;
+                    AssignRowActualBounds(row, headerCursor.MaxBottom);
 
-                    CloseRowSpanCellsEndingOnRow(g, rowIndex, headerSpanningCellsEndingOnRow, row.ActualBottom);
+                    CloseRowSpanCellsEndingOnRow(
+                        g, rowIndex, headerSpanningCellsEndingOnRow,
+                        _isVertical ? row.ActualRight : row.ActualBottom, _isVertical);
 
                     rowIndex++;
                     headerRows.Add(row);
@@ -2340,10 +2602,19 @@ namespace PeachPDF.Html.Core.Dom
                 cursor.MaxRight = headerCursor.MaxRight;
 
                 // Set header box dimensions
-                _headerBox.Location = new RPoint(startX, cursor.CurrentY);
-                _headerBox.ActualRight = cursor.MaxRight;
-                _headerBox.ActualBottom = headerRowsLayoutY - VerticalSpacingAt(rowIndex);
-                _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
+                _headerBox.Location = _isVertical ? new RPoint(cursor.CurrentY, startX) : new RPoint(startX, cursor.CurrentY);
+                if (_isVertical)
+                {
+                    _headerBox.ActualBottom = cursor.MaxRight;
+                    _headerBox.ActualRight = headerRowsLayoutY - VerticalSpacingAt(rowIndex);
+                    _headerHeight = _headerBox.ActualRight - _headerBox.Location.X;
+                }
+                else
+                {
+                    _headerBox.ActualRight = cursor.MaxRight;
+                    _headerBox.ActualBottom = headerRowsLayoutY - VerticalSpacingAt(rowIndex);
+                    _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
+                }
             }
 
             // Step 3: Layout footer rows once to get dimensions (if needed)
@@ -2380,17 +2651,18 @@ namespace PeachPDF.Html.Core.Dom
                     var footerLocalRowIndex = footerRows.Count;
                     RegisterRowSpanCellsEndingRow(row, footerLocalRowIndex, footerOriginalRowIndices, footerSpanningCellsEndingOnRow);
                     footerCursor.MaxBottom = GrowForClosingRowSpanCells(
-                        footerLocalRowIndex, footerSpanningCellsEndingOnRow, footerCursor.MaxBottom);
+                        footerLocalRowIndex, footerSpanningCellsEndingOnRow, footerCursor.MaxBottom, _isVertical);
 
                     footerRowsLayoutY = footerCursor.MaxBottom + VerticalSpacingAt(footerRowIndex + 1);
                     footerRowIndex++;
 
                     // See the identical fix in the header-rows loop above for why this is needed.
                     row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
-                    row.ActualRight = row.Boxes.Max(x => x.ActualRight);
-                    row.ActualBottom = footerCursor.MaxBottom;
+                    AssignRowActualBounds(row, footerCursor.MaxBottom);
 
-                    CloseRowSpanCellsEndingOnRow(g, footerLocalRowIndex, footerSpanningCellsEndingOnRow, row.ActualBottom);
+                    CloseRowSpanCellsEndingOnRow(
+                        g, footerLocalRowIndex, footerSpanningCellsEndingOnRow,
+                        _isVertical ? row.ActualRight : row.ActualBottom, _isVertical);
 
                     footerRows.Add(row);
                 }
@@ -2406,10 +2678,19 @@ namespace PeachPDF.Html.Core.Dom
                 // fixed content anywhere) then silently treated as never visible - the footer never
                 // painted on any page. Mirrors the identical `_headerBox.ActualRight = maxRight`
                 // assignment above. See GitHub issue #124.
-                _footerBox.Location = new RPoint(startX, 0);
-                _footerBox.ActualRight = cursor.MaxRight;
-                _footerBox.ActualBottom = footerRowsLayoutY - VerticalSpacingAt(footerRowIndex);
-                _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
+                _footerBox.Location = _isVertical ? new RPoint(0, startX) : new RPoint(startX, 0);
+                if (_isVertical)
+                {
+                    _footerBox.ActualBottom = cursor.MaxRight;
+                    _footerBox.ActualRight = footerRowsLayoutY - VerticalSpacingAt(footerRowIndex);
+                    _footerHeight = _footerBox.ActualRight - _footerBox.Location.X;
+                }
+                else
+                {
+                    _footerBox.ActualRight = cursor.MaxRight;
+                    _footerBox.ActualBottom = footerRowsLayoutY - VerticalSpacingAt(footerRowIndex);
+                    _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
+                }
             }
 
             SettleWhetherTheGroupsRepeat();
@@ -2479,30 +2760,33 @@ namespace PeachPDF.Html.Core.Dom
         /// then started overlapping it.
         /// </summary>
         private static double GrowForClosingRowSpanCells(
-            int rowIndex, Dictionary<int, List<CssBox>> spanningCellsEndingOnRow, double rowMaxBottom)
+            int rowIndex, Dictionary<int, List<CssBox>> spanningCellsEndingOnRow, double rowMaxBottom, bool isVertical)
         {
             if (!spanningCellsEndingOnRow.TryGetValue(rowIndex, out var endingHere)) return rowMaxBottom;
 
             foreach (var cell in endingHere)
-                rowMaxBottom = Math.Max(rowMaxBottom, cell.ActualBottom);
+                rowMaxBottom = Math.Max(rowMaxBottom, isVertical ? cell.ActualRight : cell.ActualBottom);
 
             return rowMaxBottom;
         }
 
         /// <summary>
         /// Stretches every <c>rowSpan &gt; 1</c> cell ending on <paramref name="rowIndex"/> to
-        /// <paramref name="rowBottom"/> - that row's own now-final bottom, already grown to fit them by
+        /// <paramref name="rowAxisExtent"/> - that row's own now-final row-axis extent (<c>ActualBottom</c>
+        /// for a horizontal-tb table, <c>ActualRight</c> for a vertical one), already grown to fit them by
         /// <see cref="GrowForClosingRowSpanCells"/> if any needed it.
         /// </summary>
         private static void CloseRowSpanCellsEndingOnRow(
-            RGraphics g, int rowIndex, Dictionary<int, List<CssBox>> spanningCellsEndingOnRow, double rowBottom)
+            RGraphics g, int rowIndex, Dictionary<int, List<CssBox>> spanningCellsEndingOnRow, double rowAxisExtent,
+            bool isVertical)
         {
             if (!spanningCellsEndingOnRow.TryGetValue(rowIndex, out var endingHere)) return;
 
             foreach (var cell in endingHere)
             {
-                cell.ActualBottom = rowBottom;
-                CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
+                if (isVertical) cell.ActualRight = rowAxisExtent;
+                else cell.ActualBottom = rowAxisExtent;
+                CssLayoutEngine.ApplyCellVerticalAlignment(g, cell, isVertical);
             }
         }
 
@@ -2549,12 +2833,24 @@ namespace PeachPDF.Html.Core.Dom
                 ? container.PageSheetHeight / 4
                 : double.MaxValue;
 
-            _headerRepeats = HeaderIsDetached
+            // A vertical table is placed as a monolithic unit rather than paginated per-row (real per-row
+            // pagination of a vertical table is out of scope for #762 - tracked as #783), so it never
+            // actually spans a page boundary the way this repetition machinery assumes. _headerHeight/
+            // _footerHeight are row-axis (physical-X) quantities for a vertical table, not the physical-Y
+            // thickness quarterOfThePage measures against - comparing them here would be comparing
+            // different axes by coincidence of magnitude, not by any meaningful relationship. Keeping both
+            // flags false is what keeps every downstream consumer (RepeatedHeaderRoom/RepeatedFooterHeight,
+            // and everything gated on them - SliceARowAcrossTheBandsItOverflows,
+            // RepeatTheGroupsOnEveryBandTheTableSpans, RoomForARowIn) a correct no-op for a vertical table,
+            // without needing an _isVertical check re-added at each of those separately.
+            _headerRepeats = !_isVertical
+                             && HeaderIsDetached
                              && _headerBox is { } header
                              && BreakValues.AvoidsBreak(header.BreakInside, FragmentationContext.Page)
                              && _headerHeight < quarterOfThePage;
 
-            _footerRepeats = FooterIsDetached
+            _footerRepeats = !_isVertical
+                             && FooterIsDetached
                              && _footerBox is { } footer
                              && BreakValues.AvoidsBreak(footer.BreakInside, FragmentationContext.Page)
                              && _footerHeight < quarterOfThePage;
@@ -2823,10 +3119,7 @@ namespace PeachPDF.Html.Core.Dom
                 cursor.CurrentY = cursor.MaxBottom + VerticalSpacingAt(HeaderRowCountInGrid + i + 1);
 
                 row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
-                row.ActualRight = row.Boxes.Max(x => x.ActualRight);
-
-                // A sliced row keeps the bottom its own content reaches; every other row's is the cursor's.
-                row.ActualBottom = slicedRowBottom ?? cursor.MaxBottom;
+                AssignRowActualBounds(row, cursor.MaxBottom, slicedRowBottom);
 
                 // A cell of this row ran out of fragmentainer before it ran out of content, so the rows
                 // after it belong to the fragmentainer this table resumes in - laying them out here would
@@ -2879,7 +3172,7 @@ namespace PeachPDF.Html.Core.Dom
                     _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
                     _tableBox.PageBreakBottoms[leaving] = pageFooterProxy.ActualBottom;
 
-                    cursor.MaxRight = Math.Max(cursor.MaxRight, pageFooterProxy.ActualRight);
+                    GrowMaxRightFor(cursor, pageFooterProxy);
                 }
             }
 
@@ -2907,8 +3200,14 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     await finalFooterProxy.PerformLayout(g);
                     cursor.CurrentY += _footerHeight + VerticalSpacingAt(_grid?.RowCount ?? 0);
-                    cursor.MaxBottom = Math.Max(cursor.MaxBottom, finalFooterProxy.ActualBottom);
-                    cursor.MaxRight = Math.Max(cursor.MaxRight, finalFooterProxy.ActualRight);
+
+                    // cursor.MaxBottom is the row-axis tracker (physical X for a vertical table) - the
+                    // proxy's own row-axis far edge is ActualRight there, ActualBottom otherwise. Found
+                    // reading ActualBottom unconditionally: a vertical table with a non-empty <tfoot> had
+                    // its own final row-axis extent computed without the footer's own extent folded in at
+                    // all, leaving the footer positioned entirely outside the table's own settled bounds.
+                    cursor.MaxBottom = Math.Max(cursor.MaxBottom, _isVertical ? finalFooterProxy.ActualRight : finalFooterProxy.ActualBottom);
+                    GrowMaxRightFor(cursor, finalFooterProxy);
                 }
             }
 
@@ -2962,27 +3261,23 @@ namespace PeachPDF.Html.Core.Dom
 
             if (tableContinuation is null && _bottomCaptions.Count > 0)
             {
-                // Captions are not yet writing-mode-aware (out of scope here, same as headers/footers/
-                // collapsed borders - see the axis-mapping fields' own remarks) - left physical-Y as-is.
-                // The caption's own returned bottom (its ActualBottom plus its own bottom margin)
-                // already includes the grid's border-bottom width once, via gridBorderBoxBottom above
-                // - adding ActualBorderBottomWidth again below would double-count it, extending
-                // _tableBox's combined extent (and so a following sibling's position) past the
-                // caption's own visible bottom edge by one border width.
-                contentBottom = await LayoutCaptionGroup(
-                    g, _bottomCaptions, _tableBox.Location.X, gridBorderBoxBottom, GetWidthSum());
-                _tableBox.ActualBottom = contentBottom;
+                // The caption's own returned position (its own far row-axis edge plus its own trailing
+                // margin) already includes the grid's own row-axis-end border width once, via
+                // gridBorderBoxBottom above - adding it again below would double-count it, extending
+                // _tableBox's combined extent (and so a following sibling's position) past the caption's
+                // own visible far edge by one border width. gridBorderBoxBottom is already a row-axis
+                // scalar (see its own remark above), so it's exactly LayoutCaptionGroup's rowAxisCursor -
+                // no further axis conversion needed for that argument.
+                var columnAxisStart = _isVertical ? _tableBox.Location.Y : _tableBox.Location.X;
+                contentBottom = await LayoutCaptionGroup(g, _bottomCaptions, columnAxisStart, gridBorderBoxBottom, GetWidthSum());
 
-                // The caption itself stays physical-Y (unconverted, per the remark above), but the
-                // table's own row-axis-max edge still has to be settled here for a vertical table
-                // regardless - ReflectRowAxisForVerticalRl below reads _tableBox.ActualRight as the
-                // row-axis-max edge every row is mirrored against, and this branch is the only one of
-                // the three Step-7-dimension arms that previously left it unset, corrupting every row's
-                // (not just the caption's) mirrored position rather than only the caption's own.
-                if (_isVertical)
-                {
-                    _tableBox.ActualRight = gridBorderBoxBottom;
-                }
+                // Row-axis-max edge (see ReflectRowAxisForVerticalRl, which reads _tableBox.ActualRight
+                // as exactly that for a vertical table) vs. the ordinary horizontal-tb row axis
+                // (ActualBottom). The vertical table's own column-axis extent (ActualBottom there) was
+                // already settled above, at Step 7's first dimension arm, and a bottom caption never
+                // changes the column axis, so it is deliberately left alone here.
+                if (_isVertical) _tableBox.ActualRight = contentBottom;
+                else _tableBox.ActualBottom = contentBottom;
             }
             else if (_isVertical)
             {
@@ -2993,8 +3288,6 @@ namespace PeachPDF.Html.Core.Dom
                 _tableBox.ActualBottom = gridBorderBoxBottom;
             }
 
-            FinalizeGridDecorationBoxGeometry(gridBorderBoxBottom);
-
             // vertical-rl's rows actually grow from the physical-max (right) edge, not the physical-min
             // (left) edge every row/cell above was just placed against (see the axis-mapping fields' own
             // remarks on why this pass, rather than solving it during placement, is the correct fix) - now
@@ -3002,11 +3295,41 @@ namespace PeachPDF.Html.Core.Dom
             // every row's (and its cells', and their content's) row-axis position within them, then
             // recompute each row-group's bounding box from the rows' new positions - SetRowGroupBoxDimensions
             // above ran before the reflection and so captured each row-group's pre-reflection bounds.
+            //
+            // Captions and header/footer proxies share the exact same "grow forward from the row-axis-min
+            // edge, mirror once the table's own final row-axis bounds are known" chicken-and-egg problem
+            // rows have, and are laid out the same way (LayoutCaptionGroup; CreateHeaderProxy/
+            // CreateFooterProxy), so they join the same sweep rather than getting a second reflection
+            // formula. A header/footer's own PAINTED content is reflected through its proxy (OffsetLeft is
+            // a real subtree translation, and CssProxyBox.OnTranslated keeps its own captured paint
+            // snapshot in sync with exactly this - see #437) - but _headerBox/_footerBox's own detached row
+            // objects join the sweep too, even though nothing paints them directly, because
+            // GetGridLineY/GetGridLineX (collapsed-border geometry) read them straight off
+            // TableGrid.RowAt/CellAt, not off the proxy's own snapshot. Left unreflected, a border segment
+            // whose row-axis span touches the header/footer-adjacent grid line read the detached header's
+            // still-forward-grown (pre-mirror) position against the body's already-mirrored one - two
+            // coordinate spaces with no relationship to each other, producing a degenerate or wildly wrong
+            // span (found by rendering a real header+collapsed-border+rowspan vertical-rl table and looking
+            // at the result, not by a token/count assertion - this repo's own stated pitfall for exactly
+            // this class of bug).
+            //
+            // FinalizeGridDecorationBoxGeometry (below, not before this block) deliberately runs after the
+            // reflection: it reads the top caption's own final ActualRight/ActualMarginRight to place the
+            // decoration box's row-axis-start edge, and pre-reflection that value is still the caption's
+            // forward-grown (near the table's physical-min edge) position, not its final vertical-rl one.
             if (_isVertical && _rowAxisStartIsAtMax)
             {
-                ReflectRowAxisForVerticalRl(_tableBox, _bodyRows.Take(placedRows));
+                IEnumerable<CssBox> boxesToReflect = _topCaptions
+                    .Concat(_bodyRows.Take(placedRows))
+                    .Concat(_bottomCaptions)
+                    .Concat(_tableBox.Boxes.OfType<CssProxyBox>());
+                if (_headerBox is not null) boxesToReflect = boxesToReflect.Append(_headerBox);
+                if (_footerBox is not null) boxesToReflect = boxesToReflect.Append(_footerBox);
+                ReflectRowAxisForVerticalRl(_tableBox, boxesToReflect);
                 SetRowGroupBoxDimensions(placedRows);
             }
+
+            FinalizeGridDecorationBoxGeometry(gridBorderBoxBottom);
 
             // Publish where the row loop stopped, as a copy of the cursor's own state rather than the
             // cursor: a caller that kept one alive past this point would otherwise mutate what it has
@@ -3189,25 +3512,100 @@ namespace PeachPDF.Html.Core.Dom
         /// Each row is moved through <see cref="CssBox.OffsetLeft(double)"/> - a real subtree translation,
         /// not a bare <c>Location</c>/<c>ActualRight</c> rewrite - because a row-axis reflection is
         /// equivalent, for the row itself, to a plain shift by a fixed delta: the row's own row-axis
-        /// <i>extent</i> does not change, only its position within the table does. A cell within a row
-        /// shares that same row-axis footprint exactly (no colspan/rowspan in this simple-table scope), so
-        /// letting <c>OffsetLeft</c> cascade the one delta down through the row's own <c>Boxes</c> moves
-        /// every cell, and every cell's own content (its words, line-box rectangles, and any nested boxes),
-        /// by the same amount - a bare <c>Location</c>/<c>ActualRight</c> mutation on the row and cell
-        /// boxes alone left their already-laid-out content behind at its pre-reflection position, which is
-        /// what actually happened here before this fix: the row/cell rectangles moved but their text did
-        /// not, so cell text painted outside the reflected cell's own bounds.
+        /// <i>extent</i> does not change, only its position within the table does. A non-spanning cell
+        /// within a row shares that same row-axis footprint exactly, so letting <c>OffsetLeft</c> cascade
+        /// the one delta down through the row's own <c>Boxes</c> moves every such cell, and every cell's
+        /// own content (its words, line-box rectangles, and any nested boxes), by the same amount - a bare
+        /// <c>Location</c>/<c>ActualRight</c> mutation on the row and cell boxes alone left their
+        /// already-laid-out content behind at its pre-reflection position, which is what actually happened
+        /// here before this fix: the row/cell rectangles moved but their text did not, so cell text painted
+        /// outside the reflected cell's own bounds.
+        /// </para>
+        /// <para>
+        /// A rowspan cell's own row-axis footprint spans multiple rows and does not coincide with any one
+        /// row's own footprint, so reflecting it as a side effect of its opening row's cascade (the only
+        /// thing that happens to it above) uses the wrong delta except when the span is exactly one row.
+        /// The real cell object lives in its opening row's own <c>Boxes</c> (later rows hold only a bare
+        /// <see cref="CssSpacingBox"/> placeholder standing in for it), so the row loop's cascade always
+        /// reaches it - just with the wrong shift. Since <c>OffsetLeft</c> is a pure additive translation,
+        /// composing the row loop's shift with a second, residual shift that corrects for the difference
+        /// between the cell's own delta and its opening row's delta reaches the same target position a
+        /// (hypothetical) independent reflection of the cell's own footprint would - snapshotting each
+        /// spanning cell's pre-reflection footprint up front, before the row loop mutates anything, is what
+        /// makes that residual computable afterward.
         /// </para>
         /// </remarks>
+        /// <summary>
+        /// Grows <paramref name="cursor"/>'s own <see cref="TableRowCursor.MaxRight"/> - the column-axis
+        /// tracker (physical Y for a vertical table, physical X otherwise; see the header/footer-repeat
+        /// call sites this centralizes) - to include <paramref name="proxy"/>'s own column-axis far edge.
+        /// </summary>
+        /// <remarks>
+        /// Every call site that grows <c>MaxRight</c> from a header/footer proxy's own geometry needs this
+        /// same axis swap - reused rather than repeated, after one such site (Step 5's closing-footer arm)
+        /// was found reading <c>ActualRight</c> unconditionally, corrupting a vertical table's own final
+        /// column-axis extent (and, for a table with a footer, cascading into a row-axis corruption too,
+        /// since that same arm also grows <c>MaxBottom</c> from the same proxy - see its own call site).
+        /// </remarks>
+        private void GrowMaxRightFor(TableRowCursor cursor, CssBox proxy)
+        {
+            cursor.MaxRight = Math.Max(cursor.MaxRight, _isVertical ? proxy.ActualBottom : proxy.ActualRight);
+        }
+
+        // A vertical table's row axis is physical X (ActualRight), the field CloseSpanningCell/
+        // CloseRowSpanCellsEndingOnRow mutates later when it closes a rowspan cell opened on this row - so
+        // capturing it from Boxes.Max here, before that happens, would freeze a stale value. rowAxisExtent
+        // (the tracked cursor accumulator the caller passes in) is never mutated afterward and is exactly
+        // what ReflectRowAxisForVerticalRl needs. The column axis (ActualBottom) is the mirror image:
+        // stable per-cell from placement (ResolveOwnInlineSize), so Boxes.Max is safe there - the same
+        // reasoning horizontal-tb already relies on, just on the other physical pair. slicedColumnAxisBottom
+        // only applies to the horizontal-tb column axis: a sliced row (§4.3's last-resort fragmentainer
+        // slice) keeps the bottom its own content reaches instead of the cursor's, and slicing is gated off
+        // entirely for vertical tables (see LayoutBodyRow's own pagination pre-pass gate), so it never
+        // applies on the _isVertical arm.
+        private void AssignRowActualBounds(CssBox row, double rowAxisExtent, double? slicedColumnAxisBottom = null)
+        {
+            if (_isVertical)
+            {
+                row.ActualRight = rowAxisExtent;
+                row.ActualBottom = row.Boxes.Max(x => x.ActualBottom);
+            }
+            else
+            {
+                row.ActualRight = row.Boxes.Max(x => x.ActualRight);
+                row.ActualBottom = slicedColumnAxisBottom ?? rowAxisExtent;
+            }
+        }
+
         private static void ReflectRowAxisForVerticalRl(CssBox tableBox, IEnumerable<CssBox> placedRows)
         {
             var min = tableBox.Location.X;
             var max = tableBox.ActualRight;
 
-            foreach (var row in placedRows)
+            var rows = placedRows as IReadOnlyCollection<CssBox> ?? placedRows.ToList();
+
+            var rowspanFixups = new List<(CssBox Cell, double CellLoc0, double CellRight0, double RowLoc0, double RowRight0)>();
+            foreach (var row in rows)
+            {
+                foreach (var cell in row.Boxes)
+                {
+                    if (cell is CssSpacingBox || GetRowSpan(cell) <= 1) continue;
+                    rowspanFixups.Add((cell, cell.Location.X, cell.ActualRight, row.Location.X, row.ActualRight));
+                }
+            }
+
+            foreach (var row in rows)
             {
                 var delta = (min + max - row.ActualRight) - row.Location.X;
                 if (delta != 0) row.OffsetLeft(delta);
+            }
+
+            foreach (var (cell, cellLoc0, cellRight0, rowLoc0, rowRight0) in rowspanFixups)
+            {
+                var cellDelta = (min + max - cellRight0) - cellLoc0;
+                var rowDelta = (min + max - rowRight0) - rowLoc0;
+                var residual = cellDelta - rowDelta;
+                if (residual != 0) cell.OffsetLeft(residual);
             }
         }
 
@@ -3307,7 +3705,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     await headerProxy.PerformLayout(g);
                     cursor.CurrentY += _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
-                    cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
+                    GrowMaxRightFor(cursor, headerProxy);
                 }
             }
 
@@ -3383,7 +3781,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     await headerProxy.PerformLayout(g);
                     cursor.CurrentY += _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
-                    cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
+                    GrowMaxRightFor(cursor, headerProxy);
                 }
             }
 
@@ -3678,7 +4076,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (headerProxy != null)
                     {
                         await headerProxy.PerformLayout(g);
-                        cursor.MaxRight = Math.Max(cursor.MaxRight, headerProxy.ActualRight);
+                        GrowMaxRightFor(cursor, headerProxy);
                     }
                 }
 
@@ -3706,7 +4104,7 @@ namespace PeachPDF.Html.Core.Dom
                         _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
                         _tableBox.PageBreakBottoms[slot] = footerProxy.ActualBottom;
 
-                        cursor.MaxRight = Math.Max(cursor.MaxRight, footerProxy.ActualRight);
+                        GrowMaxRightFor(cursor, footerProxy);
                     }
                 }
             }
@@ -4022,6 +4420,22 @@ namespace PeachPDF.Html.Core.Dom
                     cell.PositionAssignedByEngine = false;
                 }
 
+                // A CssSpacingBox is built with a bare "none" tag and never inherits style (its own doc
+                // comment), so its own WritingMode stays at the CSS initial value (horizontal-tb) even
+                // inside a vertical table - PerformLayout's ordinary auto-height-from-empty-content
+                // resolution then collapses the ActualBottom set above right back down to Location.Y,
+                // since for a horizontal-tb box that field is the one auto-resolved-from-content, not the
+                // engine-controlled row-axis extent it is here. Harmless for horizontal-tb, where the same
+                // resolution instead targets ActualRight - a field this loop never pre-sets before layout
+                // in the first place, so there is nothing for it to clobber. Re-asserting is safe: a
+                // spacer's own geometry is entirely engine-controlled (it has no content of its own to
+                // lay out), so there is nothing PerformLayout could have legitimately changed here. Found
+                // by rendering a real vertical-rl table with a rowspan cell and looking at the result - a
+                // row-axis-degenerate spacer put the row after the spanned one back at the spanned column's
+                // own position instead of after it, corrupting every collapsed-border segment whose span
+                // depended on that row's own geometry (GetGridLineY reads grid.RowAt/CellAt directly).
+                if (_isVertical && cell is CssSpacingBox) cell.ActualBottom = cell.Location.Y + width;
+
                 // Did this cell finish? Asked here because here is the only place the answer exists: a
                 // box's record is cleared at the start of its next layout, and the engine's whole-table
                 // pre-checks can restart this loop over the same cells. Recorded, not acted on - the loop
@@ -4106,7 +4520,13 @@ namespace PeachPDF.Html.Core.Dom
             // still move this row - see RecordForeignWrite). Asked before that loop runs, and before
             // CloseSpanningCell answers the same question for the spanning cell itself, so every cell
             // this row aligns sees the one, final rowMaxBottom.
-            if (boxesThatEndOnRow is { Count: > 0 }
+            //
+            // !_isVertical: SpanningCellBandGeometry reads cell.Location.Y/GetMaximumBottom, both the
+            // physical-Y page-band axis - meaningless for a vertical table, whose own row axis is
+            // physical X and has no relationship to the page grid's physical-Y bands. Same scope boundary
+            // CloseSpanningCell's own pagination arm below already draws for the identical reason (#762).
+            if (!_isVertical
+                && boxesThatEndOnRow is { Count: > 0 }
                 && _tableBox.HtmlContainer is { HasRealPageGrid: true } alignmentContainer
                 && alignmentContainer.CurrentFragmentainer is { HasOwnBand: false })
             {
@@ -4181,14 +4601,10 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     // rowMaxBottom is the row's own settled row-axis extent (physical X for a vertical
                     // table - see its own tracking above), so growing the cell to match is ActualRight
-                    // there, not ActualBottom. ApplyCellVerticalAlignment itself is left unconverted - CSS
-                    // vertical-align repositions a cell's content along the row's own cross axis, which
-                    // needs its own axis-aware treatment this pass doesn't attempt (tracked with the rest
-                    // of Table's remaining writing-mode gaps in #762); a vertical table's cells keep their
-                    // correct final SIZE either way, just not necessarily correctly content-aligned within it.
+                    // there, not ActualBottom.
                     if (_isVertical) cell.ActualRight = rowMaxBottom;
                     else cell.ActualBottom = rowMaxBottom;
-                    CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
+                    CssLayoutEngine.ApplyCellVerticalAlignment(g, cell, _isVertical);
                 }
             }
 
@@ -4402,7 +4818,7 @@ namespace PeachPDF.Html.Core.Dom
             if (_isVertical) cell.ActualRight = bottom;
             else cell.ActualBottom = bottom;
 
-            var applied = CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);
+            var applied = CssLayoutEngine.ApplyCellVerticalAlignment(g, cell, _isVertical);
 
             cursor.RecordForeignWrite(cell, previousBottom, applied);
         }
@@ -4497,6 +4913,13 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the cells width, taking colspan and being in the specified column
         /// </summary>
+        /// <remarks>
+        /// Already axis-correct for a vertical table with no fix needed: <c>_columnWidths</c> is indexed
+        /// by the column axis regardless of orientation (see <see cref="CellInlineSize"/>'s own
+        /// height-not-width convention), colspan is inherently a column/inline-axis concept in
+        /// css-tables-3, and <see cref="ReflectRowAxisForVerticalRl"/> never touches the column axis - so
+        /// this sum has no row-axis interaction to straddle in the first place. Reviewed as part of #762.
+        /// </remarks>
         /// <param name="column"></param>
         /// <param name="b"></param>
         /// <returns></returns>

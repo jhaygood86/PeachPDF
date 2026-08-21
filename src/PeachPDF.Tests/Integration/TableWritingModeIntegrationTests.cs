@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using PeachPDF.CSS;
 using PeachPDF.Html.Core;
+using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
@@ -9,13 +11,12 @@ using Xunit;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// End-to-end layout tests for writing-mode-aware Table sizing and cell placement
-    /// (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngineTable"/>'s axis-mapping fields), asserting actual
-    /// post-layout <c>CssBox</c> geometry - not just that layout completes - per this repo's testing
-    /// conventions for layout-engine changes. Scoped to simple tables (no <c>&lt;thead&gt;</c>/
-    /// <c>&lt;tfoot&gt;</c>, no <c>colspan</c>/<c>rowspan</c>, no <c>border-collapse: collapse</c>, no
-    /// <c>&lt;caption&gt;</c>) - see the axis-mapping fields' own remarks in <c>CssLayoutEngineTable.cs</c>
-    /// and issue #762 for what remains out of scope.
+    /// End-to-end layout tests for writing-mode-aware Table sizing, cell placement, captions,
+    /// <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>, collapsed borders, <c>vertical-align</c>, and
+    /// <c>rowspan</c> (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngineTable"/>'s axis-mapping fields),
+    /// asserting actual post-layout <c>CssBox</c> geometry - not just that layout completes - per this
+    /// repo's testing conventions for layout-engine changes. <c>colspan</c> straddling the row axis and
+    /// real per-row pagination of a vertical table's own content remain out of scope - see issue #762.
     /// </summary>
     public class TableWritingModeIntegrationTests
     {
@@ -285,6 +286,59 @@ namespace PeachPDF.Tests.Integration
             }
         }
 
+        [Theory]
+        [InlineData("vertical-lr")]
+        [InlineData("vertical-rl")]
+        public async Task VerticalTable_WithRepeatingThead_ManyRows_ExceedingOnePagesBand_LaysOutWithoutSpuriousInternalPageBreak(string writingMode)
+        {
+            // Regression test for a second instance of the same bug class as
+            // VerticalTable_ManyRows_ExceedingOnePagesBand_LaysOutWithoutSpuriousInternalPageBreak just
+            // above, found in this diff's own post-change review: SettleWhetherTheGroupsRepeat decided
+            // whether a <thead>/<tfoot> repeats per page by comparing _headerHeight/_footerHeight (a
+            // row-axis, i.e. physical-X, quantity for a vertical table) against a quarter of the
+            // container's real physical-Y page-sheet height, with no _isVertical guard - so a vertical
+            // table with a repeating <thead> small enough to pass that cap could still set _headerRepeats,
+            // which in turn let SliceARowAcrossTheBandsItOverflows (also unguarded) run its physical-Y
+            // page-band arithmetic against this table's row-axis cursor and corrupt it, exactly as the
+            // no-thead case above already regression-tests. A vertical table's own content is placed as
+            // one monolithic unit (real per-row pagination is out of scope - see #783), so _headerRepeats/
+            // _footerRepeats must never become true for one regardless of measured heights.
+            const int rowCount = 10;
+            var rows = string.Join("", Enumerable.Range(0, rowCount)
+                .Select(i => $"<tr><td id=\"r{i}\" style=\"height: 20pt; width: 30pt\">R{i}</td></tr>"));
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-spacing: 2pt">
+                  <thead><tr><td id="h" style="height: 20pt; width: 20pt">H</td></tr></thead>
+                  {rows}
+                </table>
+                """);
+
+            // Same 200pt page (160pt content band) as the no-thead sibling test - far shorter than this
+            // table's own row-axis extent, and the <thead>'s own 20pt row-axis thickness is comfortably
+            // under a quarter of the 200pt page sheet, which is exactly what let _headerRepeats trip.
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 200, margin: 20);
+
+            var rowBoxes = Enumerable.Range(0, rowCount)
+                .Select(i => LayoutHarness.FindById(root, $"r{i}"))
+                .Select(b => { Assert.NotNull(b); return b!; })
+                .ToList();
+
+            for (var i = 0; i < rowCount - 1; i++)
+            {
+                var a = rowBoxes[i];
+                var b = rowBoxes[i + 1];
+
+                if (writingMode == "vertical-lr")
+                {
+                    Assert.Equal(a.ActualRight + 2, b.Location.X, 1);
+                }
+                else
+                {
+                    Assert.Equal(b.ActualRight + 2, a.Location.X, 1);
+                }
+            }
+        }
+
         [Fact]
         public async Task VerticalRl_TableWithBottomCaption_DoesNotCorruptRowPlacement()
         {
@@ -320,6 +374,412 @@ namespace PeachPDF.Tests.Integration
             const double borderSpacing = 4;
             Assert.Equal(t.ActualRight - borderSpacing, a1!.ActualRight, 1);
             Assert.True(a2!.Location.X < a1.Location.X, "row 2 should still sit to the left of row 1");
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_RowspanCell_SpansTheCombinedRowAxisExtentOfItsRows(string writingMode)
+        {
+            // A rowspan="2" cell's own row-axis extent (physical X) must equal the combined row-axis
+            // extent of both rows it spans - the vertical-table counterpart of an ordinary horizontal-tb
+            // rowspan cell's height growing to fit every row it spans (CloseSpanningCell). Row 1's own
+            // extent is driven by b1 (30pt), row 2's by b2 (40pt, deliberately different so the combined
+            // total - 30 + 4 (spacing) + 40 = 74 - can't be mistaken for either row's own individual
+            // extent or the spanning cell's own small natural width (10pt).
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-spacing: 4pt">
+                  <tr>
+                    <td id="span" rowspan="2" style="width: 10pt; height: 60pt">Span</td>
+                    <td id="b1" style="width: 30pt; height: 60pt">B1</td>
+                  </tr>
+                  <tr>
+                    <td id="b2" style="width: 40pt; height: 60pt">B2</td>
+                  </tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "span");
+            Assert.NotNull(span);
+
+            Assert.Equal(74, span!.ActualRight - span.Location.X, 1);
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_RowspanCell_DoesNotCorruptSiblingCellsRowAxisPosition(string writingMode)
+        {
+            // Regression gate for the row.ActualRight/ActualBottom bookkeeping fix: before it, a
+            // rowspan cell's opening row captured its own ActualRight (the row axis, for a vertical
+            // table) from the spanning cell's still-premature, not-yet-closed extent, corrupting the
+            // row's own placement - and, for vertical-rl, every sibling cell's mirrored position too,
+            // via ReflectRowAxisForVerticalRl's per-row OffsetLeft cascade. b1 must still sit exactly
+            // where it would in a table with no rowspan at all: flush (one border-spacing in) against
+            // the table's own block-start edge.
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-spacing: 4pt">
+                  <tr>
+                    <td rowspan="2" style="width: 10pt; height: 60pt">Span</td>
+                    <td id="b1" style="width: 30pt; height: 60pt">B1</td>
+                  </tr>
+                  <tr>
+                    <td style="width: 40pt; height: 60pt">B2</td>
+                  </tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            var b1 = LayoutHarness.FindById(root, "b1");
+            Assert.NotNull(t);
+            Assert.NotNull(b1);
+
+            const double borderSpacing = 4;
+            if (writingMode == "vertical-rl")
+            {
+                Assert.Equal(t!.ActualRight - borderSpacing, b1!.ActualRight, 1);
+            }
+            else
+            {
+                Assert.Equal(t!.Location.X + borderSpacing, b1!.Location.X, 1);
+            }
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_RowspanCell_InsideAShortPagedContainer_DoesNotCorruptGeometry(string writingMode)
+        {
+            // Regression gate for the rowMaxBottom pre-pass gate fix: SpanningCellBandGeometry reads
+            // physical-Y page-band concepts (cell.Location.Y/GetMaximumBottom) that are meaningless for a
+            // vertical table's own row axis, but the pre-pass that consults it was previously gated only
+            // on the *container's* real page grid, not on _isVertical - so a vertical table with a
+            // rowspan cell inside an ordinary paginated document could reach it. A short page (well under
+            // this table's own row-axis extent) forces HasRealPageGrid true and exercises exactly that
+            // path; the table stays monolithic regardless (MonolithicContent), so this only has to prove
+            // the rowspan geometry itself still comes out right, not that pagination is honored.
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-spacing: 4pt">
+                  <tr>
+                    <td id="span" rowspan="2" style="width: 10pt; height: 60pt">Span</td>
+                    <td id="b1" style="width: 30pt; height: 60pt">B1</td>
+                  </tr>
+                  <tr>
+                    <td style="width: 40pt; height: 60pt">B2</td>
+                  </tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 100, margin: 20);
+            var span = LayoutHarness.FindById(root, "span");
+            var b1 = LayoutHarness.FindById(root, "b1");
+            Assert.NotNull(span);
+            Assert.NotNull(b1);
+
+            Assert.Equal(74, span!.ActualRight - span.Location.X, 1);
+            Assert.Equal(30, b1!.ActualRight - b1.Location.X, 1);
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_RowspanAndColspanCombinedOnOneCell_SizeCorrectlyOnBothAxes(string writingMode)
+        {
+            // A single cell carrying both rowspan and colspan exercises the two span mechanisms together:
+            // rowspan sizing (ReflectRowAxisForVerticalRl's residual correction) is entirely row-axis, and
+            // colspan sizing (GetCellWidth) is entirely column-axis - reviewed as orthogonal (GetCellWidth's
+            // own remarks), but not otherwise exercised together by any other test here. Three columns:
+            // "span" occupies columns 0-1 across both rows (colspan=2, rowspan=2), leaving column 2 for
+            // b1/b2 (one per row, matching the plain-rowspan tests' own shape).
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-spacing: 4pt">
+                  <tr>
+                    <td id="span" rowspan="2" colspan="2" style="width: 10pt; height: 60pt">Span</td>
+                    <td id="b1" style="width: 30pt; height: 20pt">B1</td>
+                  </tr>
+                  <tr>
+                    <td id="b2" style="width: 40pt; height: 20pt">B2</td>
+                  </tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var span = LayoutHarness.FindById(root, "span");
+            var b1 = LayoutHarness.FindById(root, "b1");
+            var b2 = LayoutHarness.FindById(root, "b2");
+            Assert.NotNull(span);
+            Assert.NotNull(b1);
+            Assert.NotNull(b2);
+
+            // Row-axis extent: same combined-rows math as an ordinary rowspan cell (30 + 4 + 40 = 74),
+            // unaffected by also carrying colspan.
+            Assert.Equal(74, span!.ActualRight - span.Location.X, 1);
+
+            // Column-axis extent: spans both of the table's two columns (column 0's own natural width -
+            // from "Span" itself, since it's the only cell in column 0 - plus column 1's width, from
+            // max(b1, b2)'s own height, 20pt, plus the interior border-spacing between them), unaffected
+            // by also carrying rowspan.
+            var columnAxisExtent = span.ActualBottom - span.Location.Y;
+            Assert.True(columnAxisExtent > 20 + 4,
+                $"colspan=2 cell's column-axis extent ({columnAxisExtent}) should include both columns, not just one");
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_WithTopAndBottomCaption_CaptionsStackAlongRowAxis_SizedAcrossColumnAxis(string writingMode)
+        {
+            // Captions are laid out along the table's own row axis (physical X for a vertical table),
+            // sized across its full column axis (physical Y) - CSS 2.1 §17.4 reinterpreted through
+            // css-tables-3's axis mapping, rather than the pre-fix "always physical Y, always full
+            // physical-X width" placement.
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-spacing: 0">
+                  <caption id="top" style="caption-side: top">Top</caption>
+                  <caption id="bottom" style="caption-side: bottom">Bottom</caption>
+                  <tr><td id="a1" style="width: 30pt; height: 50pt">A1</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var top = LayoutHarness.FindById(root, "top");
+            var bottom = LayoutHarness.FindById(root, "bottom");
+            var a1 = LayoutHarness.FindById(root, "a1");
+            Assert.NotNull(top);
+            Assert.NotNull(bottom);
+            Assert.NotNull(a1);
+
+            // Sized across the full column axis, not left at the pre-fix 0 (a caption laid out along the
+            // wrong, physical-X, axis under a vertical table never received real column-axis height).
+            Assert.True(top!.ActualBottom - top.Location.Y > 10);
+            Assert.True(bottom!.ActualBottom - bottom.Location.Y > 10);
+
+            // The row grid (a1) sits strictly between the two captions along the row axis - the top
+            // caption on the row-axis-start side, the bottom caption on the row-axis-end side.
+            if (writingMode == "vertical-rl")
+            {
+                Assert.True(top.Location.X >= a1!.ActualRight - 0.5,
+                    "top caption should sit at or past the row grid's own row-axis-start (right) edge under vertical-rl");
+                Assert.True(bottom.ActualRight <= a1.Location.X + 0.5,
+                    "bottom caption should sit at or past the row grid's own row-axis-end (left) edge under vertical-rl");
+            }
+            else
+            {
+                Assert.True(top.ActualRight <= a1!.Location.X + 0.5,
+                    "top caption should sit at or before the row grid's own row-axis-start (left) edge under vertical-lr");
+                Assert.True(bottom.Location.X >= a1.ActualRight - 0.5,
+                    "bottom caption should sit at or past the row grid's own row-axis-end (right) edge under vertical-lr");
+            }
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_WithTheadAndTfoot_ProxiesFlankTheBodyAlongTheRowAxis(string writingMode)
+        {
+            // <thead>/<tfoot> proxies are placed along the table's own row axis (physical X for a
+            // vertical table) - the pre-fix code hardcoded startX to _tableBox.ClientLeft (the column
+            // axis's own start for a vertical table, not the row axis's) and never axis-swapped the
+            // proxy's own RPoint construction, so a vertical table's header/footer proxies came out at
+            // physically wrong positions.
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-spacing: 0">
+                  <thead><tr><td style="width: 20pt; height: 30pt">H</td></tr></thead>
+                  <tbody><tr><td id="b1" style="width: 20pt; height: 30pt">B</td></tr></tbody>
+                  <tfoot><tr><td style="width: 20pt; height: 30pt">F</td></tr></tfoot>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            var b1 = LayoutHarness.FindById(root, "b1");
+            Assert.NotNull(t);
+            Assert.NotNull(b1);
+
+            var headerProxy = t!.Boxes.OfType<CssProxyBox>()
+                .First(p => p.DerivedStyle.ActualDisplay == Keywords.TableHeaderGroup);
+            var footerProxy = t.Boxes.OfType<CssProxyBox>()
+                .First(p => p.DerivedStyle.ActualDisplay == Keywords.TableFooterGroup);
+
+            if (writingMode == "vertical-rl")
+            {
+                Assert.True(headerProxy.Location.X >= b1!.ActualRight - 0.5,
+                    "header proxy should sit at or past the body's own row-axis-start (right) edge under vertical-rl");
+                Assert.True(footerProxy.ActualRight <= b1.Location.X + 0.5,
+                    "footer proxy should sit at or past the body's own row-axis-end (left) edge under vertical-rl");
+            }
+            else
+            {
+                Assert.True(headerProxy.ActualRight <= b1!.Location.X + 0.5,
+                    "header proxy should sit at or before the body's own row-axis-start (left) edge under vertical-lr");
+                Assert.True(footerProxy.Location.X >= b1.ActualRight - 0.5,
+                    "footer proxy should sit at or past the body's own row-axis-end (right) edge under vertical-lr");
+            }
+
+            // Non-degenerate row-axis extent on each proxy - the writing-mode-aware generalization of the
+            // #124 zero-width-Bounds regression guard (a proxy paint-culled at a real Bounds check would
+            // otherwise never paint at all).
+            Assert.True(headerProxy.ActualRight > headerProxy.Location.X);
+            Assert.True(footerProxy.ActualRight > footerProxy.Location.X);
+
+            // Regression gate: Step 5's closing-footer arm used to grow cursor.MaxBottom/MaxRight from the
+            // footer proxy's own physical ActualBottom/ActualRight unconditionally, never axis-swapped for
+            // a vertical table - so the table's own final row-axis extent (_tableBox.ActualRight) never
+            // included the footer's own row-axis extent at all, leaving the footer positioned entirely
+            // outside the table's own settled bounds. The footer must sit fully within [t.Location.X,
+            // t.ActualRight] along the row axis.
+            Assert.True(footerProxy.Location.X >= t!.Location.X - 0.5,
+                $"footer proxy's near edge ({footerProxy.Location.X}) should be within the table's own bounds (starting at {t.Location.X})");
+            Assert.True(footerProxy.ActualRight <= t.ActualRight + 0.5,
+                $"footer proxy's far edge ({footerProxy.ActualRight}) should be within the table's own bounds (ending at {t.ActualRight})");
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_CollapsedBorders_RowBoundarySegmentsAreTallNotWide(string writingMode)
+        {
+            // A row-boundary (topologically "horizontal grid line") segment paints as a physically
+            // vertical stripe - tall in Y, thin in X - for a vertical table, the literal inverse of
+            // horizontal-tb's own wide/thin shape, since rows stack along physical X there. IsHorizontal
+            // must flip to false for these segments (BordersDrawHandler.DrawCollapsedSegment's own
+            // isHorizontal parameter picks which physical draw primitive to use based on the rect's own
+            // shape, not the grid line's topology).
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-collapse: collapse; border-spacing: 0">
+                  <tr><td style="width: 30pt; height: 40pt; border: 2pt solid black">A1</td></tr>
+                  <tr><td style="width: 30pt; height: 40pt; border: 2pt solid black">A2</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(t);
+
+            var segments = t!.CollapsedBorderSegments;
+            Assert.NotNull(segments);
+            Assert.NotEmpty(segments!);
+
+            var rowBoundarySegments = segments!.Where(s => !s.IsHorizontal).ToList();
+            Assert.NotEmpty(rowBoundarySegments);
+            Assert.All(rowBoundarySegments, s => Assert.True(s.Rect.Height > s.Rect.Width,
+                $"a row-boundary segment under {writingMode} should be tall (column-axis-spanning) rather than wide: {s.Rect}"));
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_CollapsedBorders_UsedWidthsInsetTheCorrectPhysicalEdges(string writingMode)
+        {
+            // ApplyCollapsedUsedBorderWidths's own companion fix: the table's used collapsed border width
+            // is charged to the row-axis-start/-end and column-axis-start/-end physical sides, not always
+            // top/bottom/left/right - so a vertical table's own ClientLeft/ClientTop (row-axis-start/
+            // column-axis-start) must inset by the resolved outer border, not stay at Location.X/Y.
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-collapse: collapse; border-spacing: 0; border: 6pt solid black">
+                  <tr><td style="width: 30pt; height: 40pt; border: 6pt solid black">A1</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(t);
+
+            // The table's own outer collapsed border resolves to half the 6pt width (3pt) on every edge,
+            // charged to the row axis's own start/end physical sides for a vertical table - ClientLeft
+            // (row-axis-start for vertical, column-axis-start for horizontal-tb) must inset accordingly.
+            Assert.True(t!.ClientLeft > t.Location.X + 1,
+                $"ClientLeft ({t.ClientLeft}) should be inset from Location.X ({t.Location.X}) by the resolved collapsed border");
+            Assert.True(t.ClientTop > t.Location.Y + 1,
+                $"ClientTop ({t.ClientTop}) should be inset from Location.Y ({t.Location.Y}) by the resolved collapsed border");
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task VerticalTable_CellVerticalAlignBottom_OffsetsContentAlongRowAxis(string writingMode)
+        {
+            // vertical-align repositions a cell's content along the table's own row axis (physical X for
+            // a vertical table) - ApplyCellVerticalAlignment's pre-fix OffsetTop-only implementation moved
+            // content along the column axis instead. Mirrors the existing horizontal-tb regression test's
+            // own shape (VerticalAlignIntegrationTests.Bottom_OnATableCell_PushesShortContentLowerThanTopAligned):
+            // a "wide" sibling cell (100pt) forces the row's own row-axis extent, so the short (10pt)
+            // 'v' cell is stretched to match it (the row-axis equalization every cell in a vertical
+            // table's row shares - LayoutBodyRow's own rowMaxBottom bookkeeping) and has real leftover
+            // room for vertical-align to move content into - two separate one-row tables, since 'v' and a
+            // sibling in the *same* row would be different columns with a naturally-differing column-axis
+            // (Y) position of their own, unrelated to vertical-align.
+            var htmlTop = LayoutHarness.Wrap($"""
+                <table style="writing-mode: {writingMode}; border-spacing: 0">
+                  <tr>
+                    <td style="width: 100pt; height: 20pt">Wide</td>
+                    <td id="v" style="width: 10pt; height: 20pt; vertical-align: top">Short</td>
+                  </tr>
+                </table>
+                """);
+            var htmlBottom = LayoutHarness.Wrap($"""
+                <table style="writing-mode: {writingMode}; border-spacing: 0">
+                  <tr>
+                    <td style="width: 100pt; height: 20pt">Wide</td>
+                    <td id="v" style="width: 10pt; height: 20pt; vertical-align: bottom">Short</td>
+                  </tr>
+                </table>
+                """);
+
+            var (rootTop, _) = await LayoutHarness.LayoutAsync(htmlTop);
+            var (rootBottom, _) = await LayoutHarness.LayoutAsync(htmlBottom);
+            var vTop = LayoutHarness.FindById(rootTop, "v");
+            var vBottom = LayoutHarness.FindById(rootBottom, "v");
+            Assert.NotNull(vTop);
+            Assert.NotNull(vBottom);
+
+            var topWord = LayoutHarness.Descendants(vTop!).SelectMany(b => b.Words).First();
+            var bottomWord = LayoutHarness.Descendants(vBottom!).SelectMany(b => b.Words).First();
+
+            // 'bottom'-aligned content should sit further along the row axis (toward the cell's own
+            // ClientRight) than 'top'-aligned content, which stays put at its content-driven position.
+            Assert.True(bottomWord.Left > topWord.Left,
+                $"'bottom'-aligned word (X={bottomWord.Left}) should sit further along the row axis than 'top'-aligned word (X={topWord.Left})");
+
+            // And it must not have moved along the column axis at all - vertical-align is a row-axis-only
+            // repositioning.
+            Assert.Equal(topWord.Top, bottomWord.Top, 1);
+        }
+
+        [Fact]
+        public async Task VerticalTable_CellVerticalAlignMiddle_MeasuresThroughNestedExplicitWidthChild()
+        {
+            // GetMaximumRight's own two branches beyond the leaf-word case: recursing into a nested child
+            // box (a <div> wrapping the cell's real content, one level deeper than plain text ever
+            // produces) and reading an explicit (non-auto) width directly off a box that carries one -
+            // the row-axis counterpart of the same two branches GetMaximumBottom already needs for
+            // horizontal-tb (see VerticalAlignIntegrationTests' own explicit-height regression test).
+            var html = LayoutHarness.Wrap("""
+                <table style="writing-mode: vertical-rl; border-spacing: 0">
+                  <tr>
+                    <td style="width: 100pt; height: 20pt">Wide</td>
+                    <td id="v" style="width: 10pt; height: 20pt; vertical-align: middle">
+                      <div style="width: 12pt; height: 8pt"><div style="width: 6pt; height: 4pt"></div></div>
+                    </td>
+                  </tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var v = LayoutHarness.FindById(root, "v");
+            Assert.NotNull(v);
+
+            var child = v!.Boxes.Single();
+            Assert.NotEqual(Keywords.Auto, child.Width);
+
+            // 'middle' splits the leftover row-axis room between the child's own explicit-width far edge
+            // and the cell's own ClientRight - a nonzero offset here (rather than 0, the no-op every
+            // no-op-driving bug in this area has produced) proves GetMaximumRight actually measured the
+            // child's own explicit ActualRight rather than falling through with an unmeasured 0.
+            Assert.True(child.Location.X > v.ClientLeft,
+                $"child.Location.X ({child.Location.X}) should have moved past the cell's own ClientLeft ({v.ClientLeft})");
         }
 
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)

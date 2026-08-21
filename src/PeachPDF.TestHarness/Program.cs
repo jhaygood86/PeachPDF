@@ -5253,12 +5253,13 @@ await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
 // vertical-rl, left-to-right for vertical-lr), text runs top-to-bottom within each line, and
 // glyphs paint rotated 90° by default (text-orientation: sideways/mixed's rotated runs) or
 // upright without rotation (text-orientation: upright/mixed's upright runs, real Unicode
-// Vertical_Orientation classification - issue #765). Flexbox and simple Table layout are also
-// writing-mode-aware now, and so is a vertical box's own block-level and orthogonal-flow content
-// (issue #760) - see .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's still
-// deferred (Multi-column axis awareness, real margin collapsing/orthogonal shrink-to-fit sizing for
-// block children, and Table's own collapsed borders/headers-footers/captions/rowspan-colspan/per-row
-// pagination).
+// Vertical_Orientation classification - issue #765). Flexbox and Table layout are also
+// writing-mode-aware now, including Table's own captions, <thead>/<tfoot>, collapsed borders,
+// vertical-align, and rowspan row-axis sizing (issue #762), and so is a vertical box's own
+// block-level and orthogonal-flow content (issue #760) - see
+// .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's still deferred (Multi-column
+// axis awareness, real margin collapsing/orthogonal shrink-to-fit sizing for block children, and
+// Table's own colspan straddling the row axis / real per-row pagination).
 
 // A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK
 // characters section 8 below uses, so mixed text-orientation renders real upright glyphs rather
@@ -5355,6 +5356,22 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</table><div class=\"label\">vertical-lr table: rows stack left-to-right, columns run top-to-bottom</div></div>" +
     "</div>" +
 
+    "<h2>7b &mdash; caption, &lt;thead&gt;/&lt;tfoot&gt;, collapsed borders and rowspan under vertical-rl (issue #762)</h2>" +
+    "<div class=\"row\">" +
+    "<div><table style=\"writing-mode: vertical-rl; border-collapse: collapse; border-spacing: 0\">" +
+    "<caption style=\"caption-side: top; font-weight: bold\">Top caption</caption>" +
+    "<caption style=\"caption-side: bottom; font-style: italic\">Bottom caption</caption>" +
+    "<thead><tr><td style=\"width: 40px; height: 40px; background: #1a6b8a; color: #fff; text-align: center; border: 2px solid #123\">Head</td>" +
+    "<td style=\"width: 40px; height: 40px; background: #1a6b8a; color: #fff; text-align: center; border: 2px solid #123\">Head</td></tr></thead>" +
+    "<tbody>" +
+    "<tr><td rowspan=\"2\" style=\"width: 30px; height: 40px; background: #cfe9f5; text-align: center; border: 2px solid #123\">Span</td>" +
+    "<td style=\"width: 60px; height: 40px; background: #7cc0e0; text-align: center; border: 2px solid #123\">R1C2</td></tr>" +
+    "<tr><td style=\"width: 60px; height: 40px; background: #7cc0e0; text-align: center; border: 2px solid #123\">R2C2</td></tr>" +
+    "</tbody>" +
+    "<tfoot><tr><td colspan=\"2\" style=\"width: 40px; height: 40px; background: #4a9bc4; color: #fff; text-align: center; border: 2px solid #123\">Foot</td></tr></tfoot>" +
+    "</table><div class=\"label\">top/bottom caption flank the row axis, &lt;thead&gt;/&lt;tfoot&gt; sit at the row-axis start/end, collapsed borders paint as row-axis-tall/column-axis-wide stripes, and the rowspan cell spans both body rows' combined row-axis extent</div></div>" +
+    "</div>" +
+
     $"<h2>8 &mdash; text-orientation: real per-character upright/rotated splitting (issue #765)</h2>" +
     $"<style>@font-face {{ font-family: 'CJK'; src: url('data:font/truetype;base64,{writingModeCjkFontB64}') format('truetype'); }} .cjk {{ font-family: 'CJK', Arial, sans-serif }}</style>" +
     "<div class=\"row\">" +
@@ -5411,7 +5428,7 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
-    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout, block-level/orthogonal-flow content inside a vertical box, direction: rtl block children anchoring to the physical bottom edge, and real CSS2.1 margin collapse (sibling-to-sibling and box-own-edge) between block-axis-stacked children.",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout (including captions, thead/tfoot, collapsed borders, vertical-align and rowspan row-axis sizing), block-level/orthogonal-flow content inside a vertical box, direction: rtl block children anchoring to the physical bottom edge, and real CSS2.1 margin collapse (sibling-to-sibling and box-own-edge) between block-axis-stacked children.",
     writingModeHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---
