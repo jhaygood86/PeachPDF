@@ -475,9 +475,15 @@ own block-axis point against a physical-X span rather than a physical-Y point ag
 column's own usable inline-axis extent whenever a floated sibling's physical-X span covers that column's own
 block-axis position — computed once per column (`CreateVerticalLineBoxes`'s own `ComputeEffectiveWrapLimit`),
 not once per word, since a column's block-axis position never changes mid-column. Confirmed via spec research
-(current CSS Writing Modes 4 text, which no longer lists `float`/`clear` among properties it reinterprets via
-line-left/line-right, plus MDN's live-tested logical-floating guide) that `float: left`/`right` stay strictly
-physical under a vertical writing mode — this engine's own physical-only `Floating` enum needed no changes.
+that `float: left`/`right` stay strictly physical under a vertical writing mode, matching real, current
+browser behavior (MDN's dedicated logical-floating guide's live examples show `float: left` staying physical,
+with `float: inline-start`/`inline-end` — a separate CSS Logical Properties Level 1 feature, not something
+this engine parses — as the actual writing-mode-aware mechanism) — this engine's own physical-only `Floating`
+enum needed no changes. A post-change review pass found CSS Writing Modes 4 §7.1 does name "floating" once,
+in passing, as one of the features it says get reinterpreted via line-left/line-right — but that is the
+*only* mention of float/clear anywhere in the whole document, with no normative algorithm anywhere backing
+it, so it reads as an unfollowed-through aspiration rather than a rule real implementations honor; the MDN-
+verified, real-browser-behavior conclusion above stands.
 **Real per-character hyphenation** splices a hyphenated prefix/suffix into both the flat word list and the
 owning box's own `Words` at the current loop index, gated by `hyphenate-limit-lines`/`-zone` against a local
 per-column streak counter (the method has no fragmentainer-resume state to seed a shared one from, and

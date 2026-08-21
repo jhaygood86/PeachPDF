@@ -3144,13 +3144,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (lineBox.Words.Count == 0) return;
 
-            double contentTop = double.MaxValue, contentBottom = double.MinValue;
-            foreach (var word in lineBox.Words)
-            {
-                contentTop = Math.Min(contentTop, word.Top);
-                contentBottom = Math.Max(contentBottom, word.Bottom);
-            }
-
+            var (contentTop, contentBottom) = GetColumnContentExtent(lineBox);
             var targetTop = toBottom ? clientBottom - (contentBottom - contentTop) : clientTop;
             var diff = targetTop - contentTop;
 
@@ -3174,13 +3168,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (lineBox.Words.Count == 0) return;
 
-            double contentTop = double.MaxValue, contentBottom = double.MinValue;
-            foreach (var word in lineBox.Words)
-            {
-                contentTop = Math.Min(contentTop, word.Top);
-                contentBottom = Math.Max(contentBottom, word.Bottom);
-            }
-
+            var (contentTop, contentBottom) = GetColumnContentExtent(lineBox);
             var availableExtent = clientBottom - clientTop;
             var contentExtent = contentBottom - contentTop;
             var diff = clientTop + (availableExtent - contentExtent) / 2 - contentTop;
@@ -3191,6 +3179,25 @@ namespace PeachPDF.Html.Core.Dom
             {
                 word.Top += diff;
             }
+        }
+
+        /// <summary>
+        /// A column's own content extent along the inline axis (physical top/bottom) - shared by
+        /// <see cref="ApplyVerticalFlushAlignment"/> and <see cref="ApplyVerticalCenterAlignment"/>. Scans
+        /// <see cref="CssLineBox.Words"/> directly rather than reading the first/last word by document
+        /// order - document order is not physical order for a vertical+RTL column (see
+        /// <see cref="ApplyVerticalBidiReordering"/>'s own remarks).
+        /// </summary>
+        private static (double Top, double Bottom) GetColumnContentExtent(CssLineBox lineBox)
+        {
+            double contentTop = double.MaxValue, contentBottom = double.MinValue;
+            foreach (var word in lineBox.Words)
+            {
+                contentTop = Math.Min(contentTop, word.Top);
+                contentBottom = Math.Max(contentBottom, word.Bottom);
+            }
+
+            return (contentTop, contentBottom);
         }
 
         /// <summary>
@@ -3300,10 +3307,13 @@ namespace PeachPDF.Html.Core.Dom
 
             if (runs.Count == 1 && !runs[0].IsRtl) return;
 
+            // The line's last word has no CssRect.FullHeight (there is no vertical counterpart of
+            // FullWidth) - ActualWordSpacing is added explicitly so the fallback boundary agrees with
+            // ApplyBidiReordering's own use of FullWidth here, which a plain `.Height` silently drops.
             double SlotBoundaryAfter(int index) =>
                 index + 1 < lineBox.Words.Count
                     ? slots[index + 1]
-                    : slots[index] + lineBox.Words[index].Height;
+                    : slots[index] + lineBox.Words[index].Height + lineBox.Words[index].ActualWordSpacing;
 
             var runNewStart = slots[0];
 

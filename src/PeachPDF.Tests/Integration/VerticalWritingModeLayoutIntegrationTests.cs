@@ -1599,6 +1599,48 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_Float_AlreadyClearedByTheTimeContentStarts_HasNoEffect()
+        {
+            // A float whose own inline-axis (Y) span lies entirely before this content's own ClientTop -
+            // "already passed" in the direction this content's columns grow into - must have zero effect,
+            // even if its physical-X span happens to overlap where this content's own columns land. Guards
+            // DomUtils.ScanForVerticalFloatConstraint's own perpendicular-axis relevance check: an earlier,
+            // buggy version treated any X-overlapping float as a same-column constraint regardless of
+            // whether its Y-span ever actually reached this content at all, clamping a negative "extent"
+            // to zero (a spurious full block) instead of recognizing the float as irrelevant.
+            var withFloat = LayoutHarness.Wrap("""
+                <div style="float: left; width: 300px; height: 20pt; background: red"></div>
+                <div style="height: 400pt"></div>
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
+                  <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon.</p>
+                </div>
+                """);
+            var withoutFloat = LayoutHarness.Wrap("""
+                <div style="height: 400pt"></div>
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
+                  <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon.</p>
+                </div>
+                """);
+
+            var (rootWith, _) = await LayoutHarness.LayoutAsync(withFloat);
+            var (rootWithout, _) = await LayoutHarness.LayoutAsync(withoutFloat);
+            var afterWith = LayoutHarness.FindById(rootWith, "after");
+            var afterWithout = LayoutHarness.FindById(rootWithout, "after");
+            Assert.NotNull(afterWith);
+            Assert.NotNull(afterWithout);
+
+            var wordsWith = afterWith!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            var wordsWithout = afterWithout!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.Equal(wordsWithout.Count, wordsWith.Count);
+
+            for (var i = 0; i < wordsWith.Count; i++)
+            {
+                Assert.Equal(wordsWithout[i].Top, wordsWith[i].Top, 1);
+                Assert.Equal(wordsWithout[i].Left, wordsWith[i].Left, 1);
+            }
+        }
+
+        [Fact]
         public async Task VerticalRl_Float_RoutesThroughLayoutVerticalBlockChildren_NotWordStream()
         {
             // Guards the routing assumption the whole float-avoidance design depends on: DomParser's
