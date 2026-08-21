@@ -3302,16 +3302,22 @@ namespace PeachPDF.Html.Core.Dom
             // CreateFooterProxy), so they join the same sweep rather than getting a second reflection
             // formula. A header/footer's own PAINTED content is reflected through its proxy (OffsetLeft is
             // a real subtree translation, and CssProxyBox.OnTranslated keeps its own captured paint
-            // snapshot in sync with exactly this - see #437) - but _headerBox/_footerBox's own detached row
-            // objects join the sweep too, even though nothing paints them directly, because
-            // GetGridLineY/GetGridLineX (collapsed-border geometry) read them straight off
-            // TableGrid.RowAt/CellAt, not off the proxy's own snapshot. Left unreflected, a border segment
-            // whose row-axis span touches the header/footer-adjacent grid line read the detached header's
-            // still-forward-grown (pre-mirror) position against the body's already-mirrored one - two
-            // coordinate spaces with no relationship to each other, producing a degenerate or wildly wrong
-            // span (found by rendering a real header+collapsed-border+rowspan vertical-rl table and looking
-            // at the result, not by a token/count assertion - this repo's own stated pitfall for exactly
-            // this class of bug).
+            // snapshot in sync with exactly this uniform, group-wide shift - see #437) - but
+            // _headerBox/_footerBox's own detached row objects join the sweep too, even though nothing
+            // paints them directly, because GetGridLineY/GetGridLineX (collapsed-border geometry) read
+            // them straight off TableGrid.RowAt/CellAt, not off the proxy's own snapshot. Left unreflected,
+            // a border segment whose row-axis span touches the header/footer-adjacent grid line read the
+            // detached header's still-forward-grown (pre-mirror) position against the body's
+            // already-mirrored one - two coordinate spaces with no relationship to each other, producing a
+            // degenerate or wildly wrong span (found by rendering a real header+collapsed-border+rowspan
+            // vertical-rl table and looking at the result, not by a token/count assertion - this repo's own
+            // stated pitfall for exactly this class of bug).
+            //
+            // A group with two or more rows needs more than that one uniform shift: ReflectRowAxisForVerticalRl
+            // itself now also reverses each such group's own internal row order (issue #784), applying the
+            // extra per-row residual to both the detached rows above AND directly into the proxy's own
+            // captured snapshot (OnTranslated's uniform shift alone cannot express two rows moving by
+            // different amounts) - see that method's own remarks for the full reasoning.
             //
             // FinalizeGridDecorationBoxGeometry (below, not before this block) deliberately runs after the
             // reflection: it reads the top caption's own final ActualRight/ActualMarginRight to place the
@@ -3493,49 +3499,6 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Mirrors every placed row's row-axis (physical X) position within the table's own now-final
-        /// row-axis bounds - the correction every row was placed assuming it would <i>not</i> need,
-        /// growing forward from the physical-min edge the way <c>vertical-lr</c> genuinely does. Called
-        /// only for <c>vertical-rl</c>, once <see cref="_tableBox"/>'s own <see cref="CssBox.ActualRight"/>
-        /// names the true row-axis-max edge every reflection is taken about. See the axis-mapping fields'
-        /// own remarks for why a reflection pass, rather than placing rows backward to begin with, is the
-        /// tractable fix. The caller must re-run <see cref="SetRowGroupBoxDimensions"/> afterward, since
-        /// its bounding box was computed from each row's pre-reflection position.
-        /// </summary>
-        /// <remarks>
-        /// <para>
-        /// Column-axis (physical Y) geometry is untouched - reflecting swaps which end of the row axis a
-        /// box's own edges face, not its column-axis position, which vertical-rl and vertical-lr already
-        /// share (both grow their columns top-to-bottom).
-        /// </para>
-        /// <para>
-        /// Each row is moved through <see cref="CssBox.OffsetLeft(double)"/> - a real subtree translation,
-        /// not a bare <c>Location</c>/<c>ActualRight</c> rewrite - because a row-axis reflection is
-        /// equivalent, for the row itself, to a plain shift by a fixed delta: the row's own row-axis
-        /// <i>extent</i> does not change, only its position within the table does. A non-spanning cell
-        /// within a row shares that same row-axis footprint exactly, so letting <c>OffsetLeft</c> cascade
-        /// the one delta down through the row's own <c>Boxes</c> moves every such cell, and every cell's
-        /// own content (its words, line-box rectangles, and any nested boxes), by the same amount - a bare
-        /// <c>Location</c>/<c>ActualRight</c> mutation on the row and cell boxes alone left their
-        /// already-laid-out content behind at its pre-reflection position, which is what actually happened
-        /// here before this fix: the row/cell rectangles moved but their text did not, so cell text painted
-        /// outside the reflected cell's own bounds.
-        /// </para>
-        /// <para>
-        /// A rowspan cell's own row-axis footprint spans multiple rows and does not coincide with any one
-        /// row's own footprint, so reflecting it as a side effect of its opening row's cascade (the only
-        /// thing that happens to it above) uses the wrong delta except when the span is exactly one row.
-        /// The real cell object lives in its opening row's own <c>Boxes</c> (later rows hold only a bare
-        /// <see cref="CssSpacingBox"/> placeholder standing in for it), so the row loop's cascade always
-        /// reaches it - just with the wrong shift. Since <c>OffsetLeft</c> is a pure additive translation,
-        /// composing the row loop's shift with a second, residual shift that corrects for the difference
-        /// between the cell's own delta and its opening row's delta reaches the same target position a
-        /// (hypothetical) independent reflection of the cell's own footprint would - snapshotting each
-        /// spanning cell's pre-reflection footprint up front, before the row loop mutates anything, is what
-        /// makes that residual computable afterward.
-        /// </para>
-        /// </remarks>
-        /// <summary>
         /// Grows <paramref name="cursor"/>'s own <see cref="TableRowCursor.MaxRight"/> - the column-axis
         /// tracker (physical Y for a vertical table, physical X otherwise; see the header/footer-repeat
         /// call sites this centralizes) - to include <paramref name="proxy"/>'s own column-axis far edge.
@@ -3577,35 +3540,179 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        /// <summary>
+        /// Mirrors every placed row's row-axis (physical X) position within the table's own now-final
+        /// row-axis bounds - the correction every row was placed assuming it would <i>not</i> need,
+        /// growing forward from the physical-min edge the way <c>vertical-lr</c> genuinely does. Called
+        /// only for <c>vertical-rl</c>, once <paramref name="tableBox"/>'s own <see cref="CssBox.ActualRight"/>
+        /// names the true row-axis-max edge every reflection is taken about. See the axis-mapping fields'
+        /// own remarks for why a reflection pass, rather than placing rows backward to begin with, is the
+        /// tractable fix. The caller must re-run <see cref="SetRowGroupBoxDimensions"/> afterward, since
+        /// its bounding box was computed from each row's pre-reflection position.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Column-axis (physical Y) geometry is untouched - reflecting swaps which end of the row axis a
+        /// box's own edges face, not its column-axis position, which vertical-rl and vertical-lr already
+        /// share (both grow their columns top-to-bottom).
+        /// </para>
+        /// <para>
+        /// Each row is moved through <see cref="CssBox.OffsetLeft(double)"/> - a real subtree translation,
+        /// not a bare <c>Location</c>/<c>ActualRight</c> rewrite - because a row-axis reflection is
+        /// equivalent, for the row itself, to a plain shift by a fixed delta: the row's own row-axis
+        /// <i>extent</i> does not change, only its position within the table does. A non-spanning cell
+        /// within a row shares that same row-axis footprint exactly, so letting <c>OffsetLeft</c> cascade
+        /// the one delta down through the row's own <c>Boxes</c> moves every such cell, and every cell's
+        /// own content (its words, line-box rectangles, and any nested boxes), by the same amount - a bare
+        /// <c>Location</c>/<c>ActualRight</c> mutation on the row and cell boxes alone left their
+        /// already-laid-out content behind at its pre-reflection position, which is what actually happened
+        /// here before this fix: the row/cell rectangles moved but their text did not, so cell text painted
+        /// outside the reflected cell's own bounds.
+        /// </para>
+        /// <para>
+        /// A rowspan cell's own row-axis footprint spans multiple rows and does not coincide with any one
+        /// row's own footprint, so reflecting it as a side effect of its opening row's cascade (the only
+        /// thing that happens to it above) uses the wrong delta except when the span is exactly one row.
+        /// The real cell object lives in its opening row's own <c>Boxes</c> (later rows hold only a bare
+        /// <see cref="CssSpacingBox"/> placeholder standing in for it), so the row loop's cascade always
+        /// reaches it - just with the wrong shift. Since <c>OffsetLeft</c> is a pure additive translation,
+        /// composing the row loop's shift with a second, residual shift that corrects for the difference
+        /// between the cell's own delta and its opening row's delta reaches the same target position a
+        /// (hypothetical) independent reflection of the cell's own footprint would - snapshotting each
+        /// spanning cell's pre-reflection footprint up front, before the row loop mutates anything, is what
+        /// makes that residual computable afterward.
+        /// </para>
+        /// <para>
+        /// A <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> with two or more rows is exactly the same shape of
+        /// problem one level up: <paramref name="placedRows"/> carries the row-GROUP (<c>_headerBox</c>/
+        /// <c>_footerBox</c>) as one entry, not its individual rows, so the main loop above gives the
+        /// whole group one shared delta - correct for a single-row group (the row's own delta and the
+        /// group's own delta are the same number), but a multi-row group's own rows then keep their
+        /// forward-grown relative order instead of reversing the way an ordinary <c>&lt;tbody&gt;</c> row
+        /// does (issue <see href="https://github.com/jhaygood86/PeachPDF/issues/784">#784</see>). The fix
+        /// composes exactly like the rowspan case above: each internal row gets a residual
+        /// (<c>rowDelta - groupDelta</c>) on top of the uniform delta it already received by cascading
+        /// down from its group's own <c>OffsetLeft</c> - the row's total received shift becomes
+        /// <c>groupDelta + residual == rowDelta</c>, the same delta an independently-reflected row would
+        /// get. The same widened net catches a rowspan cell nested inside such a group too - one whose
+        /// span is entirely contained within the group's own rows - since the rowspan-fixup scan above
+        /// also walks each multi-row group's own rows' cells, not just <paramref name="placedRows"/>'s
+        /// immediate entries (a row-GROUP's immediate <c>Boxes</c> are its <c>&lt;tr&gt;</c> children, not
+        /// cells, so without this widening <c>GetRowSpan</c> could never find a real rowspan cell nested
+        /// inside one).
+        /// </para>
+        /// <para>
+        /// The residual above only fixes the <i>detached</i> row objects - what <c>GetGridLineY</c>/
+        /// <c>GetGridLineX</c>/<c>EmitCollapsedBorderSegments</c> read directly off <c>TableGrid.RowAt</c>/
+        /// <c>CellAt</c>. A repeating group's actually-painted content instead comes from its own
+        /// <see cref="CssProxyBox.SourceGeometry"/> - a frozen <see cref="BoxGeometrySnapshot"/> captured
+        /// in <see cref="CssProxyBox.PerformLayoutImp"/>, necessarily before this method's own
+        /// <c>min</c>/<c>max</c> (the table's final row-axis bounds) are known - so the same residual is
+        /// also applied to it directly, via <see cref="BoxGeometrySnapshot.ReflectSubtree"/>, once per
+        /// row, for whichever proxy(s) in <paramref name="placedRows"/> repeat that row's own group
+        /// (<c>ReferenceEquals(proxy.SourceBox, group)</c>). This is safe even though a snapshot may have
+        /// been captured at a different page position than the group's own current (detached) state: the
+        /// residual algebraically reduces to <c>(groupRight0 + groupLoc0) - (rowRight0 + rowLoc0)</c> (the
+        /// <c>min</c>/<c>max</c> terms cancel), which is invariant under adding any shared constant to all
+        /// four inputs - i.e. under any uniform translation of the whole group, which is exactly what
+        /// distinguishes one page's own capture of the same relative row layout from another's, since
+        /// <see cref="CssProxyBox.PerformLayoutImp"/> always moves every row of a group by one shared
+        /// delta per page. (A vertical table cannot actually repeat its header/footer today -
+        /// <c>_headerRepeats</c>/<c>_footerRepeats</c> require <c>!_isVertical</c>, since a vertical table
+        /// is monolithic - so only one proxy per group is reachable in practice; the invariance still
+        /// matters for the fix to be correct in general, and costs nothing extra to rely on.)
+        /// </para>
+        /// </remarks>
         private static void ReflectRowAxisForVerticalRl(CssBox tableBox, IEnumerable<CssBox> placedRows)
         {
             var min = tableBox.Location.X;
             var max = tableBox.ActualRight;
 
+            // The one mirror-about-the-table's-midline formula every delta/residual below is built from -
+            // shared so a future correction to it can't be applied to one copy and missed in the others.
+            double Reflect(double loc0, double right0) => (min + max - right0) - loc0;
+
             var rows = placedRows as IReadOnlyCollection<CssBox> ?? placedRows.ToList();
 
-            var rowspanFixups = new List<(CssBox Cell, double CellLoc0, double CellRight0, double RowLoc0, double RowRight0)>();
-            foreach (var row in rows)
+            var rowGroupFixups = new List<(CssBox Row, CssBox Group, double RowLoc0, double RowRight0, double GroupLoc0, double GroupRight0)>();
+            var rowToGroup = new Dictionary<CssBox, CssBox>();
+            foreach (var group in rows)
+            {
+                if (group is CssProxyBox) continue;
+                if (group.DerivedStyle.ActualDisplay is not (Keywords.TableHeaderGroup or Keywords.TableFooterGroup)) continue;
+
+                // !IsRowCollapsed only - matches HeaderRowCountInGrid's/_allRows' own filter, i.e. what
+                // TableGrid actually indexes (GetGridLineY/GetGridLineX's grid.RowAt reads), not the
+                // stricter ActualDisplay == TableRow check Step 5's own row-layout loop uses for a
+                // different reason (skipping non-row children while walking .Boxes directly).
+                var groupRows = group.Boxes.Where(r => !IsRowCollapsed(r)).ToList();
+                if (groupRows.Count < 2) continue;
+
+                foreach (var row in groupRows)
+                {
+                    rowGroupFixups.Add((row, group, row.Location.X, row.ActualRight, group.Location.X, group.ActualRight));
+                    // Which repeated-group each row-group-fixup row belongs to - a rowspan cell opening on
+                    // one of these rows needs its own residual (below) propagated into that group's own
+                    // proxy snapshot too, on top of the row-level residual, exactly like it needs both
+                    // shifts applied to the live cell (see this method's own remarks on why the two compose
+                    // rather than replace one another).
+                    rowToGroup[row] = group;
+                }
+            }
+
+            var rowspanFixups = new List<(CssBox Cell, CssBox Row, double CellLoc0, double CellRight0, double RowLoc0, double RowRight0)>();
+            foreach (var row in rows.Concat(rowGroupFixups.Select(f => f.Row)))
             {
                 foreach (var cell in row.Boxes)
                 {
                     if (cell is CssSpacingBox || GetRowSpan(cell) <= 1) continue;
-                    rowspanFixups.Add((cell, cell.Location.X, cell.ActualRight, row.Location.X, row.ActualRight));
+                    rowspanFixups.Add((cell, row, cell.Location.X, cell.ActualRight, row.Location.X, row.ActualRight));
                 }
             }
 
             foreach (var row in rows)
             {
-                var delta = (min + max - row.ActualRight) - row.Location.X;
+                var delta = Reflect(row.Location.X, row.ActualRight);
                 if (delta != 0) row.OffsetLeft(delta);
             }
 
-            foreach (var (cell, cellLoc0, cellRight0, rowLoc0, rowRight0) in rowspanFixups)
+            var rowResiduals = new List<(CssBox Row, CssBox Group, double Residual)>();
+            foreach (var (row, group, rowLoc0, rowRight0, groupLoc0, groupRight0) in rowGroupFixups)
             {
-                var cellDelta = (min + max - cellRight0) - cellLoc0;
-                var rowDelta = (min + max - rowRight0) - rowLoc0;
-                var residual = cellDelta - rowDelta;
+                var residual = Reflect(rowLoc0, rowRight0) - Reflect(groupLoc0, groupRight0);
+                rowResiduals.Add((row, group, residual));
+                if (residual != 0) row.OffsetLeft(residual);
+            }
+
+            var cellResiduals = new List<(CssBox Cell, CssBox? Group, double Residual)>();
+            foreach (var (cell, row, cellLoc0, cellRight0, rowLoc0, rowRight0) in rowspanFixups)
+            {
+                var residual = Reflect(cellLoc0, cellRight0) - Reflect(rowLoc0, rowRight0);
+                cellResiduals.Add((cell, rowToGroup.GetValueOrDefault(row), residual));
                 if (residual != 0) cell.OffsetLeft(residual);
+            }
+
+            if (rowResiduals.Count > 0 || cellResiduals.Any(f => f.Group is not null))
+            {
+                var proxiesBySource = rows.OfType<CssProxyBox>().ToLookup(p => p.SourceBox);
+
+                foreach (var (row, group, residual) in rowResiduals)
+                {
+                    if (residual == 0) continue;
+
+                    foreach (var proxy in proxiesBySource[group]) proxy.SourceGeometry?.ReflectSubtree(row, residual);
+                }
+
+                // The row-level sync above already carried a rowspan cell's opening row's own residual
+                // into the snapshot (ReflectSubtree recurses into the row's own cells) - but a rowspan
+                // cell's own footprint differs from its opening row's, so it needs this second, on-top
+                // residual applied directly to it too, exactly like the live cell above.
+                foreach (var (cell, group, residual) in cellResiduals)
+                {
+                    if (residual == 0 || group is null) continue;
+
+                    foreach (var proxy in proxiesBySource[group]) proxy.SourceGeometry?.ReflectSubtree(cell, residual);
+                }
             }
         }
 

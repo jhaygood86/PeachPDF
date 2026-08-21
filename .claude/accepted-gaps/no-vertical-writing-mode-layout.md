@@ -165,14 +165,19 @@ table's own final size entirely, positioning the footer outside the table's own 
 routing every such site through one shared, axis-aware helper (`GrowMaxRightFor`) instead of five
 independent unconditional reads.
 
-**Scoped down from the above: a `<thead>`/`<tfoot>` with exactly one row** (the overwhelming common case,
-and the only shape tested/rasterized above) is fully correct; a header/footer group with **two or more**
-rows does not yet reverse its own rows' relative order for `vertical-rl` the way `<tbody>` rows do — tracked
-separately as [#784](https://github.com/jhaygood86/PeachPDF/issues/784), since a real fix needs the group's
-own `CssProxyBox`/`BoxGeometrySnapshot` to individually re-order its captured rows, not just uniformly
-translate them, which is a larger, separate piece of work than #762's own scope. The same root cause means a
-`rowspan` cell entirely contained within such a multi-row header/footer group doesn't get its own residual
-row-axis correction either — also tracked under #784, not a separate gap.
+**A `<thead>`/`<tfoot>` with two or more rows** now reverses its own rows' relative order for `vertical-rl`
+the same way `<tbody>` rows do ([#784](https://github.com/jhaygood86/PeachPDF/issues/784), closed): the
+group still receives one uniform shift from `ReflectRowAxisForVerticalRl`'s per-entry mirror loop (correct
+for the group's own aggregate bounds), but each internal row now also gets an additional residual
+(`rowDelta - groupDelta`) on top, composed the same additive way a rowspan cell's own residual already
+composed on top of its opening row's — reversing the rows without needing a second reflection formula. The
+same fix propagates each row's residual into the group's own `CssProxyBox.SourceGeometry` (the frozen
+`BoxGeometrySnapshot` a repeating group's painted content actually reads), via a new
+`BoxGeometrySnapshot.ReflectSubtree` method, so the painted output and the detached row objects (read
+directly by `GetGridLineY`/`GetGridLineX`/`EmitCollapsedBorderSegments` for collapsed-border geometry) agree.
+A `rowspan` cell entirely contained within such a multi-row header/footer group is fixed the same way — the
+`rowspanFixups` cell scan now also walks a multi-row group's own rows' cells, not just the top-level entries
+it was given, so `GetRowSpan` can actually find a cell nested inside one.
 
 Real per-row pagination of a vertical table's own content remains genuinely out of scope — see below.
 

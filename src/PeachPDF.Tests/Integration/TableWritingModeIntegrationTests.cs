@@ -636,6 +636,176 @@ namespace PeachPDF.Tests.Integration
                 $"footer proxy's far edge ({footerProxy.ActualRight}) should be within the table's own bounds (ending at {t.ActualRight})");
         }
 
+        [Fact]
+        public async Task VerticalRl_MultiRowThead_InternalRowsReverseOrder_InBothLiveBoxesAndPaintSnapshot()
+        {
+            // Issue #784: ReflectRowAxisForVerticalRl used to give a multi-row <thead> ONE shared delta
+            // (the group as a whole), which correctly repositions the group's own aggregate bounds but
+            // leaves its own internal rows in forward-grown (unreversed) order - unlike an ordinary
+            // <tbody> row, which is reflected individually and so reverses correctly. H1 (topologically
+            // first) must end up physically closer to the table's own block-start (physical-max, since
+            // vertical-rl's row axis starts at the max edge) than H2 - the same relative order every
+            // <tbody> row already gets.
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <thead>
+                    <tr><td id="h1" style="width: 20pt; height: 30pt">H1</td></tr>
+                    <tr><td id="h2" style="width: 20pt; height: 30pt">H2</td></tr>
+                  </thead>
+                  <tbody><tr><td id="b1" style="width: 20pt; height: 30pt">B</td></tr></tbody>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(t);
+
+            var headerProxy = t!.Boxes.OfType<CssProxyBox>()
+                .First(p => p.DerivedStyle.ActualDisplay == Keywords.TableHeaderGroup);
+            var rows = headerProxy.SourceBox.Boxes.Where(r => r.DerivedStyle.ActualDisplay == Keywords.TableRow).ToList();
+            Assert.Equal(2, rows.Count);
+            var h1 = LayoutHarness.FindById(headerProxy.SourceBox, "h1");
+            var h2 = LayoutHarness.FindById(headerProxy.SourceBox, "h2");
+            Assert.NotNull(h1);
+            Assert.NotNull(h2);
+
+            // Live (detached) row order - what GetGridLineY/GetGridLineX read directly.
+            Assert.True(rows[0].Location.X > rows[1].Location.X,
+                $"H1 (topologically first, Location.X={rows[0].Location.X}) should end up physically closer to the block-start/max edge than H2 (Location.X={rows[1].Location.X}) under vertical-rl");
+
+            // Each row's own (non-rowspan) cell must move WITH its row, not be left behind at the
+            // pre-reflection position - the exact regression this file's own OffsetLeft doc comment
+            // warns about ("the row/cell rectangles moved but their text did not").
+            Assert.Equal(rows[0].Location.X, h1!.Location.X, 1);
+            Assert.Equal(rows[1].Location.X, h2!.Location.X, 1);
+
+            // Painted (proxy snapshot) order - what actually renders, kept in sync via ReflectSubtree.
+            Assert.True(headerProxy.SourceGeometry!.TryGetGeometry(rows[0], out var g0));
+            Assert.True(headerProxy.SourceGeometry!.TryGetGeometry(rows[1], out var g1));
+            Assert.True(g0.Location.X > g1.Location.X,
+                "the painted snapshot should show the same reversed row order as the live boxes");
+            Assert.Equal(rows[0].Location.X, g0.Location.X, 1);
+            Assert.Equal(rows[1].Location.X, g1.Location.X, 1);
+
+            // The cells' own snapshot entries must agree with the cells' own live position too - not just
+            // their rows'.
+            Assert.True(headerProxy.SourceGeometry!.TryGetGeometry(h1, out var hg1));
+            Assert.True(headerProxy.SourceGeometry!.TryGetGeometry(h2, out var hg2));
+            Assert.Equal(h1.Location.X, hg1.Location.X, 1);
+            Assert.Equal(h2.Location.X, hg2.Location.X, 1);
+        }
+
+        [Fact]
+        public async Task VerticalLr_MultiRowThead_InternalRowsKeepForwardOrder()
+        {
+            // Sibling regression guard for the fix above: ReflectRowAxisForVerticalRl only runs for
+            // vertical-rl (_rowAxisStartIsAtMax), so vertical-lr's own forward-grown row order - already
+            // correct, since vertical-lr's row axis genuinely grows left-to-right - must be unaffected.
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-lr; border-spacing: 0">
+                  <thead>
+                    <tr><td id="h1" style="width: 20pt; height: 30pt">H1</td></tr>
+                    <tr><td id="h2" style="width: 20pt; height: 30pt">H2</td></tr>
+                  </thead>
+                  <tbody><tr><td id="b1" style="width: 20pt; height: 30pt">B</td></tr></tbody>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(t);
+
+            var headerProxy = t!.Boxes.OfType<CssProxyBox>()
+                .First(p => p.DerivedStyle.ActualDisplay == Keywords.TableHeaderGroup);
+            var rows = headerProxy.SourceBox.Boxes.Where(r => r.DerivedStyle.ActualDisplay == Keywords.TableRow).ToList();
+            Assert.Equal(2, rows.Count);
+
+            Assert.True(rows[0].Location.X < rows[1].Location.X,
+                "H1 (topologically first) should stay physically before H2 under vertical-lr's genuine left-to-right growth");
+        }
+
+        [Fact]
+        public async Task VerticalRl_MultiRowTfoot_InternalRowsReverseOrder()
+        {
+            // Same shape as the <thead> case above, for a multi-row <tfoot>.
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <tbody><tr><td id="b1" style="width: 20pt; height: 30pt">B</td></tr></tbody>
+                  <tfoot>
+                    <tr><td id="f1" style="width: 20pt; height: 30pt">F1</td></tr>
+                    <tr><td id="f2" style="width: 20pt; height: 30pt">F2</td></tr>
+                  </tfoot>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(t);
+
+            var footerProxy = t!.Boxes.OfType<CssProxyBox>()
+                .First(p => p.DerivedStyle.ActualDisplay == Keywords.TableFooterGroup);
+            var rows = footerProxy.SourceBox.Boxes.Where(r => r.DerivedStyle.ActualDisplay == Keywords.TableRow).ToList();
+            Assert.Equal(2, rows.Count);
+            var f1 = LayoutHarness.FindById(footerProxy.SourceBox, "f1");
+            var f2 = LayoutHarness.FindById(footerProxy.SourceBox, "f2");
+            Assert.NotNull(f1);
+            Assert.NotNull(f2);
+
+            Assert.True(rows[0].Location.X > rows[1].Location.X,
+                $"F1 (topologically first, Location.X={rows[0].Location.X}) should end up physically closer to the block-start/max edge than F2 (Location.X={rows[1].Location.X}) under vertical-rl");
+            Assert.Equal(rows[0].Location.X, f1!.Location.X, 1);
+            Assert.Equal(rows[1].Location.X, f2!.Location.X, 1);
+
+            Assert.True(footerProxy.SourceGeometry!.TryGetGeometry(rows[0], out var g0));
+            Assert.True(footerProxy.SourceGeometry!.TryGetGeometry(rows[1], out var g1));
+            Assert.True(g0.Location.X > g1.Location.X,
+                "the painted snapshot should show the same reversed row order as the live boxes");
+
+            Assert.True(footerProxy.SourceGeometry!.TryGetGeometry(f1, out var fg1));
+            Assert.True(footerProxy.SourceGeometry!.TryGetGeometry(f2, out var fg2));
+            Assert.Equal(f1.Location.X, fg1.Location.X, 1);
+            Assert.Equal(f2.Location.X, fg2.Location.X, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_RowspanCellInsideMultiRowThead_SpansCombinedExtent_InBothLiveAndSnapshot()
+        {
+            // Companion gap in #784: ReflectRowAxisForVerticalRl's rowspanFixups scan only ever walked
+            // `row.Boxes` for the top-level entries it was given, and a multi-row <thead>'s own top-level
+            // entry is the row-GROUP (whose .Boxes are <tr>s, not cells) - so a rowspan cell entirely
+            // inside such a group was never found at all, and never received its own residual correction.
+            // Widths 10/20/30 are deliberately distinct so the combined extent (20 + 4 + 30 = 54) can't be
+            // mistaken for either individual row's own extent or the spanning cell's own small natural
+            // width, mirroring VerticalTable_RowspanCell_SpansTheCombinedRowAxisExtentOfItsRows's own trick.
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 4pt">
+                  <thead>
+                    <tr>
+                      <td id="span" rowspan="2" style="width: 10pt; height: 60pt">Span</td>
+                      <td id="h1" style="width: 20pt; height: 30pt">H1</td>
+                    </tr>
+                    <tr><td id="h2" style="width: 30pt; height: 30pt">H2</td></tr>
+                  </thead>
+                  <tbody><tr><td id="b1" style="width: 20pt; height: 30pt">B</td></tr></tbody>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(t);
+
+            var headerProxy = t!.Boxes.OfType<CssProxyBox>()
+                .First(p => p.DerivedStyle.ActualDisplay == Keywords.TableHeaderGroup);
+            var span = LayoutHarness.FindById(headerProxy.SourceBox, "span");
+            Assert.NotNull(span);
+
+            Assert.Equal(20 + 4 + 30, span!.ActualRight - span.Location.X, 1);
+
+            Assert.True(headerProxy.SourceGeometry!.TryGetGeometry(span, out var geometry));
+            Assert.Equal(span.Location.X, geometry.Location.X, 1);
+            Assert.Equal(span.ActualRight, geometry.ActualRight, 1);
+        }
+
         [Theory]
         [InlineData("vertical-rl")]
         [InlineData("vertical-lr")]
