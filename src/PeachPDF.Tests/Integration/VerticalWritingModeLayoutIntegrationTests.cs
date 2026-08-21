@@ -5,6 +5,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Tests.TestSupport;
+using PeachPDF.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.Integration
@@ -1255,6 +1256,483 @@ namespace PeachPDF.Tests.Integration
             // The outer box's own LayoutVerticalBlockChildren places its only child flush against the
             // outer box's own block-start (right, under vertical-rl) edge.
             Assert.Equal(outer!.ClientRight, inner.ActualRight, 1);
+        }
+
+        // ── Issue #768: hyphenation ─────────────────────────────────────────────
+
+        [Fact]
+        public async Task VerticalRl_HyphensAuto_LongWordHyphenatesAcrossColumnBoundary()
+        {
+            // lang must be on <html> (DocumentLanguage only reads it there, matching
+            // AutoHyphenationIntegrationTests' own convention) - LayoutHarness.Wrap's <html> tag carries none.
+            const string html = """
+                <!DOCTYPE html><html lang="en"><head></head><body style="margin:0">
+                <div id="el" style="writing-mode: vertical-rl; width: 200px; height: 80px; hyphens: auto">antidisestablishmentarianism</div>
+                </body></html>
+                """;
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            Assert.NotNull(el);
+
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.True(words.Count > 1, "expected the word to be split into multiple fragments");
+            Assert.Contains(words, w => w.Text!.EndsWith('-'));
+            Assert.True(el.LineBoxes.Count >= 2, "a hyphenated split should straddle a column boundary");
+
+            var prefix = words.First(w => w.Text!.EndsWith('-'));
+            var suffix = words[words.IndexOf(prefix) + 1];
+            var prefixColumn = el.LineBoxes.First(l => l.Words.Contains(prefix));
+            var suffixColumn = el.LineBoxes.First(l => l.Words.Contains(suffix));
+            Assert.NotSame(prefixColumn, suffixColumn);
+
+            var candidates = HyphenationEngine.FindHyphenationPoints("antidisestablishmentarianism", "en");
+            Assert.Contains(prefix.Text!.TrimEnd('-').Length, candidates);
+        }
+
+        [Fact]
+        public async Task VerticalRl_SoftHyphen_IsABreakOpportunityAcrossColumns()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; width: 200px; height: 60px; hyphens: manual">hyphen&shy;ation</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            Assert.NotNull(el);
+
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.True(words.Count > 1, "the soft hyphen should be an available break opportunity");
+            Assert.Contains(words, w => w.Text!.EndsWith('-'));
+        }
+
+        [Fact]
+        public async Task VerticalRl_HyphenateLimitChars_WordMinimumSuppressesHyphenation()
+        {
+            const string html = """
+                <!DOCTYPE html><html lang="en"><head></head><body style="margin:0">
+                <div id="el" style="writing-mode: vertical-rl; width: 200px; height: 80px; hyphens: auto; hyphenate-limit-chars: 50">antidisestablishmentarianism</div>
+                </body></html>
+                """;
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            Assert.NotNull(el);
+
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.Single(words);
+            Assert.Equal("antidisestablishmentarianism", words[0].Text);
+        }
+
+        [Fact]
+        public async Task VerticalRl_HyphenateLimitLines_One_NeverProducesTwoConsecutiveHyphenatedColumns()
+        {
+            const string html = """
+                <!DOCTYPE html><html lang="en"><head></head><body style="margin:0">
+                <div id="el" style="writing-mode: vertical-rl; width: 400px; height: 40px; hyphens: auto; hyphenate-limit-lines: 1">
+                antidisestablishmentarianism antidisestablishmentarianism antidisestablishmentarianism
+                </div>
+                </body></html>
+                """;
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            Assert.NotNull(el);
+            Assert.True(el!.LineBoxes.Count >= 2, "expected multiple columns for this much text at 40pt height");
+
+            var endsInHyphen = el.LineBoxes
+                .Select(l => l.Words.LastOrDefault(w => !w.IsSpaces && !w.IsLineBreak))
+                .Select(w => w?.Text?.EndsWith('-') == true)
+                .ToList();
+
+            for (var i = 0; i < endsInHyphen.Count - 1; i++)
+            {
+                Assert.False(endsInHyphen[i] && endsInHyphen[i + 1],
+                    "hyphenate-limit-lines: 1 must never allow two consecutive hyphenated columns");
+            }
+        }
+
+        [Fact]
+        public async Task VerticalRl_HyphenateCharacter_CustomString_AppearsAtTheSplit()
+        {
+            const string html = """
+                <!DOCTYPE html><html lang="en"><head></head><body style="margin:0">
+                <div id="el" style="writing-mode: vertical-rl; width: 200px; height: 80px; hyphens: auto; hyphenate-character: '~'">antidisestablishmentarianism</div>
+                </body></html>
+                """;
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            Assert.NotNull(el);
+
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.True(words.Count > 1);
+            Assert.Contains(words, w => w.Text!.EndsWith('~'));
+            Assert.DoesNotContain(words, w => w.Text!.EndsWith('-'));
+        }
+
+        [Fact]
+        public async Task VerticalRl_HyphensAuto_NoLanguage_DoesNotHyphenate_Regression()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; width: 200px; height: 80px; hyphens: auto">antidisestablishmentarianism</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            Assert.NotNull(el);
+
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.Single(words);
+            Assert.Equal("antidisestablishmentarianism", words[0].Text);
+        }
+
+        // ── Issue #768: position: absolute/fixed inside vertical inline content ──
+
+        [Fact]
+        public async Task VerticalRl_InlineNestedAbsolutePositionedSpan_DoesNotReserveColumnSpaceAndPositionsAgainstAncestor()
+        {
+            // position:absolute blockifies (CSS2.1 §9.7, DomParser.BlockifyPositionedBox) - a plain <span>
+            // gets exactly the same full left/top resolution a <div> would, so DomParser's own
+            // anonymous-block correction splits it out of "Before"/"After" the same way it splits out a
+            // float; el itself ends up block-children-dispatched (LineBoxes.Count == 0), not inline-only,
+            // so words are gathered from every descendant rather than from el's own LineBoxes. An explicit
+            // width sidesteps a separate, pre-existing bug (CreateVerticalLineBoxes's own auto-width-shrink
+            // logic, from #761, corrupts an absolutely-positioned descendant's own Location.X when its
+            // width is auto - unrelated to #768, not fixed here).
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; position: relative; width: 200px; height: 200px">
+                Before <span id="abs" style="position: absolute; left: 5pt; top: 5pt; width: 20pt">X</span> After
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            var abs = LayoutHarness.FindById(root, "abs");
+            Assert.NotNull(el);
+            Assert.NotNull(abs);
+
+            // "Before"/"After" wrap as if the absolutely-positioned span's own content wasn't there at all -
+            // and its own "X" never leaks into the ordinary word stream (not an exact count: leading/
+            // trailing whitespace from the raw-string fixture can add its own space-only fragments).
+            var ordinaryWords = LayoutHarness.Descendants(el!).SelectMany(d => d.LineBoxes).SelectMany(l => l.Words)
+                .Where(w => !w.IsLineBreak && !w.IsSpaces).ToList();
+            Assert.Contains(ordinaryWords, w => w.Text == "Before");
+            Assert.Contains(ordinaryWords, w => w.Text == "After");
+            Assert.DoesNotContain(ordinaryWords, w => w.OwnerBox == abs);
+
+            // Positioned against el's own padding-box (the nearest positioned ancestor), not wherever it
+            // would have sat inline.
+            Assert.Equal(el!.ClientLeft + 5, abs!.Location.X, 1);
+            Assert.Equal(el.ClientTop + 5, abs.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_InlineNestedFixedPositionedSpan_PositionsAgainstThePage()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; width: 200px; height: 200px">
+                Before <span id="fixed" style="position: fixed; left: 10pt; top: 10pt; width: 20pt">X</span> After
+                </div>
+                """);
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var fixedBox = LayoutHarness.FindById(root, "fixed");
+            Assert.NotNull(fixedBox);
+
+            Assert.Equal(10, fixedBox!.Location.X, 1);
+            Assert.Equal(10, fixedBox.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_InlineNestedAbsolutePositionedDiv_PlacesItselfAsBlockBoxCase_FullyPositioned()
+        {
+            // Same shape as the <span> case above, using an already-block-level element - both reach the
+            // same fully-resolved positioning path since position:absolute blockifies either way.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; position: relative; width: 200px; height: 200px">
+                Before <div id="abs" style="position: absolute; left: 15pt; top: 20pt; width: 10pt; height: 10pt">X</div> After
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            var abs = LayoutHarness.FindById(root, "abs");
+            Assert.NotNull(el);
+            Assert.NotNull(abs);
+
+            Assert.Equal(el!.ClientLeft + 15, abs!.Location.X, 1);
+            Assert.Equal(el.ClientTop + 20, abs.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_InlineNestedAbsolutePositionedDescendant_DoesNotCorruptSurroundingColumnLayout()
+        {
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; width: 200px; height: 300px">
+                <p id="p1" style="width: 40pt">First. <span style="position: absolute">Positioned.</span></p>
+                <p id="p2" style="width: 40pt">Second.</p>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var p1 = LayoutHarness.FindById(root, "p1");
+            var p2 = LayoutHarness.FindById(root, "p2");
+            Assert.NotNull(p1);
+            Assert.NotNull(p2);
+
+            // The positioned descendant contributes nothing to the block-axis cursor, so the two ordinary
+            // paragraphs still stack immediately adjacent to each other (40pt apart), the same assertion
+            // shape as VerticalRl_RunningPositionedAndOutOfFlowChildren_AreSkippedFromStackingButDoNotCrash.
+            Assert.Equal(40, p1!.Location.X - p2!.Location.X, 1);
+        }
+
+        // ── Issue #768: real float wrap-around for vertical column flow ─────────
+
+        [Fact]
+        public async Task VerticalRl_FloatRight_NarrowsEarlyColumnsAndNoWordOverlapsIt()
+        {
+            await AssertFloatAvoidance(
+                floated: """
+                    <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
+                      <div id="floatBox" style="float: right; width: 30pt; height: 60pt"></div>
+                      <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
+                    </div>
+                    """,
+                unfloated: """
+                    <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
+                      <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
+                    </div>
+                    """);
+        }
+
+        [Fact]
+        public async Task VerticalRl_FloatLeft_NarrowsLaterColumnsAndNoWordOverlapsIt()
+        {
+            // "after" has an explicit width (200pt) giving it a fixed, font-independent physical span of
+            // [wrapper.ClientRight-200, wrapper.ClientRight] - but its actual columns are only created as
+            // content needs them, so how far left they actually reach (and whether they overflow past that
+            // declared span) is column-pitch/word-height dependent, i.e. font-metric dependent. A narrow
+            // float sized to just barely reach into that overflow zone on one font's metrics can miss
+            // entirely on another's (this previously passed locally on Windows but failed in CI on
+            // Ubuntu/macOS, whose default fallback font produces different metrics). Two independent
+            // safety margins remove that dependency: the float is widened/heightened to overlap most of
+            // "after"'s own always-present, font-independent [120,320] span rather than relying on
+            // overflow past it, and the word count is 6x'd so even a compact font's fewer, wider columns
+            // still walk deep into that span.
+            const string words = """
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon Phi Chi Psi Omega Digamma Koppa Sampi Heta San Wau.
+                """;
+            await AssertFloatAvoidance(
+                floated: $"""
+                    <div id="wrapper" style="writing-mode: vertical-rl; width: 400px">
+                      <div id="floatBox" style="float: left; width: 200pt; height: 60pt"></div>
+                      <p id="after" style="width: 200pt; height: 60pt">{words}</p>
+                    </div>
+                    """,
+                unfloated: $"""
+                    <div id="wrapper" style="writing-mode: vertical-rl; width: 400px">
+                      <p id="after" style="width: 200pt; height: 60pt">{words}</p>
+                    </div>
+                    """);
+        }
+
+        [Fact]
+        public async Task VerticalLr_FloatLeft_NarrowsEarlyColumnsAndNoWordOverlapsIt()
+        {
+            await AssertFloatAvoidance(
+                floated: """
+                    <div id="wrapper" style="writing-mode: vertical-lr; width: 300px">
+                      <div id="floatBox" style="float: left; width: 30pt; height: 60pt"></div>
+                      <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
+                    </div>
+                    """,
+                unfloated: """
+                    <div id="wrapper" style="writing-mode: vertical-lr; width: 300px">
+                      <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
+                    </div>
+                    """);
+        }
+
+        [Fact]
+        public async Task VerticalRl_Rtl_FloatRight_NarrowsEarlyColumnsAndNoWordOverlapsIt()
+        {
+            // Explicit height on "after" - an auto-height inline-only vertical box under direction:rtl has
+            // a separate, pre-existing bug (words anchor against the provisional page-height bottom edge,
+            // not the final settled one, landing outside the box - unrelated to #768, not fixed here);
+            // sidestepped here since it isn't what this test is about.
+            await AssertFloatAvoidance(
+                floated: """
+                    <div id="wrapper" style="writing-mode: vertical-rl; direction: rtl; width: 300px; height: 350pt">
+                      <div id="floatBox" style="float: right; width: 30pt; height: 60pt"></div>
+                      <p id="after" style="width: 200pt; height: 330pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
+                    </div>
+                    """,
+                unfloated: """
+                    <div id="wrapper" style="writing-mode: vertical-rl; direction: rtl; width: 300px; height: 350pt">
+                      <p id="after" style="width: 200pt; height: 330pt">Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa.</p>
+                    </div>
+                    """);
+        }
+
+        [Fact]
+        public async Task VerticalRl_Float_TextBeforeItInSourceOrderIsUnaffected()
+        {
+            // A float only ever constrains content that comes at or after it in the flow (CSS2.1 §9.5.1) -
+            // the anonymous block preceding it in the split tree must lay out identically with or without it.
+            var withFloat = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
+                  <p id="before" style="width: 200pt">Alpha Beta Gamma Delta Epsilon.</p>
+                  <div style="float: right; width: 30pt; height: 60pt"></div>
+                </div>
+                """);
+            var withoutFloat = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
+                  <p id="before" style="width: 200pt">Alpha Beta Gamma Delta Epsilon.</p>
+                </div>
+                """);
+
+            var (rootWith, _) = await LayoutHarness.LayoutAsync(withFloat);
+            var (rootWithout, _) = await LayoutHarness.LayoutAsync(withoutFloat);
+            var beforeWith = LayoutHarness.FindById(rootWith, "before");
+            var beforeWithout = LayoutHarness.FindById(rootWithout, "before");
+            Assert.NotNull(beforeWith);
+            Assert.NotNull(beforeWithout);
+
+            var wordsWith = beforeWith!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            var wordsWithout = beforeWithout!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.Equal(wordsWithout.Count, wordsWith.Count);
+
+            for (var i = 0; i < wordsWith.Count; i++)
+            {
+                Assert.Equal(wordsWithout[i].Top, wordsWith[i].Top, 1);
+                Assert.Equal(wordsWithout[i].Left, wordsWith[i].Left, 1);
+            }
+        }
+
+        [Fact]
+        public async Task VerticalRl_Float_AlreadyClearedByTheTimeContentStarts_HasNoEffect()
+        {
+            // A float whose own inline-axis (Y) span lies entirely before this content's own ClientTop -
+            // "already passed" in the direction this content's columns grow into - must have zero effect,
+            // even if its physical-X span happens to overlap where this content's own columns land. Guards
+            // DomUtils.ScanForVerticalFloatConstraint's own perpendicular-axis relevance check: an earlier,
+            // buggy version treated any X-overlapping float as a same-column constraint regardless of
+            // whether its Y-span ever actually reached this content at all, clamping a negative "extent"
+            // to zero (a spurious full block) instead of recognizing the float as irrelevant.
+            var withFloat = LayoutHarness.Wrap("""
+                <div style="float: left; width: 300px; height: 20pt; background: red"></div>
+                <div style="height: 400pt"></div>
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
+                  <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon.</p>
+                </div>
+                """);
+            var withoutFloat = LayoutHarness.Wrap("""
+                <div style="height: 400pt"></div>
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
+                  <p id="after" style="width: 200pt">Alpha Beta Gamma Delta Epsilon.</p>
+                </div>
+                """);
+
+            var (rootWith, _) = await LayoutHarness.LayoutAsync(withFloat);
+            var (rootWithout, _) = await LayoutHarness.LayoutAsync(withoutFloat);
+            var afterWith = LayoutHarness.FindById(rootWith, "after");
+            var afterWithout = LayoutHarness.FindById(rootWithout, "after");
+            Assert.NotNull(afterWith);
+            Assert.NotNull(afterWithout);
+
+            var wordsWith = afterWith!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            var wordsWithout = afterWithout!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.Equal(wordsWithout.Count, wordsWith.Count);
+
+            for (var i = 0; i < wordsWith.Count; i++)
+            {
+                Assert.Equal(wordsWithout[i].Top, wordsWith[i].Top, 1);
+                Assert.Equal(wordsWithout[i].Left, wordsWith[i].Left, 1);
+            }
+        }
+
+        [Fact]
+        public async Task VerticalRl_Float_RoutesThroughLayoutVerticalBlockChildren_NotWordStream()
+        {
+            // Guards the routing assumption the whole float-avoidance design depends on: DomParser's
+            // anonymous-block correction always splits a floated sibling out of otherwise inline-only
+            // content before layout runs, so "wrapper" itself never reaches CreateVerticalLineBoxes - each
+            // text run around the float gets its own, independent CreateVerticalLineBoxes call instead.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 300px">
+                  Some text.
+                  <div id="floatBox" style="float: left; width: 20pt; height: 20pt"></div>
+                  More text.
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var floatBox = LayoutHarness.FindById(root, "floatBox");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(floatBox);
+
+            // wrapper itself holds no LineBoxes of its own (block-children dispatch, not inline-only).
+            Assert.Empty(wrapper!.LineBoxes);
+            Assert.True(wrapper.Boxes.Count > 1, "the float should have been split out into its own sibling");
+            Assert.True(floatBox!.IsFloated);
+            Assert.NotEqual(default, floatBox.Location);
+        }
+
+        private static async Task AssertFloatAvoidance(string floated, string unfloated)
+        {
+            var (floatedRoot, _) = await LayoutHarness.LayoutAsync(floated);
+            var (unfloatedRoot, _) = await LayoutHarness.LayoutAsync(unfloated);
+
+            var floatBox = LayoutHarness.FindById(floatedRoot, "floatBox");
+            var floatedAfter = LayoutHarness.FindById(floatedRoot, "after");
+            var unfloatedAfter = LayoutHarness.FindById(unfloatedRoot, "after");
+            Assert.NotNull(floatBox);
+            Assert.NotNull(floatedAfter);
+            Assert.NotNull(unfloatedAfter);
+
+            var floatedWords = floatedAfter!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            var unfloatedWords = unfloatedAfter!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            Assert.Equal(unfloatedWords.Count, floatedWords.Count);
+
+            // The float must have actually changed something - a no-op implementation would produce
+            // byte-identical output versus the no-float baseline.
+            var anyDifference = false;
+            for (var i = 0; i < floatedWords.Count; i++)
+            {
+                if (System.Math.Abs(floatedWords[i].Top - unfloatedWords[i].Top) > 0.5
+                    || System.Math.Abs(floatedWords[i].Left - unfloatedWords[i].Left) > 0.5)
+                {
+                    anyDifference = true;
+                    break;
+                }
+            }
+            Assert.True(anyDifference, "the float should have changed at least one word's position versus the no-float baseline");
+
+            // No word's own painted rectangle overlaps the float's - except a column's own first word,
+            // which (mirroring FlowBox's identical accepted behavior for an unavoidable overflow) is always
+            // placed regardless of fit, to guarantee the column-stacking loop keeps making forward
+            // progress even when a float leaves a column no usable room at all.
+            foreach (var lineBox in floatedAfter.LineBoxes)
+            {
+                var columnWords = lineBox.Words.Where(w => !w.IsLineBreak).ToList();
+                foreach (var word in columnWords.Skip(1))
+                {
+                    var overlapsX = word.Left < floatBox!.ActualRight + floatBox.ActualMarginRight
+                                    && word.Left + word.Width > floatBox.Location.X - floatBox.ActualMarginLeft;
+                    var overlapsY = word.Top < floatBox.ActualBottom + floatBox.ActualMarginBottom
+                                     && word.Top + word.Height > floatBox.Location.Y - floatBox.ActualMarginTop;
+
+                    Assert.False(overlapsX && overlapsY,
+                        $"word '{word.Text}' at ({word.Left},{word.Top},{word.Width}x{word.Height}) overlaps the float");
+                }
+            }
         }
     }
 }

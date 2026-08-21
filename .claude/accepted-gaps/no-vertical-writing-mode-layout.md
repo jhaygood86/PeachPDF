@@ -460,14 +460,88 @@ width/size regardless of orientation), but the SVG `MeasureTextBounds` fix above
 other purpose and is now removed as dead code, and neither pipeline has to remember "measure before
 reading Height" as an unenforced convention going forward.
 
+**`CreateVerticalLineBoxes` now has real feature parity with `FlowBox` for floats, absolute/fixed
+positioning, hyphenation, bidi reordering, and `text-align`** ([#768](https://github.com/jhaygood86/PeachPDF/issues/768),
+closed). `position: absolute`/`fixed` and `float` are excluded from the word stream at collection time
+(`MeasureAndCollectWordsInDocumentOrder` now also returns the out-of-flow descendants it skipped) and laid
+out afterward, once the box's own auto sizing has settled, via the same general `CssBox.LayoutBlockChild`
+entry point every other out-of-flow child already uses — `position: absolute`/`fixed` blockifies per CSS2.1
+§9.7 (`DomParser.BlockifyPositionedBox`) before it can ever reach an inline-only box's word stream in the
+first place, so this closes the gap fully for that case (reserves no column space, resolves its own
+`left`/`top`/`right`/`bottom` against its nearest positioned ancestor exactly as a block-level positioned
+descendant already does). **Float column wrap-around** is real too: `DomUtils.GetVerticalFloatConstraint`
+(mirroring `FindNarrowestRightFloatBox`'s ancestor/preceding-sibling traversal shape, but testing a column's
+own block-axis point against a physical-X span rather than a physical-Y point against a row) narrows a
+column's own usable inline-axis extent whenever a floated sibling's physical-X span covers that column's own
+block-axis position — computed once per column (`CreateVerticalLineBoxes`'s own `ComputeEffectiveWrapLimit`),
+not once per word, since a column's block-axis position never changes mid-column. Confirmed via spec research
+that `float: left`/`right` stay strictly physical under a vertical writing mode, matching real, current
+browser behavior (MDN's dedicated logical-floating guide's live examples show `float: left` staying physical,
+with `float: inline-start`/`inline-end` — a separate CSS Logical Properties Level 1 feature, not something
+this engine parses — as the actual writing-mode-aware mechanism) — this engine's own physical-only `Floating`
+enum needed no changes. A post-change review pass found CSS Writing Modes 4 §7.1 does name "floating" once,
+in passing, as one of the features it says get reinterpreted via line-left/line-right — but that is the
+*only* mention of float/clear anywhere in the whole document, with no normative algorithm anywhere backing
+it, so it reads as an unfollowed-through aspiration rather than a rule real implementations honor; the MDN-
+verified, real-browser-behavior conclusion above stands.
+**Real per-character hyphenation** splices a hyphenated prefix/suffix into both the flat word list and the
+owning box's own `Words` at the current loop index, gated by `hyphenate-limit-lines`/`-zone` against a local
+per-column streak counter (the method has no fragmentainer-resume state to seed a shared one from, and
+`hyphenate-limit-last` — defined relative to a break — has nothing to apply to in a method that never
+fragments). A real, load-bearing structural fix was needed alongside this: the wrap-overflow check used to
+gate on `inlineOffset > 0` (skipping an empty column, to avoid infinite wrap loops) — but that same guard
+was accidentally also gating whether hyphenation was even *attempted*, so a single word too long for an
+entire empty column (including the box's very first word) never got a real hyphenation attempt at all. Fixed
+by splitting "does this word fit" (checked unconditionally, matching `FlowBox`'s own `overflows`) from
+"should we start a new column" (still gated on a non-empty column, to guarantee forward progress). **Real
+`text-align`** (`ApplyVerticalTextAlignment` and its `Flush`/`Center`/`Justify` helpers) and **real bidi
+reordering** (`ApplyVerticalBidiReordering`) run in a new per-column finalize loop, replacing the old
+bubble/assign-only tail — which required moving the auto-height/width settle blocks to run *before* that
+loop (previously after), since both new steps need the box's own final `ClientTop`/`ClientBottom`. A
+non-obvious asymmetry vs. horizontal flow drove both: under vertical + `direction: rtl`, natural
+(pre-alignment) word placement already flushes to physical-bottom (baked into `WritingModeFrame.ToPhysical`'s
+own `InlineStartIsBottom` branch) — unlike horizontal, where natural placement is always flush-left
+regardless of direction. This means `text-align: left` needs an *active* case here (a no-op only under LTR,
+unlike horizontal's `Left`, which is always a no-op), and raw physical `Top` is not monotonic in document
+order for vertical+RTL content, so `ApplyVerticalBidiReordering` normalizes every word to a logical
+inline-offset-from-start coordinate (guaranteed monotonic) before reordering, rather than porting
+`ApplyBidiReordering`'s `Left`-based math with a naive axis swap (which would have silently corrupted the
+run-reflection formulas for exactly the RTL case bidi reordering is for). A second, easy-to-miss trap: these
+new steps must read the box's own **final** `ClientTop`/`ClientBottom` as explicit parameters, never live off
+`lineBox.OwnerBox.ClientTop`/`ClientBottom` — for a box with a *definite* (non-auto) height, `ActualBottom`
+(and so `ClientBottom`) is not actually settled until `ApplyHeight` runs in the layout epilogue, well after
+`CreateVerticalLineBoxes` itself returns, so reading it live silently no-ops every alignment case that needs
+an active shift toward the bottom edge. Verified with new integration test files
+(`VerticalTextAlignIntegrationTests.cs`, `VerticalBidiIntegrationTests.cs`) plus new scenarios added to
+`VerticalWritingModeLayoutIntegrationTests.cs`, and the full existing test suite passing unchanged (9100+
+tests, zero regressions).
+
+Three narrower, pre-existing bugs were found (not introduced) while building and testing #768, confirmed
+independent of its own five features, and deliberately left unfixed — each has its own tracking issue since
+each needs its own focused fix: a float's own starting position inside a vertical box's block content is
+physically meaningless, and `clear` on an ordinary block child is unimplemented
+([#796](https://github.com/jhaygood86/PeachPDF/issues/796)); an RTL auto-height inline-only vertical box
+positions its words against the placement-time provisional (page-height) bottom edge rather than the box's
+own final settled one ([#797](https://github.com/jhaygood86/PeachPDF/issues/797), from #761/#778-era code);
+and `CreateVerticalLineBoxes`'s own auto-width shrink (#761) corrupts `Location.X` for an
+absolutely/fixed-positioned descendant with an auto width, since it assumes `Location.X` is always a
+block-start edge free to move, which is false once a CSS `left` offset already gave it real meaning
+([#798](https://github.com/jhaygood86/PeachPDF/issues/798)).
+
 ## What's still out of scope
 
-- **Floats, absolute positioning, hyphenation, bidi reordering, `text-align`, and
-  `box-decoration-break: clone`** are not honored inside a vertical box's own content
-  ([#768](https://github.com/jhaygood86/PeachPDF/issues/768)). This now also covers a block-level
-  out-of-flow (floated/absolutely/fixed-positioned) child of a vertical box's own block children: it is
-  routed through the ordinary, physical-Y-oriented `LayoutBlockChild` path rather than given block-axis-aware
-  float/positioning logic of its own — see `VerticalRl_RunningPositionedAndOutOfFlowChildren_AreSkippedFromStackingButDoNotCrash`.
+- **A float's own starting position inside a vertical box's block-level content is physically meaningless
+  (derived from an unrelated preceding sibling's own inline-axis extent), and `clear` on an ordinary,
+  non-floated block child is unimplemented** ([#796](https://github.com/jhaygood86/PeachPDF/issues/796)).
+  Column wrap-around avoidance for text flowing around a float ([#768](https://github.com/jhaygood86/PeachPDF/issues/768),
+  closed) is unaffected by this — it queries wherever the float actually ends up, not where it "should".
+- **An RTL, auto-height, inline-only vertical box positions its words against the placement-time
+  provisional bottom edge instead of its own final settled one**, landing them outside the box entirely
+  ([#797](https://github.com/jhaygood86/PeachPDF/issues/797)) — reproduces with plain text, independent of
+  `text-align`/bidi/hyphenation/floats/positioning.
+- **`CreateVerticalLineBoxes`'s own auto-width shrink corrupts `Location.X` for an absolutely/fixed-positioned
+  descendant whose own width is auto** ([#798](https://github.com/jhaygood86/PeachPDF/issues/798)) — an
+  explicit `width` avoids the bug.
 - **A nested inline element's own border/padding/margin does not reserve inline-axis (physical left/right,
   for `vertical-rl`/`vertical-lr`) space** ([#769](https://github.com/jhaygood86/PeachPDF/issues/769)), and
   its block-axis (physical top/bottom) padding/border is applied once per column it spans rather than once
