@@ -5372,6 +5372,29 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</table><div class=\"label\">top/bottom caption flank the row axis, &lt;thead&gt;/&lt;tfoot&gt; sit at the row-axis start/end, collapsed borders paint as row-axis-tall/column-axis-wide stripes, and the rowspan cell spans both body rows' combined row-axis extent</div></div>" +
     "</div>" +
 
+    "<h2>7c &mdash; multi-row &lt;thead&gt;/&lt;tfoot&gt; reverses its own internal row order under vertical-rl (issue #784)</h2>" +
+    "<div class=\"row\">" +
+    "<div><table style=\"writing-mode: vertical-rl; border-collapse: collapse; border-spacing: 0\">" +
+    "<thead>" +
+    "<tr><td style=\"width: 30px; height: 50px; background: #1a6b8a; color: #fff; text-align: center; border: 2px solid #123\">H1</td></tr>" +
+    "<tr><td style=\"width: 30px; height: 50px; background: #2a86a8; color: #fff; text-align: center; border: 2px solid #123\">H2</td></tr>" +
+    "</thead>" +
+    "<tbody><tr><td style=\"width: 60px; height: 50px; background: #cfe9f5; text-align: center; border: 2px solid #123\">Body</td></tr></tbody>" +
+    "<tfoot>" +
+    "<tr><td style=\"width: 30px; height: 50px; background: #4a9bc4; color: #fff; text-align: center; border: 2px solid #123\">F1</td></tr>" +
+    "<tr><td style=\"width: 30px; height: 50px; background: #3a7ba0; color: #fff; text-align: center; border: 2px solid #123\">F2</td></tr>" +
+    "</tfoot>" +
+    "</table><div class=\"label\">reading right-to-left (the table's own block-start-to-end order): H1, H2, Body, F1, F2 - topologically-first H1/F1 sit nearest their own group's block-start edge, not swapped with H2/F2 the way an unfixed #784 would paint them</div></div>" +
+    "<div><table style=\"writing-mode: vertical-rl; border-spacing: 4px\">" +
+    "<thead>" +
+    "<tr><td rowspan=\"2\" style=\"width: 20px; height: 40px; background: #1a6b8a; color: #fff; text-align: center\">Span</td>" +
+    "<td style=\"width: 30px; height: 40px; background: #2a86a8; color: #fff; text-align: center\">H1</td></tr>" +
+    "<tr><td style=\"width: 40px; height: 40px; background: #2a86a8; color: #fff; text-align: center\">H2</td></tr>" +
+    "</thead>" +
+    "<tbody><tr><td style=\"width: 30px; height: 40px; background: #cfe9f5; text-align: center\">Body</td></tr></tbody>" +
+    "</table><div class=\"label\">a rowspan cell entirely inside a multi-row &lt;thead&gt; spans the combined row-axis extent of its own two rows, correctly positioned at the reversed (block-start-ward) side rather than only against its opening row</div></div>" +
+    "</div>" +
+
     $"<h2>8 &mdash; text-orientation: real per-character upright/rotated splitting (issue #765)</h2>" +
     $"<style>@font-face {{ font-family: 'CJK'; src: url('data:font/truetype;base64,{writingModeCjkFontB64}') format('truetype'); }} .cjk {{ font-family: 'CJK', Arial, sans-serif }}</style>" +
     "<div class=\"row\">" +

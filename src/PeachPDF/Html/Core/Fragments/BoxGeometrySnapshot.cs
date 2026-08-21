@@ -159,21 +159,60 @@ namespace PeachPDF.Html.Core.Fragments
         {
             foreach (var geometry in _geometry.Values)
             {
-                geometry.Location = new RPoint(geometry.Location.X + dx, geometry.Location.Y + dy);
-                geometry.ActualRight += dx;
-                geometry.ActualBottom += dy;
+                ShiftGeometry(geometry, dx, dy);
+            }
+        }
 
-                foreach (var line in geometry.Rectangles.Keys.ToList())
-                {
-                    var r = geometry.Rectangles[line];
-                    geometry.Rectangles[line] = new RRect(r.X + dx, r.Y + dy, r.Width, r.Height);
-                }
+        /// <summary>
+        /// Shifts <paramref name="root"/> and its captured descendants by <paramref name="dx"/> only -
+        /// the scoped, single-subtree counterpart of <see cref="Translate"/>, needed when different
+        /// subtrees of the same snapshot must move by different amounts.
+        /// </summary>
+        /// <remarks>
+        /// A multi-row <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>'s own internal rows reversing their
+        /// row-axis order under <c>vertical-rl</c> is exactly this case - see
+        /// <see cref="CssLayoutEngineTable.ReflectRowAxisForVerticalRl"/>, issue
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/784">#784</see>. Only <c>dx</c> (the
+        /// row axis for a vertical table) is ever non-zero here - passed as <c>dy = 0</c> into the same
+        /// <see cref="ShiftGeometry"/> helper <see cref="Translate"/> uses, so <c>ActualBottom</c> and the
+        /// Y component of <c>Rectangles</c>/<c>WordOrigins</c> are left untouched, matching
+        /// <see cref="CssBox.OffsetLeft(double)"/>'s own row-axis-only convention: a row-axis reflection
+        /// never touches the column axis.
+        /// </remarks>
+        internal void ReflectSubtree(CssBox root, double dx)
+        {
+            if (dx == 0) return;
 
-                for (var i = 0; i < geometry.WordOrigins.Count; i++)
-                {
-                    if (geometry.WordOrigins[i] is { } origin)
-                        geometry.WordOrigins[i] = new RPoint(origin.X + dx, origin.Y + dy);
-                }
+            if (_geometry.TryGetValue(root, out var geometry))
+            {
+                ShiftGeometry(geometry, dx, 0);
+            }
+
+            foreach (var child in root.Boxes)
+                ReflectSubtree(child, dx);
+        }
+
+        /// <summary>
+        /// Shifts one captured box's own geometry by <paramref name="dx"/>/<paramref name="dy"/> - the
+        /// per-box mutation both <see cref="Translate"/> (every captured box, one shared shift) and
+        /// <see cref="ReflectSubtree"/> (one subtree, its own shift) apply.
+        /// </summary>
+        private static void ShiftGeometry(BoxGeometry geometry, double dx, double dy)
+        {
+            geometry.Location = new RPoint(geometry.Location.X + dx, geometry.Location.Y + dy);
+            geometry.ActualRight += dx;
+            geometry.ActualBottom += dy;
+
+            foreach (var line in geometry.Rectangles.Keys)
+            {
+                var r = geometry.Rectangles[line];
+                geometry.Rectangles[line] = new RRect(r.X + dx, r.Y + dy, r.Width, r.Height);
+            }
+
+            for (var i = 0; i < geometry.WordOrigins.Count; i++)
+            {
+                if (geometry.WordOrigins[i] is { } origin)
+                    geometry.WordOrigins[i] = new RPoint(origin.X + dx, origin.Y + dy);
             }
         }
     }
