@@ -3,6 +3,8 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -127,6 +129,104 @@ namespace PeachPDF.Tests.Integration
                 "</div>"));
             var abs = FindById(root, "abs")!;
             Assert.Equal(80, abs.ActualHeight, 1.5);
+        }
+
+        // ─── §10.1 containing block for content inside a detached <thead>/<tfoot> (issue #787) ──
+        //
+        // vertical-align:top on every cell below is deliberate, not incidental: it neutralizes the
+        // UA-default vertical-align:middle a <th>/<td> would otherwise apply to its own in-flow content,
+        // which is an orthogonal axis of behavior from the containing-block bug these tests target and
+        // would otherwise make the expected Y coordinates depend on an unrelated cell-sizing detail.
+
+        [Fact]
+        public async Task AbsoluteInTheadCell_NoPositionedAncestor_ResolvesAgainstPageContentOrigin()
+        {
+            // CssLayoutEngineTable.RemoveHeaderFooterFromTree detaches a <thead> (ParentBox = null)
+            // before laying its rows out. Before the fix, GetNearestPositionedAncestor stopped at that
+            // detached, not-yet-positioned box (Location still (0,0)) instead of continuing on to the
+            // real document root - landing "abs" near (5, 5) instead of the real page-content origin.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<table style='border-collapse:collapse; border-spacing:0;'>" +
+                "<thead><tr><th style='padding:0; border:0; vertical-align:top;'>" +
+                "<div id='abs' style='position:absolute; top:5pt; left:5pt; width:10pt; height:10pt;'></div>" +
+                "</th></tr></thead>" +
+                "<tbody><tr><td style='padding:0; border:0; vertical-align:top;'>x</td></tr></tbody>" +
+                "</table>"), margin: 20);
+
+            var abs = LayoutHarness.FindByIdIncludingHeaderFooterProxies(root, "abs")!;
+            Assert.Equal(25, abs.Location.X, 1.5);
+            Assert.Equal(25, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteInTfootCell_NoPositionedAncestor_ResolvesAgainstPageContentOrigin()
+        {
+            // Same bug, the <tfoot> branch of RemoveHeaderFooterFromTree/DomParentBox. The footer cell
+            // needs some real in-flow content alongside "abs" - a footer whose only content is
+            // out-of-flow measures a natural height of 0, which (a separate, pre-existing table quirk,
+            // out of scope here) skips creating a footer proxy for it at all.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<table style='border-collapse:collapse; border-spacing:0;'>" +
+                "<tbody><tr><td style='padding:0; border:0; vertical-align:top;'>x</td></tr></tbody>" +
+                "<tfoot><tr><td style='padding:0; border:0; vertical-align:top;'>" +
+                "y<div id='abs' style='position:absolute; top:5pt; left:5pt; width:10pt; height:10pt;'></div>" +
+                "</td></tr></tfoot>" +
+                "</table>"), margin: 20);
+
+            var abs = LayoutHarness.FindByIdIncludingHeaderFooterProxies(root, "abs")!;
+            Assert.Equal(25, abs.Location.X, 1.5);
+            Assert.Equal(25, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteInTheadCell_PositionedAncestorSeveralLevelsAboveTable_ResolvesAgainstThatAncestor()
+        {
+            // The containing-block walk must not stop early at the detached <thead> (this test's own
+            // regression target) NOR skip past a real positioned ancestor further up the tree to land on
+            // the document root instead. #pos is pushed away from the page origin on both axes - down by
+            // a spacer, right by its own margin - so the two possible (wrong) answers - page origin, or
+            // "stopped at the header" - are both numerically distinguishable from the correct one.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='height:50pt;'></div>" +
+                "<div id='pos' style='position:relative; margin:0 0 0 30pt; padding:0; border:0;'>" +
+                "<div style='margin:0; padding:0; border:0;'>" +
+                "<table style='border-collapse:collapse; border-spacing:0;'>" +
+                "<thead><tr><th style='padding:0; border:0; vertical-align:top;'>" +
+                "<div id='abs' style='position:absolute; top:5pt; left:5pt; width:10pt; height:10pt;'></div>" +
+                "</th></tr></thead>" +
+                "<tbody><tr><td style='padding:0; border:0; vertical-align:top;'>x</td></tr></tbody>" +
+                "</table></div></div>"), margin: 20);
+
+            var pos = LayoutHarness.FindById(root, "pos")!;
+            var abs = LayoutHarness.FindByIdIncludingHeaderFooterProxies(root, "abs")!;
+
+            Assert.Equal(pos.ClientLeft + 5, abs.Location.X, 1.5);
+            Assert.Equal(pos.ClientTop + 5, abs.Location.Y, 1.5);
+            // Proves the walk didn't stop at the page origin (the bug this test guards against fixing
+            // too eagerly) or short at the header itself.
+            Assert.NotEqual(25, abs.Location.X, 1.5);
+            Assert.NotEqual(25, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task AbsolutePercentWidthInTheadCell_ResolvesAgainstPositionedAncestor_NotDetachedHeader()
+        {
+            // CssLayoutEngine.PercentageBase (CSS 2.1 §10.1) calls the same GetNearestPositionedAncestor
+            // this fix corrects, so a percentage width on an absolute box inside a <thead> cell benefits
+            // automatically - it must resolve against #pos's own 120pt width, not against the detached,
+            // not-yet-sized header box's own stale default width.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='pos' style='position:relative; width:120pt; height:80pt; margin:0; padding:0; border:0;'>" +
+                "<div style='margin:0; padding:0; border:0;'>" +
+                "<table style='border-collapse:collapse; border-spacing:0;'>" +
+                "<thead><tr><th style='padding:0; border:0; vertical-align:top;'>" +
+                "<div id='abs' style='position:absolute; width:100%; height:10pt;'></div>" +
+                "</th></tr></thead>" +
+                "<tbody><tr><td style='padding:0; border:0; vertical-align:top;'>x</td></tr></tbody>" +
+                "</table></div></div>"), margin: 20);
+
+            var abs = LayoutHarness.FindByIdIncludingHeaderFooterProxies(root, "abs")!;
+            Assert.Equal(120, abs.Size.Width, 1.5);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

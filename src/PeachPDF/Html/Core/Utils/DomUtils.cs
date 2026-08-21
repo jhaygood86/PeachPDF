@@ -535,8 +535,8 @@ namespace PeachPDF.Html.Core.Utils
 
             do
             {
-                currentBox = currentBox.ParentBox;
-            } while (currentBox is { IsPositioned: false, ParentBox: not null });
+                currentBox = currentBox.EffectiveParentBox;
+            } while (currentBox is { IsPositioned: false, EffectiveParentBox: not null });
 
             return currentBox!;
         }
@@ -554,7 +554,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </remarks>
         internal static bool IsSelfOrDescendantOf(CssBox box, CssBox root)
         {
-            for (var current = box; current is not null; current = current.ParentBox)
+            for (var current = box; current is not null; current = current.EffectiveParentBox)
             {
                 if (ReferenceEquals(current, root)) return true;
             }

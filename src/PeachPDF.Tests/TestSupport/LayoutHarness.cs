@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.TestSupport
@@ -156,6 +157,24 @@ namespace PeachPDF.Tests.TestSupport
             {
                 var found = FindById(childBox, id);
                 if (found is not null) return found;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Depth-first search that also descends into a repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>'s
+        /// detached source subtree via each <see cref="CssProxyBox"/> it finds, since that content isn't
+        /// reachable through the ordinary <see cref="FindById"/> walk once
+        /// <c>CssLayoutEngineTable.RemoveHeaderFooterFromTree</c> has detached it from the live tree.
+        /// </summary>
+        internal static CssBox? FindByIdIncludingHeaderFooterProxies(CssBox box, string id)
+        {
+            if (FindById(box, id) is { } found) return found;
+
+            foreach (var proxy in Descendants(box).OfType<CssProxyBox>())
+            {
+                if (FindById(proxy.SourceBox, id) is { } inSource) return inSource;
             }
 
             return null;

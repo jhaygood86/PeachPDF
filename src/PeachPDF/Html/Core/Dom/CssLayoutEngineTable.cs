@@ -2025,6 +2025,7 @@ namespace PeachPDF.Html.Core.Dom
                 _headerIndex = _tableBox.Boxes.IndexOf(_headerBox);
                 _tableBox.Boxes.Remove(_headerBox);
                 _headerBox.ParentBox = null;
+                _headerBox.DomParentBox = _tableBox;
             }
 
             if (_footerBox != null)
@@ -2032,6 +2033,7 @@ namespace PeachPDF.Html.Core.Dom
                 _footerIndex = _tableBox.Boxes.IndexOf(_footerBox);
                 _tableBox.Boxes.Remove(_footerBox);
                 _footerBox.ParentBox = null;
+                _footerBox.DomParentBox = _tableBox;
             }
         }
 
@@ -2083,6 +2085,13 @@ namespace PeachPDF.Html.Core.Dom
                 // then setting the parent adds the group twice, which is exactly one header's worth of
                 // extra height on the second run and was the whole of this issue's "extra height".
                 source.ParentBox = _tableBox;
+
+                // DomParentBox exists only to stand in for a null ParentBox (see its own doc comment) -
+                // now that ParentBox is real again, clear it rather than leave it pointing at _tableBox
+                // forever. Harmless today (every reader already prefers ParentBox), but a stale non-null
+                // DomParentBox on a box that's genuinely back in the live tree is a footgun for whatever
+                // reads it next.
+                source.DomParentBox = null;
 
                 if (proxy.SourceIndex >= 0 && proxy.SourceIndex < _tableBox.Boxes.Count - 1)
                 {

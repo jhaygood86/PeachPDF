@@ -696,6 +696,50 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRlTable_MultiRowThead_AbsoluteContentWithNoPositionedAncestor_SnapshotIsNotShiftedByRowAxisReflection()
+        {
+            // Issue #787's secondary fix: BoxGeometrySnapshot.Translate/ReflectSubtree had no
+            // EscapesTranslationOf-equivalent guard, so an absolutely-positioned descendant with no
+            // positioned ancestor of its own - which should stay put, resolved against the true document
+            // root - would incorrectly receive the same per-row residual ReflectSubtree applies to
+            // reverse a multi-row <thead>'s internal row order under vertical-rl (issue #784).
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <thead>
+                    <tr><td style="width: 20pt; height: 20pt">H1</td></tr>
+                    <tr><td style="width: 20pt; height: 20pt; padding: 0; border: 0; vertical-align: top;">
+                      <div id="abs" style="position:absolute; top:5pt; left:5pt; width:5pt; height:5pt;"></div>
+                    </td></tr>
+                  </thead>
+                  <tr><td style="width: 30pt; height: 20pt">R0</td></tr>
+                  <tr><td style="width: 30pt; height: 20pt">R1</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(t);
+
+            var headerProxy = t!.Boxes.OfType<CssProxyBox>()
+                .First(p => p.DerivedStyle.ActualDisplay == Keywords.TableHeaderGroup);
+            var abs = LayoutHarness.FindById(headerProxy.SourceBox, "abs");
+            Assert.NotNull(abs);
+
+            // Live box: resolved against the real page-content origin, not the detached header (#787's
+            // primary fix).
+            Assert.Equal(25, abs!.Location.X, 1.5);
+            Assert.Equal(25, abs.Location.Y, 1.5);
+
+            // Painted snapshot: must agree with the live box - i.e. must NOT have received the per-row
+            // residual ReflectSubtree applies to reverse the header's own internal row order under
+            // vertical-rl, since abs's containing block (the true document root) lies outside the header
+            // subtree being reflected.
+            Assert.True(headerProxy.SourceGeometry!.TryGetGeometry(abs, out var absGeometry));
+            Assert.Equal(abs.Location.X, absGeometry.Location.X, 1);
+            Assert.Equal(abs.Location.Y, absGeometry.Location.Y, 1);
+        }
+
+        [Fact]
         public async Task VerticalLr_MultiRowThead_InternalRowsKeepForwardOrder()
         {
             // Sibling regression guard for the fix above: ReflectRowAxisForVerticalRl only runs for

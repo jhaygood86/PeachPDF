@@ -53,13 +53,23 @@ namespace PeachPDF.Html.Core.Fragments
         private readonly Dictionary<CssBox, BoxGeometry> _geometry = [];
 
         /// <summary>
+        /// The single root this snapshot was captured from, or null for the multi-root <see cref="Capture(IEnumerable{CssBox}, IReadOnlySet{CssBox}?)"/>
+        /// overload. Consulted by <see cref="Translate"/>/<see cref="ReflectSubtree"/> to skip an
+        /// out-of-flow descendant whose containing block lies outside this snapshot's own subtree,
+        /// mirroring <see cref="CssBox.OffsetTop(double)"/>'s <see cref="CssBox.EscapesTranslationOf"/>
+        /// guard - see <see href="https://github.com/jhaygood86/PeachPDF/issues/787">#787</see>. Never
+        /// set for the multi-root overload since it is never combined with either method today.
+        /// </summary>
+        private CssBox? _translationRoot;
+
+        /// <summary>
         /// Captures the current geometry of <paramref name="root"/> and every descendant.
         /// </summary>
         internal static BoxGeometrySnapshot Capture(CssBox root)
         {
             ArgumentNullException.ThrowIfNull(root);
 
-            var snapshot = new BoxGeometrySnapshot();
+            var snapshot = new BoxGeometrySnapshot { _translationRoot = root };
             snapshot.CaptureBox(root, excluded: null);
             return snapshot;
         }
@@ -154,12 +164,48 @@ namespace PeachPDF.Html.Core.Fragments
         /// column re-banding pass, a keep-with-next run, table row placement — cannot reach them by walking
         /// <see cref="CssBox.Boxes"/>; <see cref="CssProxyBox.OnTranslated"/> calls this instead, once per
         /// such move (see <see href="https://github.com/jhaygood86/PeachPDF/issues/437">#437</see>).
+        /// An out-of-flow descendant whose own containing block lies outside this snapshot's subtree is
+        /// skipped, mirroring <see cref="CssBox.OffsetTop(double)"/> (see
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/787">#787</see>) - a flat per-box check
+        /// would be wrong here, since an in-flow descendant *inside* a correctly-skipped escaping box must
+        /// still be skipped too, not shifted independently; only a real tree walk that stops descending the
+        /// instant it finds an escaping box gets that right.
         /// </remarks>
         internal void Translate(double dx, double dy)
         {
-            foreach (var geometry in _geometry.Values)
+            if (_translationRoot is null)
+            {
+                // Not reached by any call site today - Translate/ReflectSubtree are only ever called on
+                // a snapshot captured via the single-root Capture(CssBox), which always sets
+                // _translationRoot. Kept as a defensive fallback, not dead code, for the multi-root
+                // Capture(IEnumerable<CssBox>, excluded) overload, whose one real caller
+                // (CssLayoutEngineColumns.FillColumns) never combines it with either method - a future
+                // caller that starts doing so gets this snapshot's pre-#787 behavior (an unconditional
+                // shift, no escape-of-subtree guard) rather than a crash, since there is no single root
+                // for that guard to walk from; BoxGeometrySnapshotTests.cs exercises this branch directly.
+                foreach (var geometry in _geometry.Values)
+                {
+                    ShiftGeometry(geometry, dx, dy);
+                }
+
+                return;
+            }
+
+            TranslateSubtree(_translationRoot, dx, dy, _translationRoot);
+        }
+
+        private void TranslateSubtree(CssBox box, double dx, double dy, CssBox translationRoot)
+        {
+            if (_geometry.TryGetValue(box, out var geometry))
             {
                 ShiftGeometry(geometry, dx, dy);
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                if (child.EscapesTranslationOf(translationRoot)) continue;
+
+                TranslateSubtree(child, dx, dy, translationRoot);
             }
         }
 
@@ -183,13 +229,7 @@ namespace PeachPDF.Html.Core.Fragments
         {
             if (dx == 0) return;
 
-            if (_geometry.TryGetValue(root, out var geometry))
-            {
-                ShiftGeometry(geometry, dx, 0);
-            }
-
-            foreach (var child in root.Boxes)
-                ReflectSubtree(child, dx);
+            TranslateSubtree(root, dx, dy: 0, translationRoot: root);
         }
 
         /// <summary>
