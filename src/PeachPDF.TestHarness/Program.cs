@@ -5256,15 +5256,21 @@ await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
 // Vertical_Orientation classification - issue #765). Flexbox and Table layout are also
 // writing-mode-aware now, including Table's own captions, <thead>/<tfoot>, collapsed borders,
 // vertical-align, and rowspan row-axis sizing (issue #762), and so is a vertical box's own
-// block-level and orthogonal-flow content (issue #760) - see
-// .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's still deferred (Multi-column
-// axis awareness, real margin collapsing/orthogonal shrink-to-fit sizing for block children, and
-// Table's own colspan straddling the row axis / real per-row pagination).
+// block-level and orthogonal-flow content (issue #760). CreateVerticalLineBoxes (inline-only
+// content) now has real feature parity with horizontal FlowBox too: text-align, Unicode Bidi
+// Algorithm reordering, hyphenation, position: absolute/fixed, and float column wrap-around all
+// work (issue #768) - see .claude/accepted-gaps/no-vertical-writing-mode-layout.md for what's
+// still deferred (Multi-column axis awareness, a float's own starting position/clear, and
+// Table's own colspan straddling the row axis / real per-row pagination combined with rowspan).
 
 // A subset of Noto Sans JP (see assets/fonts/NotoSansJPSubset.LICENSE.txt) covering the CJK
 // characters section 8 below uses, so mixed text-orientation renders real upright glyphs rather
 // than .notdef boxes - the vast majority of real-world text-orientation: mixed content is CJK.
 var writingModeCjkFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansJPSubset.ttf")));
+
+// Section 10b's bidi example needs real Hebrew glyphs, the same bundled subset the dedicated
+// bidi_text showcase (below) already proves embeds cleanly.
+var writingModeHebrewB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansHebrewSubset.ttf")));
 
 const string WritingModeCss = """
     <style>
@@ -5469,10 +5475,51 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</div><div class=\"label\">box-own-edge collapse: a nested vertical-rl wrapper's own edge collapsing with its first stacked child's margin</div></div>" +
     "</div>" +
 
+"<div style=\"page-break-before: always\"></div>" +
+    $"<style>@font-face {{ font-family: 'Hebrew'; src: url('data:font/truetype;base64,{writingModeHebrewB64}') format('truetype'); }}</style>" +
+    "<h2>10 &mdash; text-align inside vertical line flow (issue #768)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 60px; height: 140px; text-align: left\">Hi there</div>" +
+    "<div class=\"label\">text-align: left (flush physical top)</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 60px; height: 140px; text-align: right\">Hi there</div>" +
+    "<div class=\"label\">text-align: right (flush physical bottom)</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 60px; height: 140px; text-align: center\">Hi there</div>" +
+    "<div class=\"label\">text-align: center</div></div>" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 200px; height: 60px; text-align: justify\">Alpha Beta Gamma Delta Epsilon.</div>" +
+    "<div class=\"label\">text-align: justify (spreads non-last columns)</div></div>" +
+    "</div>" +
+
+    "<h2>10b &mdash; Unicode Bidi Algorithm reordering inside vertical line flow (issue #768)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; direction: rtl; width: 60px; height: 220px; font-family: 'Hebrew', Arial, sans-serif\">שלום עולם 123 כאן</div>" +
+    "<div class=\"label\">dir: rtl paragraph; the embedded \"123\" digit run reorders between its two Hebrew neighbors, same as horizontal RTL text</div></div>" +
+    "</div>" +
+
+    "<h2>10c &mdash; hyphenation splits a word across a column boundary (issue #768)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 120px; height: 200px; hyphens: auto\" lang=\"en\">antidisestablishmentarianism</div>" +
+    "<div class=\"label\">hyphens: auto — splits with a real hyphen instead of overflowing</div></div>" +
+    "</div>" +
+
+    "<h2>10d &mdash; position: absolute/fixed nested inside vertical line flow (issue #768)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; position: relative; width: 260px; height: 200px\">" +
+    "Before <span style=\"position: absolute; left: 8px; top: 8px; width: 40px; background: #1a6b8a; color: #fff; padding: 2px\">Positioned</span> after" +
+    "</div><div class=\"label\">position: absolute, nested in otherwise inline-only vertical text — reserves no column space and resolves fully against its own nearest positioned ancestor</div></div>" +
+    "</div>" +
+
+    "<h2>10e &mdash; float column wrap-around inside vertical line flow (issue #768)</h2>" +
+    "<div class=\"row\">" +
+    "<div><div class=\"vbox\" style=\"writing-mode: vertical-rl; width: 260px; height: 200px\">" +
+    "<div style=\"float: right; width: 30px; height: 60px; background: #7cc0e0\"></div>" +
+    "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta." +
+    "</div><div class=\"label\">float: right — later columns narrow to avoid the float's own physical footprint, the same way a horizontal line already wraps around a float</div></div>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vertical Text)",
-    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout (including captions, thead/tfoot, collapsed borders, vertical-align and rowspan row-axis sizing), block-level/orthogonal-flow content inside a vertical box, direction: rtl block children anchoring to the physical bottom edge, and real CSS2.1 margin collapse (sibling-to-sibling and box-own-edge) between block-axis-stacked children.",
+    "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout (including captions, thead/tfoot, collapsed borders, vertical-align and rowspan row-axis sizing), block-level/orthogonal-flow content inside a vertical box, direction: rtl block children anchoring to the physical bottom edge, real CSS2.1 margin collapse (sibling-to-sibling and box-own-edge) between block-axis-stacked children, and (issue #768) text-align, Unicode Bidi Algorithm reordering, hyphenation, position: absolute/fixed, and float column wrap-around all working inside vertical line flow.",
     writingModeHtml, pdfConfig);
 
 // --- CSS1 canvas background showcase ---

@@ -733,6 +733,103 @@ namespace PeachPDF.Html.Core.Utils
             }
         }
 
+        /// <summary>
+        /// The tightest inline-axis extent (a physical Y distance from <paramref name="columnInlineStart"/>,
+        /// in the direction a vertical box's own column actually grows - downward when
+        /// <paramref name="inlineStartIsBottom"/> is false, upward when true) that a floated sibling leaves
+        /// available at block-axis (physical X) position <paramref name="columnBlockAxisPoint"/>, or
+        /// <see langword="null"/> if no floated box's own physical-X span covers that point.
+        /// </summary>
+        /// <remarks>
+        /// Mirrors <see cref="FindNarrowestRightFloatBox"/>'s ancestor/preceding-sibling traversal shape,
+        /// used from <c>CssLayoutEngine.CreateVerticalLineBoxes</c> once per column rather than once per
+        /// word (a column's own block-axis position, unlike a horizontal line's right-float wrap boundary,
+        /// never changes mid-column). <c>float: left</c>/<c>right</c> stay strictly physical under a
+        /// vertical writing mode - CSS Writing Modes 4 does not include them among the properties it
+        /// reinterprets via line-left/line-right, and this engine parses no logical (<c>inline-start</c>/
+        /// <c>inline-end</c>) float value in the first place - so which side a float declared only decided
+        /// where along the physical-X (this box's own block) axis it already sits; it plays no further
+        /// role once that position is known, unlike the horizontal engine's own asymmetric left/right
+        /// (point-collision vs. lookahead) treatment.
+        /// </remarks>
+        public static double? GetVerticalFloatConstraint(CssBox reference, double columnBlockAxisPoint,
+            double columnInlineStart, bool inlineStartIsBottom)
+        {
+            var container = reference.HtmlContainer;
+            container?.RecordFloatScanCall();
+
+            // See GetFirstIntersectingFloatBox above for why this short-circuit exists.
+            if (container?.HasFloatedBoxes != true)
+            {
+                return null;
+            }
+
+            var boxesVisited = 0;
+            var tightest = FindTightestVerticalFloatConstraint(reference, columnBlockAxisPoint, columnInlineStart,
+                inlineStartIsBottom, ref boxesVisited);
+            container.RecordFloatScanBoxVisits(boxesVisited);
+            return tightest;
+        }
+
+        private static double? FindTightestVerticalFloatConstraint(CssBox reference, double columnBlockAxisPoint,
+            double columnInlineStart, bool inlineStartIsBottom, ref int boxesVisited)
+        {
+            double? tightest = null;
+
+            while (reference.ParentBox is not null)
+            {
+                var currentBoxIdx = reference.ParentBox.Boxes.IndexOf(reference);
+
+                for (var i = 0; i < currentBoxIdx; i++)
+                {
+                    ScanForVerticalFloatConstraint(reference.ParentBox.Boxes[i], columnBlockAxisPoint,
+                        columnInlineStart, inlineStartIsBottom, ref tightest, ref boxesVisited);
+                }
+
+                reference = reference.ParentBox;
+            }
+
+            return tightest;
+        }
+
+        private static void ScanForVerticalFloatConstraint(CssBox box, double columnBlockAxisPoint,
+            double columnInlineStart, bool inlineStartIsBottom, ref double? tightest, ref int boxesVisited)
+        {
+            boxesVisited++;
+
+            if (box.IsFloated)
+            {
+                var targetLeft = box.Location.X - box.ActualMarginLeft;
+                var targetRight = box.ActualRight + box.ActualMarginRight;
+
+                // Closed on both ends, unlike the horizontal engine's half-open point test: a column's own
+                // block-axis point here names its leading (not-yet-consumed) edge, which is very commonly
+                // exactly flush against a float's own edge (e.g. a plain float:right in vertical-rl sits at
+                // the same physical-right edge column 0's own leading edge starts at) - a strict `<`/`>`
+                // test would miss that touching case even though the column's real footprint, once it has
+                // any thickness at all, provably overlaps the float from that shared edge inward.
+                if (targetLeft <= columnBlockAxisPoint && columnBlockAxisPoint <= targetRight)
+                {
+                    // The float's own near edge along the column's inline-growth direction, clamped to 0 -
+                    // a float that already covers the column's own inline-start leaves no usable extent.
+                    var extent = inlineStartIsBottom
+                        ? Math.Max(0, columnInlineStart - (box.ActualBottom + box.ActualMarginBottom))
+                        : Math.Max(0, box.Location.Y - box.ActualMarginTop - columnInlineStart);
+
+                    if (tightest is null || extent < tightest.Value)
+                    {
+                        tightest = extent;
+                    }
+                }
+            }
+
+            foreach (var childBox in box.Boxes)
+            {
+                ScanForVerticalFloatConstraint(childBox, columnBlockAxisPoint, columnInlineStart,
+                    inlineStartIsBottom, ref tightest, ref boxesVisited);
+            }
+        }
+
         public static CssBox? GetNearestParentElementBox(CssBox box)
         {
             var parentBox = box.ParentBox;

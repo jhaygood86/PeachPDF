@@ -435,24 +435,28 @@ namespace PeachPDF.Html.Core.Dom
         /// whole box in one pass, always.
         /// </summary>
         /// <remarks>
-        /// Deliberately scoped down for this milestone (see the no-vertical-writing-mode-layout accepted
-        /// gap): plain text and simple nested inline boxes only (no leading/trailing inline spacing from
-        /// their own border/padding/margin), no floats, no absolute positioning, no hyphenation, no bidi
-        /// reordering, no <c>text-align</c>, no <c>box-decoration-break: clone</c>. Glyphs are painted
-        /// rotated 90° regardless of <c>text-orientation</c> (the "everything rotates" interim
-        /// simplification - real per-character upright/rotated splitting is a later phase), so each word's
-        /// own natural (horizontal) <see cref="CssRect.Width"/>/<see cref="CssRect.Height"/> already are
-        /// its inline-size/block-size; only their arrangement, not their own measurement, needs to change
-        /// here. Width auto-sizing (fill-available, unaware of writing-mode) is unchanged; only auto
-        /// height becomes genuinely content-driven, mirroring <see cref="CreateLineBoxes"/>'s own auto-height
-        /// growth.
+        /// Real vertical line flow with real feature parity to <see cref="FlowBox"/> (issue #768): floats,
+        /// absolute/fixed positioning, <c>hyphens</c>, Unicode Bidi Algorithm reordering, and
+        /// <c>text-align</c> are all honored now. Glyphs are painted rotated 90° regardless of
+        /// <c>text-orientation</c> (the "everything rotates" interim simplification - real per-character
+        /// upright/rotated splitting is a later phase), so each word's own natural (horizontal)
+        /// <see cref="CssRect.Width"/>/<see cref="CssRect.Height"/> already are its inline-size/block-size;
+        /// only their arrangement, not their own measurement, needs to change here. Width auto-sizing
+        /// (fill-available, unaware of writing-mode) is unchanged; only auto height becomes genuinely
+        /// content-driven, mirroring <see cref="CreateLineBoxes"/>'s own auto-height growth. Still scoped
+        /// down: no leading/trailing inline spacing from a nested inline box's own border/padding/margin, no
+        /// <c>box-decoration-break: clone</c> - see the no-vertical-writing-mode-layout accepted gap. A
+        /// float's own starting position inside a vertical box's <em>block-level</em> content (a sibling of
+        /// this method, not a descendant reached here) remains a separate, pre-existing, out-of-scope gap;
+        /// see that accepted-gap file's own remaining-gaps section.
         /// </remarks>
         internal static async ValueTask CreateVerticalLineBoxes(RGraphics g, CssBox blockBox)
         {
             blockBox.LineBoxes.Clear();
 
             var words = new List<CssRect>();
-            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words);
+            var outOfFlowDescendants = new List<CssBox>();
+            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words, outOfFlowDescendants);
 
             var clientTop = blockBox.ClientTop;
             var clientLeft = blockBox.ClientLeft;
@@ -496,6 +500,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (heightIsAuto) blockBox.ActualBottom = clientTop;
                 if (widthIsAuto) ShrinkAutoWidthTo(blockBox, frame, 0);
+                await LayoutOutOfFlowDescendants(g, blockBox, outOfFlowDescendants);
                 return;
             }
 
@@ -504,18 +509,29 @@ namespace PeachPDF.Html.Core.Dom
             double blockOffset = 0;
             double lineThickness = 0;
             double maxInlineExtentUsed = 0;
+            var consecutiveHyphenatedColumns = 0;
+            var currentColumnHyphenated = false;
+            var effectiveWrapLimit = ComputeEffectiveWrapLimit(blockBox, frame, clientTop, wrapLimit, 0);
 
             void StartNewLine()
             {
+                // The column about to close is being abandoned for a new one - fold whether it ended in a
+                // hyphen into the running consecutive-hyphenated-columns count before that state resets.
+                consecutiveHyphenatedColumns = currentColumnHyphenated ? consecutiveHyphenatedColumns + 1 : 0;
+                currentColumnHyphenated = false;
+
                 maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
                 blockOffset += lineThickness;
                 inlineOffset = 0;
                 lineThickness = 0;
                 line = new CssLineBox(blockBox);
+                effectiveWrapLimit = ComputeEffectiveWrapLimit(blockBox, frame, clientTop, wrapLimit, blockOffset);
             }
 
-            foreach (var word in words)
+            for (var i = 0; i < words.Count; i++)
             {
+                var word = words[i];
+
                 if (word.IsLineBreak)
                 {
                     StartNewLine();
@@ -532,11 +548,62 @@ namespace PeachPDF.Html.Core.Dom
                 var wordAdvance = naturalWidth + word.ActualWordSpacing; // + spacing, what the next word's placement clears
                 var wordBlock = naturalHeight; // natural line-height - the line's own cross-axis thickness
 
-                // A fragment split from what was one word - a per-codepoint-font run, or (since this
-                // phase) a Vertical_Orientation run - must never itself be treated as a wrap opportunity,
-                // the same guard FlowBox's own wrap check already applies. Without it, a split landing
-                // right at the wrap boundary could visibly break one word across two columns.
-                if (!word.SuppressWrapBefore && inlineOffset > 0 && inlineOffset + wordAdvance > wrapLimit)
+                // Whether word, placed at its current inlineOffset, fits this column's real usable extent
+                // (effectiveWrapLimit, narrowed from the box's own wrapLimit by a floated sibling, if any) -
+                // checked unconditionally, independent of column position, the same way FlowBox's own
+                // `overflows` is: a word that alone is too long for even an empty column must still get a
+                // real hyphenation attempt, not just an unavoidable-overflow pass-through.
+                var wordDoesNotFit = inlineOffset + wordAdvance > effectiveWrapLimit;
+
+                // hyphens:auto/manual: before giving up and wrapping the whole word, see if a cached
+                // candidate break point (from CssBox.ParseToWords - either an explicit soft hyphen or an
+                // automatic HyphenationEngine suggestion) lets a hyphenated prefix fit in the space
+                // remaining in this column instead - gated by hyphenate-limit-lines/-zone exactly like
+                // FlowBox's own attempt, just against this column's own local hyphenation-streak counter
+                // rather than CssLineBoxCoordinates's (this method is always a single monolithic pass, so
+                // there is no fragmentainer-resume state to seed that counter from, and hyphenate-limit-last
+                // - defined relative to a fragmentainer break - has nothing to apply to here).
+                if (wordDoesNotFit && !word.SuppressWrapBefore &&
+                    word.HyphenationCandidates is { Count: > 0 } &&
+                    IsWithinHyphenateLimitLines(blockBox, consecutiveHyphenatedColumns) &&
+                    IsWithinHyphenateLimitZone(blockBox, effectiveWrapLimit - inlineOffset, effectiveWrapLimit) &&
+                    TryHyphenateWord(g, word.OwnerBox, word, effectiveWrapLimit - inlineOffset, out var prefixWord, out var suffixWord))
+                {
+                    // Splices into both the owning box's own word list (the real source of truth
+                    // TryRestoreHyphenationSplit later reads) and this method's own locally-flattened list,
+                    // at this word's current position in each.
+                    var ownerWords = word.OwnerBox.Words;
+                    var ownerIndex = ownerWords.IndexOf(word);
+                    if (ownerIndex >= 0)
+                    {
+                        ownerWords[ownerIndex] = prefixWord!;
+                        ownerWords.Insert(ownerIndex + 1, suffixWord!);
+                    }
+
+                    words[i] = prefixWord!;
+                    words.Insert(i + 1, suffixWord!);
+
+                    // TryHyphenateWord never sets this - without it, ApplyVerticalBidiReordering would
+                    // treat a hyphenated fragment as base-level LTR regardless of its true embedding level.
+                    prefixWord!.BidiLevel = word.BidiLevel;
+                    suffixWord!.BidiLevel = word.BidiLevel;
+
+                    word = prefixWord;
+                    (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
+                    wordRectInline = naturalWidth;
+                    wordAdvance = naturalWidth + word.ActualWordSpacing;
+                    wordBlock = naturalHeight;
+
+                    wordDoesNotFit = false;
+                    currentColumnHyphenated = true;
+                }
+
+                // A fragment split from what was one word - a per-codepoint-font run, or a
+                // Vertical_Orientation run - must never itself be treated as a wrap opportunity, the same
+                // guard FlowBox's own wrap check already applies. inlineOffset > 0 (a real word already
+                // placed in this column) avoids wrapping a column that is still empty - the same
+                // unavoidable-overflow fallback FlowBox's own first-word-of-a-line case gets.
+                if (!word.SuppressWrapBefore && inlineOffset > 0 && wordDoesNotFit)
                     StartNewLine();
 
                 var physical = frame.ToPhysical(new RRect(inlineOffset, blockOffset, wordRectInline, wordBlock));
@@ -552,12 +619,10 @@ namespace PeachPDF.Html.Core.Dom
 
             maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
 
-            foreach (var lineBox in blockBox.LineBoxes)
-            {
-                BubbleRectangles(blockBox, lineBox);
-                lineBox.AssignRectanglesToBoxes();
-            }
-
+            // Auto height/width must settle before text-align/bidi below - both read the box's own final
+            // ClientTop/ClientBottom, which ApplyHeight would otherwise not have resolved yet. This also
+            // moves BubbleRectangles/AssignRectanglesToBoxes (formerly run immediately after the word loop)
+            // to after settling - safe, since neither ever reads blockBox.ActualBottom/ActualRight.
             if (heightIsAuto)
             {
                 blockBox.ActualBottom = clientTop + Math.Min(maxInlineExtentUsed, wrapLimit)
@@ -571,6 +636,61 @@ namespace PeachPDF.Html.Core.Dom
                 var contentBlockExtent = blockOffset + lineThickness;
                 ShrinkAutoWidthTo(blockBox, frame, contentBlockExtent);
             }
+
+            // The box's own real final inline-axis bottom edge - NOT blockBox.ClientBottom: for a box with
+            // a definite (non-auto) height, ActualBottom (and so ClientBottom) isn't actually settled until
+            // ApplyHeight runs in the layout epilogue, well after this method returns. clientTop needs no
+            // equivalent care - it never moves once this method starts. Reuses the exact same formula the
+            // heightIsAuto branch above just used to set ActualBottom, minus the padding/border it folds in
+            // (ClientBottom is a content-box edge; clientTop already is too).
+            var finalClientBottom = heightIsAuto
+                ? clientTop + Math.Min(maxInlineExtentUsed, wrapLimit)
+                : clientTop + wrapLimit;
+
+            // Rebuilt against the box's now-final Client edges - frame (above) was built against
+            // heightIsAuto's page-height wrap-limit fallback, which is not a real edge for the
+            // logical<->physical conversions text-align/bidi need below.
+            var finalFrame = WritingModeFrame.ForContentBox(blockBox.ClientLeft, clientTop,
+                blockBox.ClientRight, finalClientBottom, blockBox.WritingMode.Value, blockBox.Direction.Value);
+
+            for (var i = 0; i < blockBox.LineBoxes.Count; i++)
+            {
+                var lineBox = blockBox.LineBoxes[i];
+                var isLastColumn = i == blockBox.LineBoxes.Count - 1;
+
+                // text-align before bidi, for the same reason FinalizeLineBoxes orders them this way for
+                // horizontal flow: alignment establishes the column's own outer span, and bidi only ever
+                // reflects positions within that span - it never moves the span's own edges.
+                ApplyVerticalTextAlignment(lineBox, finalFrame, isLastColumn, clientTop, finalClientBottom);
+                ApplyVerticalBidiReordering(lineBox, finalFrame, clientTop, finalClientBottom);
+
+                BubbleRectangles(blockBox, lineBox);
+                lineBox.AssignRectanglesToBoxes();
+            }
+
+            await LayoutOutOfFlowDescendants(g, blockBox, outOfFlowDescendants);
+        }
+
+        /// <summary>
+        /// The inline-axis extent a column starting at block-axis position <paramref name="blockOffset"/>
+        /// can actually use, narrowed from <paramref name="wrapLimit"/> by whichever floated sibling (found
+        /// via <see cref="DomUtils.GetVerticalFloatConstraint"/>) occupies this column's own block-axis
+        /// position and leaves the least room. Computed once per column (called from <c>StartNewLine</c>,
+        /// not per word) since a column's own block-axis position, unlike a horizontal line's right-float
+        /// wrap boundary, never changes mid-column.
+        /// </summary>
+        private static double ComputeEffectiveWrapLimit(CssBox blockBox, WritingModeFrame frame, double clientTop,
+            double wrapLimit, double blockOffset)
+        {
+            var columnBlockAxisPoint = frame.ToPhysical(0, blockOffset).X;
+
+            // The same provisional bottom edge frame itself was built from (clientTop + wrapLimit), not
+            // blockBox.ClientBottom - which, for an auto-height box, is not yet resolved at this point.
+            var columnInlineStart = frame.InlineStartIsBottom ? clientTop + wrapLimit : clientTop;
+
+            var constraint = DomUtils.GetVerticalFloatConstraint(blockBox, columnBlockAxisPoint, columnInlineStart, frame.InlineStartIsBottom);
+
+            return constraint is { } extent ? Math.Min(wrapLimit, extent) : wrapLimit;
         }
 
         /// <summary>
@@ -761,7 +881,8 @@ namespace PeachPDF.Html.Core.Dom
         /// box's own <see cref="CssBox.MeasureWordsSize"/> call in its prologue only measures its own
         /// direct words, not its descendants'.
         /// </summary>
-        private static async ValueTask MeasureAndCollectWordsInDocumentOrder(RGraphics g, CssBox box, List<CssRect> words)
+        private static async ValueTask MeasureAndCollectWordsInDocumentOrder(RGraphics g, CssBox box,
+            List<CssRect> words, List<CssBox> outOfFlowDescendants)
         {
             if (box.Words.Count > 0)
             {
@@ -772,7 +893,47 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var child in box.Boxes)
             {
-                await MeasureAndCollectWordsInDocumentOrder(g, child, words);
+                // A floated or absolutely/fixed-positioned descendant establishes its own formatting/
+                // positioning context (CSS2.1 §9.7/§10.1) - its whole subtree is excluded from this box's
+                // own word stream, not recursed into at all, and laid out separately once this box's own
+                // auto sizing has settled (LayoutOutOfFlowDescendants, called from CreateVerticalLineBoxes's
+                // own tail) rather than here, since a same-box positioned ancestor must not resolve its
+                // offsets against this box's not-yet-final ClientLeft/Top/Width/Height.
+                //
+                // A defensive backstop, not a path real content reaches today: DomParser.BlockifyPositionedBox
+                // (position:absolute/fixed) and Float-based blockification (DerivedStyle.ActualDisplay) both
+                // force a block-level Display before ContainsInlinesOnly is ever checked, so a genuinely
+                // out-of-flow box can never survive as a descendant of a box this method is called on -
+                // DomParser.CorrectBlockInsideInline promotes it up to an ordinary sibling first. Kept
+                // in case a future parser change leaves a gap, since folding an out-of-flow box's words
+                // into ordinary column flow would be a silent correctness bug, not a crash.
+                if (child.IsOutOfFlow)
+                {
+                    outOfFlowDescendants.Add(child);
+                    continue;
+                }
+
+                await MeasureAndCollectWordsInDocumentOrder(g, child, words, outOfFlowDescendants);
+            }
+        }
+
+        /// <summary>
+        /// Lays out every box <see cref="MeasureAndCollectWordsInDocumentOrder"/> pulled out of a vertical
+        /// box's own word stream (a floated or absolutely/fixed-positioned inline-nested descendant) via the
+        /// same general, physical-coordinate <see cref="CssBox.LayoutBlockChild"/> entry point every other
+        /// out-of-flow child already uses (<see cref="CssBox.LayoutOutOfFlowChildren"/>, <see cref="CssBox.LayoutVerticalBlockChildren"/>'s
+        /// own <c>IsOutOfFlow</c> branch) - reused as-is, since a float's own physical `left`/`top`/`right`/
+        /// `bottom` (position:absolute/fixed) or float placement (CssLayoutEngine.FloatBox, called from
+        /// CommitBlockChildOffset) needs no writing-mode awareness of its own. Called only after
+        /// <paramref name="blockBox"/>'s own auto width/height have settled, so a same-box positioned
+        /// ancestor resolves against final geometry.
+        /// </summary>
+        private static async ValueTask LayoutOutOfFlowDescendants(RGraphics g, CssBox blockBox, List<CssBox> outOfFlowDescendants)
+        {
+            foreach (var child in outOfFlowDescendants)
+            {
+                if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                await blockBox.LayoutBlockChild(g, child);
             }
         }
 
@@ -2126,7 +2287,7 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (!word.SuppressWrapBefore && overflows && !word.IsLineBreak && !wrapNoWrapBox &&
                             word.HyphenationCandidates is { Count: > 0 } &&
-                            IsWithinHyphenateLimitLines(blockBox, coordinates) &&
+                            IsWithinHyphenateLimitLines(blockBox, coordinates.ConsecutiveHyphenatedLines) &&
                             IsWithinHyphenateLimitZone(blockBox, availableWidth, actualLimitRight - lineStartX) &&
                             TryHyphenateWord(g, b, word, availableWidth, out var prefixWord, out var suffixWord))
                         {
@@ -2543,10 +2704,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>hyphenate-limit-lines</c> (CSS Text 4 §6.3.5): whether the line about to be built is still
         /// allowed to end in a hyphen, given how many immediately preceding lines already did.
         /// </summary>
-        private static bool IsWithinHyphenateLimitLines(CssBox blockBox, CssLineBoxCoordinates coordinates)
+        private static bool IsWithinHyphenateLimitLines(CssBox blockBox, int consecutiveHyphenatedLines)
         {
             var limit = blockBox.HyphenateLimitLines.Value;
-            return !limit.IsValue || coordinates.ConsecutiveHyphenatedLines < limit.Value!.Value;
+            return !limit.IsValue || consecutiveHyphenatedLines < limit.Value!.Value;
         }
 
         /// <summary>
@@ -2904,6 +3065,17 @@ namespace PeachPDF.Html.Core.Dom
 
         private static void PlaceBidiRunWord(CssRect word, double slotLeft, byte level, bool mirror)
         {
+            MirrorWordTextIfNeeded(word, level, mirror);
+            word.Left = slotLeft;
+        }
+
+        /// <summary>
+        /// UAX#9 L4 mirroring's pure-text half, shared between <see cref="PlaceBidiRunWord"/> (horizontal,
+        /// writes <see cref="CssRect.Left"/>) and <see cref="PlaceVerticalBidiRunWord"/> (vertical, writes
+        /// <see cref="CssRect.Top"/>) - the one piece of bidi run placement that is genuinely axis-independent.
+        /// </summary>
+        private static void MirrorWordTextIfNeeded(CssRect word, byte level, bool mirror)
+        {
             if (mirror && word is CssRectWord { IsSpaces: false, IsLineBreak: false } rectWord)
             {
                 // Mirrors from the word's own stable pre-mirror text, not its current (possibly already
@@ -2913,8 +3085,261 @@ namespace PeachPDF.Html.Core.Dom
                 // otherwise toggle back to unmirrored on every second application.
                 rectWord.ReplaceText(BidiMirrorResolver.ApplyMirroring(rectWord.PreMirrorText, level));
             }
+        }
 
-            word.Left = slotLeft;
+        /// <summary>
+        /// The vertical counterpart of <see cref="ApplyHorizontalAlignment"/>: resolves the used value of
+        /// <c>text-align</c> and repositions <paramref name="lineBox"/>'s words along the inline axis
+        /// (physical Y for a vertical box) accordingly.
+        /// </summary>
+        /// <remarks>
+        /// Unlike horizontal flow - where natural (pre-alignment) placement is always flush to the same
+        /// physical edge regardless of <c>direction</c> - a vertical box's own natural placement already
+        /// flushes to physical-bottom under <c>direction: rtl</c> (baked into
+        /// <see cref="WritingModeFrame.ToPhysical(RRect)"/>'s own <see cref="WritingModeFrame.InlineStartIsBottom"/>
+        /// branch). So <c>left</c> (CSS Writing Modes' line-left/line-right: direction-independent, always
+        /// physical-top here) needs an active case - it is only a no-op under LTR, unlike horizontal's
+        /// <c>Left</c>, which is always a no-op.
+        /// </remarks>
+        private static void ApplyVerticalTextAlignment(CssLineBox lineBox, WritingModeFrame finalFrame,
+            bool isLastColumn, double clientTop, double clientBottom)
+        {
+            var textAlign = lineBox.OwnerBox.TextAlign.Value switch
+            {
+                HorizontalAlignment.Start => finalFrame.InlineStartIsBottom ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+                HorizontalAlignment.End => finalFrame.InlineStartIsBottom ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+                var other => other
+            };
+
+            switch (textAlign)
+            {
+                case HorizontalAlignment.Left:
+                    ApplyVerticalFlushAlignment(lineBox, toBottom: false, clientTop, clientBottom);
+                    break;
+                case HorizontalAlignment.Right:
+                    ApplyVerticalFlushAlignment(lineBox, toBottom: true, clientTop, clientBottom);
+                    break;
+                case HorizontalAlignment.Center:
+                    ApplyVerticalCenterAlignment(lineBox, clientTop, clientBottom);
+                    break;
+                case HorizontalAlignment.Justify:
+                    ApplyVerticalJustifyAlignment(lineBox, finalFrame, isLastColumn, clientTop, clientBottom);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// <c>text-align: left</c>/<c>right</c> (and the direction-resolved <c>start</c>/<c>end</c>) for a
+        /// vertical box: flushes every word in the column to the box's own physical top
+        /// (<paramref name="toBottom"/> false) or physical bottom (true) edge. Scans <see cref="CssLineBox.Words"/>
+        /// directly for the column's own content extent rather than reusing horizontal's "read the last
+        /// word" shortcut - document order is not physical order for a vertical+RTL column (see
+        /// <see cref="ApplyVerticalBidiReordering"/>'s own remarks). Takes the box's own inline-axis edges
+        /// as parameters rather than reading <c>lineBox.OwnerBox.ClientTop</c>/<c>ClientBottom</c> live: for
+        /// a box with a definite (non-auto) height, <c>ActualBottom</c> - and so <c>ClientBottom</c> - is
+        /// not actually settled until <c>ApplyHeight</c> runs in the layout epilogue, well after this
+        /// method's caller (<see cref="CreateVerticalLineBoxes"/>) returns.
+        /// </summary>
+        private static void ApplyVerticalFlushAlignment(CssLineBox lineBox, bool toBottom, double clientTop, double clientBottom)
+        {
+            if (lineBox.Words.Count == 0) return;
+
+            double contentTop = double.MaxValue, contentBottom = double.MinValue;
+            foreach (var word in lineBox.Words)
+            {
+                contentTop = Math.Min(contentTop, word.Top);
+                contentBottom = Math.Max(contentBottom, word.Bottom);
+            }
+
+            var targetTop = toBottom ? clientBottom - (contentBottom - contentTop) : clientTop;
+            var diff = targetTop - contentTop;
+
+            // Natural placement can already sit flush at either edge depending on direction (unlike
+            // horizontal, where it is always flush-left) - a one-directional diff > 0 guard would silently
+            // skip the case where natural placement needs to move toward physical-top instead.
+            if (toBottom ? !(diff > 0) : !(diff < 0)) return;
+
+            foreach (var word in lineBox.Words)
+            {
+                word.Top += diff;
+            }
+        }
+
+        /// <summary>
+        /// <c>text-align: center</c> for a vertical box: centers the column's own content between the
+        /// box's physical top and bottom edges. See <see cref="ApplyVerticalFlushAlignment"/>'s own remarks
+        /// for why the edges are passed in rather than read live off <c>lineBox.OwnerBox</c>.
+        /// </summary>
+        private static void ApplyVerticalCenterAlignment(CssLineBox lineBox, double clientTop, double clientBottom)
+        {
+            if (lineBox.Words.Count == 0) return;
+
+            double contentTop = double.MaxValue, contentBottom = double.MinValue;
+            foreach (var word in lineBox.Words)
+            {
+                contentTop = Math.Min(contentTop, word.Top);
+                contentBottom = Math.Max(contentBottom, word.Bottom);
+            }
+
+            var availableExtent = clientBottom - clientTop;
+            var contentExtent = contentBottom - contentTop;
+            var diff = clientTop + (availableExtent - contentExtent) / 2 - contentTop;
+
+            if (!(Math.Abs(diff) > 0)) return;
+
+            foreach (var word in lineBox.Words)
+            {
+                word.Top += diff;
+            }
+        }
+
+        /// <summary>
+        /// <c>text-align: justify</c> for a vertical box: spreads the column's words evenly across the
+        /// box's own physical top-to-bottom extent, walking in document order from the column's own
+        /// inline-start edge - the direct counterpart of <see cref="ApplyJustifyAlignment"/>'s own
+        /// currentX walk. The block's last column is exempt (CSS Text §7.3) - always exact here, unlike
+        /// horizontal's <c>blockFinished</c>-gated check, since <c>CreateVerticalLineBoxes</c> is always a
+        /// single monolithic pass with no fragmentation break to leave an ambiguous "last" line behind.
+        /// <c>text-indent</c> is not implemented for vertical content at all yet, so no indent is applied
+        /// here (compare <see cref="ApplyJustifyAlignment"/>'s own <c>GetLineTextIndent</c> call). See
+        /// <see cref="ApplyVerticalFlushAlignment"/>'s own remarks for why the edges are parameters.
+        /// </summary>
+        private static void ApplyVerticalJustifyAlignment(CssLineBox lineBox, WritingModeFrame finalFrame,
+            bool isLastColumn, double clientTop, double clientBottom)
+        {
+            if (isLastColumn) return;
+            if (lineBox.Words.Count == 0) return;
+
+            var availableExtent = clientBottom - clientTop;
+
+            var textSum = 0d;
+            var wordCount = 0d;
+            foreach (var w in lineBox.Words)
+            {
+                textSum += w.Height;
+                wordCount += 1d;
+            }
+
+            if (wordCount <= 0d) return;
+
+            var spacing = (availableExtent - textSum) / wordCount;
+            var cursor = finalFrame.InlineStartIsBottom ? clientBottom : clientTop;
+
+            foreach (var word in lineBox.Words)
+            {
+                if (finalFrame.InlineStartIsBottom)
+                {
+                    word.Top = cursor - word.Height;
+                    cursor -= word.Height + spacing;
+                }
+                else
+                {
+                    word.Top = cursor;
+                    cursor += word.Height + spacing;
+                }
+
+                if (word == lineBox.Words[^1])
+                {
+                    word.Top = finalFrame.InlineStartIsBottom ? clientTop : clientBottom - word.Height;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The vertical counterpart of <see cref="ApplyBidiReordering"/>: UAX#9 L2 (visual reordering) + L4
+        /// (mirroring) for a vertical box's column, reordering along the inline axis (physical Y) instead
+        /// of physical X.
+        /// </summary>
+        /// <remarks>
+        /// Not a simple <c>Left</c>&#8594;<c>Top</c> port: raw physical <see cref="CssRect.Top"/> is not
+        /// monotonic in document order for vertical+<c>direction: rtl</c> content (natural placement there
+        /// already flushes to physical-bottom - see <see cref="ApplyVerticalTextAlignment"/>'s own remarks),
+        /// unlike SVG's <c>GlyphInfo.Py</c>, which <c>SvgRenderer.LayoutGlyphs</c> already computes
+        /// monotonically along the pen's own advance direction. A naive axis swap here would corrupt the
+        /// run-reflection math (the "boundary between this run and the next" / "content span" logic every
+        /// run's reflection depends on being expressed in a coordinate that only ever increases along
+        /// document order). Instead, every word's physical <c>Top</c> is normalized to a logical distance
+        /// from the column's own inline-start edge before reordering, and converted back to physical
+        /// <c>Top</c> once each word's new position is known - exactly the quantity the original
+        /// placement loop's own <c>inlineOffset</c> held before <see cref="WritingModeFrame.ToPhysical(RRect)"/>
+        /// converted it, so it is guaranteed monotonically non-decreasing in document order regardless of
+        /// direction, both here and after <see cref="ApplyVerticalTextAlignment"/> has already run (flush/
+        /// center only add one uniform shift to every word; justify rebuilds positions via a walk that is
+        /// itself monotonic in document order by construction).
+        /// </remarks>
+        private static void ApplyVerticalBidiReordering(CssLineBox lineBox, WritingModeFrame finalFrame,
+            double clientTop, double clientBottom)
+        {
+            if (lineBox.Words.Count == 0) return;
+
+            var ownerBox = lineBox.OwnerBox;
+
+            double ToLogicalOffset(CssRect w) => finalFrame.InlineStartIsBottom
+                ? clientBottom - w.Bottom
+                : w.Top - clientTop;
+
+            var levels = new byte[lineBox.Words.Count];
+            var slots = new double[lineBox.Words.Count];
+            for (var i = 0; i < levels.Length; i++)
+            {
+                levels[i] = lineBox.Words[i].BidiLevel;
+                slots[i] = ToLogicalOffset(lineBox.Words[i]);
+            }
+
+            // L1 clause 4: a trailing run of whitespace/line-break words at the very end of the column
+            // resets to the paragraph's base level - mirrors ApplyBidiReordering's own identical clause.
+            var baseLevel = ownerBox.Direction.Value == DirectionMode.Rtl ? (byte)1 : (byte)0;
+            var j = levels.Length - 1;
+            while (j >= 0 && lineBox.Words[j].IsSpaces)
+            {
+                levels[j] = baseLevel;
+                j--;
+            }
+
+            var runs = BidiResolver.ReorderLine(levels, 0, levels.Length);
+
+            if (runs.Count == 1 && !runs[0].IsRtl) return;
+
+            double SlotBoundaryAfter(int index) =>
+                index + 1 < lineBox.Words.Count
+                    ? slots[index + 1]
+                    : slots[index] + lineBox.Words[index].Height;
+
+            var runNewStart = slots[0];
+
+            foreach (var run in runs)
+            {
+                var runOldStart = slots[run.Start];
+                var lastIndexInRun = run.Start + run.Length - 1;
+
+                var runContentExtent = slots[lastIndexInRun] + lineBox.Words[lastIndexInRun].Height - runOldStart;
+                var trailingGap = SlotBoundaryAfter(lastIndexInRun) - (runOldStart + runContentExtent);
+
+                for (var k = 0; k < run.Length; k++)
+                {
+                    var idx = run.Start + k;
+                    var word = lineBox.Words[idx];
+                    var offsetFromRunStart = slots[idx] - runOldStart;
+
+                    var newLogicalOffset = run.IsRtl
+                        ? runNewStart + runContentExtent - (offsetFromRunStart + word.Height)
+                        : runNewStart + offsetFromRunStart;
+
+                    var newTop = finalFrame.InlineStartIsBottom
+                        ? clientBottom - newLogicalOffset - word.Height
+                        : clientTop + newLogicalOffset;
+
+                    PlaceVerticalBidiRunWord(word, newTop, run.Level, mirror: run.IsRtl);
+                }
+
+                runNewStart += runContentExtent + trailingGap;
+            }
+        }
+
+        private static void PlaceVerticalBidiRunWord(CssRect word, double newTop, byte level, bool mirror)
+        {
+            MirrorWordTextIfNeeded(word, level, mirror);
+            word.Top = newTop;
         }
 
         /// <summary>
