@@ -15,8 +15,12 @@ namespace PeachPDF.Tests.Integration
     /// <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>, collapsed borders, <c>vertical-align</c>, and
     /// <c>rowspan</c> (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngineTable"/>'s axis-mapping fields),
     /// asserting actual post-layout <c>CssBox</c> geometry - not just that layout completes - per this
-    /// repo's testing conventions for layout-engine changes. <c>colspan</c> straddling the row axis and
-    /// real per-row pagination of a vertical table's own content remain out of scope - see issue #762.
+    /// repo's testing conventions for layout-engine changes. <c>colspan</c> straddling the row axis
+    /// remains out of scope - see issue #762. Real per-column pagination of a <b>plain-grid</b> vertical
+    /// table's own content (issue #783 - no rowspan/colspan/caption/thead-tfoot/collapsed borders; see
+    /// <see cref="PeachPDF.Html.Core.Fragmentation.MonolithicContent.HasColumnPaginationExcludedFeature"/>)
+    /// is covered below; a table combining real pagination with any of those excluded features remains a
+    /// tracked follow-up gap, still monolithic exactly as before.
     /// </summary>
     public class TableWritingModeIntegrationTests
     {
@@ -168,12 +172,39 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalRl_Table_Fragment_IsMonolithic()
+        public async Task VerticalRl_TableWithCollapsedBorders_Fragment_IsMonolithic()
         {
-            // CssLayoutEngineTable lays out a vertical table's row axis monolithically (its pageHeight
-            // override), so MonolithicContent.IsUnresumableVerticalTable must mark it as such - otherwise
-            // the outer fragmentation driver could try to slice it mid-row, which the engine has no way to
-            // resume from.
+            // Issue #783's own first-cut scope boundary: a vertical table using a feature real
+            // per-column pagination doesn't yet reach (MonolithicContent.HasColumnPaginationExcludedFeature -
+            // collapsed borders here) must keep the whole-table "move as one unit" treatment
+            // CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries declines to touch for it - otherwise
+            // the outer fragmentation driver could try to slice it mid-column, which those excluded
+            // combinations have no support for.
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; border-collapse: collapse">
+                  <tr><td>Cell</td></tr>
+                </table>
+                """);
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html);
+
+            var fragments = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .Where(f => f.Box.HtmlTag?.TryGetAttribute("id") == "t")
+                .ToList();
+
+            Assert.NotEmpty(fragments);
+            Assert.All(fragments, f => Assert.True(f.IsMonolithic));
+        }
+
+        [Fact]
+        public async Task VerticalRl_PlainGridTable_Fragment_IsNotMonolithic()
+        {
+            // Sibling regression guard for the fix above: a plain-grid vertical table (no rowspan/colspan/
+            // caption/thead-tfoot/collapsed borders) is no longer unconditionally monolithic now that real
+            // per-column pagination (issue #783) can relocate its content across page boundaries - this
+            // table is far too small to actually need relocating, so the assertion is purely about the
+            // policy, not about anything visibly different in the rendered output.
             var html = LayoutHarness.Wrap("""
                 <table id="t" style="writing-mode: vertical-rl">
                   <tr><td>Cell</td></tr>
@@ -188,7 +219,7 @@ namespace PeachPDF.Tests.Integration
                 .ToList();
 
             Assert.NotEmpty(fragments);
-            Assert.All(fragments, f => Assert.True(f.IsMonolithic));
+            Assert.All(fragments, f => Assert.False(f.IsMonolithic));
         }
 
         [Fact]
@@ -1045,6 +1076,260 @@ namespace PeachPDF.Tests.Integration
             // child's own explicit ActualRight rather than falling through with an unmeasured 0.
             Assert.True(child.Location.X > v.ClientLeft,
                 $"child.Location.X ({child.Location.X}) should have moved past the cell's own ClientLeft ({v.ClientLeft})");
+        }
+
+        // ─── Real per-column pagination of a plain-grid vertical table (issue #783) ──────────────
+
+        [Fact]
+        public async Task PlainGridVerticalTable_TallerThanOnePagesBand_GrowsTheTablesOwnBottomAndPlacesTheNextSiblingAfterIt()
+        {
+            // The relocation pass moves cells via CssBox.OffsetTop, which keeps each cell's own
+            // ActualBottom in sync automatically (a computed property) - but _tableBox.ActualBottom and
+            // each row's ActualBottom are real, stored fields, settled by Step 7/SetRowGroupBoxDimensions
+            // *before* this pass runs. Left untouched they still name the table's pre-relocation extent,
+            // and a following sibling is positioned from exactly that stale value (CssBox's own in-flow
+            // placement reads the previous sibling's ActualBottom) - landing on top of the relocated
+            // column(s) instead of after them.
+            var cells = string.Concat(Enumerable.Range(0, 8)
+                .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <tr>{cells}</tr>
+                </table>
+                <div id="sib" style="height:10pt">sibling</div>
+                """);
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 300, margin: 20);
+
+            var table = LayoutHarness.FindById(root, "t")!;
+            var lastCell = LayoutHarness.FindById(root, "c7")!;
+            var sib = LayoutHarness.FindById(root, "sib")!;
+
+            Assert.Equal(lastCell.ActualBottom, table.ActualBottom, 0.5);
+            Assert.Equal(table.ActualBottom, sib.Location.Y, 0.5);
+            Assert.True(sib.Location.Y >= lastCell.ActualBottom - 0.5,
+                $"sibling (y={sib.Location.Y}) must not overlap the relocated last column (bottom={lastCell.ActualBottom})");
+        }
+
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task PlainGridVerticalTable_TallerThanOnePagesBand_RelocatesColumnsOntoLaterPages(string writingMode)
+        {
+            // 8 columns of 40pt each (320pt total) against a 260pt content band (pageHeight 300, margin
+            // 20): columns 0-5 (240pt) fit page 1, column 6 (240+40=280pt) does not - a break falls
+            // before it, relocating columns 6-7 onto page 2. writing-mode doesn't affect this pass at
+            // all (it operates purely on the already-settled column axis, physical Y regardless of
+            // orientation) - both siblings must behave identically.
+            var cells = string.Concat(Enumerable.Range(0, 8)
+                .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: {writingMode}; border-spacing: 0">
+                  <tr>{cells}</tr>
+                </table>
+                """);
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 300, margin: 20);
+
+            var cellsById = Enumerable.Range(0, 8).Select(i => LayoutHarness.FindById(root, $"c{i}")).ToList();
+            Assert.All(cellsById, Assert.NotNull);
+
+            for (var i = 0; i < 6; i++)
+            {
+                Assert.Equal(0, container.SlotStartingAt(cellsById[i]!.Location.Y));
+            }
+
+            for (var i = 6; i < 8; i++)
+            {
+                Assert.Equal(1, container.SlotStartingAt(cellsById[i]!.Location.Y));
+            }
+
+            // Column 6 starts exactly at page 2's own content top - a clean relocation, not a partial
+            // overlap with the page boundary.
+            Assert.Equal(container.PageTopOf(1), cellsById[6]!.Location.Y, 0.01);
+
+            // Every cell keeps its own correct, uniform 40pt column height, unaffected by relocation.
+            foreach (var cell in cellsById)
+            {
+                Assert.Equal(40, cell!.ActualBottom - cell.Location.Y, 0.5);
+            }
+
+            // The table states the same per-page slice-bottom fact an ordinary horizontal table's row
+            // loop already does, so CssBox.PaginatedItsOwnContentWithoutBreaking correctly reads this
+            // table as having fragmented rather than falling back to the monolithic move-whole mover.
+            var table = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(table!.PageBreakBottoms);
+            Assert.True(table.PageBreakBottoms!.TryGetValue(0, out var slot0Bottom));
+            Assert.Equal(cellsById[5]!.ActualBottom, slot0Bottom, 0.5);
+
+            // The table's own column-axis extent grows to match its true, post-relocation last column -
+            // not left at the pre-relocation value Step 7 settled before this pass ran.
+            Assert.Equal(cellsById[7]!.ActualBottom, table.ActualBottom, 0.5);
+        }
+
+        [Fact]
+        public async Task PlainGridVerticalTable_FittingOnOnePage_IsUnaffectedByTheRelocationPass()
+        {
+            // Regression guard: the new pass must be a true no-op when nothing crosses a page boundary -
+            // every column lands at exactly the same forward-grown position layout already gave it, and
+            // no PageBreakBottoms entry is written.
+            var cells = string.Concat(Enumerable.Range(0, 3)
+                .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <tr>{cells}</tr>
+                </table>
+                """);
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 300, margin: 20);
+
+            var cellsById = Enumerable.Range(0, 3).Select(i => LayoutHarness.FindById(root, $"c{i}")).ToList();
+            Assert.All(cellsById, Assert.NotNull);
+            Assert.All(cellsById, c => Assert.Equal(0, container.SlotStartingAt(c!.Location.Y)));
+
+            var table = LayoutHarness.FindById(root, "t");
+            Assert.Null(table!.PageBreakBottoms);
+        }
+
+        [Fact]
+        public async Task VerticalTable_WithRowspan_TallerThanOnePagesBand_StaysMonolithic()
+        {
+            // The excluded-feature fallback: a table combining real pagination's target shape (tall
+            // enough to cross a page boundary) with a feature the first cut doesn't support (rowspan
+            // here) must fall all the way back to today's whole-table "move as one unit" treatment,
+            // exactly as #762's own already-shipped combined scenario relies on - not a partial or
+            // corrupted relocation.
+            var cells = string.Concat(Enumerable.Range(0, 8)
+                .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <tr><td rowspan="2">r</td>{cells}</tr>
+                </table>
+                """);
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 300, margin: 20);
+
+            var table = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(table);
+            Assert.Null(table!.PageBreakBottoms);
+
+            var fragments = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .Where(f => ReferenceEquals(f.Box, table))
+                .ToList();
+            Assert.NotEmpty(fragments);
+            Assert.All(fragments, f => Assert.True(f.IsMonolithic));
+        }
+
+        [Fact]
+        public async Task VerticalTable_WithRowspanInsideATbody_StaysMonolithic()
+        {
+            // MonolithicContent.HasColumnPaginationExcludedFeature's TableRowGroup arm - the same
+            // rowspan-exclusion check as the sibling test above, but for a row wrapped in an explicit
+            // <tbody> rather than a bare <tr> directly under <table>.
+            var cells = string.Concat(Enumerable.Range(0, 8)
+                .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <tbody><tr><td rowspan="2">r</td>{cells}</tr></tbody>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 300, margin: 20);
+
+            var table = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(table);
+            Assert.Null(table!.PageBreakBottoms);
+        }
+
+        [Fact]
+        public async Task PlainGridVerticalTable_WithAColumnTallerThanAnyPage_StaysMonolithic()
+        {
+            // The other bail-out arm: a single column whose own fixed extent (from _columnWidths[])
+            // exceeds even a whole fresh page's band cannot be helped by any relocation - there is no
+            // content-driven break point inside a grid-fixed-height column to slice at. The whole pass
+            // must bail out unmodified, leaving even the earlier columns that would otherwise have fit
+            // exactly where ordinary (non-relocated) layout placed them - "plan, then commit" means a
+            // bail-out anywhere undoes nothing, since nothing was ever applied.
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <tr>
+                    <td id="c0" style="height:40pt; width:20pt;">0</td>
+                    <td id="c1" style="height:40pt; width:20pt;">1</td>
+                    <td id="c2" style="height:300pt; width:20pt;">2</td>
+                  </tr>
+                </table>
+                """);
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 300, margin: 20);
+
+            var c0 = LayoutHarness.FindById(root, "c0");
+            var c1 = LayoutHarness.FindById(root, "c1");
+            Assert.NotNull(c0);
+            Assert.NotNull(c1);
+
+            // Untouched: c0/c1 stayed on slot 0, exactly where the ordinary (non-relocated) row loop
+            // placed them, since the whole pass bailed out before applying anything.
+            Assert.Equal(0, container.SlotStartingAt(c0!.Location.Y));
+            Assert.Equal(0, container.SlotStartingAt(c1!.Location.Y));
+
+            var table = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(table);
+            Assert.Null(table!.PageBreakBottoms);
+        }
+
+        [Fact]
+        public async Task RaggedVerticalTable_TallerThanOnePagesBand_StaysMonolithic()
+        {
+            // A "plain grid" table (no rowspan/colspan) is still not guaranteed to have the same cell
+            // count in every row - an author can simply write fewer <td>s in one row, and InsertEmptyBoxes
+            // never pads a row for anything but a rowspan cell (a ragged row is already a reachable,
+            // unpadded shape elsewhere in this engine). RelocateColumnsAcrossPageBoundaries reads
+            // columnCount from row 0 and indexes every row positionally by it - this must be detected and
+            // excluded rather than read the wrong cell (or throw) for the short row.
+            var row0 = string.Concat(Enumerable.Range(0, 4)
+                .Select(i => $"<td id='a{i}' style='height:80pt; width:20pt;'>{i}</td>"));
+            var row1 = string.Concat(Enumerable.Range(0, 3)
+                .Select(i => $"<td id='b{i}' style='height:80pt; width:20pt;'>{i}</td>"));
+            var html = LayoutHarness.Wrap($"""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <tr>{row0}</tr>
+                  <tr>{row1}</tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 300, margin: 20);
+
+            var table = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(table);
+            Assert.Null(table!.PageBreakBottoms);
+        }
+
+        [Fact]
+        public async Task PlainGridVerticalTable_AsAFlexItem_TallerThanOnePagesBand_StaysMonolithic()
+        {
+            // MonolithicContent.HasColumnPaginationExcludedFeature's flex/grid-parent exclusion.
+            // LineRelocation.MayNotBeCut reads the same IsUnresumableVerticalTable predicate to decide
+            // whether the flex line holding this table must move to the next fragmentainer as one unit -
+            // a plain-grid table answering "no" there would let the line straddle a page boundary while
+            // this table's own column-relocation pass moves its columns independently, with neither
+            // mechanism aware of the other. Excluding a flex-item table keeps it monolithic here, exactly
+            // as every vertical table was before issue #783.
+            var cells = string.Concat(Enumerable.Range(0, 8)
+                .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
+            var html = LayoutHarness.Wrap($"""
+                <div style="display:flex">
+                  <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                    <tr>{cells}</tr>
+                  </table>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 300, margin: 20);
+
+            var table = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(table);
+            Assert.Null(table!.PageBreakBottoms);
         }
 
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)

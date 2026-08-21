@@ -191,25 +191,106 @@ namespace PeachPDF.Html.Core.Fragmentation
             && (DomUtils.ContainsInlinesOnly(box) || !box.EstablishesMultiColumnContext);
 
         /// <summary>
-        /// Whether <paramref name="box"/> is a table box under a vertical writing mode. Unlike an
-        /// ordinary <c>horizontal-tb</c> table — which hands the driver a real per-row resumption record
-        /// (issue #464) — <c>CssLayoutEngineTable</c> lays out a vertical table's row axis monolithically
-        /// (its constructor forces <c>pageHeight</c> to <see cref="double.MaxValue"/> for exactly this
-        /// case, routing the whole row loop through the pre-existing unpaginated fallback path), so the
-        /// outer fragmentation driver must move the whole table to a later fragmentainer as one unit
-        /// rather than slice it mid-row.
+        /// Whether <paramref name="box"/> is a table box under a vertical writing mode that
+        /// <c>CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries</c> cannot help (issue #783's own
+        /// first-cut scope boundary) — a table using any feature that pass declines to touch, so it must
+        /// keep today's whole-table "move as one unit" treatment. A <b>plain-grid</b> vertical table (no
+        /// excluded feature) is deliberately <i>not</i> unconditionally unresumable any more: real
+        /// per-column pagination relocates its content across page boundaries as a genuine subtree
+        /// translation (see that method's own remarks for why this is sound without a new interleaved
+        /// layout pass), and whether that relocation actually found anything to do is answered the same
+        /// way an ordinary <c>horizontal-tb</c> table's own row-break decision already is —
+        /// <see cref="CssBox.PaginatedItsOwnContentWithoutBreaking"/> reading <c>PageBreakBottoms</c> as a
+        /// post-layout fact, not asked here as a style-derived property. That is also the safety net for
+        /// every case this predicate itself declines: if <c>RelocateColumnsAcrossPageBoundaries</c> finds
+        /// nothing to relocate (fits on one page) or bails out entirely (a single column too tall for any
+        /// page — the one sub-case even a plain grid still cannot help), it leaves <c>PageBreakBottoms</c>
+        /// untouched, and the table falls through to exactly today's monolithic move-whole behavior with
+        /// no special-casing needed here for those outcomes.
         /// </summary>
         /// <remarks>
         /// Not a spec claim, the same way <see cref="IsUnresumableOrthogonalFlow"/> isn't: css-tables-3
-        /// does not forbid fragmenting a vertical table's rows across a page boundary. This is the same
-        /// practical constraint that predicate already tracks for vertical-writing-mode block content,
-        /// extended to the one remaining engine (<c>CssLayoutEngineTable</c>) that still lacks real
-        /// per-row pagination under a vertical writing mode. See the no-vertical-writing-mode-layout
-        /// accepted gap and issue #762 for the tracked follow-up that lifts this.
+        /// does not forbid fragmenting a vertical table's own content across a page boundary. This is the
+        /// same practical constraint that predicate already tracks for vertical-writing-mode block
+        /// content — narrowed, for the one remaining engine (<c>CssLayoutEngineTable</c>), to the specific
+        /// combinations of features real per-column pagination doesn't yet reach. See the
+        /// no-vertical-writing-mode-layout accepted gap and issue #783 for the tracked follow-up that
+        /// lifts the remaining excluded-feature combinations.
         /// </remarks>
         internal static bool IsUnresumableVerticalTable(CssBox box) =>
             box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
-            && box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable;
+            && box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
+            && HasColumnPaginationExcludedFeature(box);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> (a table) uses a feature <c>CssLayoutEngineTable
+        /// .RelocateColumnsAcrossPageBoundaries</c>'s first cut does not support: a <c>rowspan</c>/
+        /// <c>colspan</c> cell, a <c>&lt;caption&gt;</c>, a <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>,
+        /// collapsed borders, or the table itself being a flex/grid item. Kept as one whole-table
+        /// combinator, consulted by both that method (to decide whether to attempt relocation at all) and
+        /// <see cref="IsUnresumableVerticalTable"/> (to keep such a table's own already-shipped,
+        /// already-tested combined scenario — #762's own showcase, which exercises all five original
+        /// features together — byte-for-byte unchanged), so the two can never disagree about which tables
+        /// are in scope.
+        /// </summary>
+        /// <remarks>
+        /// The flex/grid-item exclusion exists because <c>LineRelocation.MayNotBeCut</c> reads this same
+        /// predicate (via <see cref="IsUnresumableVerticalTable"/>/<see cref="IsMonolithicForFragmentation"/>)
+        /// to decide whether a flex line or grid row containing this table must move to the next
+        /// fragmentainer as one unit. Before this predicate existed, every vertical table was unconditionally
+        /// monolithic, so that question always came out "yes" for a line holding one. A plain-grid table
+        /// answering "no" now would let <c>LineRelocation</c> leave the line straddling a boundary while
+        /// <c>RelocateColumnsAcrossPageBoundaries</c> - which reasons purely about the table's own column
+        /// axis against the page grid, with no awareness of the flex/grid line it sits in - relocates the
+        /// table's columns independently of whatever the line does with the table's siblings. Excluding a
+        /// flex/grid-item table here keeps it monolithic in that context, exactly as before, deferring real
+        /// coordination between the two mechanisms to a future, separately-scoped follow-up.
+        /// </remarks>
+        internal static bool HasColumnPaginationExcludedFeature(CssBox box)
+        {
+            if (box.BorderCollapse == Keywords.Collapse) return true;
+
+            if (box.ParentBox is { } parent &&
+                parent.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
+                    or Keywords.Grid or Keywords.InlineGrid)
+            {
+                return true;
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                switch (child.DerivedStyle.ActualDisplay)
+                {
+                    case Keywords.TableCaption:
+                    case Keywords.TableHeaderGroup:
+                    case Keywords.TableFooterGroup:
+                        return true;
+                    case Keywords.TableRow:
+                        if (RowHasSpanningCell(child)) return true;
+                        break;
+                    case Keywords.TableRowGroup:
+                        foreach (var row in child.Boxes)
+                        {
+                            if (row.DerivedStyle.ActualDisplay == Keywords.TableRow && RowHasSpanningCell(row))
+                                return true;
+                        }
+                        break;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool RowHasSpanningCell(CssBox row)
+        {
+            foreach (var cell in row.Boxes)
+            {
+                if (CssLayoutEngineTable.GetRowSpan(cell) > 1 || CssLayoutEngineTable.GetColSpan(cell) > 1)
+                    return true;
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// Whether <paramref name="box"/> must be treated as an indivisible unit by its parent's own

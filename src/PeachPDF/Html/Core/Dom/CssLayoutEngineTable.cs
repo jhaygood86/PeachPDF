@@ -3597,6 +3597,185 @@ namespace PeachPDF.Html.Core.Dom
             // recorded no break inside itself, so it did not fragment, and a box that did not fragment
             // is moved whole or left alone. The engine states the fact (PageBreakBottoms) and the
             // epilogue takes the decision - see CssBox.PaginatedItsOwnContentWithoutBreaking.
+
+            // Real per-column pagination (issue #783), for a vertical table only. Run last, once every
+            // row's real geometry (including the vertical-rl reflection above) has settled - see the
+            // method's own remarks for why this is a relocation pass over already-correct geometry rather
+            // than a change to the row loop itself.
+            RelocateColumnsAcrossPageBoundaries(placedRows);
+        }
+
+        /// <summary>
+        /// Relocates whole columns of a vertical table across page boundaries wherever one falls between
+        /// them - issue #783's first-cut real per-column pagination, scoped to a "plain grid" table (see
+        /// <see cref="MonolithicContent.HasColumnPaginationExcludedFeature"/>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why a relocation pass over already-laid-out geometry, not an interleaved column-major layout
+        /// loop.</b> A vertical table's own column axis (physical Y) is genuinely paginable - unlike the
+        /// row axis, physical Y is the page's own real fragmentation axis - but a *row*'s own row-axis
+        /// extent still cannot be known without laying out that row's cells across every column at once
+        /// (there is no per-row equivalent of <c>_columnWidths[]</c>'s own CSS-hint-driven precomputation).
+        /// Interleaving column-by-column layout with page-by-page pagination would need every row's
+        /// content fragmented across the very columns pagination is trying to place independently - a
+        /// two-pass architecture (measure every row unpaginated, *then* paginate) genuinely more than this
+        /// first cut needs. This method instead runs once, after the table's own ordinary (still-forward-
+        /// grown, unpaginated) row loop has already settled every cell's real geometry: a column's own
+        /// extent is entirely fixed by <c>_columnWidths[]</c> (<see cref="CellInlineSize"/>'s "cell height
+        /// is the column-sizing hint" mechanism) - identical for every row's cell in that column, by
+        /// construction (<c>cell.ActualBottom = cell.Location.Y + width</c> in <see cref="LayoutBodyRow"/>,
+        /// <c>width</c> read straight from <c>_columnWidths[]</c>, never from that cell's own content) - so
+        /// relocating a column onto a later page is a pure subtree translation
+        /// (<see cref="CssBox.OffsetTop(double)"/>) of every row's cell in it, the same mover pattern
+        /// already used throughout this engine (e.g. <see cref="ReflectRowAxisForVerticalRl"/>), not a new
+        /// layout pass with its own continuation/resumption machinery.
+        /// </para>
+        /// <para>
+        /// <b>Plan, then commit - never partially relocate.</b> The loop below first walks every column
+        /// computing where it would land (<c>plannedDeltas</c>) and which page breaks that requires
+        /// (<c>pageBreaks</c>), mutating nothing. Only if that succeeds for every column does a second loop
+        /// apply the planned shifts. A single column whose own fixed extent exceeds even a fresh page's
+        /// whole band cannot be helped by any relocation - discovered partway through, that would leave
+        /// earlier columns already translated with no undo - so the whole pass bails out, unmodified, the
+        /// instant that is found, deferring to <see cref="MonolithicContent.IsUnresumableVerticalTable"/>'s
+        /// own existing "move the whole table" fallback for that one remaining sub-case. The same bail-out
+        /// covers the table's own first column not fitting where the table currently starts: that is not a
+        /// column-relocation question (nothing has been placed on this page yet for a relocation to
+        /// preserve), so the ordinary whole-table mover already answers it correctly on its own.
+        /// </para>
+        /// <para>
+        /// <b>No new "did this fragment" fact is needed.</b> Whether this pass found anything to relocate
+        /// is answered exactly the way an ordinary <c>horizontal-tb</c> table's own row-break decision
+        /// already is - <see cref="CssBox.PaginatedItsOwnContentWithoutBreaking"/> reading
+        /// <see cref="CssBox.PageBreakBottoms"/> as a post-layout fact. This method states that same fact:
+        /// every entry records the absolute Y the table's own slice on that page ends at, which
+        /// <see cref="Paint.FragmentPainter"/> already reads to clip the table's own bottom border there.
+        /// Finding nothing to relocate, or bailing out entirely, simply leaves it unset, and the table
+        /// falls through to exactly today's monolithic move-whole behavior with no special-casing needed
+        /// here for either outcome.
+        /// </para>
+        /// </remarks>
+        /// <param name="placedRows">
+        /// how many of <see cref="_bodyRows"/> this pass actually placed - every one of them, since a
+        /// vertical table's own row loop never stops mid-table (its <c>pageHeight</c> override routes it
+        /// through the unpaginated fallback path), but named to match <see cref="ReflectRowAxisForVerticalRl"/>'s
+        /// own caller rather than assumed.
+        /// </param>
+        private void RelocateColumnsAcrossPageBoundaries(int placedRows)
+        {
+            if (!_isVertical || _bodyRows.Count == 0 || placedRows == 0) return;
+
+            // A continuation pass resumes only the still-open cell content of a row already placed by an
+            // earlier pass - row 0's geometry (this method's own reference for every column's position) is
+            // not fresh here, and may already reflect an earlier pass's own relocation. Recomputing deltas
+            // from it a second time has no established invariant behind it, so this pass simply defers to
+            // whatever the fresh pass that placed row 0 already decided.
+            if (_continuesAPreviousPass) return;
+
+            var container = _tableBox.HtmlContainer;
+            if (container is not { HasRealPageGrid: true }) return;
+
+            if (MonolithicContent.HasColumnPaginationExcludedFeature(_tableBox)) return;
+
+            var columnCount = _bodyRows[0].Boxes.Count;
+            if (columnCount == 0) return;
+
+            // A "plain grid" table (no rowspan/colspan - already excluded above) is still not guaranteed to
+            // have the same cell count in every row: an author can simply write fewer <td>s in one row, or
+            // give a cell display:none in some rows but not others (a ragged row is already a reachable,
+            // unpadded shape elsewhere in this engine - see InsertEmptyBoxes's own remarks). Every column
+            // below is read positionally (_bodyRows[r].Boxes[c]), which silently reads the wrong cell - or
+            // throws - for a short row, so bail out to the existing whole-table mover instead of guessing.
+            for (var r = 1; r < placedRows; r++)
+            {
+                if (_bodyRows[r].Boxes.Count != columnCount) return;
+            }
+
+            var plannedDeltas = new double[columnCount];
+            List<(int Slot, double Bottom)> pageBreaks = [];
+
+            var appliedDelta = 0d;
+            var currentSlot = container.SlotStartingAt(_bodyRows[0].Boxes[0].Location.Y);
+            var previousColumnBottom = 0d;
+
+            for (var c = 0; c < columnCount; c++)
+            {
+                var referenceCell = _bodyRows[0].Boxes[c];
+                var columnTop = referenceCell.Location.Y + appliedDelta;
+                var columnHeight = referenceCell.ActualBottom - referenceCell.Location.Y;
+
+                if (HtmlContainerInt.FallsPast(columnTop + columnHeight, container.BandOfSlot(currentSlot)))
+                {
+                    if (c == 0)
+                    {
+                        // The table's own first column doesn't fit where the table currently starts -
+                        // nothing has been placed on this page yet for a relocation to preserve, so this
+                        // is an ordinary "does the whole box fit here" question, not a column-relocation
+                        // one. Leave it to the existing whole-table mover.
+                        return;
+                    }
+
+                    var nextSlot = currentSlot + 1;
+                    if (columnHeight > container.PageBandHeightOf(nextSlot))
+                    {
+                        // No relocation can help a column taller than a whole fresh page - bail out of
+                        // the entire pass, unmodified, per this method's own "plan, then commit" remarks.
+                        return;
+                    }
+
+                    pageBreaks.Add((currentSlot, previousColumnBottom));
+
+                    appliedDelta += container.PageTopOf(nextSlot) - columnTop;
+                    currentSlot = nextSlot;
+                    columnTop = container.PageTopOf(nextSlot);
+                }
+
+                plannedDeltas[c] = appliedDelta;
+                previousColumnBottom = columnTop + columnHeight;
+            }
+
+            if (pageBreaks.Count == 0) return;
+
+            for (var c = 0; c < columnCount; c++)
+            {
+                if (plannedDeltas[c] == 0) continue;
+
+                for (var r = 0; r < placedRows; r++)
+                {
+                    _bodyRows[r].Boxes[c].OffsetTop(plannedDeltas[c]);
+                }
+            }
+
+            // OffsetTop keeps every relocated cell's own ActualBottom in sync (a computed property), but
+            // the table's own column-axis extent, and each row's, were both settled by Step 7/
+            // SetRowGroupBoxDimensions before this pass ran and are real, stored fields - left alone they
+            // still name the pre-relocation extent, understating how far the table's content now actually
+            // reaches. That is not just a cosmetic gap: a following sibling is positioned from
+            // _tableBox.ActualBottom (CssBox's own in-flow placement), so a stale value lands the next box
+            // on top of the relocated column(s) rather than after them. plannedDeltas is monotonically
+            // non-decreasing in c (appliedDelta only ever grows), and every column's own pre-relocation
+            // ActualBottom is strictly increasing in c (columns stack forward) - so the last column always
+            // carries both the largest delta and the table's true final column-axis edge, making
+            // plannedDeltas[columnCount - 1] exactly what _tableBox's own trailing border/spacing epilogue
+            // (added after the last column's content at Step 7) needs to shift by too. Each row is
+            // recomputed from its own (now-relocated) cells instead, the same way AssignRowActualBounds
+            // already does for the row loop itself, rather than assumed to share the table's one delta -
+            // cheap, and it costs nothing to be exact rather than lean on the same derivation twice.
+            _tableBox.ActualBottom += plannedDeltas[columnCount - 1];
+
+            for (var r = 0; r < placedRows; r++)
+            {
+                _bodyRows[r].ActualBottom = _bodyRows[r].Boxes.Max(x => x.ActualBottom);
+            }
+
+            SetRowGroupBoxDimensions(placedRows);
+
+            _tableBox.PageBreakBottoms ??= [];
+            foreach (var (slot, bottom) in pageBreaks)
+            {
+                _tableBox.PageBreakBottoms[slot] = bottom;
+            }
         }
 
         /// <summary>
@@ -5300,7 +5479,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the colspan of the specified box
         /// </summary>
         /// <param name="b"></param>
-        private static int GetColSpan(CssBox b)
+        internal static int GetColSpan(CssBox b)
         {
             var att = b.GetAttribute("colspan", "1");
 
@@ -5311,7 +5490,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the rowspan of the specified box
         /// </summary>
         /// <param name="b"></param>
-        private static int GetRowSpan(CssBox b)
+        internal static int GetRowSpan(CssBox b)
         {
             var att = b.GetAttribute("rowspan", "1");
 
