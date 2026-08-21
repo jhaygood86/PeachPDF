@@ -883,8 +883,19 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         /// <param name="g">the graphics context layout is running against</param>
         /// <param name="cell">the table cell whose content is being aligned in its box</param>
+        /// <param name="isVertical">
+        /// whether <paramref name="cell"/> belongs to a <c>vertical-rl</c>/<c>vertical-lr</c> table, whose
+        /// row axis (what css-tables-3 aligns a cell's content along) is physical X rather than physical Y.
+        /// A cell's own <c>ClientLeft</c>/<c>ClientRight</c> already describe its final, post-reflection
+        /// physical position by the time this runs (table layout settles cell geometry, including the
+        /// <c>vertical-rl</c> mirror pass, before ever calling this), so - unlike some other axis-aware
+        /// sites in <see cref="Dom.CssLayoutEngineTable"/> - no separate "which physical edge is
+        /// row-axis-start" flag is needed here: <c>top</c>/<c>baseline</c> stay a no-op (content already
+        /// lays out from the cell's own block-start edge forward) and <c>bottom</c>/<c>middle</c> push
+        /// toward <c>ClientRight</c>, uniformly for both <c>vertical-rl</c> and <c>vertical-lr</c>.
+        /// </param>
         /// <returns>the distance every child of <paramref name="cell"/> was offset by, zero where none was</returns>
-        public static double ApplyCellVerticalAlignment(RGraphics g, CssBox cell)
+        public static double ApplyCellVerticalAlignment(RGraphics g, CssBox cell, bool isVertical = false)
         {
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(cell);
@@ -897,29 +908,31 @@ namespace PeachPDF.Html.Core.Dom
             if (cellKeyword is VerticalAlignment.Top or VerticalAlignment.Baseline)
                 return 0d;
 
-            var cellBottom = cell.ClientBottom;
+            var cellFarEdge = isVertical ? cell.ClientRight : cell.ClientBottom;
 
-            // Measure over the cell's children, not the cell itself: GetMaximumBottom's own-height
-            // fallback exists for a childless box with an explicit height, but the cell always has an
-            // explicit ActualBottom by this point (the row just stretched it), so passing the cell as
-            // startBox would clamp `bottom` to `cellBottom` and always compute a zero offset whenever the
-            // cell also carries a CSS `height` (issue found via `height` + `vertical-align: middle`).
-            var bottom = cell.ClientTop;
+            // Measure over the cell's children, not the cell itself: GetMaximumBottom/GetMaximumRight's own
+            // explicit-size fallback exists for a childless box with an explicit height/width, but the cell
+            // always has an explicit ActualBottom/ActualRight by this point (the row just stretched it), so
+            // passing the cell as startBox would clamp the measured edge to cellFarEdge and always compute
+            // a zero offset whenever the cell also carries a CSS height/width (issue found via `height` +
+            // `vertical-align: middle`).
+            var farEdge = isVertical ? cell.ClientLeft : cell.ClientTop;
             foreach (var b in cell.Boxes)
             {
-                bottom = CssBox.GetMaximumBottom(b, bottom);
+                farEdge = isVertical ? CssBox.GetMaximumRight(b, farEdge) : CssBox.GetMaximumBottom(b, farEdge);
             }
 
             var dist = cellKeyword switch
             {
-                VerticalAlignment.Bottom => cellBottom - bottom,
-                VerticalAlignment.Middle => (cellBottom - bottom) / 2,
+                VerticalAlignment.Bottom => cellFarEdge - farEdge,
+                VerticalAlignment.Middle => (cellFarEdge - farEdge) / 2,
                 _ => 0d
             };
 
             foreach (var b in cell.Boxes)
             {
-                b.OffsetTop(dist);
+                if (isVertical) b.OffsetLeft(dist);
+                else b.OffsetTop(dist);
             }
 
             return dist;

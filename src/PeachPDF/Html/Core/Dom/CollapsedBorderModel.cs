@@ -49,8 +49,29 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>CssLayoutEngineTable.CollapseColumnWidths</c> already zeroing its width.
         /// </param>
         /// <param name="leftToRight">The table's own <c>direction</c>, for the resolver's position tiebreak.</param>
+        /// <param name="blockStart">
+        /// The table's own resolved block-start physical side (<see cref="Border.Top"/> for
+        /// <c>horizontal-tb</c>, <see cref="Border.Right"/>/<see cref="Border.Left"/> for
+        /// <c>vertical-rl</c>/<c>vertical-lr</c>) - rows always stack along the block axis per
+        /// css-tables-3, so every horizontal grid-line candidate this method collects reads from this
+        /// physical side (or <paramref name="blockEnd"/>) rather than a hardcoded <see cref="Border.Top"/>/
+        /// <see cref="Border.Bottom"/>. Resolved once by the caller (<c>CssLayoutEngineTable</c>, which
+        /// already derives <c>_isVertical</c>/<c>_rowAxisStartIsAtMax</c> from the identical
+        /// <c>LogicalPropertyResolver.BlockStart</c> call) rather than re-derived here - this class stays
+        /// unaware of <c>WritingMode</c> entirely.
+        /// </param>
+        /// <param name="blockEnd">The table's own resolved block-end physical side - see <paramref name="blockStart"/>.</param>
+        /// <param name="inlineStart">
+        /// The table's own resolved inline-start physical side (<see cref="Border.Left"/> for
+        /// <c>horizontal-tb</c>, <see cref="Border.Top"/> for both vertical writing modes - this engine has
+        /// no <c>direction: rtl</c> column/inline axis) - columns always run along the inline axis, so
+        /// every vertical grid-line candidate reads from this side (or <paramref name="inlineEnd"/>)
+        /// instead of a hardcoded <see cref="Border.Left"/>/<see cref="Border.Right"/>.
+        /// </param>
+        /// <param name="inlineEnd">The table's own resolved inline-end physical side - see <paramref name="inlineStart"/>.</param>
         internal static CollapsedBorderModel Resolve(
-            TableGrid grid, CssBox tableBox, Func<int, bool> isColumnCollapsed, bool leftToRight)
+            TableGrid grid, CssBox tableBox, Func<int, bool> isColumnCollapsed, bool leftToRight,
+            Border blockStart, Border blockEnd, Border inlineStart, Border inlineEnd)
         {
             var columnCount = Math.Max(grid.ColumnCount, 1);
             var horizontal = new CollapsedBorder[grid.RowCount + 1, columnCount];
@@ -71,7 +92,7 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     candidates.Clear();
-                    CollectHorizontal(grid, tableBox, line, column, candidates);
+                    CollectHorizontal(grid, tableBox, line, column, candidates, blockStart, blockEnd);
                     var resolved = CollapsedBorderResolver.Resolve(CollectionsMarshal.AsSpan(candidates), leftToRight);
 
                     horizontal[line, column] = resolved;
@@ -93,7 +114,9 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     candidates.Clear();
-                    CollectVertical(grid, tableBox, row, line, candidates, skipLeft: leftCollapsed, skipRight: rightCollapsed);
+                    CollectVertical(
+                        grid, tableBox, row, line, candidates, skipLeft: leftCollapsed, skipRight: rightCollapsed,
+                        inlineStart, inlineEnd);
                     var resolved = CollapsedBorderResolver.Resolve(CollectionsMarshal.AsSpan(candidates), leftToRight);
 
                     vertical[row, line] = resolved;
@@ -105,7 +128,8 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         private static void CollectHorizontal(
-            TableGrid grid, CssBox tableBox, int line, int column, List<CollapsedBorderCandidate> into)
+            TableGrid grid, CssBox tableBox, int line, int column, List<CollapsedBorderCandidate> into,
+            Border blockStart, Border blockEnd)
         {
             var above = line > 0 ? grid.CellAt(line - 1, column) : null;
             var below = line < grid.RowCount ? grid.CellAt(line, column) : null;
@@ -115,37 +139,40 @@ namespace PeachPDF.Html.Core.Dom
             if (above is not null && ReferenceEquals(above, below)) return;
 
             // If above/below survived the check above, contiguous spans guarantee this really is that
-            // cell's own top/bottom edge (see CollapsedBorderModel's own remarks for why).
-            Add(into, above, Border.Bottom, CollapsedBorderOrigin.Cell, line - 1, column);
-            Add(into, below, Border.Top, CollapsedBorderOrigin.Cell, line, column);
+            // cell's own top/bottom (block-end/block-start) edge (see CollapsedBorderModel's own remarks
+            // for why).
+            Add(into, above, blockEnd, CollapsedBorderOrigin.Cell, line - 1, column);
+            Add(into, below, blockStart, CollapsedBorderOrigin.Cell, line, column);
 
-            if (line > 0) Add(into, grid.RowAt(line - 1), Border.Bottom, CollapsedBorderOrigin.Row, line - 1, 0);
-            if (line < grid.RowCount) Add(into, grid.RowAt(line), Border.Top, CollapsedBorderOrigin.Row, line, 0);
+            if (line > 0) Add(into, grid.RowAt(line - 1), blockEnd, CollapsedBorderOrigin.Row, line - 1, 0);
+            if (line < grid.RowCount) Add(into, grid.RowAt(line), blockStart, CollapsedBorderOrigin.Row, line, 0);
 
             if (line > 0 && grid.IsLastRowOfGroup(line - 1))
-                Add(into, grid.RowGroupAt(line - 1), Border.Bottom, CollapsedBorderOrigin.RowGroup, line - 1, 0);
+                Add(into, grid.RowGroupAt(line - 1), blockEnd, CollapsedBorderOrigin.RowGroup, line - 1, 0);
             if (line < grid.RowCount && grid.IsFirstRowOfGroup(line))
-                Add(into, grid.RowGroupAt(line), Border.Top, CollapsedBorderOrigin.RowGroup, line, 0);
+                Add(into, grid.RowGroupAt(line), blockStart, CollapsedBorderOrigin.RowGroup, line, 0);
 
-            // A column/column-group has no per-row top/bottom boundary of its own - only at the table's
-            // very top/bottom does its own border-top/-bottom compete at all (a column spans every row).
+            // A column/column-group has no per-row block-start/-end boundary of its own - only at the
+            // table's very block-start/-end (topologically line 0 / line RowCount - a pure grid-index
+            // fact, unaffected by which physical side either actually is) does its own border-block-start/
+            // -end compete at all (a column spans every row).
             if (line == 0)
             {
-                Add(into, grid.ColumnAt(column), Border.Top, CollapsedBorderOrigin.Column, 0, column);
-                Add(into, grid.ColumnGroupAt(column), Border.Top, CollapsedBorderOrigin.ColumnGroup, 0, column);
-                Add(into, tableBox, Border.Top, CollapsedBorderOrigin.Table, 0, 0);
+                Add(into, grid.ColumnAt(column), blockStart, CollapsedBorderOrigin.Column, 0, column);
+                Add(into, grid.ColumnGroupAt(column), blockStart, CollapsedBorderOrigin.ColumnGroup, 0, column);
+                Add(into, tableBox, blockStart, CollapsedBorderOrigin.Table, 0, 0);
             }
             if (line == grid.RowCount)
             {
-                Add(into, grid.ColumnAt(column), Border.Bottom, CollapsedBorderOrigin.Column, 0, column);
-                Add(into, grid.ColumnGroupAt(column), Border.Bottom, CollapsedBorderOrigin.ColumnGroup, 0, column);
-                Add(into, tableBox, Border.Bottom, CollapsedBorderOrigin.Table, 0, 0);
+                Add(into, grid.ColumnAt(column), blockEnd, CollapsedBorderOrigin.Column, 0, column);
+                Add(into, grid.ColumnGroupAt(column), blockEnd, CollapsedBorderOrigin.ColumnGroup, 0, column);
+                Add(into, tableBox, blockEnd, CollapsedBorderOrigin.Table, 0, 0);
             }
         }
 
         private static void CollectVertical(
             TableGrid grid, CssBox tableBox, int row, int line, List<CollapsedBorderCandidate> into,
-            bool skipLeft, bool skipRight)
+            bool skipLeft, bool skipRight, Border inlineStart, Border inlineEnd)
         {
             var left = !skipLeft && line > 0 ? grid.CellAt(row, line - 1) : null;
             var right = !skipRight && line < grid.ColumnCount ? grid.CellAt(row, line) : null;
@@ -153,35 +180,35 @@ namespace PeachPDF.Html.Core.Dom
             // Interior to a colspanning cell - same reasoning as CollectHorizontal.
             if (left is not null && ReferenceEquals(left, right)) return;
 
-            Add(into, left, Border.Right, CollapsedBorderOrigin.Cell, row, line - 1);
-            Add(into, right, Border.Left, CollapsedBorderOrigin.Cell, row, line);
+            Add(into, left, inlineEnd, CollapsedBorderOrigin.Cell, row, line - 1);
+            Add(into, right, inlineStart, CollapsedBorderOrigin.Cell, row, line);
 
-            if (!skipLeft && line == 0) Add(into, grid.RowAt(row), Border.Left, CollapsedBorderOrigin.Row, row, 0);
-            if (!skipRight && line == grid.ColumnCount) Add(into, grid.RowAt(row), Border.Right, CollapsedBorderOrigin.Row, row, 0);
+            if (!skipLeft && line == 0) Add(into, grid.RowAt(row), inlineStart, CollapsedBorderOrigin.Row, row, 0);
+            if (!skipRight && line == grid.ColumnCount) Add(into, grid.RowAt(row), inlineEnd, CollapsedBorderOrigin.Row, row, 0);
 
             if (line == 0)
             {
-                Add(into, grid.RowGroupAt(row), Border.Left, CollapsedBorderOrigin.RowGroup, row, 0);
-                Add(into, tableBox, Border.Left, CollapsedBorderOrigin.Table, 0, 0);
+                Add(into, grid.RowGroupAt(row), inlineStart, CollapsedBorderOrigin.RowGroup, row, 0);
+                Add(into, tableBox, inlineStart, CollapsedBorderOrigin.Table, 0, 0);
             }
             if (line == grid.ColumnCount)
             {
-                Add(into, grid.RowGroupAt(row), Border.Right, CollapsedBorderOrigin.RowGroup, row, 0);
-                Add(into, tableBox, Border.Right, CollapsedBorderOrigin.Table, 0, 0);
+                Add(into, grid.RowGroupAt(row), inlineEnd, CollapsedBorderOrigin.RowGroup, row, 0);
+                Add(into, tableBox, inlineEnd, CollapsedBorderOrigin.Table, 0, 0);
             }
 
             // A column/column-group's own border participates at every vertical line its own boundary
             // falls on - unlike row/row-group/table above, this is not confined to the table's outer
-            // edges, since a column runs the table's full height but only *begins*/*ends* at its own
-            // left/right boundary, which can be any interior line.
+            // edges, since a column runs the table's full block-axis extent but only *begins*/*ends* at
+            // its own inline-start/-end boundary, which can be any interior line.
             if (!skipLeft && line > 0 && grid.ColumnBoxEndsAt(line - 1))
-                Add(into, grid.ColumnAt(line - 1), Border.Right, CollapsedBorderOrigin.Column, 0, line - 1);
+                Add(into, grid.ColumnAt(line - 1), inlineEnd, CollapsedBorderOrigin.Column, 0, line - 1);
             if (!skipRight && line < grid.ColumnCount && grid.ColumnBoxStartsAt(line))
-                Add(into, grid.ColumnAt(line), Border.Left, CollapsedBorderOrigin.Column, 0, line);
+                Add(into, grid.ColumnAt(line), inlineStart, CollapsedBorderOrigin.Column, 0, line);
             if (!skipLeft && line > 0 && grid.ColumnGroupEndsAt(line - 1))
-                Add(into, grid.ColumnGroupAt(line - 1), Border.Right, CollapsedBorderOrigin.ColumnGroup, 0, line - 1);
+                Add(into, grid.ColumnGroupAt(line - 1), inlineEnd, CollapsedBorderOrigin.ColumnGroup, 0, line - 1);
             if (!skipRight && line < grid.ColumnCount && grid.ColumnGroupStartsAt(line))
-                Add(into, grid.ColumnGroupAt(line), Border.Left, CollapsedBorderOrigin.ColumnGroup, 0, line);
+                Add(into, grid.ColumnGroupAt(line), inlineStart, CollapsedBorderOrigin.ColumnGroup, 0, line);
         }
 
         /// <summary>
@@ -207,17 +234,19 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="groupRow">The repeated group's own last row index (for a header) or first row index (for a footer).</param>
         /// <param name="groupRowGroup">The repeated group's own row-group box (<c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>).</param>
         /// <param name="adjacentRow">Whichever row index this page's layout actually places next to the repeated group.</param>
-        /// <param name="groupIsAbove">True for a header's own bottom edge (group above, adjacent row below); false for a footer's own top edge.</param>
+        /// <param name="groupIsAbove">True for a header's own block-end edge (group above, adjacent row below); false for a footer's own block-start edge.</param>
         /// <param name="leftToRight">The table's own <c>direction</c>, for the resolver's position tiebreak.</param>
+        /// <param name="blockStart">The table's own resolved block-start physical side - see <see cref="Resolve"/>'s identical parameter.</param>
+        /// <param name="blockEnd">The table's own resolved block-end physical side - see <see cref="Resolve"/>'s identical parameter.</param>
         internal static CollapsedBorder[] ResolveRepeatedGroupBoundary(
             TableGrid grid, int groupRow, CssBox? groupRowGroup, int adjacentRow,
-            bool groupIsAbove, bool leftToRight)
+            bool groupIsAbove, bool leftToRight, Border blockStart, Border blockEnd)
         {
             var result = new CollapsedBorder[Math.Max(grid.ColumnCount, 1)];
             var candidates = new List<CollapsedBorderCandidate>(6);
 
-            var groupSide = groupIsAbove ? Border.Bottom : Border.Top;
-            var adjacentSide = groupIsAbove ? Border.Top : Border.Bottom;
+            var groupSide = groupIsAbove ? blockEnd : blockStart;
+            var adjacentSide = groupIsAbove ? blockStart : blockEnd;
             var adjacentRowGroup = grid.RowGroupAt(adjacentRow);
 
             for (var column = 0; column < grid.ColumnCount; column++)

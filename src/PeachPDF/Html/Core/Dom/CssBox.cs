@@ -5876,6 +5876,35 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Gets the maximum right of the boxes inside the startBox - the row-axis counterpart of
+        /// <see cref="GetMaximumBottom"/>, used by a vertical table's own <c>vertical-align</c> content
+        /// alignment (<see cref="CssLayoutEngine.ApplyCellVerticalAlignment"/>), where the row axis is
+        /// physical X rather than physical Y.
+        /// </summary>
+        /// <param name="startBox"></param>
+        /// <param name="currentMaxRight"></param>
+        /// <returns></returns>
+        internal static double GetMaximumRight(CssBox startBox, double currentMaxRight)
+        {
+            foreach (var line in startBox.Rectangles.Keys)
+            {
+                currentMaxRight = Math.Max(currentMaxRight, startBox.Rectangles[line].Right);
+            }
+
+            foreach (var b in startBox.Boxes)
+            {
+                currentMaxRight = Math.Max(currentMaxRight, GetMaximumRight(b, currentMaxRight));
+            }
+
+            if (startBox.Width is not Keywords.Auto)
+            {
+                currentMaxRight = Math.Max(currentMaxRight, startBox.ActualRight);
+            }
+
+            return currentMaxRight;
+        }
+
+        /// <summary>
         /// Get the <paramref name="minWidth"/> and <paramref name="maxWidth"/> width of the box content.<br/>
         /// </summary>
         /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>

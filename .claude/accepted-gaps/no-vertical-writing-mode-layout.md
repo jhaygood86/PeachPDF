@@ -98,7 +98,83 @@ assertions (row/column stacking direction and spacing, column-sizing-from-height
 rows, the page-break and caption regressions above), fragment-level `IsMonolithic`/page-straddle
 assertions, and the existing 544 horizontal-tb Table tests all still pass unchanged (the column-width
 guard, in particular, only ever removes a shrink no horizontal-tb test relied on). Scoped to simple tables
-only — see below for what `display: table` still doesn't handle under a vertical writing mode.
+only at this point — see below for what `display: table` still doesn't handle under a vertical writing mode.
+
+**Table's remaining gaps — captions, `<thead>`/`<tfoot>`, collapsed borders, `vertical-align`, and
+`rowspan` row-axis sizing** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762)) are closed too, in
+the same "grow forward as if `vertical-lr`, mirror once via `ReflectRowAxisForVerticalRl`" shape the
+simple-table work above already established. A `<caption>` now stacks along the row axis and sizes across
+the full column axis (`LayoutCaptionGroup`) rather than always physical-Y/full-physical-width; getting this
+right for `vertical-rl` needed the caption's own `Height` CSS string set to a real value before its content
+lays out (`CreateVerticalLineBoxes` reads that string, not a pre-set `ActualBottom`, for its own wrap
+limit — a caption bypasses the ordinary block-flow frame that would otherwise resolve it) and a real
+subtree re-anchor (`OffsetLeft`) after layout, since `CreateVerticalLineBoxes`'s own auto-width shrink
+(issue #761) anchors to the caption's own real block-start edge (`ActualRight` for `vertical-rl`), which
+disagrees with this method's forward-growth convention. `<thead>`/`<tfoot>` proxies are placed along the
+row axis now (`CreateHeaderProxy`/`CreateFooterProxy`), and — the one piece that also needed the *detached*
+header/footer row objects themselves, not just their proxies, joining the whole-table reflection sweep —
+`GetGridLineY`/`GetGridLineX` (collapsed-border geometry) read `TableGrid.RowAt`/`CellAt` directly, not the
+proxy's own snapshot, so leaving the detached rows unreflected left a border segment whose span touched a
+header/footer-adjacent grid line comparing an unmirrored position against an already-mirrored one. Collapsed
+borders (`border-collapse: collapse`) resolve through the same block-start/block-end/inline-start/inline-end
+mapping `LogicalPropertyResolver` already gives `_isVertical`/`_rowAxisStartIsAtMax` (`CollapsedBorderModel`'s
+candidate collection, `CssLayoutEngineTable.ApplyCollapsedUsedBorderWidths`, and `GetGridLineY`/`GetGridLineX`
+all reused rather than re-derived), and `EmitCollapsedBorderSegments`/`EmitHeaderFooterBorderSegments`'s own
+`IsHorizontal` flag flips for a vertical table since it names physical paint orientation
+(`BordersDrawHandler.DrawCollapsedSegment`'s own axis branching), not grid-line topology, despite its own
+doc comment's wording. `vertical-align` now repositions a cell's content along the row axis
+(`CssLayoutEngine.ApplyCellVerticalAlignment`, `CssBox.GetMaximumRight` alongside the existing
+`GetMaximumBottom`) rather than being a hardcoded `OffsetTop`-only no-op there. A `rowspan` cell's own
+row-axis extent now grows to the combined row-axis extent of every row it spans, mirroring how a `colspan`
+cell already sums across the column axis (`GetCellWidth`, confirmed already axis-correct by construction —
+colspan is inherently a column-axis concept and the reflection pass never touches the column axis, so no fix
+was needed there): the row-tracking bookkeeping this needed real fixes for was `row.ActualRight`/
+`ActualBottom` being read via `Boxes.Max` before `CloseSpanningCell` had actually closed the spanning cell
+(axis-swapped which field reads the tracked cursor accumulator vs. the row's own children, matching which
+field a vertical table's rowspan-closing pass actually mutates later), `ReflectRowAxisForVerticalRl` itself
+needing a residual per-cell correction for a rowspan cell's own footprint (which spans multiple rows and so
+cannot share any one row's own reflection delta — proven correct by composition, since the residual is
+exactly what an independent reflection of the cell's own pre-reflection footprint would produce), a
+pagination-overflow pre-pass reading physical-Y page-band geometry with no `_isVertical` gate the way
+`CloseSpanningCell`'s own identical-shaped check already had, and — found only by rendering a real
+`vertical-rl` table with a rowspan cell, `<thead>`/`<tfoot>` and `border-collapse: collapse` together and
+looking at the rasterized result, not by any of the property assertions above — a `CssSpacingBox` (the
+rowspan placeholder `InsertEmptyBoxes` inserts into the row a span continues through) is built with a bare
+tag and never inherits style, so its own `WritingMode` stays at the CSS initial `horizontal-tb` even inside
+a vertical table; `PerformLayout`'s ordinary auto-height-from-empty-content resolution then collapsed the
+row-axis extent `LayoutBodyRow` had just set on it back down to zero, leaving the row after a rowspan's
+opening row placed on top of the spanned column instead of after it (harmless for horizontal-tb, where the
+same resolution instead targets `ActualRight`, a field never pre-set before a spacer's own layout runs
+either) — fixed by re-asserting the engine-controlled extent once the spacer's own layout returns, since a
+spacer's geometry is entirely engine-controlled to begin with. `colspan` straddling a vertical table's row
+axis needed no fix: it was already axis-correct by construction, per `GetCellWidth`'s own remarks above.
+Verified with `CssBox`-property assertions (rowspan combined row-axis extent, sibling non-corruption in both
+`vertical-rl` and `vertical-lr`, a rowspan cell inside a short-page-height paginated container to exercise
+the pagination pre-pass gate, caption row-axis stacking, `<thead>`/`<tfoot>` proxy row-axis position,
+`vertical-align`'s row-axis-only offset, rowspan and colspan combined on one cell to confirm the two span
+mechanisms compose), structural assertions on `CssBox.CollapsedBorderSegments` (a row-boundary segment comes
+out column-axis-tall/row-axis-thin for a vertical table — the literal inverse of horizontal-tb's own shape),
+and PDFium/MuPDF rasterization of a combined caption+`<thead>`+`<tfoot>`+collapsed-border+rowspan
+`vertical-rl` table (the `writing_mode` showcase's own section 7b) agreeing byte-for-byte. A post-change
+review pass also caught, and this fixed, a companion bug beyond the rowspan/caption/collapsed-border work
+above: `cursor.MaxRight`/`MaxBottom` — the column-axis/row-axis trackers a table's own final dimensions are
+settled from — were grown from a header/footer proxy's own physical `ActualRight`/`ActualBottom`
+unconditionally at every repeat-proxy call site, never axis-swapped; for the one site reachable by a
+vertical table today (Step 5's closing-footer arm), this left a `<tfoot>`'s own row-axis extent out of the
+table's own final size entirely, positioning the footer outside the table's own settled bounds — fixed by
+routing every such site through one shared, axis-aware helper (`GrowMaxRightFor`) instead of five
+independent unconditional reads.
+
+**Scoped down from the above: a `<thead>`/`<tfoot>` with exactly one row** (the overwhelming common case,
+and the only shape tested/rasterized above) is fully correct; a header/footer group with **two or more**
+rows does not yet reverse its own rows' relative order for `vertical-rl` the way `<tbody>` rows do — tracked
+separately as [#784](https://github.com/jhaygood86/PeachPDF/issues/784), since a real fix needs the group's
+own `CssProxyBox`/`BoxGeometrySnapshot` to individually re-order its captured rows, not just uniformly
+translate them, which is a larger, separate piece of work than #762's own scope. The same root cause means a
+`rowspan` cell entirely contained within such a multi-row header/footer group doesn't get its own residual
+row-axis correction either — also tracked under #784, not a separate gap.
+
+Real per-row pagination of a vertical table's own content remains genuinely out of scope — see below.
 
 **Block-level and orthogonal-flow children of a vertical box**
 ([#760](https://github.com/jhaygood86/PeachPDF/issues/760)) now work too:
@@ -407,21 +483,16 @@ reading Height" as an unenforced convention going forward.
   than a behavior authors should rely on either way.
 - **`sideways-rl`/`sideways-lr`** ([#766](https://github.com/jhaygood86/PeachPDF/issues/766)) still render
   as `horizontal-tb` throughout (`WritingModeFrame.IsVertical` is true only for `vertical-rl`/`vertical-lr`).
-- **Table remaining gaps** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762), stays open for
-  these): collapsed borders (`CollapsedBorderResolver`'s candidate collection still hardcodes physical
-  top/bottom/left/right edge reads), `<thead>`/`<tfoot>` repetition, `<caption>` (beyond the narrow
-  `_tableBox.ActualRight` fix above, which only stops a bottom caption from corrupting the *other* rows'
-  positions — the caption's own placement stays physical-Y, unconverted), a `rowspan` cell's own row-axis
-  sizing (it is not yet computed as the combined row-axis extent of every row it spans, the way
-  `GetCellWidth` already sums a `colspan` cell's extent across the *column* axis — a `rowspan` cell
-  currently sizes and can end up overflowing past the table's own row-axis bound; the row-tracking
-  bookkeeping around it — `rowMaxBottom`, `CloseSpanningCell` — is axis-aware and no longer corrupts its
-  *non-spanning* row siblings' positions, but the spanning cell's own extent is still wrong), `colspan`
-  straddling a vertical table's row axis, real per-row pagination of a vertical table's own content (it is
-  monolithic instead — see "What now works" above and the general per-vertical-content-fragmentation gap
-  below), and `vertical-align`'s content-alignment-*within*-a-cell behavior (cell *size* is
-  writing-mode-aware; `CssLayoutEngine.ApplyCellVerticalAlignment`'s own internal positioning of a cell's
-  content is not yet).
+- **Table's one remaining gap: real per-row pagination of a vertical table's own content**
+  ([#762](https://github.com/jhaygood86/PeachPDF/issues/762) stays open for exactly this, tracked in its own
+  right as [#783](https://github.com/jhaygood86/PeachPDF/issues/783); everything else #762 originally listed
+  — collapsed borders, `<thead>`/`<tfoot>` placement, `<caption>`, a `rowspan` cell's own row-axis sizing,
+  `colspan` straddling the row axis — is done, see "What now works" above). A vertical table is monolithic
+  instead (`MonolithicContent.IsUnresumableVerticalTable`) — it moves whole to a later page, or is
+  displaced-per-band, rather than splitting its own rows across a page boundary. This needs the
+  page-fragmentation system's own primitives (`FragmentainerContext`, `HtmlContainerInt.SlotStartingAt`/
+  `PageTopOf`/`PageBottomOf`) to become axis-agnostic — the same architectural wall the Multi-column gap
+  below hits for the identical reason, not a small fix scoped to this file alone.
 - **Multi-column** ([#764](https://github.com/jhaygood86/PeachPDF/issues/764)) has no real column
   arrangement under a vertical writing mode — `column-count`/`column-width` are inert there, and a
   vertical-writing-mode multicol container falls back to ordinary single-column block flow (`CssLayoutEngineColumns.Layout`
