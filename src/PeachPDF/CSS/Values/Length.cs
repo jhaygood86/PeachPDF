@@ -439,10 +439,11 @@ namespace PeachPDF.CSS
             Cqmin,
             Cqmax,
             // CSS Values and Units 4 §6.2 small/large/dynamic viewport-percentage units. Vi/Vb get the
-            // same horizontal-tb-only treatment Cqi/Cqb already have (Vi === Vw, Vb === Vh) - this engine
-            // has no vertical-writing-mode support. Small/large/dynamic variants all resolve identically
-            // here (see ToPixels) - a PDF page box has no scrollbar or dynamic browser chrome to distinguish
-            // them by.
+            // same horizontal-tb-only treatment Cqi/Cqb already have (Vi === Vw, Vb === Vh) - neither is
+            // adjusted for the root element's/container's own writing-mode, independent of this engine's
+            // real vertical-writing-mode layout support elsewhere (see docs/html-css-support.md's CSS
+            // Viewport Units section). Small/large/dynamic variants all resolve identically here (see
+            // ToPixels) - a PDF page box has no scrollbar or dynamic browser chrome to distinguish them by.
             Vi,
             Vb,
             Svw,
