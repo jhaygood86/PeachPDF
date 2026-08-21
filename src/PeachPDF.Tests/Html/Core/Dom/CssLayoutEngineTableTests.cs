@@ -644,8 +644,11 @@ th, td { border: 1px solid black; padding: 8px; }
             // A rowspan declared larger than the <thead>'s own row count (rowspan="99" in a 2-row header)
             // used to make TableGrid.Build record a CellSpan whose LastRow pointed past the grid's own
             // last row - CollapsedBorderModel then indexed its own line-width arrays with that out-of-range
-            // value and threw IndexOutOfRangeException. Merely asserts layout completes without throwing;
-            // the exact geometry a malformed rowspan this large produces isn't otherwise specified.
+            // value and threw IndexOutOfRangeException. A span this pathologically large clamps to the
+            // table's own last body row (issue #788's ComputeHeaderRowSpansCrossingIntoBody), which is a
+            // defensible, non-throwing fallback rather than a fully-specified case in its own right - see
+            // TableLayout_RowspanCrossingFromTheadIntoTbody_ClosesOnTheCorrectBodyRowAndColumn below for
+            // the well-defined, minimal-repro shape of this same mechanism.
             var html = @"
 <!DOCTYPE html>
 <html>
@@ -672,6 +675,82 @@ th, td { border: 1px solid black; padding: 8px; }
 
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
+        }
+
+        [Fact]
+        public async Task TableLayout_RowspanCrossingFromTheadIntoTbody_ClosesOnTheCorrectBodyRowAndColumn()
+        {
+            // Issue #788: A's rowspan="3" opens on the header's own row 0, reaches through row 1 (D's
+            // row - the header's own last row), and one row further, into the table's one <tbody> row.
+            // TableGrid/column-placement already correctly reserved column 0 for A there (cross-group-
+            // aware by construction) - the bug was that the header's own closing bookkeeping stopped A
+            // at D's row instead of following it into the body, leaving a phantom gap: no CssSpacingBox
+            // placeholder in the body row's own Boxes, and A's own ActualBottom never reaching the body
+            // row it was supposed to cover.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 200px; }
+        th, td { border: 1px solid black; height: 20px; }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr><th id='a' rowspan='3'>A</th><th id='b'>B</th></tr>
+            <tr><th id='d'>D</th></tr>
+        </thead>
+        <tbody>
+            <tr><td id='x'>x</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+
+            var a = FindById(headerProxy.SourceBox, "a");
+            var d = FindById(headerProxy.SourceBox, "d");
+            var x = FindById(rootBox, "x");
+
+            Assert.NotNull(a);
+            Assert.NotNull(d);
+            Assert.NotNull(x);
+
+            // x was not phantom-shifted into a column the header never declared - it lands in the same
+            // column as D, the only column A's own span leaves free.
+            Assert.Equal(d!.Location.X, x!.Location.X, 1);
+
+            // A's own bottom reaches down to cover the body row it spans into, not just D's row.
+            Assert.True(a!.ActualBottom >= x.ActualBottom - 1,
+                $"A's own bottom ({a.ActualBottom}) should reach the body row's bottom ({x.ActualBottom})");
+            Assert.True(a.ActualBottom > d.ActualBottom,
+                "A should reach past its own header row group into the body, not stop at D's row.");
+
+            // A CssSpacingBox placeholder stands in for A's continuation at the body row's own column 0 -
+            // the piece InsertEmptyBoxes never placed before this fix, since a header cell isn't itself a
+            // member of any _bodyRows entry's Boxes.
+            var bodyRow = x.ParentBox;
+            Assert.NotNull(bodyRow);
+            var spacer = bodyRow!.Boxes.OfType<CssSpacingBox>().FirstOrDefault(sb => ReferenceEquals(sb.ExtendedBox, a));
+            Assert.NotNull(spacer);
+
+            // The header proxy's own painted snapshot - what FragmentEmitter actually builds the header's
+            // fragments from - has to agree with the live box's now-correct, stretched geometry. The proxy
+            // is created (and its snapshot captured) before the body row loop runs, so without an explicit
+            // resync once A closes, the snapshot would still show A cut short at the header's own bottom
+            // even though the live box above is already right - a layout/paint divergence this repo's own
+            // testing conventions warn a property-only assertion (the ones above) cannot catch on its own.
+            Assert.True(headerProxy.SourceGeometry!.TryGetGeometry(a, out var aSnapshot));
+            Assert.Equal(a.ActualBottom, aSnapshot.ActualBottom, 1);
         }
 
         [Fact]
@@ -731,6 +810,155 @@ th, td { border: 1px solid black; padding: 8px; }
             Assert.Equal(c!.ActualBottom, a!.ActualBottom, 1);
             Assert.True(a.ActualBottom < d!.ActualBottom - 1,
                 $"A's bottom ({a.ActualBottom}) should stop at C's row, short of D's ({d.ActualBottom}).");
+        }
+
+        [Fact]
+        public async Task TableLayout_RowspanCrossingFromTheadIntoTbody_AcrossACollapsedHeaderRow_ClosesOnTheCorrectBodyRow()
+        {
+            // Issue #788's own collapse-aware sibling: A's rowspan='4' counts raw (collapsed-included)
+            // header rows the same way TableLayout_RowspanAcrossACollapsedTheadRow_ClosesOnTheCorrectRow
+            // does for a span that stays inside the header - here the span additionally crosses into the
+            // body, so GetLastRowInGrid (TableGrid/column-placement's own view of where the span ends)
+            // has to apply the identical remapping ComputeHeaderRowSpansCrossingIntoBody already does, or
+            // the two disagree about which body row A actually reaches. A's rowspan='4' covers the raw
+            // header rows (A's own row, the collapsed row, D's row) plus one more: x's row, not y's -
+            // naive raw arithmetic (gridRow + rowSpan - 1) would instead reach one row too far, into y's,
+            // reserving y's own column 0 for a span that never gets there and shifting y's real cell into
+            // a phantom column.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 200px; }
+        th, td { border: 1px solid black; height: 20px; }
+        .skip { visibility: collapse; }
+    </style>
+</head>
+<body>
+    <table>
+        <thead>
+            <tr><th id='a' rowspan='4'>A</th><th id='b'>B</th></tr>
+            <tr class='skip'><th>skip</th></tr>
+            <tr><th id='d'>D</th></tr>
+        </thead>
+        <tbody>
+            <tr><td id='x'>x</td></tr>
+            <tr><td id='y'>y</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+
+            var a = FindById(headerProxy.SourceBox, "a");
+            var d = FindById(headerProxy.SourceBox, "d");
+            var x = FindById(rootBox, "x");
+            var y = FindById(rootBox, "y");
+
+            Assert.NotNull(a);
+            Assert.NotNull(d);
+            Assert.NotNull(x);
+            Assert.NotNull(y);
+
+            // A reaches x's row, not y's.
+            Assert.True(a!.ActualBottom >= x!.ActualBottom - 1,
+                $"A's own bottom ({a.ActualBottom}) should reach x's row's bottom ({x.ActualBottom})");
+            Assert.True(a.ActualBottom < y!.ActualBottom - 1,
+                $"A's own bottom ({a.ActualBottom}) should stop short of y's row's bottom ({y.ActualBottom})");
+
+            // x shares D's column (column 0 is occupied by A through x's row, so x's real cell is
+            // pushed into the same free column D's own row already used). y is NOT phantom-shifted
+            // into that same column, though - A's span stops at x, so column 0 is free again by y's
+            // row, and y's real cell lands back there rather than following x's column.
+            Assert.Equal(d!.Location.X, x.Location.X, 1);
+            Assert.NotEqual(x.Location.X, y.Location.X, 1);
+
+            // A CssSpacingBox placeholder stands in for A's continuation at x's own row only.
+            var xRow = x.ParentBox;
+            var yRow = y.ParentBox;
+            Assert.NotNull(xRow);
+            Assert.NotNull(yRow);
+            Assert.Contains(xRow!.Boxes.OfType<CssSpacingBox>(), sb => ReferenceEquals(sb.ExtendedBox, a));
+            Assert.DoesNotContain(yRow!.Boxes.OfType<CssSpacingBox>(), sb => ReferenceEquals(sb.ExtendedBox, a));
+        }
+
+        [Fact]
+        public async Task TableLayout_RowspanCrossingFromTheadIntoTbody_WithATfootBetweenTwoTbodyGroups_ClosesOnTheCorrectBodyRow()
+        {
+            // ComputeAllRowsOriginalIndices's own regression target: a <tfoot> placed between two
+            // <tbody> groups (legal per the HTML table content model) must not perturb the original-index
+            // numbering of body rows that come after it - _allRows always places footer rows last
+            // regardless of source order, so a <tfoot> sitting in the middle of the markup contributes
+            // nothing to the row-space A's own rowspan is measured against. A's rowspan='4' covers the
+            // header's own row plus r0, r1, r2 - not r3 - regardless of where <tfoot> sits in the markup.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { border-collapse: collapse; width: 200px; }
+        th, td { border: 1px solid black; height: 20px; }
+    </style>
+</head>
+<body>
+    <table>
+        <thead><tr><th id='a' rowspan='4'>A</th><th id='b'>B</th></tr></thead>
+        <tbody>
+            <tr><td id='r0'>r0</td></tr>
+            <tr><td id='r1'>r1</td></tr>
+        </tbody>
+        <tfoot><tr><td id='f0'>f0</td></tr></tfoot>
+        <tbody>
+            <tr><td id='r2'>r2</td></tr>
+            <tr><td id='r3'>r3</td></tr>
+        </tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html, pageHeight: 800);
+
+            var table = FindTableBox(rootBox);
+            Assert.NotNull(table);
+
+            var headerProxy = table.Boxes.OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+
+            var a = FindById(headerProxy.SourceBox, "a");
+            var b = FindById(headerProxy.SourceBox, "b");
+            var r2 = FindById(rootBox, "r2");
+            var r3 = FindById(rootBox, "r3");
+
+            Assert.NotNull(a);
+            Assert.NotNull(b);
+            Assert.NotNull(r2);
+            Assert.NotNull(r3);
+
+            // A reaches r2's row, not r3's.
+            Assert.True(a!.ActualBottom >= r2!.ActualBottom - 1,
+                $"A's own bottom ({a.ActualBottom}) should reach r2's row's bottom ({r2.ActualBottom})");
+            Assert.True(a.ActualBottom < r3!.ActualBottom - 1,
+                $"A's own bottom ({a.ActualBottom}) should stop short of r3's row's bottom ({r3.ActualBottom})");
+
+            // r3 was not phantom-shifted into a column A never actually reaches - it lands back in
+            // column 0 (B's own column), not pushed into column 1 the way r2 correctly is.
+            Assert.Equal(b!.Location.X, r2.Location.X, 1);
+            Assert.NotEqual(r2.Location.X, r3.Location.X, 1);
+
+            var r2Row = r2.ParentBox;
+            var r3Row = r3.ParentBox;
+            Assert.NotNull(r2Row);
+            Assert.NotNull(r3Row);
+            Assert.Contains(r2Row!.Boxes.OfType<CssSpacingBox>(), sb => ReferenceEquals(sb.ExtendedBox, a));
+            Assert.DoesNotContain(r3Row!.Boxes.OfType<CssSpacingBox>(), sb => ReferenceEquals(sb.ExtendedBox, a));
         }
 
       [Fact]

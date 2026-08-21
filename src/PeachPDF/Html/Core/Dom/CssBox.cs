@@ -188,6 +188,30 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// This box's true DOM/structural parent, consulted only when <see cref="ParentBox"/> is null.
+        /// <see cref="CssLayoutEngineTable.RemoveHeaderFooterFromTree"/> nulls a repeating
+        /// <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>'s own <see cref="ParentBox"/> to detach it from the
+        /// live layout tree before laying its rows out, replacing it in the table's child list with one
+        /// <see cref="CssProxyBox"/> per page - so a containing-block walk that only knew to stop at "no
+        /// ParentBox" mistook the detached group itself for the document root. This lets
+        /// <see cref="DomUtils.GetNearestPositionedAncestor"/> continue past the detachment point to the
+        /// group's real DOM parent (the table box) and on up from there. A box deliberately reparented
+        /// elsewhere for layout - e.g. a <c>position: running()</c> box's synthetic containing block, see
+        /// <see cref="RunningElementLayout.LayoutRunningElementFor"/> - is unaffected: its
+        /// <see cref="ParentBox"/> is never null while that reparenting is in effect, so this is never
+        /// consulted for it. See <see href="https://github.com/jhaygood86/PeachPDF/issues/787">#787</see>.
+        /// </summary>
+        internal CssBox? DomParentBox { get; set; }
+
+        /// <summary>
+        /// <see cref="ParentBox"/> when this box has a live layout-tree parent, falling back to
+        /// <see cref="DomParentBox"/> when it doesn't - the one expression every containing-block walk
+        /// that needs to see past a detached <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> should use, rather
+        /// than each caller re-deriving the same <c>?? </c> fallback.
+        /// </summary>
+        internal CssBox? EffectiveParentBox => ParentBox ?? DomParentBox;
+
+        /// <summary>
         /// Gets the children boxes of this box
         /// </summary>
         public List<CssBox> Boxes { get; } = [];
@@ -6775,7 +6799,7 @@ namespace PeachPDF.Html.Core.Dom
         /// subtree translation rooted there must not move it. See the remarks on the private
         /// <see cref="OffsetTop(double, CssBox)"/> overload for why.
         /// </summary>
-        private bool EscapesTranslationOf(CssBox translationRoot) =>
+        internal bool EscapesTranslationOf(CssBox translationRoot) =>
             Position.Value is PositionMode.Absolute or PositionMode.Fixed
             && !DomUtils.IsSelfOrDescendantOf(DomUtils.GetNearestPositionedAncestor(this), translationRoot);
 

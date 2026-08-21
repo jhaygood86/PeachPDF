@@ -133,6 +133,26 @@ namespace PeachPDF.Html.Core.Dom
         private readonly List<CssBox> _allRows = [];
 
         /// <summary>
+        /// <see cref="_allRows"/>'s own grid-row-space twin of <see cref="_bodyRowOriginalIndices"/>: for
+        /// each of the header's rows (real per-row count, not <see cref="_bodyRowOriginalIndices"/>'s own
+        /// "the header counts as one unit" numbering) followed by each of <see cref="_bodyRows"/>'s own
+        /// rows, the original (collapsed-rows-included) index within its own group - one continuous,
+        /// unbroken numbering spanning the header/body boundary. Only the header and body portions are
+        /// populated (the footer is provably unreachable from a header-opened span, since <c>_allRows</c>
+        /// always places footer rows last regardless of source order) - see
+        /// <see cref="ComputeAllRowsOriginalIndices"/>.
+        /// </summary>
+        private readonly List<int> _allRowsOriginalIndices = [];
+
+        /// <summary>
+        /// Every header cell whose <c>rowspan</c> reaches past the header's own last row, into
+        /// <see cref="_bodyRows"/> - keyed to the body-local row index (an index into
+        /// <see cref="_bodyRows"/>) its span actually ends on. See
+        /// <see cref="ComputeHeaderRowSpansCrossingIntoBody"/> (issue #788).
+        /// </summary>
+        private readonly Dictionary<CssBox, int> _headerRowSpansCrossingIntoBody = [];
+
+        /// <summary>
         /// Every <c>table-caption</c> box among the table's direct children, in source order -
         /// populated by <see cref="AssignBoxKinds"/> and split by each box's own <c>caption-side</c>
         /// into <see cref="_topCaptions"/>/<see cref="_bottomCaptions"/>.
@@ -445,6 +465,12 @@ namespace PeachPDF.Html.Core.Dom
 
             // get the table boxes into the proper fields
             AssignBoxKinds();
+
+            // A header-opened rowspan crossing into the body (issue #788) needs both: the grid-row-space
+            // numbering to find such a cell, and which cell(s) those are, before InsertEmptyBoxes below
+            // places their continuation placeholders.
+            ComputeAllRowsOriginalIndices();
+            ComputeHeaderRowSpansCrossingIntoBody();
 
             // Every real cell's grid column, needed before InsertEmptyBoxes' own first call to
             // GetCellRealColumnIndex - see ComputeColumnPlacements' own remarks.
@@ -1332,6 +1358,107 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Populates <see cref="_allRowsOriginalIndices"/>: <see cref="_headerBox"/>'s own real per-row
+        /// numbering (<see cref="ComputeRowGroupOriginalIndices"/>), continued by one more unbroken counter
+        /// across <see cref="_tableBox"/>'s remaining children - mirroring <see cref="AssignBoxKinds"/>'s
+        /// own <c>TableRow</c>/<c>TableRowGroup</c> cases exactly, so the result stays index-aligned with
+        /// <see cref="_bodyRows"/>, but never incrementing for <see cref="_footerBox"/> itself.
+        /// </summary>
+        /// <remarks>
+        /// A first cut rebased <see cref="_bodyRowOriginalIndices"/>'s own values (which count the header
+        /// as one unit, and may have a footer's own unit mixed in) by a single constant, reasoning that
+        /// only each body row's original index *relative to the first body row* is used. That reasoning
+        /// holds only when a <c>&lt;tfoot&gt;</c> sits before every body row - real, HTML-table-content-
+        /// model-legal markup can place one *between* two <c>&lt;tbody&gt;</c> groups instead, where the
+        /// footer's one-unit slot perturbs only the body rows *after* it, not by a constant every body
+        /// row shares. A fresh, independent walk has no such position-dependent term to get wrong: the
+        /// footer is simply never counted, wherever it sits, which is what "no unit for a box that isn't
+        /// part of this numbering" already means for the header's own leading contribution too.
+        /// </remarks>
+        private void ComputeAllRowsOriginalIndices()
+        {
+            _allRowsOriginalIndices.Clear();
+            _allRowsOriginalIndices.AddRange(ComputeRowGroupOriginalIndices(_headerBox));
+
+            var originalRowIndex = _headerBox?.Boxes.Count(r => r.DerivedStyle.ActualDisplay == Keywords.TableRow) ?? 0;
+
+            foreach (var box in _tableBox.Boxes)
+            {
+                if (box is CssProxyBox) continue;
+                if (ReferenceEquals(box, _headerBox) || ReferenceEquals(box, _footerBox)) continue;
+
+                switch (box.DerivedStyle.ActualDisplay)
+                {
+                    case Keywords.TableRow:
+                        if (!IsRowCollapsed(box)) _allRowsOriginalIndices.Add(originalRowIndex);
+                        originalRowIndex++;
+                        break;
+                    case Keywords.TableRowGroup:
+                        foreach (var childBox in box.Boxes)
+                        {
+                            if (childBox.DerivedStyle.ActualDisplay != Keywords.TableRow) continue;
+
+                            if (!IsRowCollapsed(childBox)) _allRowsOriginalIndices.Add(originalRowIndex);
+                            originalRowIndex++;
+                        }
+                        break;
+                    case Keywords.TableHeaderGroup or Keywords.TableFooterGroup:
+                        // A second <thead>/<tfoot> - AssignBoxKinds folds it into _bodyRows as one whole
+                        // entry, with no collapse check of its own (mirrored here unchanged, not newly
+                        // introduced) - needs the same one-unit counting to stay index-aligned with it.
+                        _allRowsOriginalIndices.Add(originalRowIndex);
+                        originalRowIndex++;
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Populates <see cref="_headerRowSpansCrossingIntoBody"/>: every header cell whose <c>rowspan</c>
+        /// reaches past the header's own last row (issue #788). <see cref="TableGrid"/>/column-placement
+        /// (<see cref="ComputeColumnPlacements"/>, built over the whole-grid <see cref="_allRows"/>) already
+        /// treats such a span as reaching into the body and reserves a column for it there - this is the
+        /// other half, finding which cells those are so the rest of this engine can agree.
+        /// </summary>
+        /// <remarks>
+        /// A footer-opened span crossing into the body is not possible to detect the same way and does not
+        /// need to be: <see cref="_allRows"/> always places footer rows after every body row, so a footer
+        /// row's own grid index is never small enough for <see cref="GetEffectiveEndRowIndex(int, int, IReadOnlyList{int}, int)"/>
+        /// to walk past it into anything - there is nothing after the footer in the grid to cross into.
+        /// </remarks>
+        private void ComputeHeaderRowSpansCrossingIntoBody()
+        {
+            _headerRowSpansCrossingIntoBody.Clear();
+
+            if (_headerBox is null || _bodyRows.Count == 0) return;
+
+            var headerRowCountInGrid = HeaderRowCountInGrid;
+            var headerRowIndex = 0;
+
+            foreach (var row in _headerBox.Boxes)
+            {
+                if (row.DerivedStyle.ActualDisplay != Keywords.TableRow) continue;
+                if (IsRowCollapsed(row)) continue;
+
+                foreach (var cell in row.Boxes)
+                {
+                    var rowSpan = GetRowSpan(cell);
+                    if (rowSpan <= 1) continue;
+
+                    var gridEndRow = GetEffectiveEndRowIndex(
+                        headerRowIndex, rowSpan, _allRowsOriginalIndices, _allRowsOriginalIndices.Count);
+
+                    if (gridEndRow < headerRowCountInGrid) continue;
+
+                    _headerRowSpansCrossingIntoBody[cell] =
+                        Math.Min(gridEndRow - headerRowCountInGrid, _bodyRows.Count - 1);
+                }
+
+                headerRowIndex++;
+            }
+        }
+
+        /// <summary>
         /// Whether <paramref name="row"/> is a table row (or a row inside a collapsed row group -
         /// <c>visibility</c> is an inherited property, so a <c>&lt;tbody&gt;</c>/<c>&lt;thead&gt;</c>/
         /// <c>&lt;tfoot&gt;</c> marked <c>collapse</c> already gives every row inside it the same
@@ -1362,37 +1489,65 @@ namespace PeachPDF.Html.Core.Dom
                     var realColumnIndex = GetCellRealColumnIndex(cell); //Real column of the cell
                     var endRowIndex = GetEffectiveEndRowIndex(currentRow, rowSpan);
 
-                    for (var i = currentRow + 1; i <= endRowIndex; i++)
-                    {
-                        var columnCount = 0;
-                        var inserted = false;
-                        for (var j = 0; j < _bodyRows[i].Boxes.Count; j++)
-                        {
-                            if (columnCount == realColumnIndex)
-                            {
-                                _bodyRows[i].Boxes.Insert(columnCount, new CssSpacingBox(_tableBox, ref cell, currentRow, endRowIndex));
-                                inserted = true;
-                                break;
-                            }
-                            columnCount++;
-                            realColumnIndex -= GetColSpan(_bodyRows[i].Boxes[j]) - 1;
-                        }
-
-                        // The loop above only ever compares columnCount against a later row's *existing*
-                        // cells, so a rowspan whose column sits at or past that row's last cell (the
-                        // common case: a rowspan in the table's last column) never matches inside the
-                        // loop and falls through here with no placeholder inserted at all - the row's
-                        // column count then silently undercounts and CalculateCountAndWidth's tally
-                        // (below) misses this row's contribution to it (issue #522).
-                        if (!inserted && columnCount == realColumnIndex)
-                        {
-                            _bodyRows[i].Boxes.Add(new CssSpacingBox(_tableBox, ref cell, currentRow, endRowIndex));
-                        }
-                    }
+                    InsertSpacingBoxesForSpan(cell, realColumnIndex, currentRow, endRowIndex);
                 }
             }
 
+            // A header cell whose rowspan crosses into the body (issue #788) isn't reached by the loop
+            // above - it isn't itself a member of any _bodyRows entry's Boxes - so it needs its own
+            // placeholder pass, opening at the sentinel row index TableRowCursor.RowIndex already uses
+            // for "opened outside the body's own numbering" (-1) rather than any real _bodyRows index.
+            foreach (var (cell, endBodyRow) in _headerRowSpansCrossingIntoBody)
+            {
+                InsertSpacingBoxesForSpan(cell, GetCellRealColumnIndex(cell), -1, endBodyRow);
+            }
+
             _tableBox._tableFixed = true;
+        }
+
+        /// <summary>
+        /// Places a <see cref="CssSpacingBox"/> continuation placeholder for <paramref name="cell"/>'s own
+        /// <c>rowspan</c> into every <see cref="_bodyRows"/> entry between <paramref name="openingBodyRow"/>
+        /// (exclusive) and <paramref name="endRowIndex"/> (inclusive), at <paramref name="realColumnIndex"/> -
+        /// the shared body of <see cref="InsertEmptyBoxes"/>'s own loop, reused for a header-opened cell
+        /// crossing into the body (issue #788), whose own opening row isn't a member of <see cref="_bodyRows"/>
+        /// at all.
+        /// </summary>
+        /// <remarks>
+        /// <paramref name="realColumnIndex"/> is deliberately mutated across the outer loop's own
+        /// iterations rather than reset to <see cref="GetCellRealColumnIndex(CssBox)"/>'s own value per
+        /// row - matching this method's pre-extraction shape exactly, since re-deriving whether that was
+        /// itself a latent bug is out of scope for whichever change last touched this loop.
+        /// </remarks>
+        private void InsertSpacingBoxesForSpan(CssBox cell, int realColumnIndex, int openingBodyRow, int endRowIndex)
+        {
+            for (var i = openingBodyRow + 1; i <= endRowIndex; i++)
+            {
+                var columnCount = 0;
+                var inserted = false;
+                for (var j = 0; j < _bodyRows[i].Boxes.Count; j++)
+                {
+                    if (columnCount == realColumnIndex)
+                    {
+                        _bodyRows[i].Boxes.Insert(columnCount, new CssSpacingBox(_tableBox, ref cell, openingBodyRow, endRowIndex));
+                        inserted = true;
+                        break;
+                    }
+                    columnCount++;
+                    realColumnIndex -= GetColSpan(_bodyRows[i].Boxes[j]) - 1;
+                }
+
+                // The loop above only ever compares columnCount against a later row's *existing*
+                // cells, so a rowspan whose column sits at or past that row's last cell (the
+                // common case: a rowspan in the table's last column) never matches inside the
+                // loop and falls through here with no placeholder inserted at all - the row's
+                // column count then silently undercounts and CalculateCountAndWidth's tally
+                // (below) misses this row's contribution to it (issue #522).
+                if (!inserted && columnCount == realColumnIndex)
+                {
+                    _bodyRows[i].Boxes.Add(new CssSpacingBox(_tableBox, ref cell, openingBodyRow, endRowIndex));
+                }
+            }
         }
 
         /// <summary>
@@ -1477,8 +1632,15 @@ namespace PeachPDF.Html.Core.Dom
         /// issue #665) whether the caller wants it for the collapsed-border grid or for
         /// <see cref="GetCellRealColumnIndex"/>'s own cache, so <see cref="ComputeColumnPlacements"/> (the
         /// one caller left - <see cref="BuildTableGrid"/> reuses its output rather than asking again) is
-        /// the single place this has to be right. Neither a header nor a footer row's rowspan needs the
-        /// remapping (<see cref="InsertEmptyBoxes"/> never touches them).
+        /// the single place this has to be right. A header row's rowspan needs the identical remapping
+        /// too (issue #788: a rowspan crossing a <c>visibility: collapse</c> header row, or reaching past
+        /// the header into the body, otherwise lands one row short or long per collapsed row it crosses -
+        /// the same failure mode issue #665 already fixed for a body row's own rowspan), via
+        /// <see cref="_allRowsOriginalIndices"/> rather than <see cref="_bodyRowOriginalIndices"/>, since a
+        /// header-opened span's own start index is in the header's portion of the whole-grid numbering, not
+        /// the body's. A footer row's rowspan needs no remapping (<see cref="_allRows"/> always places
+        /// footer rows last, so a footer-opened span has nothing after it in the grid to cross into or
+        /// reach past - the raw arithmetic fallback below is already correct for it).
         /// </summary>
         private int GetLastRowInGrid(int gridRow, CssBox cell, int rowSpan)
         {
@@ -1489,6 +1651,11 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var bodyIndex = gridRow - headerRowCount;
                 return GetEffectiveEndRowIndex(bodyIndex, rowSpan) + headerRowCount;
+            }
+
+            if (gridRow < headerRowCount)
+            {
+                return GetEffectiveEndRowIndex(gridRow, rowSpan, _allRowsOriginalIndices, _allRowsOriginalIndices.Count);
             }
 
             return gridRow + rowSpan - 1;
@@ -2025,6 +2192,7 @@ namespace PeachPDF.Html.Core.Dom
                 _headerIndex = _tableBox.Boxes.IndexOf(_headerBox);
                 _tableBox.Boxes.Remove(_headerBox);
                 _headerBox.ParentBox = null;
+                _headerBox.DomParentBox = _tableBox;
             }
 
             if (_footerBox != null)
@@ -2032,6 +2200,7 @@ namespace PeachPDF.Html.Core.Dom
                 _footerIndex = _tableBox.Boxes.IndexOf(_footerBox);
                 _tableBox.Boxes.Remove(_footerBox);
                 _footerBox.ParentBox = null;
+                _footerBox.DomParentBox = _tableBox;
             }
         }
 
@@ -2083,6 +2252,13 @@ namespace PeachPDF.Html.Core.Dom
                 // then setting the parent adds the group twice, which is exactly one header's worth of
                 // extra height on the second run and was the whole of this issue's "extra height".
                 source.ParentBox = _tableBox;
+
+                // DomParentBox exists only to stand in for a null ParentBox (see its own doc comment) -
+                // now that ParentBox is real again, clear it rather than leave it pointing at _tableBox
+                // forever. Harmless today (every reader already prefers ParentBox), but a stale non-null
+                // DomParentBox on a box that's genuinely back in the live tree is a footgun for whatever
+                // reads it next.
+                source.DomParentBox = null;
 
                 if (proxy.SourceIndex >= 0 && proxy.SourceIndex < _tableBox.Boxes.Count - 1)
                 {
@@ -2415,6 +2591,14 @@ namespace PeachPDF.Html.Core.Dom
             if (!_continuesAPreviousPass)
             {
                 await DetachAndMeasureRepeatedRowGroups(g, cursor, startX);
+
+                // A header-opened rowspan cell crossing into the body (issue #788) is registered here,
+                // before the body row loop below ever calls TableRowCursor.BeginRow - the same shape
+                // TableRowCursor.Continuing already uses to pre-seed RowSpannedBoxes for a cell an
+                // earlier *pass* left open, reused for a cell an earlier *row-group* left open instead.
+                // Once seeded, CloseSpanningCell/straddle-correction/Continuation/Continuing all treat it
+                // as an indistinguishable, ordinary already-open rowspan cell - no changes needed there.
+                SeedCrossBoundaryRowSpans(cursor);
             }
 
             // Step 4: Layout body rows with page break detection.
@@ -2574,7 +2758,9 @@ namespace PeachPDF.Html.Core.Dom
 
                     await LayoutBodyRow(g, row, startX, headerCursor);
 
-                    RegisterRowSpanCellsEndingRow(row, rowIndex, headerOriginalRowIndices, headerSpanningCellsEndingOnRow);
+                    RegisterRowSpanCellsEndingRow(
+                        row, rowIndex, headerOriginalRowIndices, headerSpanningCellsEndingOnRow,
+                        _headerRowSpansCrossingIntoBody);
                     headerCursor.MaxBottom = GrowForClosingRowSpanCells(
                         rowIndex, headerSpanningCellsEndingOnRow, headerCursor.MaxBottom, _isVertical);
 
@@ -2704,6 +2890,38 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Registers each of <see cref="_headerRowSpansCrossingIntoBody"/>'s cells into <paramref name="cursor"/>'s
+        /// own <see cref="TableRowCursor.RowSpannedBoxes"/>, at the body-local row its span actually ends
+        /// on - before the body row loop places its first row, so the cell looks, to every consumer of
+        /// that map, exactly like an ordinary rowspan cell some earlier body row opened (issue #788).
+        /// </summary>
+        private void SeedCrossBoundaryRowSpans(TableRowCursor cursor)
+        {
+            foreach (var (cell, bodyEndRow) in _headerRowSpansCrossingIntoBody)
+            {
+                if (!cursor.RowSpannedBoxes.TryGetValue(bodyEndRow, out var boxes))
+                    cursor.RowSpannedBoxes[bodyEndRow] = boxes = [];
+
+                boxes.Add(cell);
+            }
+        }
+
+        /// <summary>
+        /// Re-syncs every header proxy created so far against <paramref name="cell"/>'s own now-final
+        /// (post-<see cref="CloseSpanningCell"/>) geometry - see <see cref="BoxGeometrySnapshot.Resync"/>
+        /// for why this is needed at all for a header cell crossing into the body (issue #788).
+        /// </summary>
+        private void ResyncHeaderProxiesFor(CssBox cell)
+        {
+            foreach (var proxy in _tableBox.Boxes.OfType<CssProxyBox>())
+            {
+                if (proxy.DerivedStyle.ActualDisplay != Keywords.TableHeaderGroup) continue;
+
+                proxy.SourceGeometry?.Resync(cell);
+            }
+        }
+
+        /// <summary>
         /// Closes every <c>rowSpan &gt; 1</c> cell in a just-measured detached header's/footer's own rows
         /// the same way <see cref="LayoutBodyRow"/>'s own vertical-alignment loop closes an ordinary body
         /// row's rowspan cell (<c>cell.ActualBottom = rowMaxBottom; CssLayoutEngine.ApplyCellVerticalAlignment(g, cell);</c>,
@@ -2734,14 +2952,27 @@ namespace PeachPDF.Html.Core.Dom
         /// every <c>rowSpan &gt; 1</c> cell seen so far this loop, keyed by the row-group-local row index
         /// its span ends on - shared by every method here and scoped to one header/footer loop
         /// </param>
+        /// <param name="crossingCells">
+        /// <see cref="_headerRowSpansCrossingIntoBody"/>, when <paramref name="row"/> belongs to the
+        /// header - a cell in it closes in the body instead (issue #788), so it must not also be
+        /// registered here. Null for the footer loop, which has no equivalent (a footer-opened span has
+        /// nothing after it in the grid to cross into).
+        /// </param>
         private static void RegisterRowSpanCellsEndingRow(
             CssBox row, int rowIndex, IReadOnlyList<int> originalRowIndices,
-            Dictionary<int, List<CssBox>> spanningCellsEndingOnRow)
+            Dictionary<int, List<CssBox>> spanningCellsEndingOnRow,
+            IReadOnlyDictionary<CssBox, int>? crossingCells = null)
         {
             foreach (var cell in row.Boxes)
             {
                 var rowSpan = GetRowSpan(cell);
                 if (rowSpan <= 1) continue;
+
+                // A cell crossing into the body (issue #788) closes there instead - registering it here
+                // too would stretch/align it against the header's own last row first, leaving it in a
+                // state CloseSpanningCell's later close (from the body row it actually ends on) would
+                // incorrectly compose on top of rather than replace.
+                if (crossingCells?.ContainsKey(cell) == true) continue;
 
                 var endRow = GetEffectiveEndRowIndex(rowIndex, rowSpan, originalRowIndices, originalRowIndices.Count);
                 if (!spanningCellsEndingOnRow.TryGetValue(endRow, out var endingHere))
@@ -3366,6 +3597,185 @@ namespace PeachPDF.Html.Core.Dom
             // recorded no break inside itself, so it did not fragment, and a box that did not fragment
             // is moved whole or left alone. The engine states the fact (PageBreakBottoms) and the
             // epilogue takes the decision - see CssBox.PaginatedItsOwnContentWithoutBreaking.
+
+            // Real per-column pagination (issue #783), for a vertical table only. Run last, once every
+            // row's real geometry (including the vertical-rl reflection above) has settled - see the
+            // method's own remarks for why this is a relocation pass over already-correct geometry rather
+            // than a change to the row loop itself.
+            RelocateColumnsAcrossPageBoundaries(placedRows);
+        }
+
+        /// <summary>
+        /// Relocates whole columns of a vertical table across page boundaries wherever one falls between
+        /// them - issue #783's first-cut real per-column pagination, scoped to a "plain grid" table (see
+        /// <see cref="MonolithicContent.HasColumnPaginationExcludedFeature"/>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why a relocation pass over already-laid-out geometry, not an interleaved column-major layout
+        /// loop.</b> A vertical table's own column axis (physical Y) is genuinely paginable - unlike the
+        /// row axis, physical Y is the page's own real fragmentation axis - but a *row*'s own row-axis
+        /// extent still cannot be known without laying out that row's cells across every column at once
+        /// (there is no per-row equivalent of <c>_columnWidths[]</c>'s own CSS-hint-driven precomputation).
+        /// Interleaving column-by-column layout with page-by-page pagination would need every row's
+        /// content fragmented across the very columns pagination is trying to place independently - a
+        /// two-pass architecture (measure every row unpaginated, *then* paginate) genuinely more than this
+        /// first cut needs. This method instead runs once, after the table's own ordinary (still-forward-
+        /// grown, unpaginated) row loop has already settled every cell's real geometry: a column's own
+        /// extent is entirely fixed by <c>_columnWidths[]</c> (<see cref="CellInlineSize"/>'s "cell height
+        /// is the column-sizing hint" mechanism) - identical for every row's cell in that column, by
+        /// construction (<c>cell.ActualBottom = cell.Location.Y + width</c> in <see cref="LayoutBodyRow"/>,
+        /// <c>width</c> read straight from <c>_columnWidths[]</c>, never from that cell's own content) - so
+        /// relocating a column onto a later page is a pure subtree translation
+        /// (<see cref="CssBox.OffsetTop(double)"/>) of every row's cell in it, the same mover pattern
+        /// already used throughout this engine (e.g. <see cref="ReflectRowAxisForVerticalRl"/>), not a new
+        /// layout pass with its own continuation/resumption machinery.
+        /// </para>
+        /// <para>
+        /// <b>Plan, then commit - never partially relocate.</b> The loop below first walks every column
+        /// computing where it would land (<c>plannedDeltas</c>) and which page breaks that requires
+        /// (<c>pageBreaks</c>), mutating nothing. Only if that succeeds for every column does a second loop
+        /// apply the planned shifts. A single column whose own fixed extent exceeds even a fresh page's
+        /// whole band cannot be helped by any relocation - discovered partway through, that would leave
+        /// earlier columns already translated with no undo - so the whole pass bails out, unmodified, the
+        /// instant that is found, deferring to <see cref="MonolithicContent.IsUnresumableVerticalTable"/>'s
+        /// own existing "move the whole table" fallback for that one remaining sub-case. The same bail-out
+        /// covers the table's own first column not fitting where the table currently starts: that is not a
+        /// column-relocation question (nothing has been placed on this page yet for a relocation to
+        /// preserve), so the ordinary whole-table mover already answers it correctly on its own.
+        /// </para>
+        /// <para>
+        /// <b>No new "did this fragment" fact is needed.</b> Whether this pass found anything to relocate
+        /// is answered exactly the way an ordinary <c>horizontal-tb</c> table's own row-break decision
+        /// already is - <see cref="CssBox.PaginatedItsOwnContentWithoutBreaking"/> reading
+        /// <see cref="CssBox.PageBreakBottoms"/> as a post-layout fact. This method states that same fact:
+        /// every entry records the absolute Y the table's own slice on that page ends at, which
+        /// <see cref="Paint.FragmentPainter"/> already reads to clip the table's own bottom border there.
+        /// Finding nothing to relocate, or bailing out entirely, simply leaves it unset, and the table
+        /// falls through to exactly today's monolithic move-whole behavior with no special-casing needed
+        /// here for either outcome.
+        /// </para>
+        /// </remarks>
+        /// <param name="placedRows">
+        /// how many of <see cref="_bodyRows"/> this pass actually placed - every one of them, since a
+        /// vertical table's own row loop never stops mid-table (its <c>pageHeight</c> override routes it
+        /// through the unpaginated fallback path), but named to match <see cref="ReflectRowAxisForVerticalRl"/>'s
+        /// own caller rather than assumed.
+        /// </param>
+        private void RelocateColumnsAcrossPageBoundaries(int placedRows)
+        {
+            if (!_isVertical || _bodyRows.Count == 0 || placedRows == 0) return;
+
+            // A continuation pass resumes only the still-open cell content of a row already placed by an
+            // earlier pass - row 0's geometry (this method's own reference for every column's position) is
+            // not fresh here, and may already reflect an earlier pass's own relocation. Recomputing deltas
+            // from it a second time has no established invariant behind it, so this pass simply defers to
+            // whatever the fresh pass that placed row 0 already decided.
+            if (_continuesAPreviousPass) return;
+
+            var container = _tableBox.HtmlContainer;
+            if (container is not { HasRealPageGrid: true }) return;
+
+            if (MonolithicContent.HasColumnPaginationExcludedFeature(_tableBox)) return;
+
+            var columnCount = _bodyRows[0].Boxes.Count;
+            if (columnCount == 0) return;
+
+            // A "plain grid" table (no rowspan/colspan - already excluded above) is still not guaranteed to
+            // have the same cell count in every row: an author can simply write fewer <td>s in one row, or
+            // give a cell display:none in some rows but not others (a ragged row is already a reachable,
+            // unpadded shape elsewhere in this engine - see InsertEmptyBoxes's own remarks). Every column
+            // below is read positionally (_bodyRows[r].Boxes[c]), which silently reads the wrong cell - or
+            // throws - for a short row, so bail out to the existing whole-table mover instead of guessing.
+            for (var r = 1; r < placedRows; r++)
+            {
+                if (_bodyRows[r].Boxes.Count != columnCount) return;
+            }
+
+            var plannedDeltas = new double[columnCount];
+            List<(int Slot, double Bottom)> pageBreaks = [];
+
+            var appliedDelta = 0d;
+            var currentSlot = container.SlotStartingAt(_bodyRows[0].Boxes[0].Location.Y);
+            var previousColumnBottom = 0d;
+
+            for (var c = 0; c < columnCount; c++)
+            {
+                var referenceCell = _bodyRows[0].Boxes[c];
+                var columnTop = referenceCell.Location.Y + appliedDelta;
+                var columnHeight = referenceCell.ActualBottom - referenceCell.Location.Y;
+
+                if (HtmlContainerInt.FallsPast(columnTop + columnHeight, container.BandOfSlot(currentSlot)))
+                {
+                    if (c == 0)
+                    {
+                        // The table's own first column doesn't fit where the table currently starts -
+                        // nothing has been placed on this page yet for a relocation to preserve, so this
+                        // is an ordinary "does the whole box fit here" question, not a column-relocation
+                        // one. Leave it to the existing whole-table mover.
+                        return;
+                    }
+
+                    var nextSlot = currentSlot + 1;
+                    if (columnHeight > container.PageBandHeightOf(nextSlot))
+                    {
+                        // No relocation can help a column taller than a whole fresh page - bail out of
+                        // the entire pass, unmodified, per this method's own "plan, then commit" remarks.
+                        return;
+                    }
+
+                    pageBreaks.Add((currentSlot, previousColumnBottom));
+
+                    appliedDelta += container.PageTopOf(nextSlot) - columnTop;
+                    currentSlot = nextSlot;
+                    columnTop = container.PageTopOf(nextSlot);
+                }
+
+                plannedDeltas[c] = appliedDelta;
+                previousColumnBottom = columnTop + columnHeight;
+            }
+
+            if (pageBreaks.Count == 0) return;
+
+            for (var c = 0; c < columnCount; c++)
+            {
+                if (plannedDeltas[c] == 0) continue;
+
+                for (var r = 0; r < placedRows; r++)
+                {
+                    _bodyRows[r].Boxes[c].OffsetTop(plannedDeltas[c]);
+                }
+            }
+
+            // OffsetTop keeps every relocated cell's own ActualBottom in sync (a computed property), but
+            // the table's own column-axis extent, and each row's, were both settled by Step 7/
+            // SetRowGroupBoxDimensions before this pass ran and are real, stored fields - left alone they
+            // still name the pre-relocation extent, understating how far the table's content now actually
+            // reaches. That is not just a cosmetic gap: a following sibling is positioned from
+            // _tableBox.ActualBottom (CssBox's own in-flow placement), so a stale value lands the next box
+            // on top of the relocated column(s) rather than after them. plannedDeltas is monotonically
+            // non-decreasing in c (appliedDelta only ever grows), and every column's own pre-relocation
+            // ActualBottom is strictly increasing in c (columns stack forward) - so the last column always
+            // carries both the largest delta and the table's true final column-axis edge, making
+            // plannedDeltas[columnCount - 1] exactly what _tableBox's own trailing border/spacing epilogue
+            // (added after the last column's content at Step 7) needs to shift by too. Each row is
+            // recomputed from its own (now-relocated) cells instead, the same way AssignRowActualBounds
+            // already does for the row loop itself, rather than assumed to share the table's one delta -
+            // cheap, and it costs nothing to be exact rather than lean on the same derivation twice.
+            _tableBox.ActualBottom += plannedDeltas[columnCount - 1];
+
+            for (var r = 0; r < placedRows; r++)
+            {
+                _bodyRows[r].ActualBottom = _bodyRows[r].Boxes.Max(x => x.ActualBottom);
+            }
+
+            SetRowGroupBoxDimensions(placedRows);
+
+            _tableBox.PageBreakBottoms ??= [];
+            foreach (var (slot, bottom) in pageBreaks)
+            {
+                _tableBox.PageBreakBottoms[slot] = bottom;
+            }
         }
 
         /// <summary>
@@ -4928,6 +5338,18 @@ namespace PeachPDF.Html.Core.Dom
             var applied = CssLayoutEngine.ApplyCellVerticalAlignment(g, cell, _isVertical);
 
             cursor.RecordForeignWrite(cell, previousBottom, applied);
+
+            // A header-opened cell crossing into the body (issue #788) closes here, for the first time,
+            // strictly after any header proxy already created for this table captured its own snapshot at
+            // the cell's natural, not-yet-closed height (LayoutBodyRows creates the header proxy before
+            // its own row loop runs) - resync every such proxy now, or its painted output shows the cell
+            // cut short at the header's own bottom despite the live box (this method's own work above)
+            // already being correct. A proxy created after this point (a later page's repeat) needs no
+            // resync of its own: it captures the already-closed live geometry directly.
+            if (_headerRowSpansCrossingIntoBody.ContainsKey(cell))
+            {
+                ResyncHeaderProxiesFor(cell);
+            }
         }
 
         /// <summary>
@@ -5057,7 +5479,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the colspan of the specified box
         /// </summary>
         /// <param name="b"></param>
-        private static int GetColSpan(CssBox b)
+        internal static int GetColSpan(CssBox b)
         {
             var att = b.GetAttribute("colspan", "1");
 
@@ -5068,7 +5490,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Gets the rowspan of the specified box
         /// </summary>
         /// <param name="b"></param>
-        private static int GetRowSpan(CssBox b)
+        internal static int GetRowSpan(CssBox b)
         {
             var att = b.GetAttribute("rowspan", "1");
 

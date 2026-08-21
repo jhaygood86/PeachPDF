@@ -5395,6 +5395,27 @@ var writingModeHtml = "<!DOCTYPE html><html><head>" + WritingModeCss + "</head><
     "</table><div class=\"label\">a rowspan cell entirely inside a multi-row &lt;thead&gt; spans the combined row-axis extent of its own two rows, correctly positioned at the reversed (block-start-ward) side rather than only against its opening row</div></div>" +
     "</div>" +
 
+    "<div style=\"page-break-before: always\"></div>" +
+    "<h2>7d &mdash; real per-column pagination of a plain-grid vertical table (issue #783)</h2>" +
+    "<div class=\"row\">" +
+    "<div><table style=\"writing-mode: vertical-rl; border-spacing: 0; border: 2px solid #123\">" +
+    "<tr>" +
+    "<td style=\"width: 60px; height: 100px; background: #1a6b8a; color: #fff; text-align: center; border: 1px solid #123\">C1</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #2a86a8; color: #fff; text-align: center; border: 1px solid #123\">C2</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #3a95bc; color: #fff; text-align: center; border: 1px solid #123\">C3</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #4a9bc4; color: #fff; text-align: center; border: 1px solid #123\">C4</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #5aa8d0; color: #fff; text-align: center; border: 1px solid #123\">C5</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #6ab5dc; color: #fff; text-align: center; border: 1px solid #123\">C6</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #7cc0e0; text-align: center; border: 1px solid #123\">C7</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #9cd2ea; text-align: center; border: 1px solid #123\">C8</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #bce3f2; text-align: center; border: 1px solid #123\">C9</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #cfe9f5; text-align: center; border: 1px solid #123\">C10</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #dff2fa; text-align: center; border: 1px solid #123\">C11</td>" +
+    "<td style=\"width: 60px; height: 100px; background: #eef6fb; text-align: center; border: 1px solid #123\">C12</td>" +
+    "</tr>" +
+    "</table><div class=\"label\">a plain grid (no rowspan/colspan/caption/thead-tfoot/collapsed borders) whose own column-axis extent exceeds one page's band relocates the columns that don't fit onto the next page as whole units, rather than moving the entire table - the table's own outer border and each page's own slice-bottom border paint correctly on both pages</div></div>" +
+    "</div>" +
+
     $"<h2>8 &mdash; text-orientation: real per-character upright/rotated splitting (issue #765)</h2>" +
     $"<style>@font-face {{ font-family: 'CJK'; src: url('data:font/truetype;base64,{writingModeCjkFontB64}') format('truetype'); }} .cjk {{ font-family: 'CJK', Arial, sans-serif }}</style>" +
     "<div class=\"row\">" +
