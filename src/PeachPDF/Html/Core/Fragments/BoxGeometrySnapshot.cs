@@ -150,6 +150,28 @@ namespace PeachPDF.Html.Core.Fragments
         internal bool TryGetGeometry(CssBox box, out BoxGeometry geometry) => _geometry.TryGetValue(box, out geometry!);
 
         /// <summary>
+        /// Re-captures <paramref name="subtreeRoot"/> and its descendants' <b>current</b> live geometry,
+        /// overwriting whatever this snapshot already held for them.
+        /// </summary>
+        /// <remarks>
+        /// A repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>'s proxy is created - and its own snapshot
+        /// captured - before the body row loop runs (<c>CssLayoutEngineTable.LayoutBodyRows</c>'s own
+        /// header-proxy-creation step precedes its row loop), so a header cell whose <c>rowspan</c>
+        /// crosses into <c>&lt;tbody&gt;</c> (issue #788) is captured at its natural, not-yet-closed height
+        /// - the body row loop only stretches it to its real, final extent afterward, through
+        /// <c>CloseSpanningCell</c>. Without this, the proxy's own painted snapshot - what
+        /// <see cref="Fragmentation.FragmentEmitter"/> actually builds the header's fragments from - shows
+        /// the cell cut short at the header's own bottom, even though the live box (what every
+        /// <c>CssBox</c>-property test reads) has already been correctly stretched: exactly the
+        /// layout/paint divergence this repo's own testing conventions warn a property-only assertion
+        /// cannot catch. <see cref="CssLayoutEngineTable.SeedCrossBoundaryRowSpans"/>'s caller resyncs
+        /// every header proxy that already exists at the moment such a cell closes; a proxy created
+        /// afterward (a later page's repeat) captures the already-closed live geometry directly through
+        /// the ordinary <see cref="Capture(CssBox)"/> path and needs no resync of its own.
+        /// </remarks>
+        internal void Resync(CssBox subtreeRoot) => CaptureBox(subtreeRoot, excluded: null);
+
+        /// <summary>
         /// Whether this snapshot captured <paramref name="box"/> at all — the question "was this box placed
         /// in the fragmentainer this snapshot describes?", which is not the same as whether it has geometry.
         /// </summary>

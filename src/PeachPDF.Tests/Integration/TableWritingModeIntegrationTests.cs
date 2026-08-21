@@ -740,6 +740,57 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalLrTable_HeaderOpenedRowspan_CrossingIntoBody_ClosesOnTheCorrectBodyRowAndColumn()
+        {
+            // Issue #788, the vertical-table sibling of CssLayoutEngineTableTests'
+            // TableLayout_RowspanCrossingFromTheadIntoTbody_ClosesOnTheCorrectBodyRowAndColumn - the
+            // mechanism (ComputeHeaderRowSpansCrossingIntoBody/SeedCrossBoundaryRowSpans) operates purely
+            // on grid row/column indices, never physical coordinates, so it needs no axis-specific
+            // handling of its own. vertical-lr (not vertical-rl) so the assertions below read as direct,
+            // forward-grown positions with no ReflectRowAxisForVerticalRl residual to account for.
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-lr; border-spacing: 0">
+                  <thead>
+                    <tr><td id="a" rowspan="3" style="width: 20pt; height: 20pt">A</td>
+                        <td id="b" style="width: 20pt; height: 20pt">B</td></tr>
+                  </thead>
+                  <tr><td id="d" style="width: 20pt; height: 20pt">D</td></tr>
+                  <tr><td id="x" style="width: 20pt; height: 20pt">x</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var t = LayoutHarness.FindById(root, "t");
+            Assert.NotNull(t);
+
+            var headerProxy = t!.Boxes.OfType<CssProxyBox>()
+                .First(p => p.DerivedStyle.ActualDisplay == Keywords.TableHeaderGroup);
+            var a = LayoutHarness.FindById(headerProxy.SourceBox, "a");
+            var d = LayoutHarness.FindById(root, "d");
+            var x = LayoutHarness.FindById(root, "x");
+
+            Assert.NotNull(a);
+            Assert.NotNull(d);
+            Assert.NotNull(x);
+
+            // x was not phantom-shifted into a column the header never declared - it lands at the same
+            // column-axis (physical Y) position as D, the only column A's own span leaves free.
+            Assert.Equal(d!.Location.Y, x!.Location.Y, 1);
+
+            // A's own row-axis extent (ActualRight for a vertical table) reaches down to cover x's row,
+            // not just D's.
+            Assert.True(a!.ActualRight >= x.ActualRight - 1,
+                $"A's own row-axis extent ({a.ActualRight}) should reach x's row's ({x.ActualRight})");
+            Assert.True(a.ActualRight > d.ActualRight,
+                "A should reach past its own header row group into the body, not stop at D's row.");
+
+            var bodyRow = x.ParentBox;
+            Assert.NotNull(bodyRow);
+            var spacer = bodyRow!.Boxes.OfType<CssSpacingBox>().FirstOrDefault(sb => ReferenceEquals(sb.ExtendedBox, a));
+            Assert.NotNull(spacer);
+        }
+
+        [Fact]
         public async Task VerticalLr_MultiRowThead_InternalRowsKeepForwardOrder()
         {
             // Sibling regression guard for the fix above: ReflectRowAxisForVerticalRl only runs for

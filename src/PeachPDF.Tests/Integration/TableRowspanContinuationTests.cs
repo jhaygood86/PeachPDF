@@ -810,5 +810,61 @@ namespace PeachPDF.Tests.Integration
                 Assert.Equal(cell.ActualBottom, sibling.ActualBottom, 0.01);
             }
         }
+
+        /// <summary>
+        /// Issue #788: a header-opened rowspan cell crossing into the body is registered into
+        /// <see cref="TableRowCursor"/>'s own <c>RowSpannedBoxes</c> before the body row loop starts
+        /// (<c>CssLayoutEngineTable.SeedCrossBoundaryRowSpans</c>) - indistinguishable, from that point on,
+        /// from an ordinary rowspan cell some earlier body row opened. This is the pagination case: the
+        /// body row the header's span actually ends on lands on a later page than the header itself, which
+        /// this same, already-proven straddle-correction/continuation machinery has to carry across the
+        /// page boundary with no changes of its own.
+        /// </summary>
+        [Fact]
+        public async Task AHeaderOpenedRowspan_ThatEndsOnABodyRowLandingOnALaterPage_ClosesThereCorrectly()
+        {
+            var fillerRows = string.Concat(Enumerable.Range(0, 8)
+                .Select(i => $"<tr><td id='r{i}'><div style='height:40pt'>row{i}</div></td></tr>"));
+
+            var html = LayoutHarness.Wrap(
+                "<table style='width:100%;border-collapse:collapse'>"
+                + "<thead><tr><th id='a' rowspan='10'><div style='height:20pt'>A</div></th>"
+                + "<th id='b'><div style='height:20pt'>B</div></th></tr></thead>"
+                + $"<tbody>{fillerRows}<tr><td id='x'><div style='height:20pt'>x</div></td></tr></tbody>"
+                + "</table>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var headerProxy = LayoutHarness.Descendants(root).OfType<CssProxyBox>()
+                .First(p => p.Display.Value == DisplayMode.TableHeaderGroup);
+            var a = LayoutHarness.FindById(headerProxy.SourceBox, "a");
+            var x = LayoutHarness.FindById(root, "x");
+
+            Assert.NotNull(a);
+            Assert.NotNull(x);
+
+            // The fixture's own filler rows (320pt) comfortably exceed one page's content band (260pt),
+            // so x's own row must actually have landed on page 2 - otherwise this test would not be
+            // exercising the pagination case its name promises.
+            var xSlot = container.SlotStartingAt(x!.Location.Y);
+            Assert.True(xSlot > 0, $"fixture must paginate to exercise the crossing-pages case, x landed on slot {xSlot}");
+
+            // x was not phantom-shifted into a column the header never declared - it lands in the same
+            // free column every other filler row's own single cell already resolved to.
+            var r0 = LayoutHarness.FindById(root, "r0");
+            Assert.NotNull(r0);
+            Assert.Equal(r0!.Location.X, x.Location.X, 1);
+
+            // A's own bottom reaches all the way down to x's row, on page 2 - not stranded at the
+            // header's own (page-1) position.
+            Assert.True(a!.ActualBottom >= x.ActualBottom - 1,
+                $"A's own bottom ({a.ActualBottom}) should reach x's row's bottom ({x.ActualBottom})");
+
+            // A CssSpacingBox placeholder stands in for A's continuation at x's own body row.
+            var bodyRow = x.ParentBox;
+            Assert.NotNull(bodyRow);
+            var spacer = bodyRow!.Boxes.OfType<CssSpacingBox>().FirstOrDefault(sb => ReferenceEquals(sb.ExtendedBox, a));
+            Assert.NotNull(spacer);
+        }
     }
 }
