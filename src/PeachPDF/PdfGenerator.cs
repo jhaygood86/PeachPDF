@@ -626,6 +626,12 @@ namespace PeachPDF
             // never disagree about which page an anchor lands on.
             (int PageIndex, double TopPt)? ResolveAnchorTarget(string anchorId)
             {
+                // href="#" (an empty fragment, commonly used as a JS-driven no-op link) reaches here
+                // as an empty anchorId - there is no element to target, so treat it the same as an
+                // anchor whose target simply wasn't found rather than let the elementId-not-null-or-empty
+                // guard inside GetElementRectangle throw.
+                if (anchorId.Length == 0) return null;
+
                 var anchorRect = container.GetElementRectangle(anchorId);
                 return anchorRect.HasValue
                     ? PageAnchorResolver.ResolveRectToPage(inner, ppp, slotToPage, maxMappedSlot, fragmentainers.Count, anchorRect.Value)
