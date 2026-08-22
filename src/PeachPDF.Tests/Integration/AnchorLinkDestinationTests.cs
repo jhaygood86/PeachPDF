@@ -59,6 +59,21 @@ namespace PeachPDF.Tests.Integration
                 $"Target starts its own fresh page (break-before:page), so its bottom-up Top ({top}) should be near the full page height ({pageHeight}), not near 0.");
         }
 
+        // Regression test for issue #801: an `<a href="#">` (an empty fragment, a common JS-driven
+        // no-op link pattern in real-world HTML) has Href.Length == 1, so LinkElementData.AnchorId
+        // evaluates to string.Empty rather than a real id. HandleLinks's ResolveAnchorTarget local
+        // passed that empty string straight to HtmlContainer.GetElementRectangle, which asserts its
+        // elementId argument is non-null/non-empty and threw ArgumentNullException("elementId"),
+        // crashing PDF generation for any document containing such a link.
+        [Fact]
+        public async Task AnchorLink_EmptyFragment_DoesNotThrowAndAddsNoAnnotation()
+        {
+            var html = "<html><body><a href='#'>no-op</a></body></html>";
+            var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
+
+            Assert.Equal(0, result.PdfDocument.Pages[0].Annotations.Count);
+        }
+
         // PdfGenerator.HandleLinks always calls the internal HtmlContainer.GetLinks(bookmarkBoxes)
         // overload now (so bookmark collection rides along on the same walk, see
         // DomUtils.GetAllLinkAndBookmarkBoxes), leaving the public no-arg GetLinks() only reachable by
