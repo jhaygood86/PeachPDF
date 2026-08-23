@@ -656,20 +656,88 @@ namespace PeachPDF.Html.Core.Dom
         /// resolution (CSS Containment 3 SS6.2) - shared by every length-resolution call site (<see
         /// cref="Parse.CssValueParser.ParseLength(string, double, CssBox)"/>, font-size) so there is one
         /// place that decides how a box's nearest container's size is measured, not one per caller.
-        /// Block size is only ever non-null for a <c>size</c> container - an <c>inline-size</c> container
-        /// doesn't track the block axis at all.
+        /// <c>WidthPt</c>/<c>HeightPt</c> are always the container's own physical width/height (for
+        /// <c>cqw</c>/<c>cqh</c>); <c>InlineSizePt</c>/<c>BlockSizePt</c> are the container's own
+        /// inline/block axis (for <c>cqi</c>/<c>cqb</c>/<c>cqmin</c>/<c>cqmax</c>), which rotates onto the
+        /// orthogonal physical axis under a <c>vertical-rl</c>/<c>vertical-lr</c> container (CSS Writing
+        /// Modes 4 SS7.1) - the two pairs only diverge for a vertical container. The axis that's
+        /// unconditionally available (an <c>inline-size</c> container already tracks its own physical
+        /// width/its own inline axis) vs. gated on <c>size</c> containment (the physical height/the block
+        /// axis, which an <c>inline-size</c>-only container doesn't track) rotates along with
+        /// <c>InlineSizePt</c>/<c>BlockSizePt</c> too.
         /// </summary>
-        internal (double? InlineSizePt, double? BlockSizePt) GetContainerRelativeUnitBasis()
+        internal (double? WidthPt, double? HeightPt, double? InlineSizePt, double? BlockSizePt) GetContainerRelativeUnitBasis()
         {
             var container = FindNearestQueryContainer(name: null);
-            if (container is null) return (null, null);
+            if (container is null) return (null, null, null, null);
 
-            double? inlinePt = container.ClientRight - container.ClientLeft;
-            double? blockPt = container.ContainerType.Value == ContainerTypeEnum.Size
-                ? container.ClientBottom - container.ClientTop
-                : null;
+            var isSizeContainer = container.ContainerType.Value == ContainerTypeEnum.Size;
+            var rawWidthPt = container.ClientRight - container.ClientLeft;
+            // A descendant's own width resolves top-down, before this container's own ClientBottom is
+            // settled (CssLayoutEngine.ApplyHeight - which a definite height still goes through - runs
+            // in this container's own layout epilogue, after its children, including the very descendant
+            // asking for this basis, have already been sized). ResolveDefiniteHeightPt sidesteps that by
+            // resolving a genuinely definite height directly, since it never depends on content in the
+            // first place; an auto/indefinite-percentage height still needs the live (by-then-settled)
+            // read (issue #805).
+            var rawHeightPt = container.ResolveDefiniteHeightPt() ?? container.ClientBottom - container.ClientTop;
 
-            return (inlinePt, blockPt);
+            double? widthPt = rawWidthPt;
+            double? heightPt = isSizeContainer ? rawHeightPt : null;
+
+            var isVertical = container.WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr;
+            double? inlineSizePt = isVertical ? rawHeightPt : rawWidthPt;
+            double? blockSizePt = isSizeContainer ? (isVertical ? rawWidthPt : rawHeightPt) : null;
+
+            return (widthPt, heightPt, inlineSizePt, blockSizePt);
+        }
+
+        /// <summary>
+        /// This box's own definite (non-auto) <c>height</c>, resolved directly from its own
+        /// <see cref="Height"/> string rather than read live off <see cref="ClientBottom"/> - which, for a
+        /// box with a definite height, is not actually settled until that box's own layout epilogue
+        /// (<c>CssLayoutEngine.ApplyHeight</c>) runs, well after a descendant may already need it mid-layout
+        /// (e.g. <see cref="GetContainerRelativeUnitBasis"/>, issue #805). A definite height never depends
+        /// on its OWN content, so resolving it this way ahead of that settling is correct - not an
+        /// approximation of a still-unknown value - reusing <see cref="CssLayoutEngine.GetBoxHeight"/> for
+        /// the exact same computation (including its <c>min-height</c> clamp and percentage base) so this
+        /// never re-derives that logic independently, then mirroring <c>ApplyHeight</c>'s own
+        /// <c>max-height</c>/min-height-wins-on-conflict clamp (deliberately against
+        /// <see cref="ContainingBlock"/>, not the percentage base <c>GetBoxHeight</c>'s own <c>min-height</c>
+        /// clamp uses - an existing inconsistency in <c>ApplyHeight</c> itself this intentionally preserves
+        /// rather than "fixes", since the goal here is predicting what <c>ApplyHeight</c> will actually
+        /// settle on, not deriving a more spec-consistent number of its own).
+        /// <para>
+        /// Returns <see langword="null"/> for an <c>auto</c> height, or a <c>height</c>/<c>max-height</c>/
+        /// <c>min-height</c> percentage whose own base isn't itself height-calculated yet - both genuinely
+        /// still need this box's own content (or an ancestor's own not-yet-settled height) resolved first,
+        /// so the caller falls back to the live, by-then-settled read for those.
+        /// </para>
+        /// </summary>
+        private double? ResolveDefiniteHeightPt()
+        {
+            if (!CssValueParser.IsValidLength(Height)) return null;
+
+            var height = CssLayoutEngine.GetBoxHeight(this);
+            if (height is null) return null;
+
+            if (CssValueParser.IsValidLength(MaxHeight) && (ContainingBlock.IsHeightCalculated || !MaxHeight.EndsWith('%')))
+            {
+                var maxHeight = CssValueParser.ParseLength(MaxHeight, ContainingBlock.Size.Height, this) + ActualBoxSizeIncludedHeight;
+
+                if (height > maxHeight)
+                {
+                    height = maxHeight;
+
+                    if (CssValueParser.IsValidLength(MinHeight) && (ContainingBlock.IsHeightCalculated || !MinHeight.EndsWith('%')))
+                    {
+                        var minHeight = CssValueParser.ParseLength(MinHeight, ContainingBlock.Size.Height, this) + ActualBoxSizeIncludedHeight;
+                        if (height < minHeight) height = minHeight;
+                    }
+                }
+            }
+
+            return height;
         }
 
         /// <summary>
@@ -678,11 +746,16 @@ namespace PeachPDF.Html.Core.Dom
         /// for a <c>cq*</c> unit with no eligible ancestor container (<see cref="GetContainerRelativeUnitBasis"/>).
         /// There is no scrollbar or dynamic browser chrome in a paged medium, so this is also the basis
         /// for the <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants - they are numerically identical here.
+        /// <c>ViewportWidthPt</c>/<c>ViewportHeightPt</c> are always the page's own physical width/height
+        /// (for <c>vw</c>/<c>vh</c>); <c>ViewportInlineSizePt</c>/<c>ViewportBlockSizePt</c> are the
+        /// page's size along the root element's own inline/block axis (for <c>vi</c>/<c>vb</c>), which
+        /// rotates onto the orthogonal physical axis under a <c>vertical-rl</c>/<c>vertical-lr</c> root
+        /// (CSS Writing Modes 4 §7.1) - the two pairs only diverge for a vertical root.
         /// </summary>
-        internal (double? ViewportWidthPt, double? ViewportHeightPt) GetViewportUnitBasis()
+        internal (double? ViewportWidthPt, double? ViewportHeightPt, double? ViewportInlineSizePt, double? ViewportBlockSizePt) GetViewportUnitBasis()
         {
             var container = HtmlContainer;
-            if (container is null) return (null, null);
+            if (container is null) return (null, null, null, null);
 
             var size = container.PageSize;
             // Same double.MaxValue sentinel guard HasRealPageGrid/UseVariablePageWidth already use for an
@@ -690,7 +763,11 @@ namespace PeachPDF.Html.Core.Dom
             double? width = size.Width is > 0 and < double.MaxValue - 1 ? size.Width : null;
             double? height = size.Height is > 0 and < double.MaxValue - 1 ? size.Height : null;
 
-            return (width, height);
+            var rootIsVertical = container.RootWritingMode is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr;
+            double? inlineSizePt = rootIsVertical ? height : width;
+            double? blockSizePt = rootIsVertical ? width : height;
+
+            return (width, height, inlineSizePt, blockSizePt);
         }
 
         public bool IsHeightCalculated { get; set; } = false;

@@ -43,7 +43,21 @@ namespace PeachPDF.Html.Core
             foreach (var (id, context) in _byId)
             {
                 if (!other._byId.TryGetValue(id, out var otherContext)) return false;
+                if (Math.Abs(context.WidthPt - otherContext.WidthPt) > epsilonPt) return false;
                 if (Math.Abs(context.InlineSizePt - otherContext.InlineSizePt) > epsilonPt) return false;
+
+                // WidthPt/InlineSizePt (and HeightPt/BlockSizePt below) only ever diverge when the
+                // container's own writing-mode is vertical - comparing both pairs, not just one, is what
+                // catches a container whose writing-mode itself changed pass-over-pass in a way that
+                // happens to leave InlineSizePt/BlockSizePt coincidentally unchanged while the physical
+                // width/height a width/height/aspect-ratio/orientation condition reads did not.
+                var heightDiffers = (context.HeightPt, otherContext.HeightPt) switch
+                {
+                    (null, null) => false,
+                    (double a, double b) => Math.Abs(a - b) > epsilonPt,
+                    _ => true
+                };
+                if (heightDiffers) return false;
 
                 var blockDiffers = (context.BlockSizePt, otherContext.BlockSizePt) switch
                 {

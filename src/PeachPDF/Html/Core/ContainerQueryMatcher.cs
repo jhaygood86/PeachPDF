@@ -75,9 +75,16 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// The container-valid feature subset (CSS Containment 3 SS7.3) - narrower than <c>@media</c>'s:
         /// no <c>color</c>/<c>resolution</c>/<c>hover</c>/etc., since those describe the output device,
-        /// not a container's own box. <c>height</c>/<c>block-size</c>/<c>aspect-ratio</c>/<c>orientation</c>
-        /// are false (not permissive) against an <c>inline-size</c>-only container, since it tracks only
-        /// the inline axis (<see cref="ContainerQueryContext.BlockSizePt"/> is <c>null</c> there).
+        /// not a container's own box. <c>width</c>/<c>aspect-ratio</c>/<c>orientation</c> are always
+        /// physical (never adjusted for the container's own <c>writing-mode</c>); <c>inline-size</c>/
+        /// <c>block-size</c> follow the container's own inline/block axis instead, rotating onto the
+        /// orthogonal physical axis under <c>vertical-rl</c>/<c>vertical-lr</c> (CSS Writing Modes 4
+        /// §7.1) - <c>width</c>/<c>inline-size</c> and <c>height</c>/<c>block-size</c> only coincide
+        /// under the container's default <c>horizontal-tb</c>. <c>height</c>/<c>block-size</c>/
+        /// <c>aspect-ratio</c>/<c>orientation</c> are false (not permissive) against an
+        /// <c>inline-size</c>-only container, since it tracks only its own inline axis
+        /// (<see cref="ContainerQueryContext.HeightPt"/>/<see cref="ContainerQueryContext.BlockSizePt"/>
+        /// are both <c>null</c> there).
         /// </summary>
         private static bool FeatureMatches(MediaFeature feature, ContainerQueryContext ctx)
         {
@@ -88,21 +95,25 @@ namespace PeachPDF.Html.Core
             switch (name)
             {
                 case "width":
+                    return MediaQueryMatcher.CompareLength(feature, ctx.WidthPt);
+
                 case "inline-size":
                     return MediaQueryMatcher.CompareLength(feature, ctx.InlineSizePt);
 
                 case "height":
+                    return ctx.HeightPt is { } heightPt && MediaQueryMatcher.CompareLength(feature, heightPt);
+
                 case "block-size":
                     return ctx.BlockSizePt is { } blockPt && MediaQueryMatcher.CompareLength(feature, blockPt);
 
                 case "aspect-ratio":
-                    if (ctx.BlockSizePt is not { } aspectHeight || aspectHeight <= 0) return false;
+                    if (ctx.HeightPt is not { } aspectHeight || aspectHeight <= 0) return false;
                     if (feature.AsRatio() is not { } ratio) return false;
-                    return MediaQueryMatcher.CompareNumeric(ctx.InlineSizePt / aspectHeight, ratio, feature.Comparison);
+                    return MediaQueryMatcher.CompareNumeric(ctx.WidthPt / aspectHeight, ratio, feature.Comparison);
 
                 case "orientation":
-                    if (ctx.BlockSizePt is not { } orientationHeight) return false;
-                    var orientation = ctx.InlineSizePt > orientationHeight ? "landscape" : "portrait";
+                    if (ctx.HeightPt is not { } orientationHeight) return false;
+                    var orientation = ctx.WidthPt > orientationHeight ? "landscape" : "portrait";
                     return !feature.HasValue
                         || string.Equals(feature.Value, orientation, System.StringComparison.OrdinalIgnoreCase);
 

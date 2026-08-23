@@ -12,7 +12,9 @@ namespace PeachPDF.CSS
     {
         public CalcContext(double hundredPercent, double emFactor, double remFactor, bool returnPoints = false,
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
-            double? viewportWidthPt = null, double? viewportHeightPt = null)
+            double? viewportWidthPt = null, double? viewportHeightPt = null,
+            double? containerWidthPt = null, double? containerHeightPt = null,
+            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null)
         {
             HundredPercent = hundredPercent;
             EmFactor = emFactor;
@@ -22,6 +24,10 @@ namespace PeachPDF.CSS
             ContainerBlockSizePt = containerBlockSizePt;
             ViewportWidthPt = viewportWidthPt;
             ViewportHeightPt = viewportHeightPt;
+            ContainerWidthPt = containerWidthPt;
+            ContainerHeightPt = containerHeightPt;
+            ViewportInlineSizePt = viewportInlineSizePt;
+            ViewportBlockSizePt = viewportBlockSizePt;
         }
 
         public double HundredPercent { get; }
@@ -36,19 +42,32 @@ namespace PeachPDF.CSS
         public bool ReturnPoints { get; }
 
         /// <summary>See <see cref="Length.ToPixels"/>'s parameter of the same name - the nearest ancestor
-        /// query container's resolved size, for a <c>cqw</c>/<c>cqi</c>/<c>cqb</c>/etc. leaf inside calc().</summary>
+        /// query container's own inline/block axis size, for a <c>cqi</c>/<c>cqb</c>/<c>cqmin</c>/
+        /// <c>cqmax</c> leaf inside calc().</summary>
         public double? ContainerInlineSizePt { get; }
         public double? ContainerBlockSizePt { get; }
 
         /// <summary>See <see cref="Length.ToPixels"/>'s parameter of the same name - the page box's own
-        /// size, for a <c>vw</c>/<c>vh</c>/etc. leaf inside calc(), and the <c>cq*</c> no-container fallback.</summary>
+        /// physical size, for a <c>vw</c>/<c>vh</c>/etc. leaf inside calc(), and the <c>cqw</c>/<c>cqh</c>
+        /// no-container fallback.</summary>
         public double? ViewportWidthPt { get; }
         public double? ViewportHeightPt { get; }
+
+        /// <summary>See <see cref="Length.ToPixels"/>'s parameter of the same name - the nearest ancestor
+        /// query container's own physical size, for a <c>cqw</c>/<c>cqh</c> leaf inside calc().</summary>
+        public double? ContainerWidthPt { get; }
+        public double? ContainerHeightPt { get; }
+
+        /// <summary>See <see cref="Length.ToPixels"/>'s parameter of the same name - the page's own size
+        /// along the root element's own inline/block axis, for a <c>vi</c>/<c>vb</c>/etc. leaf inside
+        /// calc(), and the <c>cqi</c>/<c>cqb</c> no-container fallback.</summary>
+        public double? ViewportInlineSizePt { get; }
+        public double? ViewportBlockSizePt { get; }
     }
 
     /// <summary>
     /// Evaluates a validated calc-family AST to a pixel-space number. This is the one place calc()
-    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?)"/>),
+    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?)"/>),
     /// since only layout has the <see cref="CalcContext"/> a percentage/em/rem leaf needs to resolve.
     /// Reuses <see cref="Length.ToPixels"/> for every leaf, so no unit-conversion arithmetic is duplicated
     /// here. A null result signals a divide-by-zero; per the type-checker's rules every legal divisor is
@@ -71,7 +90,9 @@ namespace PeachPDF.CSS
                     return new Length((float)dimension.Value, dimension.Unit)
                         .ToPixels(context.EmFactor, context.RemFactor, context.HundredPercent,
                             context.ContainerInlineSizePt, context.ContainerBlockSizePt,
-                            context.ViewportWidthPt, context.ViewportHeightPt);
+                            context.ViewportWidthPt, context.ViewportHeightPt,
+                            context.ContainerWidthPt, context.ContainerHeightPt,
+                            context.ViewportInlineSizePt, context.ViewportBlockSizePt);
 
                 case PercentageCalcNode percentage:
                     return new Length((float)percentage.Value, Length.Unit.Percent)

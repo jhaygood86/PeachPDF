@@ -1030,12 +1030,12 @@ against is the PDF page box — the same page-box dimensions [CSS Media Queries]
 | `vmin` | 1% of the smaller of the page box's width and height |
 | `vmax` | 1% of the larger of the page box's width and height |
 
-`vi`/`vb` (the logical inline/block axis forms) are treated the same as `vw`/`vh` — they always resolve
-against the page box's physical width/height and do not follow the root element's own `writing-mode`,
-the same treatment [`cqi`/`cqb`](#css-container-queries) give a query container's own `writing-mode`.
-This is narrower than the [real vertical-writing-mode layout](#text-layout) supported elsewhere in the
-engine: a `vertical-rl`/`vertical-lr` root element still gets `vi === vw` and `vb === vh` rather than the
-inline/block axis actually rotating with it.
+`vi`/`vb` (the logical inline/block axis forms) follow the **root element's own** `writing-mode` (CSS
+Values and Units 4 §6.2), the same way [`cqi`/`cqb`](#css-container-queries) follow a query container's
+own `writing-mode`: under `horizontal-tb` (the default) `vi`/`vb` are identical to `vw`/`vh`, but under a
+`vertical-rl`/`vertical-lr` root element `vi` tracks the page box's **height** and `vb` tracks its
+**width** — the inline/block axis actually rotates with the root's own writing mode, matching the [real
+vertical-writing-mode layout](#text-layout) supported elsewhere in the engine.
 
 The small (`sv*`), large (`lv*`), and dynamic (`dv*`) viewport variants (`svw`, `svh`, `svi`, `svb`,
 `svmin`, `svmax`, and the equivalent `lv*`/`dv*` forms) are all fully supported, and all resolve
@@ -1078,11 +1078,15 @@ Supported ([CSS Containment 3](https://developer.mozilla.org/en-US/docs/Web/CSS/
 | `container` shorthand | `container: <name> / <type>` — expands to the two longhands above; the `/ <type>` half is optional and resets `container-type` to `normal` when omitted |
 | `@container <condition> { }` | Unnamed size query — applies against the nearest ancestor with `container-type: size` or `inline-size` |
 | `@container <name> <condition> { }` | Named size query — applies against the nearest ancestor whose own `container-name` includes `<name>` and whose `container-type` is `size`/`inline-size` |
-| `width`/`min-width`/`max-width`/`inline-size` (and the `min-`/`max-`/range-syntax forms) | Evaluated against the container's own resolved inline-axis size |
-| `height`/`min-height`/`max-height`/`block-size`, `aspect-ratio`, `orientation` | Evaluated against the container's own resolved block-axis size — **only meaningful against a `container-type: size` container**; against an `inline-size`-only container these never match (it tracks the inline axis only), regardless of the container's actual height |
+| `width`/`min-width`/`max-width` (and the `min-`/`max-`/range-syntax forms) | Evaluated against the container's own resolved **physical width**, regardless of its `writing-mode` |
+| `inline-size` (and the `min-`/`max-`/range-syntax forms) | Evaluated against the container's own resolved **inline-axis** size (CSS Writing Modes 4 §7.1) — identical to `width` under the container's default `horizontal-tb`, but its physical height under `vertical-rl`/`vertical-lr` |
+| `height`/`min-height`/`max-height`, `aspect-ratio`, `orientation` | Evaluated against the container's own resolved **physical height**, regardless of its `writing-mode` — **only meaningful against a `container-type: size` container**; against an `inline-size`-only container these never match (it tracks only its own inline axis), regardless of the container's actual physical height |
+| `block-size` (and the `min-`/`max-`/range-syntax forms) | Evaluated against the container's own resolved **block-axis** size — identical to `height` under `horizontal-tb`, but its physical width under `vertical-rl`/`vertical-lr`. Same `container-type: size`-only restriction as `height` above |
 | `style(<property>: <value>)` | Matches when the nearest eligible ancestor query container's own resolved value for `<property>` equals `<value>`. Unlike size queries, **any** query container is eligible regardless of `container-type` — `container-type: normal` (the initial value, so effectively any element) still qualifies, since a style query needs no layout containment. `and`/`or`/`not` combine multiple `style()` feature checks; a combined operand needs its own parenthesized declaration (`style((--a: 1) and (--b: 2))`), matching `@supports`'s own grammar. Comparison is a trimmed, literal-text match against the container's resolved value — reliable for custom properties (values are opaque, author-controlled text) and for a standard property whose authored value already matches PeachPDF's own canonical serialization (e.g. keyword values like `style(display: block)`), but not full computed-value equivalence (`style(color: red)` won't match a container that resolves to `rgb(255, 0, 0)`) |
-| `cqw`, `cqi` | 1% of the nearest ancestor query container's own resolved inline-axis size — `cqi` is always treated as `cqw` (physical width), not adjusted for the container's own `writing-mode` (see the equivalent `vi`/`vb` caveat under [CSS Viewport Units](#css-viewport-units)) |
-| `cqh`, `cqb` | 1% of the nearest ancestor query container's own resolved block-axis size (only meaningful against a `size` container — `0` against an `inline-size`-only one, which doesn't track that axis) — `cqb` is always treated as `cqh` (physical height), same caveat as `cqi` above |
+| `cqw` | 1% of the nearest ancestor query container's own resolved **physical width**, regardless of its `writing-mode` |
+| `cqh` | 1% of the nearest ancestor query container's own resolved **physical height** (only meaningful against a `size` container — `0` against an `inline-size`-only one, which doesn't track that axis), regardless of its `writing-mode`. When the container's own `height` is a percentage whose own base isn't itself resolved yet at the point this is evaluated, this also falls back to `0` rather than the real value — a definite (explicit-length) container `height` is unaffected |
+| `cqi` | 1% of the nearest ancestor query container's own resolved **inline-axis** size (CSS Writing Modes 4 §7.1) — identical to `cqw` under the container's default `horizontal-tb`, but its **physical height** under `vertical-rl`/`vertical-lr` (the same `vi`/`vb`-style rotation described under [CSS Viewport Units](#css-viewport-units)). Shares `cqh`'s percentage-height caveat above when the container is vertical (its inline axis is then the physical height) |
+| `cqb` | 1% of the nearest ancestor query container's own resolved **block-axis** size (only meaningful against a `size` container) — identical to `cqh` under `horizontal-tb`, but its **physical width** under `vertical-rl`/`vertical-lr`. Shares `cqh`'s percentage-height caveat above when the container is horizontal (its block axis is then the physical height) |
 | `cqmin`, `cqmax` | The smaller/larger of `cqi` and `cqb` |
 | Container-relative unit with no eligible ancestor container | Falls back to the corresponding small-viewport unit (`cqw`→`svw`, `cqh`→`svh`, `cqi`→`svi`, `cqb`→`svb`, `cqmin`→`svmin`, `cqmax`→`svmax`) — see [CSS Viewport Units](#css-viewport-units) |
 | Container-relative unit in `font-size` (e.g. `font-size: 10cqw`) | Resolves to `0` for any element with text content — a font-caching order limitation, not the general no-ancestor-container fallback above; a real ancestor container is found, but its size isn't available yet at the point text content first resolves the font. Works only for the uncommon case of an element with no text content of its own |

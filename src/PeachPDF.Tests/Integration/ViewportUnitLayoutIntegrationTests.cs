@@ -63,6 +63,46 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expectedPt, actual, 1);
         }
 
+        // ── vi/vb follow the ROOT element's own writing-mode (issue #795) ─
+        // A vertical-rl root's own inline axis is the page's physical height and block axis is the
+        // page's physical width - the inverse of a horizontal-tb root's. vw/vh must stay physical
+        // regardless (always width/height respectively); only vi/vb rotate onto the swapped axis. The
+        // target is pinned to horizontal-tb so its OWN layout stays on the ordinary, well-tested
+        // physical-width path - only the document root's own writing-mode is under test.
+
+        [Fact]
+        public async Task ViewportUnit_LogicalForm_FollowsTheRootElementsOwnWritingMode()
+        {
+            var html = "<!DOCTYPE html><html style=\"writing-mode: vertical-rl\"><head><style>" +
+                "#target { writing-mode: horizontal-tb; width: 50vi; height: 50vb; }" +
+                "</style></head><body><div id='target'></div></body></html>";
+
+            var root = await BuildRoot(html);
+            var target = DomUtils.GetBoxById(root, "target");
+            Assert.NotNull(target);
+
+            // vi tracks the page's own height axis (600pt -> 50% = 300pt) and vb tracks the page's own
+            // width axis (800pt -> 50% = 400pt) - swapped from vw/vh's own values below, proving vi/vb
+            // actually follow the root element's writing-mode rather than aliasing vw/vh.
+            Assert.Equal(300d, target!.ActualBoxSizingWidth, 1);
+            Assert.Equal(400d, target!.ActualBoxSizingHeight, 1);
+        }
+
+        [Fact]
+        public async Task ViewportUnit_PhysicalForm_StaysPhysicalRegardlessOfTheRootElementsWritingMode()
+        {
+            var html = "<!DOCTYPE html><html style=\"writing-mode: vertical-rl\"><head><style>" +
+                "#target { writing-mode: horizontal-tb; width: 50vw; height: 50vh; }" +
+                "</style></head><body><div id='target'></div></body></html>";
+
+            var root = await BuildRoot(html);
+            var target = DomUtils.GetBoxById(root, "target");
+            Assert.NotNull(target);
+
+            Assert.Equal(400d, target!.ActualBoxSizingWidth, 1);
+            Assert.Equal(300d, target!.ActualBoxSizingHeight, 1);
+        }
+
         [Fact]
         public async Task ViewportUnit_ResolvesInsideCalc()
         {
