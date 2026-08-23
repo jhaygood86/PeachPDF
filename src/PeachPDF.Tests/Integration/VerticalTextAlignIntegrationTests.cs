@@ -199,5 +199,95 @@ namespace PeachPDF.Tests.Integration
                 Assert.Equal(el.ClientBottom, firstColumn[^1].Bottom, 1);
             }
         }
+
+        [Fact]
+        public async Task VerticalRl_Rtl_AutoHeight_PlainText_WordsStayWithinTheBoxsOwnFinalBottomEdge()
+        {
+            // Issue #797: an auto-height RTL vertical box's own natural word placement is anchored during
+            // layout against a large placeholder bottom edge (CreateVerticalLineBoxes's own heightIsAuto
+            // wrap-limit fallback). text-align's default "start" resolves to physical-right (flush-bottom)
+            // under vertical+rtl (ApplyVerticalTextAlignment), which must re-anchor every word to the box's
+            // own real, much closer final ClientBottom once it settles - a guard bug in
+            // ApplyVerticalFlushAlignment instead silently skipped that correction, landing every word far
+            // outside the box's own bottom edge.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; direction: rtl; width: 200pt">Some plain text with no other styling.</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el")!;
+            var words = Words(el);
+            Assert.NotEmpty(words);
+
+            foreach (var word in words)
+            {
+                Assert.True(word.Top >= el.ClientTop - 1,
+                    $"word '{word.Text}' Top {word.Top} is above ClientTop {el.ClientTop}");
+                Assert.True(word.Bottom <= el.ClientBottom + 1,
+                    $"word '{word.Text}' Bottom {word.Bottom} is below ClientBottom {el.ClientBottom}");
+            }
+
+            // Default text-align:start resolves to physical-right (flush-bottom) under vertical+rtl.
+            Assert.Equal(el.ClientBottom, words.Max(w => w.Bottom), 1);
+        }
+
+        [Fact]
+        public async Task VerticalLr_Rtl_AutoHeight_PlainText_WordsStayWithinTheBoxsOwnFinalBottomEdge()
+        {
+            // vertical-lr's InlineStartIsBottom asymmetry matches vertical-rl's own (same Y-axis logic;
+            // only the block/X-axis anchor differs between the two writing modes).
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-lr; direction: rtl; width: 200pt">Some plain text with no other styling.</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el")!;
+            var words = Words(el);
+            Assert.NotEmpty(words);
+
+            foreach (var word in words)
+            {
+                Assert.True(word.Top >= el.ClientTop - 1);
+                Assert.True(word.Bottom <= el.ClientBottom + 1);
+            }
+
+            Assert.Equal(el.ClientBottom, words.Max(w => w.Bottom), 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_Rtl_AutoHeight_TextAlignRight_WordsFlushToTheBoxsRealBottomEdge()
+        {
+            // Confirms the fix isn't accidentally keyed off the start-vs-right resolution rather than the
+            // underlying ApplyVerticalFlushAlignment guard itself - explicit "right" resolves to the exact
+            // same toBottom:true branch as the default "start" does under direction:rtl.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; direction: rtl; width: 200pt; text-align: right">Some plain text with no other styling.</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el")!;
+            var words = Words(el);
+            Assert.NotEmpty(words);
+            Assert.Equal(el.ClientBottom, words.Max(w => w.Bottom), 1);
+            Assert.True(words.Min(w => w.Top) >= el.ClientTop - 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_Rtl_AutoHeight_TextAlignLeft_WordsFlushToTheBoxsRealTopEdge()
+        {
+            // A regression guard for the toBottom:false branch, which happened to apply its correction
+            // even before this fix (its guard's sign coincidentally matched what an auto-height RTL box
+            // needs) - no existing test combined this with auto height, only definite height.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; direction: rtl; width: 200pt; text-align: left">Some plain text with no other styling.</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el")!;
+            var words = Words(el);
+            Assert.NotEmpty(words);
+            Assert.Equal(el.ClientTop, words.Min(w => w.Top), 1);
+            Assert.True(words.Max(w => w.Bottom) <= el.ClientBottom + 1);
+        }
     }
 }

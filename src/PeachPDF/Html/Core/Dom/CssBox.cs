@@ -2023,6 +2023,22 @@ namespace PeachPDF.Html.Core.Dom
         private List<CssBox>? _pendingCrossAxisRtlReflection;
 
         /// <summary>
+        /// Set by <see cref="CssLayoutEngine.CreateVerticalLineBoxes"/> when this box is a <c>direction: rtl</c>
+        /// vertical-writing-mode box with inline-only content, whose own text-align/bidi finalize pass had to
+        /// be deferred to <see cref="PerformLayoutEpilogue"/> rather than run immediately - see that method's
+        /// own remarks for why. Set regardless of whether this box's own <c>height</c> is auto or an explicit
+        /// length: <c>min-height</c>/<c>max-height</c> clamping applies to both.
+        /// </summary>
+        /// <remarks>
+        /// Unlike <see cref="_pendingCrossAxisRtlReflection"/> (issue #778's own precedent for this box's
+        /// block-level children), a plain flag is enough here: <see cref="PerformLayoutEpilogue"/> runs on
+        /// this very box, so its own now-final Client edges/LineBoxes/WritingMode/Direction are all already
+        /// live instance state at consumption time - nothing needs to be captured ahead of time the way
+        /// "which children to reflect" does for the block-children case.
+        /// </remarks>
+        internal bool _pendingVerticalInlineFinalize;
+
+        /// <summary>
         /// Whether this box has already taken an <see cref="EarlyBreak"/> on this fragmentainer pass.
         /// </summary>
         /// <remarks>
@@ -5215,6 +5231,19 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             _pendingCrossAxisRtlReflection = null;
+
+            if (_pendingVerticalInlineFinalize)
+            {
+                // Only now - after ApplyHeight has settled min-height/max-height clamping - are ClientTop/
+                // ClientBottom this box's own true final inline-axis edges. WritingModeFrame.For(this) reads
+                // them (plus ClientLeft/ClientRight/WritingMode/Direction) directly off this box. This only
+                // ever re-positions this box's own Words (ApplyVerticalTextAlignment/ApplyVerticalBidiReordering
+                // write word.Top directly) - it must NOT move this box's own Location, unlike the
+                // block-children reflection above, since this box's own position was assigned by its parent
+                // and stays fixed.
+                CssLayoutEngine.FinalizeVerticalLineBoxes(this, WritingModeFrame.For(this), ClientTop, ClientBottom);
+                _pendingVerticalInlineFinalize = false;
+            }
 
             CssLayoutEngine.ApplyParentHeight(this);
 

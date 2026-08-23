@@ -522,12 +522,12 @@ Three narrower, pre-existing bugs were found (not introduced) while building and
 independent of its own five features — each had its own tracking issue since each needed its own focused
 fix: a float's own starting position inside a vertical box's block content is physically meaningless, and
 `clear` on an ordinary block child is unimplemented ([#796](https://github.com/jhaygood86/PeachPDF/issues/796));
-an RTL auto-height inline-only vertical box positions its words against the placement-time provisional
-(page-height) bottom edge rather than the box's own final settled one
-([#797](https://github.com/jhaygood86/PeachPDF/issues/797), from #761/#778-era code); and
-`CreateVerticalLineBoxes`'s own auto-width shrink (#761) corrupted `Location.X` for an absolutely/fixed-
-positioned descendant with an auto width, since it assumed `Location.X` was always a block-start edge free
-to move, which is false once a CSS `left` offset already gave it real meaning.
+a direction:rtl vertical box positioned its own inline content's words against the placement-time
+provisional bottom edge rather than the box's own final settled one (#797, from #761/#778-era code, since
+fixed — see `.claude/recent-fixes/`); and `CreateVerticalLineBoxes`'s own auto-width shrink (#761) corrupted
+`Location.X` for an absolutely/fixed-positioned descendant with an auto width, since it assumed `Location.X`
+was always a block-start edge free to move, which is false once a CSS `left` offset already gave it real
+meaning.
 [#798](https://github.com/jhaygood86/PeachPDF/issues/798) fixes this properly rather than just gating it
 off: for `vertical-rl` specifically, `Location.X` now stays pinned to the CSS `left` offset while the
 box's already-laid-out content (words and descendants, placed against a pre-shrink placeholder anchor
@@ -553,10 +553,6 @@ would double-apply the same shift.
   non-floated block child is unimplemented** ([#796](https://github.com/jhaygood86/PeachPDF/issues/796)).
   Column wrap-around avoidance for text flowing around a float ([#768](https://github.com/jhaygood86/PeachPDF/issues/768),
   closed) is unaffected by this — it queries wherever the float actually ends up, not where it "should".
-- **An RTL, auto-height, inline-only vertical box positions its words against the placement-time
-  provisional bottom edge instead of its own final settled one**, landing them outside the box entirely
-  ([#797](https://github.com/jhaygood86/PeachPDF/issues/797)) — reproduces with plain text, independent of
-  `text-align`/bidi/hyphenation/floats/positioning.
 - **A nested inline element's own border/padding/margin does not reserve inline-axis (physical left/right,
   for `vertical-rl`/`vertical-lr`) space** ([#769](https://github.com/jhaygood86/PeachPDF/issues/769)), and
   its block-axis (physical top/bottom) padding/border is applied once per column it spans rather than once
