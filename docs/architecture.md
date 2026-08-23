@@ -569,7 +569,7 @@ This paint-order correctness — together with the pagination fixes above (blank
 
 ### Image loading and decoding
 
-Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding is handled by **PeachImage** (JPEG, PNG, BMP, GIF, WebP, and AVIF — TGA, PSD, and HDR aren't implemented there and so aren't decodable). Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
+Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding is handled by **PeachImage** (JPEG, PNG, BMP, GIF, WebP, AVIF, and TIFF — TGA, PSD, and HDR aren't implemented there and so aren't decodable). Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
 
 `ImageLoadHandler` is an implementation detail of `CssImage.Url`: each URL image owns its handler and exposes `EnsureLoadedAsync(HtmlContainerInt)` for lazy loading and `Dispose()` for cleanup. Callers (background layer loops, list marker painting) interact only with `CssImage` and never touch `ImageLoadHandler` directly.
 
