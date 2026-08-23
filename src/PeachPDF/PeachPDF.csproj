@@ -2,7 +2,7 @@
 	<PropertyGroup>
 		<AssemblyName>PeachPDF</AssemblyName>
 		<PackageId>PeachPDF</PackageId>
-		<PackageVersion>0.9.12</PackageVersion>
+		<PackageVersion>0.9.13</PackageVersion>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageIcon>peach.png</PackageIcon>
 		<IncludeSymbols>true</IncludeSymbols>
@@ -40,7 +40,7 @@
 		net10.0-conditioned - see .claude/recent-fixes/2026-08-15-net10-image-codec-ported-to-peachimage.md).
 	-->
 	<ItemGroup>
-		<PackageReference Include="PeachImage" Version="0.2.2" />
+		<PackageReference Include="PeachImage" Version="0.4.1" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Remove="PdfSharpCore\Resources\Messages.restext" />
