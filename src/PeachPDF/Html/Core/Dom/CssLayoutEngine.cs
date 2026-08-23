@@ -653,6 +653,44 @@ namespace PeachPDF.Html.Core.Dom
             var finalFrame = WritingModeFrame.ForContentBox(blockBox.ClientLeft, clientTop,
                 blockBox.ClientRight, finalClientBottom, blockBox.WritingMode.Value, blockBox.Direction.Value);
 
+            // A direction:rtl vertical box's own natural word placement (the loop above) is anchored against
+            // clientTop + wrapLimit - for an auto-height box that is only a provisional placeholder edge, not
+            // this box's real final bottom. Worse, finalClientBottom (computed locally just above) is itself
+            // not fully final for ANY height (auto or definite): min-height/max-height clamping
+            // (CssLayoutEngine.ApplyHeight/GetBoxHeight) only runs later, in the layout epilogue, and applies
+            // regardless of whether this box's own `height` is auto or an explicit length - reusing this
+            // method's own local edge here would reintroduce a version of issue #778's own symptom for text
+            // whenever min-height/max-height moves the box's real bottom away from that local value. So for
+            // every direction:rtl vertical box, finalize is deferred to CssBox.PerformLayoutEpilogue instead
+            // of running immediately - see CssBox._pendingVerticalInlineFinalize's own remarks. LTR vertical
+            // is unaffected either way, since its natural placement never depends on clientBottom at all, so
+            // deferring would have nothing to gain there.
+            if (frame.InlineStartIsBottom)
+            {
+                blockBox._pendingVerticalInlineFinalize = true;
+            }
+            else
+            {
+                FinalizeVerticalLineBoxes(blockBox, finalFrame, clientTop, finalClientBottom);
+            }
+
+            await LayoutOutOfFlowDescendants(g, blockBox, outOfFlowDescendants);
+        }
+
+        /// <summary>
+        /// The per-column text-align/bidi finalize pass for <see cref="CreateVerticalLineBoxes"/>'s own line
+        /// boxes, against the box's real final inline-axis edges. Takes <paramref name="finalFrame"/>/
+        /// <paramref name="clientTop"/>/<paramref name="clientBottom"/> as parameters rather than reading them
+        /// live off <paramref name="blockBox"/> - the immediate call site (a definite-height box, or an
+        /// auto-height LTR vertical one) still needs its own locally-computed edges, since
+        /// <paramref name="blockBox"/>'s own <c>ClientBottom</c> is not genuinely final until
+        /// <c>ApplyHeight</c> runs in the layout epilogue; only the deferred call site
+        /// (<see cref="CssBox.PerformLayoutEpilogue"/>, after <c>ApplyHeight</c> has run) can safely pass the
+        /// box's own live Client edges.
+        /// </summary>
+        internal static void FinalizeVerticalLineBoxes(CssBox blockBox, WritingModeFrame finalFrame,
+            double clientTop, double clientBottom)
+        {
             for (var i = 0; i < blockBox.LineBoxes.Count; i++)
             {
                 var lineBox = blockBox.LineBoxes[i];
@@ -661,14 +699,12 @@ namespace PeachPDF.Html.Core.Dom
                 // text-align before bidi, for the same reason FinalizeLineBoxes orders them this way for
                 // horizontal flow: alignment establishes the column's own outer span, and bidi only ever
                 // reflects positions within that span - it never moves the span's own edges.
-                ApplyVerticalTextAlignment(lineBox, finalFrame, isLastColumn, clientTop, finalClientBottom);
-                ApplyVerticalBidiReordering(lineBox, finalFrame, clientTop, finalClientBottom);
+                ApplyVerticalTextAlignment(lineBox, finalFrame, isLastColumn, clientTop, clientBottom);
+                ApplyVerticalBidiReordering(lineBox, finalFrame, clientTop, clientBottom);
 
                 BubbleRectangles(blockBox, lineBox);
                 lineBox.AssignRectanglesToBoxes();
             }
-
-            await LayoutOutOfFlowDescendants(g, blockBox, outOfFlowDescendants);
         }
 
         /// <summary>
@@ -3177,10 +3213,20 @@ namespace PeachPDF.Html.Core.Dom
             var targetTop = toBottom ? clientBottom - (contentBottom - contentTop) : clientTop;
             var diff = targetTop - contentTop;
 
-            // Natural placement can already sit flush at either edge depending on direction (unlike
-            // horizontal, where it is always flush-left) - a one-directional diff > 0 guard would silently
-            // skip the case where natural placement needs to move toward physical-top instead.
-            if (toBottom ? !(diff > 0) : !(diff < 0)) return;
+            // targetTop - contentTop is, by construction, exactly the shift needed to flush the column's
+            // content to the requested edge - there is no direction in which a nonzero diff should be
+            // discarded. The previous one-directional guard (diff > 0 for toBottom, diff < 0 otherwise)
+            // assumed natural (pre-alignment) placement is never further from the target edge than "the
+            // wrong way", which holds for a definite-height box or LTR vertical content (whose natural
+            // placement never depends on clientBottom), but not for an auto-height RTL vertical box: its
+            // natural placement is anchored during word layout against a placeholder bottom edge far below
+            // the real one (see CreateVerticalLineBoxes's own heightIsAuto wrapLimit fallback), so both
+            // toBottom:true and toBottom:false need a same-direction (very negative) correction once the
+            // real, much closer final bottom is known - toBottom:false's guard happened to allow this by
+            // coincidence of sign; toBottom:true's did not, leaving every word positioned far outside the
+            // box's own real bottom edge (issue #797). Only a genuinely near-zero diff (content already
+            // flush) is worth skipping, matching ApplyVerticalCenterAlignment's own guard shape.
+            if (!(Math.Abs(diff) > 0)) return;
 
             foreach (var word in lineBox.Words)
             {

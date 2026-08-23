@@ -601,6 +601,71 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_Rtl_AutoHeight_MinHeightGrowsTheBox_PlainTextStillAnchorsToTheRealFinalBottom()
+        {
+            // The inline-content analog of VerticalRl_Rtl_MinHeightGrowsTheBoxAfterContent_...: the
+            // finalize pass (text-align/bidi) that anchors this box's own words to its bottom edge must run
+            // against the box's real, min-height-clamped ClientBottom (settled by CssLayoutEngine.ApplyHeight
+            // in the layout epilogue), not the smaller, content-only edge CreateVerticalLineBoxes computes
+            // locally before ApplyHeight has run - deferring to CssBox.PerformLayoutEpilogue (issue #797) is
+            // what makes this possible.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; direction: rtl; width: 200pt; min-height: 400pt">Some plain text with no other styling.</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el")!;
+
+            // min-height won: the box's own real height is 400pt, taller than its content alone would
+            // drive it.
+            Assert.Equal(400, el.ActualBottom - el.Location.Y, 1);
+
+            var words = el.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak && !w.IsSpaces).ToList();
+            Assert.NotEmpty(words);
+
+            foreach (var word in words)
+            {
+                Assert.True(word.Top >= el.ClientTop - 1);
+                Assert.True(word.Bottom <= el.ClientBottom + 1);
+            }
+
+            // Default text-align:start resolves to physical-right under vertical+rtl - words flush to the
+            // box's real (min-height-driven) bottom, not the smaller content-only extent.
+            Assert.Equal(el.ClientBottom, words.Max(w => w.Bottom), 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_Rtl_ExplicitHeight_MinHeightOverridesIt_PlainTextStillAnchorsToTheRealFinalBottom()
+        {
+            // min-height/max-height clamping (CssLayoutEngine.ApplyHeight/GetBoxHeight) applies regardless
+            // of whether this box's own height is auto or an explicit length - so an *explicit* height
+            // overridden by a larger min-height reproduces the same #797 symptom the auto-height case does:
+            // CreateVerticalLineBoxes's own local finalClientBottom (DefiniteContentHeight-driven, i.e. the
+            // explicit height alone) never accounts for min-height winning in the layout epilogue. Deferring
+            // finalize for every direction:rtl vertical box (not just auto-height ones) is what closes this.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; direction: rtl; width: 200pt; height: 50pt; min-height: 400pt">Some plain text with no other styling.</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el")!;
+
+            // min-height won over the explicit (smaller) height: the box's own real height is 400pt.
+            Assert.Equal(400, el.ActualBottom - el.Location.Y, 1);
+
+            var words = el.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak && !w.IsSpaces).ToList();
+            Assert.NotEmpty(words);
+
+            foreach (var word in words)
+            {
+                Assert.True(word.Top >= el.ClientTop - 1);
+                Assert.True(word.Bottom <= el.ClientBottom + 1);
+            }
+
+            Assert.Equal(el.ClientBottom, words.Max(w => w.Bottom), 1);
+        }
+
+        [Fact]
         public async Task VerticalRl_OrthogonalHorizontalChild_LaysOutOwnContentHorizontally_WhilePlacedAsOneAtomicBlock()
         {
             // A writing-mode: horizontal-tb block child nested inside a vertical-rl parent is an
