@@ -3802,6 +3802,19 @@ namespace PeachPDF.Html.Core.Dom
 
                 await childBox.LayoutContentAtItsAssignedPosition(g);
 
+                // A same-writing-mode, non-orthogonal child (excluded from the fit-content branch above)
+                // reaches its own auto-width shrink - if it has one - only now, inside its own content
+                // layout: e.g. an inline-only child dispatches to CreateVerticalLineBoxes, which calls
+                // ShrinkAutoWidthTo on itself. `childWidth` above was captured from ResolveOwnInlineSize's
+                // pre-content-layout (stretch-to-available) estimate, so it's stale once that shrink has
+                // run - re-read the child's now-true width so the accumulator below reflects what the
+                // child actually occupies. No Location.X correction is needed here even for vertical-rl:
+                // the child's own recursive ShrinkAutoWidthTo already captured ITS OWN pre-shrink
+                // ActualRight (this child's block-start edge, placed above) as ITS anchor and moved its
+                // own Location.X against it - re-deriving Location.X again here from the placeholder
+                // childWidth would double-apply that same shift on top of an already-correct position.
+                childWidth = childBox.ActualRight - childBox.Location.X;
+
                 // IsBlockAxisMarginCollapseThrough mirrors IsMarginCollapseThrough's own recursive
                 // "self-collapsing empty box" definition, gated on this child's already-resolved
                 // block-axis extent rather than a Width style token (see that method's own remarks for
@@ -6918,6 +6931,51 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         private void OffsetLeft(double amount, CssBox translationRoot)
         {
+            ShiftOwnLineGeometryLeft(amount);
+
+            foreach (var b in Boxes)
+            {
+                if (b.EscapesTranslationOf(translationRoot)) continue;
+
+                b.OffsetLeft(amount, translationRoot);
+            }
+
+            Location = Location with { X = Location.X + amount };
+            OnTranslated(amount, 0);
+        }
+
+        /// <summary>
+        /// Like <see cref="OffsetLeft(double)"/>, but leaves this box's own <see cref="Location"/> in
+        /// place - only its content (line rectangles, words, and descendants) shifts.
+        /// </summary>
+        /// <remarks>
+        /// For an out-of-flow box under <c>vertical-rl</c>, <see cref="CssLayoutEngine.ShrinkAutoWidthTo"/>
+        /// (issue #798) needs this: such a box's content is laid out against a placeholder block-start
+        /// anchor before its true content extent is known, but its <c>Location.X</c> is separately pinned
+        /// to a CSS <c>left</c> offset that must never move. Once the real content extent settles, the
+        /// content - not <c>Location</c> - is what has to move to reconcile the two.
+        /// </remarks>
+        internal void OffsetContentLeft(double amount)
+        {
+            ShiftOwnLineGeometryLeft(amount);
+
+            foreach (var b in Boxes)
+            {
+                if (b.EscapesTranslationOf(this)) continue;
+
+                b.OffsetLeft(amount, this);
+            }
+
+            OnTranslated(amount, 0);
+        }
+
+        /// <summary>
+        /// The <see cref="Rectangles"/>/<see cref="Words"/> half of <see cref="OffsetLeft(double)"/> and
+        /// <see cref="OffsetContentLeft"/> - the part both share, since they differ only in whether
+        /// <see cref="Location"/> itself moves.
+        /// </summary>
+        private void ShiftOwnLineGeometryLeft(double amount)
+        {
             List<CssLineBox> lines = [];
             foreach (var line in Rectangles.Keys)
                 lines.Add(line);
@@ -6932,16 +6990,6 @@ namespace PeachPDF.Html.Core.Dom
             {
                 word.Left += amount;
             }
-
-            foreach (var b in Boxes)
-            {
-                if (b.EscapesTranslationOf(translationRoot)) continue;
-
-                b.OffsetLeft(amount, translationRoot);
-            }
-
-            Location = Location with { X = Location.X + amount };
-            OnTranslated(amount, 0);
         }
 
         /// <summary>
