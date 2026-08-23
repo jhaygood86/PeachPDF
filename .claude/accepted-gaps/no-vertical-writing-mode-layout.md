@@ -201,7 +201,9 @@ atomic replaced element (`<img>`) already is. (Its own *outer width*, when auto,
 — see [#777](https://github.com/jhaygood86/PeachPDF/issues/777), closed, below.) Auto width/height on the
 vertical box itself shrink to the accumulated block-axis/
 cross-axis extent of its children, reusing `CssLayoutEngine.ShrinkAutoWidthTo` (widened to `internal`) —
-the same block-start-stays-fixed mechanism the inline-only case already established.
+the same block-start-stays-fixed mechanism the inline-only case already established. (A same-writing-mode
+child's own contribution to that accumulation was, until [#798](https://github.com/jhaygood86/PeachPDF/issues/798),
+measured before that child's own auto-width shrink had run — see #798's own entry below.)
 
 Such a box is treated as monolithic with respect to its parent's own page fragmentation, the same
 `MonolithicContent.IsUnresumableOrthogonalFlow` treatment the inline-only case and a vertical table already
@@ -517,16 +519,32 @@ an active shift toward the bottom edge. Verified with new integration test files
 tests, zero regressions).
 
 Three narrower, pre-existing bugs were found (not introduced) while building and testing #768, confirmed
-independent of its own five features, and deliberately left unfixed — each has its own tracking issue since
-each needs its own focused fix: a float's own starting position inside a vertical box's block content is
-physically meaningless, and `clear` on an ordinary block child is unimplemented
-([#796](https://github.com/jhaygood86/PeachPDF/issues/796)); an RTL auto-height inline-only vertical box
-positions its words against the placement-time provisional (page-height) bottom edge rather than the box's
-own final settled one ([#797](https://github.com/jhaygood86/PeachPDF/issues/797), from #761/#778-era code);
-and `CreateVerticalLineBoxes`'s own auto-width shrink (#761) corrupts `Location.X` for an
-absolutely/fixed-positioned descendant with an auto width, since it assumes `Location.X` is always a
-block-start edge free to move, which is false once a CSS `left` offset already gave it real meaning
-([#798](https://github.com/jhaygood86/PeachPDF/issues/798)).
+independent of its own five features — each had its own tracking issue since each needed its own focused
+fix: a float's own starting position inside a vertical box's block content is physically meaningless, and
+`clear` on an ordinary block child is unimplemented ([#796](https://github.com/jhaygood86/PeachPDF/issues/796));
+an RTL auto-height inline-only vertical box positions its words against the placement-time provisional
+(page-height) bottom edge rather than the box's own final settled one
+([#797](https://github.com/jhaygood86/PeachPDF/issues/797), from #761/#778-era code); and
+`CreateVerticalLineBoxes`'s own auto-width shrink (#761) corrupted `Location.X` for an absolutely/fixed-
+positioned descendant with an auto width, since it assumed `Location.X` was always a block-start edge free
+to move, which is false once a CSS `left` offset already gave it real meaning.
+[#798](https://github.com/jhaygood86/PeachPDF/issues/798) fixes this properly rather than just gating it
+off: for `vertical-rl` specifically, `Location.X` now stays pinned to the CSS `left` offset while the
+box's already-laid-out content (words and descendants, placed against a pre-shrink placeholder anchor
+before the true content extent was known) is reconciled against it with a new `CssBox.OffsetContentLeft`
+primitive — a variant of the existing `OffsetLeft` subtree translator that moves everything *except* the
+box's own `Location` — so the box's auto width still genuinely shrinks to content instead of only its
+position being correct (`vertical-lr` was never affected: its anchor, `ClientLeft`, was always already
+tied to `Location.X`). Fixing this surfaced a second, distinct pre-existing bug in the same area, also
+fixed by #798: `CssBox.LayoutVerticalBlockChildren` measured a same-writing-mode block-level child's width
+from `ResolveOwnInlineSize`'s pre-content-layout (stretch-to-available) estimate, before that child's own
+auto-width shrink — which only runs later, inside its own content layout — had actually narrowed it, so an
+auto-width vertical-rl box with block-level (not just inline) children never shrunk to fit regardless of
+positioning scheme. Now re-measured after the child's own content layout runs — no further `Location.X`
+correction needed even for `vertical-rl`: a child with its own recursive `ShrinkAutoWidthTo` (inline
+content, or a nested block-children pass) already re-anchored its own `Location.X` against its own
+pre-shrink `ActualRight` during that call, so re-deriving it again from the stale placeholder width here
+would double-apply the same shift.
 
 ## What's still out of scope
 
@@ -539,9 +557,6 @@ block-start edge free to move, which is false once a CSS `left` offset already g
   provisional bottom edge instead of its own final settled one**, landing them outside the box entirely
   ([#797](https://github.com/jhaygood86/PeachPDF/issues/797)) — reproduces with plain text, independent of
   `text-align`/bidi/hyphenation/floats/positioning.
-- **`CreateVerticalLineBoxes`'s own auto-width shrink corrupts `Location.X` for an absolutely/fixed-positioned
-  descendant whose own width is auto** ([#798](https://github.com/jhaygood86/PeachPDF/issues/798)) — an
-  explicit `width` avoids the bug.
 - **A nested inline element's own border/padding/margin does not reserve inline-axis (physical left/right,
   for `vertical-rl`/`vertical-lr`) space** ([#769](https://github.com/jhaygood86/PeachPDF/issues/769)), and
   its block-axis (physical top/bottom) padding/border is applied once per column it spans rather than once

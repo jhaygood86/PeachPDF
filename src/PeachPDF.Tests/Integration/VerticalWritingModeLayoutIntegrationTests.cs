@@ -1397,9 +1397,8 @@ namespace PeachPDF.Tests.Integration
             // anonymous-block correction splits it out of "Before"/"After" the same way it splits out a
             // float; el itself ends up block-children-dispatched (LineBoxes.Count == 0), not inline-only,
             // so words are gathered from every descendant rather than from el's own LineBoxes. An explicit
-            // width sidesteps a separate, pre-existing bug (CreateVerticalLineBoxes's own auto-width-shrink
-            // logic, from #761, corrupts an absolutely-positioned descendant's own Location.X when its
-            // width is auto - unrelated to #768, not fixed here).
+            // width keeps this test focused on #768's own scope; the auto-width case (once a separate bug,
+            // #798) has its own test below.
             var html = LayoutHarness.Wrap("""
                 <div id="el" style="writing-mode: vertical-rl; position: relative; width: 200px; height: 200px">
                 Before <span id="abs" style="position: absolute; left: 5pt; top: 5pt; width: 20pt">X</span> After
@@ -1427,6 +1426,38 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(el.ClientTop + 5, abs.Location.Y, 1);
         }
 
+        // ── Issue #798: auto-width out-of-flow descendant no longer has its Location.X corrupted ──
+
+        [Fact]
+        public async Task VerticalRl_InlineNestedAbsolutePositionedSpanWithAutoWidth_PositionsAgainstAncestor()
+        {
+            // Same shape as VerticalRl_InlineNestedAbsolutePositionedSpan_..., minus the explicit width
+            // that test uses to dodge #798 - CreateVerticalLineBoxes's own auto-width shrink used to
+            // overwrite abs's Location.X (already correctly set from `left: 5pt` by CommitBlockChildOffset)
+            // with a content-derived value, since it assumed Location.X was always a free-to-move
+            // block-start edge. It isn't, for an out-of-flow box.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; position: relative; width: 200px; height: 200px">
+                Before <span id="abs" style="position: absolute; left: 5pt; top: 5pt">X</span> After
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el");
+            var abs = LayoutHarness.FindById(root, "abs");
+            Assert.NotNull(el);
+            Assert.NotNull(abs);
+
+            Assert.Equal(el!.ClientLeft + 5, abs!.Location.X, 1);
+            Assert.Equal(el.ClientTop + 5, abs.Location.Y, 1);
+
+            // Width still shrinks to content too, not just position: the placeholder-anchored content is
+            // reconciled with the pinned Location.X via CssBox.OffsetContentLeft, not left at whatever
+            // unconstrained width the box had before its own content layout ran.
+            var width = abs.ActualRight - abs.Location.X;
+            Assert.True(width > 0 && width < 50, $"auto width should shrink to its short content, got {width}");
+        }
+
         [Fact]
         public async Task VerticalRl_InlineNestedFixedPositionedSpan_PositionsAgainstThePage()
         {
@@ -1442,6 +1473,107 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(10, fixedBox!.Location.X, 1);
             Assert.Equal(10, fixedBox.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_InlineNestedFixedPositionedSpanWithAutoWidth_PositionsAgainstThePage()
+        {
+            // Auto-width counterpart of VerticalRl_InlineNestedFixedPositionedSpan_PositionsAgainstThePage,
+            // covering the Position.Fixed branch of the same #798 fix.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="writing-mode: vertical-rl; width: 200px; height: 200px">
+                Before <span id="fixed" style="position: fixed; left: 10pt; top: 10pt">X</span> After
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var fixedBox = LayoutHarness.FindById(root, "fixed");
+            Assert.NotNull(fixedBox);
+
+            Assert.Equal(10, fixedBox!.Location.X, 1);
+            Assert.Equal(10, fixedBox.Location.Y, 1);
+
+            var width = fixedBox.ActualRight - fixedBox.Location.X;
+            Assert.True(width > 0 && width < 50, $"auto width should shrink to its short content, got {width}");
+        }
+
+        [Fact]
+        public async Task VerticalRl_AbsolutePositionedBoxWithBlockContent_WidthShrinksToContentToo()
+        {
+            // A block-level (not inline-only) child dispatches through LayoutVerticalBlockChildren rather
+            // than CreateVerticalLineBoxes - absBox's own width:auto shrink happens there instead, via the
+            // same ShrinkAutoWidthTo call, so it needs the identical Location.X-preserving treatment.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="width: 600pt; writing-mode: vertical-rl; position: relative">
+                <div id="absBox" style="position: absolute; left: 10pt; top: 10pt">
+                <p>A block child not this box's own direct text</p>
+                </div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var absBox = LayoutHarness.FindById(root, "absBox");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(absBox);
+
+            Assert.Equal(wrapper!.ClientLeft + 10, absBox!.Location.X, 1);
+            Assert.Equal(wrapper.ClientTop + 10, absBox.Location.Y, 1);
+
+            var width = absBox.ActualRight - absBox.Location.X;
+            Assert.True(width > 0 && width < 50, $"auto width should shrink to its short content, got {width}");
+        }
+
+        [Fact]
+        public async Task VerticalRl_InFlowBoxWithAutoWidthBlockChild_WidthShrinksToContent()
+        {
+            // Not an out-of-flow scenario at all: LayoutVerticalBlockChildren measured a same-writing-mode
+            // block child's width from ResolveOwnInlineSize's pre-content-layout (stretch) estimate, before
+            // that child's own auto-width shrink (inside its own content layout) had actually narrowed it -
+            // so the parent's own shrink-to-fit accumulated the wrong, unshrunk child width regardless of
+            // positioning scheme. Independent of #798, found while verifying its fix.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl">
+                <div id="box">
+                <p>A block child not this box's own direct text</p>
+                </div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var wrapper = LayoutHarness.FindById(root, "wrapper");
+            var box = LayoutHarness.FindById(root, "box");
+            Assert.NotNull(wrapper);
+            Assert.NotNull(box);
+
+            // Position, not just width: box's block-start edge (its own ActualRight, since vertical-rl)
+            // must stay flush with wrapper's own content-box right edge - the anchor LayoutVerticalBlockChildren
+            // placed it against - not drift from a redundant second position correction.
+            Assert.Equal(wrapper!.ClientRight, box!.ActualRight, 1);
+
+            var width = box.ActualRight - box.Location.X;
+            Assert.True(width > 0 && width < 50, $"auto width should shrink to its short content, got {width}");
+        }
+
+        [Fact]
+        public async Task VerticalRl_FloatWithAutoWidth_StillShrinksToContent()
+        {
+            // The #798 guard only fires for Position.Absolute/Fixed, not the broader IsOutOfFlow (which
+            // also covers floats) - a float's own Location.X comes from CommitBlockChildOffset's
+            // flow-stacking branch (CssLayoutEngine.FloatBox avoidance), not a CSS `left` offset, so it's
+            // exactly as free to move as an ordinary in-flow box's and must keep shrinking to content.
+            var html = LayoutHarness.Wrap("""
+                <div id="wrapper" style="writing-mode: vertical-rl; width: 300px; height: 300px">
+                <div id="floatBox" style="float: right">Hi</div>
+                </div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var floatBox = LayoutHarness.FindById(root, "floatBox");
+            Assert.NotNull(floatBox);
+
+            var width = floatBox!.ActualRight - floatBox.Location.X;
+            Assert.True(width > 0 && width < 50, $"float's auto width should shrink to its short content, got {width}");
         }
 
         [Fact]

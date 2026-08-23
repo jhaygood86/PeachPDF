@@ -710,12 +710,41 @@ namespace PeachPDF.Html.Core.Dom
         /// Internal rather than private: <see cref="CssBox.LayoutVerticalBlockChildren"/> reuses this
         /// directly for its own auto-width shrink (issue #760) rather than duplicating the
         /// <see cref="WritingModeFrame.BlockStartIsRight"/>-vs-<c>Location.X</c> subtlety above.
+        /// <para>
+        /// For an absolutely/fixed-positioned box under <c>vertical-rl</c>, <c>Location.X</c> is not a
+        /// block-start edge free to move - it was already set by <see cref="CssBox.CommitBlockChildOffset"/>
+        /// from the box's own CSS <c>left</c> offset before this box's own content layout ran, so the
+        /// vertical-rl branch below pins <c>Location.X</c> and shifts the already-laid-out content instead
+        /// (issue #798), via <see cref="CssBox.OffsetContentLeft"/>. This deliberately checks
+        /// <c>Position.Value</c> rather than the broader <see cref="CssBox.IsOutOfFlow"/> (which also
+        /// covers floats): a float reaches <see cref="CssBox.CommitBlockChildOffset"/>'s flow-stacking
+        /// branch instead, so its <c>Location.X</c> is a computed avoidance position, not a CSS offset -
+        /// exactly as free to move as an ordinary in-flow box's, and correctly takes the ordinary branch
+        /// below.
+        /// </para>
         /// </remarks>
         internal static void ShrinkAutoWidthTo(CssBox blockBox, WritingModeFrame frame, double contentBlockExtent)
         {
             // The content-box edge the block axis has reached, in the same physical coordinate
             // ToPhysical already anchors every word to - independent of which side is block-start.
             var contentFarEdgeX = frame.ToPhysical(0, contentBlockExtent).X;
+
+            if (frame.BlockStartIsRight && blockBox.Position.Value is PositionMode.Absolute or PositionMode.Fixed)
+            {
+                // Content was laid out against a placeholder block-start anchor (this box's pre-shrink
+                // ActualRight) before its true extent was known, but Location.X is pinned to a CSS `left`
+                // offset that must not move. ToPhysical is a pure translation for a fixed frame, so the
+                // gap between where the content's block-end edge landed and where Location.X actually is
+                // is a uniform shift - move the content to close it, not Location.
+                var trueRight = blockBox.ActualRight;
+                var contentLeftEdge = contentFarEdgeX - blockBox.ActualPaddingLeft - blockBox.ActualBorderLeftWidth;
+                var delta = blockBox.Location.X - contentLeftEdge;
+
+                if (delta != 0) blockBox.OffsetContentLeft(delta);
+
+                blockBox.ActualRight = blockBox.Location.X + (trueRight - contentLeftEdge);
+                return;
+            }
 
             if (frame.BlockStartIsRight)
             {
