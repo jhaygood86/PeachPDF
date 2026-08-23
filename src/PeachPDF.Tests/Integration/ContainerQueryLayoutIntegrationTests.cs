@@ -92,6 +92,53 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ContainerRelativeUnit_Cqh_AgainstADefiniteHeightSizeContainer_ResolvesTheRealHeight()
+        {
+            // Regression test for issue #805: a descendant's own width resolves top-down, before a
+            // definite-height container's own ClientBottom would normally be settled (that only happens
+            // in the container's own layout epilogue, after its children - including this very
+            // descendant - have already been sized). CssBox.ResolveDefiniteHeightPt resolves the
+            // container's real, explicit 200px (150pt) height directly instead of reading a not-yet-live
+            // ClientBottom (which read back as exactly 0 before that fix), so cqh correctly resolves to
+            // 50% of it - not 0, and not the small-viewport fallback either.
+            var html = Html(
+                "#box { container-type: size; width: 400px; height: 200px; } " +
+                "#target { width: 50cqh; height: 10px; }",
+                "<div id='box'><div id='target'></div></div>");
+
+            var root = await BuildRoot(html);
+            var target = DomUtils.GetBoxById(root, "target");
+            Assert.NotNull(target);
+            Assert.Equal(75d, target!.ActualBoxSizingWidth, 1);
+        }
+
+        // ── cqw/cqh/cqi/cqb follow the container's OWN writing-mode (issue #795) ─
+        // A vertical-rl SIZE container's own inline axis is physical height and block axis is physical
+        // width - the inverse of a horizontal-tb container's. cqw/cqh must stay physical regardless
+        // (always width/height respectively); only cqi/cqb rotate onto the swapped axis. The target is
+        // pinned to horizontal-tb so its OWN layout stays on the ordinary, well-tested physical-width
+        // path - only the container's own writing-mode (read via FindNearestQueryContainer) is under
+        // test. (cqi/cqh, both driven by the container's own physical height, also exercise issue #805's
+        // fix - CssBox.ResolveDefiniteHeightPt - since #box's height is a definite, explicit length.)
+        [Theory]
+        [InlineData("width: 50cqw", 150d)]  // physical width (400px=300pt) - unaffected by writing-mode
+        [InlineData("width: 50cqi", 75d)]   // the container's own inline axis - physical height (200px=150pt) under vertical-rl
+        [InlineData("width: 50cqh", 75d)]   // physical height - unaffected by writing-mode
+        [InlineData("width: 50cqb", 150d)]  // the container's own block axis - physical width under vertical-rl
+        public async Task ContainerRelativeUnit_UnderAVerticalContainer_CqiCqbFollowTheContainersWritingMode(string declaration, double expectedPt)
+        {
+            var html = Html(
+                "#box { container-type: size; writing-mode: vertical-rl; width: 400px; height: 200px; } " +
+                $"#target {{ writing-mode: horizontal-tb; {declaration}; height: 10px; }}",
+                "<div id='box'><div id='target'></div></div>");
+
+            var root = await BuildRoot(html);
+            var target = DomUtils.GetBoxById(root, "target");
+            Assert.NotNull(target);
+            Assert.Equal(expectedPt, target!.ActualBoxSizingWidth, 1);
+        }
+
+        [Fact]
         public async Task ContainerRelativeUnit_ResolvesInsideCalc()
         {
             var html = Html(
@@ -186,6 +233,31 @@ namespace PeachPDF.Tests.Integration
 
             var box = await FindByTag(html, "p");
             Assert.Equal(Red, box.Color);
+        }
+
+        // ── inline-size/block-size follow the container's OWN writing-mode; width/height/aspect-ratio/
+        // orientation stay physical (issue #806) ─
+        // A vertical-rl SIZE container's own inline axis is physical height and block axis is physical
+        // width - the inverse of a horizontal-tb container's. width/height must stay physical regardless;
+        // only inline-size/block-size rotate onto the swapped axis. `p` is pinned to horizontal-tb (its
+        // own writing-mode is otherwise irrelevant here - only the container's is under test).
+        [Theory]
+        [InlineData("(width >= 300px)", true)]        // physical width (400px=300pt) - unaffected by writing-mode
+        [InlineData("(inline-size >= 300px)", false)] // container's own inline axis - physical height (200px=150pt) under vertical-rl - narrower than 300px
+        [InlineData("(inline-size >= 100px)", true)]
+        [InlineData("(height >= 100px)", true)]        // physical height (200px=150pt) - unaffected by writing-mode
+        [InlineData("(block-size >= 300px)", true)]    // container's own block axis - physical width (400px=300pt) under vertical-rl
+        [InlineData("(block-size >= 500px)", false)]
+        public async Task SizeFeature_UnderAVerticalContainer_InlineSizeAndBlockSizeFollowTheContainersWritingMode(string condition, bool shouldApply)
+        {
+            var html = Html(
+                "#box { container-type: size; writing-mode: vertical-rl; width: 400px; height: 200px; } " +
+                "p { writing-mode: horizontal-tb; color: #ff0000; } " +
+                "@container " + condition + " { p { color: #0000ff; } }",
+                "<div id='box'><p>text</p></div>");
+
+            var box = await FindByTag(html, "p");
+            Assert.Equal(shouldApply ? Blue : Red, box.Color);
         }
 
         // ── named containers: nearest match wins, a non-matching name never applies ─

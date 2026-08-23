@@ -130,6 +130,13 @@ namespace PeachPDF.Html.Core.Parse
             // descending into a CssBoxSvg - see their `if (box is CssBoxSvg) return;` and issue #159.
             CascadeApplyStyles(cssValueParser, root, cssData, media, containerSizes);
 
+            // vi/vb unit resolution (CssBox.GetViewportUnitBasis) needs the root element's own resolved
+            // writing-mode (CSS Values and Units 4 §6.2) - read now, only once per document, reusing the
+            // same htmlBox lookup DocumentLanguage above already did, rather than re-walking the DOM on
+            // every length resolution. Must come after CascadeApplyStyles - htmlBox.WritingMode isn't
+            // resolved yet at the DocumentLanguage assignment above.
+            htmlContainer.RootWritingMode = htmlBox?.WritingMode.Value ?? WritingMode.HorizontalTb;
+
             // Must run after the whole tree's cascade above, not from inside it - see
             // ApplyTablePresentationalAttributesToCells's remarks / issue #636.
             ApplyTablePresentationalAttributesToCells(root);

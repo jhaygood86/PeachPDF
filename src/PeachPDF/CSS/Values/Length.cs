@@ -318,26 +318,47 @@ namespace PeachPDF.CSS
         /// <param name="remFactor">Pixels per 1rem, i.e. the root element's font size in pixels.</param>
         /// <param name="hundredPercent">The pixel value equivalent to 100%.</param>
         /// <param name="containerInlineSizePt">The nearest ancestor query container's own resolved
-        /// inline-axis (width) size in points, for <c>cqw</c>/<c>cqi</c>/<c>cqmin</c>/<c>cqmax</c> -
-        /// <c>null</c> when there is no eligible ancestor container (see
+        /// inline-axis size in points (physical width for a <c>horizontal-tb</c> container, physical
+        /// height for <c>vertical-rl</c>/<c>vertical-lr</c> - CSS Writing Modes 4 §7.1), for <c>cqi</c>/
+        /// <c>cqmin</c>/<c>cqmax</c> - <c>null</c> when there is no eligible ancestor container (see
         /// <see cref="Html.Core.Dom.CssBox.FindNearestQueryContainer"/>), which falls back to
-        /// <paramref name="viewportWidthPt"/> (the corresponding small-viewport unit, per CSS
+        /// <paramref name="viewportInlineSizePt"/> (the corresponding small-viewport unit, per CSS
         /// Containment 3 §6.2).</param>
         /// <param name="containerBlockSizePt">The nearest ancestor query container's own resolved
-        /// block-axis (height) size in points, for <c>cqh</c>/<c>cqb</c>/<c>cqmin</c>/<c>cqmax</c> -
-        /// <c>null</c> with no eligible container, or when the eligible container is
-        /// <c>inline-size</c>-only (it doesn't track the block axis either), which falls back to
-        /// <paramref name="viewportHeightPt"/> for that axis.</param>
-        /// <param name="viewportWidthPt">The page box's own width in points, for <c>vw</c>/<c>vi</c> and
-        /// their <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqw</c>/<c>cqi</c> fallback -
-        /// <c>null</c> when no page context is available (see
-        /// <see cref="Html.Core.Dom.CssBox.GetViewportUnitBasis"/>), which resolves those units to 0.</param>
-        /// <param name="viewportHeightPt">The page box's own height in points, for <c>vh</c>/<c>vb</c> and
-        /// their <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqh</c>/<c>cqb</c> fallback -
-        /// <c>null</c> when no page context is available.</param>
+        /// block-axis size in points (the physical axis orthogonal to <paramref name="containerInlineSizePt"/>),
+        /// for <c>cqb</c>/<c>cqmin</c>/<c>cqmax</c> - <c>null</c> with no eligible container, or when the
+        /// eligible container is <c>inline-size</c>-only (it doesn't track the block axis either), which
+        /// falls back to <paramref name="viewportBlockSizePt"/> for that axis.</param>
+        /// <param name="viewportWidthPt">The page box's own width in points, for <c>vw</c> and its
+        /// <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqw</c> fallback - <c>null</c> when no
+        /// page context is available (see <see cref="Html.Core.Dom.CssBox.GetViewportUnitBasis"/>), which
+        /// resolves those units to 0. Always the page's physical width, regardless of anyone's
+        /// <c>writing-mode</c> (CSS Values and Units 4 §6.2) - unlike <paramref name="viewportInlineSizePt"/>.</param>
+        /// <param name="viewportHeightPt">The page box's own height in points, for <c>vh</c> and its
+        /// <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqh</c> fallback - <c>null</c> when no
+        /// page context is available. Always the page's physical height, regardless of anyone's
+        /// <c>writing-mode</c> - unlike <paramref name="viewportBlockSizePt"/>.</param>
+        /// <param name="containerWidthPt">The nearest ancestor query container's own resolved physical
+        /// width in points, for <c>cqw</c> - <c>null</c> with no eligible container, which falls back to
+        /// <paramref name="viewportWidthPt"/>. Always physical, unlike <paramref name="containerInlineSizePt"/>.</param>
+        /// <param name="containerHeightPt">The nearest ancestor query container's own resolved physical
+        /// height in points, for <c>cqh</c> - <c>null</c> with no eligible container, or an
+        /// <c>inline-size</c>-only one, which falls back to <paramref name="viewportHeightPt"/>. Always
+        /// physical, unlike <paramref name="containerBlockSizePt"/>.</param>
+        /// <param name="viewportInlineSizePt">The page's own size along the root element's own inline
+        /// axis in points (physical width for a <c>horizontal-tb</c> root, physical height for
+        /// <c>vertical-rl</c>/<c>vertical-lr</c> - CSS Writing Modes 4 §7.1), for <c>vi</c> and its
+        /// <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqi</c> no-container fallback (CSS
+        /// Containment 3 §6.2's <c>svi</c> fallback) - <c>null</c> when no page context is available.</param>
+        /// <param name="viewportBlockSizePt">The page's own size along the root element's own block axis
+        /// in points (the physical axis orthogonal to <paramref name="viewportInlineSizePt"/>), for
+        /// <c>vb</c> and its <c>sv*</c>/<c>lv*</c>/<c>dv*</c> variants, and as the <c>cqb</c> no-container
+        /// fallback - <c>null</c> when no page context is available.</param>
         internal double ToPixels(double emFactor, double remFactor, double hundredPercent,
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
-            double? viewportWidthPt = null, double? viewportHeightPt = null)
+            double? viewportWidthPt = null, double? viewportHeightPt = null,
+            double? containerWidthPt = null, double? containerHeightPt = null,
+            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null)
         {
             // The engine's internal layout unit is 1 point (PixelsPerInch defaults to 72), so
             // physical units (in/cm/mm/pc/pt) resolve directly against points. CSS px resolves
@@ -366,14 +387,22 @@ namespace PeachPDF.CSS
                 Unit.Cm => // 1 cm = 72/2.54 pt
                     (72d / 2.54d) * Value,
                 Unit.Percent => hundredPercent / 100d * Value,
-                Unit.Cqw or Unit.Cqi => (containerInlineSizePt ?? viewportWidthPt ?? 0d) / 100d * Value,
-                Unit.Cqh or Unit.Cqb => (containerBlockSizePt ?? viewportHeightPt ?? 0d) / 100d * Value,
-                Unit.Cqmin => Math.Min(containerInlineSizePt ?? viewportWidthPt ?? 0d, containerBlockSizePt ?? viewportHeightPt ?? 0d) / 100d * Value,
-                Unit.Cqmax => Math.Max(containerInlineSizePt ?? viewportWidthPt ?? 0d, containerBlockSizePt ?? viewportHeightPt ?? 0d) / 100d * Value,
-                Unit.Vw or Unit.Svw or Unit.Lvw or Unit.Dvw or Unit.Vi or Unit.Svi or Unit.Lvi or Unit.Dvi =>
+                Unit.Cqw => (containerWidthPt ?? viewportWidthPt ?? 0d) / 100d * Value,
+                Unit.Cqh => (containerHeightPt ?? viewportHeightPt ?? 0d) / 100d * Value,
+                Unit.Cqi => (containerInlineSizePt ?? viewportInlineSizePt ?? 0d) / 100d * Value,
+                Unit.Cqb => (containerBlockSizePt ?? viewportBlockSizePt ?? 0d) / 100d * Value,
+                // CSS Containment 3 §6.2: cqmin/cqmax are the smaller/larger of cqi and cqb - not cqw/cqh.
+                Unit.Cqmin => Math.Min(containerInlineSizePt ?? viewportInlineSizePt ?? 0d, containerBlockSizePt ?? viewportBlockSizePt ?? 0d) / 100d * Value,
+                Unit.Cqmax => Math.Max(containerInlineSizePt ?? viewportInlineSizePt ?? 0d, containerBlockSizePt ?? viewportBlockSizePt ?? 0d) / 100d * Value,
+                Unit.Vw or Unit.Svw or Unit.Lvw or Unit.Dvw =>
                     (viewportWidthPt ?? 0d) / 100d * Value,
-                Unit.Vh or Unit.Svh or Unit.Lvh or Unit.Dvh or Unit.Vb or Unit.Svb or Unit.Lvb or Unit.Dvb =>
+                Unit.Vh or Unit.Svh or Unit.Lvh or Unit.Dvh =>
                     (viewportHeightPt ?? 0d) / 100d * Value,
+                Unit.Vi or Unit.Svi or Unit.Lvi or Unit.Dvi =>
+                    (viewportInlineSizePt ?? 0d) / 100d * Value,
+                Unit.Vb or Unit.Svb or Unit.Lvb or Unit.Dvb =>
+                    (viewportBlockSizePt ?? 0d) / 100d * Value,
+                // CSS Values and Units 4 §6.2: vmin/vmax are the smaller/larger of vw and vh - not vi/vb.
                 Unit.Vmin or Unit.Svmin or Unit.Lvmin or Unit.Dvmin =>
                     Math.Min(viewportWidthPt ?? 0d, viewportHeightPt ?? 0d) / 100d * Value,
                 Unit.Vmax or Unit.Svmax or Unit.Lvmax or Unit.Dvmax =>
@@ -438,12 +467,11 @@ namespace PeachPDF.CSS
             Cqb,
             Cqmin,
             Cqmax,
-            // CSS Values and Units 4 §6.2 small/large/dynamic viewport-percentage units. Vi/Vb get the
-            // same horizontal-tb-only treatment Cqi/Cqb already have (Vi === Vw, Vb === Vh) - neither is
-            // adjusted for the root element's/container's own writing-mode, independent of this engine's
-            // real vertical-writing-mode layout support elsewhere (see docs/html-css-support.md's CSS
-            // Viewport Units section). Small/large/dynamic variants all resolve identically here (see
-            // ToPixels) - a PDF page box has no scrollbar or dynamic browser chrome to distinguish them by.
+            // CSS Values and Units 4 §6.2 small/large/dynamic viewport-percentage units. Vi/Vb (like
+            // Cqi/Cqb) track the root element's/container's own writing-mode - see ToPixels'
+            // viewportInlineSizePt/viewportBlockSizePt parameters. Small/large/dynamic variants all
+            // resolve identically here (see ToPixels) - a PDF page box has no scrollbar or dynamic browser
+            // chrome to distinguish them by.
             Vi,
             Vb,
             Svw,

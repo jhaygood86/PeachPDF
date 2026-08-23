@@ -726,6 +726,16 @@ namespace PeachPDF.Html.Core
         internal CssBox? Root { get; private set; }
 
         /// <summary>
+        /// The document's root (<c>&lt;html&gt;</c>) element's own resolved <c>writing-mode</c>, defaulting
+        /// to the CSS initial <see cref="WritingMode.HorizontalTb"/> when there is no document yet. Set
+        /// once per document parse (<c>DomParser.GenerateCssTree</c>, alongside <see cref="DocumentLanguage"/>)
+        /// rather than looked up on demand, since <c>vi</c>/<c>vb</c> unit resolution
+        /// (<see cref="Dom.CssBox.GetViewportUnitBasis"/>) reads this on effectively every CSS length
+        /// parsed in the document - re-walking the DOM for it each time would be a real perf regression.
+        /// </summary>
+        internal WritingMode RootWritingMode { get; set; } = WritingMode.HorizontalTb;
+
+        /// <summary>
         /// Metadata extracted from the HTML head elements.
         /// </summary>
         internal HtmlDocumentMetadata? DocumentMetadata { get; private set; }
@@ -984,9 +994,19 @@ namespace PeachPDF.Html.Core
                 if (box.ContainerType.Value is CSS.ContainerType.Size or CSS.ContainerType.InlineSize)
                 {
                     var isSize = box.ContainerType.Value == CSS.ContainerType.Size;
+                    var widthPt = box.ClientRight - box.ClientLeft;
+                    var heightPt = box.ClientBottom - box.ClientTop;
+
+                    // inline-size/block-size (CSS Writing Modes 4 §7.1) rotate onto the orthogonal
+                    // physical axis under a vertical-rl/vertical-lr container - width/height/aspect-ratio/
+                    // orientation stay physical regardless (CSS Containment 3 §7.3).
+                    var isVertical = box.WritingMode.Value is CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr;
+
                     byId[box.Id] = new ContainerQueryContext(
-                        InlineSizePt: box.ClientRight - box.ClientLeft,
-                        BlockSizePt: isSize ? box.ClientBottom - box.ClientTop : null,
+                        WidthPt: widthPt,
+                        HeightPt: isSize ? heightPt : null,
+                        InlineSizePt: isVertical ? heightPt : widthPt,
+                        BlockSizePt: isSize ? (isVertical ? widthPt : heightPt) : null,
                         ContainerName: box.ContainerName);
                 }
 

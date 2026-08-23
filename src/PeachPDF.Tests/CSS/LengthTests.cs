@@ -253,17 +253,21 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Theory]
-        [InlineData((int)Length.Unit.Cqw, 200d, 100d, 100d)]  // 50% of the 200pt container inline size
-        [InlineData((int)Length.Unit.Cqi, 200d, 100d, 100d)]  // same as cqw (inline axis, horizontal writing mode)
-        [InlineData((int)Length.Unit.Cqh, 100d, 200d, 100d)]  // 50% of the 200pt container block size
-        [InlineData((int)Length.Unit.Cqb, 100d, 200d, 100d)]  // same as cqh
+        [InlineData((int)Length.Unit.Cqw, 200d, 100d, 100d)]  // 50% of the 200pt container inline/width size
+        [InlineData((int)Length.Unit.Cqi, 200d, 100d, 100d)]  // same value here (horizontal writing mode: inline == width)
+        [InlineData((int)Length.Unit.Cqh, 100d, 200d, 100d)]  // 50% of the 200pt container block/height size
+        [InlineData((int)Length.Unit.Cqb, 100d, 200d, 100d)]  // same value here (horizontal writing mode: block == height)
         [InlineData((int)Length.Unit.Cqmin, 300d, 100d, 50d)] // min(300,100) = 100 -> 50% = 50
         [InlineData((int)Length.Unit.Cqmax, 300d, 100d, 150d)] // max(300,100) = 300 -> 50% = 150
         public void ToPixels_ContainerRelativeUnit_UsesContainerSize(int unitValue, double inlinePt, double blockPt, double expected)
         {
             var length = new Length(50f, (Length.Unit)unitValue);
 
-            Assert.Equal(expected, length.ToPixels(0, 0, 0, inlinePt, blockPt));
+            // A horizontal-tb container has no divergence between its physical width/height and its own
+            // inline/block axis, so the same numbers feed both pairs of parameters here - see
+            // ToPixels_Cqw_UsesPhysicalWidth_NotContainerInlineAxis below for a vertical container, where
+            // they genuinely differ and only the correct pair may be read.
+            Assert.Equal(expected, length.ToPixels(0, 0, 0, inlinePt, blockPt, null, null, inlinePt, blockPt));
         }
 
         [Theory]
@@ -275,8 +279,8 @@ namespace PeachPDF.Tests.CSS
         [InlineData((int)Length.Unit.Cqmax)]
         public void ToPixels_ContainerRelativeUnit_WithNoAncestorContainerOrViewport_ResolvesToZero(int unitValue)
         {
-            // Neither a container size nor a viewport size supplied (all four null) - the ultimate
-            // fallback with genuinely no context at all (e.g. a media-query/@page call site).
+            // No container or viewport context at all supplied - the ultimate fallback with genuinely no
+            // context at all (e.g. a media-query/@page call site).
             var length = new Length(50f, (Length.Unit)unitValue);
 
             Assert.Equal(0d, length.ToPixels(0, 0, 0));
@@ -284,18 +288,18 @@ namespace PeachPDF.Tests.CSS
 
         [Theory]
         [InlineData((int)Length.Unit.Cqw, 400d)]   // 50% of the 800pt viewport width
-        [InlineData((int)Length.Unit.Cqi, 400d)]   // same as cqw
+        [InlineData((int)Length.Unit.Cqi, 400d)]   // same value here (horizontal writing mode)
         [InlineData((int)Length.Unit.Cqh, 300d)]   // 50% of the 600pt viewport height
-        [InlineData((int)Length.Unit.Cqb, 300d)]   // same as cqh
+        [InlineData((int)Length.Unit.Cqb, 300d)]   // same value here (horizontal writing mode)
         [InlineData((int)Length.Unit.Cqmin, 300d)] // min(800,600) = 600 -> 50% = 300
         [InlineData((int)Length.Unit.Cqmax, 400d)] // max(800,600) = 800 -> 50% = 400
         public void ToPixels_ContainerRelativeUnit_WithNoAncestorContainer_FallsBackToViewportSize(int unitValue, double expected)
         {
-            // No ancestor query container (both container args null) but a real viewport size supplied -
-            // CSS Containment 3 §6.2's cq* -> sv* fallback (issue #615), not the old hardcoded 0.
+            // No ancestor query container (both container-pair args null) but a real viewport size
+            // supplied - CSS Containment 3 §6.2's cq* -> sv* fallback (issue #615), not the old hardcoded 0.
             var length = new Length(50f, (Length.Unit)unitValue);
 
-            Assert.Equal(expected, length.ToPixels(0, 0, 0, null, null, 800d, 600d));
+            Assert.Equal(expected, length.ToPixels(0, 0, 0, null, null, 800d, 600d, null, null, 800d, 600d));
         }
 
         [Theory]
@@ -311,7 +315,8 @@ namespace PeachPDF.Tests.CSS
             const double viewportWidthPt = 1000d;  // deliberately different from containerInlinePt, so a
             const double viewportHeightPt = 200d;  // wrong "fall back to viewport entirely" bug would show.
 
-            var result = length.ToPixels(0, 0, 0, containerInlinePt, null, viewportWidthPt, viewportHeightPt);
+            var result = length.ToPixels(0, 0, 0, containerInlinePt, null, viewportWidthPt, viewportHeightPt,
+                null, null, viewportWidthPt, viewportHeightPt);
 
             // cqmin/cqmax combine the REAL container inline size (300) with the VIEWPORT-fallback block
             // size (200), i.e. min/max(300, 200) * 50% - not min/max(1000, 200) (all-viewport) or
@@ -322,14 +327,44 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal(expected, result);
         }
 
+        [Fact]
+        public void ToPixels_Cqw_UsesContainerPhysicalWidth_NotContainerInlineAxis()
+        {
+            // A vertical container's own inline axis (physical height) and physical width genuinely
+            // diverge - cqw must always read the physical width (containerWidthPt), never the axis-aware
+            // inline size (containerInlineSizePt), even when both are supplied and different.
+            var length = new Length(50f, Length.Unit.Cqw);
+
+            var result = length.ToPixels(0, 0, 0,
+                containerInlineSizePt: 999d, containerBlockSizePt: null,
+                viewportWidthPt: null, viewportHeightPt: null,
+                containerWidthPt: 200d, containerHeightPt: null);
+
+            Assert.Equal(100d, result); // 50% of containerWidthPt (200), not containerInlineSizePt (999)
+        }
+
+        [Fact]
+        public void ToPixels_Cqi_UsesContainerInlineAxis_NotContainerPhysicalWidth()
+        {
+            // The mirror of the test above: cqi must always read the axis-aware inline size
+            // (containerInlineSizePt), never the physical width (containerWidthPt) - proving the two are
+            // genuinely separate switch arms, not just documentation.
+            var length = new Length(50f, Length.Unit.Cqi);
+
+            var result = length.ToPixels(0, 0, 0,
+                containerInlineSizePt: 300d, containerBlockSizePt: null,
+                viewportWidthPt: null, viewportHeightPt: null,
+                containerWidthPt: 999d, containerHeightPt: null);
+
+            Assert.Equal(150d, result); // 50% of containerInlineSizePt (300), not containerWidthPt (999)
+        }
+
         [Theory]
         [InlineData((int)Length.Unit.Vw, 400d)]
-        [InlineData((int)Length.Unit.Vi, 400d)]
         [InlineData((int)Length.Unit.Svw, 400d)]
         [InlineData((int)Length.Unit.Lvw, 400d)]
         [InlineData((int)Length.Unit.Dvw, 400d)]
         [InlineData((int)Length.Unit.Vh, 300d)]
-        [InlineData((int)Length.Unit.Vb, 300d)]
         [InlineData((int)Length.Unit.Svh, 300d)]
         [InlineData((int)Length.Unit.Lvh, 300d)]
         [InlineData((int)Length.Unit.Dvh, 300d)]
@@ -352,10 +387,64 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Theory]
+        [InlineData((int)Length.Unit.Vi, 400d)]
+        [InlineData((int)Length.Unit.Svi, 400d)]
+        [InlineData((int)Length.Unit.Lvi, 400d)]
+        [InlineData((int)Length.Unit.Dvi, 400d)]
+        [InlineData((int)Length.Unit.Vb, 300d)]
+        [InlineData((int)Length.Unit.Svb, 300d)]
+        [InlineData((int)Length.Unit.Lvb, 300d)]
+        [InlineData((int)Length.Unit.Dvb, 300d)]
+        public void ToPixels_ViewportUnit_LogicalForm_ResolvesAgainstRootAxisSize(int unitValue, double expected)
+        {
+            // 800x600 root-inline/root-block basis (a horizontal-tb root, so numerically identical to the
+            // physical-pair test above) - proving vi/vb read viewportInlineSizePt/viewportBlockSizePt, not
+            // viewportWidthPt/viewportHeightPt (which are deliberately left null here).
+            var length = new Length(50f, (Length.Unit)unitValue);
+
+            Assert.Equal(expected, length.ToPixels(0, 0, 0, null, null, null, null,
+                null, null, viewportInlineSizePt: 800d, viewportBlockSizePt: 600d));
+        }
+
+        [Fact]
+        public void ToPixels_Vw_UsesPhysicalWidth_NotRootInlineAxis()
+        {
+            // A vertical root's own inline axis (physical height) and physical width genuinely diverge -
+            // vw must always read the physical width (viewportWidthPt), never the axis-aware inline size
+            // (viewportInlineSizePt), even when both are supplied and different.
+            var length = new Length(50f, Length.Unit.Vw);
+
+            var result = length.ToPixels(0, 0, 0, null, null,
+                viewportWidthPt: 800d, viewportHeightPt: null,
+                containerWidthPt: null, containerHeightPt: null,
+                viewportInlineSizePt: 999d, viewportBlockSizePt: null);
+
+            Assert.Equal(400d, result); // 50% of viewportWidthPt (800), not viewportInlineSizePt (999)
+        }
+
+        [Fact]
+        public void ToPixels_Vi_UsesRootInlineAxis_NotPhysicalWidth()
+        {
+            // The mirror of the test above: vi must always read the axis-aware inline size
+            // (viewportInlineSizePt), never the physical width (viewportWidthPt) - the exact case that
+            // was previously broken (Vi aliased directly to Vw with no writing-mode consultation at all).
+            var length = new Length(50f, Length.Unit.Vi);
+
+            var result = length.ToPixels(0, 0, 0, null, null,
+                viewportWidthPt: 999d, viewportHeightPt: null,
+                containerWidthPt: null, containerHeightPt: null,
+                viewportInlineSizePt: 600d, viewportBlockSizePt: null);
+
+            Assert.Equal(300d, result); // 50% of viewportInlineSizePt (600), not viewportWidthPt (999)
+        }
+
+        [Theory]
         [InlineData((int)Length.Unit.Vw)]
         [InlineData((int)Length.Unit.Vh)]
         [InlineData((int)Length.Unit.Vmin)]
         [InlineData((int)Length.Unit.Vmax)]
+        [InlineData((int)Length.Unit.Vi)]
+        [InlineData((int)Length.Unit.Vb)]
         public void ToPixels_ViewportUnit_WithNoPageContext_ResolvesToZero(int unitValue)
         {
             var length = new Length(50f, (Length.Unit)unitValue);
