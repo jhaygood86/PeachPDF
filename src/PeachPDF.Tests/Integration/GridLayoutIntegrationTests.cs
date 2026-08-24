@@ -1412,6 +1412,116 @@ namespace PeachPDF.Tests.Integration
                 "the wider content's track should have taken the larger share");
         }
 
+        // ─── box-sizing:border-box grid-item stretch (issue #811) ───────────────
+
+        [Fact]
+        public async Task StretchedBorderBoxItem_WithPadding_FillsItsTrack_GapStaysExact()
+        {
+            // The #811 repro shape: 1fr columns, a px-unit `gap` shorthand, border-box items with
+            // real padding. Before the fix, each item rendered padding+border narrower than its track,
+            // exposing container background around it - which read as a far-oversized gap.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:repeat(3, 1fr); gap:1px;'>
+                    <div class='item' style='box-sizing:border-box; padding:10pt 14pt;'>A</div>
+                    <div class='item' style='box-sizing:border-box; padding:10pt 14pt;'>B</div>
+                    <div class='item' style='box-sizing:border-box; padding:10pt 14pt;'>C</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var items = FindAllByClass(root, "item");
+            Assert.Equal(3, items.Count);
+
+            const double gapPt = 0.75; // 1px -> pt
+            var expectedTrack = (300.0 - 2 * gapPt) / 3;
+            foreach (var item in items)
+                Assert.Equal(expectedTrack, item.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(gapPt, items[1].Location.X - items[0].ActualRight, 0.5);
+            Assert.Equal(gapPt, items[2].Location.X - items[1].ActualRight, 0.5);
+        }
+
+        [Fact]
+        public async Task GapShorthand_PxUnit_ConvertsToExactPoints()
+        {
+            // No existing test used the `gap` shorthand or a px unit (all used `column-gap:<N>pt`
+            // longhand) - close that coverage gap independent of the box-sizing angle above.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:203pt; grid-template-columns:100pt 100pt; gap:4px;'>
+                    <div id='a' style='height:10pt;'></div>
+                    <div id='b' style='height:10pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(3, b.Location.X - a.ActualRight, 0.5); // 4px -> 3pt
+        }
+
+        [Fact]
+        public async Task StretchedBorderBoxItem_AutoWidthContainer_GapStaysExact()
+        {
+            // The exact real-world shape from #811: no explicit container width (fills its containing
+            // block), 1fr columns, border-box padded items.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; grid-template-columns:repeat(3, 1fr); gap:1px;'>
+                    <div class='item' style='box-sizing:border-box; padding:10pt 14pt;'>A</div>
+                    <div class='item' style='box-sizing:border-box; padding:10pt 14pt;'>B</div>
+                    <div class='item' style='box-sizing:border-box; padding:10pt 14pt;'>C</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var items = FindAllByClass(root, "item");
+            Assert.Equal(3, items.Count);
+
+            const double gapPt = 0.75; // 1px -> pt
+            var expectedTrack = (container.ActualBoxSizingWidth - 2 * gapPt) / 3;
+            foreach (var item in items)
+                Assert.Equal(expectedTrack, item.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(gapPt, items[1].Location.X - items[0].ActualRight, 0.5);
+            Assert.Equal(gapPt, items[2].Location.X - items[1].ActualRight, 0.5);
+        }
+
+        [Fact]
+        public async Task StretchedBorderBoxItem_WithPadding_FillsRowHeight()
+        {
+            // Row-axis analog: a border-box item with padding, stretched (default align-items) to fill
+            // an auto row whose height is driven by a taller sibling. This is the one new test in this
+            // group that runs against a real page grid (the harness's default), so it also exercises
+            // ItemContentCommit.CommitLayout's own final-pass copy of the box-sizing bug - which
+            // silently re-shrinks a border-box item's height back down after PlaceItemInCell has
+            // already stretched it correctly, on every real (non-measurement) layout pass.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:100pt 100pt;'>
+                    <div id='tall' style='height:80pt;'>Tall</div>
+                    <div id='short' style='box-sizing:border-box; padding:10pt;'>Short</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var tall = FindById(root, "tall")!;
+            var shortBox = FindById(root, "short")!;
+            Assert.Equal(tall.ActualBoxSizingHeight, shortBox.ActualBoxSizingHeight, 1.0);
+        }
+
+        [Fact]
+        public async Task JustifySelfStart_BorderBoxItem_SameOuterWidthAsContentBox()
+        {
+            // The fit-content (non-stretch) auto-width branch clamps/measures in a mix of content- and
+            // outer-space (GetFitContentWidth's own result already folds the item's padding/border in);
+            // regardless of that, box-sizing must not change the item's rendered OUTER size here - a
+            // border-box item with the same content/padding/border as a content-box one should shrink to
+            // the exact same footprint (box-sizing only changes what an explicit `width` declaration
+            // means, never how shrink-to-fit sizing renders).
+            var htmlContent = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:300pt;'>
+                    <div id='a' style='box-sizing:content-box; justify-self:start; padding:20pt; border:2pt solid black;'>Hi</div>
+                </div>");
+            var htmlBorder = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; grid-template-columns:300pt;'>
+                    <div id='a' style='box-sizing:border-box; justify-self:start; padding:20pt; border:2pt solid black;'>Hi</div>
+                </div>");
+            var (rootContent, _) = await BuildAndLayout(htmlContent);
+            var (rootBorder, _) = await BuildAndLayout(htmlBorder);
+            var aContent = FindById(rootContent, "a")!;
+            var aBorder = FindById(rootBorder, "a")!;
+            Assert.Equal(aContent.ActualBoxSizingWidth, aBorder.ActualBoxSizingWidth, 0.01);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 

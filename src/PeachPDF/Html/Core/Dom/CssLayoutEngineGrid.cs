@@ -1249,7 +1249,11 @@ namespace PeachPDF.Html.Core.Dom
         /// restore" idiom.</summary>
         private async ValueTask<double> MeasureItemHeight(RGraphics g, CssBox box, double columnWidth)
         {
-            var cssWidth = Math.Max(0, columnWidth - HorizontalMarginBorderPadding(box));
+            // box.Width must end up holding whatever CssBox.ActualBoxSizeIncludedWidth's own box-sizing
+            // contract expects it to: content-space for content-box (subtract the item's own padding/
+            // border along with its margin), or its full outer footprint for border-box (subtract only
+            // its margin - ActualBoxSizeIncludedWidth is already 0 there).
+            var cssWidth = Math.Max(0, columnWidth - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
             var savedWidth = box.Width;
             box.Width = FormatLayoutUnits(cssWidth);
 
@@ -1282,13 +1286,23 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // An auto-width block would fill its containing block, so a grid item's width must be pinned:
                 // stretch → the cell's content width; otherwise its fit-content size clamped to the cell.
+                // Either way, `used` is in content-space (stretch) or already folds the item's own
+                // padding/border in (GetFitContentWidth) - box.Width must end up holding whatever
+                // ActualBoxSizeIncludedWidth's own box-sizing contract expects (content-space for
+                // content-box, the full outer footprint for border-box), so its own padding/border is
+                // added back for border-box (where ActualBoxSizeIncludedWidth is 0) and left alone for
+                // content-box (where it already equals that padding/border, cancelling to a no-op).
+                var ownPaddingBorder = HorizontalMarginBorderPadding(box) - box.ActualMarginLeft - box.ActualMarginRight;
                 var used = stretchWidth
                     ? cellContentWidth
                     : await CssLayoutEngine.GetFitContentWidth(g, box, cellContentWidth);
-                box.Width = FormatLayoutUnits(used);
+                box.Width = FormatLayoutUnits(Math.Max(0, used + ownPaddingBorder - box.ActualBoxSizeIncludedWidth));
             }
             if (stretchHeight)
-                box.Height = FormatLayoutUnits(Math.Max(0, cellHeight - VerticalMarginBorderPadding(box)));
+            {
+                var usedHeight = Math.Max(0, cellHeight - box.ActualMarginTop - box.ActualMarginBottom - box.ActualBoxSizeIncludedHeight);
+                box.Height = FormatLayoutUnits(usedHeight);
+            }
 
             box.Location = new RPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
             box.ActualBottom = box.Location.Y;
@@ -1422,11 +1436,6 @@ namespace PeachPDF.Html.Core.Dom
             box.ActualMarginLeft + box.ActualMarginRight
             + box.ActualPaddingLeft + box.ActualPaddingRight
             + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
-
-        private static double VerticalMarginBorderPadding(CssBox box) =>
-            box.ActualMarginTop + box.ActualMarginBottom
-            + box.ActualPaddingTop + box.ActualPaddingBottom
-            + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
 
         // ─── Subgrid (CSS Grid Level 2 §9) ─────────────────────────────────────────
 

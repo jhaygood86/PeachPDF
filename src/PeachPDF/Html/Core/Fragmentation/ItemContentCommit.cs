@@ -37,13 +37,22 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <remarks>
         /// <para>
         /// A <b>fresh</b> commit (<paramref name="resume"/> null) pins <paramref name="box"/>'s
-        /// content-box <c>Width</c>/<c>Height</c> to its already-resolved outer size
+        /// <c>Width</c>/<c>Height</c> to its already-resolved outer size
         /// (<see cref="CssBox.ActualBoxSizingWidth"/>/<see cref="CssBox.ActualBoxSizingHeight"/>)
         /// before laying out — every earlier phase already decided this item's size, and
         /// re-deriving it from an "auto" property here (the value every earlier phase temporarily
         /// sets and then reverts, since none of them are the item's <i>final</i> layout) would let
         /// this, genuinely final, layout disagree with the size the rest of the engine's algorithm
-        /// already committed to. Unlike those earlier phases, this pin is <b>not</b> reverted
+        /// already committed to. The value pinned is content-space for <c>content-box</c> (the
+        /// outer size minus this box's own padding/border) but the outer size itself for
+        /// <c>border-box</c> — <see cref="CssBox.ActualBoxSizeIncludedWidth"/>/<c>Height</c>'s own
+        /// box-sizing contract, which a border-box item's <c>Width</c>/<c>Height</c> string must
+        /// keep honoring here: unlike <c>Width</c> (only consumed by this box's own content layout,
+        /// which needs a content-space wrap bound either way), <c>Height</c> is re-read by every
+        /// pass's own epilogue (<see cref="CssLayoutEngine.ApplyHeight"/>), which assigns it straight
+        /// to the used outer height — pinning a border-box item's content height there would shrink
+        /// it back down by its own padding+border on this, the pass whose result actually ships
+        /// (issue #811). Unlike those earlier phases, this pin is <b>not</b> reverted
         /// afterward: a later fragmentainer pass resuming this same item (<paramref name="resume"/>
         /// non-null) must see the same <c>Width</c>/<c>Height</c> the first pass used, or a nested
         /// engine that re-derives its own content box from them
@@ -63,13 +72,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             if (resume is null)
             {
-                var horizontalPB = box.ActualPaddingLeft + box.ActualPaddingRight
-                    + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
-                var verticalPB = box.ActualPaddingTop + box.ActualPaddingBottom
-                    + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
-
-                box.Width = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingWidth - horizontalPB));
-                box.Height = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingHeight - verticalPB));
+                // box.Width/Height must hold whatever CssBox.ActualBoxSizeIncludedWidth/Height's own
+                // box-sizing contract expects: content-space for content-box (subtract its own
+                // padding/border back out of the outer size), or the outer size directly for
+                // border-box (ActualBoxSizeIncludedWidth/Height is already 0 there, so this is a no-op).
+                box.Width = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingWidth - box.ActualBoxSizeIncludedWidth));
+                box.Height = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingHeight - box.ActualBoxSizeIncludedHeight));
 
                 box.RectanglesReset();
             }
