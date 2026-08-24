@@ -2,6 +2,7 @@ using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachImage;
 using PeachImage.Formats.Bmp;
 using PeachImage.Formats.Jpeg;
+using PeachImage.Formats.Webp;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
@@ -109,10 +110,52 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         // --- FromBinary: dimensions / Transparent heuristic ---
 
         [Fact]
-        public void FromBinary_Png_IsTransparent()
+        public void FromBinary_OpaquePng_IsNotTransparent()
         {
+            // Transparent reflects real alpha content (a full pixel scan), not source format - an
+            // opaque PNG (a=255 everywhere) takes the lossy JPEG embed path exactly like an opaque
+            // JPEG/BMP/WebP/AVIF source would, since there's no alpha channel to lose.
             var bytes = MakePngBytes(4, 4, 255, 0, 0);
             var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            Assert.False(img.Transparent);
+        }
+
+        [Fact]
+        public void FromBinary_PngWithRealAlpha_IsTransparent()
+        {
+            var bytes = MakePngBytes(4, 4, 255, 0, 0, a: 128);
+            var img = ImageSource.FromBinary("test.png", () => bytes);
+
+            Assert.True(img.Transparent);
+        }
+
+        [Fact]
+        public void FromBinary_GifWithTransparency_IsTransparent()
+        {
+            // Previously (PNG-magic-byte sniff): this GIF would have been mis-routed to the lossy JPEG
+            // path, silently dropping its transparency, since only a PNG signature counted. A real
+            // pixel-alpha scan catches it regardless of source format.
+            var gifBytes = Convert.FromBase64String(
+                "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==");
+
+            var img = ImageSource.FromBinary("pixel.gif", () => gifBytes);
+
+            Assert.True(img.Transparent);
+        }
+
+        [Fact]
+        public void FromBinary_WebpWithRealAlpha_IsTransparent()
+        {
+            // Same bug as the GIF case above, for WebP: a PNG-magic-byte sniff would never flag this as
+            // transparent no matter how much real alpha it carries. Built with PeachImage's own lossless
+            // (VP8L) encoder, which preserves alpha, rather than a fixture file (unlike the decode-only
+            // WebpTestImageBase64 fixture used elsewhere in this file).
+            using var image = MakeSolidImage(4, 4, 10, 20, 30, a: 128);
+            using var ms = new MemoryStream();
+            image.Save(ms, "webp", new WebpEncoderOptions());
+
+            var img = ImageSource.FromBinary("test.webp", () => ms.ToArray());
 
             Assert.True(img.Transparent);
         }
@@ -286,7 +329,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             Assert.Equal(3, img.Width);
             Assert.Equal(5, img.Height);
-            Assert.True(img.Transparent);
+            Assert.False(img.Transparent);
         }
 
         [Fact]
@@ -321,7 +364,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             Assert.Equal(2, img.Width);
             Assert.Equal(2, img.Height);
-            Assert.True(img.Transparent);
+            Assert.False(img.Transparent);
         }
 
         [Fact]
@@ -386,6 +429,51 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             Assert.Equal(10, reloaded.Width);
             Assert.Equal(12, reloaded.Height);
+        }
+
+        [Fact]
+        public void SaveAsJpeg_WithTargetSize_ResizesOutput()
+        {
+            var img = ImageSource.FromBinary("src.png", () => MakePngBytes(40, 30, 0, 128, 255));
+            var ms = new MemoryStream();
+            img.SaveAsJpeg(ms, targetWidth: 10, targetHeight: 8);
+
+            ms.Position = 0;
+            var reloaded = ImageSource.FromStream("out.jpg", () => new MemoryStream(ms.ToArray()));
+
+            Assert.Equal(10, reloaded.Width);
+            Assert.Equal(8, reloaded.Height);
+        }
+
+        [Fact]
+        public void SaveAsPdfBitmap_WithTargetSize_ResizesOutput()
+        {
+            var img = ImageSource.FromBinary("src.png", () => MakePngBytes(40, 30, 0, 128, 255, a: 128));
+            var ms = new MemoryStream();
+            img.SaveAsPdfBitmap(ms, targetWidth: 10, targetHeight: 8);
+
+            using var decoded = Image.Load(new MemoryStream(ms.ToArray()));
+
+            Assert.Equal(10, decoded.Width);
+            Assert.Equal(8, decoded.Height);
+        }
+
+        [Fact]
+        public void SaveAsJpeg_WithMatchingTargetSize_DoesNotResize()
+        {
+            // targetWidth/targetHeight equal to the natural size must take the cheap no-resize path -
+            // this is what PdfImageTable relies on to skip PeachImage.Resize entirely when a caller
+            // (e.g. DownscaleImages = false, or a display size that's already smaller than the source)
+            // determined no actual shrink is needed.
+            var img = ImageSource.FromBinary("src.png", () => MakePngBytes(10, 8, 0, 128, 255));
+            var ms = new MemoryStream();
+            img.SaveAsJpeg(ms, targetWidth: 10, targetHeight: 8);
+
+            ms.Position = 0;
+            var reloaded = ImageSource.FromStream("out.jpg", () => new MemoryStream(ms.ToArray()));
+
+            Assert.Equal(10, reloaded.Width);
+            Assert.Equal(8, reloaded.Height);
         }
 
         // --- Output encoding: actual pixel-data correctness, not just header bytes ---

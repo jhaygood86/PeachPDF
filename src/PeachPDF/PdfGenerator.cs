@@ -201,6 +201,9 @@ namespace PeachPDF
             if (string.IsNullOrEmpty(html) && config.NetworkLoader is null) return;
 
             document.PdfDocument.Options.CompressContentStreams = config.CompressContentStreams;
+            document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
+            document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
+            document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
 
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;

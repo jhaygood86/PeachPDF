@@ -638,7 +638,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         {
             const string format = Config.SignificantFigures4;
 
-            string name = Realize(image);
+            string name = Realize(image, width, height);
             if (!(image is XForm))
             {
                 if (_gfx.PageDirection == XPageDirection.Downwards)
@@ -690,7 +690,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double width = destRect.Width;
             double height = destRect.Height;
 
-            string name = Realize(image);
+            string name = Realize(image, width, height);
             if (!(image is XForm))
             {
                 if (_gfx.PageDirection == XPageDirection.Downwards)
@@ -1594,7 +1594,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// <summary>
         /// Makes the specified image to the current graphics object.
         /// </summary>
-        string Realize(XImage image)
+        string Realize(XImage image, double width, double height)
         {
             BeginPage();
             BeginGraphicMode();
@@ -1604,7 +1604,26 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _gfxState.RealizeNonStrokeTransparency(1, _colorMode);
 
             XForm form = image as XForm;
-            return form != null ? GetFormName(form) : GetImageName(image);
+            if (form != null)
+                return GetFormName(form);
+
+            // width/height is the caller's own destRect, before any transform active on the graphics
+            // state (an SVG viewport transform, or a CSS `transform: scale(...)`) is applied - fold in
+            // that transform's own scale so a downscale decision made in GetImageName sees the image's
+            // true final on-page size. Ordinary (untransformed) draws have an identity/translation-only
+            // CTM here, so this is a no-op (both scales == 1) for the common case.
+            //
+            // Per-axis, not a single geometric-mean-of-determinant scalar: the length of the CTM's own
+            // transformed X/Y basis vectors (columns (M11,M12) and (M21,M22)) gives the true horizontal/
+            // vertical scale even when they differ (CSS `scaleX`/`scaleY`, a non-uniform `matrix()`), and
+            // is exact under rotation too, since rotation preserves each basis vector's length. A single
+            // sqrt(|det|) scalar applied to both axes - the area scale factor - would be wrong for any
+            // non-uniform scale (e.g. `scaleX(3)` on a square image would under-size the stretched axis
+            // and over-size the other).
+            var ctm = _gfxState.RealizedCtm;
+            var scaleX = Math.Sqrt(ctm.M11 * ctm.M11 + ctm.M12 * ctm.M12);
+            var scaleY = Math.Sqrt(ctm.M21 * ctm.M21 + ctm.M22 * ctm.M22);
+            return GetImageName(image, width * scaleX, height * scaleY);
         }
 
         /// <summary>
@@ -1732,7 +1751,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double width = destRect.Width;
             double height = destRect.Height;
 
-            string name = Realize(image);
+            string name = Realize(image, width, height);
 
             BeginPage();
             image.Finish();
@@ -1816,7 +1835,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double width = destRect.Width;
             double height = destRect.Height;
 
-            string name = Realize(image);
+            string name = Realize(image, width, height);
 
             BeginPage();
             image.Finish();
@@ -1886,11 +1905,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// <summary>
         /// Gets the resource name of the specified image within this page or form.
         /// </summary>
-        internal string GetImageName(XImage image)
+        internal string GetImageName(XImage image, double width, double height)
         {
             if (_page != null)
-                return _page.GetImageName(image);
-            return _form.GetImageName(image);
+                return _page.GetImageName(image, width, height);
+            return _form.GetImageName(image, width, height);
         }
 
         /// <summary>

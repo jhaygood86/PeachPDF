@@ -103,5 +103,35 @@ namespace PeachPDF.PdfSharpCore.Pdf
             set { _useFlateDecoderForJpegImages = value; }
         }
         PdfUseFlateDecoderForJpegImages _useFlateDecoderForJpegImages = PdfUseFlateDecoderForJpegImages.Never;
+
+        /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.DownscaleImages"/> - see there for behavior.
+        /// </summary>
+        public bool DownscaleImages
+        {
+            get { return _downscaleImages; }
+            set { _downscaleImages = value; }
+        }
+        bool _downscaleImages = true;
+
+        /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.DownscaleQuality"/> - see there for behavior.
+        /// </summary>
+        public int DownscaleQuality
+        {
+            get { return _downscaleQuality; }
+            set { _downscaleQuality = value; }
+        }
+        int _downscaleQuality = 70;
+
+        /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.MaximumDownscaleMultiplier"/> - see there for behavior.
+        /// </summary>
+        public double MaximumDownscaleMultiplier
+        {
+            get { return _maximumDownscaleMultiplier; }
+            set { _maximumDownscaleMultiplier = value; }
+        }
+        double _maximumDownscaleMultiplier = 1.0;
     }
 }
