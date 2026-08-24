@@ -4,6 +4,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
 using Xunit;
@@ -131,6 +132,151 @@ body { margin: 0; }
             // Child still fits
             Assert.True(inner!.ActualRight <= paddingBoxRight + 0.01,
                 $"Child right ({inner.ActualRight:F3}) exceeds content-box clip right ({paddingBoxRight:F3})");
+        }
+
+        // --- Rounded-clip curve tests (issue #812: overflow:hidden + border-radius must clip to the
+        // curve, not just the padding-edge rectangle) ---
+
+        [Fact]
+        public async Task OverflowClipCurve_PopulatedForRoundedOverflowHiddenAncestor()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='track' style='overflow:hidden;border-radius:999pt;width:100pt;height:6pt;'>" +
+                "<div id='fill' style='width:65%;height:100%;'></div></div>"));
+
+            var fillBox = LayoutHarness.FindById(root, "fill");
+            Assert.NotNull(fillBox);
+
+            var fragment = FragmentPaintHarness.FirstFragmentOf(container, fillBox!);
+
+            Assert.NotNull(fragment.OverflowClip);
+            Assert.NotNull(fragment.OverflowClipCurve);
+            Assert.True(fragment.OverflowClipCurve!.Radii.IsRounded);
+
+            // border-radius:999pt on a 100pt x 6pt box is overconstrained on both axes, far more so on
+            // height. The CSS spec's single joint reduction factor must land every radius at
+            // height/2 = 3pt - a true semicircular cap, not an ellipse that only reduced Y this far
+            // while X stayed near width/2 (the bug this fix corrects in DerivedStyle.ComputeRadii).
+            Assert.Equal(3.0, fragment.OverflowClipCurve.Radii.TLX, 2);
+            Assert.Equal(3.0, fragment.OverflowClipCurve.Radii.TLY, 2);
+        }
+
+        [Fact]
+        public async Task OverflowClipCurve_NullForNonRoundedOverflowHiddenAncestor()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='track' style='overflow:hidden;width:100pt;height:6pt;'>" +
+                "<div id='fill' style='width:65%;height:100%;'></div></div>"));
+
+            var fillBox = LayoutHarness.FindById(root, "fill");
+            Assert.NotNull(fillBox);
+
+            var fragment = FragmentPaintHarness.FirstFragmentOf(container, fillBox!);
+
+            Assert.NotNull(fragment.OverflowClip);
+            Assert.Null(fragment.OverflowClipCurve);
+        }
+
+        [Fact]
+        public async Task PaintingRoundedOverflowHiddenChild_PushesRectClipThenPathClip_BothPoppedBalanced()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='track' style='overflow:hidden;border-radius:999pt;width:100pt;height:6pt;'>" +
+                "<div id='fill' style='width:65%;height:100%;'></div></div>"));
+
+            var fillBox = LayoutHarness.FindById(root, "fill");
+            Assert.NotNull(fillBox);
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(container, fillBox!, recording);
+
+            var curveIndex = recording.Log.FindIndex(op => op.Kind == PaintOpKind.PushClipPath);
+            Assert.True(curveIndex > 0, "expected a rounded-curve clip to be pushed after a rectangular one");
+            Assert.Equal(PaintOpKind.PushClip, recording.Log[curveIndex - 1].Kind);
+
+            // Every push (rect and curve alike) must be matched by a pop - the exact failure mode
+            // issue #812's symptom B describes (a stroke that "keeps going" past its clipped box).
+            Assert.Equal(recording.PushCount, recording.PopCount);
+        }
+
+        [Fact]
+        public async Task PaintingHoistedStackingContextChild_ThroughRoundedOverflowHiddenWrapper_PushesPathClip()
+        {
+            // `hoisted` establishes its own stacking context (opacity < 1), so StackingOrder.Flatten
+            // paints it via the explicit ancestor-reapplication path (PaintStackingParticipant /
+            // RenderUtils.PushAncestorOverflowClips / TryPushOverflowClip) rather than through
+            // `clipper`'s own ordinary nested-children loop - the one other place a rounded overflow
+            // clip is pushed, and the one this test isolates.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='clipper' style='overflow:hidden;border-radius:999pt;width:100pt;height:6pt;'>" +
+                "<div id='hoisted' style='opacity:0.99;width:65%;height:100%;'></div></div>"));
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintPage(container, recording);
+
+            var curveIndex = recording.Log.FindIndex(op => op.Kind == PaintOpKind.PushClipPath);
+            Assert.True(curveIndex >= 0,
+                "expected the hoisted stacking-context child to re-apply its rounded ancestor's curve clip");
+            Assert.Equal(recording.PushCount, recording.PopCount);
+        }
+
+        [Fact]
+        public async Task OverflowClipCurve_PreservesEllipticalRadii()
+        {
+            // border-radius: 40pt / 10pt on a box large enough that no overlap-reduction kicks in - the
+            // pushed curve's X and Y radii must stay distinct (elliptical), not collapse to one shared
+            // value the way a bug in threading BorderRadii through OverflowClipCurve could.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='clipper' style='overflow:hidden;border-radius:40pt / 10pt;width:300pt;height:200pt;'>" +
+                "<div id='fill' style='width:65%;height:100%;'></div></div>"));
+
+            var fillBox = LayoutHarness.FindById(root, "fill");
+            Assert.NotNull(fillBox);
+
+            var fragment = FragmentPaintHarness.FirstFragmentOf(container, fillBox!);
+
+            Assert.NotNull(fragment.OverflowClipCurve);
+            Assert.Equal(40.0, fragment.OverflowClipCurve!.Radii.TLX, 2);
+            Assert.Equal(10.0, fragment.OverflowClipCurve.Radii.TLY, 2);
+        }
+
+        [Fact]
+        public async Task PaintingReplacedElement_InsideRoundedOverflowHiddenAncestor_PushesRectClipThenPathClip()
+        {
+            // Exercises ReplacedFragmentPainter's own pop-by-count loop (a second, independent copy of
+            // the same pattern PaintBoxContent uses), which the plain-box tests above don't reach.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='clipper' style='overflow:hidden;border-radius:20pt;width:100pt;height:60pt;'>" +
+                "<img id='pic' width='120' height='120' src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2240%22 fill=%22red%22/%3E%3C/svg%3E'/></div>"));
+
+            var picBox = LayoutHarness.FindById(root, "pic");
+            Assert.NotNull(picBox);
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(container, picBox!, recording);
+
+            var curveIndex = recording.Log.FindIndex(op => op.Kind == PaintOpKind.PushClipPath);
+            Assert.True(curveIndex > 0,
+                "expected a rounded-curve clip pushed for a replaced element inside a rounded overflow:hidden ancestor");
+            Assert.Equal(PaintOpKind.PushClip, recording.Log[curveIndex - 1].Kind);
+            Assert.Equal(recording.PushCount, recording.PopCount);
+        }
+
+        [Fact]
+        public async Task PaintingRectangularOverflowHiddenChild_PushesNoPathClip()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='track' style='overflow:hidden;width:100pt;height:6pt;'>" +
+                "<div id='fill' style='width:65%;height:100%;'></div></div>"));
+
+            var fillBox = LayoutHarness.FindById(root, "fill");
+            Assert.NotNull(fillBox);
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter());
+            FragmentPaintHarness.PaintBox(container, fillBox!, recording);
+
+            Assert.DoesNotContain(recording.Log, op => op.Kind == PaintOpKind.PushClipPath);
+            Assert.Equal(recording.PushCount, recording.PopCount);
         }
 
         // --- Smoke tests (PDF generation must not throw) ---

@@ -339,7 +339,7 @@ namespace PeachPDF.Html.Core.Paint
             if (box.DerivedStyle.ActualDisplay == Keywords.None ||
                 (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells == Keywords.Hide && box.IsSpaceOrEmpty)) return;
 
-            var clipped = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip);
+            var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, fragment.OverflowClip, fragment.OverflowClipCurve);
 
             // This fragment's own decoration rectangles - one per line box it spans on this page, or a
             // single whole-border-box rectangle for a block-level box. Already fragmentainer-local.
@@ -533,7 +533,7 @@ namespace PeachPDF.Html.Core.Paint
                 }
             }
 
-            if (clipped)
+            for (var i = 0; i < clipsPushed; i++)
                 g.PopClip();
 
             if (paintMarkers)

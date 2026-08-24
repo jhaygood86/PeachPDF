@@ -174,6 +174,16 @@ namespace PeachPDF.Html.Core.Fragments
     /// last position layout gave it, and the builder is the only thing that still knows which of them
     /// this fragment came from.
     /// </param>
+    /// <param name="OverflowClipCurve">
+    /// the rounded-corner curve of the same clipping ancestor named by <paramref name="OverflowClip"/>,
+    /// when that ancestor also has a <c>border-radius</c> — or null when it doesn't (or there is no
+    /// clipping ancestor at all). Carried separately rather than folded into <paramref name="OverflowClip"/>
+    /// because a displaced fragment's <c>ConfinedTo</c> band further intersects that rectangle for
+    /// table-pagination purposes, a purely rectangular restriction unrelated to the clipping ancestor's
+    /// own corners; this curve's <see cref="OverflowClipCurve.Rect"/> stays the ancestor's own,
+    /// unconfined padding rect, since the rounded shape it describes is always a subset of that rect and
+    /// so composes correctly with the (possibly narrower) rectangular clip regardless.
+    /// </param>
     internal sealed record BoxFragment(
         RRect Rect,
         CssBox Box,
@@ -187,7 +197,8 @@ namespace PeachPDF.Html.Core.Fragments
         IReadOnlyList<LineFragment> Lines,
         IReadOnlyList<TextFragment> Words,
         IReadOnlyList<BoxFragment> Children,
-        RRect? OverflowClip) : Fragment(Rect)
+        RRect? OverflowClip,
+        OverflowClipCurve? OverflowClipCurve = null) : Fragment(Rect)
     {
         /// <summary>
         /// This fragment's principal decoration rectangle — the one a replaced element (an image, an
@@ -215,6 +226,18 @@ namespace PeachPDF.Html.Core.Fragments
             return false;
         }
     }
+
+    /// <summary>
+    /// The rounded-corner curve a <c>border-radius</c> + <c>overflow: hidden</c> ancestor clips
+    /// descendant content to, per
+    /// <see href="https://www.w3.org/TR/css-backgrounds-3/#corner-clipping">CSS Backgrounds and Borders
+    /// Module Level 3 §5.5</see> — in addition to, not instead of, <see cref="BoxFragment.OverflowClip"/>'s
+    /// rectangular bound. See <see cref="BoxFragment.OverflowClipCurve"/> for why the two are carried
+    /// separately.
+    /// </summary>
+    /// <param name="Rect">the clipping ancestor's own (unconfined) padding-edge rectangle, in this fragment's local space</param>
+    /// <param name="Radii">that ancestor's overlap-reduced corner radii for <paramref name="Rect"/>, from <see cref="CssBox.ComputeRadii"/></param>
+    internal sealed record OverflowClipCurve(RRect Rect, BorderRadii Radii);
 
     /// <summary>
     /// One fragmentainer — for PeachPDF, one materialized PDF page. Per

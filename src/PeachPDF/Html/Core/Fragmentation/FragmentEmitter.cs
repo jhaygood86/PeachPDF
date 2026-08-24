@@ -1336,6 +1336,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             var span = _spans[draft.Key];
             var bounds = ExtentOf(draft);
             var lines = LinesOf(draft, bounds);
+            var (overflowClip, overflowClipCurve) = ClipOf(draft);
 
             return new BoxFragment(
                 RectOf(draft),
@@ -1352,15 +1353,17 @@ namespace PeachPDF.Html.Core.Fragmentation
                 lines,
                 draft.Words,
                 children,
-                ClipOf(draft));
+                overflowClip,
+                overflowClipCurve);
         }
 
         /// <summary>
         /// What this fragment is clipped to in its own local space: the nearest <c>overflow: hidden</c>
-        /// ancestor's padding edge, the band a displaced fragment is confined to, or the tighter of the two
-        /// where a displaced run also sits inside a clipping ancestor.
+        /// ancestor's padding edge (plus its rounded-corner curve, if any), the band a displaced fragment
+        /// is confined to, or the tighter of the rectangular two where a displaced run also sits inside a
+        /// clipping ancestor.
         /// </summary>
-        private static RRect? ClipOf(Draft draft)
+        private static (RRect? Clip, OverflowClipCurve? Curve) ClipOf(Draft draft)
         {
             // Which origin the ancestor's clip is localized against depends on whether that ancestor moves
             // with this fragment. One inside the displaced run does, so it is already in the box's own
@@ -1378,14 +1381,25 @@ namespace PeachPDF.Html.Core.Fragmentation
             var overflow = OverflowClipOf(
                 draft.Box, draft.Snapshot, displacedPastItsClip ? draft.Slot.LocalOriginY : draft.OriginY);
 
-            if (draft.ConfinedTo is not { } band) return overflow;
+            RRect? overflowRect = null;
+            OverflowClipCurve? curve = null;
+            if (overflow is { } o)
+            {
+                overflowRect = o.Rect;
+                if (o.Radii is { } radii) curve = new OverflowClipCurve(o.Rect, radii);
+            }
+
+            if (draft.ConfinedTo is not { } band) return (overflowRect, curve);
 
             // The band is stated in document space and, unlike everything else on a displaced draft, is a
             // fact about the *fragmentainer* rather than about the box - so it is localized against the
-            // slot's own origin, not the displaced one the box draws from.
+            // slot's own origin, not the displaced one the box draws from. It never touches the curve:
+            // the curve belongs to the clipping ancestor's own corners, and stays a subset of its
+            // (unconfined) Rect regardless of how this rectangular band narrows the fragment's clip.
             var confinement = Localize(band, draft.Slot.LocalOriginY);
 
-            return overflow is { } clip ? RRect.Intersect(clip, confinement) : confinement;
+            var clip = overflowRect is { } r ? RRect.Intersect(r, confinement) : confinement;
+            return (clip, curve);
         }
 
         /// <summary>
@@ -1896,14 +1910,18 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// detaches the source row-group, so the chain ends there and never leaves the subtree.
         /// </para>
         /// </remarks>
-        private static RRect? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
+        private static (RRect Rect, BorderRadii? Radii)? OverflowClipOf(CssBox box, BoxGeometrySnapshot? snapshot, double originY)
         {
             var containingBlock = box.ContainingBlock;
 
             while (true)
             {
                 if (containingBlock.Overflow.Value == Overflow.Hidden)
-                    return Localize(PaddingEdgeOf(containingBlock, snapshot), originY);
+                {
+                    var paddingRect = PaddingEdgeOf(containingBlock, snapshot);
+                    var radii = containingBlock.IsRounded ? containingBlock.ComputeRadii(paddingRect) : (BorderRadii?)null;
+                    return (Localize(paddingRect, originY), radii);
+                }
 
                 var next = containingBlock.ContainingBlock;
                 if (ReferenceEquals(next, containingBlock)) return null;

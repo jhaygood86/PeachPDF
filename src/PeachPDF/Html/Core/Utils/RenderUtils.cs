@@ -14,6 +14,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Fragments;
 using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Utils
@@ -36,43 +37,80 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Pushes the clip an <c>overflow: hidden</c> ancestor imposes on the fragment being painted, as
         /// resolved by <see cref="Fragmentation.FragmentEmitter"/> and carried on
-        /// <see cref="Fragments.BoxFragment.OverflowClip"/>. Already in the fragment's own space, so
-        /// there is nothing here to map.
+        /// <see cref="Fragments.BoxFragment.OverflowClip"/>/<see cref="Fragments.BoxFragment.OverflowClipCurve"/>.
+        /// Already in the fragment's own space, so there is nothing here to map. When the clipping
+        /// ancestor has a <c>border-radius</c>, an additional path clip confines content to the rounded
+        /// curve itself (CSS Backgrounds and Borders Level 3 §5.5), not just its padding-edge rectangle.
         /// </summary>
         /// <param name="g">the graphics to clip</param>
         /// <param name="overflowClip">
-        /// the clip resolved for the fragment being painted, or null when no ancestor clips it
+        /// the rectangular clip resolved for the fragment being painted, or null when no ancestor clips it
         /// </param>
-        /// <returns>true - was clipped, false - not clipped</returns>
-        public static bool ClipGraphicsByOverflow(RGraphics g, RRect? overflowClip)
+        /// <param name="curve">
+        /// the clipping ancestor's rounded-corner curve, or null when it has no <c>border-radius</c>
+        /// </param>
+        /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
+        public static int ClipGraphicsByOverflow(RGraphics g, RRect? overflowClip, OverflowClipCurve? curve)
         {
-            if (overflowClip is not { } clip) return false;
+            if (overflowClip is not { } clip) return 0;
 
             // Intersecting with what is already on the stack is the one part that cannot be precomputed:
             // it depends on where in the paint walk this fragment is reached.
             clip.Intersect(g.GetClip());
             g.PushClip(clip);
-            return true;
+            var pushed = 1;
+
+            if (curve is { } c) pushed += PushRoundedClipIfRounded(g, c.Rect, c.Radii);
+
+            return pushed;
         }
 
         /// <summary>
-        /// Pushes <paramref name="overflowBox"/>'s own clip (padding-edge rect, per CSS spec) if it has
-        /// <c>overflow: hidden</c>, mapped into the coordinate space of the fragment being painted by
-        /// subtracting its <paramref name="originY"/> (zero for a fixed fragment, which does not move
-        /// with the page).
+        /// Pushes <paramref name="overflowBox"/>'s own clip (padding-edge rect, per CSS spec, plus its
+        /// rounded-corner curve if it has a <c>border-radius</c>) if it has <c>overflow: hidden</c>,
+        /// mapped into the coordinate space of the fragment being painted by subtracting its
+        /// <paramref name="originY"/> (zero for a fixed fragment, which does not move with the page).
         /// </summary>
-        private static bool TryPushOverflowClip(RGraphics g, CssBox overflowBox, double originY)
+        /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
+        private static int TryPushOverflowClip(RGraphics g, CssBox overflowBox, double originY)
         {
-            if (overflowBox.Overflow.Value != Overflow.Hidden) return false;
+            if (overflowBox.Overflow.Value != Overflow.Hidden) return 0;
 
             var prevClip = g.GetClip();
-            var rect = PaddingEdgeOf(overflowBox, overflowBox.Bounds);
+            var paddingRect = PaddingEdgeOf(overflowBox, overflowBox.Bounds);
 
+            var rect = paddingRect;
             rect.Offset(0, -originY);
-
             rect.Intersect(prevClip);
             g.PushClip(rect);
-            return true;
+            var pushed = 1;
+
+            if (overflowBox.IsRounded)
+            {
+                var curveRect = paddingRect;
+                curveRect.Offset(0, -originY);
+                pushed += PushRoundedClipIfRounded(g, curveRect, overflowBox.ComputeRadii(paddingRect));
+            }
+
+            return pushed;
+        }
+
+        /// <summary>
+        /// Pushes a rounded-path clip for <paramref name="radii"/> over <paramref name="rect"/>, shared by
+        /// <see cref="ClipGraphicsByOverflow"/> (a precomputed <see cref="OverflowClipCurve"/>) and
+        /// <see cref="TryPushOverflowClip"/> (a live <see cref="CssBox.ComputeRadii"/> call) so the two
+        /// don't each carry their own copy of the same "build the path, push it, count it" sequence.
+        /// </summary>
+        /// <returns>1 if a clip was pushed, 0 if <paramref name="radii"/> has no rounded corner</returns>
+        private static int PushRoundedClipIfRounded(RGraphics g, RRect rect, BorderRadii radii)
+        {
+            if (!radii.IsRounded) return 0;
+
+            using var path = GetRoundRect(g, rect,
+                radii.TLX, radii.TLY, radii.TRX, radii.TRY,
+                radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+            g.PushClip(path);
+            return 1;
         }
 
         /// <summary>
@@ -116,7 +154,7 @@ namespace PeachPDF.Html.Core.Utils
             var pushed = 0;
             foreach (var ancestor in ancestors)
             {
-                if (TryPushOverflowClip(g, ancestor, originY)) pushed++;
+                pushed += TryPushOverflowClip(g, ancestor, originY);
             }
             return pushed;
         }
@@ -158,6 +196,7 @@ namespace PeachPDF.Html.Core.Utils
             if (nwX > 0 || nwY > 0)
                 path.ArcTo(rect.Left + nwX, rect.Top, nwX, nwY, RGraphicsPath.Corner.TopLeft);
 
+            path.CloseFigure();
             return path;
         }
     }

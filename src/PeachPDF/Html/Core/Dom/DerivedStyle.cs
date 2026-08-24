@@ -421,8 +421,14 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Computes overlap-reduced radii for the given rendering rectangle, per CSS spec §4.
-        /// Horizontal and vertical axes are reduced independently.
+        /// Computes overlap-reduced radii for the given rendering rectangle, per the corner-overlap
+        /// algorithm in <see href="https://www.w3.org/TR/css-backgrounds-3/#corner-overlap">CSS
+        /// Backgrounds and Borders Module Level 3 §4</see>: a single factor f - the minimum, across all
+        /// four edges, of that edge's length divided by the sum of the two corner radii on it - is
+        /// applied uniformly to every corner's x AND y radius. A per-axis factor (reducing all x radii
+        /// by one factor and all y radii by another, independently) is spec-incorrect: for a radius far
+        /// more overconstrained on one axis than the other (e.g. `border-radius: 999px` on a short,
+        /// wide box), it stretches what should be a circular corner into a near-degenerate ellipse.
         /// </summary>
         internal BorderRadii ComputeRadii(RRect rect)
         {
@@ -431,18 +437,15 @@ namespace PeachPDF.Html.Core.Dom
             double brX = ActualBorderBottomRightRadiusX, brY = ActualBorderBottomRightRadiusY;
             double blX = ActualBorderBottomLeftRadiusX, blY = ActualBorderBottomLeftRadiusY;
 
-            // Horizontal reduction: check top side and bottom side independently.
             double fTop = tlX + trX > 0 && rect.Width > 0 ? rect.Width / (tlX + trX) : 1.0;
-            double fBot = blX + brX > 0 && rect.Width > 0 ? rect.Width / (blX + brX) : 1.0;
-            double fX = Math.Min(1.0, Math.Min(fTop, fBot));
-
-            // Vertical reduction: check left side and right side independently.
+            double fBottom = blX + brX > 0 && rect.Width > 0 ? rect.Width / (blX + brX) : 1.0;
             double fLeft = tlY + blY > 0 && rect.Height > 0 ? rect.Height / (tlY + blY) : 1.0;
             double fRight = trY + brY > 0 && rect.Height > 0 ? rect.Height / (trY + brY) : 1.0;
-            double fY = Math.Min(1.0, Math.Min(fLeft, fRight));
 
-            return new BorderRadii(tlX * fX, tlY * fY, trX * fX, trY * fY,
-                brX * fX, brY * fY, blX * fX, blY * fY);
+            double f = Math.Min(1.0, Math.Min(Math.Min(fTop, fBottom), Math.Min(fLeft, fRight)));
+
+            return new BorderRadii(tlX * f, tlY * f, trX * f, trY * f,
+                brX * f, brY * f, blX * f, blY * f);
         }
 
         /// <summary>Whether at least one of the box's corners is rounded.</summary>

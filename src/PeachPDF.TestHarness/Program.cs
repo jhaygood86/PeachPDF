@@ -289,10 +289,31 @@ var radiusHtml = "<!DOCTYPE html><html><head>" + RadiusCss + "</head><body>" +
         RadiusSwatch("no border, bg only", "15px", "border: none; ")
     ) +
 
+    "<h2>7 — Clipping to the Rounded Curve (overflow: hidden)</h2>" +
+    "<p class=\"intro\">A rounded overflow:hidden box clips its descendants to the curve itself " +
+    "(CSS Backgrounds and Borders Level 3 &#167;5.5), not just its padding-edge rectangle — a child " +
+    "that fills the box must show rounded corners matching the parent's own, and the parent's own " +
+    "border must never paint past its own rounded edge.</p>" +
+    "<table class=\"sw\"><tr><td style=\"width:50%\">" +
+    "<div style=\"display:flex;align-items:center;gap:8px;width:140px\">" +
+    "<div style=\"flex:1;height:14px;border-radius:999px;background:#ffc487;overflow:hidden\">" +
+    "<div style=\"height:100%;background:#3e7a4c;width:65%\"></div>" +
+    "</div><span style=\"font-size:8pt\">65 / 35</span></div>" +
+    "<div class=\"desc\">pill progress bar — flex child clipped to a 999px-radius parent</div>" +
+    "</td><td style=\"width:50%\">" +
+    "<div style=\"border:2px solid #1a6b8a;border-radius:14px;overflow:hidden;width:200px\">" +
+    "<div style=\"padding:6px 10px;background:steelblue;color:#fff;font-size:8pt\">Card header</div>" +
+    "<div style=\"display:grid;grid-template-columns:1fr 1fr\">" +
+    "<div style=\"padding:6px 10px;border-right:1px solid #1a6b8a;border-top:1px solid #1a6b8a;font-size:7pt\">Cell A</div>" +
+    "<div style=\"padding:6px 10px;border-top:1px solid #1a6b8a;font-size:7pt\">Cell B</div>" +
+    "</div></div>" +
+    "<div class=\"desc\">rounded bordered card — grid content and border confined to the curve</div>" +
+    "</td></tr></table>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius",
-    "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes.",
+    "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes, plus overflow:hidden clipping descendant content to the curve.",
     radiusHtml, pdfConfig);
 
 // --- Box-shadow showcase ---
