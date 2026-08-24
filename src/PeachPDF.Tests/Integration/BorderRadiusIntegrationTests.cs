@@ -134,6 +134,27 @@ div { width: 100pt; height: 100pt; border-radius: 60pt; }
         }
 
         [Fact]
+        public async Task BorderRadius_AsymmetricOverconstraint_ReducesXAndYByOneJointFactor()
+        {
+            // 200pt x 20pt box; border-radius: 300pt - overconstrained on both axes, but far more so
+            // on height (600 vs H=20) than width (600 vs W=200). Per the CSS spec's single joint
+            // factor f = min across all four edges, BOTH axes must shrink by the same (height-driven)
+            // factor, landing every radius at H/2=10 - a true semicircular cap. Reducing X and Y
+            // independently (the bug: two separate factors, one per axis) would instead leave X near
+            // W/2=100 while Y shrinks to 10, stretching the corner into a near-degenerate ellipse -
+            // exactly what issue #812 reported as a "pointed" pill cap.
+            var html = @"<!DOCTYPE html><html><head><style>
+div { width: 200pt; height: 20pt; border-radius: 300pt; }
+</style></head><body><div></div></body></html>";
+
+            var divBox = await FindDivBoxFromHtml(html);
+            var radii = divBox.ComputeRadii(new PeachPDF.Html.Adapters.Entities.RRect(0, 0, 200, 20));
+
+            Assert.Equal(10.0, radii.TLX, 2);
+            Assert.Equal(10.0, radii.TLY, 2);
+        }
+
+        [Fact]
         public async Task BorderRadius_NonOverlappingRadii_AreNotChanged()
         {
             // 200pt × 200pt box; border-radius: 30pt — 30+30=60 < 200, no reduction.

@@ -45,7 +45,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 Lines: lines,
                 Words: words,
                 Children: children,
-                OverflowClip: null);
+                OverflowClip: null,
+                OverflowClipCurve: null); // a running element's content is never clipped
         }
 
         private static List<LineFragment> BuildLines(CssBox box)

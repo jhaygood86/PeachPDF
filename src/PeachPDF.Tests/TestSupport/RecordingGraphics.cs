@@ -14,6 +14,7 @@ namespace PeachPDF.Tests.TestSupport
         Polygon,
         Line,
         PushClip,
+        PushClipPath,
         PopClip,
         PushTransform,
         PopTransform,
@@ -98,7 +99,21 @@ namespace PeachPDF.Tests.TestSupport
             Log.Add(new PaintOp(PaintOpKind.PopClip, default));
         }
 
-        public override void PushClip(RGraphicsPath path) => _clipStack.Push(_clipStack.Peek());
+        /// <summary>
+        /// A path clip (the rounded-corner curve of a `border-radius` + `overflow: hidden` box, e.g.)
+        /// doesn't have a rectangular bound this mock can track precisely, so - like the real
+        /// GraphicsAdapter's own clip-stack bookkeeping (RenderUtils.cs remarks) - it keeps the
+        /// enclosing rect on the tracked stack rather than attempting one. It still logs and counts the
+        /// push/pop like any other clip, so PushCount/PopCount balance and Log preserves push order
+        /// (rect clip, then path clip) for a caller asserting on it.
+        /// </summary>
+        public override void PushClip(RGraphicsPath path)
+        {
+            _clipStack.Push(_clipStack.Peek());
+            PushCount++;
+            Log.Add(new PaintOp(PaintOpKind.PushClipPath, default));
+        }
+
         public override void PushClipExclude(RRect rect) { }
 
         public override void PushTransform(RMatrix matrix) =>
@@ -143,13 +158,18 @@ namespace PeachPDF.Tests.TestSupport
 
     internal sealed class RecordingGraphicsPath : RGraphicsPath
     {
+        /// <summary>Whether <see cref="CloseFigure"/> was called - lets a test verify a path-building
+        /// method (e.g. <c>RenderUtils.GetRoundRect</c>) explicitly closes its subpath rather than
+        /// relying on the last segment's endpoint coinciding with the first by floating-point luck.</summary>
+        public bool Closed { get; private set; }
+
         public override void Start(double x, double y) { }
         public override void LineTo(double x, double y) { }
         public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) { }
         public override void AddMove(double x, double y) { }
         public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
         public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
-        public override void CloseFigure() { }
+        public override void CloseFigure() => Closed = true;
         public override void Transform(RMatrix matrix) { }
         public override void AddPath(RGraphicsPath path) { }
         public override RFillMode FillMode { get; set; }
