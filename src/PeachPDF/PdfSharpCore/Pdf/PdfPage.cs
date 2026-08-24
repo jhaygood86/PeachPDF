@@ -534,9 +534,9 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Gets the resource name of the specified image within this page.
         /// </summary>
-        internal string GetImageName(XImage image)
+        internal string GetImageName(XImage image, double width, double height)
         {
-            PdfImage pdfImage = _document.ImageTable.GetImage(image);
+            PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
             Debug.Assert(pdfImage != null);
             string name = Resources.AddImage(pdfImage);
             return name;
@@ -545,9 +545,9 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// <summary>
         /// Implements the interface because the primary function is internal.
         /// </summary>
-        string IContentStream.GetImageName(XImage image)
+        string IContentStream.GetImageName(XImage image, double width, double height)
         {
-            return GetImageName(image);
+            return GetImageName(image, width, height);
         }
 
         /// <summary>

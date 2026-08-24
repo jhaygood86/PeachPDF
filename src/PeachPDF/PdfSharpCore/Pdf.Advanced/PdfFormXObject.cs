@@ -103,7 +103,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
 
-        string IContentStream.GetImageName(XImage image)
+        string IContentStream.GetImageName(XImage image, double width, double height)
         {
             throw new NotImplementedException();
         }

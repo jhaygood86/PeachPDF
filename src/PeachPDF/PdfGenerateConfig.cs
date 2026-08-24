@@ -236,6 +236,31 @@ namespace PeachPDF
         public bool EnableInteractivePdfForms { get; set; } = false;
 
         /// <summary>
+        /// When set to <c>true</c> (the default), a raster image whose decoded pixel size is larger than
+        /// its on-page display size is resized down before being embedded in the PDF, shrinking output
+        /// file size with no visible quality loss. Set to <c>false</c> to always embed images at their
+        /// full decoded resolution, as PeachPDF did before this option existed.
+        /// </summary>
+        public bool DownscaleImages { get; set; } = true;
+
+        /// <summary>
+        /// The JPEG quality (0-100) used when <see cref="DownscaleImages"/> actually resizes an image
+        /// that has no real alpha channel (and so would be JPEG-encoded anyway). Has no effect on
+        /// full-resolution JPEG embeds, and never applies to images with real transparency - those stay
+        /// on the lossless embed path regardless of downscaling, just resized. Defaults to <c>70</c>.
+        /// </summary>
+        public int DownscaleQuality { get; set; } = 70;
+
+        /// <summary>
+        /// When <see cref="DownscaleImages"/> resizes an image, the resize target is the image's on-page
+        /// display size multiplied by this value, clamped to never exceed the image's natural decoded
+        /// size (downscaling never upscales). For example, an image displayed at 60x40 with a multiplier
+        /// of <c>2.0</c> resizes to 120x80 - useful headroom for zooming or printing. Defaults to
+        /// <c>1.0</c> (resize to exactly the display size).
+        /// </summary>
+        public double MaximumDownscaleMultiplier { get; set; } = 1.0;
+
+        /// <summary>
         /// Set all 4 margins to the given value.
         /// </summary>
         /// <param name="value"></param>

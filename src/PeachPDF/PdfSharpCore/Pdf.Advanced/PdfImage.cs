@@ -44,15 +44,20 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     internal sealed partial class PdfImage : PdfXObject
     {
         /// <summary>
-        /// Initializes a new instance of PdfImage from an XImage.
+        /// Initializes a new instance of PdfImage from an XImage. When <paramref name="targetWidth"/>/
+        /// <paramref name="targetHeight"/> are given, the image is resized to that pixel size before
+        /// being embedded (see <see cref="PdfImageTable.GetImage"/>), and every <c>/Width</c>/<c>/Height</c>
+        /// this type writes uses that size rather than the image's own natural decoded size.
         /// </summary>
-        public PdfImage(PdfDocument document, XImage image)
+        public PdfImage(PdfDocument document, XImage image, int? targetWidth = null, int? targetHeight = null)
             : base(document)
         {
             Elements.SetName(Keys.Type, "/XObject");
             Elements.SetName(Keys.Subtype, "/Image");
 
             _image = image;
+            _targetWidth = targetWidth;
+            _targetHeight = targetHeight;
 
             ////// TODO: identify multiple used images. If the image already exists use the same XRef.
             ////_defaultName = PdfImageTable.NextImageName;
@@ -93,6 +98,15 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         readonly XImage _image;
+        readonly int? _targetWidth;
+        readonly int? _targetHeight;
+
+        /// <summary>
+        /// The pixel size this image is actually embedded at - <c>_targetWidth</c>/<c>_targetHeight</c>
+        /// when a resize applies, otherwise the source's own natural decoded size.
+        /// </summary>
+        int EffectiveWidth => _targetWidth ?? _image.PixelWidth;
+        int EffectiveHeight => _targetHeight ?? _image.PixelHeight;
 
         /// <summary>
         /// Returns 'Image'.
@@ -109,7 +123,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             byte[] imageBits = null;
 
-            using (MemoryStream memory = _image.AsJpeg())
+            // A resize only ever reaches here for an image with no real alpha (PdfImageTable only
+            // resizes; whether that resize lands on the Jpeg or NonJpeg path is still decided by
+            // XImage.Initialize's Transparent check) - so DownscaleQuality applies exactly when a resize
+            // is actually happening, and leaves a full-resolution JPEG embed's own quality untouched.
+            int? qualityOverride = _targetWidth.HasValue ? _document.Options.DownscaleQuality : null;
+            using (MemoryStream memory = _image.AsJpeg(_targetWidth, _targetHeight, qualityOverride))
             {
                 imageBits = memory.ToArray();
             }
@@ -136,8 +155,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
             if (_image.Interpolate)
                 Elements[Keys.Interpolate] = PdfBoolean.True;
-            Elements[Keys.Width] = new PdfInteger(_image.PixelWidth);
-            Elements[Keys.Height] = new PdfInteger(_image.PixelHeight);
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
             Elements[Keys.BitsPerComponent] = new PdfInteger(8);
             Elements[Keys.ColorSpace] = new PdfName("/DeviceRGB");
         }
@@ -170,7 +189,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         {
             int pdfVersion = Owner.Version;
             MemoryStream memory = new MemoryStream();
-            memory = _image.AsBitmap();
+            memory = _image.AsBitmap(_targetWidth, _targetHeight);
             // THHO4THHO Use ImageImporterBMP here to avoid redundant code.
 
             int streamLength = (int)memory.Length;
@@ -182,8 +201,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 memory.Read(imageBits, 0, streamLength);
                 memory.Dispose();
 
-                int height = _image.PixelHeight;
-                int width = _image.PixelWidth;
+                // Must match whatever pixel size AsBitmap() above actually encoded - the BMP bytes are
+                // self-validated against these below, and they're also what ends up in /Width /Height.
+                int height = EffectiveHeight;
+                int width = EffectiveWidth;
 
                 // TODO: we could define structures for
                 //   BITMAPFILEHEADER

@@ -172,18 +172,18 @@ namespace PeachPDF.PdfSharpCore.Drawing
             }
         }
 
-        public MemoryStream AsJpeg()
+        public MemoryStream AsJpeg(int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null)
         {
             var ms = new MemoryStream();
-            _source.SaveAsJpeg(ms);
+            _source.SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
             ms.Position = 0;
             return ms;
         }
 
-        public MemoryStream AsBitmap()
+        public MemoryStream AsBitmap(int? targetWidth = null, int? targetHeight = null)
         {
             var ms = new MemoryStream();
-            _source.SaveAsPdfBitmap(ms);
+            _source.SaveAsPdfBitmap(ms, targetWidth, targetHeight);
             ms.Position = 0;
             return ms;
         }
@@ -337,9 +337,22 @@ namespace PeachPDF.PdfSharpCore.Drawing
 
         /// <summary>
         /// Cache PdfImageTable.ImageSelector to speed up finding the right PdfImage
-        /// if this image is used more than once.
+        /// if this image is used more than once. Valid only when no resize applies (see
+        /// PdfImageTable.GetImage) - a resize target makes the selector depend on display size too, so
+        /// that case is cached separately below.
         /// </summary>
         internal PdfImageTable.ImageSelector _selector = null!;
+
+        /// <summary>
+        /// Caches the selector PdfImageTable.GetImage computed for the immediately preceding call, keyed
+        /// by the display size (in PDF points) it was computed for - e.g. a logo redrawn identically
+        /// across a repeating header/footer - so a resized image reused unchanged doesn't pay a fresh
+        /// ComputeTargetPixelSize call and ImageSelector allocation on every single draw.
+        /// </summary>
+        internal PdfImageTable.ImageSelector _lastSizedSelector = null!;
+        internal double _lastSizedSelectorWidthPt;
+        internal double _lastSizedSelectorHeightPt;
+
         private IImageSource _source = null!;
     }
 }

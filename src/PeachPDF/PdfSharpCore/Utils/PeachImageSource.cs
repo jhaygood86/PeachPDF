@@ -4,6 +4,8 @@ using PeachImage.Formats.Bmp;
 using PeachImage.Formats.Jpeg;
 using System;
 using System.IO;
+using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace PeachPDF.PdfSharpCore.Utils
 {
@@ -16,7 +18,7 @@ namespace PeachPDF.PdfSharpCore.Utils
         {
             var bytes = imageSource.Invoke();
             using var ms = new MemoryStream(bytes, writable: false);
-            return Decode(name, ms, quality ?? 75, IsPng(bytes));
+            return Decode(name, ms, quality ?? 75);
         }
 
         protected override IImageSource FromFileImpl(string path, int? quality = 75) =>
@@ -32,23 +34,13 @@ namespace PeachPDF.PdfSharpCore.Utils
             // read) falls back to the original copy-into-a-fresh-buffer path.
             if (stream is MemoryStream existing && existing.Position == 0)
             {
-                return DecodeFromMemoryStream(name, existing, quality ?? 75);
+                return Decode(name, existing, quality ?? 75);
             }
 
             using var copy = new MemoryStream();
             stream.CopyTo(copy);
             copy.Position = 0;
-            return DecodeFromMemoryStream(name, copy, quality ?? 75);
-        }
-
-        private static IImageSource DecodeFromMemoryStream(string name, MemoryStream ms, int quality)
-        {
-            var header = new byte[4];
-            int read = ms.Read(header, 0, 4);
-            ms.Position = 0;
-            bool isPng = read == 4 && IsPng(header);
-
-            return Decode(name, ms, quality, isPng);
+            return Decode(name, copy, quality ?? 75);
         }
 
         // PeachImage 0.2.1+ guarantees Image.Load(stream, options) converts to TargetPixelFormat in one
@@ -59,12 +51,12 @@ namespace PeachPDF.PdfSharpCore.Utils
         // stream's content, not from anything this class knows up front.
         private static readonly DecoderOptions Rgba32DecoderOptions = new() { TargetPixelFormat = PixelFormat.Rgba32 };
 
-        private static PeachImageSourceImpl Decode(string name, Stream stream, int quality, bool isPng)
+        private static PeachImageSourceImpl Decode(string name, Stream stream, int quality)
         {
             try
             {
                 var decoded = Image.Load(stream, Rgba32DecoderOptions);
-                return new PeachImageSourceImpl(name, decoded, quality, isPng);
+                return new PeachImageSourceImpl(name, decoded, quality, HasRealAlpha(decoded));
             }
             catch (ImageFormatException ex)
             {
@@ -76,6 +68,44 @@ namespace PeachPDF.PdfSharpCore.Utils
                 // bytes) to that contract, rather than letting it crash the whole render.
                 throw new InvalidOperationException(ex.Message, ex);
             }
+        }
+
+        // Whether to embed losslessly (preserving alpha, via SaveAsPdfBitmap) or as lossy JPEG is
+        // decided by real alpha content, not by source format - a WebP/AVIF/GIF image with genuine
+        // transparency needs the lossless path exactly as much as a PNG does (see
+        // .claude/migration-notes for the behavior change this replaced: a PNG-magic-byte sniff that
+        // silently dropped alpha on any non-PNG-sniffed source). Decoding always produces Rgba32 (see
+        // Rgba32DecoderOptions above), so this scans every pixel's alpha byte once, right after decode.
+        //
+        // Vectorized: GetPixelSpan() is R,G,B,A bytes, tightly packed, so reinterpreting it as a uint
+        // span puts each pixel's alpha byte in the top byte of its uint (little-endian). A batch of
+        // pixels is fully opaque iff every uint, masked to its top byte, still reads 0xFF000000 - so
+        // ANDing a whole Vector<uint> batch against that mask and comparing to the same mask broadcast
+        // finds a non-opaque pixel anywhere in the batch in one comparison, with an early exit the
+        // moment one is found (most images are either fully opaque or have alpha concentrated in one
+        // region, so most calls return well before scanning the whole buffer).
+        private static bool HasRealAlpha(Image decoded)
+        {
+            ReadOnlySpan<uint> pixels = MemoryMarshal.Cast<byte, uint>(decoded.GetPixelSpan());
+            const uint alphaMask = 0xFF000000u;
+            var maskVector = new Vector<uint>(alphaMask);
+
+            int i = 0;
+            int vectorizedLength = pixels.Length - pixels.Length % Vector<uint>.Count;
+            for (; i < vectorizedLength; i += Vector<uint>.Count)
+            {
+                var batch = new Vector<uint>(pixels.Slice(i, Vector<uint>.Count));
+                if (!Vector.EqualsAll(batch & maskVector, maskVector))
+                    return true;
+            }
+
+            for (; i < pixels.Length; i++)
+            {
+                if ((pixels[i] & alphaMask) != alphaMask)
+                    return true;
+            }
+
+            return false;
         }
 
         private sealed class PeachImageSourceImpl : IImageSource
@@ -96,15 +126,45 @@ namespace PeachPDF.PdfSharpCore.Utils
                 Transparent = transparent;
             }
 
-            public void SaveAsJpeg(MemoryStream ms)
+            public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null)
             {
                 // JPEG ignores the alpha channel of a Rgba32 source.
-                _rgba.Save(ms, "jpeg", new JpegEncoderOptions { Quality = _quality });
+                using var scope = new ResizeScope(_rgba, targetWidth, targetHeight);
+                scope.Source.Save(ms, "jpeg", new JpegEncoderOptions { Quality = qualityOverride ?? _quality });
             }
 
-            public void SaveAsPdfBitmap(MemoryStream ms)
+            public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null)
             {
-                _rgba.Save(ms, "bmp", new BmpEncoderOptions());
+                using var scope = new ResizeScope(_rgba, targetWidth, targetHeight);
+                scope.Source.Save(ms, "bmp", new BmpEncoderOptions());
+            }
+
+            // Resolves to either the original decoded image or a resized clone, so SaveAsJpeg/
+            // SaveAsPdfBitmap share one resize decision instead of duplicating it. Disposing a scope
+            // that didn't resize is a no-op - it never owns _rgba.
+            private readonly struct ResizeScope : IDisposable
+            {
+                public readonly Image Source;
+                private readonly bool _owned;
+
+                public ResizeScope(Image rgba, int? targetWidth, int? targetHeight)
+                {
+                    if (targetWidth is int w && targetHeight is int h && (w != rgba.Width || h != rgba.Height))
+                    {
+                        Source = rgba.Resize(w, h, new ResizeOptions { Filter = ResamplingFilter.Bicubic });
+                        _owned = true;
+                    }
+                    else
+                    {
+                        Source = rgba;
+                        _owned = false;
+                    }
+                }
+
+                public void Dispose()
+                {
+                    if (_owned) Source.Dispose();
+                }
             }
 
             // IImageSource doesn't declare IDisposable (XImage never disposes its IImageSource) - the

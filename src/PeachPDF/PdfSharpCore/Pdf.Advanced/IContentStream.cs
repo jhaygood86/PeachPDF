@@ -39,7 +39,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
         string GetFontName(XFont font, out PdfFont pdfFont);
 
-        string GetImageName(XImage image);
+        string GetImageName(XImage image, double width, double height);
 
         string GetFormName(XForm form);
     }
