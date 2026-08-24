@@ -119,10 +119,15 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // see the comment above. A row landing here would need relocating to the next page;
             // one left behind with its bottom past this line has bled into the margin band.
             var contentBottomPage0 = marginTop + pageHeight;
+            // Fixture lands exactly on the boundary by design (see the comment above), so allow a
+            // floating-point epsilon: FMA/SIMD codegen differences between platforms (observed between
+            // x64 and arm64 CI runners) can land ActualBottom a ~1e-14 hair past contentBottomPage0
+            // without any real regression in the availableHeight computation itself.
+            const double epsilon = 1e-6;
             foreach (var row in rows.Where(r => r.Location.Y < contentBottomPage0))
             {
                 _output.WriteLine($"Row on page 0: Location.Y={row.Location.Y}, ActualBottom={row.ActualBottom}");
-                Assert.True(row.ActualBottom <= contentBottomPage0,
+                Assert.True(row.ActualBottom <= contentBottomPage0 + epsilon,
                     $"Row ActualBottom={row.ActualBottom} bleeds into bottom margin " +
                     $"(limit={contentBottomPage0}). Missing - marginTop in availableHeight regression.");
             }
