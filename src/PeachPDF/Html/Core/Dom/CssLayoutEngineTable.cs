@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF;
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -1952,7 +1953,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <remarks>
         /// Provably unreachable under the current (pre-existing, out-of-scope) <see cref="CanReduceWidth()"/>
-        /// - see .claude/accepted-gaps/table-max-width-clip-branch-coverage.md.
+        /// - see .claude/accepted-gaps/table-shrink-columns-dead-code.md.
         /// </remarks>
         [ExcludeFromCodeCoverage]
         private void ShrinkColumnsToFitAvailableWidth()
@@ -1977,13 +1978,6 @@ namespace PeachPDF.Html.Core.Dom
         /// Lowers the width of columns, starting from the largest one, until the max width is satisfied.
         /// Columns are already at their content minimum, so this results in clipping.
         /// </summary>
-        /// <remarks>
-        /// Its caller's guard (<c>maxWidth &lt; widthSum</c>, after columns are already at their content
-        /// minimum) is live code, not provably dead like <see cref="ShrinkColumnsToFitAvailableWidth"/> -
-        /// but no HTML/CSS input tried actually reaches it; see
-        /// .claude/accepted-gaps/table-max-width-clip-branch-coverage.md for the investigation.
-        /// </remarks>
-        [ExcludeFromCodeCoverage]
         private void ClipColumnsToMaxWidth(double maxWidth)
         {
             var widthSum = GetWidthSum();
@@ -2347,8 +2341,14 @@ namespace PeachPDF.Html.Core.Dom
                     // silently falls back to an auto one-page-tall wrap limit and then shrinks to content
                     // instead of spanning the column axis. Formatted as "pt" (the identity unit for this
                     // engine's own internal layout units) rather than "px", which resolves at 0.75pt and
-                    // would silently shrink this to 75% of the intended extent.
-                    caption.Height = columnAxisExtent.ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "pt";
+                    // would silently shrink this to 75% of the intended extent. columnAxisExtent is
+                    // already in caption's own internal layout coordinate space, which
+                    // CssValueParser's absolute-length resolution now scales by PixelsPerPoint on the
+                    // way back out (issue #814) - pre-divide by that same factor here so the re-parse
+                    // round-trips to this exact value instead of PixelsPerPoint times it.
+                    var captionPixelsPerPoint = (caption.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                    caption.Height = (columnAxisExtent / captionPixelsPerPoint)
+                        .ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "pt";
 
                     await caption.LayoutContentAtItsAssignedPosition(g);
 
@@ -5537,6 +5537,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="columnIndex"></param>
         /// <returns></returns>
+        /// <remarks>
+        /// The bounds check below is backwards (always true, so this always returns <c>false</c>) -
+        /// see .claude/accepted-gaps/table-shrink-columns-dead-code.md. Left as-is: fixing it makes
+        /// <see cref="ShrinkColumnsToFitAvailableWidth"/> live for every table's layout, not just the
+        /// max-width scenario this investigation was actually about, and that broader activation
+        /// regresses vertical-writing-mode column sizing - a real, separate, out-of-scope bug of its own.
+        /// </remarks>
         private bool CanReduceWidth(int columnIndex)
         {
             if (_columnWidths!.Length >= columnIndex || GetColumnMinWidths().Length >= columnIndex)

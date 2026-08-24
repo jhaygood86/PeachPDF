@@ -133,9 +133,13 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ParagraphFirstLinePushedByWordFlow_PullsAvoidChainedHeadingAlong()
         {
+            // A taller filler than BuildFillerDocument's own default (820pt, not 700pt): with correct
+            // font metrics the heading + paragraph's first line no longer reach the page boundary from
+            // 700pt of filler, so nothing actually straddles and the scenario this test is about (word
+            // flow pushing the paragraph's first line across the boundary) never fires.
             var html = BuildFillerDocument(@"
 <h2 class='heading'>Section heading</h2>
-<p class='para' style='margin: 0'>A plain paragraph of body text that follows the heading and whose first line lands across the page boundary.</p>");
+<p class='para' style='margin: 0'>A plain paragraph of body text that follows the heading and whose first line lands across the page boundary.</p>", fillerHeight: 820);
 
             var (rootBox, container) = await BuildCssBoxTree(html);
             var pageHeight = container.PageSize.Height;
@@ -161,9 +165,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ChainedAvoidHeadings_TooTallToTravelWhole_AreTrimmedFromTheFront()
         {
-            // A ~728pt band (A4 less 20mm margins). The chapter heading is 600pt tall, so the whole group -
-            // heading, subheading and the 180pt avoid box - cannot fit the destination band, while the
-            // subheading plus the box needs only ~200pt of it.
+            // This helper hardcodes the page band at PageSize.Height (842, see BuildCssBoxTree) rather
+            // than the @page rule's own A4-less-20mm ~728pt, so it is that 842 the group has to exceed.
+            // The chapter heading is 600pt tall, so the whole group - heading, subheading and the 220pt
+            // avoid box - cannot fit the destination band (600 + the subheading's own height + 220 is
+            // comfortably past 842), while the subheading plus the box alone needs only ~240pt of it.
             var html = @"<!DOCTYPE html>
 <html><head><style>
 @page { size: A4; margin: 20mm; }
@@ -175,7 +181,7 @@ h2, h3 { margin: 6pt 0; }
 <h2 class='outer' style='height: 600pt'>Chapter heading</h2>
 <h3 class='inner'>Section heading</h3>
 <div class='keep' style='break-inside: avoid; page-break-inside: avoid'>
-<div style='height: 180pt'>Keep together</div>
+<div style='height: 220pt'>Keep together</div>
 </div>
 </body></html>";
 
@@ -235,6 +241,10 @@ h2, h3 { margin: 6pt 0; }
         [Fact]
         public async Task OrphansPushedParagraph_PullsAvoidChainedHeadingAlong()
         {
+            // filler is 810pt, not 740pt: the paragraph's own line-height is pinned explicitly (12pt),
+            // unaffected by the font-metrics fix, but the h2 heading above it is not, and with correct
+            // metrics the heading is short enough that 740pt of filler no longer pushes the six-line
+            // paragraph's orphan-protected run across the page boundary at all.
             var html = @"<!DOCTYPE html>
 <html>
 <head>
@@ -246,7 +256,7 @@ h2 { margin: 6pt 0; }
 </style>
 </head>
 <body>
-<div class='filler' style='height: 740pt'>filler</div>
+<div class='filler' style='height: 810pt'>filler</div>
 <h2 class='heading'>Section heading</h2>
 <p class='para'>one<br>two<br>three<br>four<br>five<br>six</p>
 </body>
@@ -442,7 +452,7 @@ h2 { margin: 6pt 0; }
         // authored in pt (1pt = 1 layout unit), and the body margin is pinned to 8pt (what the UA
         // default `body { margin: 8px }` resolved to when these scenarios were calibrated, before
         // px became 0.75pt), so the boundary-sensitive geometry stays exact.
-        private static string BuildFillerDocument(string section)
+        private static string BuildFillerDocument(string section, double fillerHeight = 700)
         {
             return @"<!DOCTYPE html>
 <html>
@@ -454,7 +464,7 @@ h2, h3 { margin: 6pt 0; }
 </style>
 </head>
 <body>
-<div class='filler' style='height: 700pt'>filler</div>
+<div class='filler' style='height: " + fillerHeight.ToString(System.Globalization.CultureInfo.InvariantCulture) + @"pt'>filler</div>
 " + section + @"
 </body>
 </html>";
@@ -462,7 +472,7 @@ h2, h3 { margin: 6pt 0; }
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
 
             await container.SetHtml(html, null);

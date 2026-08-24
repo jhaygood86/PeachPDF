@@ -198,6 +198,12 @@ namespace PeachPDF.Tests.Integration
                 + $"(topOnPage={topRelativeToPage}, height={boxHeight}, pageHeight={pageHeight})");
         }
 
+        // 23 filler paragraphs (not 30): with correct font/line-height metrics, 30 pushed the
+        // .avoid box's own natural (unrelocated) position well past the first page boundary
+        // altogether, so it landed comfortably inside page 2 without ever straddling anything -
+        // both tests below need the box's natural position to straddle the page 0/1 boundary,
+        // since that straddle is what break-inside: avoid has to relocate (or, for avoid-column/
+        // avoid-region, must leave alone).
         private static string BreakInsideHtml(string declaration) => $@"<!DOCTYPE html>
 <html>
 <head>
@@ -213,8 +219,7 @@ namespace PeachPDF.Tests.Integration
 <p>Line 6</p><p>Line 7</p><p>Line 8</p><p>Line 9</p><p>Line 10</p>
 <p>Line 11</p><p>Line 12</p><p>Line 13</p><p>Line 14</p><p>Line 15</p>
 <p>Line 16</p><p>Line 17</p><p>Line 18</p><p>Line 19</p><p>Line 20</p>
-<p>Line 21</p><p>Line 22</p><p>Line 23</p><p>Line 24</p><p>Line 25</p>
-<p>Line 26</p><p>Line 27</p><p>Line 28</p><p>Line 29</p><p>Line 30</p>
+<p>Line 21</p><p>Line 22</p><p>Line 23</p>
 </div>
 <div class='avoid'>
 <p>Keep together paragraph 1</p>
@@ -654,7 +659,7 @@ body { margin: 0; }
 
         private async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
 
             await container.SetHtml(html, null);

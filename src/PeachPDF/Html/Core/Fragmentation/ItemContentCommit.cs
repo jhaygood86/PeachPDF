@@ -1,3 +1,4 @@
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -76,8 +77,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // box-sizing contract expects: content-space for content-box (subtract its own
                 // padding/border back out of the outer size), or the outer size directly for
                 // border-box (ActualBoxSizeIncludedWidth/Height is already 0 there, so this is a no-op).
-                box.Width = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingWidth - box.ActualBoxSizeIncludedWidth));
-                box.Height = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingHeight - box.ActualBoxSizeIncludedHeight));
+                box.Width = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingWidth - box.ActualBoxSizeIncludedWidth), box);
+                box.Height = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingHeight - box.ActualBoxSizeIncludedHeight), box);
 
                 box.RectanglesReset();
             }
@@ -126,8 +127,12 @@ namespace PeachPDF.Html.Core.Fragmentation
                 box.Display = savedDisplay;
         }
 
-        private static string FormatLayoutUnits(double value) =>
-            value.ToString("F4", CultureInfo.InvariantCulture) + "pt";
+        // See CssLayoutEngineFlex.FormatLayoutUnits's identical comment: pre-divide by PixelsPerPoint
+        // so a re-parse through CssValueParser's now-PixelsPerPoint-aware absolute-length resolution
+        // (issue #814) lands back on this same internal-space value instead of PixelsPerPoint times it.
+        private static string FormatLayoutUnits(double value, CssBox box) =>
+            (value / ((box.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0))
+                .ToString("F4", CultureInfo.InvariantCulture) + "pt";
 
         /// <summary>
         /// Moves each of <paramref name="boxes"/> by <paramref name="delta"/> via a direct

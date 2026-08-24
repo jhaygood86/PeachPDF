@@ -40,8 +40,11 @@ namespace PeachPDF.Tests.Integration
             var height = wrapper!.ActualBottom - wrapper.Location.Y;
             Assert.True(height > 0,
                 $"Block wrapping only a padded inline-block must not collapse to a negative height (top={wrapper.Location.Y}, bottom={wrapper.ActualBottom})");
-            Assert.True(height >= 200,
-                $"Block height ({height}) must cover the inline-block's own 200px of vertical padding");
+            // 100px top+bottom padding resolves to 75pt a side (1px = 0.75pt, see Length.PointsPerPx) -
+            // 150pt total - so 150 is the padding's own floor; the block's height must clear that
+            // (with headroom left for the button's one text line on top) to prove it is not collapsing.
+            Assert.True(height >= 150,
+                $"Block height ({height}) must cover the inline-block's own 150pt (100px * 0.75) of vertical padding");
         }
 
         // A tighter companion to the test above: asserts the block's height against the button's own
@@ -51,7 +54,7 @@ namespace PeachPDF.Tests.Integration
         // own top inset (border-top+padding-top) for a box reached through FlowBox's recursive branch:
         // `startY`, captured at that nested call's own entry, already named the content-box top (this
         // issue's pre-shift), while ActualHeight is a border-box measurement, so summing them counted
-        // the top inset twice. `height >= 200` alone does not notice a result that is too large.
+        // the top inset twice. `height >= 150` alone does not notice a result that is too large.
         [Fact]
         public async Task PaddedInlineBlock_SoleContentOfBlock_BlockHeightMatchesInsetsExactly()
         {
@@ -271,7 +274,11 @@ namespace PeachPDF.Tests.Integration
 </body>
 </html>";
 
-            var (root, _) = await BuildCssBoxTree(html, width: 200, height: 300);
+            // The column height (285) has to sit strictly between "filler + one un-inset line" (~234.6)
+            // and "filler + padding-top + one line" (~294.6) for the scenario the comment above states:
+            // column 1 comfortably fits the word on its own, and only the padding-top shift pushes it
+            // past the column's bottom.
+            var (root, _) = await BuildCssBoxTree(html, width: 200, height: 285);
 
             var mc = FindFirst(root, b => b.HtmlTag?.TryGetAttribute("id", "") == "mc");
             var button = FindFirst(root, b => b.HtmlTag?.TryGetAttribute("id", "") == "btn");
@@ -315,7 +322,10 @@ namespace PeachPDF.Tests.Integration
 </body>
 </html>";
 
-            var (root, _) = await BuildCssBoxTree(html, width: 200, height: 300);
+            // The column height (230) has to sit strictly between "filler + padding-top + one line"
+            // (~224.6) and "filler + padding-top + both lines" (~239.3), so the first internal line
+            // still fits column 1 and only the second, forced-break line straddles and moves alone.
+            var (root, _) = await BuildCssBoxTree(html, width: 200, height: 230);
 
             var mc = FindFirst(root, b => b.HtmlTag?.TryGetAttribute("id", "") == "mc");
             var button = FindFirst(root, b => b.HtmlTag?.TryGetAttribute("id", "") == "btn");
@@ -346,7 +356,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html, double width, double height)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
             container.MarginTop = 0;
             container.MarginLeft = 0;

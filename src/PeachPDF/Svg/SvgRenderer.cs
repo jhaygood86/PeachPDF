@@ -50,7 +50,7 @@ namespace PeachPDF.Svg
             var viewBoxX = document.ViewBox?.X ?? 0;
             var viewBoxY = document.ViewBox?.Y ?? 0;
 
-            var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, document.PreserveAspectRatio);
+            var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, document.PreserveAspectRatio);
 
             g.PushClip(viewportRect);
             g.PushTransform(matrix);
@@ -154,6 +154,32 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// <see cref="ComputeViewportTransform"/>, adjusted for painting through <paramref name="g"/>:
+        /// that method's own math (shared with <see cref="CollectLinks"/>, which needs it unmodified)
+        /// resolves entirely in <paramref name="g"/>'s own coordinate space, where <paramref name="viewportRect"/>
+        /// lives - but <c>viewBoxWidth</c>/<c>viewBoxHeight</c> (and the resulting linear "scale") are
+        /// plain SVG user-unit numbers, never scaled by <see cref="RGraphics.PixelsPerPoint"/> the way
+        /// <paramref name="viewportRect"/> itself already is. <see cref="RGraphics.PushTransform"/> only
+        /// divides a matrix's translation by <c>PixelsPerPoint</c> before handing it to the backend, not
+        /// its linear part - correct for an ordinary CSS <c>transform: scale()</c> (already scale-neutral),
+        /// wrong for this transform's scale (a ratio of a <c>PixelsPerPoint</c>-scaled length over a
+        /// never-scaled one), which would otherwise land <c>PixelsPerPoint</c> times too large (issue
+        /// #814: an inline SVG icon's content overflowing its own, correctly-sized clip). Pre-dividing
+        /// the linear part here - leaving the translation untouched, since that still wants
+        /// <see cref="RGraphics.PushTransform"/>'s own single division - is why this exists as a distinct
+        /// helper from <see cref="ComputeViewportTransform"/> rather than a change to it directly.
+        /// </summary>
+        private static RMatrix ComputePaintViewportTransform(RGraphics g, RRect viewportRect, double viewBoxX, double viewBoxY, double viewBoxWidth, double viewBoxHeight, SvgPreserveAspectRatio par)
+        {
+            var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, par);
+            var pixelsPerPoint = g.PixelsPerPoint;
+            return pixelsPerPoint == 1.0
+                ? matrix
+                : new RMatrix(matrix.M11 / pixelsPerPoint, matrix.M12 / pixelsPerPoint,
+                    matrix.M21 / pixelsPerPoint, matrix.M22 / pixelsPerPoint, matrix.OffsetX, matrix.OffsetY);
+        }
+
+        /// <summary>
         /// Computes the viewBox-to-viewport transform per <paramref name="par"/>'s alignment and
         /// meet/slice mode. <c>xMidYMid meet</c> (the SVG/CSS default) is a uniform scale, centered,
         /// letterboxed; other alignments shift which edge/corner touches the viewport instead of
@@ -210,7 +236,7 @@ namespace PeachPDF.Svg
             var viewBoxX = viewBox?.X ?? 0;
             var viewBoxY = viewBox?.Y ?? 0;
             var viewportRect = new RRect(x, y, width, height);
-            var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, par);
+            var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, par);
 
             g.PushClip(viewportRect);
             g.PushTransform(matrix);
@@ -252,7 +278,7 @@ namespace PeachPDF.Svg
                 // document is fit into its box - not the referenced document's own root
                 // preserveAspectRatio (only relevant when that document is rendered as a top-level
                 // viewport in its own right, e.g. via RenderInto).
-                var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, image.PreserveAspectRatio);
+                var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, image.PreserveAspectRatio);
 
                 g.PushClip(viewportRect);
                 g.PushTransform(matrix);
@@ -266,7 +292,7 @@ namespace PeachPDF.Svg
             }
             else if (image.Image is { } raster && raster.Width > 0 && raster.Height > 0)
             {
-                var matrix = ComputeViewportTransform(viewportRect, 0, 0, raster.Width, raster.Height, image.PreserveAspectRatio);
+                var matrix = ComputePaintViewportTransform(g, viewportRect, 0, 0, raster.Width, raster.Height, image.PreserveAspectRatio);
 
                 g.PushClip(viewportRect);
                 g.PushTransform(matrix);

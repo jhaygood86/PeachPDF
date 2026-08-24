@@ -49,6 +49,16 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>Every word string passed to DrawString during this paint pass, with the Y it was drawn at.</summary>
         public List<(string Text, double Y)> DrawnStrings { get; } = [];
 
+        /// <summary>
+        /// Settable so a test can exercise a non-default <c>PixelsPerPoint</c> (issue #814) without a
+        /// full <c>GraphicsAdapter</c>/PDF stack - defaults to the base <see cref="RGraphics.PixelsPerPoint"/>
+        /// no-op of <c>1.0</c>. A field-backed override (rather than an auto-property) since the base
+        /// virtual member is get-only.
+        /// </summary>
+        public double PixelsPerPointOverride { get; set; } = 1.0;
+
+        public override double PixelsPerPoint => PixelsPerPointOverride;
+
         public RecordingGraphics(RAdapter adapter)
             : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 

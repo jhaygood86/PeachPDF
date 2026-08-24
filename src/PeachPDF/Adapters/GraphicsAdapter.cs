@@ -37,7 +37,7 @@ namespace PeachPDF.Adapters
         /// </summary>
         private readonly bool _releaseGraphics;
 
-        private double PixelsPerPoint { get; }
+        public override double PixelsPerPoint { get; }
 
         /// <summary>
         /// _releaseGraphics is set true exactly for tile-backed instances (see the constructor

@@ -95,8 +95,11 @@ namespace PeachPDF.Tests.Integration
 
         // Mirrors KeepWithNextIntegrationTests' filler convention: a fixed-height filler pins the
         // section near the bottom of page 1 deterministically, and the body margin is pinned in pt so
-        // the boundary-sensitive geometry stays exact.
-        private static string Document(string section, double fillerHeight = 700) =>
+        // the boundary-sensitive geometry stays exact. 820, not 700: with correct font metrics the
+        // heading + paragraph's first line no longer reach the page boundary from 700pt of filler (see
+        // the identical fix on KeepWithNextIntegrationTests.ParagraphFirstLinePushedByWordFlow_...),
+        // so the retry this whole fixture exists to drive never fires.
+        private static string Document(string section, double fillerHeight = 820) =>
             $$"""
             <!DOCTYPE html>
             <html>
@@ -116,7 +119,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAsync(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
 
             await container.SetHtml(html, null);

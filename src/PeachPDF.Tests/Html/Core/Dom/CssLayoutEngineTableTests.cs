@@ -1444,23 +1444,32 @@ Assert.NotNull(tbody);
         public async Task TableLayout_MaxWidthNarrowerThanExplicitWidth_RespectsMaxWidth()
         {
             // Regression coverage for max-width being respected on a table whose explicit width would
-            // otherwise be far wider - see .claude/accepted-gaps/table-max-width-clip-branch-coverage.md
-            // for why this doesn't directly exercise CssLayoutEngineTable.ClipColumnsToMaxWidth itself.
+            // otherwise be far wider - see .claude/accepted-gaps/table-max-width-clip-branch-coverage.md,
+            // now resolved: CssLayoutEngineTable.ClipColumnsToMaxWidth's own shrink IS what produces the
+            // clamped width here, verified by instrumenting it directly. Content must be wrappable
+            // (multiple words, not white-space: nowrap) - EnforceMinimumSize (correctly, per CSS 2.1
+            // §10.4/§17.5.2: unbreakable content may legitimately exceed max-width) restores any column
+            // back to its true content-minimum right after the clip, so an unbreakable cell's full,
+            // un-wrappable width - not max-width - would win and this fixture would not actually be
+            // testing the clip at all (which is exactly what silently happened here before: nowrap text
+            // measured at a bugged, artificially tiny width under a non-default PixelsPerPoint - see
+            // issue #814 - small enough to already fit under max-width without any real clipping, so the
+            // assertion passed for the wrong reason).
             var html = @"
 <!DOCTYPE html>
 <html>
 <head>
     <style>
         table { width: 1000pt; max-width: 200pt; border-collapse: collapse; }
-        td { border: 1px solid black; padding: 4pt; white-space: nowrap; }
+        td { border: 1px solid black; padding: 4pt; }
     </style>
 </head>
 <body>
     <table>
         <tr>
-            <td>AAAAAAAAAAAAAAAAAAAA</td>
-            <td>BBBBBBBBBBBBBBBBBBBB</td>
-            <td>CCCCCCCCCCCCCCCCCCCC</td>
+            <td>Alpha bravo charlie delta echo foxtrot golf</td>
+            <td>Hotel india juliet kilo lima mike november</td>
+            <td>Oscar papa quebec romeo sierra tango uniform</td>
         </tr>
     </table>
 </body>
@@ -1471,7 +1480,7 @@ Assert.NotNull(tbody);
 
             Assert.NotNull(table);
             var tableWidth = table!.ActualRight - table.Location.X;
-            _output.WriteLine($"Table width with width:1000pt max-width:200pt and nowrap content: {tableWidth}");
+            _output.WriteLine($"Table width with width:1000pt max-width:200pt and wrappable content: {tableWidth}");
 
             // Clipped down to max-width (200pt) - nowhere near the 1000pt explicit width.
             Assert.Equal(200, tableWidth, precision: 3);
@@ -1509,8 +1518,10 @@ Assert.NotNull(tbody);
             _output.WriteLine($"Table width with width:1000pt max-width:400pt and wrappable content: {tableWidth}");
 
             // Spread back up to max-width (400pt) - nowhere near the 1000pt explicit width, and not left
-            // stuck at the wrapped-content minimum either.
-            Assert.Equal(400, tableWidth, precision: 3);
+            // stuck at the wrapped-content minimum either. SpreadExtraWidthToColumns's own convergence
+            // loop stops once within 0.1pt of maxWidth (its "close enough" tolerance, CssLayoutEngineTable.cs),
+            // so precision looser than that - not the exact value - is what the algorithm actually promises.
+            Assert.Equal(400, tableWidth, precision: 1);
         }
 
         #endregion
@@ -1989,7 +2000,7 @@ Assert.NotNull(tbody);
     string html, 
  double pageHeight = 842) // A4 height by default
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
        var container = new HtmlContainerInt(adapter);
 
           await container.SetHtml(html, null);

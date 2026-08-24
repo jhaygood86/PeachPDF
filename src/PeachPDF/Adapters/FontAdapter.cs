@@ -73,10 +73,22 @@ namespace PeachPDF.Adapters
             var descriptor = font.Descriptor;
             var descent = font.Size * descriptor.Descender / descriptor.UnitsPerEm;
             var ascent = font.Size * descriptor.Ascender / descriptor.UnitsPerEm;
-            var height = font.Height;
-            _height = height;
-            _underlineOffset = Math.Round(height - descent + 1f);
-            _ascent = Math.Round(ascent);
+            // XFont.Height (int, System.Drawing.Font-style API) rounds up to a whole point via
+            // Math.Ceiling - harmless at an ordinary font.Size, but collapses to exactly 1 for any
+            // sub-1pt size, discarding all proportional information. This adapter's own Height then
+            // multiplies that lossy value back up by PixelsPerPoint (below) to undo CreateFontInt's own
+            // size/PixelsPerPoint division - a font constructed sub-1pt (any PixelsPerInch/ShrinkToFit/
+            // ScaleToPageSize scale where PixelsPerPoint > ~7) would land on exactly PixelsPerPoint
+            // itself, not the font's real line height (issue #814's line-height family). GetHeight() is
+            // XFont's own double-precision equivalent, with no such collapse.
+            _height = font.GetHeight();
+            // Height above; UnderlineOffset/Ascent below round to whole points too, but only after
+            // scaling by PixelsPerPoint (in the properties, not here) - rounding this font's own tiny
+            // constructed size first, the same way Height used to via XFont.Height, would collapse a
+            // sub-1pt ascent/descent to exactly 0 before PixelsPerPoint ever gets a chance to restore
+            // real magnitude, for the identical reason.
+            _underlineOffset = _height - descent + 1f;
+            _ascent = ascent;
         }
 
         /// <summary>
@@ -88,11 +100,11 @@ namespace PeachPDF.Adapters
 
         public override double Size => Font.Size;
 
-        public override double UnderlineOffset => _underlineOffset;
+        public override double UnderlineOffset => Math.Round(_underlineOffset * PixelsPerPoint);
 
         public override double Height => _height * PixelsPerPoint;
 
-        public override double Ascent => _ascent * PixelsPerPoint;
+        public override double Ascent => Math.Round(_ascent * PixelsPerPoint);
 
         public override double LeftPadding => Height / 6f;
 
