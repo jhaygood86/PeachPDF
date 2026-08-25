@@ -6,6 +6,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
+using System.Diagnostics;
 using System.Linq;
 
 namespace PeachPDF.Tests.Html.Core.Dom
@@ -1522,6 +1523,167 @@ Assert.NotNull(tbody);
             // loop stops once within 0.1pt of maxWidth (its "close enough" tolerance, CssLayoutEngineTable.cs),
             // so precision looser than that - not the exact value - is what the algorithm actually promises.
             Assert.Equal(400, tableWidth, precision: 1);
+        }
+
+        [Fact]
+        public async Task TableLayout_ExplicitColumnWidthsExceedTableWidth_ShrinksColumnsToFit()
+        {
+            // Issue #819: CanReduceWidth(int)'s bounds check was inverted (always true for every
+            // in-range column), so ShrinkColumnsToFitAvailableWidth's own outer
+            // "while (widthSum > GetAvailableTableWidth() && CanReduceWidth())" could never enter its
+            // body - provably dead code. Two declared 100px (75pt) columns exceed this table's own
+            // explicit 100pt width by 50pt; with the bounds check corrected, that 50pt is now actually
+            // shrunk off, split evenly between the two columns via the round-robin.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+<table id='t' style='width: 100pt; border-spacing: 0'>
+  <colgroup>
+    <col style='width: 100px'>
+    <col style='width: 100px'>
+  </colgroup>
+  <tr><td id='c1' style='min-width: 5pt'>A</td><td id='c2' style='min-width: 5pt'>B</td></tr>
+</table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindById(rootBox, "t");
+            var c1 = FindById(rootBox, "c1");
+            var c2 = FindById(rootBox, "c2");
+
+            Assert.NotNull(table);
+            Assert.NotNull(c1);
+            Assert.NotNull(c2);
+
+            var tableWidth = table!.ActualRight - table.Location.X;
+            var c1Width = c1!.ActualRight - c1.Location.X;
+            _output.WriteLine($"Table width: {tableWidth}, c1 width: {c1Width}, c2.Location.X: {c2!.Location.X - table.Location.X}");
+
+            // Shrunk to the table's own 100pt width - nowhere near the 150pt the two declared 100px
+            // (75pt) columns would otherwise need. The 1-point-at-a-time algorithm's own granularity is
+            // the tolerance, matching SpreadExtraWidthToColumns's own test above.
+            Assert.Equal(100, tableWidth, precision: 1);
+            // Each column gave up half of the 50pt excess: 75pt - 25pt = 50pt.
+            Assert.Equal(50, c1Width, precision: 1);
+            Assert.Equal(50, c2.Location.X - table.Location.X, precision: 1);
+        }
+
+        [Fact]
+        public async Task TableLayout_ShrinkSearchWrapsAroundUnreducibleColumn_TerminatesQuickly()
+        {
+            // Issue #819's second bug: ShrinkColumnsToFitAvailableWidth's inner
+            // "while (!CanReduceWidth(curCol)) curCol++;" search never wrapped curCol back to 0, so once
+            // the outer bounds-check fix alone made CanReduceWidth(int) live, a table whose later
+            // columns become unreducible before its earlier ones needed the search to wrap - and without
+            // wrapping it walked curCol past the end of _columnWidths indefinitely (observed as a ~20ms
+            // test taking 10+ seconds before throwing). Column "stuck" sits LAST (index 6 of 7) - every
+            // time the round-robin's cursor reaches it while it is still unreducible, the inner search
+            // must step past the end of _columnWidths and wrap back to column 0 to find the next
+            // reducible one, rather than merely skipping forward by one slot the way an unreducible
+            // column in the middle of the array would. A hang or an IndexOutOfRangeException here would
+            // fail this test; the elapsed-time assertion is a belt-and-suspenders check that the search
+            // isn't merely correct but efficient.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+<table id='t' style='width: 200pt; border-spacing: 0'>
+  <colgroup>
+    <col style='width: 100px'>
+    <col style='width: 100px'>
+    <col style='width: 100px'>
+    <col style='width: 100px'>
+    <col style='width: 100px'>
+    <col style='width: 100px'>
+    <col style='width: 20px'>
+  </colgroup>
+  <tr>
+    <td style='min-width: 1pt'>A</td><td style='min-width: 1pt'>B</td><td style='min-width: 1pt'>C</td>
+    <td style='min-width: 1pt'>D</td><td style='min-width: 1pt'>E</td><td id='last' style='min-width: 1pt'>F</td>
+    <td id='stuck' style='min-width: 15pt'>G</td>
+  </tr>
+</table>
+</body>
+</html>";
+
+            var stopwatch = Stopwatch.StartNew();
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            stopwatch.Stop();
+
+            var table = FindById(rootBox, "t");
+            var stuck = FindById(rootBox, "stuck");
+            var last = FindById(rootBox, "last");
+            Assert.NotNull(table);
+            Assert.NotNull(stuck);
+            Assert.NotNull(last);
+
+            _output.WriteLine($"Layout took {stopwatch.ElapsedMilliseconds}ms; table width: {table!.ActualRight - table.Location.X}");
+
+            // Generous relative to the sub-millisecond this genuinely takes - the old unwrapped search
+            // hung for 10+ seconds (or threw) rather than merely being slow, so this bound comfortably
+            // separates "terminates" from "does not".
+            Assert.True(stopwatch.ElapsedMilliseconds < 5000,
+                $"Shrink search should terminate quickly; took {stopwatch.ElapsedMilliseconds}ms");
+
+            // The stuck column (its min-width equals its declared width) never gave up any of its 15pt -
+            // proving the search actually reached and skipped it repeatedly rather than, say, never
+            // being asked to reduce it at all.
+            var stuckWidth = stuck!.ActualRight - stuck.Location.X;
+            Assert.Equal(15, stuckWidth, precision: 1);
+
+            // The table as a whole still fits its own explicit 200pt width - the six reducible columns
+            // gave up the full excess between them.
+            Assert.Equal(200, table.ActualRight - table.Location.X, precision: 1);
+            Assert.True(last!.ActualRight <= table.ActualRight + 0.5, "last column should not overflow the shrunk table");
+        }
+
+        [Fact]
+        public async Task TableLayout_ExplicitWidthWithCollapsedColumn_ShrinksOnlyVisibleColumns()
+        {
+            // A collapsed (visibility: collapse) column's raw width is still sitting in _columnWidths
+            // when ShrinkColumnsToFitAvailableWidth runs - CollapseColumnWidths, which zeroes it, runs
+            // later in EnforceMaximumSize/EnforceMinimumSize's pipeline (see CollapseColumnWidths' own
+            // remarks). Comparing the raw GetWidthSum() against GetAvailableTableWidth() here would
+            // count that soon-to-vanish width as part of the deficit and shrink the *visible* columns to
+            // compensate for width collapse was already about to remove in full -
+            // GetWidthSumExcludingCollapsedColumnWidths and CanReduceWidth's own collapsed-column
+            // exclusion exist specifically to avoid that.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+<table id='t' style='width: 120pt; border-spacing: 0'>
+  <colgroup>
+    <col style='width: 100px'>
+    <col style='width: 100px; visibility: collapse'>
+    <col style='width: 100px'>
+  </colgroup>
+  <tr><td id='c1' style='min-width: 5pt'>A</td><td>B</td><td id='c3' style='min-width: 5pt'>C</td></tr>
+</table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindById(rootBox, "t");
+            var c1 = FindById(rootBox, "c1");
+            var c3 = FindById(rootBox, "c3");
+            Assert.NotNull(table);
+            Assert.NotNull(c1);
+            Assert.NotNull(c3);
+
+            var tableWidth = table!.ActualRight - table.Location.X;
+            var c1Width = c1!.ActualRight - c1.Location.X;
+            _output.WriteLine($"Table width: {tableWidth}, c1 width: {c1Width}, c3.Location.X: {c3!.Location.X - table.Location.X}");
+
+            // Only the two visible 75pt columns count toward the 150pt raw sum the collapsed column's
+            // still-present 75pt would otherwise inflate to 225pt; excluding it leaves a 30pt excess over
+            // the table's 120pt width, split evenly (15pt each) between the two visible columns.
+            Assert.Equal(120, tableWidth, precision: 1);
+            Assert.Equal(60, c1Width, precision: 1);
+            // No residual border-spacing gap for the collapsed column - c3 starts immediately after c1.
+            Assert.Equal(60, c3.Location.X - table.Location.X, precision: 1);
         }
 
         #endregion

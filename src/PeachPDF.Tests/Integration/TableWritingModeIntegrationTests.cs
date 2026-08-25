@@ -150,6 +150,35 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_ExplicitHeight_ShrinksColumnToFit()
+        {
+            // Issue #819's counterpart to the test above: an auto-height table has no genuine
+            // column-axis constraint to shrink toward (ShrinkColumnsToFitAvailableWidth's own guard
+            // skips it - see its remarks), but a vertical table with an explicit `height` genuinely
+            // does, and must still shrink to it exactly like a horizontal table shrinks to an explicit
+            // `width`. The column is sized from a <col> declaration (200px = 150pt) rather than the
+            // cell's own height, so it is the <col>'s own contribution being shrunk toward the table's
+            // explicit 100pt height, not the cell's - a0's own 30pt height is well below the 100pt
+            // target, so it is nowhere near being the constraint doing the shrinking (and stays clear of
+            // CSS 2.1 17.5.3's unshrinkable per-cell floor - see GetColumnMinWidths' own remarks - which
+            // only a cell whose own height exceeds the target could ever hit).
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; height: 100pt; border-spacing: 0">
+                  <colgroup>
+                    <col style="height: 200px">
+                  </colgroup>
+                  <tr><td id="a0" style="width: 20pt; height: 30pt">A0</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a0 = LayoutHarness.FindById(root, "a0");
+            Assert.NotNull(a0);
+
+            Assert.Equal(100, a0!.ActualBottom - a0.Location.Y, 1);
+        }
+
+        [Fact]
         public async Task HorizontalTb_Table_UnaffectedByAxisMapping()
         {
             // Regression guard: the ordinary horizontal-tb path (already covered exhaustively by the
