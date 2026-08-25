@@ -71,13 +71,12 @@ break to be actionable.
   consistently with the same rounded-clip treatment rather than also fixing that, to keep this
   change scoped to the reported issue.
 - A post-change review pass turned up a real, pre-existing spec deviation this fix's new clip curve
-  deliberately inherits rather than fixes: the padding-edge curve should use `border-radius -
+  deliberately inherited rather than fixed: the padding-edge curve should use `border-radius -
   border-width` (CSS Backgrounds and Borders Level 3 §5.5), not the raw border-box radius applied to
   the smaller inset rect — `background-clip: padding-box`/`content-box` already had this gap before
   this change; fixing only the new overflow-clip curve would make a box's background and its content
-  clip visibly disagree with each other. Tracked as
-  [.claude/accepted-gaps/padding-content-edge-border-radius-not-reduced-by-border-width.md](../accepted-gaps/padding-content-edge-border-radius-not-reduced-by-border-width.md)
-  / [issue #817](https://github.com/jhaygood86/PeachPDF/issues/817).
+  clip visibly disagree with each other. Tracked as issue #817 and closed by
+  [2026-08-25-padding-content-edge-border-radius-inner-reduction.md](2026-08-25-padding-content-edge-border-radius-inner-reduction.md).
 - The review pass also found (and this fix applied) one duplication worth knowing before touching
   `RenderUtils.cs` again: `ClipGraphicsByOverflow` and `TryPushOverflowClip` both need to "build a
   rounded path from `BorderRadii`, push it, count it" — factored into a shared private

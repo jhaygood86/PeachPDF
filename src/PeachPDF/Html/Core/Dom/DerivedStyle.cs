@@ -437,6 +437,59 @@ namespace PeachPDF.Html.Core.Dom
             double brX = ActualBorderBottomRightRadiusX, brY = ActualBorderBottomRightRadiusY;
             double blX = ActualBorderBottomLeftRadiusX, blY = ActualBorderBottomLeftRadiusY;
 
+            return ApplyCornerOverlap(rect, tlX, tlY, trX, trY, brX, brY, blX, blY);
+        }
+
+        /// <summary>
+        /// Computes overlap-reduced radii for a box's padding edge or content edge, per
+        /// <see href="https://www.w3.org/TR/css-backgrounds-3/#corner-clipping">CSS Backgrounds and
+        /// Borders Module Level 3 §5.5 (Corner Clipping)</see>: "The padding edge (inner border) radius
+        /// is the outer border radius minus the corresponding border thickness. In the case where this
+        /// results in a negative value, the inner radius is zero." (For the content edge, the caller
+        /// additionally folds the padding widths into <paramref name="insetLeft"/>/etc.)
+        /// <para>
+        /// This composes with, rather than replaces, the corner-overlap algorithm <see cref="ComputeRadii"/>
+        /// already applies: first the box's own declared radii are overlap-reduced against
+        /// <paramref name="borderBoxRect"/> to get the "outer" (used, border-box) radius per §4 - the same
+        /// value a border-box caller of <see cref="ComputeRadii"/> would get - then each corner's X/Y
+        /// component is reduced by the border (and, for the content edge, padding) thickness on its
+        /// adjacent edge, clamped to zero. The result is overlap-reduced a second time against
+        /// <paramref name="innerRect"/>'s own (smaller) dimensions, since subtracting a constant width can
+        /// still leave two adjacent corner radii summing to more than a short inner edge.
+        /// </para>
+        /// </summary>
+        /// <param name="borderBoxRect">the box's own border box, used to resolve the outer (used) radius</param>
+        /// <param name="innerRect">the padding-edge or content-edge rectangle the reduced radii apply to</param>
+        /// <param name="insetLeft">border-left width (plus padding-left for the content edge)</param>
+        /// <param name="insetTop">border-top width (plus padding-top for the content edge)</param>
+        /// <param name="insetRight">border-right width (plus padding-right for the content edge)</param>
+        /// <param name="insetBottom">border-bottom width (plus padding-bottom for the content edge)</param>
+        internal BorderRadii ComputeInnerRadii(RRect borderBoxRect, RRect innerRect,
+            double insetLeft, double insetTop, double insetRight, double insetBottom)
+        {
+            var outer = ComputeRadii(borderBoxRect);
+
+            double tlX = Math.Max(0, outer.TLX - insetLeft), tlY = Math.Max(0, outer.TLY - insetTop);
+            double trX = Math.Max(0, outer.TRX - insetRight), trY = Math.Max(0, outer.TRY - insetTop);
+            double brX = Math.Max(0, outer.BRX - insetRight), brY = Math.Max(0, outer.BRY - insetBottom);
+            double blX = Math.Max(0, outer.BLX - insetLeft), blY = Math.Max(0, outer.BLY - insetBottom);
+
+            return ApplyCornerOverlap(innerRect, tlX, tlY, trX, trY, brX, brY, blX, blY);
+        }
+
+        /// <summary>
+        /// The corner-overlap algorithm itself (<see href="https://www.w3.org/TR/css-backgrounds-3/#corner-overlap">
+        /// CSS Backgrounds and Borders Module Level 3 §4</see>): a single factor f - the minimum, across
+        /// all four edges, of that edge's length divided by the sum of the two corner radii on it - is
+        /// applied uniformly to every corner's x AND y radius. Shared by <see cref="ComputeRadii"/> (the
+        /// box's own declared radii) and <see cref="ComputeInnerRadii"/> (an already inner-reduced set of
+        /// radii, re-clamped against the smaller inner rectangle) so the two never derive their own,
+        /// possibly-drifting copy of the same reduction.
+        /// </summary>
+        private static BorderRadii ApplyCornerOverlap(RRect rect,
+            double tlX, double tlY, double trX, double trY,
+            double brX, double brY, double blX, double blY)
+        {
             double fTop = tlX + trX > 0 && rect.Width > 0 ? rect.Width / (tlX + trX) : 1.0;
             double fBottom = blX + brX > 0 && rect.Width > 0 ? rect.Width / (blX + brX) : 1.0;
             double fLeft = tlY + blY > 0 && rect.Height > 0 ? rect.Height / (tlY + blY) : 1.0;

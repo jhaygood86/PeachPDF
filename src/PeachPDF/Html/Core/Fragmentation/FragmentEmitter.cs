@@ -1918,8 +1918,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 if (containingBlock.Overflow.Value == Overflow.Hidden)
                 {
-                    var paddingRect = PaddingEdgeOf(containingBlock, snapshot);
-                    var radii = containingBlock.IsRounded ? containingBlock.ComputeRadii(paddingRect) : (BorderRadii?)null;
+                    var borderBoxRect = BoundsOf(containingBlock, snapshot);
+                    var paddingRect = RenderUtils.PaddingEdgeOf(containingBlock, borderBoxRect);
+                    var radii = containingBlock.IsRounded
+                        ? containingBlock.ComputeInnerRadii(borderBoxRect, paddingRect,
+                            containingBlock.ActualBorderLeftWidth, containingBlock.ActualBorderTopWidth,
+                            containingBlock.ActualBorderRightWidth, containingBlock.ActualBorderBottomWidth)
+                        : (BorderRadii?)null;
                     return (Localize(paddingRect, originY), radii);
                 }
 
@@ -1928,15 +1933,6 @@ namespace PeachPDF.Html.Core.Fragmentation
                 containingBlock = next;
             }
         }
-
-        /// <summary>
-        /// A box's padding-edge rectangle at the position <paramref name="snapshot"/> recorded for it, or
-        /// its live one. Border widths are page-invariant, so only the box's extent comes from the
-        /// snapshot — the geometry itself is <see cref="RenderUtils.PaddingEdgeOf"/>, shared with the one
-        /// remaining box-based clip caller so the two cannot drift apart.
-        /// </summary>
-        private static RRect PaddingEdgeOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
-            RenderUtils.PaddingEdgeOf(box, BoundsOf(box, snapshot));
 
         /// <summary>
         /// A box's children for fragment-building purposes. This is <see cref="CssBox.Boxes"/> for

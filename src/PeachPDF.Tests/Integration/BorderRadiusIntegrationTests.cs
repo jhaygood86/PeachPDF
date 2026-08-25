@@ -169,6 +169,124 @@ div { width: 200pt; height: 200pt; border-radius: 30pt; }
             Assert.Equal(30.0, radii.TLY, 2);
         }
 
+        // --- Inner (padding-/content-edge) radius reduction: CSS Backgrounds and Borders Level 3 §5.5 ---
+
+        [Fact]
+        public async Task ComputeInnerRadii_PaddingEdge_SubtractsBorderWidth()
+        {
+            // border-radius: 14pt, border: 6pt solid — padding-edge radius must be 14-6=8pt, per
+            // "the padding edge (inner border) radius is the outer border radius minus the
+            // corresponding border thickness" (CSS Backgrounds and Borders Level 3 §5.5).
+            var html = @"<!DOCTYPE html><html><head><style>
+div { width: 200pt; height: 200pt; border: 6pt solid black; border-radius: 14pt; }
+</style></head><body><div></div></body></html>";
+
+            var divBox = await FindDivBoxFromHtml(html);
+            var borderBoxRect = new PeachPDF.Html.Adapters.Entities.RRect(0, 0, 200, 200);
+            var paddingRect = new PeachPDF.Html.Adapters.Entities.RRect(6, 6, 188, 188);
+
+            var radii = divBox.ComputeInnerRadii(borderBoxRect, paddingRect, 6, 6, 6, 6);
+
+            Assert.Equal(8.0, radii.TLX, 2);
+            Assert.Equal(8.0, radii.TLY, 2);
+            Assert.Equal(8.0, radii.TRX, 2);
+            Assert.Equal(8.0, radii.BRX, 2);
+            Assert.Equal(8.0, radii.BLX, 2);
+        }
+
+        [Fact]
+        public async Task ComputeInnerRadii_BorderWiderThanRadius_ClampsToZero()
+        {
+            // border-radius: 4pt, border: 10pt solid — 4-10 is negative, so the inner radius clamps
+            // to zero rather than going negative.
+            var html = @"<!DOCTYPE html><html><head><style>
+div { width: 200pt; height: 200pt; border: 10pt solid black; border-radius: 4pt; }
+</style></head><body><div></div></body></html>";
+
+            var divBox = await FindDivBoxFromHtml(html);
+            var borderBoxRect = new PeachPDF.Html.Adapters.Entities.RRect(0, 0, 200, 200);
+            var paddingRect = new PeachPDF.Html.Adapters.Entities.RRect(10, 10, 180, 180);
+
+            var radii = divBox.ComputeInnerRadii(borderBoxRect, paddingRect, 10, 10, 10, 10);
+
+            Assert.Equal(0.0, radii.TLX);
+            Assert.Equal(0.0, radii.TLY);
+            Assert.False(radii.IsRounded);
+        }
+
+        [Fact]
+        public async Task ComputeInnerRadii_ContentEdge_SubtractsBorderAndPadding()
+        {
+            // border-radius: 30pt, border: 5pt solid, padding: 10pt — content-edge radius must be
+            // 30-5-10=15pt (border AND padding both count toward the content edge's inset).
+            var html = @"<!DOCTYPE html><html><head><style>
+div { width: 200pt; height: 200pt; border: 5pt solid black; padding: 10pt; border-radius: 30pt; }
+</style></head><body><div></div></body></html>";
+
+            var divBox = await FindDivBoxFromHtml(html);
+            var borderBoxRect = new PeachPDF.Html.Adapters.Entities.RRect(0, 0, 200, 200);
+            var contentRect = new PeachPDF.Html.Adapters.Entities.RRect(15, 15, 170, 170);
+
+            var radii = divBox.ComputeInnerRadii(borderBoxRect, contentRect, 15, 15, 15, 15);
+
+            Assert.Equal(15.0, radii.TLX, 2);
+            Assert.Equal(15.0, radii.TLY, 2);
+        }
+
+        [Fact]
+        public async Task ComputeInnerRadii_ReducedRadiusStillOverlapping_AppliesCornerOverlapAgain()
+        {
+            // 100pt x 20pt box, border-radius: 40pt, border: 4pt solid — outer (border-box) radius
+            // is already overlap-clamped to height/2=10 (40+40=80 > width=100 is fine, but
+            // 40+40=80 > height=20 forces f=20/80=0.25, giving an outer radius of 10 per corner).
+            // After subtracting the 4pt border, the inner radius is 6pt - well within the smaller
+            // padding rect (100-8=92 wide, 20-8=12 tall), so no further overlap reduction should
+            // kick in and 6pt should survive unchanged.
+            var html = @"<!DOCTYPE html><html><head><style>
+div { width: 100pt; height: 20pt; border: 4pt solid black; border-radius: 40pt; }
+</style></head><body><div></div></body></html>";
+
+            var divBox = await FindDivBoxFromHtml(html);
+            var borderBoxRect = new PeachPDF.Html.Adapters.Entities.RRect(0, 0, 100, 20);
+            var paddingRect = new PeachPDF.Html.Adapters.Entities.RRect(4, 4, 92, 12);
+
+            var radii = divBox.ComputeInnerRadii(borderBoxRect, paddingRect, 4, 4, 4, 4);
+
+            Assert.Equal(6.0, radii.TLX, 2);
+            Assert.Equal(6.0, radii.TLY, 2);
+        }
+
+        [Fact]
+        public async Task ComputeInnerRadii_AsymmetricBorderWidths_ReduceEachCornerByItsOwnAdjacentEdges()
+        {
+            // Non-uniform border widths: each corner's X component reduces by its own adjacent
+            // vertical edge's border width, and Y component by its own adjacent horizontal edge's -
+            // not a single shared inset.
+            var html = @"<!DOCTYPE html><html><head><style>
+div { width: 200pt; height: 200pt; border-style: solid; border-width: 2pt 4pt 6pt 8pt; border-radius: 20pt; }
+</style></head><body><div></div></body></html>";
+
+            var divBox = await FindDivBoxFromHtml(html);
+            // border-width: top right bottom left = 2 4 6 8
+            var borderBoxRect = new PeachPDF.Html.Adapters.Entities.RRect(0, 0, 200, 200);
+            var paddingRect = new PeachPDF.Html.Adapters.Entities.RRect(8, 2, 200 - 8 - 4, 200 - 2 - 6);
+
+            var radii = divBox.ComputeInnerRadii(borderBoxRect, paddingRect, 8, 2, 4, 6);
+
+            // TL: X reduces by left(8) -> 12, Y reduces by top(2) -> 18
+            Assert.Equal(12.0, radii.TLX, 2);
+            Assert.Equal(18.0, radii.TLY, 2);
+            // TR: X reduces by right(4) -> 16, Y reduces by top(2) -> 18
+            Assert.Equal(16.0, radii.TRX, 2);
+            Assert.Equal(18.0, radii.TRY, 2);
+            // BR: X reduces by right(4) -> 16, Y reduces by bottom(6) -> 14
+            Assert.Equal(16.0, radii.BRX, 2);
+            Assert.Equal(14.0, radii.BRY, 2);
+            // BL: X reduces by left(8) -> 12, Y reduces by bottom(6) -> 14
+            Assert.Equal(12.0, radii.BLX, 2);
+            Assert.Equal(14.0, radii.BLY, 2);
+        }
+
         // --- Helpers ---
 
         private Task<CssBox> FindDivBox(string css)

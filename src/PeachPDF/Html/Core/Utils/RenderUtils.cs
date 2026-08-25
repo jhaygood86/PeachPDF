@@ -89,7 +89,10 @@ namespace PeachPDF.Html.Core.Utils
             {
                 var curveRect = paddingRect;
                 curveRect.Offset(0, -originY);
-                pushed += PushRoundedClipIfRounded(g, curveRect, overflowBox.ComputeRadii(paddingRect));
+                var radii = overflowBox.ComputeInnerRadii(overflowBox.Bounds, paddingRect,
+                    overflowBox.ActualBorderLeftWidth, overflowBox.ActualBorderTopWidth,
+                    overflowBox.ActualBorderRightWidth, overflowBox.ActualBorderBottomWidth);
+                pushed += PushRoundedClipIfRounded(g, curveRect, radii);
             }
 
             return pushed;
@@ -98,8 +101,8 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Pushes a rounded-path clip for <paramref name="radii"/> over <paramref name="rect"/>, shared by
         /// <see cref="ClipGraphicsByOverflow"/> (a precomputed <see cref="OverflowClipCurve"/>) and
-        /// <see cref="TryPushOverflowClip"/> (a live <see cref="CssBox.ComputeRadii"/> call) so the two
-        /// don't each carry their own copy of the same "build the path, push it, count it" sequence.
+        /// <see cref="TryPushOverflowClip"/> (a live <see cref="CssBox.ComputeInnerRadii"/> call) so the
+        /// two don't each carry their own copy of the same "build the path, push it, count it" sequence.
         /// </summary>
         /// <returns>1 if a clip was pushed, 0 if <paramref name="radii"/> has no rounded corner</returns>
         private static int PushRoundedClipIfRounded(RGraphics g, RRect rect, BorderRadii radii)

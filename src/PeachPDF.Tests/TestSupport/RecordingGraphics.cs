@@ -37,6 +37,19 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>All rects passed to PushClip during this paint pass.</summary>
         public List<RRect> PushedClips { get; } = [];
 
+        /// <summary>
+        /// Every rounded-path clip pushed via <see cref="PushClip(RGraphicsPath)"/>, in order - lets a
+        /// test inspect the actual corner radii a clip curve was built with (see
+        /// <see cref="RecordingGraphicsPath.Arcs"/>), not just that a path clip happened.
+        /// </summary>
+        public List<RecordingGraphicsPath> PushedClipPaths { get; } = [];
+
+        /// <summary>
+        /// Every path filled via <see cref="DrawPath(RBrush, RGraphicsPath)"/>, in order - the rounded
+        /// curve a <c>background-clip: padding-box</c>/<c>content-box</c> fill was clipped to.
+        /// </summary>
+        public List<RecordingGraphicsPath> DrawnPaths { get; } = [];
+
         /// <summary>Total PushClip invocations.</summary>
         public int PushCount { get; private set; }
 
@@ -121,6 +134,7 @@ namespace PeachPDF.Tests.TestSupport
         {
             _clipStack.Push(_clipStack.Peek());
             PushCount++;
+            if (path is RecordingGraphicsPath recordingPath) PushedClipPaths.Add(recordingPath);
             Log.Add(new PaintOp(PaintOpKind.PushClipPath, default));
         }
 
@@ -153,7 +167,11 @@ namespace PeachPDF.Tests.TestSupport
         public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
         public override void DrawImage(RImage image, RRect destRect) { }
         public override void DrawPath(RPen pen, RGraphicsPath path) { }
-        public override void DrawPath(RBrush brush, RGraphicsPath path) { }
+
+        public override void DrawPath(RBrush brush, RGraphicsPath path)
+        {
+            if (path is RecordingGraphicsPath recordingPath) DrawnPaths.Add(recordingPath);
+        }
         public override RGraphicsPath GetGraphicsPath() => new RecordingGraphicsPath();
 
         public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
@@ -173,9 +191,16 @@ namespace PeachPDF.Tests.TestSupport
         /// relying on the last segment's endpoint coinciding with the first by floating-point luck.</summary>
         public bool Closed { get; private set; }
 
+        /// <summary>Every corner arc added via <see cref="ArcTo"/>, in order - lets a test read back the
+        /// actual per-corner radius a rounded-rect path (<c>RenderUtils.GetRoundRect</c>) was built
+        /// with, e.g. to confirm a padding-/content-edge curve was reduced per CSS Backgrounds and
+        /// Borders Level 3 §5.5 rather than using the box's raw declared radius.</summary>
+        public List<(Corner Corner, double RadiusX, double RadiusY)> Arcs { get; } = [];
+
         public override void Start(double x, double y) { }
         public override void LineTo(double x, double y) { }
-        public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) { }
+        public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) =>
+            Arcs.Add((corner, radiusX, radiusY));
         public override void AddMove(double x, double y) { }
         public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
         public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
