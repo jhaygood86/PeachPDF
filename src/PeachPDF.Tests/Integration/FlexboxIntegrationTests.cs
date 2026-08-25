@@ -1930,6 +1930,75 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(geomControl.Location.Y + tableDelta, geomDisplaced.Location.Y, 0.5);
         }
 
+        // ─── box-sizing:border-box flex-item stretch/shrink-to-fit (issue #815) ────
+
+        [Fact]
+        public async Task GrowingBorderBoxItem_WithPadding_FillsAllottedMainAxisSpace()
+        {
+            // The #815 repro shape: box-sizing:border-box items with real padding/border, grown to
+            // fill free main-axis space. Before the fix, ResizeItem assigned each item exactly
+            // padding+border narrower than its allotted share, because it treated the outer target
+            // size as content-space regardless of box-sizing.
+            var html = Wrap(@"
+                <div style='display:flex; width:300pt;'>
+                    <div id='a' style='flex-grow:1; box-sizing:border-box; padding:20pt; border:2pt solid black; height:80pt;'></div>
+                    <div id='b' style='flex-grow:1; box-sizing:border-box; padding:20pt; border:2pt solid black; height:80pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(150, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(150, b.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task ShrinkToFitColumnItem_BorderBox_SameOuterWidthAsContentBox()
+        {
+            // Cross-axis (width) shrink-to-fit under flex-direction:column with a non-stretch
+            // align-items exercises ShrinkColumnItemToContentWidth. box-sizing must not change the
+            // item's rendered OUTER width here - a border-box item with the same content/padding/
+            // border as a content-box one should shrink to the exact same footprint.
+            var contentBoxHtml = Wrap(@"
+                <div style='display:flex; flex-direction:column; align-items:flex-start; width:300pt;'>
+                    <div id='a' style='box-sizing:content-box; padding:20pt; border:2pt solid black;'>Hi</div>
+                </div>");
+            var borderBoxHtml = Wrap(@"
+                <div style='display:flex; flex-direction:column; align-items:flex-start; width:300pt;'>
+                    <div id='a' style='box-sizing:border-box; padding:20pt; border:2pt solid black;'>Hi</div>
+                </div>");
+            var (rootContent, _) = await BuildAndLayout(contentBoxHtml);
+            var (rootBorder, _) = await BuildAndLayout(borderBoxHtml);
+            var aContent = FindById(rootContent, "a")!;
+            var aBorder = FindById(rootBorder, "a")!;
+            Assert.Equal(aContent.ActualBoxSizingWidth, aBorder.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task GrowingItem_BorderBoxAndContentBox_SameOuterWidth()
+        {
+            // Main-axis grow with an auto width and flex-grow>0 pins the hypothetical main size to 0
+            // (see the flex-grow branch of the hypothetical-size derivation), so the final outer width
+            // is independent of box-sizing before ResizeItem even runs - isolating ResizeItem's own
+            // box-sizing handling. box-sizing changes what an explicit width means, never the rendered
+            // footprint of grown/stretched sizing.
+            var contentBoxHtml = Wrap(@"
+                <div style='display:flex; width:300pt;'>
+                    <div id='a' style='flex-grow:1; box-sizing:content-box; padding:20pt; border:2pt solid black; height:80pt;'></div>
+                    <div style='flex-grow:1; height:80pt;'></div>
+                </div>");
+            var borderBoxHtml = Wrap(@"
+                <div style='display:flex; width:300pt;'>
+                    <div id='a' style='flex-grow:1; box-sizing:border-box; padding:20pt; border:2pt solid black; height:80pt;'></div>
+                    <div style='flex-grow:1; height:80pt;'></div>
+                </div>");
+            var (rootContent, _) = await BuildAndLayout(contentBoxHtml);
+            var (rootBorder, _) = await BuildAndLayout(borderBoxHtml);
+            var aContent = FindById(rootContent, "a")!;
+            var aBorder = FindById(rootBorder, "a")!;
+            Assert.Equal(aContent.ActualBoxSizingWidth, aBorder.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(150, aContent.ActualBoxSizingWidth, 1.0);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 
