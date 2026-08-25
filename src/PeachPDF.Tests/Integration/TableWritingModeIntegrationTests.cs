@@ -179,6 +179,55 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_AutoHeightCell_StretchesToColumnExtent()
+        {
+            // Issue #836: a table cell with height:auto (the default) must still fill its column's
+            // shared extent along the block axis (CSS 2.1 §17.5.3 - a cell's own height is the larger of
+            // its content height and its column's assigned extent, not its content height alone), the
+            // vertical-writing-mode analog of an ordinary horizontal cell's width:auto already filling
+            // its column. The column's own extent is sized from the <col> declaration (150pt), well
+            // above a0's own tiny single-word content height - if the fix regressed to "content height
+            // only", this would read a0's own small content height instead of 150.
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <colgroup>
+                    <col style="height: 200px">
+                  </colgroup>
+                  <tr><td id="a0" style="width: 20pt">A0</td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a0 = LayoutHarness.FindById(root, "a0");
+            Assert.NotNull(a0);
+
+            Assert.Equal(150, a0!.ActualBottom - a0.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task VerticalRl_AutoHeightCell_TallerContentStillWinsOverColumnExtent()
+        {
+            // The other half of §17.5.3's max(): a cell whose own content genuinely needs more than the
+            // column's assigned extent must not be clamped down to it - the fix's Math.Max, not a bare
+            // overwrite, is what this asserts. a0's child block (80pt) needs far more than its column's
+            // own 40pt (from the <col> declaration).
+            var html = LayoutHarness.Wrap("""
+                <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
+                  <colgroup>
+                    <col style="height: 53px">
+                  </colgroup>
+                  <tr><td id="a0" style="width: 20pt"><div style="height: 80pt"></div></td></tr>
+                </table>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var a0 = LayoutHarness.FindById(root, "a0");
+            Assert.NotNull(a0);
+
+            Assert.Equal(80, a0!.ActualBottom - a0.Location.Y, 1);
+        }
+
+        [Fact]
         public async Task HorizontalTb_Table_UnaffectedByAxisMapping()
         {
             // Regression guard: the ordinary horizontal-tb path (already covered exhaustively by the
