@@ -450,5 +450,7 @@
         public const string DoNotScroll = "do-not-scroll";
         public const string Password = "password";
         public const string Email = "email";
+        public const string Clip = "clip";
+        public const string Ellipsis = "ellipsis";
     }
 }

@@ -1805,6 +1805,24 @@
       }
     },
     {
+      "name": "text-overflow",
+      "comment": "Only 'clip'/'ellipsis' are recognized - CSS Overflow 3's ratified grammar is exactly these two keywords; the two-value edge syntax, '<string>' replacement, and 'fade()' are non-standard/Level-4-experimental (MDN) and out of scope. An unrecognized value falls back to the initial 'clip'. Applied at paint time (FragmentPainter.Text.cs), per overflowing line box, in whichever writing mode/direction the box uses.",
+      "inherited": false,
+      "initialValue": "clip",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextOverflow",
+        "keywordMap": "Map.TextOverflowModes",
+        "fallback": "TextOverflow.Clip"
+      },
+      "html": {
+        "propertyPath": "TextOverflow",
+        "csharpDataType": "CssProperty<TextOverflow>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextOverflow.ToString()"
+      }
+    },
+    {
       "name": "text-transform",
       "comment": "cssDataType's own Map.TextTransforms includes full-width, mapped to CssBox.cs's ApplyTextTransform which converts characters to their Unicode fullwidth compatibility form. full-size-kana is not implemented (not in the TextTransform enum or Map.TextTransforms) so it's rejected outright and excluded from supportsSupportedValues below, same shape as word-break's keep-all split.",
       "inherited": true,

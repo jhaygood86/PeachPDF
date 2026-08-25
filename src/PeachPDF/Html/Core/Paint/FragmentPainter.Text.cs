@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
 using System;
+using System.Collections.Generic;
 using System.Text;
 
 namespace PeachPDF.Html.Core.Paint
@@ -15,16 +16,57 @@ namespace PeachPDF.Html.Core.Paint
     internal sealed partial class FragmentPainter
     {
         /// <summary>
-        /// Paints all the words of one fragment, each at its own fragment rectangle.
+        /// Paints all the words of one fragment, each at its own fragment rectangle. <c>text-overflow</c>
+        /// (like <c>overflow</c> itself - CSS Overflow 3 applies both to "block containers") is read off
+        /// <paramref name="box"/>'s own <see cref="CssBox.ContainingBlock"/>, not <paramref name="box"/>
+        /// directly: the box actually holding words is routinely a plain inline run - an anonymous
+        /// wrapper CssBox.ParseToWords produces for a block element's own direct text, or a real
+        /// <c>&lt;span&gt;</c> - never the block container the style was declared on, exactly mirroring
+        /// how <c>RenderUtils.OverflowClipOf</c>/<c>TryPushOverflowClip</c> already resolve an ancestor's
+        /// <c>overflow: hidden</c> for this same box.
         /// </summary>
+        /// <remarks>
+        /// Gated on <c>Overflow.Hidden</c> specifically, not "anything but visible": <c>auto</c>/
+        /// <c>scroll</c> don't establish a real clip in this renderer either
+        /// (<c>RenderUtils.OverflowClipOf</c> only special-cases <c>Hidden</c> - there is no interactive
+        /// scrolling in a PDF, so this renderer already lets <c>auto</c>/<c>scroll</c> content overflow
+        /// unclipped, see the <c>overflow</c> property's own <c>css-properties.json</c> comment), so an
+        /// ellipsis over still-unclipped content would be a confusing half-effect. This also means
+        /// <see cref="Fragments.BoxFragment.OverflowClip"/> - resolved by that exact same walk, over that
+        /// exact same starting box and exact same <c>Hidden</c> check - is guaranteed populated whenever
+        /// ellipsis is active, so <see cref="PaintWordsWithEllipsis"/> can use it directly as the
+        /// containing block's own content-edge rectangle instead of needing that box's own fragment.
+        /// </remarks>
         /// <param name="g">the device to draw into</param>
         /// <param name="box">the box whose text style is painted</param>
         /// <param name="fragment">the fragment whose words are painted</param>
-        private static void PaintWords(RGraphics g, CssBox box, BoxFragment fragment)
+        private void PaintWords(RGraphics g, CssBox box, BoxFragment fragment)
         {
             if (box.Width is null or { Length: <= 0 }) return;
 
-            foreach (var wordFragment in fragment.Words)
+            var containingBlock = box.ContainingBlock;
+            var ellipsisActive = containingBlock.TextOverflow.Value == TextOverflow.Ellipsis
+                                  && containingBlock.Overflow.Value == Overflow.Hidden;
+
+            if (!ellipsisActive || fragment.Lines.Count == 0)
+            {
+                PaintWordSequence(g, box, fragment.Words);
+                return;
+            }
+
+            PaintWordsWithEllipsis(g, box, containingBlock, fragment);
+        }
+
+        /// <summary>
+        /// Paints an ordered sequence of words - the ordinary (no truncation) path, and also what a
+        /// truncated line's own surviving whole words are painted through. Identical to what
+        /// <see cref="PaintWords"/> always did before <c>text-overflow</c> existed, just made reusable
+        /// over an arbitrary (not necessarily <see cref="Fragments.BoxFragment.Words"/> itself) ordered
+        /// list.
+        /// </summary>
+        private static void PaintWordSequence(RGraphics g, CssBox box, IReadOnlyList<TextFragment> words)
+        {
+            foreach (var wordFragment in words)
             {
                 var word = wordFragment.Word;
                 if (word.IsLineBreak || word.IsImage) continue;
@@ -47,58 +89,91 @@ namespace PeachPDF.Html.Core.Paint
                     continue;
                 }
 
-                // A word on the target's first formatted line, under a ::first-line rule, uses that
-                // resolved shadow box's font/color/letter-spacing instead of the box's own - it was
-                // already measured against this same styleSource (see ApplyFirstLineStyleOverride), so
-                // word.Top/Height are already consistent with it.
-                var styleSource = word.FirstLineStyle ?? box;
-
-                // A fragment drawn with a different font than the box's own ActualFont - a synthesized
-                // small-caps run (smaller size) or a per-codepoint fallback face (different metrics) - is
-                // top-anchored at the same word.Top (the shared line box's top), so without correction its
-                // baseline would sit at a different height than its full-size neighbors'. Shift down by the
-                // ascent difference so every fragment's baseline lines up. This is exactly 0 for an ordinary
-                // word (font == ActualFont), so it is a no-op there.
-                var font = CssBox.ResolveWordFont(word, styleSource);
-                var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
                 var text = word.FirstLineText ?? word.Text!;
+                DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new RSize(word.Width, word.Height));
+            }
+        }
 
-                if (box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr)
+        /// <summary>
+        /// Draws one word's (or, for a <c>text-overflow</c> truncation, one word's kept substring's)
+        /// glyphs at its own position and orientation - the per-word body every ordinary word already
+        /// went through, factored out so a truncated word's shorter <paramref name="text"/> can go
+        /// through the identical upright/sideways/horizontal dispatch instead of duplicating it.
+        /// </summary>
+        /// <param name="g">the device to draw into</param>
+        /// <param name="box">the box whose writing-mode/text-orientation style governs the dispatch</param>
+        /// <param name="word">the source word - its style, font, and (for an ordinary paint) own text</param>
+        /// <param name="rect">
+        /// the word's own fragment rectangle for an ordinary (untruncated) word; for a partially kept
+        /// word, the caller has already repositioned this to where <paramref name="text"/> itself
+        /// belongs (its own natural anchor edge doesn't move when a word is shortened - only how much of
+        /// it is drawn does).
+        /// </param>
+        /// <param name="text">the exact string to draw - the full word, or a truncated substring.</param>
+        /// <param name="textSize">
+        /// only consulted by the horizontal branch (the vertical branches derive their own size from
+        /// <paramref name="rect"/>/the text's own per-character measurement).
+        /// </param>
+        /// <param name="fontOverride">
+        /// when set, used instead of <paramref name="word"/>'s own resolved font - a
+        /// <c>text-overflow</c> ellipsis glyph is never one of <paramref name="word"/>'s own codepoints,
+        /// so it needs its own per-codepoint fallback resolution (<see cref="CssBox.ActualFontForCodepoint"/>)
+        /// rather than whatever font happens to cover <paramref name="word"/>'s own script - reusing the
+        /// cut word's font for it silently drew nothing when that font's family didn't include a "…"
+        /// glyph (e.g. a narrow embedded script subset).
+        /// </param>
+        private static void DrawWordGlyphs(RGraphics g, CssBox box, CssRect word, RRect rect, string text, RSize textSize, RFont? fontOverride = null)
+        {
+            // A word on the target's first formatted line, under a ::first-line rule, uses that
+            // resolved shadow box's font/color/letter-spacing instead of the box's own - it was
+            // already measured against this same styleSource (see ApplyFirstLineStyleOverride), so
+            // word.Top/Height are already consistent with it.
+            var styleSource = word.FirstLineStyle ?? box;
+
+            // A fragment drawn with a different font than the box's own ActualFont - a synthesized
+            // small-caps run (smaller size) or a per-codepoint fallback face (different metrics) - is
+            // top-anchored at the same word.Top (the shared line box's top), so without correction its
+            // baseline would sit at a different height than its full-size neighbors'. Shift down by the
+            // ascent difference so every fragment's baseline lines up. This is exactly 0 for an ordinary
+            // word (font == ActualFont), so it is a no-op there.
+            var font = fontOverride ?? CssBox.ResolveWordFont(word, styleSource);
+            var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
+
+            if (box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr)
+            {
+                // text-orientation decides per this box (upright/sideways force one answer for
+                // every word) or per fragment (mixed, the default - CssBox.AddWord/
+                // EmitPerCodepointFragments already split the word into maximal same-orientation
+                // runs, so word.IsUprightOrientation is a real per-fragment fact here, not a guess).
+                var isUpright = box.TextOrientation.Value switch
                 {
-                    // text-orientation decides per this box (upright/sideways force one answer for
-                    // every word) or per fragment (mixed, the default - CssBox.AddWord/
-                    // EmitPerCodepointFragments already split the word into maximal same-orientation
-                    // runs, so word.IsUprightOrientation is a real per-fragment fact here, not a guess).
-                    var isUpright = box.TextOrientation.Value switch
-                    {
-                        TextOrientation.Upright => true,
-                        TextOrientation.Sideways => false,
-                        _ => word.IsUprightOrientation
-                    };
+                    TextOrientation.Upright => true,
+                    TextOrientation.Sideways => false,
+                    _ => word.IsUprightOrientation
+                };
 
-                    if (isUpright)
-                    {
-                        PaintUprightVerticalRun(g, text, font, styleSource, wordFragment.Rect, baselineAdjust);
-                    }
-                    else
-                    {
-                        // wordFragment.Rect is already the word's true physical (rotated) footprint, set
-                        // by CssLayoutEngine.CreateVerticalLineBoxes via WritingModeFrame, which swaps
-                        // width/height for a vertical box - so the glyph run's own natural (pre-rotation)
-                        // size is that swap undone.
-                        var naturalSize = new RSize(wordFragment.Rect.Height, wordFragment.Rect.Width);
-                        var rotation = SidewaysRotation(wordFragment.Rect);
-                        g.PushTransform(rotation);
-                        g.DrawString(text, font, styleSource.ActualColor, new RPoint(0, baselineAdjust), naturalSize,
-                            styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
-                        g.PopTransform();
-                    }
+                if (isUpright)
+                {
+                    PaintUprightVerticalRun(g, text, font, styleSource, rect, baselineAdjust);
                 }
                 else
                 {
-                    var wordPoint = new RPoint(wordFragment.Rect.X, wordFragment.Rect.Y + baselineAdjust);
-                    g.DrawString(text, font, styleSource.ActualColor, wordPoint, new RSize(word.Width, word.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                    // rect is already the word's true physical (rotated) footprint, set by
+                    // CssLayoutEngine.CreateVerticalLineBoxes via WritingModeFrame, which swaps
+                    // width/height for a vertical box - so the glyph run's own natural (pre-rotation)
+                    // size is that swap undone.
+                    var naturalSize = new RSize(rect.Height, rect.Width);
+                    var rotation = SidewaysRotation(rect);
+                    g.PushTransform(rotation);
+                    g.DrawString(text, font, styleSource.ActualColor, new RPoint(0, baselineAdjust), naturalSize,
+                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                    g.PopTransform();
                 }
+            }
+            else
+            {
+                var wordPoint = new RPoint(rect.X, rect.Y + baselineAdjust);
+                g.DrawString(text, font, styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
             }
         }
 

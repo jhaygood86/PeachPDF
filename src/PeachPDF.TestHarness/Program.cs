@@ -5561,6 +5561,72 @@ await SaveShowcaseAsync("writing_mode", "Typography & Text", "writing-mode (Vert
     "Real vertical-rl/vertical-lr line flow: columns stacking along the block axis, text running top-to-bottom within each column, real per-character text-orientation (upright CJK next to rotated Latin), writing-mode-aware Flexbox and Table layout (including captions, thead/tfoot, collapsed borders, vertical-align and rowspan row-axis sizing), block-level/orthogonal-flow content inside a vertical box, direction: rtl block children anchoring to the physical bottom edge, real CSS2.1 margin collapse (sibling-to-sibling and box-own-edge) between block-axis-stacked children, and (issue #768) text-align, Unicode Bidi Algorithm reordering, hyphenation, position: absolute/fixed, and float column wrap-around all working inside vertical line flow.",
     writingModeHtml, pdfConfig);
 
+// --- text-overflow: ellipsis showcase (issue #694) ---
+// Per-line truncation of whatever content genuinely overflows an overflow:hidden container's
+// content edge - Tailwind's truncate idiom (overflow:hidden; white-space:nowrap; text-overflow:
+// ellipsis) for the common single-line case, a wrapping paragraph whose one unbreakable line
+// overflows, and both horizontal directions and vertical writing modes, since the "end" edge
+// (where truncation/the ellipsis lands) depends on writing-mode/direction: physical right for
+// LTR, left for RTL, bottom for vertical-rl/vertical-lr under LTR direction, top under RTL.
+// Reuses the Hebrew/CJK font subsets already loaded above for the writing-mode showcase.
+
+const string TextOverflowCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 10pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    .card { border: 1px solid #ccc; border-radius: 4px; padding: 6px 10px; margin-bottom: 6px; background: #f7fafc }
+    .truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis }
+    .w1 { width: 260px }
+    .w2 { width: 160px }
+    .w3 { width: 90px }
+    .label { font-size: 7pt; color: #444; margin-top: 2px }
+    .vrow { display: flex; gap: 12px; align-items: flex-start }
+    .vcol { text-orientation: upright; overflow: hidden; text-overflow: ellipsis;
+            border: 1px solid #ccc; border-radius: 4px; padding: 6px; width: 40px }
+    </style>
+    """;
+
+var textOverflowHtml = "<!DOCTYPE html><html><head>" + TextOverflowCss +
+    $"<style>@font-face {{ font-family: 'PeachPDF Hebrew Subset'; src: url(data:font/ttf;base64,{writingModeHebrewB64}) format('truetype') }}" +
+    $"@font-face {{ font-family: 'PeachPDF CJK Subset'; src: url(data:font/ttf;base64,{writingModeCjkFontB64}) format('truetype') }}</style>" +
+    "</head><body>" +
+
+    "<h1>CSS text-overflow: ellipsis Test Page</h1>" +
+
+    "<h2>1 &mdash; horizontal LTR: truncate at decreasing widths</h2>" +
+    "<div class=\"card truncate w1\">The quick brown fox jumps over the lazy dog</div>" +
+    "<div class=\"card truncate w2\">The quick brown fox jumps over the lazy dog</div>" +
+    "<div class=\"card truncate w3\">The quick brown fox jumps over the lazy dog</div>" +
+    "<div class=\"card truncate w1\">Short text needs no truncation at all</div>" +
+
+    "<h2>2 &mdash; horizontal RTL: truncate stays flush-right, ellipsis on the physical left</h2>" +
+    "<div class=\"card truncate w1\" dir=\"rtl\" style=\"font-family: 'PeachPDF Hebrew Subset', Arial, sans-serif\">" +
+    "זהו משפט ארוך בעברית שאמור להיחתך בקצה הנכון של התיבה</div>" +
+
+    "<h2>3 &mdash; a wrapping paragraph whose one unbreakable line overflows</h2>" +
+    "<div class=\"card\" style=\"overflow: hidden; text-overflow: ellipsis; width: 220px\">" +
+    "This paragraph wraps normally, but one line below has a single run with no spaces:<br>" +
+    "ThisIsOneVeryLongUnbreakableTokenWithNoSpacesAtAllToWrapOn<br>" +
+    "and this last line is short again.</div>" +
+
+    "<h2>4 &mdash; vertical-rl/vertical-lr columns: truncation along the inline (top-to-bottom) axis</h2>" +
+    "<div class=\"vrow\">" +
+    "<div><div class=\"vcol\" style=\"writing-mode: vertical-rl; height: 120px; font-family: 'PeachPDF CJK Subset', Arial, sans-serif\">" +
+    "この文章は縦書きの列の高さより長いため途中で省略記号に置き換えられます</div>" +
+    "<div class=\"label\">vertical-rl</div></div>" +
+    "<div><div class=\"vcol\" style=\"writing-mode: vertical-lr; height: 120px; font-family: 'PeachPDF CJK Subset', Arial, sans-serif\">" +
+    "この文章は縦書きの列の高さより長いため途中で省略記号に置き換えられます</div>" +
+    "<div class=\"label\">vertical-lr</div></div>" +
+    "</div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("text_overflow", "Typography & Text", "text-overflow: ellipsis",
+    "Per-line-box truncation with a trailing ellipsis wherever content overflows an overflow:hidden container's content edge - Tailwind's truncate idiom for the common single nowrap line, a wrapping paragraph whose one unbreakable line overflows, and both horizontal directions plus vertical-rl/vertical-lr writing modes, each finding the correct end edge (right/left/bottom/top) for its own writing-mode/direction combination.",
+    textOverflowHtml, pdfConfig);
+
 // --- CSS1 canvas background showcase ---
 
 var canvasBackgroundHtml = "<!DOCTYPE html><html><head><style>" +

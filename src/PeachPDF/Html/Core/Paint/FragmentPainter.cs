@@ -49,6 +49,17 @@ namespace PeachPDF.Html.Core.Paint
         private readonly HashSet<BoxFragment> _painted = new(ReferenceEqualityComparer.Instance);
 
         /// <summary>
+        /// Lines whose <c>text-overflow: ellipsis</c> truncation has already been painted this page. A
+        /// line box is shared by every sibling <see cref="CssBox"/> that contributes words to it (plain
+        /// text next to a <c>&lt;b&gt;</c>/<c>&lt;span&gt;</c>/inline image run) - <see cref="PaintWords"/>
+        /// is called once per box, not once per line, so without this a second box past the truncation
+        /// point would independently rediscover "my own words don't fit" and draw its own extra ellipsis.
+        /// Cleared per page implicitly: a new <see cref="FragmentPainter"/> instance paints each page (see
+        /// <c>FragmentPaintHarness.PaintPage</c>/production's own per-page construction).
+        /// </summary>
+        private readonly HashSet<CssLineBox> _linesAlreadyTruncated = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
         /// Paints one page: the fragmentainer's whole fragment subtree, clipped to the page's content
         /// window.
         /// </summary>
