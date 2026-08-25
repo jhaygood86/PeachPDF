@@ -70,6 +70,22 @@ namespace PeachPDF.Html.Core.Paint
                     rect.Height - box.ActualBorderTopWidth  - box.ActualBorderBottomWidth),
             };
 
+            // The clip rectangle's own curve - border-box uses the box's declared radius as-is, while
+            // padding-box/content-box reduce it by the border width (and, for content-box, the padding
+            // too) per CSS Backgrounds and Borders Level 3 §5.5 before clipping the smaller rectangle.
+            BorderRadii ClipRadii(string clipValue, RRect clipRect) => clipValue switch
+            {
+                Keywords.BorderBox => box.ComputeRadii(clipRect),
+                Keywords.ContentBox => box.ComputeInnerRadii(rect, clipRect,
+                    box.ActualBorderLeftWidth + box.ActualPaddingLeft,
+                    box.ActualBorderTopWidth + box.ActualPaddingTop,
+                    box.ActualBorderRightWidth + box.ActualPaddingRight,
+                    box.ActualBorderBottomWidth + box.ActualPaddingBottom),
+                _ => box.ComputeInnerRadii(rect, clipRect,
+                    box.ActualBorderLeftWidth, box.ActualBorderTopWidth,
+                    box.ActualBorderRightWidth, box.ActualBorderBottomWidth),
+            };
+
             // background-origin/background-clip are themselves comma-list (per-layer) properties,
             // just like background-image/-position/-size - resolved per layer inside the loop below,
             // not once for the whole box.
@@ -90,12 +106,13 @@ namespace PeachPDF.Html.Core.Paint
                 // background-color is not itself a layered property: when background-clip has
                 // multiple values, the solid fill uses the LAST (bottom-most) one, independent of
                 // how many background-image layers exist - including zero.
-                var colorClipRect = BoxModelRect(clipLayers[^1]);
+                var colorClipValue = clipLayers[^1];
+                var colorClipRect = BoxModelRect(colorClipValue);
 
                 RGraphicsPath? colorRoundedClipPath = null;
                 if (box.IsRounded)
                 {
-                    var radii = box.ComputeRadii(colorClipRect);
+                    var radii = ClipRadii(colorClipValue, colorClipRect);
                     colorRoundedClipPath = RenderUtils.GetRoundRect(g, colorClipRect,
                         radii.TLX, radii.TLY, radii.TRX, radii.TRY,
                         radii.BRX, radii.BRY, radii.BLX, radii.BLY);
@@ -115,12 +132,13 @@ namespace PeachPDF.Html.Core.Paint
             foreach (int layerIndex in layersToPaint)
             {
                 var originRect = BoxModelRect(BackgroundLayerResolver.LayerAt(originLayers, layerIndex));
-                var clipRect   = BoxModelRect(BackgroundLayerResolver.LayerAt(clipLayers, layerIndex));
+                var clipValue  = BackgroundLayerResolver.LayerAt(clipLayers, layerIndex);
+                var clipRect   = BoxModelRect(clipValue);
 
                 RGraphicsPath? roundedClipPath = null;
                 if (box.IsRounded)
                 {
-                    var radii = box.ComputeRadii(clipRect);
+                    var radii = ClipRadii(clipValue, clipRect);
                     roundedClipPath = RenderUtils.GetRoundRect(g, clipRect,
                         radii.TLX, radii.TLY, radii.TRX, radii.TRY,
                         radii.BRX, radii.BRY, radii.BLX, radii.BLY);

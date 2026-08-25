@@ -310,10 +310,28 @@ var radiusHtml = "<!DOCTYPE html><html><head>" + RadiusCss + "</head><body>" +
     "<div class=\"desc\">rounded bordered card — grid content and border confined to the curve</div>" +
     "</td></tr></table>" +
 
+    "<h2>8 — Padding/Content-Edge Radius Reduction (thick border)</h2>" +
+    "<p class=\"intro\">The padding edge's own radius is the border-box radius minus the border " +
+    "thickness, clamped to zero (CSS Backgrounds and Borders Level 3 &#167;5.5) — for a thick border " +
+    "relative to its radius, the inset curve must sit noticeably tighter than the outer border, not " +
+    "bulge past it. Both boxes below use border: 6px solid; border-radius: 14px, so the inset curve's " +
+    "effective radius is 14&#8722;6=8px.</p>" +
+    "<table class=\"sw\"><tr><td style=\"width:50%\">" +
+    "<div style=\"border:6px solid #1a6b8a;border-radius:14px;width:160px;height:90px;" +
+    "background:linear-gradient(135deg,#ffb454,#e8663c);background-clip:padding-box;\"></div>" +
+    "<div class=\"desc\">background-clip: padding-box — fill's curve follows the border's own inner edge</div>" +
+    "<div class=\"css\">border: 6px solid; border-radius: 14px; background-clip: padding-box</div>" +
+    "</td><td style=\"width:50%\">" +
+    "<div style=\"border:6px solid #1a6b8a;border-radius:14px;width:160px;height:90px;overflow:hidden\">" +
+    "<div style=\"width:100%;height:100%;background:linear-gradient(135deg,#5a9bd8,#2f5f8a)\"></div>" +
+    "</div>" +
+    "<div class=\"desc\">overflow: hidden — descendant fill clipped to the same reduced inner curve</div>" +
+    "</td></tr></table>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius",
-    "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes, plus overflow:hidden clipping descendant content to the curve.",
+    "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes, plus overflow:hidden clipping descendant content to the curve and background-clip's inset curves reduced by border width.",
     radiusHtml, pdfConfig);
 
 // --- Box-shadow showcase ---

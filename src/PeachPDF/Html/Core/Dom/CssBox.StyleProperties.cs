@@ -282,10 +282,25 @@ namespace PeachPDF.Html.Core.Dom
         public double ActualBorderBottomLeftRadiusY => DerivedStyle.ActualBorderBottomLeftRadiusY;
 
         /// <summary>
-        /// Computes overlap-reduced radii for the given rendering rectangle, per CSS spec §4.
-        /// Horizontal and vertical axes are reduced independently.
+        /// Computes overlap-reduced radii for the given rendering rectangle, per
+        /// <see href="https://www.w3.org/TR/css-backgrounds-3/#corner-overlap">CSS Backgrounds and
+        /// Borders Module Level 3 §4</see>. Use this for a border-box rectangle (the border itself,
+        /// <c>background-clip: border-box</c>); for a padding-edge or content-edge rectangle, use
+        /// <see cref="ComputeInnerRadii"/> instead so the radius is also reduced per §5.5.
         /// </summary>
         internal BorderRadii ComputeRadii(RRect rect) => DerivedStyle.ComputeRadii(rect);
+
+        /// <summary>
+        /// Computes overlap-reduced radii for a padding-edge or content-edge rectangle, first reducing
+        /// the box's own (border-box) radius by <paramref name="insetLeft"/>/<paramref name="insetTop"/>/
+        /// <paramref name="insetRight"/>/<paramref name="insetBottom"/> per
+        /// <see href="https://www.w3.org/TR/css-backgrounds-3/#corner-clipping">CSS Backgrounds and
+        /// Borders Module Level 3 §5.5</see> - border widths alone for the padding edge, border widths
+        /// plus padding for the content edge.
+        /// </summary>
+        internal BorderRadii ComputeInnerRadii(RRect borderBoxRect, RRect innerRect,
+            double insetLeft, double insetTop, double insetRight, double insetBottom) =>
+            DerivedStyle.ComputeInnerRadii(borderBoxRect, innerRect, insetLeft, insetTop, insetRight, insetBottom);
 
         /// <summary>Gets a value indicating if at least one of the corners of the box is rounded.</summary>
         public bool IsRounded => DerivedStyle.IsRounded;
