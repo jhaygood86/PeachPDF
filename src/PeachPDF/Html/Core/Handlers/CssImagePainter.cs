@@ -196,13 +196,14 @@ namespace PeachPDF.Html.Core.Handlers
             var (p1, p2) = ComputeGradientLine(originRect, gradient.AngleRad);
             double gdx = p2.X - p1.X, gdy = p2.Y - p1.Y;
             double gradientLength = Math.Sqrt(gdx * gdx + gdy * gdy);
-            var stops = NormalizeGradientStops(gradient.Stops, gradientLength, gradient.ColorSpace, gradient.HueMethod);
+            var stops = NormalizeGradientStops(gradient.Stops, gradientLength, g.PixelsPerPoint, gradient.ColorSpace, gradient.HueMethod);
             if (gradient.IsRepeating) stops = ExpandRepeatingStops(stops);
             return g.GetLinearGradientBrush(p1, p2, stops, gradient.IsRepeating);
         }
 
         private static RBrush GetRadialGradientBrush(RGraphics g, ParsedRadialGradient radialGradient, RRect originRect)
         {
+            var pixelsPerPoint = g.PixelsPerPoint;
             var center = new RPoint(
                 originRect.X + radialGradient.CenterX * originRect.Width,
                 originRect.Y + radialGradient.CenterY * originRect.Height);
@@ -220,13 +221,13 @@ namespace PeachPDF.Html.Core.Handlers
                 var rx = radialGradient.ExplicitRadiusX.Value;
                 radiusX = rx.Type == Length.Unit.Percent
                     ? rx.Value / 100.0 * originRect.Width
-                    : rx.ToPixel();
+                    : rx.ToPixel() * pixelsPerPoint;
                 if (radialGradient.ExplicitRadiusY.HasValue)
                 {
                     var ry = radialGradient.ExplicitRadiusY.Value;
                     radiusY = ry.Type == Length.Unit.Percent
                         ? ry.Value / 100.0 * originRect.Height
-                        : ry.ToPixel();
+                        : ry.ToPixel() * pixelsPerPoint;
                 }
                 else
                 {
@@ -275,7 +276,7 @@ namespace PeachPDF.Html.Core.Handlers
                 }
             }
 
-            var radialStops = NormalizeGradientStops(radialGradient.Stops, radiusX, radialGradient.ColorSpace, radialGradient.HueMethod);
+            var radialStops = NormalizeGradientStops(radialGradient.Stops, radiusX, pixelsPerPoint, radialGradient.ColorSpace, radialGradient.HueMethod);
             if (radialGradient.IsRepeating) radialStops = ExpandRepeatingStops(radialStops);
             return g.GetRadialGradientBrush(center, radiusX, radiusY, radialStops, radialGradient.IsRepeating);
         }
@@ -308,16 +309,16 @@ namespace PeachPDF.Html.Core.Handlers
             return (p1, p2);
         }
 
-        private static double? ConvertLength(Length? length, double gradientLength, double emPx = 16.0)
+        private static double? ConvertLength(Length? length, double gradientLength, double pixelsPerPoint, double emPx = 16.0)
         {
             if (!length.HasValue) return null;
             var len = length.Value;
             if (len.Type == Length.Unit.Percent)
                 return len.Value / 100.0;
             if (len.IsAbsolute)
-                return gradientLength > 0 ? len.ToPixel() / gradientLength : 0.0;
+                return gradientLength > 0 ? len.ToPixel() * pixelsPerPoint / gradientLength : 0.0;
             if (len.Type == Length.Unit.Em)
-                return gradientLength > 0 ? len.Value * emPx / gradientLength : 0.0;
+                return gradientLength > 0 ? len.Value * emPx * pixelsPerPoint / gradientLength : 0.0;
             return null;
         }
 
@@ -554,6 +555,7 @@ namespace PeachPDF.Html.Core.Handlers
         private static (RColor Color, double Position)[] NormalizeGradientStops(
             (RColor? Color, Length? Position, bool IsHint)[] stops,
             double gradientLength,
+            double pixelsPerPoint,
             GradientColorSpace colorSpace = GradientColorSpace.Srgb,
             HueInterpolationMethod hueMethod = HueInterpolationMethod.Shorter,
             double emPx = 16.0)
@@ -564,7 +566,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             var rawPos = new double?[n];
             for (int i = 0; i < n; i++)
-                rawPos[i] = ConvertLength(colorStops[i].Position, gradientLength, emPx);
+                rawPos[i] = ConvertLength(colorStops[i].Position, gradientLength, pixelsPerPoint, emPx);
 
             var resolved = new (RColor Color, double Position)[n];
             double first = rawPos[0] ?? 0.0;
@@ -626,7 +628,7 @@ namespace PeachPDF.Html.Core.Handlers
                     var s1 = resolved[colorIdx - 1];
                     var s2 = resolved[colorIdx];
                     double range = s2.Position - s1.Position;
-                    double hintPos = ConvertLength(stops[i].Position, gradientLength, emPx) ?? (s1.Position + range * 0.5);
+                    double hintPos = ConvertLength(stops[i].Position, gradientLength, pixelsPerPoint, emPx) ?? (s1.Position + range * 0.5);
                     double h = range > 1e-9
                         ? Math.Clamp((hintPos - s1.Position) / range, 1e-9, 1.0 - 1e-9)
                         : 0.5;
