@@ -6,7 +6,7 @@ namespace PeachPDF.Html.Core.Utils
 {
     /// <summary>
     /// Resolves a CSS font-size value (absolute keyword, <c>smaller</c>/<c>larger</c>, or any length unit
-    /// <see cref="CssValueParser.ParseLength(string, double, double, double, string?, bool, double?, double?, double?, double?, double?, double?, double?, double?)"/>
+    /// <see cref="CssValueParser.ParseLength(string, double, double, double, string?, bool, double?, double?, double?, double?, double?, double?, double?, double?, double)"/>
     /// understands) to a numeric size. Extracted from <c>CssBox.ActualFont</c>'s original inline
     /// switch so in-flow content and <c>MarginBoxRenderer.BuildFont</c> (@page margin boxes, which have no
     /// real inheritance chain and pass <see cref="Utils.DefaultFontResolver.FontSize"/> for both

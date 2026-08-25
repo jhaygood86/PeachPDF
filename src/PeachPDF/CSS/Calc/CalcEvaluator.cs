@@ -14,7 +14,8 @@ namespace PeachPDF.CSS
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
             double? viewportWidthPt = null, double? viewportHeightPt = null,
             double? containerWidthPt = null, double? containerHeightPt = null,
-            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null)
+            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
+            double pixelsPerPoint = 1.0)
         {
             HundredPercent = hundredPercent;
             EmFactor = emFactor;
@@ -28,6 +29,7 @@ namespace PeachPDF.CSS
             ContainerHeightPt = containerHeightPt;
             ViewportInlineSizePt = viewportInlineSizePt;
             ViewportBlockSizePt = viewportBlockSizePt;
+            PixelsPerPoint = pixelsPerPoint;
         }
 
         public double HundredPercent { get; }
@@ -63,11 +65,22 @@ namespace PeachPDF.CSS
         /// calc(), and the <c>cqi</c>/<c>cqb</c> no-container fallback.</summary>
         public double? ViewportInlineSizePt { get; }
         public double? ViewportBlockSizePt { get; }
+
+        /// <summary>
+        /// The ambient <c>PixelsPerPoint</c> (<c>PdfGenerateConfig.PixelsPerInch / 72</c>) an absolute or
+        /// <c>em</c>/<c>rem</c>/<c>ex</c>/<c>ch</c> calc() leaf needs multiplied in, mirroring
+        /// <see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(PeachPDF.CSS.Length, double, PeachPDF.Html.Core.Dom.CssBox)"/>'s own
+        /// catch-up multiply for a literal length (issues #814/#826) - see
+        /// <see cref="CalcEvaluator.Evaluate"/>'s <c>DimensionCalcNode</c> case (issue #829). Defaults to
+        /// <c>1.0</c> (a no-op) for every call site with no real box/adapter in scope (font-size
+        /// resolution, <c>@page</c> margins), matching every other existing call site of this idiom.
+        /// </summary>
+        public double PixelsPerPoint { get; }
     }
 
     /// <summary>
     /// Evaluates a validated calc-family AST to a pixel-space number. This is the one place calc()
-    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?)"/>),
+    /// numbers actually get computed — called only from Layer B (<see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double)"/>),
     /// since only layout has the <see cref="CalcContext"/> a percentage/em/rem leaf needs to resolve.
     /// Reuses <see cref="Length.ToPixels"/> for every leaf, so no unit-conversion arithmetic is duplicated
     /// here. A null result signals a divide-by-zero; per the type-checker's rules every legal divisor is
@@ -83,16 +96,32 @@ namespace PeachPDF.CSS
                 case NumberCalcNode number:
                     return number.Value;
 
+                // ReturnPoints mirrors the same-named short-circuit below for a bare pt leaf: a
+                // ReturnPoints=true context (today, only FontSizeResolver's font-size resolution) wants
+                // its result in true CSS points, never the box's PixelsPerPoint-inflated layout space, so
+                // no leaf in that context - Pt or otherwise - ever receives the catch-up multiply below.
                 case DimensionCalcNode { Unit: Length.Unit.Pt } dimension when context.ReturnPoints:
                     return dimension.Value;
 
                 case DimensionCalcNode dimension:
-                    return new Length((float)dimension.Value, dimension.Unit)
-                        .ToPixels(context.EmFactor, context.RemFactor, context.HundredPercent,
-                            context.ContainerInlineSizePt, context.ContainerBlockSizePt,
-                            context.ViewportWidthPt, context.ViewportHeightPt,
-                            context.ContainerWidthPt, context.ContainerHeightPt,
-                            context.ViewportInlineSizePt, context.ViewportBlockSizePt);
+                {
+                    var asLength = new Length((float)dimension.Value, dimension.Unit);
+                    var pixels = asLength.ToPixels(context.EmFactor, context.RemFactor, context.HundredPercent,
+                        context.ContainerInlineSizePt, context.ContainerBlockSizePt,
+                        context.ViewportWidthPt, context.ViewportHeightPt,
+                        context.ContainerWidthPt, context.ContainerHeightPt,
+                        context.ViewportInlineSizePt, context.ViewportBlockSizePt);
+
+                    // Per-leaf mirror of Length.NeedsPixelsPerPointCatchUp's use in
+                    // CssValueParser.ParseLength (issues #814/#826/#829): an absolute or em/rem/ex/ch leaf
+                    // resolves to a true-point value above and needs one extra multiply to land in the
+                    // box's PixelsPerPoint-inflated internal layout space. A percentage/container/
+                    // viewport-relative leaf's basis is already reported in that inflated space, so it
+                    // must not be double-scaled - and, per the ReturnPoints case above, no leaf is scaled
+                    // at all in a ReturnPoints=true context.
+                    var needsCatchUpMultiply = !context.ReturnPoints && asLength.NeedsPixelsPerPointCatchUp;
+                    return needsCatchUpMultiply ? pixels * context.PixelsPerPoint : pixels;
+                }
 
                 case PercentageCalcNode percentage:
                     return new Length((float)percentage.Value, Length.Unit.Percent)

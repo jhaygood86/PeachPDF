@@ -152,7 +152,7 @@ namespace PeachPDF.Html.Core.Parse
         /// callers that do their own lightweight text scanning of a length string (like
         /// <see cref="Dom.CssBox"/>'s FontSize setter, which regex-searches for a bare "Nem"
         /// substring to eagerly convert em to points) know to leave a calc() expression alone rather than
-        /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?)"/>'s
+        /// mangling it, deferring to <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double)"/>'s
         /// real evaluation instead.
         /// </summary>
         public static bool IsCalcFunction(string value)
@@ -163,7 +163,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Recognizes a length string that is a single calc-family (calc/min/max/clamp) function, e.g. for
         /// the syntactic gate in <see cref="IsValidLength"/> and the evaluation branch in
-        /// <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?)"/>. Real
+        /// <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double)"/>. Real
         /// grammar/type validation already happened in Layer A's CalcValueConverter for any value that
         /// didn't arrive via the var() substitution bypass; this is a syntactic recognizer only.
         /// </summary>
@@ -271,9 +271,7 @@ namespace PeachPDF.Html.Core.Parse
             // box.Width/Height as a "pt" string to re-run layout (CssLayoutEngineFlex/Grid,
             // ItemContentCommit, a table caption's own Height) pre-divides by this same factor before
             // formatting, so this multiply round-trips those unchanged rather than double-scaling them.
-            var needsCatchUpMultiply = length.IsAbsolute
-                || length.Type is Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex or Length.Unit.Ch;
-            return needsCatchUpMultiply ? result * pixelsPerPoint : result;
+            return length.NeedsPixelsPerPointCatchUp ? result * pixelsPerPoint : result;
         }
 
         /// <summary>
@@ -396,16 +394,23 @@ namespace PeachPDF.Html.Core.Parse
             // through, since css-properties.json stores them as raw strings, not typed Length values.
             var result = ParseLength(length, hundredPercent, box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, null, false,
                 containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt,
-                containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt);
+                containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, pixelsPerPoint);
+
+            if (IsCalcFunction(length))
+            {
+                // The pixelsPerPoint passed into the call above already applied the catch-up multiply
+                // per-leaf inside CalcEvaluator (issue #829's fix, see NeedsPixelsPerPointCatchUp) - no
+                // further whole-result multiply, and no point re-parsing length as a literal Length below
+                // (a calc() string never succeeds Length.TryParse anyway).
+                return result;
+            }
 
             // Same absolute-length catch-up as the typed Length overload above (issue #814), now extended
             // to em/rem/ex/ch (issue #826) - re-parse just far enough to classify the unit (a bare,
             // already-folded absolute or font-relative length, e.g. from a fully-absolute calc() that
-            // Layer A's CalcSerializer already reduced to literal text; a still-relative calc() expression
-            // doesn't parse as a single Length here and is deliberately left unscaled - see
-            // .claude/accepted-gaps/calc-length-not-scaled-by-pixelsperpoint.md, issue #829).
-            return Length.TryParse(length, out var parsed) &&
-                   (parsed.IsAbsolute || parsed.Type is Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex or Length.Unit.Ch)
+            // Layer A's CalcSerializer already reduced to literal text before it ever reaches the
+            // IsCalcFunction check above).
+            return Length.TryParse(length, out var parsed) && parsed.NeedsPixelsPerPointCatchUp
                 ? result * pixelsPerPoint
                 : result;
         }
@@ -432,12 +437,18 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="containerHeightPt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
         /// <param name="viewportInlineSizePt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
         /// <param name="viewportBlockSizePt">See <see cref="Length.ToPixels"/>'s parameter of the same name.</param>
+        /// <param name="pixelsPerPoint">See <see cref="CalcContext.PixelsPerPoint"/> - the catch-up
+        /// multiply an absolute or em/rem/ex/ch <c>calc()</c> leaf needs to land in the box's
+        /// <c>PixelsPerPoint</c>-inflated internal layout space (issue #829). <c>1.0</c> (a no-op) for
+        /// every call site with no real box/adapter in scope (font-size resolution, <c>@page</c> margins),
+        /// which deliberately want the raw, unscaled true-point result.</param>
         /// <returns>the parsed length value with adjustments</returns>
         public static double ParseLength(string length, double hundredPercent, double emFactor, double remFactor, string? defaultUnit, bool returnPoints,
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
             double? viewportWidthPt = null, double? viewportHeightPt = null,
             double? containerWidthPt = null, double? containerHeightPt = null,
-            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null)
+            double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
+            double pixelsPerPoint = 1.0)
         {
             //Return zero if no length specified, zero specified
             if (string.IsNullOrEmpty(length) || length == "0")
@@ -451,7 +462,8 @@ namespace PeachPDF.Html.Core.Parse
                 // used elsewhere in this method for any other degenerate input.
                 var node = CalcParser.Parse(calcFunction);
                 var context = new CalcContext(hundredPercent, emFactor, remFactor, returnPoints, containerInlineSizePt, containerBlockSizePt,
-                    viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt);
+                    viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt,
+                    pixelsPerPoint);
                 var pixels = node is not null ? CalcEvaluator.Evaluate(node, context) : null;
 
                 return pixels ?? 0d;
