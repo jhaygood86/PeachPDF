@@ -249,6 +249,41 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("/ShadingType", pdfText);
         }
 
+        [Fact]
+        public async Task RadialGradientEmRadius_ResolvesAgainstTheMarginBoxsOwnFontSize_NotTheRoots()
+        {
+            // Issue #827's own repro: the margin box declares its own font-size (20px), distinct from the
+            // root's (10px). A real, laid-out CssBox has no stand-in issue here - MarginBoxRenderer passes
+            // the document root as CssImagePainter.Paint's `box` parameter (there's no real CssBox for a
+            // margin box), which issues #823/#824 made a live em/rem basis for gradient content. Without
+            // #827's fix, "2em" resolves against the root's 10px (=2*10=20px radius, wrong); with it,
+            // against the margin box's own 20px (=2*20=40px, spec-correct per CSS Paged Media 3 §7).
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                @page { size: A4; margin: 20mm;
+                  @top-center { font-size: 20px; content: radial-gradient(2em at center, red, blue); }
+                }
+                html { font-size: 10px; }
+                </style></head><body><p>content</p></body></html>
+                """;
+
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+            var doc = await generator.GeneratePdf(html, config);
+            var ms = new MemoryStream();
+            doc.Save(ms);
+            var pdfText = Encoding.Latin1.GetString(ms.ToArray());
+
+            var match = Regex.Match(pdfText,
+                @"/Coords\s*\[\s*([\d.eE+-]+)\s+([\d.eE+-]+)\s+0\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s*\]");
+            Assert.True(match.Success, "expected a circular radial shading /Coords array");
+            var radius = double.Parse(match.Groups[5].Value, CultureInfo.InvariantCulture);
+
+            // 2em at the margin box's own 20px (15pt) font-size is a 30pt radius - not 15pt, which 2em
+            // would be if it (incorrectly) resolved against the root's 10px (7.5pt) font-size instead.
+            Assert.Equal(30.0, radius, 3);
+        }
+
         // ─── Direct ResolveContentImage unit tests ─────────────────────────────
 
         [Fact]

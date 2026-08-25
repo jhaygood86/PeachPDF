@@ -988,6 +988,7 @@ namespace PeachPDF.Html.Core
         private ContainerQuerySizes BuildContainerQuerySizes()
         {
             var byId = new Dictionary<uint, ContainerQueryContext>();
+            var pixelsPerPoint = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
 
             void Walk(CssBox box)
             {
@@ -1007,7 +1008,8 @@ namespace PeachPDF.Html.Core
                         HeightPt: isSize ? heightPt : null,
                         InlineSizePt: isVertical ? heightPt : widthPt,
                         BlockSizePt: isSize ? (isVertical ? widthPt : heightPt) : null,
-                        ContainerName: box.ContainerName);
+                        ContainerName: box.ContainerName,
+                        PixelsPerPoint: pixelsPerPoint);
                 }
 
                 foreach (var child in box.Boxes)

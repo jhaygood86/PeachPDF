@@ -74,11 +74,11 @@ namespace PeachPDF.Html.Core
                 case "width":
                 case "device-width":
                 case "inline-size":
-                    return CompareLength(feature, context.ViewportWidthPt);
+                    return CompareLength(feature, context.ViewportWidthPt, context.PixelsPerPoint);
                 case "height":
                 case "device-height":
                 case "block-size":
-                    return CompareLength(feature, context.ViewportHeightPt);
+                    return CompareLength(feature, context.ViewportHeightPt, context.PixelsPerPoint);
 
                 case "orientation":
                     if (context.ViewportWidthPt is not { } ow || context.ViewportHeightPt is not { } oh)
@@ -150,7 +150,27 @@ namespace PeachPDF.Html.Core
         /// see CLAUDE.md's "don't write two parsers for the same grammar" rule; this is the numeric-
         /// comparison half of that, not grammar, but still one algorithm that shouldn't fork.
         /// </summary>
-        internal static bool CompareLength(MediaFeature feature, double? actualPt)
+        /// <param name="feature">The length-valued feature (<c>min-width</c>, <c>height &gt;= ...</c>, etc.)
+        /// to compare.</param>
+        /// <param name="actualPt">The known size to compare against, or <c>null</c> for no page/container
+        /// geometry (matches permissively).</param>
+        /// <param name="pixelsPerPoint">The ambient catch-up multiplier (issue #814's convention) -
+        /// despite the <c>Pt</c> naming, <paramref name="actualPt"/> is PeachPDF's internal,
+        /// <c>PixelsPerPoint</c>-inflated layout coordinate space, not true PDF points, whenever
+        /// <c>PixelsPerInch</c> is non-default (issue #820). <c>valuePt</c> below is always resolved in
+        /// true CSS points for the unit families this call actually feeds a basis for - absolute units and
+        /// <c>em</c>/<c>rem</c>/<c>ex</c>/<c>ch</c> (<c>initialFontPt</c> is a fixed true-point constant) -
+        /// so those need this multiply to land in the same space as <paramref name="actualPt"/>, mirroring
+        /// <see cref="Parse.CssValueParser.ParseLength(Length,double,Dom.CssBox)"/>'s identical gate. A bare
+        /// percentage needs no multiply (its <c>hundredPercent</c> basis, <paramref name="actualPt"/>
+        /// itself, is already in the inflated space); container/viewport-relative units currently resolve
+        /// to <c>0</c> here regardless (this call passes no container/viewport basis to
+        /// <see cref="Length.ToPixels"/>) and are deliberately excluded from the gate too, rather than
+        /// multiplying a value that isn't actually in true-point space - if a future change threads a real
+        /// basis in for those units, it would already be in the inflated space (see
+        /// <see cref="Parse.CssValueParser.ParseLength(Length,double,Dom.CssBox)"/>'s viewport/container branches),
+        /// so it must not gain this multiply either.</param>
+        internal static bool CompareLength(MediaFeature feature, double? actualPt, double pixelsPerPoint)
         {
             if (actualPt is not { } actual) return true;   // no page geometry → permissive
             if (feature.AsLength() is not { } length) return true;
@@ -159,6 +179,10 @@ namespace PeachPDF.Html.Core
             // document root's font size (Media Queries 4 §1.3 / §6). 16px = 12pt.
             const double initialFontPt = 16d * PeachPDF.CSS.Length.PointsPerPx;
             var valuePt = length.ToPixels(initialFontPt, initialFontPt, actual);
+
+            var needsCatchUpMultiply = length.IsAbsolute
+                || length.Type is Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex or Length.Unit.Ch;
+            if (needsCatchUpMultiply) valuePt *= pixelsPerPoint;
 
             return CompareNumeric(actual, valuePt, feature.Comparison);
         }

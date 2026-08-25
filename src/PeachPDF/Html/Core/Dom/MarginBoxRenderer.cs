@@ -75,7 +75,12 @@ namespace PeachPDF.Html.Core.Dom
                 if (image != null)
                 {
                     var position = ResolveImagePosition(marginRule.Style, pageStyle, boxName);
-                    PaintImage(g, image, rect, position, adapter, htmlContainer);
+                    // Only a gradient's em/ex/ch stop-position/explicit-radius resolution ever consults
+                    // this (issue #827) - skip it for a plain url()/SVG image, which never does.
+                    var emSizePt = image is CssImage.LinearGradient or CssImage.RadialGradient
+                        ? ResolveFontSizePt(marginRule.Style, pageStyle)
+                        : (double?)null;
+                    PaintImage(g, image, rect, position, adapter, htmlContainer, emSizePt);
                     continue;
                 }
 
@@ -144,13 +149,19 @@ namespace PeachPDF.Html.Core.Dom
         /// <paramref name="htmlContainer"/>'s root box stands in for the (non-existent, for a margin
         /// box) owning <c>CssBox</c> that <see cref="BackgroundLayerResolver"/> needs for potential
         /// em/rem length resolution - unreachable for the keyword position/"auto" values used here, but
-        /// a real, already-laid-out box is a safe, defensible fallback if that ever changes. It *has*
-        /// changed for a gradient's own stop-position/explicit-radius em/rem units (issues #823/#824):
-        /// those now resolve against this root box's font-size, not the margin box's own declared
-        /// font-size, if the two differ - a known, narrow gap, see
-        /// .claude/accepted-gaps/margin-box-gradient-content-em-rem-basis.md.
+        /// a real, already-laid-out box is a safe, defensible fallback if that ever changes. A
+        /// gradient's own stop-position/explicit-radius <c>em</c>/<c>ex</c>/<c>ch</c> units (issues
+        /// #823/#824) would otherwise resolve against this root box's font-size instead of the margin
+        /// box's own declared font-size when the two differ (issue #827) - <paramref name="emSizePt"/>
+        /// (the same <see cref="ResolveFontSizePt(StyleDeclaration,StyleDeclaration?)"/> resolution the
+        /// margin box's own text content and its width/height em-basis already use, css-page-3 §8)
+        /// overrides <see cref="CssBox.GetEmHeight"/> for that resolution specifically. <c>rem</c> is
+        /// unaffected - it always resolves against the document root's font-size regardless of context,
+        /// which <paramref name="htmlContainer"/>'s root box's own <see cref="CssBox.GetRemHeight"/>
+        /// already correctly is.
         /// </summary>
-        private static void PaintImage(XGraphics g, CssImage image, XRect rect, string positionList, RAdapter adapter, HtmlContainerInt htmlContainer)
+        private static void PaintImage(XGraphics g, CssImage image, XRect rect, string positionList, RAdapter adapter,
+            HtmlContainerInt htmlContainer, double? emSizePt)
         {
             // Root is only ever null before the document's initial layout, which has already run by
             // the time page rendering (and so margin-box painting) begins - null here would mean
@@ -170,7 +181,8 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     graphicsAdapter.DrawRectangle(brush, paintRect.X, paintRect.Y, paintRect.Width, paintRect.Height);
                     brush.Dispose();
-                });
+                },
+                gradientEmSizePt: emSizePt);
         }
 
         /// <summary>
