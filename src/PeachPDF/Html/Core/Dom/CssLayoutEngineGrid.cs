@@ -1,3 +1,4 @@
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -1255,7 +1256,7 @@ namespace PeachPDF.Html.Core.Dom
             // its margin - ActualBoxSizeIncludedWidth is already 0 there).
             var cssWidth = Math.Max(0, columnWidth - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
             var savedWidth = box.Width;
-            box.Width = FormatLayoutUnits(cssWidth);
+            box.Width = FormatLayoutUnits(cssWidth, box);
 
             box.Location = new RPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
             box.ActualBottom = box.Location.Y;
@@ -1296,12 +1297,12 @@ namespace PeachPDF.Html.Core.Dom
                 var used = stretchWidth
                     ? cellContentWidth
                     : await CssLayoutEngine.GetFitContentWidth(g, box, cellContentWidth);
-                box.Width = FormatLayoutUnits(Math.Max(0, used + ownPaddingBorder - box.ActualBoxSizeIncludedWidth));
+                box.Width = FormatLayoutUnits(Math.Max(0, used + ownPaddingBorder - box.ActualBoxSizeIncludedWidth), box);
             }
             if (stretchHeight)
             {
                 var usedHeight = Math.Max(0, cellHeight - box.ActualMarginTop - box.ActualMarginBottom - box.ActualBoxSizeIncludedHeight);
-                box.Height = FormatLayoutUnits(usedHeight);
+                box.Height = FormatLayoutUnits(usedHeight, box);
             }
 
             box.Location = new RPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
@@ -1700,8 +1701,12 @@ namespace PeachPDF.Html.Core.Dom
         private double ParseGap(CssProperty<CssKeywordOrValue<NormalKeyword, LengthOrCalc>> gap, double contentBase) =>
             gap.Value is { IsValue: true, Value: { } length } ? CssValueParser.ParseLength(length, contentBase, _gridBox) : 0;
 
-        private static string FormatLayoutUnits(double value) =>
-            value.ToString("F4", CultureInfo.InvariantCulture) + "pt";
+        // See CssLayoutEngineFlex.FormatLayoutUnits's identical comment: pre-divide by PixelsPerPoint
+        // so a re-parse through CssValueParser's now-PixelsPerPoint-aware absolute-length resolution
+        // (issue #814) lands back on this same internal-space value instead of PixelsPerPoint times it.
+        private static string FormatLayoutUnits(double value, CssBox box) =>
+            (value / ((box.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0))
+                .ToString("F4", CultureInfo.InvariantCulture) + "pt";
 
         private static async ValueTask PerformLayoutBlockified(RGraphics g, CssBox box)
         {

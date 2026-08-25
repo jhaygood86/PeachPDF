@@ -102,10 +102,14 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BreakInsideAvoid_WithPageMargins_PositionsAtShiftedPageTop()
         {
+            // filler is 840px, not 640px: at 640px the .avoid box (10 lines * 15pt, all pt/px lengths
+            // so unaffected by the font-metrics fix itself) lands entirely within page 0 (519.6-669.6
+            // against a page-1 boundary at 741.6) - short by 72pt of ever straddling. The 200px bump
+            // moves its natural start to 669.6, comfortably straddling the boundary again.
             var html = $$"""
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
-                .filler { height: 640px; }
+                .filler { height: 840px; }
                 .avoid { break-inside: avoid; page-break-inside: avoid; }
                 p { margin: 0; line-height: 20px; }
                 </style></head><body>
@@ -182,7 +186,7 @@ namespace PeachPDF.Tests.Integration
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildContainer(
             string html, double rawPageHeight, double marginTop, double marginBottom)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 

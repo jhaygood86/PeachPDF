@@ -81,8 +81,15 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // Fixture lengths are in pt and the body margin is pinned to 8pt (what the UA default
             // `body { margin: 8px }` resolved to when this knife-edge scenario was calibrated,
             // before px became 0.75pt) so the row-vs-page-bottom geometry stays exact.
-            var pageHeight = 150.0;
-            var marginBottom = 20.0;
+            //
+            // BuildCssBoxTree hands `pageHeight` straight to container.PageSize (it does not carve
+            // margins out of it the way PdfGenerator.SetContent/LayoutHarness do), so in this
+            // fixture's own coordinate space `PageBandHeightOf` returns `pageHeight` unmodified and
+            // the table engine's own real page-0 bottom (see WillCrossPageBoundary's
+            // `PageTopOf(slot) + availableHeight`) is `marginTop + pageHeight` - not the
+            // `pageHeight - marginBottom` an ordinary (margin-subtracted) PageSize would give.
+            var pageHeight = 105.0;
+            var marginTop = 20.0;
 
             var html = @"
 <!DOCTYPE html>
@@ -97,7 +104,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 </body>
 </html>";
 
-            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight, marginTop);
 
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
@@ -108,12 +115,19 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var rows = tbody.Boxes.Where(b => b.Display.Value == DisplayMode.TableRow).ToList();
             _output.WriteLine($"Total rows: {rows.Count}");
 
-            // Check every row whose top is on page 0
-            var contentBottomPage0 = pageHeight - marginBottom;
-            foreach (var row in rows.Where(r => r.Location.Y < pageHeight))
+            // The table engine's own page-0 content bottom in this fixture's coordinate space -
+            // see the comment above. A row landing here would need relocating to the next page;
+            // one left behind with its bottom past this line has bled into the margin band.
+            var contentBottomPage0 = marginTop + pageHeight;
+            // Fixture lands exactly on the boundary by design (see the comment above), so allow a
+            // floating-point epsilon: FMA/SIMD codegen differences between platforms (observed between
+            // x64 and arm64 CI runners) can land ActualBottom a ~1e-14 hair past contentBottomPage0
+            // without any real regression in the availableHeight computation itself.
+            const double epsilon = 1e-6;
+            foreach (var row in rows.Where(r => r.Location.Y < contentBottomPage0))
             {
                 _output.WriteLine($"Row on page 0: Location.Y={row.Location.Y}, ActualBottom={row.ActualBottom}");
-                Assert.True(row.ActualBottom <= contentBottomPage0,
+                Assert.True(row.ActualBottom <= contentBottomPage0 + epsilon,
                     $"Row ActualBottom={row.ActualBottom} bleeds into bottom margin " +
                     $"(limit={contentBottomPage0}). Missing - marginTop in availableHeight regression.");
             }
@@ -472,6 +486,14 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // Tall enough that css-tables-3 6.2 lets the footer repeat at all - it caps a repeated group
             // at a quarter of the page, and this harness leaves the adapter's PixelsPerPoint unpinned, so
             // the footer row measures ~80 of these units. 20 rows still span several pages at 400.
+            //
+            // marginTop is 0, deliberately: see the identical comment on
+            // TableBorderPaint_IntermediatePageBreak_BottomBorderDrawnAtPageBreakY - BuildCssBoxTree
+            // never sets container.Location, so the paint clip this test actually paints against (built
+            // from Location/MaxSize alone) has no room added for MarginTop, while the table engine's own
+            // page-break math does add it. A nonzero value here let content the layout considered
+            // "still on page 0" (including the footer proxy asserted on below) land past what the paint
+            // clip can show, so it silently never painted.
             var pageHeight = 400.0;
 
             var html = @"
@@ -490,7 +512,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 </body>
 </html>";
 
-            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight, marginTop: 0);
 
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
@@ -585,6 +607,14 @@ namespace PeachPDF.Tests.Html.Core.Dom
             //
             // This test verifies: (a) a horizontal line is drawn near pageBreakBottom0, and
             // (b) PushClip/PopClip calls are balanced.
+            //
+            // marginTop is 0 here, deliberately: BuildCssBoxTree never sets container.Location (unlike
+            // production/LayoutHarness, which anchor it at (MarginLeft, MarginTop)), so the paint clip
+            // this test actually paints against - HtmlContainerInt.PageBoxRect, built from Location and
+            // MaxSize - is a bare (0, 0, pageWidth, pageHeight) with no room added for MarginTop. The
+            // table engine's own page-break math (PageTopOf/PageBottomOf) does add MarginTop, so a
+            // nonzero value here would let the recorded PageBreakBottoms exceed what the clip can
+            // actually show - the border would be computed correctly and then silently clipped away.
             var pageHeight = 200.0;
 
             var html = @"
@@ -600,7 +630,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 </body>
 </html>";
 
-            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight, marginTop: 0);
 
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
@@ -639,8 +669,13 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // must be drawn at pageBreakBottom1 rather than at the true table bottom which is
             // far below the page. Verifies that rectForBorders.Bottom is capped to the page-break
             // Y on every intermediate page, not only the first.
+            //
+            // marginTop is 0, deliberately: see the identical comment on
+            // TableBorderPaint_IntermediatePageBreak_BottomBorderDrawnAtPageBreakY - BuildCssBoxTree
+            // never sets container.Location, so a nonzero marginTop here would let PageBreakBottoms
+            // record a Y past what the paint clip (built from Location/MaxSize alone) can show.
             var pageHeight = 200.0;
-            var marginTop = 20.0;
+            var marginTop = 0.0;
 
             var html = @"
 <!DOCTYPE html>
@@ -744,6 +779,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // reuses page 1's answer on every later page would wrongly show the huge border repeated at
             // every page's header boundary too; a per-page-fresh resolution shows it only on page 1.
             var pageHeight = 400.0;
+            const int rowCount = 60;
 
             var html = @"
 <!DOCTYPE html>
@@ -754,7 +790,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             <tr><th style='border:1px solid black;padding:5px;'>Header</th></tr>
         </thead>
         <tbody>
-" + string.Join("", Enumerable.Range(1, 30).Select(i =>
+" + string.Join("", Enumerable.Range(1, rowCount).Select(i =>
     i == 1
         ? "<tr><td style='border:9px solid red;padding:5px;'>Row 1</td></tr>"
         : $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
@@ -812,6 +848,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // quarter of the page's own height, and a too-small page here would silently turn this into a
             // non-repeating-header test instead of the multi-page one intended.
             var pageHeight = 1200.0;
+            const int rowCount = 150;
 
             var html = @"
 <!DOCTYPE html>
@@ -823,7 +860,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             <tr><th style='border:1px solid black;border-top:5px solid green;padding:5px;'>Header B</th></tr>
         </thead>
         <tbody>
-" + string.Join("", Enumerable.Range(1, 90).Select(i =>
+" + string.Join("", Enumerable.Range(1, rowCount).Select(i =>
     $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
         </tbody>
     </table>
@@ -931,6 +968,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // resolution that reused the last page's answer on every earlier page would wrongly show the
             // huge border repeated at every page's footer boundary too.
             var pageHeight = 400.0;
+            const int rowCount = 60;
 
             var html = @"
 <!DOCTYPE html>
@@ -938,8 +976,8 @@ namespace PeachPDF.Tests.Html.Core.Dom
 <body>
     <table style='width:100%;border-collapse:collapse;'>
         <tbody>
-" + string.Join("", Enumerable.Range(1, 30).Select(i =>
-    i == 30
+" + string.Join("", Enumerable.Range(1, rowCount).Select(i =>
+    i == rowCount
         ? "<tr><td style='border:9px solid red;padding:5px;'>Last row</td></tr>"
         : $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
         </tbody>
@@ -1027,7 +1065,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             double marginTop = 20,
             double marginBottom = 20)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
             var size = new XSize(595, pageHeight);

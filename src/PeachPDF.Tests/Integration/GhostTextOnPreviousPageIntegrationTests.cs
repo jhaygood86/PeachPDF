@@ -164,10 +164,16 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BreakInsideAvoid_RelocatedBox_DoesNotPaintOnPreviousPage()
         {
+            // .filler leaves only ~25pt of page 0 remaining (400 - 375) - not enough room for even one
+            // of .avoid's three lines, so break-inside: avoid has to relocate the whole box rather than
+            // let it start there. .filler itself must stay short of PageHeight so it still fits on page
+            // 0, which is what makes the relocated box land flush at exactly PageHeight (zero margins
+            // keep that an exact, deterministic multiple - the precise scenario that triggers the
+            // "merely touching the clip edge" bug).
             const string html = """
                 <!DOCTYPE html><html><head><style>
                 body { margin: 0; }
-                .filler { height: 380px; background: rgb(240,240,240); }
+                .filler { height: 500px; background: rgb(240,240,240); }
                 .avoid { break-inside: avoid; page-break-inside: avoid; margin: 0; }
                 p { margin: 0; }
                 </style></head><body>
@@ -196,7 +202,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 

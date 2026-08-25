@@ -11,6 +11,7 @@
 // "The Art of War"
 
 using PeachPDF;
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -1952,7 +1953,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <remarks>
         /// Provably unreachable under the current (pre-existing, out-of-scope) <see cref="CanReduceWidth()"/>
-        /// - see .claude/accepted-gaps/table-max-width-clip-branch-coverage.md.
+        /// - see .claude/accepted-gaps/table-shrink-columns-dead-code.md.
         /// </remarks>
         [ExcludeFromCodeCoverage]
         private void ShrinkColumnsToFitAvailableWidth()
@@ -1977,13 +1978,6 @@ namespace PeachPDF.Html.Core.Dom
         /// Lowers the width of columns, starting from the largest one, until the max width is satisfied.
         /// Columns are already at their content minimum, so this results in clipping.
         /// </summary>
-        /// <remarks>
-        /// Its caller's guard (<c>maxWidth &lt; widthSum</c>, after columns are already at their content
-        /// minimum) is live code, not provably dead like <see cref="ShrinkColumnsToFitAvailableWidth"/> -
-        /// but no HTML/CSS input tried actually reaches it; see
-        /// .claude/accepted-gaps/table-max-width-clip-branch-coverage.md for the investigation.
-        /// </remarks>
-        [ExcludeFromCodeCoverage]
         private void ClipColumnsToMaxWidth(double maxWidth)
         {
             var widthSum = GetWidthSum();
@@ -2347,8 +2341,14 @@ namespace PeachPDF.Html.Core.Dom
                     // silently falls back to an auto one-page-tall wrap limit and then shrinks to content
                     // instead of spanning the column axis. Formatted as "pt" (the identity unit for this
                     // engine's own internal layout units) rather than "px", which resolves at 0.75pt and
-                    // would silently shrink this to 75% of the intended extent.
-                    caption.Height = columnAxisExtent.ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "pt";
+                    // would silently shrink this to 75% of the intended extent. columnAxisExtent is
+                    // already in caption's own internal layout coordinate space, which
+                    // CssValueParser's absolute-length resolution now scales by PixelsPerPoint on the
+                    // way back out (issue #814) - pre-divide by that same factor here so the re-parse
+                    // round-trips to this exact value instead of PixelsPerPoint times it.
+                    var captionPixelsPerPoint = (caption.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                    caption.Height = (columnAxisExtent / captionPixelsPerPoint)
+                        .ToString("F4", System.Globalization.CultureInfo.InvariantCulture) + "pt";
 
                     await caption.LayoutContentAtItsAssignedPosition(g);
 
@@ -2727,155 +2727,194 @@ namespace PeachPDF.Html.Core.Dom
             // Step 1: Remove header/footer from document tree
             RemoveHeaderFooterFromTree();
 
-            // Step 2: Layout header rows ONCE to calculate height. Proxy creation is deferred
-            // until after the header pre-check below (Step 4) has settled the header's final
-            // position - CssProxyBox.PerformLayoutImp captures a paint-time snapshot of the
-            // header at whatever position it's laid out at, so creating the proxy here (before a
-            // possible page-break relocation) would bake in a stale, pre-relocation snapshot.
-            if (HeaderIsDetached && _headerBox != null)
+            // Steps 2-3 measure the header's/footer's own natural height at a provisional position -
+            // whatever cursor.CurrentY happens to be right now, not wherever the group will actually end
+            // up once every later page repeats it by proxy. Left running against the container's real,
+            // current fragmentainer, CreateLineBoxes' own page-break check
+            // (word.WouldStraddleFragmentainer, gated on box.HtmlContainer?.SuppressWordPageBreaks and
+            // coordinates.Fragmentainer) can see this provisional position sitting outside whatever real
+            // page-content band happens to be live right now (a page short enough that even the group's
+            // first line does not fit - reachable with an ordinary page height once #6.2's own quarter-page
+            // cap draws the header this close to it) and defer the group's own content to "the next
+            // fragmentainer" - which this one-shot measurement never actually asks again, so the group
+            // measures zero height, which SettleWhetherTheGroupsRepeat then reads as trivially "inferior to"
+            // any cap, letting it repeat with no room reserved for it at all. Detaching the fragmentainer
+            // for the duration - so nothing inside can ask a fragmentation question in the first place - is
+            // the same fix RunningElementLayout.LayoutRunningElementFor and
+            // CssLayoutEngineFlex/Grid's own item-measurement passes already use for the identical
+            // measured-at-a-provisional-position problem; see HtmlContainerInt.DetachFragmentainer's own
+            // remarks for why an absence rather than a suppressed flag is the correct shape here, and
+            // SuppressWordPageBreaks alongside it for parity with those three call sites.
+            var container = _tableBox.HtmlContainer;
+            var previousSuppress = false;
+            FragmentainerContext? previousFragmentainer = null;
+            if (container is not null)
             {
-                // Layout header rows directly using table layout logic
-                var headerRowsLayoutY = cursor.CurrentY;
-                var headerCursor = cursor.ForRowGroupMeasurement(headerRowsLayoutY);
-
-                // Header rows are always _allRows' own leading entries (AssignBoxKinds), so this loop's
-                // own ordinal is that row's grid row index too - line rowIndex+1 is the boundary right
-                // after it.
-                var rowIndex = 0;
-                var headerRows = new List<CssBox>();
-                var headerOriginalRowIndices = ComputeRowGroupOriginalIndices(_headerBox);
-                var headerSpanningCellsEndingOnRow = new Dictionary<int, List<CssBox>>();
-
-                foreach (var row in _headerBox.Boxes)
-                {
-                    if (row.DerivedStyle.ActualDisplay != Keywords.TableRow)
-                        continue;
-                    if (IsRowCollapsed(row))
-                        continue;
-
-                    headerCursor.CurrentY = headerRowsLayoutY;
-                    headerCursor.MaxBottom = headerRowsLayoutY;
-
-                    await LayoutBodyRow(g, row, startX, headerCursor);
-
-                    RegisterRowSpanCellsEndingRow(
-                        row, rowIndex, headerOriginalRowIndices, headerSpanningCellsEndingOnRow,
-                        _headerRowSpansCrossingIntoBody);
-                    headerCursor.MaxBottom = GrowForClosingRowSpanCells(
-                        rowIndex, headerSpanningCellsEndingOnRow, headerCursor.MaxBottom, _isVertical);
-
-                    headerRowsLayoutY = headerCursor.MaxBottom + VerticalSpacingAt(rowIndex + 1);
-
-                    // Unlike the regular body-row loop below, this never set the row's own
-                    // Location/ActualRight/ActualBottom (only each cell's) - left it at a
-                    // degenerate (0,0,0,0) Bounds, which the paint-time visibility-culling
-                    // optimization (see SetRowGroupBoxDimensions's call-site comment for the same
-                    // bug at the row-group level) then silently drops from painting entirely.
-                    //
-                    // headerCursor.MaxBottom is the row axis - see AssignRowActualBounds for why it (not
-                    // Boxes.Max) is the safe source for that field on a vertical table.
-                    row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
-                    AssignRowActualBounds(row, headerCursor.MaxBottom);
-
-                    CloseRowSpanCellsEndingOnRow(
-                        g, rowIndex, headerSpanningCellsEndingOnRow,
-                        _isVertical ? row.ActualRight : row.ActualBottom, _isVertical);
-
-                    rowIndex++;
-                    headerRows.Add(row);
-                }
-
-                cursor.MaxRight = headerCursor.MaxRight;
-
-                // Set header box dimensions
-                _headerBox.Location = _isVertical ? new RPoint(cursor.CurrentY, startX) : new RPoint(startX, cursor.CurrentY);
-                if (_isVertical)
-                {
-                    _headerBox.ActualBottom = cursor.MaxRight;
-                    _headerBox.ActualRight = headerRowsLayoutY - VerticalSpacingAt(rowIndex);
-                    _headerHeight = _headerBox.ActualRight - _headerBox.Location.X;
-                }
-                else
-                {
-                    _headerBox.ActualRight = cursor.MaxRight;
-                    _headerBox.ActualBottom = headerRowsLayoutY - VerticalSpacingAt(rowIndex);
-                    _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
-                }
+                previousSuppress = container.SuppressWordPageBreaks;
+                previousFragmentainer = container.DetachFragmentainer();
+                container.SuppressWordPageBreaks = true;
             }
 
-            // Step 3: Layout footer rows once to get dimensions (if needed)
-            if (FooterIsDetached && _footerBox != null)
+            try
             {
-                // Layout footer rows directly
-                var footerRowsLayoutY = 0d;
-                var footerCursor = cursor.ForRowGroupMeasurement(footerRowsLayoutY);
-
-                // Footer rows are always _allRows' own trailing entries, after every header and body row -
-                // see the header loop above for why the ordinal doubles as the grid row index.
-                var footerRowIndex = HeaderRowCountInGrid + _bodyRows.Count;
-                var footerRows = new List<CssBox>();
-                var footerOriginalRowIndices = ComputeRowGroupOriginalIndices(_footerBox);
-                var footerSpanningCellsEndingOnRow = new Dictionary<int, List<CssBox>>();
-
-                foreach (var row in _footerBox.Boxes)
+                // Step 2: Layout header rows ONCE to calculate height. Proxy creation is deferred
+                // until after the header pre-check below (Step 4) has settled the header's final
+                // position - CssProxyBox.PerformLayoutImp captures a paint-time snapshot of the
+                // header at whatever position it's laid out at, so creating the proxy here (before a
+                // possible page-break relocation) would bake in a stale, pre-relocation snapshot.
+                if (HeaderIsDetached && _headerBox != null)
                 {
-                    if (row.DerivedStyle.ActualDisplay != Keywords.TableRow)
-                        continue;
-                    if (IsRowCollapsed(row))
-                        continue;
+                    // Layout header rows directly using table layout logic
+                    var headerRowsLayoutY = cursor.CurrentY;
+                    var headerCursor = cursor.ForRowGroupMeasurement(headerRowsLayoutY);
 
-                    footerCursor.CurrentY = footerRowsLayoutY;
-                    footerCursor.MaxBottom = footerRowsLayoutY;
+                    // Header rows are always _allRows' own leading entries (AssignBoxKinds), so this loop's
+                    // own ordinal is that row's grid row index too - line rowIndex+1 is the boundary right
+                    // after it.
+                    var rowIndex = 0;
+                    var headerRows = new List<CssBox>();
+                    var headerOriginalRowIndices = ComputeRowGroupOriginalIndices(_headerBox);
+                    var headerSpanningCellsEndingOnRow = new Dictionary<int, List<CssBox>>();
 
-                    await LayoutBodyRow(g, row, startX, footerCursor);
+                    foreach (var row in _headerBox.Boxes)
+                    {
+                        if (row.DerivedStyle.ActualDisplay != Keywords.TableRow)
+                            continue;
+                        if (IsRowCollapsed(row))
+                            continue;
 
-                    // The row-group-local row index this closing pass keys against restarts at 0 here,
-                    // deliberately independent of footerRowIndex (the whole-grid ordinal used for
-                    // VerticalSpacingAt just below) - footerSpanningCellsEndingOnRow only ever has to be
-                    // internally consistent with itself across this one loop, and never needs to agree
-                    // with any other row-numbering scheme.
-                    var footerLocalRowIndex = footerRows.Count;
-                    RegisterRowSpanCellsEndingRow(row, footerLocalRowIndex, footerOriginalRowIndices, footerSpanningCellsEndingOnRow);
-                    footerCursor.MaxBottom = GrowForClosingRowSpanCells(
-                        footerLocalRowIndex, footerSpanningCellsEndingOnRow, footerCursor.MaxBottom, _isVertical);
+                        headerCursor.CurrentY = headerRowsLayoutY;
+                        headerCursor.MaxBottom = headerRowsLayoutY;
 
-                    footerRowsLayoutY = footerCursor.MaxBottom + VerticalSpacingAt(footerRowIndex + 1);
-                    footerRowIndex++;
+                        await LayoutBodyRow(g, row, startX, headerCursor);
 
-                    // See the identical fix in the header-rows loop above for why this is needed.
-                    row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
-                    AssignRowActualBounds(row, footerCursor.MaxBottom);
+                        RegisterRowSpanCellsEndingRow(
+                            row, rowIndex, headerOriginalRowIndices, headerSpanningCellsEndingOnRow,
+                            _headerRowSpansCrossingIntoBody);
+                        headerCursor.MaxBottom = GrowForClosingRowSpanCells(
+                            rowIndex, headerSpanningCellsEndingOnRow, headerCursor.MaxBottom, _isVertical);
 
-                    CloseRowSpanCellsEndingOnRow(
-                        g, footerLocalRowIndex, footerSpanningCellsEndingOnRow,
-                        _isVertical ? row.ActualRight : row.ActualBottom, _isVertical);
+                        headerRowsLayoutY = headerCursor.MaxBottom + VerticalSpacingAt(rowIndex + 1);
 
-                    footerRows.Add(row);
+                        // Unlike the regular body-row loop below, this never set the row's own
+                        // Location/ActualRight/ActualBottom (only each cell's) - left it at a
+                        // degenerate (0,0,0,0) Bounds, which the paint-time visibility-culling
+                        // optimization (see SetRowGroupBoxDimensions's call-site comment for the same
+                        // bug at the row-group level) then silently drops from painting entirely.
+                        //
+                        // headerCursor.MaxBottom is the row axis - see AssignRowActualBounds for why it (not
+                        // Boxes.Max) is the safe source for that field on a vertical table.
+                        row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                        AssignRowActualBounds(row, headerCursor.MaxBottom);
+
+                        CloseRowSpanCellsEndingOnRow(
+                            g, rowIndex, headerSpanningCellsEndingOnRow,
+                            _isVertical ? row.ActualRight : row.ActualBottom, _isVertical);
+
+                        rowIndex++;
+                        headerRows.Add(row);
+                    }
+
+                    cursor.MaxRight = headerCursor.MaxRight;
+
+                    // Set header box dimensions
+                    _headerBox.Location = _isVertical ? new RPoint(cursor.CurrentY, startX) : new RPoint(startX, cursor.CurrentY);
+                    if (_isVertical)
+                    {
+                        _headerBox.ActualBottom = cursor.MaxRight;
+                        _headerBox.ActualRight = headerRowsLayoutY - VerticalSpacingAt(rowIndex);
+                        _headerHeight = _headerBox.ActualRight - _headerBox.Location.X;
+                    }
+                    else
+                    {
+                        _headerBox.ActualRight = cursor.MaxRight;
+                        _headerBox.ActualBottom = headerRowsLayoutY - VerticalSpacingAt(rowIndex);
+                        _headerHeight = _headerBox.ActualBottom - _headerBox.Location.Y;
+                    }
                 }
 
-                cursor.MaxRight = footerCursor.MaxRight;
+                // Step 3: Layout footer rows once to get dimensions (if needed)
+                if (FooterIsDetached && _footerBox != null)
+                {
+                    // Layout footer rows directly
+                    var footerRowsLayoutY = 0d;
+                    var footerCursor = cursor.ForRowGroupMeasurement(footerRowsLayoutY);
 
-                // Unlike Location/ActualBottom above, ActualRight is a computed property derived
-                // from Size.Width, which is never otherwise set on the footer row-group box itself
-                // (only its row/cell children get real sizes) - leaving it out here left every
-                // CssProxyBox created from _footerBox (see CreateFooterProxy) with a zero-width
-                // Bounds, which CssBox.Paint's visibility-culling check (the Rectangles.Count==0/
-                // Bounds-intersect-clip branch, active whenever the document has no float/absolute/
-                // fixed content anywhere) then silently treated as never visible - the footer never
-                // painted on any page. Mirrors the identical `_headerBox.ActualRight = maxRight`
-                // assignment above. See GitHub issue #124.
-                _footerBox.Location = _isVertical ? new RPoint(0, startX) : new RPoint(startX, 0);
-                if (_isVertical)
-                {
-                    _footerBox.ActualBottom = cursor.MaxRight;
-                    _footerBox.ActualRight = footerRowsLayoutY - VerticalSpacingAt(footerRowIndex);
-                    _footerHeight = _footerBox.ActualRight - _footerBox.Location.X;
+                    // Footer rows are always _allRows' own trailing entries, after every header and body row -
+                    // see the header loop above for why the ordinal doubles as the grid row index.
+                    var footerRowIndex = HeaderRowCountInGrid + _bodyRows.Count;
+                    var footerRows = new List<CssBox>();
+                    var footerOriginalRowIndices = ComputeRowGroupOriginalIndices(_footerBox);
+                    var footerSpanningCellsEndingOnRow = new Dictionary<int, List<CssBox>>();
+
+                    foreach (var row in _footerBox.Boxes)
+                    {
+                        if (row.DerivedStyle.ActualDisplay != Keywords.TableRow)
+                            continue;
+                        if (IsRowCollapsed(row))
+                            continue;
+
+                        footerCursor.CurrentY = footerRowsLayoutY;
+                        footerCursor.MaxBottom = footerRowsLayoutY;
+
+                        await LayoutBodyRow(g, row, startX, footerCursor);
+
+                        // The row-group-local row index this closing pass keys against restarts at 0 here,
+                        // deliberately independent of footerRowIndex (the whole-grid ordinal used for
+                        // VerticalSpacingAt just below) - footerSpanningCellsEndingOnRow only ever has to be
+                        // internally consistent with itself across this one loop, and never needs to agree
+                        // with any other row-numbering scheme.
+                        var footerLocalRowIndex = footerRows.Count;
+                        RegisterRowSpanCellsEndingRow(row, footerLocalRowIndex, footerOriginalRowIndices, footerSpanningCellsEndingOnRow);
+                        footerCursor.MaxBottom = GrowForClosingRowSpanCells(
+                            footerLocalRowIndex, footerSpanningCellsEndingOnRow, footerCursor.MaxBottom, _isVertical);
+
+                        footerRowsLayoutY = footerCursor.MaxBottom + VerticalSpacingAt(footerRowIndex + 1);
+                        footerRowIndex++;
+
+                        // See the identical fix in the header-rows loop above for why this is needed.
+                        row.Location = new RPoint(row.Boxes.Min(x => x.Location.X), row.Boxes.Min(x => x.Location.Y));
+                        AssignRowActualBounds(row, footerCursor.MaxBottom);
+
+                        CloseRowSpanCellsEndingOnRow(
+                            g, footerLocalRowIndex, footerSpanningCellsEndingOnRow,
+                            _isVertical ? row.ActualRight : row.ActualBottom, _isVertical);
+
+                        footerRows.Add(row);
+                    }
+
+                    cursor.MaxRight = footerCursor.MaxRight;
+
+                    // Unlike Location/ActualBottom above, ActualRight is a computed property derived
+                    // from Size.Width, which is never otherwise set on the footer row-group box itself
+                    // (only its row/cell children get real sizes) - leaving it out here left every
+                    // CssProxyBox created from _footerBox (see CreateFooterProxy) with a zero-width
+                    // Bounds, which CssBox.Paint's visibility-culling check (the Rectangles.Count==0/
+                    // Bounds-intersect-clip branch, active whenever the document has no float/absolute/
+                    // fixed content anywhere) then silently treated as never visible - the footer never
+                    // painted on any page. Mirrors the identical `_headerBox.ActualRight = maxRight`
+                    // assignment above. See GitHub issue #124.
+                    _footerBox.Location = _isVertical ? new RPoint(0, startX) : new RPoint(startX, 0);
+                    if (_isVertical)
+                    {
+                        _footerBox.ActualBottom = cursor.MaxRight;
+                        _footerBox.ActualRight = footerRowsLayoutY - VerticalSpacingAt(footerRowIndex);
+                        _footerHeight = _footerBox.ActualRight - _footerBox.Location.X;
+                    }
+                    else
+                    {
+                        _footerBox.ActualRight = cursor.MaxRight;
+                        _footerBox.ActualBottom = footerRowsLayoutY - VerticalSpacingAt(footerRowIndex);
+                        _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
+                    }
                 }
-                else
+            }
+            finally
+            {
+                if (container is not null)
                 {
-                    _footerBox.ActualRight = cursor.MaxRight;
-                    _footerBox.ActualBottom = footerRowsLayoutY - VerticalSpacingAt(footerRowIndex);
-                    _footerHeight = _footerBox.ActualBottom - _footerBox.Location.Y;
+                    container.RestoreFragmentainer(previousFragmentainer);
+                    container.SuppressWordPageBreaks = previousSuppress;
                 }
             }
 
@@ -3064,6 +3103,15 @@ namespace PeachPDF.Html.Core.Dom
                 ? container.PageSheetHeight / 4
                 : double.MaxValue;
 
+            // A group whose height lands within floating-point noise of the quarter is not meaningfully
+            // "inferior to" it either way - which side of the strict `<` it falls on can flip with the
+            // font metrics or the platform's floating-point codegen (observed: x64 vs arm64 CI runners),
+            // for a table whose content did not change at all. Padding the boundary by this epsilon keeps
+            // the decision stable across both without weakening the quarter-page cap for any group that is
+            // actually, non-negligibly over it - see TableRepeatedGroupConditionsTests's own remarks on
+            // this exact fragility.
+            const double epsilon = 1e-6;
+
             // A vertical table is placed as a monolithic unit rather than paginated per-row (real per-row
             // pagination of a vertical table is out of scope for #762 - tracked as #783), so it never
             // actually spans a page boundary the way this repetition machinery assumes. _headerHeight/
@@ -3078,13 +3126,13 @@ namespace PeachPDF.Html.Core.Dom
                              && HeaderIsDetached
                              && _headerBox is { } header
                              && BreakValues.AvoidsBreak(header.BreakInside, FragmentationContext.Page)
-                             && _headerHeight < quarterOfThePage;
+                             && _headerHeight < quarterOfThePage - epsilon;
 
             _footerRepeats = !_isVertical
                              && FooterIsDetached
                              && _footerBox is { } footer
                              && BreakValues.AvoidsBreak(footer.BreakInside, FragmentationContext.Page)
-                             && _footerHeight < quarterOfThePage;
+                             && _footerHeight < quarterOfThePage - epsilon;
         }
 
         /// <summary>
@@ -5537,6 +5585,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="columnIndex"></param>
         /// <returns></returns>
+        /// <remarks>
+        /// The bounds check below is backwards (always true, so this always returns <c>false</c>) -
+        /// see .claude/accepted-gaps/table-shrink-columns-dead-code.md. Left as-is: fixing it makes
+        /// <see cref="ShrinkColumnsToFitAvailableWidth"/> live for every table's layout, not just the
+        /// max-width scenario this investigation was actually about, and that broader activation
+        /// regresses vertical-writing-mode column sizing - a real, separate, out-of-scope bug of its own.
+        /// </remarks>
         private bool CanReduceWidth(int columnIndex)
         {
             if (_columnWidths!.Length >= columnIndex || GetColumnMinWidths().Length >= columnIndex)

@@ -459,7 +459,7 @@ thead { display: table-header-group; }
             string html, 
   double pageHeight = 400)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
           var container = new HtmlContainerInt(adapter);
 
 await container.SetHtml(html, null);

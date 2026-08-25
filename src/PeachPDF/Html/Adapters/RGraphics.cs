@@ -56,6 +56,23 @@ namespace PeachPDF.Html.Adapters
         }
 
         /// <summary>
+        /// The scale between this graphics context's own coordinate space (matching
+        /// <see cref="Core.Dom.CssBox"/> geometry - <c>PdfGenerateConfig.PixelsPerInch / 72</c>-inflated
+        /// relative to a true PDF point, see <c>HtmlContainer.PageSize</c>) and true PDF points.
+        /// <c>1.0</c> (the base, no-op default) is correct for every test-only <see cref="RGraphics"/>
+        /// mock, which never inflates its own coordinate space this way; <c>PeachPDF.Adapters.
+        /// GraphicsAdapter</c> - the only implementation that actually paints a PDF - overrides this with
+        /// its real, adapter-driven value. A caller that needs to compute a transform matrix whose
+        /// *linear* (scale/rotation) part won't itself be divided by this factor before use -
+        /// <c>GraphicsAdapter.PushTransform</c> only divides a matrix's translation, not
+        /// <c>M11</c>/<c>M12</c>/<c>M21</c>/<c>M22</c> - reads this to pre-divide that part itself (issue
+        /// #814's SVG viewBox-to-viewport transform is the first such case: its "scale" is a ratio of an
+        /// inflated length to a never-inflated, dimensionless SVG user unit, so it is not already
+        /// scale-neutral the way an ordinary CSS <c>transform: scale()</c> is).
+        /// </summary>
+        public virtual double PixelsPerPoint => 1.0;
+
+        /// <summary>
         /// Get color pen.
         /// </summary>
         /// <param name="color">the color to get the pen for</param>

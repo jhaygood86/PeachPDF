@@ -102,10 +102,12 @@ namespace PeachPDF.Tests.Integration
             var target = FindById(root, "target");
             Assert.NotNull(target);
 
-            // True CSS points: 2 * 20pt = 40pt, independent of PixelsPerPoint - ordinary box geometry
-            // (unlike page-level margins) is never pre-multiplied by PixelsPerPoint. The pre-fix NoEms
-            // instead converted 2 * (20 / PixelsPerPoint) = 20pt here - half the correct value.
-            Assert.Equal(40.0, target!.ActualTextIndent, 3);
+            // True CSS points: 2 * 20pt = 40pt. Like every other absolutely-resolved box geometry value,
+            // this lands in the box's internal layout coordinate space, which PixelsPerPoint inflates
+            // relative to true points (issue #814) - so at pixelsPerPoint=2, the internal-space value is
+            // 40 * 2 = 80, matching BuildAndLayout's now-consistent (production-mirroring) inflation of
+            // PageSize/MaxSize/GraphicsAdapter by the same factor.
+            Assert.Equal(80.0, target!.ActualTextIndent, 3);
         }
 
         [Fact]
@@ -124,10 +126,12 @@ namespace PeachPDF.Tests.Integration
             var spacedWidth = CssBox.FirstWordOccurence(spaced!, spaced!.LineBoxes[0])!.Width;
             var plainWidth = CssBox.FirstWordOccurence(plain!, plain!.LineBoxes[0])!.Width;
 
-            // 0.5em at a declaring font-size of 20pt is 10pt per gap, regardless of PixelsPerPoint - see
+            // 0.5em at a declaring font-size of 20pt is 10 true CSS points per gap (see
             // LetterWordSpacingLayoutIntegrationTests.LetterSpacing_EmValue_ResolvesAgainstFontSize_InLayoutPoints,
-            // which asserts the identical relationship at the default PixelsPerPoint of 1.
-            Assert.Equal(plainWidth + 4 * 10, spacedWidth, 1);
+            // which asserts the identical true-point relationship at the default PixelsPerPoint of 1) -
+            // scaled by pixelsPerPoint like every other absolute length landing in this internal
+            // coordinate space (issue #814), same as plainWidth/spacedWidth themselves.
+            Assert.Equal(plainWidth + 4 * 10 * 2.0, spacedWidth, 1);
         }
 
         [Fact]
@@ -149,9 +153,10 @@ namespace PeachPDF.Tests.Integration
             var spacedGap = spacedWords[1].Left - spacedWords[0].Right;
             var plainGap = plainWords[1].Left - plainWords[0].Right;
 
-            // 0.5em at a declaring font-size of 20pt is 10pt of additional inter-word gap, regardless of
-            // PixelsPerPoint.
-            Assert.Equal(plainGap + 10, spacedGap, 1);
+            // 0.5em at a declaring font-size of 20pt is 10 true CSS points of additional inter-word gap,
+            // scaled by pixelsPerPoint like every other absolute length landing in this internal
+            // coordinate space (issue #814), same as plainGap/spacedGap themselves.
+            Assert.Equal(plainGap + 10 * 2.0, spacedGap, 1);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -164,12 +169,18 @@ namespace PeachPDF.Tests.Integration
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
+            // Mirrors production (PdfGenerator.SetContent/AddPdfPages): PageSize/MaxSize and the
+            // GraphicsAdapter's own scale both use the SAME pixelsPerPoint as the adapter's font
+            // resolution, so the box tree's internal coordinate space is consistently inflated end to
+            // end - the same consistency CssValueParser's absolute-length resolution now relies on
+            // (issue #814). A harness that inflated fonts but not geometry (as this one previously did,
+            // hardcoding 1.0 here) tests a combination no real PdfGenerator render can produce.
             var size = new XSize(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
+            container.PageSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
+            container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, pixelsPerPoint);
 
             var measure = XGraphics.CreateMeasureContext(size, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);

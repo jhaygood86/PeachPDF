@@ -129,9 +129,17 @@ namespace PeachPDF.Adapters
             NetworkLoader.BaseUri ?? (AllowLocalFileAccess ? InternalFileLoader.BaseUri : null);
 
         /// <summary>
-        /// the amount of pixels per point
+        /// The scale between the box tree's internal layout coordinate space and true PDF points -
+        /// <c>PdfGenerateConfig.PixelsPerInch / 72</c>, so <c>1.0</c> (no scaling) at the library's own
+        /// default <c>PixelsPerInch</c> of 72. <c>PdfGenerator.AddPdfPages</c> always sets this
+        /// explicitly before laying anything out; <c>1.0</c> here is only the value an adapter built
+        /// without going through <c>PdfGenerator</c> (or before that assignment runs) sees - it must
+        /// match the "no scaling" case, not literally repeat the unrelated 72 in "72 points per inch",
+        /// or every absolute-length resolution that reads it
+        /// (<see cref="PeachPDF.Html.Core.Parse.CssValueParser"/>,
+        /// <see cref="PeachPDF.Html.Core.Dom.CssLayoutEngine"/>, issue #814) silently scales by 72x.
         /// </summary>
-        public double PixelsPerPoint { get; set; } = 72d;
+        public double PixelsPerPoint { get; set; } = 1.0;
 
         public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
         {

@@ -12,6 +12,7 @@
 
 #nullable enable
 
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -57,17 +58,23 @@ namespace PeachPDF.Html.Core.Dom
             ArgumentNullException.ThrowIfNull(word);
             ArgumentNullException.ThrowIfNull(word.OwnerBox);
 
+            // Every absolute-pixel value this method resolves must land in the box's own internal
+            // layout coordinate space, which PixelsPerPoint (PdfGenerateConfig.PixelsPerInch / 72)
+            // inflates relative to a true PDF point whenever PixelsPerInch != 72 - see
+            // CssValueParser.PixelsPerPointOf's own doc comment (issue #814).
+            var pixelsPerPoint = (word.OwnerBox.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+
             // Intrinsic sizes arrive in CSS-pixel space (a raster's device pixels / an SVG's user
             // units, both 1px = 1/96in per spec), while word.Width/Height are layout units (points).
             // Convert once here; every px-unit branch below applies the same shared factor.
-            intrinsicWidth *= Length.PointsPerPx;
-            intrinsicHeight *= Length.PointsPerPx;
+            intrinsicWidth *= Length.PointsPerPx * pixelsPerPoint;
+            intrinsicHeight *= Length.PointsPerPx * pixelsPerPoint;
 
             var width = new CssLength(word.OwnerBox.Width);
             var height = new CssLength(word.OwnerBox.Height);
 
-            var hasImageTagWidth = TryResolveAbsolute(width, out var widthUnits);
-            var hasImageTagHeight = TryResolveAbsolute(height, out var heightUnits);
+            var hasImageTagWidth = TryResolveAbsolute(width, pixelsPerPoint, out var widthUnits);
+            var hasImageTagHeight = TryResolveAbsolute(height, pixelsPerPoint, out var heightUnits);
             var scaleImageHeight = false;
 
             // The element's natural (intrinsic) width/height ratio, if it has one, combined with any CSS
@@ -96,14 +103,14 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 // 20 is the legacy broken-image placeholder size, in CSS pixels like the px branches.
-                word.Width = hasImageTagHeight ? heightUnits / 1.14f : 20 * Length.PointsPerPx;
+                word.Width = hasImageTagHeight ? heightUnits / 1.14f : 20 * Length.PointsPerPx * pixelsPerPoint;
             }
 
             var maxWidth = new CssLength(word.OwnerBox.MaxWidth);
             if (maxWidth.Number > 0)
             {
                 double maxWidthVal = -1;
-                if (TryResolveAbsolute(maxWidth, out var maxWidthUnits))
+                if (TryResolveAbsolute(maxWidth, pixelsPerPoint, out var maxWidthUnits))
                 {
                     maxWidthVal = maxWidthUnits;
                 }
@@ -123,7 +130,7 @@ namespace PeachPDF.Html.Core.Dom
             if (minWidth.Number > 0)
             {
                 double minWidthVal = -1;
-                if (TryResolveAbsolute(minWidth, out var minWidthUnits))
+                if (TryResolveAbsolute(minWidth, pixelsPerPoint, out var minWidthUnits))
                 {
                     minWidthVal = minWidthUnits;
                 }
@@ -150,7 +157,7 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 // 22.8 is the legacy placeholder height, in CSS pixels like the px branches.
-                word.Height = word.Width > 0 ? word.Width * 1.14f : 22.8f * Length.PointsPerPx;
+                word.Height = word.Width > 0 ? word.Width * 1.14f : 22.8f * Length.PointsPerPx * pixelsPerPoint;
             }
 
             if (effectiveRatio is > 0)
@@ -174,7 +181,7 @@ namespace PeachPDF.Html.Core.Dom
             if (maxHeight.Number > 0)
             {
                 double maxHeightVal = -1;
-                if (TryResolveAbsolute(maxHeight, out var maxHeightUnits))
+                if (TryResolveAbsolute(maxHeight, pixelsPerPoint, out var maxHeightUnits))
                 {
                     maxHeightVal = maxHeightUnits;
                 }
@@ -197,7 +204,7 @@ namespace PeachPDF.Html.Core.Dom
             if (minHeight.Number > 0)
             {
                 double minHeightVal = -1;
-                if (TryResolveAbsolute(minHeight, out var minHeightUnits))
+                if (TryResolveAbsolute(minHeight, pixelsPerPoint, out var minHeightUnits))
                 {
                     minHeightVal = minHeightUnits;
                 }
@@ -241,11 +248,13 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Resolves an explicit absolute width/height/min/max on a replaced element to layout units
-        /// (points) through the shared CSS-OM <see cref="Length"/> conversion — any absolute unit,
-        /// spec-correct px (1px = 0.75pt) included, so replaced-element sizing agrees with the rest
-        /// of the engine by construction.
+        /// through the shared CSS-OM <see cref="Length"/> conversion — any absolute unit, spec-correct px
+        /// (1px = 0.75pt) included — then, since that conversion assumes the internal layout unit is a
+        /// true PDF point, scales by <paramref name="pixelsPerPoint"/> to land correctly in the box's real
+        /// (possibly <c>PixelsPerInch</c>-inflated) internal coordinate space, the same catch-up
+        /// <see cref="Parse.CssValueParser.ParseLength(Length, double, CssBox)"/> applies (issue #814).
         /// </summary>
-        private static bool TryResolveAbsolute(CssLength length, out double layoutUnits)
+        private static bool TryResolveAbsolute(CssLength length, double pixelsPerPoint, out double layoutUnits)
         {
             layoutUnits = 0;
             if (length.HasError || length.IsPercentage || !(length.Number > 0))
@@ -254,7 +263,7 @@ namespace PeachPDF.Html.Core.Dom
             if (!Length.TryParse(length.Length.Trim().ToLowerInvariant(), out var parsed) || !parsed.IsAbsolute)
                 return false;
 
-            layoutUnits = parsed.ToPixels(0, 0, 0);
+            layoutUnits = parsed.ToPixels(0, 0, 0) * pixelsPerPoint;
             return true;
         }
 

@@ -14,6 +14,11 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class CalcIntegrationTests
     {
+        // BuildBoxTree's own adapter PixelsPerPoint - kept as one named constant rather than repeated
+        // magic numbers so the font-size-calc tests' "undo the device-scaled font space" arithmetic
+        // stays correct if this harness's own PixelsPerPoint ever changes.
+        private const double BuildBoxTreePixelsPerPoint = 1.0;
+
         [Fact]
         public async Task Width_CalcPercentMinusPx_ResolvesAgainstContainingBlockWidth()
         {
@@ -84,15 +89,16 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(parent);
             Assert.NotNull(child);
-            // CssBox.ActualFont.Size is the resolved font size further divided by PixelsPerPoint (a
-            // pre-existing, calc()-unrelated font-metric convention) - undo that once to get parent's font
-            // size in true CSS points (what calc()'s "em" unit multiplies against), add the 4px term
-            // (converted to points), then redivide by PixelsPerPoint to land in the same space
+            // CssBox.ActualFont.Size is the resolved font size further divided by BuildBoxTree's adapter's
+            // own PixelsPerPoint (a pre-existing, calc()-unrelated font-metric convention) - undo that once
+            // to get parent's font size in true CSS points (what calc()'s "em" unit multiplies against),
+            // add the 4px term (converted to points via the fixed 72/96 px-to-pt ratio, unrelated to
+            // PixelsPerPoint), then redivide by PixelsPerPoint to land in the same space
             // child.ActualFont.Size reports in. Deriving the expected value from the actually-measured
             // parent size (rather than a hardcoded constant) keeps this test correct regardless of that
             // convention, while still proving both the em and px terms resolve correctly.
-            var parentSizePt = parent!.ActualFont.Size * 72.0;
-            var expected = (parentSizePt + 4 * (72.0 / 96.0)) / 72.0;
+            var parentSizePt = parent!.ActualFont.Size * BuildBoxTreePixelsPerPoint;
+            var expected = (parentSizePt + 4 * (72.0 / 96.0)) / BuildBoxTreePixelsPerPoint;
             Assert.Equal(expected, child!.ActualFont.Size, 8);
         }
 
@@ -112,8 +118,8 @@ namespace PeachPDF.Tests.Integration
             // GetRemHeight() walks up to the outermost box (the container's root, not <html>) and reads
             // its ActualFont.Size - that's what calc()'s "rem" unit multiplies against, in true CSS points
             // (undoing the same PixelsPerPoint division the em test above undoes for parent.ActualFont.Size).
-            var rootSizePt = root.ActualFont.Size * 72.0;
-            var expected = (rootSizePt + 4 * (72.0 / 96.0)) / 72.0;
+            var rootSizePt = root.ActualFont.Size * BuildBoxTreePixelsPerPoint;
+            var expected = (rootSizePt + 4 * (72.0 / 96.0)) / BuildBoxTreePixelsPerPoint;
             Assert.Equal(expected, child!.ActualFont.Size, 8);
         }
 
@@ -408,7 +414,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildBoxTree(string html)
         {
-            var adapter = new PdfSharpAdapter();
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
