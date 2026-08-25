@@ -93,7 +93,9 @@ genuinely new findings, not restatements of the two documented bugs:
 - Did not fix the newly-discovered "auto-height cell in a vertical table doesn't stretch to its column"
   gap described above — a real, separate defect, but not one #819's own scope (`CanReduceWidth`/
   `ShrinkColumnsToFitAvailableWidth`) touches or regresses; every existing and new test avoids triggering
-  it by giving relevant cells an explicit height or sizing columns via `<col>` instead.
+  it by giving relevant cells an explicit height or sizing columns via `<col>` instead. Tracked as
+  [#836](https://github.com/jhaygood86/PeachPDF/issues/836) and recorded in
+  [.claude/accepted-gaps/vertical-table-auto-height-cell-does-not-stretch.md](../accepted-gaps/vertical-table-auto-height-cell-does-not-stretch.md).
 
 ## Evidence
 
