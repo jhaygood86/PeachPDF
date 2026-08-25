@@ -3726,9 +3726,10 @@ namespace PeachPDF.Html.Core.Dom
             // narrowed the wrap boundary by this same amount for RTL (its own `isRtl` handling), so
             // content never naturally reaches past this reduced target in the first place. Insetting only
             // here, while still adding the indent to the flow-time CurrentX offset (what an earlier version
-            // of this fix did), double-reserves the space and can leave `diff` negative - the guard below
-            // then leaves the line exactly where flow put it, un-aligned, whenever a line's natural
-            // slack is smaller than the indent.
+            // of this fix did), double-reserves the space and can leave `diff` negative even for a line
+            // that isn't actually overflowing - which the guard below now shifts (see its own remarks)
+            // rather than leaving un-aligned, so double-reserving the indent is a correctness bug to avoid
+            // here, not a harmlessly-absorbed edge case.
             var isFirstLine = line.Equals(line.OwnerBox.LineBoxes[0]);
             var indent = GetLineTextIndent(line.OwnerBox, isFirstLine, line.FollowsForcedBreak);
             var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
@@ -3738,7 +3739,16 @@ namespace PeachPDF.Html.Core.Dom
                         - (isRtl ? indent : 0);
             var diff = right - lastWord.Right - lastWord.OwnerBox.ActualBorderRightWidth - lastWord.OwnerBox.ActualPaddingRight;
 
-            if (!(diff > 0)) return;
+            // right - lastWord.Right is, by construction, exactly the shift needed to flush the line to
+            // its target right edge - there is no direction in which a nonzero diff should be discarded.
+            // The previous positive-only guard assumed natural (pre-alignment, always left-to-right-flowing)
+            // placement is never further right than the target, which holds whenever the line's content
+            // fits; a line wider than its container (an overflowing nowrap line, or one unbreakable word
+            // wider than the box) needs the same negative-diff shift to stay flush-right and spill past the
+            // *left* edge instead of being left un-shifted at its natural position, spilling past the right
+            // edge like left-aligned content would. Mirrors ApplyVerticalFlushAlignment's identical fix
+            // (issue #797) for the horizontal axis - see that method's own remarks for the full reasoning.
+            if (!(Math.Abs(diff) > 0)) return;
 
             foreach (var word in line.Words)
             {

@@ -338,6 +338,7 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter HorizontalAlignmentConverter = Map.HorizontalAlignments.ToConverter();
         public static readonly IValueConverter VerticalAlignmentConverter = Map.VerticalAlignments.ToConverter();
         public static readonly IValueConverter WhitespaceConverter = Map.WhitespaceModes.ToConverter();
+        public static readonly IValueConverter TextOverflowConverter = Map.TextOverflowModes.ToConverter();
         public static readonly IValueConverter TextTransformConverter = Map.TextTransforms.ToConverter();
         public static readonly IValueConverter TextAlignLastConverter = Map.TextAlignmentsLast.ToConverter();
         public static readonly IValueConverter TextAnchorConverter = Map.TextAnchors.ToConverter();

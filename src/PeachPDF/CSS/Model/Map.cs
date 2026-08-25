@@ -15,6 +15,12 @@ namespace PeachPDF.CSS
                 {Keywords.PreWrap, Whitespace.PreWrap},
                 {Keywords.PreLine, Whitespace.PreLine}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, TextOverflow> TextOverflowModes =
+            new Dictionary<string, TextOverflow>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Clip, TextOverflow.Clip},
+                {Keywords.Ellipsis, TextOverflow.Ellipsis}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, TextTransform> TextTransforms =
             new Dictionary<string, TextTransform>(StringComparer.OrdinalIgnoreCase)
             {

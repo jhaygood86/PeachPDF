@@ -149,7 +149,18 @@ namespace PeachPDF.Tests.TestSupport
         public override void PopBlendMode() { }
         public override object SetAntiAliasSmoothingMode() => new object();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }
-        public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new(0, 12);
+        /// <summary>
+        /// Overrides the default fixed <c>(0, 12)</c> <see cref="MeasureString(string, RFont, TextShapingFeatures?)"/>
+        /// result when set - a test whose subject genuinely depends on relative string widths (e.g.
+        /// text-overflow's own "does this word/substring still fit" comparisons) can supply a
+        /// deterministic, length-sensitive measurement instead of the fixed default every other
+        /// consumer of this mock relies on staying zero. Null (the default) preserves the original
+        /// behavior exactly.
+        /// </summary>
+        public Func<string, RFont, TextShapingFeatures?, RSize>? MeasureStringOverride { get; set; }
+
+        public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) =>
+            MeasureStringOverride?.Invoke(str, font, features) ?? new RSize(0, 12);
         public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
 
