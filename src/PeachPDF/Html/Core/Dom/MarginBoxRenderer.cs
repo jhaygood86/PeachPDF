@@ -144,7 +144,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <paramref name="htmlContainer"/>'s root box stands in for the (non-existent, for a margin
         /// box) owning <c>CssBox</c> that <see cref="BackgroundLayerResolver"/> needs for potential
         /// em/rem length resolution - unreachable for the keyword position/"auto" values used here, but
-        /// a real, already-laid-out box is a safe, defensible fallback if that ever changes.
+        /// a real, already-laid-out box is a safe, defensible fallback if that ever changes. It *has*
+        /// changed for a gradient's own stop-position/explicit-radius em/rem units (issues #823/#824):
+        /// those now resolve against this root box's font-size, not the margin box's own declared
+        /// font-size, if the two differ - a known, narrow gap, see
+        /// .claude/accepted-gaps/margin-box-gradient-content-em-rem-basis.md.
         /// </summary>
         private static void PaintImage(XGraphics g, CssImage image, XRect rect, string positionList, RAdapter adapter, HtmlContainerInt htmlContainer)
         {

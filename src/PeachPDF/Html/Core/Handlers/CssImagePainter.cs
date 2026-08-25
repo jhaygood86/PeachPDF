@@ -3,6 +3,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Svg;
 using System;
@@ -71,11 +72,11 @@ namespace PeachPDF.Html.Core.Handlers
                     break;
                 case CssImage.LinearGradient lg:
                     PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
-                        (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect), drawBrush);
+                        (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect, box), drawBrush);
                     break;
                 case CssImage.RadialGradient rg:
                     PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
-                        (brushGraphics, rect) => GetRadialGradientBrush(brushGraphics, rg.Gradient, rect), drawBrush);
+                        (brushGraphics, rect) => GetRadialGradientBrush(brushGraphics, rg.Gradient, rect, box), drawBrush);
                     break;
                 case CssImage.ConicGradient cg:
                     PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
@@ -191,17 +192,17 @@ namespace PeachPDF.Html.Core.Handlers
                 intrinsicSizeInCssPixels: false);
         }
 
-        private static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect)
+        private static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect, CssBox box)
         {
             var (p1, p2) = ComputeGradientLine(originRect, gradient.AngleRad);
             double gdx = p2.X - p1.X, gdy = p2.Y - p1.Y;
             double gradientLength = Math.Sqrt(gdx * gdx + gdy * gdy);
-            var stops = NormalizeGradientStops(gradient.Stops, gradientLength, g.PixelsPerPoint, gradient.ColorSpace, gradient.HueMethod);
+            var stops = NormalizeGradientStops(gradient.Stops, gradientLength, box, g.PixelsPerPoint, gradient.ColorSpace, gradient.HueMethod);
             if (gradient.IsRepeating) stops = ExpandRepeatingStops(stops);
             return g.GetLinearGradientBrush(p1, p2, stops, gradient.IsRepeating);
         }
 
-        private static RBrush GetRadialGradientBrush(RGraphics g, ParsedRadialGradient radialGradient, RRect originRect)
+        private static RBrush GetRadialGradientBrush(RGraphics g, ParsedRadialGradient radialGradient, RRect originRect, CssBox box)
         {
             var pixelsPerPoint = g.PixelsPerPoint;
             var center = new RPoint(
@@ -221,13 +222,13 @@ namespace PeachPDF.Html.Core.Handlers
                 var rx = radialGradient.ExplicitRadiusX.Value;
                 radiusX = rx.Type == Length.Unit.Percent
                     ? rx.Value / 100.0 * originRect.Width
-                    : rx.ToPixel() * pixelsPerPoint;
+                    : ResolveGradientLength(rx, box, pixelsPerPoint);
                 if (radialGradient.ExplicitRadiusY.HasValue)
                 {
                     var ry = radialGradient.ExplicitRadiusY.Value;
                     radiusY = ry.Type == Length.Unit.Percent
                         ? ry.Value / 100.0 * originRect.Height
-                        : ry.ToPixel() * pixelsPerPoint;
+                        : ResolveGradientLength(ry, box, pixelsPerPoint);
                 }
                 else
                 {
@@ -276,7 +277,7 @@ namespace PeachPDF.Html.Core.Handlers
                 }
             }
 
-            var radialStops = NormalizeGradientStops(radialGradient.Stops, radiusX, pixelsPerPoint, radialGradient.ColorSpace, radialGradient.HueMethod);
+            var radialStops = NormalizeGradientStops(radialGradient.Stops, radiusX, box, pixelsPerPoint, radialGradient.ColorSpace, radialGradient.HueMethod);
             if (radialGradient.IsRepeating) radialStops = ExpandRepeatingStops(radialStops);
             return g.GetRadialGradientBrush(center, radiusX, radiusY, radialStops, radialGradient.IsRepeating);
         }
@@ -309,17 +310,65 @@ namespace PeachPDF.Html.Core.Handlers
             return (p1, p2);
         }
 
-        private static double? ConvertLength(Length? length, double gradientLength, double pixelsPerPoint, double emPx = 16.0)
+        private static double? ConvertLength(Length? length, double gradientLength, CssBox box, double pixelsPerPoint)
         {
             if (!length.HasValue) return null;
             var len = length.Value;
             if (len.Type == Length.Unit.Percent)
                 return len.Value / 100.0;
-            if (len.IsAbsolute)
-                return gradientLength > 0 ? len.ToPixel() * pixelsPerPoint / gradientLength : 0.0;
-            if (len.Type == Length.Unit.Em)
-                return gradientLength > 0 ? len.Value * emPx * pixelsPerPoint / gradientLength : 0.0;
-            return null;
+            return gradientLength > 0 ? ResolveGradientLength(len, box, pixelsPerPoint) / gradientLength : 0.0;
+        }
+
+        /// <summary>
+        /// Resolves a non-percentage gradient <see cref="Length"/> - an explicit radial-gradient radius, or
+        /// a linear/radial gradient stop/hint position - to the same <c>PixelsPerPoint</c>-inflated internal
+        /// coordinate space <c>gradientLength</c>/<c>originRect</c> already live in (issue #814/#821's
+        /// convention: an absolute length needs one catch-up multiply by <c>pixelsPerPoint</c> to match a
+        /// box's internal, DPI-scaled geometry).
+        /// <para>
+        /// Viewport/container-query-relative units resolve correctly via
+        /// <see cref="CssValueParser.ParseLength(Length,double,CssBox)"/> as-is: their basis
+        /// (<see cref="CssBox.GetViewportUnitBasis"/>/<see cref="CssBox.GetContainerRelativeUnitBasis"/>)
+        /// already reports real box geometry (<c>ClientRight</c>/<c>PageSize</c>, etc.) in that same
+        /// inflated space, confirmed by rendering an explicit <c>10vw</c> radius at two different
+        /// <c>PixelsPerInch</c> values and observing an identical resolved radius either way.
+        /// </para>
+        /// <para>
+        /// Font-relative units (<c>em</c>/<c>rem</c>/<c>ex</c>/<c>ch</c>) cannot route through that same
+        /// <see cref="CssValueParser.ParseLength(Length,double,CssBox)"/> overload, though: unlike viewport/
+        /// container units, <see cref="CssBox.GetEmHeight"/>/<see cref="CssBox.GetRemHeight"/> live in the
+        /// adapter's device-scaled *font-measurement* space - <c>trueFontSizePt / pixelsPerPoint</c>, the
+        /// OPPOSITE direction from the inflated space this method targets (see <c>CssBox.NoEms</c>'s own
+        /// doc comment, and <c>PixelsPerPointEmResolutionIntegrationTests</c>, issue #631). Confirmed
+        /// empirically: a plain <c>ParseLength(Length,...)</c> resolution of a <c>2rem</c> explicit radius
+        /// differs by a full <c>pixelsPerPoint²</c> factor between 72 and 96 <c>PixelsPerInch</c>, instead
+        /// of matching - so the device-scaling is undone here (an extra <c>* pixelsPerPoint</c>, mirroring
+        /// <c>NoEms</c>) before the usual catch-up multiply, landing on <c>* pixelsPerPoint²</c> overall
+        /// rather than <c>ParseLength</c>'s implicit <c>* 1</c>. (The wider bug this exposes - every other
+        /// <c>ParseLength(Length,double,CssBox)</c> caller resolving em/rem/ex/ch box geometry, e.g.
+        /// <c>padding</c>/<c>width</c>/<c>border-radius</c>, is equally wrong under a non-default
+        /// <c>PixelsPerInch</c> - is out of scope here; see
+        /// .claude/accepted-gaps/parselength-em-rem-ex-ch-scaling-under-non-default-pixelsperinch.md.)
+        /// </para>
+        /// </summary>
+        private static double ResolveGradientLength(Length len, CssBox box, double pixelsPerPoint)
+        {
+            switch (len.Type)
+            {
+                case Length.Unit.Em:
+                case Length.Unit.Ex:
+                case Length.Unit.Ch:
+                    // Defers the actual em/ex/ch formula to Length.ToPixels (the single source of truth
+                    // every other length consumer uses) rather than re-deriving it here - only the
+                    // device-scaling correction below is specific to this call site.
+                    return len.ToPixels(box.GetEmHeight() * pixelsPerPoint, 0, 0.0) * pixelsPerPoint;
+                case Length.Unit.Rem:
+                    return len.ToPixels(0, box.GetRemHeight() * pixelsPerPoint, 0.0) * pixelsPerPoint;
+                default:
+                    return len.IsAbsolute
+                        ? len.ToPixel() * pixelsPerPoint
+                        : CssValueParser.ParseLength(len, 0.0, box);
+            }
         }
 
         private static RColor LerpColor(RColor a, RColor b, double t)
@@ -555,10 +604,10 @@ namespace PeachPDF.Html.Core.Handlers
         private static (RColor Color, double Position)[] NormalizeGradientStops(
             (RColor? Color, Length? Position, bool IsHint)[] stops,
             double gradientLength,
+            CssBox box,
             double pixelsPerPoint,
             GradientColorSpace colorSpace = GradientColorSpace.Srgb,
-            HueInterpolationMethod hueMethod = HueInterpolationMethod.Shorter,
-            double emPx = 16.0)
+            HueInterpolationMethod hueMethod = HueInterpolationMethod.Shorter)
         {
             var colorStops = stops.Where(s => !s.IsHint).ToArray();
             int n = colorStops.Length;
@@ -566,7 +615,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             var rawPos = new double?[n];
             for (int i = 0; i < n; i++)
-                rawPos[i] = ConvertLength(colorStops[i].Position, gradientLength, pixelsPerPoint, emPx);
+                rawPos[i] = ConvertLength(colorStops[i].Position, gradientLength, box, pixelsPerPoint);
 
             var resolved = new (RColor Color, double Position)[n];
             double first = rawPos[0] ?? 0.0;
@@ -628,7 +677,7 @@ namespace PeachPDF.Html.Core.Handlers
                     var s1 = resolved[colorIdx - 1];
                     var s2 = resolved[colorIdx];
                     double range = s2.Position - s1.Position;
-                    double hintPos = ConvertLength(stops[i].Position, gradientLength, pixelsPerPoint, emPx) ?? (s1.Position + range * 0.5);
+                    double hintPos = ConvertLength(stops[i].Position, gradientLength, box, pixelsPerPoint) ?? (s1.Position + range * 0.5);
                     double h = range > 1e-9
                         ? Math.Clamp((hintPos - s1.Position) / range, 1e-9, 1.0 - 1e-9)
                         : 0.5;
