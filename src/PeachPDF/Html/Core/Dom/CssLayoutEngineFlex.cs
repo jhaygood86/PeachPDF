@@ -920,11 +920,13 @@ namespace PeachPDF.Html.Core.Dom
                                     var savedHeight = item.Box.Height;
                                     var savedWidth  = item.Box.Width;
                                     // Cross-axis stretch: set explicit Height for the re-layout but also
-                                    // lock the main-axis Width so GetBoxWidth can't fall back to container fill.
-                                    double crossContent = Math.Max(0, targetCross - item.Box.ActualPaddingTop - item.Box.ActualPaddingBottom
-                                                                                  - item.Box.ActualBorderTopWidth - item.Box.ActualBorderBottomWidth);
+                                    // lock the main-axis Width (already-final, box-sizing-aware, from
+                                    // ResizeItem) so GetBoxWidth can't fall back to container fill - both
+                                    // locked axes hold outer size for border-box, content size for
+                                    // content-box, per each axis's own BoxSizeIncluded helper.
+                                    double crossContent = Math.Max(0, targetCross - CrossBoxSizeIncluded(item.Box));
                                     item.Box.Height = FormatLayoutUnits(crossContent, item.Box);
-                                    item.Box.Width  = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainPaddingBorder(item.Box)), item.Box);
+                                    item.Box.Width  = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainBoxSizeIncluded(item.Box)), item.Box);
                                     item.Box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
                                     item.Box.ActualBottom = item.Box.Location.Y;
                                     item.Box.RectanglesReset();
@@ -936,11 +938,14 @@ namespace PeachPDF.Html.Core.Dom
                                 {
                                     var savedWidth  = item.Box.Width;
                                     var savedHeight = item.Box.Height;
-                                    // Main axis physical Y: lock cross Width and preserve main-axis Height.
-                                    double crossContent = Math.Max(0, targetCross - item.Box.ActualPaddingLeft - item.Box.ActualPaddingRight
-                                                                                  - item.Box.ActualBorderLeftWidth - item.Box.ActualBorderRightWidth);
+                                    // Main axis physical Y: lock cross Width for the re-layout and lock the
+                                    // main-axis Height (already-final, box-sizing-aware, from ResizeItem) so
+                                    // GetBoxHeight can't fall back to shrink-to-content - both locked axes
+                                    // hold outer size for border-box, content size for content-box, per each
+                                    // axis's own BoxSizeIncluded helper.
+                                    double crossContent = Math.Max(0, targetCross - CrossBoxSizeIncluded(item.Box));
                                     item.Box.Width  = FormatLayoutUnits(crossContent, item.Box);
-                                    item.Box.Height = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainPaddingBorder(item.Box)), item.Box);
+                                    item.Box.Height = FormatLayoutUnits(Math.Max(0, item.FinalMainSize - MainBoxSizeIncluded(item.Box)), item.Box);
                                     item.Box.Location = new RPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
                                     item.Box.ActualBottom = item.Box.Location.Y;
                                     item.Box.RectanglesReset();
@@ -1659,6 +1664,11 @@ namespace PeachPDF.Html.Core.Dom
         // (ActualBoxSizeIncludedWidth/Height is already 0 there, so this is a no-op).
         private double MainBoxSizeIncluded(CssBox box) =>
             _mainAxisIsPhysicalX ? box.ActualBoxSizeIncludedWidth : box.ActualBoxSizeIncludedHeight;
+
+        // Same contract as MainBoxSizeIncluded, but for the cross axis - which lands on the opposite
+        // physical axis from whichever one _mainAxisIsPhysicalX names.
+        private double CrossBoxSizeIncluded(CssBox box) =>
+            _mainAxisIsPhysicalX ? box.ActualBoxSizeIncludedHeight : box.ActualBoxSizeIncludedWidth;
 
         // Clamps an outer main-axis size against the item's min/max constraints for the main axis
         // (min/max-width when main lands on physical X, min/max-height when it lands on physical Y). Per

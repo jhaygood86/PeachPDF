@@ -1999,6 +1999,52 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(150, aContent.ActualBoxSizingWidth, 1.0);
         }
 
+        // ─── box-sizing:border-box flex-item cross-axis stretch (issue #832) ───────
+
+        [Fact]
+        public async Task StretchedBorderBoxItem_WithPadding_FillsLineCrossSize()
+        {
+            // The #832 repro shape: a box-sizing:border-box item with real padding/border, stretched
+            // (the default align-items behavior) to fill the row-direction line's cross size (height).
+            // Before the fix, ComputeCrossOffsets's stretch branch subtracted the item's own raw
+            // padding+border from the target cross size regardless of box-sizing, undersizing a
+            // border-box item by exactly that padding+border (44pt here). The same re-layout also locks
+            // the item's main-axis Width from item.FinalMainSize (already box-sizing-correct) so the
+            // re-layout can't fall back to filling the container - that lock had the identical raw
+            // padding+border bug, independently undersizing Width too, so both axes are asserted here.
+            var html = Wrap(@"
+                <div style='display:flex; width:300pt; height:100pt;'>
+                    <div id='a' style='flex-grow:1; box-sizing:border-box; padding:20pt; border:2pt solid black;'>A</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            Assert.Equal(100, a.ActualBoxSizingHeight, 0.5);
+            Assert.Equal(300, a.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task StretchedBorderBoxColumnItem_WithPadding_FillsLineCrossSize()
+        {
+            // Column-direction analog: the cross axis is Width instead of Height, exercising the
+            // ComputeCrossOffsets column-direction stretch arm. An ordinary block item can't demonstrate
+            // this: width:auto already fills the containing block via plain block auto-width layout
+            // before this method ever runs, so current and target cross size already agree and the
+            // stretch branch's re-layout is skipped as a no-op regardless of the bug. A replaced element
+            // (img) breaks that: width:auto instead resolves to its own small intrinsic size, so the
+            // item arrives here needing a genuine stretch up to the line's full cross size. Also asserts
+            // the main-axis Height lock (the column-direction counterpart of the row test's Width-lock
+            // assertion) survived the same raw-padding+border bug.
+            const string svg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='red'/%3E%3C/svg%3E";
+            var html = Wrap($@"
+                <div style='display:flex; flex-direction:column; width:300pt; height:100pt;'>
+                    <img id='a' src=""{svg}"" style='box-sizing:border-box; padding:20pt; border:2pt solid black;' />
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            Assert.Equal(300, a.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(100, a.ActualBoxSizingHeight, 0.5);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 
