@@ -72,6 +72,19 @@ namespace PeachPDF.CSS
         public bool IsRelative => !IsAbsolute;
 
         /// <summary>
+        /// Whether this length's <see cref="ToPixels"/> result needs the <c>PixelsPerPoint</c> catch-up
+        /// multiply (<c>PdfGenerateConfig.PixelsPerInch / 72</c>, issue #814) to land in a box's internal,
+        /// DPI-inflated layout coordinate space: an absolute unit, or a font-relative unit (<c>em</c>/
+        /// <c>rem</c>/<c>ex</c>/<c>ch</c>) resolved against a true-point basis (issue #826). A percentage
+        /// or container/viewport-relative unit's basis is already reported in that inflated space and
+        /// must not be multiplied again. The one shared predicate every <c>PixelsPerPoint</c> catch-up
+        /// call site (<c>CssValueParser.ParseLength</c>'s typed-<c>Length</c> and raw-<c>string</c>
+        /// overloads, and <c>CalcEvaluator.Evaluate</c>'s per-leaf calc() scaling, issue #829) applies.
+        /// </summary>
+        internal bool NeedsPixelsPerPointCatchUp =>
+            IsAbsolute || Type is Unit.Em or Unit.Rem or Unit.Ex or Unit.Ch;
+
+        /// <summary>
         ///     Gets the type of the length.
         /// </summary>
         public Unit Type { get; }
