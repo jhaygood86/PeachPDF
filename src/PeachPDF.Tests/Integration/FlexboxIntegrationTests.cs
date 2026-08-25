@@ -2045,6 +2045,32 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(100, a.ActualBoxSizingHeight, 0.5);
         }
 
+        [Fact]
+        public async Task BorderBoxExplicitFlexBasis_DoesNotWrapPrematurely()
+        {
+            // Issue #837: MeasureItem's explicit-flex-basis/width/height branch built `hypothetical`
+            // (the item's outer main size, used by CollectLines' wrap decision and returned as
+            // FlexItem.HypotheticalMainSize) by unconditionally adding the item's raw padding+border to
+            // the parsed CSS length, regardless of box-sizing - correct for content-box (whose parsed
+            // value is a content size), but double-counts for border-box, where the parsed value already
+            // IS the outer size per box-sizing:border-box (and per the flex-basis spec, which resolves a
+            // <length> flex-basis the same way width/height would:
+            // https://www.w3.org/TR/css-flexbox-1/#flex-basis-property). Two border-box items with
+            // flex-basis:100pt (an exact 200pt total, matching the 200pt wrap container exactly) each
+            // inflate to a perceived 144pt hypothetical (100 + 20pt padding x2 + 2pt border x2) before
+            // the fix, overflowing the line and forcing b onto its own line even though the items' real
+            // outer footprint fits exactly.
+            var html = Wrap(@"
+                <div style='display:flex; flex-wrap:wrap; width:200pt;'>
+                    <div id='a' style='flex:0 0 100pt; box-sizing:border-box; padding:20pt; border:2pt solid black; height:10pt;'>A</div>
+                    <div id='b' style='flex:0 0 100pt; box-sizing:border-box; padding:20pt; border:2pt solid black; height:10pt;'>B</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(a.Location.Y, b.Location.Y, 0.5);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 

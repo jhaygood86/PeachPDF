@@ -383,16 +383,20 @@ namespace PeachPDF.Html.Core.Dom
             double hypothetical;
             if (flexBasis.IsValue && !isIndefinitePercentageBasis)
             {
-                // CSS flex-basis = content size; hypothetical = outer size = content + padding + border
-                hypothetical = CssValueParser.ParseLength(flexBasis.Value!.Value, mainSize, box) + MainPaddingBorder(box);
+                // flex-basis's <length>/<percentage> resolves the same way width/height would
+                // (https://www.w3.org/TR/css-flexbox-1/#flex-basis-property), so it respects box-sizing
+                // like they do: hypothetical = outer size = parsed value + MainBoxSizeIncluded(box) -
+                // content + padding + border for content-box, the parsed value alone (already the outer
+                // size) for border-box, where MainBoxSizeIncluded is 0.
+                hypothetical = CssValueParser.ParseLength(flexBasis.Value!.Value, mainSize, box) + MainBoxSizeIncluded(box);
             }
             else if (flexBasis.Keyword is not FlexBasisKeyword.Content && _mainAxisIsPhysicalX && CssValueParser.IsValidLength(box.Width))
             {
-                hypothetical = CssValueParser.ParseLength(box.Width, mainSize, box) + MainPaddingBorder(box);
+                hypothetical = CssValueParser.ParseLength(box.Width, mainSize, box) + MainBoxSizeIncluded(box);
             }
             else if (flexBasis.Keyword is not FlexBasisKeyword.Content && !_mainAxisIsPhysicalX && CssValueParser.IsValidLength(box.Height))
             {
-                hypothetical = CssValueParser.ParseLength(box.Height, mainSize, box) + MainPaddingBorder(box);
+                hypothetical = CssValueParser.ParseLength(box.Height, mainSize, box) + MainBoxSizeIncluded(box);
             }
             else
             {
@@ -458,12 +462,14 @@ namespace PeachPDF.Html.Core.Dom
                 return new FlexItem(box, naturalMain, hypothetical);
             }
 
-            // Layout at hypothetical size so we get an accurate cross-axis dimension.
-            // hypothetical = outer size; CSS width/height property = content size = outer - padding - border.
+            // Layout at hypothetical size so we get an accurate cross-axis dimension. hypothetical is
+            // always an outer size (see each branch above); box.Width/Height must hold whatever
+            // MainBoxSizeIncluded's own box-sizing contract expects - content size (outer - padding -
+            // border) for content-box, the outer size directly for border-box.
             string? savedDim = null;
             if (hypothetical > 0)
             {
-                double cssContentSize = Math.Max(0, hypothetical - MainPaddingBorder(box));
+                double cssContentSize = Math.Max(0, hypothetical - MainBoxSizeIncluded(box));
                 if (_mainAxisIsPhysicalX) { savedDim = box.Width;  box.Width  = FormatLayoutUnits(cssContentSize, box); }
                 else                      { savedDim = box.Height; box.Height = FormatLayoutUnits(cssContentSize, box); }
             }
