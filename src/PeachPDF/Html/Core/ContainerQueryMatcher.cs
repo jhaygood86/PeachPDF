@@ -95,16 +95,16 @@ namespace PeachPDF.Html.Core
             switch (name)
             {
                 case "width":
-                    return MediaQueryMatcher.CompareLength(feature, ctx.WidthPt);
+                    return MediaQueryMatcher.CompareLength(feature, ctx.WidthPt, ctx.PixelsPerPoint);
 
                 case "inline-size":
-                    return MediaQueryMatcher.CompareLength(feature, ctx.InlineSizePt);
+                    return MediaQueryMatcher.CompareLength(feature, ctx.InlineSizePt, ctx.PixelsPerPoint);
 
                 case "height":
-                    return ctx.HeightPt is { } heightPt && MediaQueryMatcher.CompareLength(feature, heightPt);
+                    return ctx.HeightPt is { } heightPt && MediaQueryMatcher.CompareLength(feature, heightPt, ctx.PixelsPerPoint);
 
                 case "block-size":
-                    return ctx.BlockSizePt is { } blockPt && MediaQueryMatcher.CompareLength(feature, blockPt);
+                    return ctx.BlockSizePt is { } blockPt && MediaQueryMatcher.CompareLength(feature, blockPt, ctx.PixelsPerPoint);
 
                 case "aspect-ratio":
                     if (ctx.HeightPt is not { } aspectHeight || aspectHeight <= 0) return false;

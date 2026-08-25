@@ -245,21 +245,35 @@ namespace PeachPDF.Html.Core.Parse
         {
             var (containerWidthPt, containerHeightPt, containerInlinePt, containerBlockPt) = box.GetContainerRelativeUnitBasis();
             var (viewportWidthPt, viewportHeightPt, viewportInlinePt, viewportBlockPt) = box.GetViewportUnitBasis();
+            var pixelsPerPoint = PixelsPerPointOf(box);
 
-            var result = length.ToPixels(box.GetEmHeight(), box.GetRemHeight(), hundredPercent, containerInlinePt, containerBlockPt,
+            // box.GetEmHeight()/GetRemHeight() live in the adapter's device-scaled *font-measurement*
+            // space (trueFontSizePt / pixelsPerPoint - CssBox.NoEms's doc comment, issue #631) - the
+            // OPPOSITE direction from the box's internal, pixelsPerPoint-inflated layout space every other
+            // basis below (container/viewport sizes) already reports. Undoing that device-scaling here
+            // (mirroring CssImagePainter.ResolveGradientLength, issue #826) before handing them to
+            // Length.ToPixels as the em/rem basis is a no-op when only container/viewport/percent units
+            // are in play - those bases are unaffected - so it's safe to always apply.
+            var result = length.ToPixels(box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, hundredPercent,
+                containerInlinePt, containerBlockPt,
                 viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt);
 
             // An absolute length (px/pt/in/cm/mm/pc) resolves via Length.ToPixels as if the internal
             // layout unit were a true PDF point - correct only when PixelsPerPoint is 1 (PixelsPerInch
-            // == 72). Every relative unit above is already self-consistently scaled, since its own basis
-            // (GetEmHeight/GetRemHeight/container/viewport sizes) is itself in the box's real, possibly
-            // PixelsPerPoint-inflated, internal coordinate space (see HtmlContainer's PageSize/Location/
-            // margin properties) - only the absolute branch needs this catch-up multiply (issue #814).
+            // == 72). em/rem/ex/ch need the same catch-up multiply now that their basis above has been
+            // undone back to true points: Length.ToPixels multiplies that basis by the length's own
+            // literal number, so the result is still in true points until this multiply lands it in the
+            // box's inflated space (issue #826). Container/viewport/percent units need no such multiply -
+            // their basis (GetContainerRelativeUnitBasis/GetViewportUnitBasis) is already reported in the
+            // box's real, possibly PixelsPerPoint-inflated, internal coordinate space (see
+            // HtmlContainer's PageSize/Location/margin properties) - issue #814.
             // Every internal engine that temporarily re-serializes an already-resolved size back into
             // box.Width/Height as a "pt" string to re-run layout (CssLayoutEngineFlex/Grid,
             // ItemContentCommit, a table caption's own Height) pre-divides by this same factor before
             // formatting, so this multiply round-trips those unchanged rather than double-scaling them.
-            return length.IsAbsolute ? result * PixelsPerPointOf(box) : result;
+            var needsCatchUpMultiply = length.IsAbsolute
+                || length.Type is Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex or Length.Unit.Ch;
+            return needsCatchUpMultiply ? result * pixelsPerPoint : result;
         }
 
         /// <summary>
@@ -373,18 +387,26 @@ namespace PeachPDF.Html.Core.Parse
         {
             var (containerWidthPt, containerHeightPt, containerInlinePt, containerBlockPt) = box.GetContainerRelativeUnitBasis();
             var (viewportWidthPt, viewportHeightPt, viewportInlinePt, viewportBlockPt) = box.GetViewportUnitBasis();
+            var pixelsPerPoint = PixelsPerPointOf(box);
 
-            var result = ParseLength(length, hundredPercent, box.GetEmHeight(), box.GetRemHeight(), null, false,
+            // box.GetEmHeight()/GetRemHeight() need the same device-scaling correction the typed Length
+            // overload above applies (issue #826) before use as the em/rem basis - see that overload's
+            // comment. This is the overload the vast majority of Length-typed CSS box-geometry properties
+            // (padding-*, width/height, margin-*, border-*-radius, min-*/max-*, etc.) actually resolve
+            // through, since css-properties.json stores them as raw strings, not typed Length values.
+            var result = ParseLength(length, hundredPercent, box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, null, false,
                 containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt,
                 containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt);
 
-            // Same absolute-length catch-up as the typed Length overload above (issue #814) - re-parse
-            // just far enough to classify the unit (a bare, already-folded absolute length, e.g. from a
-            // fully-absolute calc() that Layer A's CalcSerializer already reduced to literal text; a
-            // still-relative calc() expression doesn't parse as a single Length here and is deliberately
-            // left unscaled - see the plan's calc() open question).
-            return Length.TryParse(length, out var parsed) && parsed.IsAbsolute
-                ? result * PixelsPerPointOf(box)
+            // Same absolute-length catch-up as the typed Length overload above (issue #814), now extended
+            // to em/rem/ex/ch (issue #826) - re-parse just far enough to classify the unit (a bare,
+            // already-folded absolute or font-relative length, e.g. from a fully-absolute calc() that
+            // Layer A's CalcSerializer already reduced to literal text; a still-relative calc() expression
+            // doesn't parse as a single Length here and is deliberately left unscaled - see
+            // .claude/accepted-gaps/calc-length-not-scaled-by-pixelsperpoint.md, issue #829).
+            return Length.TryParse(length, out var parsed) &&
+                   (parsed.IsAbsolute || parsed.Type is Length.Unit.Em or Length.Unit.Rem or Length.Unit.Ex or Length.Unit.Ch)
+                ? result * pixelsPerPoint
                 : result;
         }
 

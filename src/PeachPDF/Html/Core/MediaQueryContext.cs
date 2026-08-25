@@ -1,5 +1,7 @@
 #nullable enable
 
+using PeachPDF.Adapters;
+
 namespace PeachPDF.Html.Core
 {
     /// <summary>
@@ -16,12 +18,21 @@ namespace PeachPDF.Html.Core
     /// <param name="ViewportHeightPt">The page-box height in points, or <c>null</c> when unknown.</param>
     /// <param name="ResolutionDpi">The output resolution in dots-per-inch, for <c>resolution</c> queries.</param>
     /// <param name="PreferredColorScheme">What <c>prefers-color-scheme</c> reports.</param>
+    /// <param name="PixelsPerPoint">The ambient <c>PdfGenerateConfig.PixelsPerInch / 72</c> catch-up
+    /// multiplier (issue #814's convention) a length-valued feature's resolved value must be scaled by
+    /// before comparing against <see cref="ViewportWidthPt"/>/<see cref="ViewportHeightPt"/> - despite
+    /// their <c>Pt</c> naming, those are PeachPDF's internal, <c>PixelsPerPoint</c>-inflated layout
+    /// coordinate space (<see cref="HtmlContainerInt.PageSize"/>), not true PDF points, whenever
+    /// <c>PixelsPerInch</c> is non-default. <c>1.0</c> (a no-op) with no adapter in scope, matching every
+    /// other existing call site of this idiom. See <see cref="MediaQueryMatcher.CompareLength"/> (issue
+    /// #820).</param>
     internal readonly record struct MediaQueryContext(
         string MediaType,
         double? ViewportWidthPt,
         double? ViewportHeightPt,
         double ResolutionDpi,
-        PdfColorScheme PreferredColorScheme)
+        PdfColorScheme PreferredColorScheme,
+        double PixelsPerPoint = 1.0)
     {
         /// <summary>
         /// A context carrying only the media type, with no page geometry — used by callers that have no
@@ -42,13 +53,15 @@ namespace PeachPDF.Html.Core
             var size = container.PageSize;
             double? width = size.Width > 0 ? size.Width : null;
             double? height = size.Height > 0 ? size.Height : null;
+            var pixelsPerPoint = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
 
             return new MediaQueryContext(
                 string.IsNullOrEmpty(media) ? "all" : media!,
                 width,
                 height,
                 96d,
-                container.PreferredColorScheme);
+                container.PreferredColorScheme,
+                pixelsPerPoint);
         }
     }
 }

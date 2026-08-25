@@ -29,12 +29,25 @@ namespace PeachPDF.Html.Core.Handlers
         /// with an image layer is kept off <see cref="Paint.BoxDecorationGeometry"/>'s short path precisely
         /// so this holds.
         /// </para>
+        /// <para>
         /// <paramref name="attachmentList"/> is the (possibly comma-list, per-layer) resolved
         /// background-attachment value; for a layer resolving to <c>fixed</c>, <paramref name="viewportRect"/>
         /// (the page/viewport rect, in the same paint-time coordinate space as <paramref name="originRect"/>)
         /// is used as the background positioning area instead of <paramref name="originRect"/> (CSS
         /// Backgrounds 3 §3.9) - this is the only difference <c>fixed</c> makes; <paramref name="clipRect"/>
         /// is unaffected, so the image is still only ever visible within the element's own box.
+        /// </para>
+        /// <para>
+        /// <paramref name="gradientEmSizePt"/> overrides <paramref name="box"/>'s own
+        /// <see cref="CssBox.GetEmHeight"/> as the <c>em</c>/<c>ex</c>/<c>ch</c> basis for a gradient's
+        /// stop-position/explicit-radius resolution (issues #823/#824), as an already-resolved
+        /// true-CSS-point font size - for callers with no real, laid-out <paramref name="box"/> of their
+        /// own whose declared font-size differs from <paramref name="box"/>'s (e.g.
+        /// <see cref="Dom.MarginBoxRenderer"/> passing the document root as a geometry stand-in - issue
+        /// #827). <c>null</c> (the default) keeps using <paramref name="box"/>'s own em-height, correct
+        /// for every real in-flow/background caller. <c>rem</c> is unaffected either way - it always
+        /// resolves against the document root's font-size regardless of context.
+        /// </para>
         /// </summary>
         public static void Paint(
             RGraphics g,
@@ -49,7 +62,8 @@ namespace PeachPDF.Html.Core.Handlers
             string attachmentList,
             RRect viewportRect,
             CssBox box,
-            Action<RBrush> drawBrush)
+            Action<RBrush> drawBrush,
+            double? gradientEmSizePt = null)
         {
             var attachmentValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(attachmentList), layerIndex);
             var positioningRect = attachmentValue == Keywords.Fixed ? viewportRect : originRect;
@@ -72,11 +86,11 @@ namespace PeachPDF.Html.Core.Handlers
                     break;
                 case CssImage.LinearGradient lg:
                     PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
-                        (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect, box), drawBrush);
+                        (brushGraphics, rect) => GetLinearGradientBrush(brushGraphics, lg.Gradient, rect, box, gradientEmSizePt), drawBrush);
                     break;
                 case CssImage.RadialGradient rg:
                     PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
-                        (brushGraphics, rect) => GetRadialGradientBrush(brushGraphics, rg.Gradient, rect, box), drawBrush);
+                        (brushGraphics, rect) => GetRadialGradientBrush(brushGraphics, rg.Gradient, rect, box, gradientEmSizePt), drawBrush);
                     break;
                 case CssImage.ConicGradient cg:
                     PaintGradientLayer(g, positioningRect, clipRect, roundedClipPath, layerIndex, sizeList, positionList, repeatList, box,
@@ -192,17 +206,17 @@ namespace PeachPDF.Html.Core.Handlers
                 intrinsicSizeInCssPixels: false);
         }
 
-        private static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect, CssBox box)
+        private static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect, CssBox box, double? emSizePt)
         {
             var (p1, p2) = ComputeGradientLine(originRect, gradient.AngleRad);
             double gdx = p2.X - p1.X, gdy = p2.Y - p1.Y;
             double gradientLength = Math.Sqrt(gdx * gdx + gdy * gdy);
-            var stops = NormalizeGradientStops(gradient.Stops, gradientLength, box, g.PixelsPerPoint, gradient.ColorSpace, gradient.HueMethod);
+            var stops = NormalizeGradientStops(gradient.Stops, gradientLength, box, g.PixelsPerPoint, emSizePt, gradient.ColorSpace, gradient.HueMethod);
             if (gradient.IsRepeating) stops = ExpandRepeatingStops(stops);
             return g.GetLinearGradientBrush(p1, p2, stops, gradient.IsRepeating);
         }
 
-        private static RBrush GetRadialGradientBrush(RGraphics g, ParsedRadialGradient radialGradient, RRect originRect, CssBox box)
+        private static RBrush GetRadialGradientBrush(RGraphics g, ParsedRadialGradient radialGradient, RRect originRect, CssBox box, double? emSizePt)
         {
             var pixelsPerPoint = g.PixelsPerPoint;
             var center = new RPoint(
@@ -222,13 +236,13 @@ namespace PeachPDF.Html.Core.Handlers
                 var rx = radialGradient.ExplicitRadiusX.Value;
                 radiusX = rx.Type == Length.Unit.Percent
                     ? rx.Value / 100.0 * originRect.Width
-                    : ResolveGradientLength(rx, box, pixelsPerPoint);
+                    : ResolveGradientLength(rx, box, pixelsPerPoint, emSizePt);
                 if (radialGradient.ExplicitRadiusY.HasValue)
                 {
                     var ry = radialGradient.ExplicitRadiusY.Value;
                     radiusY = ry.Type == Length.Unit.Percent
                         ? ry.Value / 100.0 * originRect.Height
-                        : ResolveGradientLength(ry, box, pixelsPerPoint);
+                        : ResolveGradientLength(ry, box, pixelsPerPoint, emSizePt);
                 }
                 else
                 {
@@ -277,7 +291,7 @@ namespace PeachPDF.Html.Core.Handlers
                 }
             }
 
-            var radialStops = NormalizeGradientStops(radialGradient.Stops, radiusX, box, pixelsPerPoint, radialGradient.ColorSpace, radialGradient.HueMethod);
+            var radialStops = NormalizeGradientStops(radialGradient.Stops, radiusX, box, pixelsPerPoint, emSizePt, radialGradient.ColorSpace, radialGradient.HueMethod);
             if (radialGradient.IsRepeating) radialStops = ExpandRepeatingStops(radialStops);
             return g.GetRadialGradientBrush(center, radiusX, radiusY, radialStops, radialGradient.IsRepeating);
         }
@@ -310,13 +324,13 @@ namespace PeachPDF.Html.Core.Handlers
             return (p1, p2);
         }
 
-        private static double? ConvertLength(Length? length, double gradientLength, CssBox box, double pixelsPerPoint)
+        private static double? ConvertLength(Length? length, double gradientLength, CssBox box, double pixelsPerPoint, double? emSizePt)
         {
             if (!length.HasValue) return null;
             var len = length.Value;
             if (len.Type == Length.Unit.Percent)
                 return len.Value / 100.0;
-            return gradientLength > 0 ? ResolveGradientLength(len, box, pixelsPerPoint) / gradientLength : 0.0;
+            return gradientLength > 0 ? ResolveGradientLength(len, box, pixelsPerPoint, emSizePt) / gradientLength : 0.0;
         }
 
         /// <summary>
@@ -344,14 +358,27 @@ namespace PeachPDF.Html.Core.Handlers
         /// differs by a full <c>pixelsPerPoint²</c> factor between 72 and 96 <c>PixelsPerInch</c>, instead
         /// of matching - so the device-scaling is undone here (an extra <c>* pixelsPerPoint</c>, mirroring
         /// <c>NoEms</c>) before the usual catch-up multiply, landing on <c>* pixelsPerPoint²</c> overall
-        /// rather than <c>ParseLength</c>'s implicit <c>* 1</c>. (The wider bug this exposes - every other
-        /// <c>ParseLength(Length,double,CssBox)</c> caller resolving em/rem/ex/ch box geometry, e.g.
-        /// <c>padding</c>/<c>width</c>/<c>border-radius</c>, is equally wrong under a non-default
-        /// <c>PixelsPerInch</c> - is out of scope here; see
-        /// .claude/accepted-gaps/parselength-em-rem-ex-ch-scaling-under-non-default-pixelsperinch.md.)
+        /// rather than <c>ParseLength</c>'s implicit <c>* 1</c>. (The wider bug this exposed - every other
+        /// <c>ParseLength(Length,double,CssBox)</c>/<c>ParseLength(string,double,CssBox)</c> caller
+        /// resolving em/rem/ex/ch box geometry, e.g. <c>padding</c>/<c>width</c>/<c>border-radius</c>, was
+        /// equally wrong under a non-default <c>PixelsPerInch</c> - has since been fixed at the source,
+        /// issue #826, so this call site's own independent workaround is now merely redundant with
+        /// (rather than compensating for a gap in) the shared helper, and is kept as-is here to avoid an
+        /// unrelated refactor.)
         /// </para>
         /// </summary>
-        private static double ResolveGradientLength(Length len, CssBox box, double pixelsPerPoint)
+        /// <param name="len">The gradient stop/hint position or explicit radius to resolve.</param>
+        /// <param name="box">The painting box - supplies <see cref="CssBox.GetEmHeight"/>/
+        /// <see cref="CssBox.GetRemHeight"/> when <paramref name="emSizePt"/> is not supplied, and is the
+        /// context for viewport/container-relative units and any other length family.</param>
+        /// <param name="pixelsPerPoint">The ambient catch-up multiplier described above.</param>
+        /// <param name="emSizePt">Overrides <paramref name="box"/>'s own <see cref="CssBox.GetEmHeight"/>
+        /// as the <c>em</c>/<c>ex</c>/<c>ch</c> basis, as an already-resolved true-CSS-point font size -
+        /// see <see cref="Paint"/>'s <c>gradientEmSizePt</c> parameter (issue #827). <c>null</c> keeps
+        /// using <paramref name="box"/>'s own em-height (device-scaled, so still needs the same
+        /// <c>* pixelsPerPoint</c> undo below); a supplied value is already in true points and skips it.
+        /// <c>rem</c> is unaffected either way.</param>
+        private static double ResolveGradientLength(Length len, CssBox box, double pixelsPerPoint, double? emSizePt = null)
         {
             switch (len.Type)
             {
@@ -361,7 +388,8 @@ namespace PeachPDF.Html.Core.Handlers
                     // Defers the actual em/ex/ch formula to Length.ToPixels (the single source of truth
                     // every other length consumer uses) rather than re-deriving it here - only the
                     // device-scaling correction below is specific to this call site.
-                    return len.ToPixels(box.GetEmHeight() * pixelsPerPoint, 0, 0.0) * pixelsPerPoint;
+                    var emBasisPt = emSizePt ?? box.GetEmHeight() * pixelsPerPoint;
+                    return len.ToPixels(emBasisPt, 0, 0.0) * pixelsPerPoint;
                 case Length.Unit.Rem:
                     return len.ToPixels(0, box.GetRemHeight() * pixelsPerPoint, 0.0) * pixelsPerPoint;
                 default:
@@ -606,6 +634,7 @@ namespace PeachPDF.Html.Core.Handlers
             double gradientLength,
             CssBox box,
             double pixelsPerPoint,
+            double? emSizePt = null,
             GradientColorSpace colorSpace = GradientColorSpace.Srgb,
             HueInterpolationMethod hueMethod = HueInterpolationMethod.Shorter)
         {
@@ -615,7 +644,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             var rawPos = new double?[n];
             for (int i = 0; i < n; i++)
-                rawPos[i] = ConvertLength(colorStops[i].Position, gradientLength, box, pixelsPerPoint);
+                rawPos[i] = ConvertLength(colorStops[i].Position, gradientLength, box, pixelsPerPoint, emSizePt);
 
             var resolved = new (RColor Color, double Position)[n];
             double first = rawPos[0] ?? 0.0;
@@ -677,7 +706,7 @@ namespace PeachPDF.Html.Core.Handlers
                     var s1 = resolved[colorIdx - 1];
                     var s2 = resolved[colorIdx];
                     double range = s2.Position - s1.Position;
-                    double hintPos = ConvertLength(stops[i].Position, gradientLength, box, pixelsPerPoint) ?? (s1.Position + range * 0.5);
+                    double hintPos = ConvertLength(stops[i].Position, gradientLength, box, pixelsPerPoint, emSizePt) ?? (s1.Position + range * 0.5);
                     double h = range > 1e-9
                         ? Math.Clamp((hintPos - s1.Position) / range, 1e-9, 1.0 - 1e-9)
                         : 0.5;

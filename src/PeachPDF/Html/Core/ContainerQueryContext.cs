@@ -29,6 +29,14 @@ namespace PeachPDF.Html.Core
     /// <param name="ContainerName">The container's own declared <c>container-name</c> list (raw,
     /// space-separated text, or <c>"none"</c>), for informational/debugging purposes - name matching
     /// itself happens earlier, in <see cref="Dom.CssBox.FindNearestQueryContainer"/>.</param>
+    /// <param name="PixelsPerPoint">The ambient <c>PdfGenerateConfig.PixelsPerInch / 72</c> catch-up
+    /// multiplier (issue #814's convention) a length-valued feature's resolved value must be scaled by
+    /// before comparing against <see cref="WidthPt"/>/<see cref="HeightPt"/>/<see cref="InlineSizePt"/>/
+    /// <see cref="BlockSizePt"/> - those are PeachPDF's internal, <c>PixelsPerPoint</c>-inflated layout
+    /// coordinate space, not true PDF points, whenever <c>PixelsPerInch</c> is non-default. See
+    /// <see cref="MediaQueryMatcher.CompareLength"/> (issue #820), same as its <see cref="MediaQueryContext"/>
+    /// analogue.</param>
     internal readonly record struct ContainerQueryContext(
-        double WidthPt, double? HeightPt, double InlineSizePt, double? BlockSizePt, string ContainerName);
+        double WidthPt, double? HeightPt, double InlineSizePt, double? BlockSizePt, string ContainerName,
+        double PixelsPerPoint = 1.0);
 }
