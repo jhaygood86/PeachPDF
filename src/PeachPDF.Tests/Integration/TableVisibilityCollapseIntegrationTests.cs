@@ -353,9 +353,13 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
+            // 215px, not 205px: 2 columns at 100px each plus 3 border-spacing slots at 5px is the
+            // genuine natural total - anything narrower would make the control itself shrink (now that
+            // ShrinkColumnsToFitAvailableWidth is live for every table, not only collapsed-column ones),
+            // which is not what this test is isolating.
             var (control, _) = await BuildAndLayout("""
                 <!DOCTYPE html><html><body>
-                <table class="t" style="border-spacing:5px; width:205px">
+                <table class="t" style="border-spacing:5px; width:215px">
                   <colgroup>
                     <col style="width:100px">
                     <col style="width:100px">
@@ -435,9 +439,10 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
+            // 215px, not 205px - see the sibling control block's own comment above.
             var (control, _) = await BuildAndLayout("""
                 <!DOCTYPE html><html><body>
-                <table class="t" style="border-spacing:5px; width:205px">
+                <table class="t" style="border-spacing:5px; width:215px">
                   <colgroup>
                     <col style="width:100px">
                     <col style="width:100px">
@@ -476,9 +481,11 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
+            // 215px, not 205px - see CollapsedColumn_WithBorderSpacing_LeavesNoResidualGap's control
+            // block comment above.
             var (control, _) = await BuildAndLayout("""
                 <!DOCTYPE html><html><body>
-                <table class="t" style="border-spacing:5px; width:205px">
+                <table class="t" style="border-spacing:5px; width:215px">
                   <colgroup>
                     <col style="width:100px">
                     <col style="width:100px">

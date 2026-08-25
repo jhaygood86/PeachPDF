@@ -22,7 +22,6 @@ using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -1952,26 +1951,64 @@ namespace PeachPDF.Html.Core.Dom
         /// While table width is larger than it should, and width is reducible.
         /// </summary>
         /// <remarks>
-        /// Provably unreachable under the current (pre-existing, out-of-scope) <see cref="CanReduceWidth()"/>
-        /// - see .claude/accepted-gaps/table-shrink-columns-dead-code.md.
+        /// The inner search wraps <c>curCol</c> back to 0 instead of walking straight past the end of
+        /// <see cref="_columnWidths"/> - the outer condition already guarantees some column is reducible
+        /// (<see cref="CanReduceWidth()"/>) before each entry, so wrapping is guaranteed to find it within
+        /// one full pass. <c>widthSum</c> is recomputed after every single-point reduction (matching
+        /// <see cref="ClipColumnsToMaxWidth"/>'s own pattern), so the loop stops as soon as the table
+        /// actually fits rather than shrinking every column down to its minimum regardless of how much
+        /// reduction was actually needed. It compares against
+        /// <see cref="GetWidthSumExcludingCollapsedColumnWidths"/>, not the raw <see cref="GetWidthSum"/>,
+        /// because <see cref="CollapseColumnWidths"/> runs after this (see its own remarks) - a collapsed
+        /// column's current width is still whatever content/explicit sizing left it at, not the zero it
+        /// is about to become, and letting that phantom width count toward the deficit would shrink
+        /// *visible* columns to compensate for width collapse alone is already about to remove in full.
         /// </remarks>
-        [ExcludeFromCodeCoverage]
         private void ShrinkColumnsToFitAvailableWidth()
         {
-            int curCol = 0;
-            var widthSum = GetWidthSum();
+            // A vertical table's column axis is physical Y (height) - see GetAvailableTableWidth's own
+            // remarks. Unlike Width, which block layout always resolves top-down before a child lays
+            // out, an auto-height containing block only reaches its own real Size.Height in its
+            // post-order height epilogue (CssLayoutEngine's IsHeightCalculated setter) - which runs
+            // strictly after this table, one of its children, has already laid out. So when the table
+            // itself has no explicit height (GetAvailableTableWidth never set _widthSpecified) and
+            // nothing up the containing-block chain has a definite height yet either,
+            // GetAvailableTableWidth reports whatever placeholder Size.Height an earlier pass left
+            // behind (commonly 0) - not a genuine constraint - and there is nothing to shrink toward.
+            if (_isVertical && !_widthSpecified && !_tableBox.ContainingBlock.IsHeightCalculated)
+                return;
+
+            var curCol = 0;
+            var widthSum = GetWidthSumExcludingCollapsedColumnWidths();
             while (widthSum > GetAvailableTableWidth() && CanReduceWidth())
             {
                 while (!CanReduceWidth(curCol))
+                {
                     curCol++;
+                    if (curCol >= _columnWidths!.Length)
+                        curCol = 0;
+                }
 
                 _columnWidths![curCol] -= 1f;
 
                 curCol++;
-
                 if (curCol >= _columnWidths.Length)
                     curCol = 0;
+
+                widthSum = GetWidthSumExcludingCollapsedColumnWidths();
             }
+        }
+
+        /// <summary>
+        /// <see cref="GetWidthSum"/>'s own total, but also excluding every collapsed column's current
+        /// (not yet zeroed) width - see <see cref="ShrinkColumnsToFitAvailableWidth"/>'s own remarks.
+        /// </summary>
+        private double GetWidthSumExcludingCollapsedColumnWidths()
+        {
+            var sum = GetWidthSum();
+            for (var i = 0; i < _columnWidths!.Length; i++)
+                if (IsColumnCollapsed(i)) sum -= _columnWidths[i];
+            return sum;
         }
 
         /// <summary>
@@ -5586,15 +5623,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="columnIndex"></param>
         /// <returns></returns>
         /// <remarks>
-        /// The bounds check below is backwards (always true, so this always returns <c>false</c>) -
-        /// see .claude/accepted-gaps/table-shrink-columns-dead-code.md. Left as-is: fixing it makes
-        /// <see cref="ShrinkColumnsToFitAvailableWidth"/> live for every table's layout, not just the
-        /// max-width scenario this investigation was actually about, and that broader activation
-        /// regresses vertical-writing-mode column sizing - a real, separate, out-of-scope bug of its own.
+        /// A collapsed column is never reducible here - it is already headed to zero width via
+        /// <see cref="CollapseColumnWidths"/> regardless of anything this method decides, and reducing
+        /// it 1 point at a time would just waste iterations without affecting
+        /// <see cref="GetWidthSumExcludingCollapsedColumnWidths"/>, the total <see cref="ShrinkColumnsToFitAvailableWidth"/>
+        /// actually compares against.
         /// </remarks>
         private bool CanReduceWidth(int columnIndex)
         {
-            if (_columnWidths!.Length >= columnIndex || GetColumnMinWidths().Length >= columnIndex)
+            if (columnIndex >= _columnWidths!.Length || columnIndex >= GetColumnMinWidths().Length || IsColumnCollapsed(columnIndex))
                 return false;
             return _columnWidths[columnIndex] > GetColumnMinWidths()[columnIndex];
         }
@@ -5605,7 +5642,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <returns></returns>
         /// <remarks>
-        /// The table's width can be larger than the result of this method, because of the minimum 
+        /// The table's width can be larger than the result of this method, because of the minimum
         /// size that individual boxes.
         /// </remarks>
         private double GetAvailableTableWidth()
@@ -5871,6 +5908,23 @@ namespace PeachPDF.Html.Core.Dom
                     // constrains the column) rather than measuring horizontal word-wrap content that
                     // does not describe this cell's own (vertical) flow.
                     var cellMinWidth = _isVertical ? 0 : cell.GetMinimumWidth();
+
+                    // A vertical table's column-sizing hint IS a cell's own explicit `height`
+                    // (CellInlineSize - see CalculateColumnWidths), and CSS 2.1 17.5.3 makes a table
+                    // cell's own specified size an unshrinkable floor at the cell's own layout time
+                    // (CssLayoutEngine.ApplyHeight's Math.Max against IsTableCell - never actually
+                    // shrunk by anything the table algorithm does). Folding that same floor in here
+                    // keeps ShrinkColumnsToFitAvailableWidth from thinking it can reduce a column below
+                    // a value a cell's own layout is going to reassert regardless, which would leave the
+                    // column's bookkeeping (interior spacing, the next column's start position, the
+                    // table's own reported width) inconsistent with what the cell actually paints.
+                    if (_isVertical)
+                    {
+                        var cellInlineSize = CellInlineSize(cell);
+                        if (CssValueParser.IsValidLength(cellInlineSize))
+                            cellMinWidth = Math.Max(cellMinWidth, CssValueParser.ParseLength(cellInlineSize, availCellWidth, cell));
+                    }
+
                     var cellInlineMinSize = CellInlineMinSize(cell);
                     if (cellInlineMinSize != "0" && CssValueParser.IsValidLength(cellInlineMinSize))
                     {
