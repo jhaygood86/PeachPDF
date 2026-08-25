@@ -5022,21 +5022,37 @@ namespace PeachPDF.Html.Core.Dom
                     cell.PositionAssignedByEngine = false;
                 }
 
-                // A CssSpacingBox is built with a bare "none" tag and never inherits style (its own doc
-                // comment), so its own WritingMode stays at the CSS initial value (horizontal-tb) even
-                // inside a vertical table - PerformLayout's ordinary auto-height-from-empty-content
-                // resolution then collapses the ActualBottom set above right back down to Location.Y,
-                // since for a horizontal-tb box that field is the one auto-resolved-from-content, not the
-                // engine-controlled row-axis extent it is here. Harmless for horizontal-tb, where the same
-                // resolution instead targets ActualRight - a field this loop never pre-sets before layout
-                // in the first place, so there is nothing for it to clobber. Re-asserting is safe: a
-                // spacer's own geometry is entirely engine-controlled (it has no content of its own to
-                // lay out), so there is nothing PerformLayout could have legitimately changed here. Found
-                // by rendering a real vertical-rl table with a rowspan cell and looking at the result - a
-                // row-axis-degenerate spacer put the row after the spanned one back at the spanned column's
+                // A cell's own auto-height content-flow resolution (CssLayoutEngine.CreateLineBoxes, which
+                // runs as part of PerformLayout above, well before ApplyHeight) discards whatever this loop
+                // pre-set above for ActualBottom along the column axis (physical Y for a vertical table) and
+                // replaces it with the cell's own content-driven bottom - correct per CSS 2.1 §10.6.3 for an
+                // ordinary block box, but CSS 2.1 §17.5.3 makes a table cell's own height the *larger* of its
+                // content height and its column's assigned extent, not its content height alone (issue
+                // #836). Re-asserting the floor here recovers it, mirroring exactly what ApplyHeight already
+                // does for a cell's own *explicit* height (Math.Max against content) - this is that same
+                // floor, sourced from the table algorithm's column-width decision instead of the cell's own
+                // `height` property, for the auto-height case ApplyHeight has no explicit value to float
+                // against.
+                //
+                // A CssSpacingBox needs this floor unconditionally, not just when its own height is auto: it
+                // is built with a bare "none" tag and never inherits style (its own doc comment), so its own
+                // WritingMode stays at the CSS initial value (horizontal-tb) even inside a vertical table -
+                // its ActualBottom is the one PerformLayout's ordinary auto-height-from-empty-content
+                // resolution always collapses back to Location.Y, since for a horizontal-tb box that field is
+                // the content-auto-resolved one, not the engine-controlled row-axis extent it is here.
+                // Harmless for horizontal-tb, where the same resolution instead targets ActualRight - a field
+                // this loop never pre-sets before layout in the first place, so there is nothing for it to
+                // clobber. Re-asserting is safe there regardless of Math.Max: a spacer has no content of its
+                // own to lay out, so ActualBottom can only have collapsed to Location.Y, never grown past it.
+                // Found by rendering a real vertical-rl table with a rowspan cell and looking at the result -
+                // a row-axis-degenerate spacer put the row after the spanned one back at the spanned column's
                 // own position instead of after it, corrupting every collapsed-border segment whose span
                 // depended on that row's own geometry (GetGridLineY reads grid.RowAt/CellAt directly).
-                if (_isVertical && cell is CssSpacingBox) cell.ActualBottom = cell.Location.Y + width;
+                // This floor runs before the PendingBreakToken correction below on purpose: a vertical
+                // table's own pageHeight is forced to double.MaxValue (see this class's pagination-cursor
+                // setup), so no cell reached from this loop ever stops mid-fragment - PendingBreakToken is
+                // always null here, and the two Math.Max calls never actually compete over the same cell.
+                if (_isVertical) cell.ActualBottom = Math.Max(cell.ActualBottom, cell.Location.Y + width);
 
                 // Did this cell finish? Asked here because here is the only place the answer exists: a
                 // box's record is cleared at the start of its next layout, and the engine's whole-table
