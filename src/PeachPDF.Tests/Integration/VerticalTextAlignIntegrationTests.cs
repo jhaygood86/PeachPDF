@@ -178,6 +178,34 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_TextAlignJustify_SingleOverflowingWordOnNonLastColumn_StaysFlushToBottom()
+        {
+            // Regression coverage for issue #843: ApplyVerticalJustifyAlignment's own overflow-guard fix
+            // (the vertical counterpart of #840's horizontal ApplyJustifyAlignment fix). A lone word that
+            // is both a non-last column's first and only word has no earlier sibling to overlap, so it
+            // must still be actively flushed to the column's target (bottom) edge even though that means
+            // spilling past the top edge - not left un-shifted at its natural, un-overflowing position the
+            // way the pre-#843 unconditional-`spacing`-but-no-active-overflow-handling code would leave it.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="margin:0;writing-mode: vertical-rl; width: 200pt; height: 40pt; font-size: 14pt; text-align: justify">aa bb ccccccccccccccccccccccccccccccccccccccccccccc dd ee</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el")!;
+            Assert.True(el.LineBoxes.Count >= 3, "fixture must produce a middle (non-first, non-last) column");
+
+            var overflowColumn = el.LineBoxes[1].Words.Where(w => !w.IsLineBreak && !w.IsSpaces).ToList();
+            var word = Assert.Single(overflowColumn);
+
+            Assert.True(word.Height > el.ClientBottom - el.ClientTop,
+                "fixture must actually overflow the column for this test to be meaningful");
+            Assert.Equal(el.ClientBottom, word.Bottom, 1);
+            Assert.True(word.Top < el.ClientTop,
+                $"expected the overflowing justified column to spill past the top edge (word.Top={word.Top:F2} " +
+                $"should be < ClientTop={el.ClientTop:F2})");
+        }
+
+        [Fact]
         public async Task VerticalRl_TextAlignJustify_AutoHeight_FillsTheTallestColumnDrivenFinalExtent()
         {
             // Explicit height on the wrapper (not "el") forces two unequal-content columns without

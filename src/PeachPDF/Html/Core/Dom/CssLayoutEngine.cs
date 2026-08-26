@@ -2296,7 +2296,17 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var wrapNoWrapBox = false;
 
-                    if (b.WhiteSpace.Value == Whitespace.NoWrap && coordinates.CurrentX > lineStartX)
+                    // This only makes sense as a *local* exception - moving b's whole run to a fresh line
+                    // when it doesn't fit is the correct behaviour for a `nowrap` span nested in otherwise-
+                    // wrapping content (b.WhiteSpace.Value == NoWrap while blockBox's own white-space still
+                    // permits line breaks elsewhere), but when blockBox itself is `nowrap`/`pre`, no line
+                    // break is possible anywhere in its content - not before b, not within it - so creating
+                    // one here just to relocate b is never correct: it produces a second line box despite
+                    // white-space:nowrap forbidding wrapping altogether (issue #841).
+                    var blockBoxPermitsWrap = blockBox.WhiteSpace.Value != Whitespace.NoWrap
+                                               && blockBox.WhiteSpace.Value != Whitespace.Pre;
+
+                    if (blockBoxPermitsWrap && b.WhiteSpace.Value == Whitespace.NoWrap && coordinates.CurrentX > lineStartX)
                     {
                         var boxRight = coordinates.CurrentX;
 
@@ -3313,23 +3323,34 @@ namespace PeachPDF.Html.Core.Dom
 
             if (wordCount <= 0d) return;
 
+            // See ApplyJustifyAlignment's own remarks (issue #840/#843) - the horizontal counterpart of
+            // this same overflow shape: a nested `white-space: nowrap` run of more than one word can
+            // overflow a non-last column's own available extent, and an unconditional per-word `spacing`/
+            // last-word flush can push a later word backward past an earlier one's own trailing edge
+            // (overlapping/garbled text) instead of spilling coherently past the column's edge. Floors each
+            // overflowing gap at that word's own natural `ActualWordSpacing` (0 when nothing follows it, not
+            // a flat zero) rather than the shared `spacing`, so a real space in the source still renders as
+            // one instead of the words rendering flush against each other.
             var spacing = (availableExtent - textSum) / wordCount;
+            var overflowsColumn = textSum > availableExtent;
             var cursor = finalFrame.InlineStartIsBottom ? clientBottom : clientTop;
 
             foreach (var word in lineBox.Words)
             {
+                var gap = overflowsColumn ? Math.Max(spacing, word.ActualWordSpacing) : spacing;
+
                 if (finalFrame.InlineStartIsBottom)
                 {
                     word.Top = cursor - word.Height;
-                    cursor -= word.Height + spacing;
+                    cursor -= word.Height + gap;
                 }
                 else
                 {
                     word.Top = cursor;
-                    cursor += word.Height + spacing;
+                    cursor += word.Height + gap;
                 }
 
-                if (word == lineBox.Words[^1])
+                if (word == lineBox.Words[^1] && (wordCount == 1d || !overflowsColumn))
                 {
                     word.Top = finalFrame.InlineStartIsBottom ? clientTop : clientBottom - word.Height;
                 }
@@ -3637,7 +3658,22 @@ namespace PeachPDF.Html.Core.Dom
             if (words <= 0d)
                 return; //Avoid Zero division
 
+            // A line whose own words already sum wider than availWidth (an overflowing non-last line -
+            // reachable when a nested nowrap run, not just a single unbreakable word, is what doesn't fit,
+            // see issue #840) must not get *negative* spacing: unlike ApplyCenterAlignment/
+            // ApplyRightAlignment's single uniform shift (which can never overlap words, since every word
+            // moves by the same amount and their relative order is preserved), spacing here is added
+            // between each pair of words individually - a large negative value pulls a later word back
+            // past an earlier one's own trailing edge, producing overlapping/garbled text instead of an
+            // overflowing-but-coherent line. This is the actively-justified (not silently-left-natural)
+            // behaviour issue #840 asks for - it isn't enough to floor the shared spacing at zero, though:
+            // `white-space: nowrap` forbids *breaking*, not collapsing a real space to nothing, so an
+            // overflowing gap floors at that specific pair's own natural gap (word.ActualWordSpacing, 0 when
+            // the word has no space after it) rather than a flat zero, keeping the walk monotonic (each
+            // word's Left is never less than the previous word's Right) while still rendering with the
+            // space the source actually has.
             var spacing = (availWidth - textSum) / words; //Spacing that will be used
+            var overflowsLine = textSum > availWidth;
 
             // text-indent belongs on the line-start side (CSS Text 3 §3), which is the physical right
             // under RTL - so the indent moves from the leading `currentX` offset to the trailing forced-
@@ -3653,9 +3689,16 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var word in lineBox.Words)
             {
                 word.Left = currentX;
-                currentX = word.Right + spacing;
+                currentX = word.Right + (overflowsLine ? Math.Max(spacing, word.ActualWordSpacing) : spacing);
 
-                if (word == lineBox.Words[^1])
+                // A lone word standing as both the line's first and last has no earlier sibling to
+                // overlap, so it is always actively flushed to the target edge even when that means
+                // spilling past the *other* edge (mirrors ApplyRightAlignment's own overflow fix). A line
+                // with more than one word only gets the same hard flush when it isn't overflowing - the
+                // walk above (with each overflowing gap floored at its own natural word-spacing) already
+                // leaves it at the coherent, non-overlapping position that an overflowing multi-word line
+                // should keep.
+                if (word == lineBox.Words[^1] && (lineBox.Words.Count == 1 || !overflowsLine))
                 {
                     word.Left = lineBox.OwnerBox.ClientRight - word.Width - (isRtl ? indent : 0);
                 }
@@ -3692,7 +3735,18 @@ namespace PeachPDF.Html.Core.Dom
             var diff = right - lastWord.Right - lastWord.OwnerBox.ActualBorderRightWidth - lastWord.OwnerBox.ActualPaddingRight;
             diff /= 2;
 
-            if (!(diff > 0)) return;
+            // right - lastWord.Right is, by construction, exactly the shift needed to center the line
+            // around its target - there is no direction in which a nonzero diff should be discarded. The
+            // previous positive-only guard assumed natural (pre-alignment, left-to-right-flowing) placement
+            // is never further right than the target, which holds whenever the line's content fits; an
+            // overflowing line (an unbreakable nowrap run wider than the box) needs the same negative-diff
+            // shift to center around the overflow, spilling symmetrically past both edges instead of being
+            // left un-shifted at its natural position. Mirrors ApplyRightAlignment's identical fix (issue
+            // #797/#840) - a uniform shift like this one can never overlap words (every word moves by the
+            // same amount, so their relative order and spacing are preserved), unlike
+            // ApplyJustifyAlignment's own per-word spacing, which needed a different fix for the same
+            // underlying issue.
+            if (!(Math.Abs(diff) > 0)) return;
 
             foreach (var word in line.Words)
             {
