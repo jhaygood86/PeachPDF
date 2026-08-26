@@ -522,6 +522,14 @@ namespace PeachPDF.Html.Core.Dom
             var currentColumnHyphenated = false;
             var effectiveWrapLimit = ComputeEffectiveWrapLimit(blockBox, frame, clientTop, wrapLimit, 0);
 
+            // Whether blockBox's own white-space permits a column break anywhere in its content at all -
+            // FlowBox's own `blockBoxPermitsWrap` counterpart (issue #841). Read once: if blockBox itself
+            // is nowrap/pre, no line break is legal anywhere in its content, so the nested-nowrap-run
+            // atomic-move check below (mirroring FlowBox's own wrapNoWrapBox) must never fire - it exists
+            // only for a *nested* nowrap run inside otherwise-wrapping content.
+            var blockBoxPermitsWrap = blockBox.WhiteSpace.Value != Whitespace.NoWrap
+                                       && blockBox.WhiteSpace.Value != Whitespace.Pre;
+
             void StartNewLine()
             {
                 // The column about to close is being abandoned for a new one - fold whether it ended in a
@@ -557,12 +565,21 @@ namespace PeachPDF.Html.Core.Dom
                 var wordAdvance = naturalWidth + word.ActualWordSpacing; // + spacing, what the next word's placement clears
                 var wordBlock = naturalHeight; // natural line-height - the line's own cross-axis thickness
 
+                // white-space: nowrap/pre on word's own owning box must never register as "doesn't fit" -
+                // the direct counterpart of FlowBox's own `overflows` exclusion (issue #844: this exclusion
+                // was missing entirely, so nowrap had no effect at all on vertical column-breaking). A
+                // pre-wrap run doesn't wrap on its own trailing whitespace either, mirroring FlowBox's
+                // identical carve-out.
+                var permitsOverflowWrap = word.OwnerBox.WhiteSpace.Value != Whitespace.NoWrap
+                                           && word.OwnerBox.WhiteSpace.Value != Whitespace.Pre
+                                           && (word.OwnerBox.WhiteSpace.Value != Whitespace.PreWrap || !word.IsSpaces);
+
                 // Whether word, placed at its current inlineOffset, fits this column's real usable extent
                 // (effectiveWrapLimit, narrowed from the box's own wrapLimit by a floated sibling, if any) -
                 // checked unconditionally, independent of column position, the same way FlowBox's own
                 // `overflows` is: a word that alone is too long for even an empty column must still get a
                 // real hyphenation attempt, not just an unavoidable-overflow pass-through.
-                var wordDoesNotFit = inlineOffset + wordAdvance > effectiveWrapLimit;
+                var wordDoesNotFit = permitsOverflowWrap && inlineOffset + wordAdvance > effectiveWrapLimit;
 
                 // hyphens:auto/manual: before giving up and wrapping the whole word, see if a cached
                 // candidate break point (from CssBox.ParseToWords - either an explicit soft hyphen or an
@@ -607,12 +624,40 @@ namespace PeachPDF.Html.Core.Dom
                     currentColumnHyphenated = true;
                 }
 
+                // A nested nowrap run (a box whose own white-space overrides an otherwise-wrapping
+                // ancestor's, e.g. a <span style="white-space:nowrap"> inside a normally-wrapping vertical
+                // block) must still be able to move to a fresh column as a whole unit if it doesn't fit -
+                // the vertical counterpart of FlowBox's own wrapNoWrapBox (issue #844). Evaluated once per
+                // run (entering a new owning box whose own white-space is nowrap) rather than per word, and
+                // gated on blockBoxPermitsWrap: when blockBox itself is nowrap, every word already shares
+                // that nowrap and permitsOverflowWrap above already suppresses the ordinary wrap check for
+                // all of them, so forcing a break here too would reintroduce #841's bug on this axis.
+                var entersNewNoWrapRun = blockBoxPermitsWrap
+                                          && word.OwnerBox.WhiteSpace.Value == Whitespace.NoWrap
+                                          && (i == 0 || words[i - 1].OwnerBox != word.OwnerBox);
+
+                var wrapsWholeNoWrapRun = false;
+                if (entersNewNoWrapRun && inlineOffset > 0)
+                {
+                    // The run's own total *inline-axis* (along-the-column) extent - NaturalWordSize's
+                    // Width, the same quantity wordAdvance above is built from, not Height (the cross-axis
+                    // line-thickness FlowBox's own horizontal `FullWidth` has no counterpart for).
+                    var runExtent = 0d;
+                    foreach (var runWord in word.OwnerBox.Words)
+                    {
+                        var (runWidth, _) = NaturalWordSize(g, runWord);
+                        runExtent += runWidth + runWord.ActualWordSpacing;
+                    }
+
+                    wrapsWholeNoWrapRun = inlineOffset + runExtent > effectiveWrapLimit;
+                }
+
                 // A fragment split from what was one word - a per-codepoint-font run, or a
                 // Vertical_Orientation run - must never itself be treated as a wrap opportunity, the same
                 // guard FlowBox's own wrap check already applies. inlineOffset > 0 (a real word already
                 // placed in this column) avoids wrapping a column that is still empty - the same
                 // unavoidable-overflow fallback FlowBox's own first-word-of-a-line case gets.
-                if (!word.SuppressWrapBefore && inlineOffset > 0 && wordDoesNotFit)
+                if (!word.SuppressWrapBefore && inlineOffset > 0 && (wordDoesNotFit || wrapsWholeNoWrapRun))
                     StartNewLine();
 
                 var physical = frame.ToPhysical(new RRect(inlineOffset, blockOffset, wordRectInline, wordBlock));

@@ -1,11 +1,14 @@
-# `text-align:center`/`justify` overflow guard, nowrap wrapping across sibling boxes, and vertical justify (#840, #841, #843)
+# `text-align:center`/`justify` overflow guard, nowrap wrapping across sibling boxes, and their vertical-writing-mode counterparts (#840, #841, #843, #844)
 
 ## Load-bearing idea
 
-Three bugs, fixed together since all three live in `CssLayoutEngine.cs`'s line/column-building and
-alignment code. #840 and #841 were both filed as deliberate out-of-scope items during the #694
-(`text-overflow: ellipsis`) work; #843 was filed (and then fixed in the same pass, once a code
-review caught a real gap in the first attempt) as the vertical-writing-mode counterpart of #840.
+Four bugs, fixed together since all four live in `CssLayoutEngine.cs`'s line/column-building and
+alignment code, and the last two were only discovered while porting the first two to vertical
+writing mode. #840 and #841 were both filed as deliberate out-of-scope items during the #694
+(`text-overflow: ellipsis`) work; #843 was filed as the vertical counterpart of #840, and while
+building its own test fixture, #844 - the vertical counterpart of #841, and a materially bigger bug
+than #841 itself - turned up and was fixed in the same pass rather than filed and left for later,
+since #843's own fix had no way to be exercised end-to-end without it.
 
 **#840** - `ApplyCenterAlignment` had the exact same pre-#797/#694 one-directional guard
 `ApplyRightAlignment` used to (`if (!(diff > 0)) return;`): fixed identically, to
@@ -68,33 +71,58 @@ and the last-word override only fires for a single-word or non-overflowing colum
 translated from `Left`/`Right`/`Width` to `Top`/`Bottom`/`Height` (and both `InlineStartIsBottom`
 cursor directions, since vertical has two instead of horizontal's one).
 
-**A genuine end-to-end repro for the multi-word overflow case could not be constructed**, and this
-is itself a real finding, not just a testing footnote: `CreateVerticalLineBoxes` (vertical column
-line-breaking) has no counterpart to horizontal's `wrapNoWrapBox` (#841) - a nested
-`white-space:nowrap` run of more than one word splits across separate columns instead of moving
-together as a unit, confirmed empirically with the exact same fixture shape #840's horizontal test
-uses. Without that grouping mechanism, normal column-breaking always finds a split point between
-two words once nothing forces them to stay together, so "two-or-more words sharing one overflowing
-non-last column" literally cannot happen via markup yet. Filed as
-[#844](https://github.com/jhaygood86/PeachPDF/issues/844) rather than expanding this change's scope
-to fix vertical `wrapNoWrapBox` too. The vertical fix is covered instead by a single-word-overflow
-regression test (mirrors #840's own single-word carve-out test) plus the pre-existing non-overflow
-multi-word vertical justify tests, which both continue to pass unchanged.
+**A genuine end-to-end repro for #843's multi-word overflow case could not be constructed at
+first**, and chasing down *why* is what led to #844: `CreateVerticalLineBoxes` (vertical column
+line-breaking) had no counterpart to horizontal's `overflows` white-space exclusion *or*
+`wrapNoWrapBox` at all - not a narrower "grouping across sibling boxes only" gap as first assumed
+when filing #844, but a complete absence: `white-space: nowrap` had **zero effect** on vertical
+column-breaking, confirmed empirically with a single-box nowrap fixture that still wrapped onto
+seven columns. Fixed with the direct structural counterpart of #841's own two mechanisms, adapted
+to `CreateVerticalLineBoxes`'s flat-word-list model (unlike `FlowBox`'s per-box recursive walk):
+`wordDoesNotFit`'s computation now excludes a word whose own owning box is `nowrap`/`pre` (mirrors
+`overflows`), and a new `wrapsWholeNoWrapRun` check - evaluated once per run, on the first word
+whose owning box differs from the previous word's - sums that whole owning box's own words and
+forces a fresh column when the run doesn't fit from the current position, gated on `blockBox`'s own
+white-space still permitting wrap somewhere (the `blockBoxPermitsWrap` guard, #841's exact
+reasoning ported over). **One real bug in the first attempt at this, caught by testing across a
+range of column heights rather than trusting a single fixture**: the run-extent sum used
+`NaturalWordSize`'s `Height` (the cross-axis line-thickness `wordBlock` uses) instead of `Width`
+(the inline/along-the-column advance `wordAdvance` uses) - the two axes are easy to transpose since
+`CreateVerticalLineBoxes` measures every word in its natural *horizontal* orientation before
+rotating it into physical vertical space, and mixing them up made `wrapsWholeNoWrapRun` evaluate
+false in every case, silently no-op-ing the whole mechanism while every "does it move to a fresh
+column at all" test still happened to pass (a moved run and an unmoved-but-happens-to-fit run look
+identical when the wrong axis makes the overflow check never fire). Caught by testing the same
+fixture across three different column heights and noticing the placement never moved - a single
+fixture at one height could easily have missed this.
+
+Once #844 was fixed, #843's own multi-word overflow scenario became constructible for real, and
+the fix (already correct - it only needed a code path to reach it) is now covered by a genuine
+end-to-end regression test, not just the single-word carve-out.
 
 ## What running it (not just reading it) confirmed
 
-- Regression-guarded the *legitimate* `wrapNoWrapBox` scenario (nested nowrap span inside an
-  otherwise-wrapping block) still moves the span to its own line as a unit, unchanged by the
-  block-level guard - `NowrapMultiBoxWrappingTests.NestedNowrapSpan_InOtherwiseWrappingBlock_StillMovesToNextLineAsUnit`.
+- Regression-guarded the *legitimate* `wrapNoWrapBox`/`wrapsWholeNoWrapRun` scenario (nested nowrap
+  span inside an otherwise-wrapping block) still moves the span to its own line/column as a unit,
+  unchanged by each fix's own block-level guard - horizontal:
+  `NowrapMultiBoxWrappingTests.NestedNowrapSpan_InOtherwiseWrappingBlock_StillMovesToNextLineAsUnit`;
+  vertical: `VerticalNowrapMultiBoxWrappingTests.NestedNowrapSpan_InOtherwiseWrappingBlock_StillMovesToNextColumnAsUnit`.
 - A code-review pass caught a real defect in the first version of the #840 justify fix before it
   landed: flooring the shared `spacing` at a flat zero (rather than each pair's own natural
   `ActualWordSpacing`) stopped the overlap but glued the two nowrap-joined words together with no
   visible gap at all - passed every test that existed at the time, since none of them asserted on
   gap width, only on non-overlap. Caught only by an independent review reasoning through what
   `white-space: nowrap` actually forbids (breaking, not space-collapsing). Fixed, and the
-  regression test tightened to assert a real (`> 1pt`) gap, not just non-overlap.
-- `CenterJustifyOverflowAlignmentTests`/`NowrapMultiBoxWrappingTests` (8 tests) plus the new vertical
-  single-word-overflow test in `VerticalTextAlignIntegrationTests` (1 test): all pass.
+  regression test tightened to assert a real (`> 1pt`) gap, not just non-overlap - the same
+  tightened assertion now covers the vertical multi-word overflow test too.
+- The `Height`/`Width`-axis bug above was caught by adding an internal `DebugLog` collector
+  temporarily (a static `List<string>` on `CssLayoutEngine`, gated behind
+  `InternalsVisibleTo("PeachPDF.Tests")`) since neither `Console.WriteLine` nor xUnit's
+  `ITestOutputHelper` surfaced output through this repo's vstest-based `dotnet test` invocation -
+  removed again once the bug was found and fixed.
+- `CenterJustifyOverflowAlignmentTests`/`NowrapMultiBoxWrappingTests` (8 tests),
+  `VerticalNowrapMultiBoxWrappingTests` (4 tests), and the two new tests in
+  `VerticalTextAlignIntegrationTests` (single-word and multi-word overflow): all pass.
 - Full `Rtl|TextAlign|WhiteSpace|Justify|Nowrap|TextOverflow|TextIndent`-filtered sweep and the full
   vertical text-align suite: all pass, no regressions in the adjacent alignment/wrapping code these
   fixes touch.

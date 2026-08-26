@@ -17,3 +17,9 @@ crosses - now always renders as a single line box, as the spec requires. A `nowr
 only plain text, or a *nested* element that re-declares its own `white-space: nowrap` inside an
 otherwise normally-wrapping block (which correctly moves as a whole unit to a new line when it
 doesn't fit), are both unaffected by this change.
+
+A vertical-writing-mode (`writing-mode: vertical-rl`/`vertical-lr`) box had it worse: `white-space:
+nowrap` had **no effect at all** on column-breaking, even for a single box's own plain-text content
+with no inline markup involved. It now behaves the same as horizontal - a nowrap vertical box's
+content stays on one column, and a nested nowrap run moves to a fresh column as a whole unit when it
+doesn't fit alongside otherwise-wrapping content.

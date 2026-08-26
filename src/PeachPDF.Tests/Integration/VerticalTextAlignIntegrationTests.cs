@@ -206,6 +206,47 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task VerticalRl_TextAlignJustify_MultiWordOverflowingColumn_WordsStayInOrder_NoOverlap()
+        {
+            // The genuine multi-word overflow shape #843 fixes: a nested `white-space:nowrap` span (now
+            // correctly moved to its own column as a unit - issue #844) whose two words together overflow
+            // that column. An unconditional last-word flush override would push the second word backward
+            // through the first word's own trailing edge, producing overlapping/garbled text - the direct
+            // vertical counterpart of CenterJustifyOverflowAlignmentTests's horizontal
+            // Justify_MultiWordOverflowingLine_WordsStayInOrder_NoOverlap.
+            var html = LayoutHarness.Wrap("""
+                <div id="el" style="margin:0;writing-mode: vertical-rl; height: 60pt; font-size: 14pt; text-align: justify">aa <span style="white-space:nowrap">bbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccc</span> dd ee</div>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var el = LayoutHarness.FindById(root, "el")!;
+            Assert.True(el.LineBoxes.Count >= 3, "fixture must produce a middle (non-first, non-last) column");
+
+            var overflowColumn = el.LineBoxes[1].Words.Where(w => !w.IsLineBreak && !w.IsSpaces)
+                .OrderBy(w => w.Top).ToList();
+            Assert.Equal(2, overflowColumn.Count);
+
+            var first = overflowColumn[0];
+            var second = overflowColumn[1];
+
+            var columnExtent = first.Height + second.Height;
+            Assert.True(columnExtent > el.ClientBottom - el.ClientTop,
+                "fixture must actually overflow the column for this test to be meaningful");
+
+            Assert.True(second.Top >= first.Bottom - 0.01,
+                $"expected the second word to start at or after the first word's trailing edge " +
+                $"(first.Bottom={first.Bottom:F2}, second.Top={second.Top:F2}) - overlap means the words render garbled");
+
+            // white-space:nowrap forbids *breaking* between the two words, not collapsing their real space
+            // to nothing - flooring the shared spacing at a flat zero would glue them together with no
+            // visible gap at all, just as wrong as overlap for a source that has a real space here.
+            var gap = second.Top - first.Bottom;
+            Assert.True(gap > 1,
+                $"expected a real, non-zero gap between the two words carried over from their source space " +
+                $"(gap={gap:F2}) - words rendering flush against each other means natural word-spacing was lost");
+        }
+
+        [Fact]
         public async Task VerticalRl_TextAlignJustify_AutoHeight_FillsTheTallestColumnDrivenFinalExtent()
         {
             // Explicit height on the wrapper (not "el") forces two unequal-content columns without
