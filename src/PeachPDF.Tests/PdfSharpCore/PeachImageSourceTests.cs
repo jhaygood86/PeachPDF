@@ -2,6 +2,7 @@ using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachImage;
 using PeachImage.Formats.Bmp;
 using PeachImage.Formats.Jpeg;
+using PeachImage.Formats.Png;
 using PeachImage.Formats.Webp;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
@@ -66,9 +67,20 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
             return ms.ToArray();
         }
 
-        private static byte[] MakeBmpBytes(int width, int height, byte r, byte g, byte b, byte a = 255)
+        // Rgb24, not the Rgba32 MakeSolidImage below builds - BmpEncoder always writes an explicit
+        // alpha mask for an Rgba32 source (no opaque-content auto-downgrade like PNG's indexed mode
+        // has), so routing through MakeSolidImage would make every "opaque BMP" fixture declare an
+        // alpha channel it doesn't need, which Image.HasAlpha (unlike the old per-pixel scan) now takes
+        // at face value. Every caller here wants a genuinely non-alpha-declaring opaque BMP.
+        private static byte[] MakeBmpBytes(int width, int height, byte r, byte g, byte b)
         {
-            using var image = MakeSolidImage(width, height, r, g, b, a);
+            using var image = Image.Create(width, height, PixelFormat.Rgb24);
+            var pixels = image.GetPixelSpan();
+            for (int i = 0; i < pixels.Length; i += 3)
+            {
+                pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b;
+            }
+
             using var ms = new MemoryStream();
             image.Save(ms, "bmp", new BmpEncoderOptions());
             return ms.ToArray();
@@ -112,13 +124,30 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [Fact]
         public void FromBinary_OpaquePng_IsNotTransparent()
         {
-            // Transparent reflects real alpha content (a full pixel scan), not source format - an
-            // opaque PNG (a=255 everywhere) takes the lossy JPEG embed path exactly like an opaque
-            // JPEG/BMP/WebP/AVIF source would, since there's no alpha channel to lose.
+            // Transparent reflects Image.HasAlpha - whether the source format declares an alpha
+            // channel, not a per-pixel scan. This fixture is small and uniform-color, so PeachImage's
+            // encoder auto-picks indexed color (no alpha chunk) for it; it takes the lossy JPEG embed
+            // path exactly like an opaque JPEG/BMP/WebP/AVIF source would.
             var bytes = MakePngBytes(4, 4, 255, 0, 0);
             var img = ImageSource.FromBinary("test.png", () => bytes);
 
             Assert.False(img.Transparent);
+        }
+
+        [Fact]
+        public void FromBinary_OpaqueTruecolorPng_IsTransparent()
+        {
+            // Unlike the indexed-color case above: a PNG explicitly encoded with a real alpha channel
+            // (color type 6) reports Transparent = true from Image.HasAlpha even though every pixel is
+            // fully opaque (a=255 everywhere) - HasAlpha reflects the source's declared alpha channel,
+            // not whether any pixel is actually translucent.
+            using var image = MakeSolidImage(4, 4, 255, 0, 0, a: 255);
+            using var ms = new MemoryStream();
+            image.Save(ms, "png", new PngEncoderOptions { ColorMode = PngColorMode.Truecolor });
+
+            var img = ImageSource.FromBinary("test.png", () => ms.ToArray());
+
+            Assert.True(img.Transparent);
         }
 
         [Fact]
@@ -134,8 +163,9 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         public void FromBinary_GifWithTransparency_IsTransparent()
         {
             // Previously (PNG-magic-byte sniff): this GIF would have been mis-routed to the lossy JPEG
-            // path, silently dropping its transparency, since only a PNG signature counted. A real
-            // pixel-alpha scan catches it regardless of source format.
+            // path, silently dropping its transparency, since only a PNG signature counted.
+            // Image.HasAlpha (source-format-declared alpha, from GIF's own transparent-index
+            // declaration) catches it regardless of source format.
             var gifBytes = Convert.FromBase64String(
                 "R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==");
 
