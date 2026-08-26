@@ -25,6 +25,26 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task MarginInlineStart_UnderDirAutoWithRtlContent_ResolvesToMarginRight()
+        {
+            // dir="auto" runs the first-strong-character detection pre-pass
+            // (DomParser.ResolveAutoDirectionality) before the cascade resolves Direction, so a logical
+            // property here must pick up the *detected* rtl, not the ltr default - proving
+            // ResolveLogicalProperties reads the box's final resolved Direction rather than one computed
+            // before auto-detection ran.
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  #el { margin-inline-start: 5pt; }
+                </style></head><body><div id="el" dir="auto">שלום עולם</div></body></html>
+                """;
+            var root = await BuildBoxTree(html);
+            var el = FindById(root, "el")!;
+
+            Assert.Equal("5pt", CssUtils.GetPropertyValue(el, "margin-right"));
+            Assert.Equal("0", CssUtils.GetPropertyValue(el, "margin-left"));
+        }
+
+        [Fact]
         public async Task MarginBlockStart_UnderWritingModeVerticalRl_ResolvesToMarginRight()
         {
             var box = await CascadedDiv("writing-mode: vertical-rl; margin-block-start: 5pt");
