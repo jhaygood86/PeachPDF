@@ -4,8 +4,6 @@ using PeachImage.Formats.Bmp;
 using PeachImage.Formats.Jpeg;
 using System;
 using System.IO;
-using System.Numerics;
-using System.Runtime.InteropServices;
 
 namespace PeachPDF.PdfSharpCore.Utils
 {
@@ -56,7 +54,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             try
             {
                 var decoded = Image.Load(stream, Rgba32DecoderOptions);
-                return new PeachImageSourceImpl(name, decoded, quality, HasRealAlpha(decoded));
+                return new PeachImageSourceImpl(name, decoded, quality, decoded.HasAlpha);
             }
             catch (ImageFormatException ex)
             {
@@ -71,43 +69,15 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
         // Whether to embed losslessly (preserving alpha, via SaveAsPdfBitmap) or as lossy JPEG is
-        // decided by real alpha content, not by source format - a WebP/AVIF/GIF image with genuine
-        // transparency needs the lossless path exactly as much as a PNG does (see
-        // .claude/migration-notes for the behavior change this replaced: a PNG-magic-byte sniff that
-        // silently dropped alpha on any non-PNG-sniffed source). Decoding always produces Rgba32 (see
-        // Rgba32DecoderOptions above), so this scans every pixel's alpha byte once, right after decode.
-        //
-        // Vectorized: GetPixelSpan() is R,G,B,A bytes, tightly packed, so reinterpreting it as a uint
-        // span puts each pixel's alpha byte in the top byte of its uint (little-endian). A batch of
-        // pixels is fully opaque iff every uint, masked to its top byte, still reads 0xFF000000 - so
-        // ANDing a whole Vector<uint> batch against that mask and comparing to the same mask broadcast
-        // finds a non-opaque pixel anywhere in the batch in one comparison, with an early exit the
-        // moment one is found (most images are either fully opaque or have alpha concentrated in one
-        // region, so most calls return well before scanning the whole buffer).
-        private static bool HasRealAlpha(Image decoded)
-        {
-            ReadOnlySpan<uint> pixels = MemoryMarshal.Cast<byte, uint>(decoded.GetPixelSpan());
-            const uint alphaMask = 0xFF000000u;
-            var maskVector = new Vector<uint>(alphaMask);
-
-            int i = 0;
-            int vectorizedLength = pixels.Length - pixels.Length % Vector<uint>.Count;
-            for (; i < vectorizedLength; i += Vector<uint>.Count)
-            {
-                var batch = new Vector<uint>(pixels.Slice(i, Vector<uint>.Count));
-                if (!Vector.EqualsAll(batch & maskVector, maskVector))
-                    return true;
-            }
-
-            for (; i < pixels.Length; i++)
-            {
-                if ((pixels[i] & alphaMask) != alphaMask)
-                    return true;
-            }
-
-            return false;
-        }
-
+        // decided by Image.HasAlpha - PeachImage 0.4.2+'s own record of whether the *source* declares
+        // an alpha channel (PNG color type, WebP alpha flag, GIF transparent-index declaration, BMP
+        // alpha mask, etc.), set by every codec from the source's header/chunk metadata rather than a
+        // per-pixel scan. That means a source that declares alpha but happens to be fully opaque (e.g.
+        // an RGBA-color-type PNG with alpha=255 everywhere) now takes the lossless path even though no
+        // pixel is actually translucent - a deliberate trade of "know it from the format" over "prove it
+        // from the pixels", not an oversight. See .claude/migration-notes for the behavior change this
+        // replaced: a per-pixel Vector<uint> scan of the decoded Rgba32 buffer that decided the embed
+        // path from real transparency rather than declared format capability.
         private sealed class PeachImageSourceImpl : IImageSource
         {
             private readonly Image _rgba;
