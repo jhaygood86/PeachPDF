@@ -1,7 +1,0 @@
-# Gradient stop positions and explicit radial radii now resolve `em`/`rem`/`ex`/`ch`/viewport units correctly instead of a wrong or crashing value
-
-**Landed:** 2026-08-25 — Fix gradient em/rem stop-position and explicit-radius length resolution (#823/#824)
-**Doc section:** docs/html-css-support.md § [Backgrounds](../../docs/html-css-support.md#backgrounds) (the `background-image` row)
-**Verified against v0.9.13:** the `v0.9.13` tag's docs describe gradient stop positions as "absolute-length or percentage" only, verbatim — confirmed genuine behavior change since that release, in scope for the next release notes.
-
-A gradient stop position given in `em` (e.g. `linear-gradient(to right, red 0, blue 2em, green)`) used to resolve against a hard-coded 16px default rather than the painting box's own font-size — so a box with any other font-size got a wrong stop position. An explicit `radial-gradient()` radius in any relative unit other than a percentage (`em`, `rem`, `ex`, `ch`, or a viewport/container-relative unit like `vw`/`cqw`) used to throw an exception instead of rendering at all. Both now resolve correctly against the box's real font-size/root font-size/viewport, for both stop positions and explicit radii. A document that previously worked around the crash (e.g. by converting an `em`-unit radius to an equivalent absolute length by hand) can drop that workaround; a document whose `em`-unit stop position rendered at the wrong position at a non-default font-size will now render at the position it always specified.
