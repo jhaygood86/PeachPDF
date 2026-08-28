@@ -223,13 +223,11 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         /// <remarks>
         /// Asserts bounds directly rather than comparing ring-for-ring against a default-PixelsPerInch
-        /// run: <c>FragmentPainter.Decorations.BlurSteps</c> (the blur approximation's band count) is a
-        /// separate, pre-existing PixelsPerPoint-sensitivity - it reads the still-layout-space (un-divided)
-        /// <c>blur</c> value directly, so the number of concentric rings itself varies with
-        /// <c>PixelsPerInch</c> (a rendering-quality knob, not a wrong position/size - out of scope here,
-        /// same category as the pen-width gap tracked in
-        /// .claude/accepted-gaps/rounded-border-stroke-width-pixelsperpoint.md). A ring-count-dependent
-        /// comparison would spuriously fail on that unrelated difference.
+        /// run, since when this test was written <c>FragmentPainter.Decorations.BlurSteps</c> (the blur
+        /// approximation's band count) had its own separate PixelsPerPoint-sensitivity (issue #852,
+        /// fixed alongside this comment) that would have made a ring-count-dependent comparison spuriously
+        /// fail. See <see cref="BlurLayerCount_IsInvariantUnderNonDefaultPixelsPerInch"/> for that count
+        /// invariance, now that it holds.
         /// </remarks>
         [Fact]
         public async Task BlurredInsetShadow_RingBounds_StayWithinPaddingBoxUnderNonDefaultPixelsPerInch()
@@ -255,6 +253,44 @@ namespace PeachPDF.Tests.Integration
                 Assert.InRange(r.Bounds.Top, -20, 120);
                 Assert.InRange(r.Bounds.Bottom, -20, 120);
             });
+        }
+
+        /// <summary>
+        /// Issue #852: <c>FragmentPainter.Decorations.BlurSteps</c> computed the blur approximation's
+        /// concentric-layer count from a raw, un-divided layout-space <c>blur</c> value, so the same
+        /// declared blur radius got a different (smoother or coarser) number of layers depending on
+        /// <c>PixelsPerInch</c> alone - a rendering-quality difference with no author-visible cause.
+        /// Covers both the outset (<see cref="BlurredOutsetShadow_DrawsConcentricSemiTransparentLayers"/>)
+        /// and inset (<see cref="BlurredInsetShadow_DrawsConcentricRingsAfterBackground"/>) paths, since
+        /// <c>BlurSteps</c> is called from both <c>PaintOutsetShadow</c> and <c>PaintInsetShadow</c>.
+        /// </summary>
+        [Fact]
+        public async Task BlurLayerCount_IsInvariantUnderNonDefaultPixelsPerInch()
+        {
+            const string outsetHtml = "<div id='el' style='box-shadow: 0 0 10pt black; background: white; width: 40pt; height: 30pt'>x</div>";
+            const string insetHtml = "<div id='el' style='box-shadow: inset 0 0 10pt black; background: white; width: 40pt; height: 30pt'>x</div>";
+
+            Assert.Equal(
+                await BlurLayerCountAt(outsetHtml, pixelsPerPoint: 1.0),
+                await BlurLayerCountAt(outsetHtml, pixelsPerPoint: 2.0));
+
+            Assert.Equal(
+                await BlurLayerCountAt(insetHtml, pixelsPerPoint: 1.0),
+                await BlurLayerCountAt(insetHtml, pixelsPerPoint: 2.0));
+        }
+
+        private static async Task<int> BlurLayerCountAt(string html, double pixelsPerPoint)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: pixelsPerPoint);
+            var el = LayoutHarness.FindById(root, "el")!;
+            var g = new TestRecordingGraphics { PixelsPerPointOverride = pixelsPerPoint };
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            var layers = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(p => p.Color is { R: 0, G: 0, B: 0, A: > 0 and < 255 })
+                .ToList();
+            Assert.NotEmpty(layers);
+            return layers.Count;
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────────
