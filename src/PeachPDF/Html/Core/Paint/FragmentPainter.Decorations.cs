@@ -474,21 +474,25 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>Builds an even-odd fill path of <paramref name="outer"/> with a rectangular
         /// <paramref name="hole"/> punched out - a filled ring. Used for inset-shadow falloff layers, since the
-        /// PDF backend has no clip-subtract primitive.</summary>
+        /// PDF backend has no clip-subtract primitive. <paramref name="outer"/>/<paramref name="hole"/> are in
+        /// raw layout-space coordinates, like every other box-geometry <see cref="RGraphicsPath"/> builder -
+        /// divided by <see cref="RGraphics.PixelsPerPoint"/> here since the path itself has no ambient
+        /// transform to divide it back down (issue #812; see <c>RenderUtils.GetRoundRect</c>'s remarks).</summary>
         private static RGraphicsPath BuildRingPath(RGraphics g, RRect outer, RRect hole)
         {
+            var ppp = g.PixelsPerPoint;
             var path = g.GetGraphicsPath();
 
-            path.Start(outer.Left, outer.Top);
-            path.LineTo(outer.Right, outer.Top);
-            path.LineTo(outer.Right, outer.Bottom);
-            path.LineTo(outer.Left, outer.Bottom);
+            path.Start(outer.Left / ppp, outer.Top / ppp);
+            path.LineTo(outer.Right / ppp, outer.Top / ppp);
+            path.LineTo(outer.Right / ppp, outer.Bottom / ppp);
+            path.LineTo(outer.Left / ppp, outer.Bottom / ppp);
             path.CloseFigure();
 
-            path.AddMove(hole.Left, hole.Top);
-            path.LineTo(hole.Right, hole.Top);
-            path.LineTo(hole.Right, hole.Bottom);
-            path.LineTo(hole.Left, hole.Bottom);
+            path.AddMove(hole.Left / ppp, hole.Top / ppp);
+            path.LineTo(hole.Right / ppp, hole.Top / ppp);
+            path.LineTo(hole.Right / ppp, hole.Bottom / ppp);
+            path.LineTo(hole.Left / ppp, hole.Bottom / ppp);
             path.CloseFigure();
 
             path.FillMode = RFillMode.EvenOdd;

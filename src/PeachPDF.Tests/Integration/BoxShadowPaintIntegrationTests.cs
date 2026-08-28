@@ -213,6 +213,50 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain(g.Log, c => c is TestRecordingGraphics.DrawPathCall);
         }
 
+        /// <summary>
+        /// Issue #812 (reopened): the concentric ring fills a blurred inset shadow paints
+        /// (<c>FragmentPainter.Decorations.BuildRingPath</c>) are built from raw layout-space coordinates
+        /// and drawn via <c>RGraphics.DrawPath</c>, which never divides by <c>PixelsPerPoint</c> - so
+        /// <c>BuildRingPath</c> itself must divide. Verified end-to-end (real layout at a non-default
+        /// <c>PixelsPerPoint</c>, not just the isolated path builder) since the bug's actual trigger is the
+        /// box's own layout-space geometry, not a hand-constructed rect.
+        /// </summary>
+        /// <remarks>
+        /// Asserts bounds directly rather than comparing ring-for-ring against a default-PixelsPerInch
+        /// run: <c>FragmentPainter.Decorations.BlurSteps</c> (the blur approximation's band count) is a
+        /// separate, pre-existing PixelsPerPoint-sensitivity - it reads the still-layout-space (un-divided)
+        /// <c>blur</c> value directly, so the number of concentric rings itself varies with
+        /// <c>PixelsPerInch</c> (a rendering-quality knob, not a wrong position/size - out of scope here,
+        /// same category as the pen-width gap tracked in
+        /// .claude/accepted-gaps/rounded-border-stroke-width-pixelsperpoint.md). A ring-count-dependent
+        /// comparison would spuriously fail on that unrelated difference.
+        /// </remarks>
+        [Fact]
+        public async Task BlurredInsetShadow_RingBounds_StayWithinPaddingBoxUnderNonDefaultPixelsPerInch()
+        {
+            const string html = "<div id='el' style='box-shadow: inset 0 0 10pt black; background: white; width: 40pt; height: 30pt'>x</div>";
+
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
+            var el = LayoutHarness.FindById(root, "el")!;
+            var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            var rings = g.Log.OfType<TestRecordingGraphics.DrawPathCall>()
+                .Where(p => p.Color is { R: 0, G: 0, B: 0, A: > 0 }).ToList();
+            Assert.NotEmpty(rings);
+
+            // The box (with its default 20pt margin) is only 40x30pt - a generous bound around it. Before
+            // the fix, BuildRingPath's un-divided (2x too large) coordinates put every ring's bounds well
+            // outside this range.
+            Assert.All(rings, r =>
+            {
+                Assert.InRange(r.Bounds.Left, -20, 120);
+                Assert.InRange(r.Bounds.Right, -20, 120);
+                Assert.InRange(r.Bounds.Top, -20, 120);
+                Assert.InRange(r.Bounds.Bottom, -20, 120);
+            });
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

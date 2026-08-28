@@ -334,6 +334,26 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
     "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes, plus overflow:hidden clipping descendant content to the curve and background-clip's inset curves reduced by border width.",
     radiusHtml, pdfConfig);
 
+// Renders the exact same document as the border_radius showcase above, but at a non-default
+// PixelsPerInch (issue #812, reopened) - every rounded border stroke, background fill, and
+// overflow-clip curve above is built from a PdfSharpAdapter.PixelsPerPoint-inflated layout-space
+// rect/radii; RenderUtils.GetRoundRect and BordersDrawHandler.GetRoundedBorderPath must divide by
+// PixelsPerPoint before building their paths, or the rounded geometry above renders too large and
+// mis-positioned relative to everything else on the page. ShrinkToFit is deliberately left off here
+// (unlike pdfConfig above) since it recomputes its own effective PixelsPerPoint from content
+// measurement and would make the two renders an apples-to-oranges comparison rather than isolating
+// the PixelsPerInch=96-vs-72 difference this showcase exists to demonstrate.
+PdfGenerateConfig pdfConfig96 = new()
+{
+    PageSize = PageSize.A4,
+    PageOrientation = PageOrientation.Portrait,
+    PixelsPerInch = 96
+};
+
+await SaveShowcaseAsync("border_radius_96dpi", "Backgrounds & Borders", "Border Radius (96 DPI)",
+    "The same border-radius coverage as the Border Radius showcase, rendered at PixelsPerInch=96 instead of the library's default 72 — confirms rounded borders, backgrounds, and overflow-clip curves render identically regardless of PixelsPerInch.",
+    radiusHtml, pdfConfig96);
+
 // --- Box-shadow showcase ---
 
 const string ShadowCss = """

@@ -38,21 +38,28 @@ namespace PeachPDF.Html.Core.Utils
             if (shape is null) return false;
 
             path = g.GetGraphicsPath();
+            // Every coordinate below is resolved against referenceBox/box in raw layout-space (the same
+            // PixelsPerInch-inflated space CssBox geometry lives in, needed so CssValueParser.ParseLength's
+            // own absolute-length PixelsPerPoint catch-up multiply - issue #814 - and the percentage basis
+            // stay consistent with each other). Like RenderUtils.GetRoundRect/BordersDrawHandler.GetRoundedBorderPath
+            // (issue #812), the path itself has no ambient transform to divide it back down, so every final
+            // coordinate is divided by g.PixelsPerPoint right before reaching the path.
+            var ppp = g.PixelsPerPoint;
 
             switch (shape.Kind)
             {
                 case BasicShapeGrammar.BasicShapeKind.Polygon:
                     useEvenOdd = shape.PolygonFillRule == BasicShapeGrammar.FillRule.Evenodd;
-                    BuildPolygon(path, shape, referenceBox, box);
+                    BuildPolygon(path, shape, referenceBox, box, ppp);
                     break;
                 case BasicShapeGrammar.BasicShapeKind.Inset:
-                    BuildInset(path, shape, referenceBox, box);
+                    BuildInset(path, shape, referenceBox, box, ppp);
                     break;
                 case BasicShapeGrammar.BasicShapeKind.Circle:
-                    BuildCircle(path, shape, referenceBox, box);
+                    BuildCircle(path, shape, referenceBox, box, ppp);
                     break;
                 case BasicShapeGrammar.BasicShapeKind.Ellipse:
-                    BuildEllipse(path, shape, referenceBox, box);
+                    BuildEllipse(path, shape, referenceBox, box, ppp);
                     break;
                 default:
                     path.Dispose();
@@ -64,14 +71,14 @@ namespace PeachPDF.Html.Core.Utils
             return true;
         }
 
-        private static void BuildPolygon(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box)
+        private static void BuildPolygon(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box, double ppp)
         {
             var points = shape.PolygonPoints;
 
             for (var i = 0; i < points.Count; i++)
             {
-                var x = referenceBox.X + CssValueParser.ParseLength(points[i].X, referenceBox.Width, box);
-                var y = referenceBox.Y + CssValueParser.ParseLength(points[i].Y, referenceBox.Height, box);
+                var x = (referenceBox.X + CssValueParser.ParseLength(points[i].X, referenceBox.Width, box)) / ppp;
+                var y = (referenceBox.Y + CssValueParser.ParseLength(points[i].Y, referenceBox.Height, box)) / ppp;
 
                 if (i == 0)
                     path.Start(x, y);
@@ -82,7 +89,7 @@ namespace PeachPDF.Html.Core.Utils
             path.CloseFigure();
         }
 
-        private static void BuildInset(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box)
+        private static void BuildInset(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box, double ppp)
         {
             var edges = shape.InsetEdges;
             var top = CssValueParser.ParseLength(edges[0], referenceBox.Height, box);
@@ -90,10 +97,10 @@ namespace PeachPDF.Html.Core.Utils
             var bottom = CssValueParser.ParseLength(edges[2], referenceBox.Height, box);
             var left = CssValueParser.ParseLength(edges[3], referenceBox.Width, box);
 
-            var x0 = referenceBox.X + left;
-            var y0 = referenceBox.Y + top;
-            var x1 = referenceBox.Right - right;
-            var y1 = referenceBox.Bottom - bottom;
+            var x0 = (referenceBox.X + left) / ppp;
+            var y0 = (referenceBox.Y + top) / ppp;
+            var x1 = (referenceBox.Right - right) / ppp;
+            var y1 = (referenceBox.Bottom - bottom) / ppp;
 
             // A rounded inset (inset(... round <radius>)) is captured by the grammar but rendered as a
             // plain rectangle here - the corner radius is not applied (documented limitation).
@@ -104,17 +111,17 @@ namespace PeachPDF.Html.Core.Utils
             path.CloseFigure();
         }
 
-        private static void BuildCircle(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box)
+        private static void BuildCircle(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box, double ppp)
         {
             var cx = referenceBox.X + CssValueParser.ParseLength(shape.CenterX, referenceBox.Width, box);
             var cy = referenceBox.Y + CssValueParser.ParseLength(shape.CenterY, referenceBox.Height, box);
 
             var r = ResolveCircleRadius(shape.RadiusX, cx, cy, referenceBox, box);
 
-            AppendEllipse(path, cx, cy, r, r);
+            AppendEllipse(path, cx / ppp, cy / ppp, r / ppp, r / ppp);
         }
 
-        private static void BuildEllipse(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box)
+        private static void BuildEllipse(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, CssBox box, double ppp)
         {
             var cx = referenceBox.X + CssValueParser.ParseLength(shape.CenterX, referenceBox.Width, box);
             var cy = referenceBox.Y + CssValueParser.ParseLength(shape.CenterY, referenceBox.Height, box);
@@ -122,7 +129,7 @@ namespace PeachPDF.Html.Core.Utils
             var rx = ResolveAxisRadius(shape.RadiusX, cx - referenceBox.X, referenceBox.Width, referenceBox.Width, box);
             var ry = ResolveAxisRadius(shape.RadiusY, cy - referenceBox.Y, referenceBox.Height, referenceBox.Height, box);
 
-            AppendEllipse(path, cx, cy, rx, ry);
+            AppendEllipse(path, cx / ppp, cy / ppp, rx / ppp, ry / ppp);
         }
 
         /// <summary>

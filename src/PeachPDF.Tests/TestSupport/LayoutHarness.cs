@@ -20,8 +20,10 @@ namespace PeachPDF.Tests.TestSupport
     {
         /// <summary>
         /// Lays <paramref name="html"/> out on a page of <paramref name="pageWidth"/> ×
-        /// <paramref name="pageHeight"/> points. <c>PixelsPerPoint</c> is pinned to 1.0 to match
-        /// production's default <c>PixelsPerInch = 72</c>, so asserted coordinates read as points.
+        /// <paramref name="pageHeight"/> points. <paramref name="pixelsPerPoint"/> defaults to 1.0 to
+        /// match production's default <c>PixelsPerInch = 72</c>, so asserted coordinates read as points;
+        /// pass a non-default value (e.g. 2.0, simulating <c>PixelsPerInch = 144</c>) for a test whose
+        /// subject is <c>PixelsPerPoint</c>-scaling behavior itself (issue #812 and its siblings).
         /// </summary>
         /// <param name="prepare">
         /// Optional: run against the parsed box tree's root after <c>SetHtml</c> and before layout, for a
@@ -40,9 +42,10 @@ namespace PeachPDF.Tests.TestSupport
             double pageHeight = 842,
             double margin = 20,
             Action<CssBox>? prepare = null,
-            Func<CssBox, HtmlContainerInt, RGraphics, Task>? after = null)
+            Func<CssBox, HtmlContainerInt, RGraphics, Task>? after = null,
+            double pixelsPerPoint = 1.0)
         {
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = pixelsPerPoint };
             var container = new HtmlContainerInt(adapter)
             {
                 MarginTop = margin,
@@ -52,7 +55,7 @@ namespace PeachPDF.Tests.TestSupport
             };
 
             var sheet = new XSize(pageWidth, pageHeight);
-            container.PageSize = Utilities.Utils.Convert(sheet, 1.0);
+            container.PageSize = Utilities.Utils.Convert(sheet, pixelsPerPoint);
 
             await container.SetHtml(html, null);
 
@@ -67,12 +70,12 @@ namespace PeachPDF.Tests.TestSupport
             // puts the root box above the first page's band and makes pagination nonsense.
             var band = new XSize(pageWidth - container.MarginLeft - container.MarginRight,
                                  pageHeight - container.MarginTop - container.MarginBottom);
-            container.PageSize = Utilities.Utils.Convert(band, 1.0);
-            container.MaxSize = Utilities.Utils.Convert(band, 1.0);
-            container.Location = Utilities.Utils.Convert(new XPoint(container.MarginLeft, container.MarginTop), 1.0);
+            container.PageSize = Utilities.Utils.Convert(band, pixelsPerPoint);
+            container.MaxSize = Utilities.Utils.Convert(band, pixelsPerPoint);
+            container.Location = Utilities.Utils.Convert(new XPoint(container.MarginLeft, container.MarginTop), pixelsPerPoint);
 
             var measure = XGraphics.CreateMeasureContext(sheet, XGraphicsUnit.Point, XPageDirection.Downwards);
-            using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
+            using var graphics = new GraphicsAdapter(adapter, measure, pixelsPerPoint);
             await container.PerformLayout(graphics);
 
             Assert.NotNull(container.Root);
