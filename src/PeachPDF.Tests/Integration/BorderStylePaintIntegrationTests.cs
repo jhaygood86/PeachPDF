@@ -360,6 +360,31 @@ namespace PeachPDF.Tests.Integration
                 Assert.Equal(widthsDefault[i], widthsScaled[i], 3);
         }
 
+        [Fact]
+        public async Task CollapsedBorderStyleDouble_StripeWidths_AreInvariantUnderNonDefaultPixelsPerInch()
+        {
+            // BordersDrawHandler.DrawDoubleOrGrooveRidgeSegment is the collapsed-table-border twin of
+            // DrawDoubleOrGrooveRidgeBorder covered above - a separate code path (CollapsedBorderModel's
+            // resolved segments, not a box's own DrawBoxBorders) with its own pen-width divisions.
+            var html = LayoutHarness.Wrap(
+                "<table style='border-collapse:collapse'><tr><td style='border:12pt double rgb(51,51,51)'>x</td></tr></table>");
+
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(html);
+            var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
+            FragmentPaintHarness.PaintPage(containerDefault, gDefault);
+            var widthsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(html, pixelsPerPoint: 2.0);
+            var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            FragmentPaintHarness.PaintPage(containerScaled, gScaled);
+            var widthsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            Assert.NotEmpty(widthsDefault);
+            Assert.Equal(widthsDefault.Count, widthsScaled.Count);
+            for (var i = 0; i < widthsDefault.Count; i++)
+                Assert.Equal(widthsDefault[i], widthsScaled[i], 3);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
