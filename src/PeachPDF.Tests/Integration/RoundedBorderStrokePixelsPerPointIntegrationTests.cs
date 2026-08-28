@@ -32,6 +32,41 @@ namespace PeachPDF.Tests.Integration
             AssertPathsMatch(defaultPaths, scaledPaths);
         }
 
+        /// <summary>
+        /// Issue #851: <c>BordersDrawHandler.GetPen</c> set a rounded border stroke's <c>RPen.Width</c>
+        /// from a raw, un-divided layout-space value - unlike the path's own (correctly divided)
+        /// coordinates asserted above, so at a non-default <c>PixelsPerInch</c> the stroke rendered
+        /// correctly positioned but visibly thicker than declared.
+        /// </summary>
+        [Fact]
+        public async Task RoundedBorderStroke_PenWidth_IsInvariantUnderNonDefaultPixelsPerInch()
+        {
+            const string html = "<div id='box' style='width:100pt;height:100pt;" +
+                                 "border:6pt solid black;border-radius:14pt;'></div>";
+
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var boxDefault = LayoutHarness.FindById(rootDefault, "box");
+            Assert.NotNull(boxDefault);
+            var recordingDefault = new RecordingGraphics(new PdfSharpAdapter()) { PixelsPerPointOverride = 1.0 };
+            FragmentPaintHarness.PaintBox(containerDefault, boxDefault!, recordingDefault);
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
+            var boxScaled = LayoutHarness.FindById(rootScaled, "box");
+            Assert.NotNull(boxScaled);
+            var recordingScaled = new RecordingGraphics(new PdfSharpAdapter()) { PixelsPerPointOverride = 2.0 };
+            FragmentPaintHarness.PaintBox(containerScaled, boxScaled!, recordingScaled);
+
+            Assert.NotEmpty(recordingDefault.StrokedPenWidths);
+            Assert.Equal(recordingDefault.StrokedPenWidths.Count, recordingScaled.StrokedPenWidths.Count);
+            for (var i = 0; i < recordingDefault.StrokedPenWidths.Count; i++)
+                Assert.Equal(recordingDefault.StrokedPenWidths[i], recordingScaled.StrokedPenWidths[i], 3);
+
+            // Sanity: the pen width should actually equal the declared 6pt border width at both
+            // PixelsPerInch values, not just happen to agree with each other.
+            Assert.All(recordingDefault.StrokedPenWidths, w => Assert.Equal(6, w, 1));
+            Assert.All(recordingScaled.StrokedPenWidths, w => Assert.Equal(6, w, 1));
+        }
+
         [Fact]
         public async Task RoundedBorderStroke_NonDefaultPixelsPerInch_StaysWithinBoxBounds()
         {

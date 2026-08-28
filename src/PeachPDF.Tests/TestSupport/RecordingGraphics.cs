@@ -58,6 +58,13 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         public List<RecordingGraphicsPath> StrokedPaths { get; } = [];
 
+        /// <summary>
+        /// The <see cref="RPen.Width"/> of each stroke in <see cref="StrokedPaths"/>, aligned by index -
+        /// issue #851: <c>BordersDrawHandler.GetPen</c> set a rounded border stroke's pen width from a
+        /// raw, un-divided layout-space value, unlike the path's own (correctly divided) coordinates.
+        /// </summary>
+        public List<double> StrokedPenWidths { get; } = [];
+
         /// <summary>Total PushClip invocations.</summary>
         public int PushCount { get; private set; }
 
@@ -187,7 +194,9 @@ namespace PeachPDF.Tests.TestSupport
         public override void DrawImage(RImage image, RRect destRect) { }
         public override void DrawPath(RPen pen, RGraphicsPath path)
         {
-            if (path is RecordingGraphicsPath recordingPath) StrokedPaths.Add(recordingPath);
+            if (path is not RecordingGraphicsPath recordingPath) return;
+            StrokedPaths.Add(recordingPath);
+            StrokedPenWidths.Add(pen.Width);
         }
 
         public override void DrawPath(RBrush brush, RGraphicsPath path)
