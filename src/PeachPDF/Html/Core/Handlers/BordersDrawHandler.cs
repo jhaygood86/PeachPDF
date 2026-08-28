@@ -159,12 +159,14 @@ namespace PeachPDF.Html.Core.Handlers
                 innerColor = style == LineStyle.Groove ? color : Darken(color);
             }
 
+            // outerWidth/innerWidth stay in the caller's raw, un-divided layout-space units below -
+            // see DrawDoubleOrGrooveRidgeBorder's matching remark.
             var outerPen = g.GetPen(outerColor);
-            outerPen.Width = outerWidth;
+            outerPen.Width = outerWidth / g.PixelsPerPoint;
             outerPen.DashStyle = RDashStyle.Solid;
 
             var innerPen = g.GetPen(innerColor);
-            innerPen.Width = innerWidth;
+            innerPen.Width = innerWidth / g.PixelsPerPoint;
             innerPen.DashStyle = RDashStyle.Solid;
 
             if (isHorizontal)
@@ -372,12 +374,16 @@ namespace PeachPDF.Html.Core.Handlers
                 innerColor = style == LineStyle.Groove ? color : Darken(color);
             }
 
+            // outerWidth/innerWidth stay in the caller's raw, un-divided layout-space units below -
+            // they're paired with the still-raw rect in the DrawLine calls, which divide position and
+            // width together downstream (GraphicsAdapter.DrawLine). Only the pen's own stroke width
+            // needs the PixelsPerPoint correction here, same reason as GetPen's.
             var outerPen = g.GetPen(outerColor);
-            outerPen.Width = outerWidth;
+            outerPen.Width = outerWidth / g.PixelsPerPoint;
             outerPen.DashStyle = RDashStyle.Solid;
 
             var innerPen = g.GetPen(innerColor);
-            innerPen.Width = innerWidth;
+            innerPen.Width = innerWidth / g.PixelsPerPoint;
             innerPen.DashStyle = RDashStyle.Solid;
 
             switch (border)
@@ -504,7 +510,11 @@ namespace PeachPDF.Html.Core.Handlers
         private static RPen GetPen(RGraphics g, LineStyle style, RColor color, double width)
         {
             var p = g.GetPen(color);
-            p.Width = width;
+            // width is the caller's raw, un-divided layout-space (PixelsPerInch-inflated) border
+            // width - every border *position* is already divided by PixelsPerPoint before reaching
+            // the backend (GraphicsAdapter.DrawLine/DrawPolygon, GetRoundedBorderPath's own ppp
+            // setup), but a pen's own stroke width bypasses those and needs the same correction here.
+            p.Width = width / g.PixelsPerPoint;
             p.DashStyle = style switch
             {
                 LineStyle.Solid => RDashStyle.Solid,

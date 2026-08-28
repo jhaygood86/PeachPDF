@@ -302,6 +302,64 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(LineStyle.Solid, div.BorderLeftStyle.Value);
         }
 
+        // ─── issue #851: pen stroke width ignores non-default PixelsPerInch ────────
+
+        [Fact]
+        public async Task BorderStyleDotted_PenWidth_IsInvariantUnderNonDefaultPixelsPerInch()
+        {
+            const string html = "<div id='b' style='border: 12pt dotted rgb(51,51,51)'>x</div>";
+
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var divDefault = LayoutHarness.FindById(rootDefault, "b");
+            Assert.NotNull(divDefault);
+            var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
+            FragmentPaintHarness.PaintBox(containerDefault, divDefault!, gDefault);
+            var widthsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
+            var divScaled = LayoutHarness.FindById(rootScaled, "b");
+            Assert.NotNull(divScaled);
+            var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            FragmentPaintHarness.PaintBox(containerScaled, divScaled!, gScaled);
+            var widthsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            Assert.NotEmpty(widthsDefault);
+            Assert.Equal(widthsDefault.Count, widthsScaled.Count);
+            for (var i = 0; i < widthsDefault.Count; i++)
+                Assert.Equal(widthsDefault[i], widthsScaled[i], 3);
+
+            // Sanity: the pen width should actually equal the declared 12pt border width.
+            Assert.All(widthsDefault, w => Assert.Equal(12, w, 1));
+        }
+
+        [Fact]
+        public async Task BorderStyleDoubleAndGroove_StripeWidths_AreInvariantUnderNonDefaultPixelsPerInch()
+        {
+            const string html = "<div id='b' style='border-top-style: double; border-top-width: 12pt; " +
+                                 "border-top-color: rgb(51,51,51); border-left-style: groove; " +
+                                 "border-left-width: 12pt; border-left-color: rgb(51,51,51)'>x</div>";
+
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var divDefault = LayoutHarness.FindById(rootDefault, "b");
+            Assert.NotNull(divDefault);
+            var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
+            FragmentPaintHarness.PaintBox(containerDefault, divDefault!, gDefault);
+            var widthsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
+            var divScaled = LayoutHarness.FindById(rootScaled, "b");
+            Assert.NotNull(divScaled);
+            var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            FragmentPaintHarness.PaintBox(containerScaled, divScaled!, gScaled);
+            var widthsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            // double (top) contributes 2 stripes, groove (left) contributes 2 more.
+            Assert.Equal(4, widthsDefault.Count);
+            Assert.Equal(widthsDefault.Count, widthsScaled.Count);
+            for (var i = 0; i < widthsDefault.Count; i++)
+                Assert.Equal(widthsDefault[i], widthsScaled[i], 3);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
