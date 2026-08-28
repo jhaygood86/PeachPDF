@@ -187,12 +187,15 @@ namespace PeachPDF.Html.Core.Handlers
                 innerColor = style == OutlineStyle.Groove ? color : BordersDrawHandler.Darken(color);
             }
 
+            // outerWidth/innerWidth stay in the caller's raw, un-divided layout-space units below (used
+            // for nearBand/farBand position math, paired with the still-raw rect) - only the pen's own
+            // stroke width needs the PixelsPerPoint correction, same reason as GetPen's.
             var outerPen = g.GetPen(outerColor);
-            outerPen.Width = outerWidth;
+            outerPen.Width = outerWidth / g.PixelsPerPoint;
             outerPen.DashStyle = RDashStyle.Solid;
 
             var innerPen = g.GetPen(innerColor);
-            innerPen.Width = innerWidth;
+            innerPen.Width = innerWidth / g.PixelsPerPoint;
             innerPen.DashStyle = RDashStyle.Solid;
 
             // "outer"/"inner" name the stripe's position within the ring band (nearest the box edge vs.
@@ -247,7 +250,11 @@ namespace PeachPDF.Html.Core.Handlers
         private static RPen GetPen(RGraphics g, OutlineStyle style, RColor color, double width)
         {
             var p = g.GetPen(color);
-            p.Width = width;
+            // width is the caller's raw, un-divided layout-space (PixelsPerInch-inflated) outline
+            // width - every outline *position* is already built from correctly-scaled coordinates (see
+            // DrawRing/DrawDottedOrDashedLine), but a pen's own stroke width bypasses those and needs
+            // the same PixelsPerPoint correction here (mirrors BordersDrawHandler.GetPen, issue #851).
+            p.Width = width / g.PixelsPerPoint;
             p.DashStyle = style switch
             {
                 OutlineStyle.Dotted => RDashStyle.Dot,
