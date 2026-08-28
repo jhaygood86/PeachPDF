@@ -210,6 +210,16 @@ namespace PeachPDF.Tests.TestSupport
         /// tests can inspect the resulting clip geometry (e.g. a transformed clip region).</summary>
         public List<TestGraphicsPath> ClipPaths { get; } = [];
 
+        /// <summary>
+        /// Settable so a test can exercise a non-default <c>PixelsPerPoint</c> (issue #812/#814) without a
+        /// full <c>GraphicsAdapter</c>/PDF stack - defaults to the base <see cref="RGraphics.PixelsPerPoint"/>
+        /// no-op of <c>1.0</c>. A field-backed override (rather than an auto-property) since the base
+        /// virtual member is get-only. Mirrors <c>RecordingGraphics.PixelsPerPointOverride</c>.
+        /// </summary>
+        public double PixelsPerPointOverride { get; set; } = 1.0;
+
+        public override double PixelsPerPoint => PixelsPerPointOverride;
+
         public TestRecordingGraphics() : base(new TestGraphicsAdapter(), new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
         public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)

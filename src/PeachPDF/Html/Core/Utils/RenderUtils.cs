@@ -172,10 +172,27 @@ namespace PeachPDF.Html.Core.Utils
         /// SW-----SE
         /// </code>
         /// </summary>
+        /// <remarks>
+        /// <paramref name="rect"/> and every radius are in the caller's layout-space units (the same
+        /// <c>PixelsPerInch</c>-inflated space as <see cref="Dom.CssBox"/> geometry) — unlike every other
+        /// <see cref="RGraphics"/> draw primitive (<c>DrawLine</c>, <c>DrawRectangle</c>,
+        /// <c>PushClip(RRect)</c>), neither <c>RGraphics.PushClip(RGraphicsPath)</c> nor <c>DrawPath</c>
+        /// ever divides a path's coordinates by <see cref="RGraphics.PixelsPerPoint"/> before handing them
+        /// to the backend (that division is left to whichever ambient <c>PushTransform</c> is active for
+        /// SVG/glyph-outline paths, the other consumers of an <see cref="RGraphicsPath"/> — see
+        /// <c>Adapters.GraphicsPathAdapter.Transform</c>'s own comment). A box-geometry path has no such
+        /// ambient transform, so this method divides by <see cref="RGraphics.PixelsPerPoint"/> itself,
+        /// once, before building the path (issue #812).
+        /// </remarks>
         public static RGraphicsPath GetRoundRect(RGraphics g, RRect rect,
             double nwX, double nwY, double neX, double neY,
             double seX, double seY, double swX, double swY)
         {
+            var ppp = g.PixelsPerPoint;
+            rect = new RRect(rect.Left / ppp, rect.Top / ppp, rect.Width / ppp, rect.Height / ppp);
+            nwX /= ppp; nwY /= ppp; neX /= ppp; neY /= ppp;
+            seX /= ppp; seY /= ppp; swX /= ppp; swY /= ppp;
+
             var path = g.GetGraphicsPath();
 
             // Top edge: start after NW corner, end before NE corner.

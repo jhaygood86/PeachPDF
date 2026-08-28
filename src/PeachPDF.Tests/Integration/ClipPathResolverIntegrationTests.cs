@@ -162,5 +162,81 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(path);
             Assert.False(useEvenOdd);
         }
+
+        /// <summary>
+        /// Issue #812 (reopened): like <c>RenderUtils.GetRoundRect</c>/<c>BordersDrawHandler.GetRoundedBorderPath</c>,
+        /// <c>TryBuildClipPath</c> is fed raw layout-space coordinates and pushes its path via
+        /// <c>RGraphics.PushClip(RGraphicsPath)</c>, which never divides by <c>PixelsPerPoint</c> - so the
+        /// resolver itself must divide every final coordinate before it reaches the path. Verified directly
+        /// against the resolver (not full layout), so <see cref="TestRecordingGraphics.PixelsPerPointOverride"/>
+        /// alone drives the division; the values below are exactly this class's own
+        /// <see cref="Polygon_ResolvesPercentAndLengthPointsAgainstReferenceBox"/> case, halved.
+        /// </summary>
+        [Fact]
+        public async Task Polygon_NonDefaultPixelsPerPoint_DividesFinalCoordinates()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            var reference = new RRect(100, 200, 300, 400);
+
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, "polygon(0% 0%, 100% 0%, 50% 100%)", reference, box, out var path, out _);
+
+            Assert.True(built);
+            var points = ((TestGraphicsPath)path!).Points;
+
+            Assert.Equal(3, points.Count);
+            Assert.Equal(50, points[0].X, 3);
+            Assert.Equal(100, points[0].Y, 3);
+            Assert.Equal(200, points[1].X, 3);
+            Assert.Equal(100, points[1].Y, 3);
+            Assert.Equal(125, points[2].X, 3);
+            Assert.Equal(300, points[2].Y, 3);
+        }
+
+        [Fact]
+        public async Task Inset_NonDefaultPixelsPerPoint_DividesFinalCoordinates()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            var reference = new RRect(0, 0, 200, 100);
+
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, "inset(10pt 20pt 30pt 40pt)", reference, box, out var path, out _);
+
+            Assert.True(built);
+            var points = ((TestGraphicsPath)path!).Points;
+
+            // Halved rect LTRB = (20,5)..(90,35), per Inset_ResolvesRectangleEdges's (40,10)..(180,70).
+            Assert.Equal(4, points.Count);
+            Assert.Equal(20, points[0].X, 3);
+            Assert.Equal(5, points[0].Y, 3);
+            Assert.Equal(90, points[1].X, 3);
+            Assert.Equal(5, points[1].Y, 3);
+            Assert.Equal(90, points[2].X, 3);
+            Assert.Equal(35, points[2].Y, 3);
+            Assert.Equal(20, points[3].X, 3);
+            Assert.Equal(35, points[3].Y, 3);
+        }
+
+        [Fact]
+        public async Task Circle_NonDefaultPixelsPerPoint_DividesFinalCoordinates()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            var reference = new RRect(0, 0, 200, 100);
+
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, "circle()", reference, box, out var path, out _);
+
+            Assert.True(built);
+            var points = ((TestGraphicsPath)path!).Points;
+
+            // Halved bounds of Circle_ClosestSide_UsesMinCenterToEdgeDistance's (50,0)..(150,100).
+            Assert.Equal(25, points.Min(p => p.X), 3);
+            Assert.Equal(75, points.Max(p => p.X), 3);
+            Assert.Equal(0, points.Min(p => p.Y), 3);
+            Assert.Equal(50, points.Max(p => p.Y), 3);
+        }
     }
 }

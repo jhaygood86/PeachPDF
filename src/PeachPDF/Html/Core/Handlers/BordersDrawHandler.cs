@@ -416,59 +416,81 @@ namespace PeachPDF.Html.Core.Handlers
             var rad = b.ComputeRadii(r);
             if (!rad.IsRounded) return null;
 
+            // r, b's ActualBorder*Width fields, and rad's eight components are all in the caller's
+            // layout-space units (the same PixelsPerInch-inflated space as CssBox geometry). This path
+            // builder is independent of RenderUtils.GetRoundRect (no shared code) and needs the identical
+            // divide-by-PixelsPerPoint correction for the same reason - see that method's remarks (#812).
+            var ppp = g.PixelsPerPoint;
+            var left = r.Left / ppp;
+            var top = r.Top / ppp;
+            var right = r.Right / ppp;
+            var bottom = r.Bottom / ppp;
+            var blw = b.ActualBorderLeftWidth / ppp;
+            var btw = b.ActualBorderTopWidth / ppp;
+            var brw = b.ActualBorderRightWidth / ppp;
+            var bbw = b.ActualBorderBottomWidth / ppp;
+            var radTLX = rad.TLX / ppp;
+            var radTLY = rad.TLY / ppp;
+            var radTRX = rad.TRX / ppp;
+            var radTRY = rad.TRY / ppp;
+            var radBRX = rad.BRX / ppp;
+            var radBRY = rad.BRY / ppp;
+            var radBLX = rad.BLX / ppp;
+            var radBLY = rad.BLY / ppp;
+
             RGraphicsPath? path = null;
             switch (border)
             {
                 case Border.Top:
-                    if (rad.TLX > 0 || rad.TLY > 0 || rad.TRX > 0 || rad.TRY > 0)
+                    if (radTLX > 0 || radTLY > 0 || radTRX > 0 || radTRY > 0)
                     {
                         path = g.GetGraphicsPath();
-                        path.Start(r.Left + b.ActualBorderLeftWidth / 2, r.Top + b.ActualBorderTopWidth / 2 + rad.TLY);
-                        if (rad.TLX > 0 || rad.TLY > 0)
-                            path.ArcTo(r.Left + b.ActualBorderLeftWidth / 2 + rad.TLX, r.Top + b.ActualBorderTopWidth / 2, rad.TLX, rad.TLY, RGraphicsPath.Corner.TopLeft);
-                        path.LineTo(r.Right - b.ActualBorderRightWidth / 2 - rad.TRX, r.Top + b.ActualBorderTopWidth / 2);
-                        if (rad.TRX > 0 || rad.TRY > 0)
-                            path.ArcTo(r.Right - b.ActualBorderRightWidth / 2, r.Top + b.ActualBorderTopWidth / 2 + rad.TRY, rad.TRX, rad.TRY, RGraphicsPath.Corner.TopRight);
+                        path.Start(left + blw / 2, top + btw / 2 + radTLY);
+                        if (radTLX > 0 || radTLY > 0)
+                            path.ArcTo(left + blw / 2 + radTLX, top + btw / 2, radTLX, radTLY, RGraphicsPath.Corner.TopLeft);
+                        path.LineTo(right - brw / 2 - radTRX, top + btw / 2);
+                        if (radTRX > 0 || radTRY > 0)
+                            path.ArcTo(right - brw / 2, top + btw / 2 + radTRY, radTRX, radTRY, RGraphicsPath.Corner.TopRight);
                     }
                     break;
                 case Border.Bottom:
-                    if (rad.BLX > 0 || rad.BLY > 0 || rad.BRX > 0 || rad.BRY > 0)
+                    if (radBLX > 0 || radBLY > 0 || radBRX > 0 || radBRY > 0)
                     {
                         path = g.GetGraphicsPath();
-                        path.Start(r.Right - b.ActualBorderRightWidth / 2, r.Bottom - b.ActualBorderBottomWidth / 2 - rad.BRY);
-                        if (rad.BRX > 0 || rad.BRY > 0)
-                            path.ArcTo(r.Right - b.ActualBorderRightWidth / 2 - rad.BRX, r.Bottom - b.ActualBorderBottomWidth / 2, rad.BRX, rad.BRY, RGraphicsPath.Corner.BottomRight);
-                        path.LineTo(r.Left + b.ActualBorderLeftWidth / 2 + rad.BLX, r.Bottom - b.ActualBorderBottomWidth / 2);
-                        if (rad.BLX > 0 || rad.BLY > 0)
-                            path.ArcTo(r.Left + b.ActualBorderLeftWidth / 2, r.Bottom - b.ActualBorderBottomWidth / 2 - rad.BLY, rad.BLX, rad.BLY, RGraphicsPath.Corner.BottomLeft);
+                        path.Start(right - brw / 2, bottom - bbw / 2 - radBRY);
+                        if (radBRX > 0 || radBRY > 0)
+                            path.ArcTo(right - brw / 2 - radBRX, bottom - bbw / 2, radBRX, radBRY, RGraphicsPath.Corner.BottomRight);
+                        path.LineTo(left + blw / 2 + radBLX, bottom - bbw / 2);
+                        if (radBLX > 0 || radBLY > 0)
+                            path.ArcTo(left + blw / 2, bottom - bbw / 2 - radBLY, radBLX, radBLY, RGraphicsPath.Corner.BottomLeft);
                     }
                     break;
                 case Border.Right:
-                    if (rad.TRX > 0 || rad.TRY > 0 || rad.BRX > 0 || rad.BRY > 0)
+                    if (radTRX > 0 || radTRY > 0 || radBRX > 0 || radBRY > 0)
                     {
                         path = g.GetGraphicsPath();
                         bool noTop = b.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden;
                         bool noBottom = b.BorderBottomStyle.Value is LineStyle.None or LineStyle.Hidden;
-                        path.Start(r.Right - b.ActualBorderRightWidth / 2 - (noTop ? rad.TRX : 0), r.Top + b.ActualBorderTopWidth / 2 + (noTop ? 0 : rad.TRY));
-                        if ((rad.TRX > 0 || rad.TRY > 0) && noTop)
-                            path.ArcTo(r.Right - b.ActualBorderLeftWidth / 2, r.Top + b.ActualBorderTopWidth / 2 + rad.TRY, rad.TRX, rad.TRY, RGraphicsPath.Corner.TopRight);
-                        path.LineTo(r.Right - b.ActualBorderRightWidth / 2, r.Bottom - b.ActualBorderBottomWidth / 2 - rad.BRY);
-                        if ((rad.BRX > 0 || rad.BRY > 0) && noBottom)
-                            path.ArcTo(r.Right - b.ActualBorderRightWidth / 2 - rad.BRX, r.Bottom - b.ActualBorderBottomWidth / 2, rad.BRX, rad.BRY, RGraphicsPath.Corner.BottomRight);
+                        path.Start(right - brw / 2 - (noTop ? radTRX : 0), top + btw / 2 + (noTop ? 0 : radTRY));
+                        if ((radTRX > 0 || radTRY > 0) && noTop)
+                            path.ArcTo(right - blw / 2, top + btw / 2 + radTRY, radTRX, radTRY, RGraphicsPath.Corner.TopRight);
+                        path.LineTo(right - brw / 2, bottom - bbw / 2 - radBRY);
+                        if ((radBRX > 0 || radBRY > 0) && noBottom)
+                            path.ArcTo(right - brw / 2 - radBRX, bottom - bbw / 2, radBRX, radBRY, RGraphicsPath.Corner.BottomRight);
                     }
                     break;
                 case Border.Left:
-                    if (rad.TLX > 0 || rad.TLY > 0 || rad.BLX > 0 || rad.BLY > 0)
+                    if (radTLX > 0 || radTLY > 0 || radBLX > 0 || radBLY > 0)
                     {
                         path = g.GetGraphicsPath();
                         bool noTop = b.BorderTopStyle.Value is LineStyle.None or LineStyle.Hidden;
                         bool noBottom = b.BorderBottomStyle.Value is LineStyle.None or LineStyle.Hidden;
-                        path.Start(r.Left + b.ActualBorderLeftWidth / 2 + (noBottom ? rad.BLX : 0), r.Bottom - b.ActualBorderBottomWidth / 2 - (noBottom ? 0 : rad.BLY));
-                        if ((rad.BLX > 0 || rad.BLY > 0) && noBottom)
-                            path.ArcTo(r.Left + b.ActualBorderLeftWidth / 2, r.Bottom - b.ActualBorderBottomWidth / 2 - rad.BLY, rad.BLX, rad.BLY, RGraphicsPath.Corner.BottomLeft);
-                        path.LineTo(r.Left + b.ActualBorderLeftWidth / 2, r.Top + b.ActualBorderTopWidth / 2 + rad.TLY);
-                        if ((rad.TLX > 0 || rad.TLY > 0) && noTop)
-                            path.ArcTo(r.Left + b.ActualBorderLeftWidth / 2 + rad.TLX, r.Top + b.ActualBorderTopWidth / 2, rad.TLX, rad.TLY, RGraphicsPath.Corner.TopLeft);
+                        path.Start(left + blw / 2 + (noBottom ? radBLX : 0), bottom - bbw / 2 - (noBottom ? 0 : radBLY));
+                        if ((radBLX > 0 || radBLY > 0) && noBottom)
+                            path.ArcTo(left + blw / 2, bottom - bbw / 2 - radBLY, radBLX, radBLY, RGraphicsPath.Corner.BottomLeft);
+                        path.LineTo(left + blw / 2, top + btw / 2 + radTLY);
+                        if ((radTLX > 0 || radTLY > 0) && noTop)
+                            path.ArcTo(left + blw / 2 + radTLX, top + btw / 2, radTLX, radTLY, RGraphicsPath.Corner.TopLeft);
                     }
                     break;
             }

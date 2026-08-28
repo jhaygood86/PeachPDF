@@ -50,6 +50,14 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         public List<RecordingGraphicsPath> DrawnPaths { get; } = [];
 
+        /// <summary>
+        /// Every path stroked via <see cref="DrawPath(RPen, RGraphicsPath)"/>, in order - the rounded
+        /// border-stroke curve <c>BordersDrawHandler.GetRoundedBorderPath</c> builds (issue #812's
+        /// second, independent rounded-path builder; a rounded border always strokes via the <c>RPen</c>
+        /// overload, never the <c>RBrush</c> one <see cref="DrawnPaths"/> tracks).
+        /// </summary>
+        public List<RecordingGraphicsPath> StrokedPaths { get; } = [];
+
         /// <summary>Total PushClip invocations.</summary>
         public int PushCount { get; private set; }
 
@@ -177,7 +185,10 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
         public override void DrawImage(RImage image, RRect destRect) { }
-        public override void DrawPath(RPen pen, RGraphicsPath path) { }
+        public override void DrawPath(RPen pen, RGraphicsPath path)
+        {
+            if (path is RecordingGraphicsPath recordingPath) StrokedPaths.Add(recordingPath);
+        }
 
         public override void DrawPath(RBrush brush, RGraphicsPath path)
         {
@@ -208,10 +219,19 @@ namespace PeachPDF.Tests.TestSupport
         /// Borders Level 3 §5.5 rather than using the box's raw declared radius.</summary>
         public List<(Corner Corner, double RadiusX, double RadiusY)> Arcs { get; } = [];
 
-        public override void Start(double x, double y) { }
-        public override void LineTo(double x, double y) { }
-        public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner) =>
+        /// <summary>Every <see cref="Start"/>/<see cref="LineTo"/>/<see cref="ArcTo"/> endpoint, in order -
+        /// lets a test read back the path's actual position/size (not just its corner radii), e.g. to
+        /// confirm a rounded-rect path's coordinates came out divided by <c>PixelsPerPoint</c> (issue
+        /// #812), not just its radii.</summary>
+        public List<(double X, double Y)> Points { get; } = [];
+
+        public override void Start(double x, double y) => Points.Add((x, y));
+        public override void LineTo(double x, double y) => Points.Add((x, y));
+        public override void ArcTo(double x, double y, double radiusX, double radiusY, Corner corner)
+        {
+            Points.Add((x, y));
             Arcs.Add((corner, radiusX, radiusY));
+        }
         public override void AddMove(double x, double y) { }
         public override void AddBezierTo(double x1, double y1, double x2, double y2, double x3, double y3) { }
         public override void AddArc(double x, double y, double radiusX, double radiusY, double rotationAngle, bool isLargeArc, bool sweepClockwise) { }
