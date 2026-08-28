@@ -82,6 +82,43 @@ namespace PeachPDF.Tests.Integration
             AssertPathsMatch(defaultPaths, scaledPaths);
         }
 
+        /// <summary>
+        /// Issue #853: <c>GetRoundedBorderPath</c>'s <c>Border.Right</c> case offset the top-right arc's
+        /// endpoint by half the <b>left</b> border's width instead of the right border's own - a
+        /// copy-paste typo unrelated to <c>PixelsPerInch</c>, only visible when the left and right border
+        /// widths differ. Asymmetric widths plus <c>border-top: none</c> (the <c>noTop</c> branch that
+        /// reaches the buggy line) isolate exactly the arc endpoint the fix changes.
+        /// </summary>
+        [Fact]
+        public async Task RoundedBorderStroke_TopRightArcEndpoint_UsesRightBorderOwnWidth()
+        {
+            const string html = "<div id='box' style='width:100pt;height:100pt;border-radius:14pt;" +
+                                 "border-left:10pt solid black;border-right:2pt solid black;" +
+                                 "border-top:none;border-bottom:6pt solid black;'></div>";
+
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var box = LayoutHarness.FindById(root, "box");
+            Assert.NotNull(box);
+
+            var recording = new RecordingGraphics(new PdfSharpAdapter()) { PixelsPerPointOverride = 1.0 };
+            FragmentPaintHarness.PaintBox(container, box!, recording);
+
+            // Paint order (DrawBoxBorders) is Top/Left/Bottom/Right; Top is suppressed (none), so the
+            // right border's path is the third one recorded.
+            Assert.Equal(3, recording.StrokedPaths.Count);
+            var rightBorderPath = recording.StrokedPaths[2];
+
+            // Start, then the top-right ArcTo endpoint (noTop is true here), then a LineTo - no
+            // bottom-right arc, since the bottom border is present (noBottom is false).
+            Assert.Equal(3, rightBorderPath.Points.Count);
+            var topRightArcEndpoint = rightBorderPath.Points[1];
+
+            var expectedX = box!.ActualRight - box.ActualBorderRightWidth / 2;
+            var wrongX = box.ActualRight - box.ActualBorderLeftWidth / 2;
+            Assert.NotEqual(wrongX, expectedX, 3);
+            Assert.Equal(expectedX, topRightArcEndpoint.X, 3);
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────────
 
         /// <summary>
