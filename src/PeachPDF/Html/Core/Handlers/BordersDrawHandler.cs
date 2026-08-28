@@ -473,7 +473,7 @@ namespace PeachPDF.Html.Core.Handlers
                         bool noBottom = b.BorderBottomStyle.Value is LineStyle.None or LineStyle.Hidden;
                         path.Start(right - brw / 2 - (noTop ? radTRX : 0), top + btw / 2 + (noTop ? 0 : radTRY));
                         if ((radTRX > 0 || radTRY > 0) && noTop)
-                            path.ArcTo(right - blw / 2, top + btw / 2 + radTRY, radTRX, radTRY, RGraphicsPath.Corner.TopRight);
+                            path.ArcTo(right - brw / 2, top + btw / 2 + radTRY, radTRX, radTRY, RGraphicsPath.Corner.TopRight);
                         path.LineTo(right - brw / 2, bottom - bbw / 2 - radBRY);
                         if ((radBRX > 0 || radBRY > 0) && noBottom)
                             path.ArcTo(right - brw / 2 - radBRX, bottom - bbw / 2, radBRX, radBRY, RGraphicsPath.Corner.BottomRight);
