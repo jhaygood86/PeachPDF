@@ -466,6 +466,58 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(bWithout.Size, bWith.Size);
         }
 
+        // ─── issue #856: pen stroke width ignores non-default PixelsPerInch ────────
+
+        [Fact]
+        public async Task OutlineStyleDotted_PenWidth_IsInvariantUnderNonDefaultPixelsPerInch()
+        {
+            const string html = "<div id='b' style='width:20pt; height:20pt; outline: 8pt dotted rgb(3,3,3)'>x</div>";
+
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var divDefault = LayoutHarness.FindById(rootDefault, "b")!;
+            var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
+            FragmentPaintHarness.PaintBox(containerDefault, divDefault, gDefault);
+            var widthsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
+            var divScaled = LayoutHarness.FindById(rootScaled, "b")!;
+            var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            FragmentPaintHarness.PaintBox(containerScaled, divScaled, gScaled);
+            var widthsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            Assert.NotEmpty(widthsDefault);
+            Assert.Equal(widthsDefault.Count, widthsScaled.Count);
+            for (var i = 0; i < widthsDefault.Count; i++)
+                Assert.Equal(widthsDefault[i], widthsScaled[i], 3);
+
+            // Sanity: the pen width should actually equal the declared 8pt outline width.
+            Assert.All(widthsDefault, w => Assert.Equal(8, w, 1));
+        }
+
+        [Fact]
+        public async Task OutlineStyleDoubleAndGroove_StripeWidths_AreInvariantUnderNonDefaultPixelsPerInch()
+        {
+            const string html = "<div id='b' style='width:20pt; height:20pt; outline: 12pt double rgb(51,51,51)'>x</div>";
+
+            var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
+            var divDefault = LayoutHarness.FindById(rootDefault, "b")!;
+            var gDefault = new TestRecordingGraphics { PixelsPerPointOverride = 1.0 };
+            FragmentPaintHarness.PaintBox(containerDefault, divDefault, gDefault);
+            var widthsDefault = gDefault.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
+            var divScaled = LayoutHarness.FindById(rootScaled, "b")!;
+            var gScaled = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            FragmentPaintHarness.PaintBox(containerScaled, divScaled, gScaled);
+            var widthsScaled = gScaled.Log.OfType<TestRecordingGraphics.DrawLineCall>().Select(l => l.Width).ToList();
+
+            // double contributes 2 stripes per side, 4 sides.
+            Assert.Equal(8, widthsDefault.Count);
+            Assert.Equal(widthsDefault.Count, widthsScaled.Count);
+            for (var i = 0; i < widthsDefault.Count; i++)
+                Assert.Equal(widthsDefault[i], widthsScaled[i], 3);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static bool IsVerticalEdge(System.Collections.Generic.IReadOnlyList<RPoint> points)
