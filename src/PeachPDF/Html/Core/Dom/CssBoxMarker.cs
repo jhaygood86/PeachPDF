@@ -85,6 +85,15 @@ namespace PeachPDF.Html.Core.Dom
                 listStyleType.Equals(Keywords.Square, System.StringComparison.OrdinalIgnoreCase))
             {
                 MarkerShape = listStyleType.ToLowerInvariant();
+
+                // An outside marker's shape is explicitly centered within the owner's line box
+                // (PerformLayoutImp's own MarkerShape branch below). An inside marker never reaches
+                // that code - it's positioned by the ordinary inline vertical-align algorithm instead
+                // (CssLayoutEngine's own line-box pass), which defaults every box to baseline. A small
+                // vector shape baseline-aligned like a text glyph sits noticeably high relative to the
+                // adjacent text; middle-align it against the line the same way the outside path does.
+                VerticalAlign = CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue(
+                    Keywords.Middle, new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Middle, null));
                 return;
             }
 
@@ -178,7 +187,7 @@ namespace PeachPDF.Html.Core.Dom
             var width = word?.Width ?? 0;
             var height = word?.Height ?? owner.ActualFont.Height;
 
-            var top = owner.Location.Y + owner.ActualPaddingTop;
+            var top = owner.Location.Y + owner.ActualBorderTopWidth + owner.ActualPaddingTop;
             if (MarkerShape is not null)
             {
                 // Text is drawn top-aligned; center the (much smaller) shape within the owner's line

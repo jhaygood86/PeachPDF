@@ -100,6 +100,52 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(liWithout.ActualRight, liWith.ActualRight);
         }
 
+        [Fact]
+        public async Task OutsideMarker_AccountsForOwnersBorderTopWidth()
+        {
+            // CssBoxMarker.PerformLayoutImp's top calculation omitted ActualBorderTopWidth (unlike
+            // ClientTop's own definition), so a bordered <li>/<ul>/<ol> sat its marker too high by
+            // exactly the border width. Uses a decimal (<ol>) marker to skip the MarkerShape centering
+            // branch entirely, isolating just this one term.
+            var withBorder = await BuildAndLayout(Wrap("<ol><li id='li' style='border-top:4pt solid black'>text</li></ol>"));
+            var withoutBorder = await BuildAndLayout(Wrap("<ol><li id='li'>text</li></ol>"));
+
+            var markerWith = li(withBorder.root);
+            var markerWithout = li(withoutBorder.root);
+
+            Assert.Equal(4, markerWith.Location.Y - markerWithout.Location.Y, 1);
+
+            static CssBoxMarker li(CssBox root) =>
+                (CssBoxMarker)FindById(root, "li")!.Boxes.Single(b => b.IsMarkerPseudoElement);
+        }
+
+        [Fact]
+        public async Task InsideMarkerShape_IsCenteredWithinTheLine_NotBaselineAligned()
+        {
+            // An outside marker's shape is explicitly centered within the owner's line box
+            // (PerformLayoutImp's own MarkerShape branch). An "inside" marker never reaches that code -
+            // it flows as an ordinary inline box, positioned by CssLayoutEngine's line-box vertical-align
+            // pass, which defaults every box to baseline - sitting a small vector shape noticeably high
+            // relative to the adjacent text. CssBoxMarker.ResolveDefaultContent now sets VerticalAlign:
+            // middle for a shape marker, and CssLayoutEngine's ancestor walk stops at a marker box
+            // instead of reading its owning <li>'s (unset) vertical-align.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<ul style='list-style-position:inside'><li id='li'>text</li></ul>"));
+            var li = FindById(root, "li")!;
+
+            var marker = (CssBoxMarker)li.Boxes.Single(b => b.IsMarkerPseudoElement);
+            Assert.Equal(VerticalAlignment.Middle, marker.VerticalAlign.Value!.Keyword);
+
+            var markerWord = marker.Words.Single();
+            var textWord = AllWords(li).First(w => w != markerWord);
+
+            // The shape's vertical center should fall within the adjacent text word's own vertical
+            // extent - "roughly level with the text", not sitting entirely above or below it the way
+            // baseline alignment (bottom of a 0.35x-font-height shape pinned to the text baseline) does.
+            var markerCenter = markerWord.Top + markerWord.Height / 2;
+            Assert.InRange(markerCenter, textWord.Top, textWord.Top + textWord.Height);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
@@ -135,6 +181,14 @@ namespace PeachPDF.Tests.Integration
                 if (found != null) return found;
             }
             return null;
+        }
+
+        private static System.Collections.Generic.IEnumerable<CssRect> AllWords(CssBox box)
+        {
+            foreach (var word in box.Words) yield return word;
+            foreach (var child in box.Boxes)
+                foreach (var word in AllWords(child))
+                    yield return word;
         }
     }
 }
