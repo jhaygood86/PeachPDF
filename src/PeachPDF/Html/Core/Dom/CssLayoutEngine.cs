@@ -3564,9 +3564,14 @@ namespace PeachPDF.Html.Core.Dom
                 // own VerticalAlign always stays at the initial "baseline" regardless of what its
                 // originating element declared. Walk up to the nearest ancestor that has an HtmlTag
                 // (the same walk TextTop/TextBottom below already needs, for the same reason) to read
-                // the value the author actually declared.
+                // the value the author actually declared. A synthesized ::marker box stops the walk at
+                // itself instead of continuing to its owning <li> - unlike an anonymous text-node
+                // wrapper, it IS the thing vertical-align should apply to (CssBoxMarker sets its own
+                // VerticalAlign for a list-style-position: inside shape marker, to center it in the
+                // line the way an outside marker's own hand-computed position already does).
                 var styledBoxForVerticalAlign = box;
-                while (styledBoxForVerticalAlign.HtmlTag is null && styledBoxForVerticalAlign.ParentBox is not null)
+                while (styledBoxForVerticalAlign.HtmlTag is null && !styledBoxForVerticalAlign.IsMarkerPseudoElement
+                       && styledBoxForVerticalAlign.ParentBox is not null)
                     styledBoxForVerticalAlign = styledBoxForVerticalAlign.ParentBox;
                 var effectiveVerticalAlign = firstLineVerticalAlign ?? styledBoxForVerticalAlign.VerticalAlign;
 
