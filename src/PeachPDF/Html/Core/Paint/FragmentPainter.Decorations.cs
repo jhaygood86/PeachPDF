@@ -310,7 +310,7 @@ namespace PeachPDF.Html.Core.Paint
                 return;
             }
 
-            var steps = BlurSteps(blur);
+            var steps = BlurSteps(blur, g.PixelsPerPoint);
             var layerColors = ComputeBlurLayerColors(color, steps);
             if (layerColors.Length == 0) return;
 
@@ -366,7 +366,7 @@ namespace PeachPDF.Html.Core.Paint
             }
             else
             {
-                var steps = BlurSteps(blur);
+                var steps = BlurSteps(blur, g.PixelsPerPoint);
                 var layerColors = ComputeBlurLayerColors(color, steps);
 
                 // Each layer is the padding box with a rectangular hole punched out (via an even-odd fill,
@@ -401,8 +401,15 @@ namespace PeachPDF.Html.Core.Paint
                                    Adj(r.BRX), Adj(r.BRY), Adj(r.BLX), Adj(r.BLY));
         }
 
-        /// <summary>Number of concentric fills used to approximate a blur of the given radius (in points).</summary>
-        private static int BlurSteps(double blur) => Math.Clamp((int)Math.Round(blur * 2), 6, 40);
+        /// <summary>
+        /// Number of concentric fills used to approximate a blur of the given radius (in points).
+        /// <paramref name="blur"/> is the caller's raw, un-divided layout-space (PixelsPerInch-inflated)
+        /// value - unlike each ring's own position/size (already divided by PixelsPerPoint in
+        /// BuildRingPath/BuildLayerRoundRect), so the step count needs the same correction here or the
+        /// blur approximation gets smoother/coarser depending on an unrelated internal scaling knob.
+        /// </summary>
+        private static int BlurSteps(double blur, double pixelsPerPoint) =>
+            Math.Clamp((int)Math.Round(blur / pixelsPerPoint * 2), 6, 40);
 
         /// <summary>
         /// Per-layer colors for the <paramref name="steps"/> concentric blur fills (index 0 = outermost,
