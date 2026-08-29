@@ -109,6 +109,8 @@ namespace PeachPDF.Html.Core
             u, ins          { text-decoration: underline }
             
             br:before       { content: "\A" }
+            q:before        { content: open-quote }
+            q:after         { content: close-quote }
             :before, :after { white-space: pre-line }
             center          { text-align: center }
             :link, :visited { text-decoration: underline }

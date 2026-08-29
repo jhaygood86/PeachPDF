@@ -1276,6 +1276,57 @@ await SaveShowcaseAsync("content_image", "Lists & Generated Content", "Generated
     "Images inserted through the CSS content property on generated content.",
     contentHtml, pdfConfig);
 
+// ─── quotes / open-quote / close-quote showcase ─────────────────────────────
+
+var quotesHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    body { font: 12pt Georgia, serif; margin: 20px; }
+    h2 { font: bold 14pt Arial, sans-serif; margin: 24px 0 8px; }
+    p.intro { font: 10pt Arial, sans-serif; color: #555; }
+    q { font-style: italic; }
+
+    /* UA default: q::before { content: open-quote } / q::after { content: close-quote }
+       needs no author CSS at all - PeachPDF's default stylesheet supplies it. */
+
+    .custom-quotes {
+      quotes: "\201C" "\201D" "\2018" "\2019"; /* “ ” ‘ ’ - selected by nesting depth */
+    }
+    .custom-quotes q::before { content: open-quote; }
+    .custom-quotes q::after  { content: close-quote; }
+
+    .no-quotes q { quotes: none; }
+    .no-quotes q::before { content: open-quote; }
+    .no-quotes q::after  { content: close-quote; }
+    </style>
+    </head>
+    <body>
+
+    <h2>1 — UA default (guillemets, no author CSS)</h2>
+    <p class="intro">A bare &lt;q&gt; renders quote marks out of the box via PeachPDF's default stylesheet.</p>
+    <p><q>The only thing we have to fear is fear itself.</q> — Franklin D. Roosevelt</p>
+
+    <h2>2 — Nested quotes select a pair by depth (CSS 2.1 §12.3.1)</h2>
+    <p class="intro">A custom <code>quotes</code> property with two pairs; the inner &lt;q&gt; automatically
+    picks the second pair since it is one level deeper.</p>
+    <p class="custom-quotes"><q>She said, <q>this is amazing</q>, and smiled.</q></p>
+
+    <h2>3 — quotes: none suppresses the glyph but keeps tracking depth</h2>
+    <p class="intro">open-quote/close-quote still resolve (so nesting depth stays correct for sibling
+    content) but render no character.</p>
+    <p class="no-quotes"><q>No visible marks around this sentence.</q></p>
+
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("quotes", "Lists & Generated Content", "quotes & open-quote/close-quote",
+    "The CSS 2.1 quotes property and the open-quote/close-quote/no-open-quote/no-close-quote " +
+    "content keywords, including nesting-depth pair selection and the default q::before/::after UA styling.",
+    quotesHtml, pdfConfig);
+
 // ─── CSS Paged Media showcase ───────────────────────────────────────────────
 
 var pagedMediaHtml = """

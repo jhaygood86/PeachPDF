@@ -230,6 +230,41 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal HashSet<string> FinalizedCounterNames { get; } = [];
 
+        /// <summary>
+        /// CSS 2.1 §12.2 quote nesting depth (open-quote/no-open-quote minus close-quote/
+        /// no-close-quote occurring earlier in document order) at the point this box's own content
+        /// list starts resolving - memoized by <see cref="CssContentEngine.GetQuoteDepthAtStart"/> the
+        /// first time it's requested (via the previous-sibling-or-parent chain, mirroring
+        /// <see cref="CssCounterEngine"/>'s own amortized walk) so a document with many sequential/
+        /// nested quote-bearing elements resolves in roughly one pass over the tree rather than
+        /// re-walking every earlier sibling's whole subtree per box. Safe to cache permanently: it
+        /// depends only on <see cref="Content"/>'s raw declared text and the tree shape, neither of
+        /// which changes across <see cref="CssContentEngine.ApplyContent"/> being invoked more than
+        /// once for the same box (the pagination convergence loop's target-counter(page) re-resolution).
+        /// </summary>
+        internal int? QuoteDepthAtStart { get; set; }
+
+        /// <summary>
+        /// This box's own content list plus its whole descendant subtree's net quote-depth change,
+        /// computed <em>unclamped</em> (allowed to go negative) starting from a hypothetical local zero -
+        /// i.e. ignoring CSS 2.1 §12.2's "a close-quote that would go negative is ignored" rule. Paired
+        /// with <see cref="QuoteSubtreeLocalMin"/> so <see cref="CssContentEngine"/> can tell, from the
+        /// real ambient depth alone, whether that clamp could ever actually have fired inside this
+        /// subtree - if not, this raw delta already equals the true (clamped) one for any ambient depth,
+        /// so both values are pure functions of this box's own content/tree shape and safe to cache
+        /// permanently, for the same reason <see cref="QuoteDepthAtStart"/> is. See
+        /// <see cref="CssContentEngine.GetRawQuoteAggregate"/>.
+        /// </summary>
+        internal int? QuoteSubtreeRawDelta { get; set; }
+
+        /// <summary>
+        /// The minimum value the unclamped running counter described by
+        /// <see cref="QuoteSubtreeRawDelta"/> reaches anywhere within this box's own content list or
+        /// descendant subtree, starting from a hypothetical local zero. See
+        /// <see cref="CssContentEngine.GetRawQuoteAggregate"/>.
+        /// </summary>
+        internal int? QuoteSubtreeLocalMin { get; set; }
+
         public Dictionary<string, NamedString> NamedStrings { get; } = [];
 
         /// <summary>
