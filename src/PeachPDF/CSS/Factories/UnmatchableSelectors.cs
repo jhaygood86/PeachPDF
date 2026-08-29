@@ -97,7 +97,11 @@ namespace PeachPDF.CSS
 
         /// <summary>
         /// Functional pseudo-classes that parse and never match. Their argument is kept verbatim in the
-        /// selector's text (so serialization round-trips) but never interpreted.
+        /// selector's text (so serialization round-trips) but never interpreted. <c>:lang()</c> used to be
+        /// here too, but is not routed through this list any more - it's registered in
+        /// <c>SelectorConstructor.PseudoClassFunctions</c>, which always intercepts it first, so this set
+        /// never actually gated its "never matches" behavior even before it gained real matching
+        /// (<c>LangSelector</c>/<c>CssData.DoesSelectorMatch(LangSelector, ...)</c>).
         /// </summary>
         public static readonly FrozenSet<string> FunctionalPseudoClasses =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -105,8 +109,7 @@ namespace PeachPDF.CSS
                 PseudoClassNames.Host,
                 PseudoClassNames.HostContext,
                 PseudoClassNames.State,
-                PseudoClassNames.Dir,
-                PseudoClassNames.Lang
+                PseudoClassNames.Dir
             }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
