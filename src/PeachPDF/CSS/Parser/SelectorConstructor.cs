@@ -750,7 +750,7 @@ namespace PeachPDF.CSS
 
             protected override bool OnToken(Token token)
             {
-                if (token.Type == TokenType.Ident)
+                if (token.Type is TokenType.Ident or TokenType.String)
                 {
                     _value = token.Data;
                 }
@@ -772,9 +772,7 @@ namespace PeachPDF.CSS
                 {
                     return null;
                 }
-                var code = PseudoClassNames.Lang.StylesheetFunction(_value);
-                return PseudoClassSelector.Create(code);
-
+                return new LangSelector(_value);
             }
         }
 

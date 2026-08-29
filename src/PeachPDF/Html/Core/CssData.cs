@@ -705,6 +705,7 @@ namespace PeachPDF.Html.Core
                 NotSelector notSelector => DoesSelectorMatch(notSelector, node),
                 MatchesSelector matchesSelector => DoesSelectorMatch(matchesSelector, node),
                 HasSelector hasSelector => DoesSelectorMatch(hasSelector, node),
+                LangSelector langSelector => DoesSelectorMatch(langSelector, node),
                 _ => false
             };
         }
@@ -717,6 +718,26 @@ namespace PeachPDF.Html.Core
             {
                 if (parent.TagName is not null) return parent;
                 parent = parent.Parent;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// The document language for <paramref name="node"/> per CSS 2.1 §5.11.4/the HTML language
+        /// determination algorithm: the "lang" attribute of the nearest element that has one, checking
+        /// the node itself before any ancestor - or null if none is set anywhere up the chain. Only the
+        /// HTML "lang" attribute is consulted; "xml:lang" is out of scope (an inline SVG's own HTML-style
+        /// "lang" attribute still matches, for free, since <see cref="ICssDomNode.GetAttribute"/> is the
+        /// same generic accessor for every node kind).
+        /// </summary>
+        private static string? GetElementLanguage(ICssDomNode node)
+        {
+            var current = (ICssDomNode?)node;
+            while (current is not null)
+            {
+                var lang = current.GetAttribute("lang");
+                if (!string.IsNullOrEmpty(lang)) return lang;
+                current = current.Parent;
             }
             return null;
         }
@@ -1206,6 +1227,24 @@ namespace PeachPDF.Html.Core
         private static bool DoesSelectorMatch(HasSelector hasSelector, ICssDomNode? node)
         {
             return node is not null && HasRelativeMatch(node, hasSelector.Inner);
+        }
+
+        /// <summary>
+        /// CSS 2.1 §5.11.4: matches if the element's language (<see cref="GetElementLanguage"/> - the
+        /// nearest ancestor-or-self "lang" attribute) is exactly the given range, or the range is an
+        /// ASCII-case-insensitive prefix of it immediately followed by a hyphen (e.g. ":lang(en)" matches
+        /// lang="en" and lang="en-US", but not lang="english"). Case-folding is always ASCII/BCP47, not
+        /// <paramref name="node"/>'s own <see cref="ICssDomNode.NameComparison"/> (which differs between
+        /// HTML and SVG nodes for unrelated reasons - element/attribute name casing, not language tags).
+        /// </summary>
+        private static bool DoesSelectorMatch(LangSelector langSelector, ICssDomNode? node)
+        {
+            if (node is null) return false;
+            var language = GetElementLanguage(node);
+            if (language is null) return false;
+
+            return language.Equals(langSelector.LanguageRange, StringComparison.OrdinalIgnoreCase)
+                || language.StartsWith(langSelector.LanguageRange + "-", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
