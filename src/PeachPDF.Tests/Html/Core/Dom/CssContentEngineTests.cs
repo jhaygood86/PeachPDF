@@ -538,6 +538,178 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.False(tocBox.HasPendingTargetPageContent);
         }
 
+        [Fact]
+        public void ApplyContent_OpenQuoteCloseQuote_UsesDefaultGuillemets()
+        {
+            var box = CreateBox();
+            box.Content = "open-quote \"text\" close-quote";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("«text»", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_QuotesNone_SuppressesGlyphsButKeepsRestOfContent()
+        {
+            var box = CreateBox();
+            box.Quotes = "none";
+            box.Content = "open-quote \"text\" close-quote";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("text", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_CustomQuotesProperty_OverridesDefaultPair()
+        {
+            var box = CreateBox();
+            box.Quotes = "'\"' '\"'";
+            box.Content = "open-quote \"text\" close-quote";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("\"text\"", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_NoOpenQuoteNoCloseQuote_TrackDepthWithoutEmittingText()
+        {
+            // CSS 2.1 §12.2: no-open-quote/no-close-quote adjust nesting without ever rendering a glyph.
+            var box = CreateBox();
+            box.Content = "no-open-quote open-quote \"text\" close-quote no-close-quote";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("«text»", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_UnmatchedCloseQuote_IsIgnoredAndDepthStaysZero()
+        {
+            // Spec: a close-quote that would make the depth negative is ignored at rendering time - the
+            // depth stays at 0 and no quote mark is rendered, but the rest of `content` still inserts.
+            var box = CreateBox();
+            box.Content = "close-quote \"text\" open-quote";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("text«", box.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_SiblingCloseQuoteUnderflow_UsesTrueAmbientDepthNotLocalZero()
+        {
+            // Regression for GetRawQuoteAggregate's memoized (unclamped) delta/min pair: "closer"'s own
+            // subtree, evaluated starting from a hypothetical local zero, would clamp its close-quotes
+            // immediately - but the true ambient depth entering "closer" is 1 (from "opener"'s
+            // open-quote), so only its second close-quote should actually be ignored. A later box after
+            // "closer" must see the TRUE resulting depth (0), not the naive unclamped one (-1, which
+            // would crash SelectQuote's array index) - proving the underflow fallback
+            // (ApplyQuoteSubtreeExact, including its recursion into "closer"'s own child) is reached and
+            // correct, not just AppendQuote's own always-exact walk.
+            var parent = CreateBox();
+            var opener = new CssBox(parent, new HtmlTag("span", false, new Dictionary<string, string>()));
+            opener.Content = "open-quote";
+
+            var closer = new CssBox(parent, new HtmlTag("span", false, new Dictionary<string, string>()));
+            closer.Content = "close-quote";
+            var closerChild = new CssBox(closer, new HtmlTag("span", false, new Dictionary<string, string>()));
+            closerChild.Content = "close-quote open-quote close-quote close-quote";
+
+            var afterCloser = new CssBox(parent, new HtmlTag("span", false, new Dictionary<string, string>()));
+            afterCloser.Content = "open-quote";
+
+            CssContentEngine.ApplyContent(opener);
+            CssContentEngine.ApplyContent(closer);
+            CssContentEngine.ApplyContent(closerChild);
+            CssContentEngine.ApplyContent(afterCloser);
+
+            Assert.Equal("«", opener.Text);
+            Assert.Equal("»", closer.Text);
+            Assert.Equal("»«»", closerChild.Text);
+            Assert.Equal("«", afterCloser.Text);
+        }
+
+        [Fact]
+        public void ApplyContent_MalformedQuotesValue_FallsBackToDefaultGuillemets()
+        {
+            // GetQuotePairs matches StringsValueConverter's all-or-nothing validation: a single
+            // non-string/odd-count value invalidates the whole thing, falling back to the UA default,
+            // rather than silently keeping whatever partial pairs happened to parse.
+            var box = CreateBox();
+            box.Quotes = "\"only-one\"";
+            box.Content = "open-quote \"text\" close-quote";
+
+            CssContentEngine.ApplyContent(box);
+
+            Assert.Equal("«text»", box.Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_NestedQuotes_SelectsPairByNestingDepth()
+        {
+            // Real document-order nesting (unlike a hand-built tree, each level's open/close-quote lives
+            // on its own ::before/::after pseudo-element, not directly on a box that also has a real
+            // child - see GetQuoteDepthAtStart's own doc comment on that scope limitation).
+            var container = await BuildContainerWithHead(
+                "q { quotes: \"“\" \"”\" \"‘\" \"’\"; } " +
+                "q::before { content: open-quote; } q::after { content: close-quote; }",
+                "<q id=\"outer\">outer <q id=\"inner\">inner</q> text</q>");
+
+            var outer = DomUtils.GetBoxById(container.Root, "outer")!;
+            var inner = DomUtils.GetBoxById(container.Root, "inner")!;
+
+            Assert.Equal("“", outer.Boxes.First(b => b.IsBeforePseudoElement).Text);
+            Assert.Equal("‘", inner.Boxes.First(b => b.IsBeforePseudoElement).Text);
+            Assert.Equal("’", inner.Boxes.First(b => b.IsAfterPseudoElement).Text);
+            Assert.Equal("”", outer.Boxes.First(b => b.IsAfterPseudoElement).Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_DepthExceedsPairCount_RepeatsLastPair()
+        {
+            // Only the UA default single pair is configured - a second nesting level must reuse it
+            // rather than throw or emit nothing.
+            var container = await BuildContainer("<q id=\"outer\">outer <q id=\"inner\">inner</q></q>");
+
+            var outer = DomUtils.GetBoxById(container.Root, "outer")!;
+            var inner = DomUtils.GetBoxById(container.Root, "inner")!;
+
+            Assert.Equal("«", outer.Boxes.First(b => b.IsBeforePseudoElement).Text);
+            Assert.Equal("«", inner.Boxes.First(b => b.IsBeforePseudoElement).Text);
+        }
+
+        [Fact]
+        public async Task ApplyContent_TargetTextBeforeMode_ResolvesOpenQuoteFromPseudoElement()
+        {
+            // Exercises ExtractPseudoElementContent's own quote-keyword handling (a separate switch
+            // from ResolveContentTokens, kept independent to avoid content() recursion).
+            var container = await BuildContainerWithHead(
+                "#ch2::before { content: open-quote; }",
+                "<div id=\"ch2\">Two</div><div id=\"toc\"></div>");
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-text(url(#ch2), before)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            Assert.Equal("«", tocBox.Text);
+        }
+
+        [Fact]
+        public async Task QDefaultUaStyle_RendersGuillemetsWithNoAuthorCss()
+        {
+            var container = await BuildContainer("<q id=\"q1\">text</q>");
+            var qBox = DomUtils.GetBoxById(container.Root, "q1")!;
+
+            var before = qBox.Boxes.First(b => b.IsBeforePseudoElement);
+            var after = qBox.Boxes.First(b => b.IsAfterPseudoElement);
+
+            Assert.Equal("«", before.Text);
+            Assert.Equal("»", after.Text);
+        }
+
         private static async Task<HtmlContainerInt> BuildContainer(string bodyHtml)
         {
             var adapter = new PdfSharpAdapter();

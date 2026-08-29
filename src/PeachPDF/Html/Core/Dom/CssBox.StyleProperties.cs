@@ -778,6 +778,18 @@ namespace PeachPDF.Html.Core.Dom
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.List, parentStyle.List, static (s, a) => s with { List = a });
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Pagination, parentStyle.Pagination, static (s, a) => s with { Pagination = a });
 
+            // `quotes` (CSS 2.1 §12.3.1) is the one Inherited: true property in GeneratedContentArea -
+            // every sibling there (content, counter-reset/-increment/-set, string-set, bookmark-*, the
+            // PDF-output extensions) is Inherited: false, so this area can't be whole-adopted the way
+            // Font/Text/Table/List/Pagination are above; copy just this one property instead, matching
+            // the individual-property style the `everything`-only areas below use. Without this, a
+            // `q::before`/`::after` pseudo-element (InheritStyle's other caller, via CssData's
+            // pseudo-element synthesis) - the only place open-quote/close-quote's `quotes` value is ever
+            // actually consulted - would never see an ancestor's non-default `quotes` declaration.
+            var inheritedGeneratedContent = _computedStyle.GeneratedContent;
+            inheritedGeneratedContent = inheritedGeneratedContent.SetPropertyValue(inheritedGeneratedContent.Quotes, parentStyle.GeneratedContent.Quotes, static (a, v) => a with { Quotes = v });
+            _computedStyle = _computedStyle.AdoptArea(_computedStyle.GeneratedContent, inheritedGeneratedContent, static (s, a) => s with { GeneratedContent = a });
+
             // The invalidations these bypass (border/padding/opacity/transform/color/font-palette caches)
             // are intentionally skipped here - every value copied above either has no such cache, or (for
             // Color, FontPalette) is safe to leave stale since a fresh box's DerivedStyle cache starts

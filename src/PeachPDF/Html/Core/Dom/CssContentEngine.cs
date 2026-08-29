@@ -59,7 +59,8 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            cssBox.Text = ResolveContentTokens(cssBox, tokens);
+            var quoteDepth = GetQuoteDepthAtStart(cssBox);
+            cssBox.Text = ResolveContentTokens(cssBox, tokens, ref quoteDepth);
         }
 
         private static bool ContainsLeader(List<Token> tokens)
@@ -82,6 +83,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             var segments = new List<ContentSegment>();
             var textBuffer = new StringBuilder();
+            var quoteDepth = GetQuoteDepthAtStart(cssBox);
 
             void FlushText()
             {
@@ -102,7 +104,7 @@ namespace PeachPDF.Html.Core.Dom
                     continue;
                 }
 
-                textBuffer.Append(ResolveContentTokens(cssBox, [token]));
+                textBuffer.Append(ResolveContentTokens(cssBox, [token], ref quoteDepth));
             }
 
             FlushText();
@@ -145,9 +147,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>&lt;content-list&gt;</c> and nothing else) so both consume one resolver for the same
         /// grammar rather than each re-walking it independently.
         /// </summary>
-        internal static string ResolveContentTokens(CssBox cssBox, List<Token> tokens)
+        internal static string ResolveContentTokens(CssBox cssBox, List<Token> tokens, ref int quoteDepth)
         {
             var contentText = new StringBuilder();
+            IReadOnlyList<(string Open, string Close)>? quotePairs = null;
 
             foreach (var token in tokens)
             {
@@ -156,6 +159,12 @@ namespace PeachPDF.Html.Core.Dom
                     case StringToken stringToken:
                         contentText.Append(stringToken.Data);
                         break;
+                    case KeywordToken { Data: Keywords.OpenQuote or Keywords.NoOpenQuote or Keywords.CloseQuote or Keywords.NoCloseQuote } quoteToken:
+                        {
+                            quotePairs ??= GetQuotePairs(cssBox);
+                            AppendQuote(contentText, quotePairs, quoteToken.Data, ref quoteDepth);
+                            break;
+                        }
                     case FunctionToken { Data: FunctionNames.Counter } functionToken:
                         {
                             AppendCounter(contentText, cssBox, functionToken);
@@ -388,7 +397,8 @@ namespace PeachPDF.Html.Core.Dom
         public static string ResolveBookmarkLabel(CssBox cssBox)
         {
             var tokens = CssValueParser.GetCssTokens(cssBox.BookmarkLabel);
-            return ResolveContentTokens(cssBox, tokens);
+            var quoteDepth = GetQuoteDepthAtStart(cssBox);
+            return ResolveContentTokens(cssBox, tokens, ref quoteDepth);
         }
 
         /// <summary>
@@ -428,6 +438,300 @@ namespace PeachPDF.Html.Core.Dom
                 : Keywords.Decimal;
 
             sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
+        }
+
+        /// <summary>UA default quote pair (guillemets), matching <c>QuotesProperty</c>'s own fallback.</summary>
+        private static readonly (string Open, string Close)[] DefaultQuotePairs = [("«", "»")];
+
+        /// <summary>
+        /// CSS 2.1 §12.2/§12.3.1 quote nesting depth just before <paramref name="box"/>'s own content
+        /// list starts resolving - the net count of open-quote/no-open-quote minus close-quote/
+        /// no-close-quote among everything that resolves earlier in document order. The spec says this
+        /// depth is "independent of the nesting of the source document or the formatting structure" -
+        /// i.e. one running value across the whole document - but <see cref="ApplyContent"/> can run more
+        /// than once per box (the pagination convergence loop in <c>HtmlContainerInt</c> re-resolves
+        /// target-counter(page) content) and <c>DomParser.CorrectTextBoxes</c> walks a box's children in
+        /// reverse, so a single mutable counter would corrupt itself across re-runs/out-of-order visits.
+        /// Recomputing this as a pure function of the box tree - mirroring
+        /// <see cref="CssCounterEngine.GetCounter"/>'s own ancestor + preceding-sibling walk shape,
+        /// memoized the same amortized way via <see cref="CssBox.QuoteDepthAtStart"/> - is safe against
+        /// both, since it depends only on <see cref="CssBox.Content"/>'s raw text and the tree shape,
+        /// neither of which changes across re-runs. Only the single previous sibling (or the parent, if
+        /// there is none) is walked, not every earlier sibling, since <see cref="GetRawQuoteAggregate"/>
+        /// already folds a sibling's own preceding-siblings' contributions into it when IT was resolved.
+        /// <para>
+        /// Known scope limitation: a box's OWN content list is only ever counted toward its later
+        /// siblings' depth here, never toward its own children's - there is no "walk this box's own
+        /// content, then descend" step for the box whose depth is actually being asked for (only for
+        /// earlier siblings/ancestors, via <see cref="GetRawQuoteAggregate"/>). This is a non-issue for
+        /// every real caller: <c>::before</c>/<c>::after</c>/<c>::marker</c> pseudo-elements and
+        /// <c>bookmark-label</c> (the only places a literal quote-mode <c>content</c> value is ever
+        /// declared in practice) never have non-pseudo children of their own to under-count. A plain
+        /// element given both a literal <c>content</c> and real DOM children is already spec-invalid
+        /// (generated content only applies to <c>::before</c>/<c>::after</c>) and separately never reaches
+        /// this path in the first place - <c>DomParser.CorrectTextBoxes</c> treats any box whose
+        /// <see cref="CssBox.Text"/> resolves non-null as a leaf and never calls <c>ApplyContent</c> on
+        /// its children at all, so they never ask for a depth to under-count.
+        /// </para>
+        /// </summary>
+        private static int GetQuoteDepthAtStart(CssBox box)
+        {
+            if (box.QuoteDepthAtStart is { } cached) return cached;
+
+            var previousSibling = GetPreviousQuoteSibling(box);
+            var depth = previousSibling is not null
+                ? ApplyQuoteSubtree(previousSibling, GetQuoteDepthAtStart(previousSibling))
+                : box.ParentBox is not null ? GetQuoteDepthAtStart(box.ParentBox) : 0;
+
+            box.QuoteDepthAtStart = depth;
+            return depth;
+        }
+
+        /// <summary>The nearest preceding sibling that isn't display:none or the synthetic
+        /// table-grid-decoration box (issue #721 - <see cref="CssBox.IsTableGridDecorationBox"/>),
+        /// mirroring <see cref="CssCounterEngine"/>'s own equivalent skip.</summary>
+        private static CssBox? GetPreviousQuoteSibling(CssBox box)
+        {
+            var parent = box.ParentBox;
+            if (parent is null) return null;
+
+            for (var i = parent.Boxes.IndexOf(box) - 1; i >= 0; i--)
+            {
+                var sibling = parent.Boxes[i];
+                if (sibling.DerivedStyle.ActualDisplay != Keywords.None && !sibling.IsTableGridDecorationBox)
+                {
+                    return sibling;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// The true (CSS 2.1 §12.2-clamped) quote depth after traversing <paramref name="box"/>'s own
+        /// content list and its whole descendant subtree, given the real ambient
+        /// <paramref name="startDepth"/> depth was at beforehand. <see cref="GetRawQuoteAggregate"/>
+        /// caches this subtree's net change and minimum reached, both computed <em>unclamped</em> (as if
+        /// starting from a hypothetical local zero, ignoring the "a close-quote that would go negative is
+        /// ignored" rule) and so independent of any real ambient depth. Whenever
+        /// <paramref name="startDepth"/> plus that minimum still can't go negative, the clamp provably
+        /// never fires anywhere in the subtree, so the true result is just the ambient depth plus the
+        /// cached raw delta - true for any <paramref name="startDepth"/>, which is what makes the
+        /// aggregate safe to compute once and cache permanently. Only when it could underflow (an
+        /// author's own close-quote/no-close-quote sequence genuinely outrunning what's open at that
+        /// particular ambient depth - a malformed-content edge case, not the common "many quotes" case
+        /// this caching targets) does this fall back to <see cref="ApplyQuoteSubtreeExact"/>'s exact,
+        /// uncached per-token walk for just that one call.
+        /// </summary>
+        private static int ApplyQuoteSubtree(CssBox box, int startDepth)
+        {
+            var (rawDelta, localMin) = GetRawQuoteAggregate(box);
+            return startDepth + localMin >= 0
+                ? startDepth + rawDelta
+                : ApplyQuoteSubtreeExact(box, startDepth);
+        }
+
+        /// <summary>
+        /// Computes and memoizes (<see cref="CssBox.QuoteSubtreeRawDelta"/>/
+        /// <see cref="CssBox.QuoteSubtreeLocalMin"/>) <paramref name="box"/>'s own content list plus its
+        /// whole descendant subtree's net quote-depth change and minimum running value, both unclamped
+        /// and starting from a hypothetical local zero - see <see cref="ApplyQuoteSubtree"/> for why that
+        /// pair is enough to decide, for any real ambient depth, whether the CSS 2.1 §12.2 clamp could
+        /// ever fire. A display:none/table-grid-decoration box (and everything under it, since neither
+        /// generates any rendered content) contributes nothing, matching <see cref="CssCounterEngine"/>'s
+        /// own skip of both. Each box's aggregate is computed at most once ever - resolving it folds in
+        /// every already-resolved child's own cached aggregate rather than re-walking, and a later query
+        /// for a different content-bearing box that shares an ancestor/subtree hits the same cache - so a
+        /// document with many quote-bearing elements costs roughly one pass over the tree in total, not
+        /// one pass per element.
+        /// </summary>
+        private static (int RawDelta, int LocalMin) GetRawQuoteAggregate(CssBox box)
+        {
+            if (box.QuoteSubtreeRawDelta is { } cachedDelta && box.QuoteSubtreeLocalMin is { } cachedMin)
+            {
+                return (cachedDelta, cachedMin);
+            }
+
+            var aggregate = (RawDelta: 0, LocalMin: 0);
+            if (box.DerivedStyle.ActualDisplay != Keywords.None && !box.IsTableGridDecorationBox)
+            {
+                if (box.Content is not (Keywords.None or Keywords.Normal))
+                {
+                    aggregate = CombineQuoteAggregate(aggregate, ComputeContentListQuoteAggregate(CssValueParser.GetCssTokens(box.Content)));
+                }
+
+                foreach (var child in box.Boxes)
+                {
+                    aggregate = CombineQuoteAggregate(aggregate, GetRawQuoteAggregate(child));
+                }
+            }
+
+            box.QuoteSubtreeRawDelta = aggregate.RawDelta;
+            box.QuoteSubtreeLocalMin = aggregate.LocalMin;
+            return aggregate;
+        }
+
+        /// <summary>Sequential composition of two unclamped quote-depth aggregates (<paramref name="a"/>
+        /// then <paramref name="b"/>, in document order): the combined net change is additive, and the
+        /// combined minimum is whichever is lower - <paramref name="a"/>'s own minimum, or
+        /// <paramref name="b"/>'s minimum offset by everything <paramref name="a"/> already added
+        /// (the standard "running-balance-with-a-floor" monoid, e.g. used for bracket-matching).</summary>
+        private static (int RawDelta, int LocalMin) CombineQuoteAggregate((int RawDelta, int LocalMin) a, (int RawDelta, int LocalMin) b) =>
+            (a.RawDelta + b.RawDelta, Math.Min(a.LocalMin, a.RawDelta + b.LocalMin));
+
+        /// <summary>The unclamped (<see cref="ApplyQuoteSubtree"/>) quote-depth aggregate of one content
+        /// token list alone, starting from a hypothetical local zero.</summary>
+        private static (int RawDelta, int LocalMin) ComputeContentListQuoteAggregate(List<Token> tokens)
+        {
+            var delta = 0;
+            var min = 0;
+            foreach (var token in tokens)
+            {
+                if (token is not KeywordToken keywordToken) continue;
+
+                switch (keywordToken.Data)
+                {
+                    case Keywords.OpenQuote:
+                    case Keywords.NoOpenQuote:
+                        delta += 1;
+                        break;
+                    case Keywords.CloseQuote:
+                    case Keywords.NoCloseQuote:
+                        delta -= 1;
+                        break;
+                }
+                min = Math.Min(min, delta);
+            }
+            return (delta, min);
+        }
+
+        /// <summary>
+        /// The exact, uncached CSS 2.1 §12.2-clamped walk of <paramref name="box"/>'s own content list
+        /// and its whole descendant subtree given the real ambient <paramref name="startDepth"/> - reached
+        /// only via <see cref="ApplyQuoteSubtree"/>'s rare fallback path, since (unlike
+        /// <see cref="GetRawQuoteAggregate"/>'s aggregate) the clamped result genuinely depends on the
+        /// caller's ambient depth and so can't be memoized as a single reusable number.
+        /// </summary>
+        private static int ApplyQuoteSubtreeExact(CssBox box, int startDepth)
+        {
+            if (box.DerivedStyle.ActualDisplay == Keywords.None || box.IsTableGridDecorationBox) return startDepth;
+
+            var depth = startDepth;
+            if (box.Content is not (Keywords.None or Keywords.Normal))
+            {
+                ApplyContentListQuoteDepth(CssValueParser.GetCssTokens(box.Content), ref depth);
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                depth = ApplyQuoteSubtreeExact(child, depth);
+            }
+
+            return depth;
+        }
+
+        /// <summary>Depth-only half of quote-token handling (no text output), under the real CSS 2.1
+        /// §12.2 clamp - the counterpart to <see cref="AppendQuote"/> used by
+        /// <see cref="ApplyQuoteSubtreeExact"/>'s exact fallback walk.</summary>
+        private static void ApplyContentListQuoteDepth(List<Token> tokens, ref int depth)
+        {
+            foreach (var token in tokens)
+            {
+                if (token is not KeywordToken keywordToken) continue;
+
+                switch (keywordToken.Data)
+                {
+                    case Keywords.OpenQuote:
+                    case Keywords.NoOpenQuote:
+                        depth += 1;
+                        break;
+                    case Keywords.CloseQuote:
+                    case Keywords.NoCloseQuote:
+                        if (depth > 0) depth -= 1;
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Resolves one <c>open-quote</c>/<c>close-quote</c>/<c>no-open-quote</c>/<c>no-close-quote</c>
+        /// token (CSS 2.1 §12.2) against <paramref name="quotePairs"/> (the caller's <c>quotes</c> value,
+        /// resolved once via <see cref="GetQuotePairs"/> and reused across a whole content list rather
+        /// than re-parsed per quote token), threading the running <paramref name="depth"/> and appending
+        /// the selected quote glyph for the two quote-mark keywords. A <c>close-quote</c>/
+        /// <c>no-close-quote</c> that would take the depth negative is ignored per spec - the depth stays
+        /// at 0 and nothing is appended, but the rest of the content list is still processed.
+        /// </summary>
+        private static void AppendQuote(StringBuilder sb, IReadOnlyList<(string Open, string Close)> quotePairs, string quoteKeyword, ref int depth)
+        {
+            switch (quoteKeyword)
+            {
+                case Keywords.OpenQuote:
+                    sb.Append(SelectQuote(quotePairs, depth, isOpen: true));
+                    depth += 1;
+                    break;
+                case Keywords.NoOpenQuote:
+                    depth += 1;
+                    break;
+                case Keywords.CloseQuote:
+                    if (depth > 0)
+                    {
+                        depth -= 1;
+                        sb.Append(SelectQuote(quotePairs, depth, isOpen: false));
+                    }
+                    break;
+                case Keywords.NoCloseQuote:
+                    if (depth > 0) depth -= 1;
+                    break;
+            }
+        }
+
+        /// <summary>Picks the pair for <paramref name="depth"/> (CSS 2.1 §12.3.1: depth beyond the
+        /// number of declared pairs repeats the last pair), or the empty string if no pairs are
+        /// configured (<c>quotes: none</c>).</summary>
+        private static string SelectQuote(IReadOnlyList<(string Open, string Close)> pairs, int depth, bool isOpen)
+        {
+            if (pairs.Count == 0) return string.Empty;
+            var index = Math.Min(depth, pairs.Count - 1);
+            return isOpen ? pairs[index].Open : pairs[index].Close;
+        }
+
+        /// <summary>
+        /// Parses <paramref name="cssBox"/>'s effective (already-inherited, cascade-resolved) <c>quotes</c>
+        /// value - raw declared CSS text, the same storage model <c>content</c>/<c>counter-reset</c> use,
+        /// re-tokenized independently of <c>QuotesProperty</c>'s own CSS-OM converter the same way every
+        /// other <c>GeneratedContentArea</c> property already is (e.g. <see cref="ResolveContentTokens"/>
+        /// re-tokenizes <c>Content</c> rather than consuming <c>ContentProperty</c>'s parsed form) - into
+        /// ordered open/close pairs. Falls back to <see cref="DefaultQuotePairs"/> (matching
+        /// <c>QuotesProperty</c>'s own UA-default guillemet pair) for <c>none</c>, or anything that isn't
+        /// entirely made up of an even, non-zero number of strings - matching
+        /// <c>StringsValueConverter</c>'s own all-or-nothing validation (a single non-string token
+        /// invalidates the whole value there too), rather than silently discarding just the offending
+        /// tokens.
+        /// </summary>
+        private static IReadOnlyList<(string Open, string Close)> GetQuotePairs(CssBox cssBox)
+        {
+            var raw = cssBox.Quotes;
+            if (string.IsNullOrWhiteSpace(raw)) return DefaultQuotePairs;
+
+            var tokens = CssValueParser.GetCssTokens(raw);
+
+            if (tokens is [KeywordToken { Data: Keywords.None }])
+            {
+                return [];
+            }
+
+            if (tokens.Count == 0 || tokens.Count % 2 != 0 || tokens.Any(t => t is not StringToken))
+            {
+                return DefaultQuotePairs;
+            }
+
+            var pairs = new (string, string)[tokens.Count / 2];
+            for (var i = 0; i < pairs.Length; i++)
+            {
+                pairs[i] = (((StringToken)tokens[i * 2]).Data, ((StringToken)tokens[i * 2 + 1]).Data);
+            }
+            return pairs;
         }
 
         private static string? ExtractStringValue(CssBox cssBox, FunctionToken stringFunctionToken)
@@ -577,6 +881,8 @@ namespace PeachPDF.Html.Core.Dom
 
             var tokens = CssValueParser.GetCssTokens(pseudoElement.Content);
             var contentText = new StringBuilder();
+            var quoteDepth = GetQuoteDepthAtStart(pseudoElement);
+            IReadOnlyList<(string Open, string Close)>? quotePairs = null;
 
             foreach (var token in tokens)
             {
@@ -585,6 +891,12 @@ namespace PeachPDF.Html.Core.Dom
                     case StringToken stringToken:
                         contentText.Append(stringToken.Data);
                         break;
+                    case KeywordToken { Data: Keywords.OpenQuote or Keywords.NoOpenQuote or Keywords.CloseQuote or Keywords.NoCloseQuote } quoteToken:
+                        {
+                            quotePairs ??= GetQuotePairs(pseudoElement);
+                            AppendQuote(contentText, quotePairs, quoteToken.Data, ref quoteDepth);
+                            break;
+                        }
                     case FunctionToken { Data: FunctionNames.Counter } functionToken:
                         {
                             AppendCounter(contentText, pseudoElement, functionToken);

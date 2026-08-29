@@ -680,6 +680,17 @@
       }
     },
     {
+      "name": "quotes",
+      "inherited": true,
+      "initialValue": "\"«\" \"»\"",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "Quotes",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
       "name": "counter-increment",
       "inherited": false,
       "initialValue": "none",
