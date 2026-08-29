@@ -6434,6 +6434,54 @@ await SaveShowcaseAsync("clip_path", "Backgrounds & Borders", "clip-path basic s
     "CSS clip-path with basic shapes: polygon(), inset(), circle(), and ellipse() clip an element (here a gradient fill) to a shape resolved against its border-box. A shared basic-shape grammar validates the value at parse time and the resolved region is pushed as a PDF clip path.",
     clipPathHtml, pdfConfig);
 
+// ─── legacy clip: rect() showcase ────────────────────────────────────────────
+
+var clipRectHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    body { font: 12pt Arial, sans-serif; margin: 20px; color: #212529; }
+    h2 { font-size: 13pt; margin: 24px 0 6px; }
+    p.intro { font-size: 9pt; color: #555; }
+    .stage { position: relative; width: 160px; height: 120px; }
+    .swatch { position: absolute; top: 0; left: 0; width: 160px; height: 120px;
+              background: linear-gradient(135deg, #e8590c, #1971c2); color: #fff;
+              display: flex; align-items: center; justify-content: center; font-size: 10pt; }
+    </style>
+    </head>
+    <body>
+
+    <h2>1 — clip: rect(top, right, bottom, left)</h2>
+    <p class="intro">Only the region inside the rect is painted; top/bottom are offsets from the top
+    edge, right/left are offsets from the left edge (not a width/height pair).</p>
+    <div class="stage">
+      <div class="swatch" style="clip: rect(20px, 130px, 90px, 30px)">full box, mostly clipped away</div>
+    </div>
+
+    <h2>2 — auto on some edges leaves that side unclipped</h2>
+    <p class="intro"><code>clip: rect(auto, 130px, auto, 30px)</code> - top and bottom keep the box's own
+    edges; only left/right are cropped.</p>
+    <div class="stage">
+      <div class="swatch" style="clip: rect(auto, 130px, auto, 30px)">top/bottom uncropped</div>
+    </div>
+
+    <h2>3 — position: static ignores clip entirely</h2>
+    <p class="intro">Per CSS 2.1 §11.1.2, legacy <code>clip</code> only applies to absolutely/fixed
+    positioned elements - the same rect() value here has no effect at all.</p>
+    <div class="stage">
+      <div class="swatch" style="position: static; clip: rect(20px, 130px, 90px, 30px)">not clipped (position: static)</div>
+    </div>
+
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("clip_rect", "Backgrounds & Borders", "Legacy clip: rect()",
+    "The legacy CSS 2.1 clip property (rect(top, right, bottom, left), superseded by clip-path) clipping " +
+    "an absolutely positioned element to a rectangle, including auto edges and its position:static no-op.",
+    clipRectHtml, pdfConfig);
+
 // aspect-ratio: sizes the axis whose length is otherwise automatic (CSS Box Sizing 4 §5), in either
 // direction and on both normal boxes and replaced elements (a 2:1 image below).
 const string AspectRatioSvg2x1 =

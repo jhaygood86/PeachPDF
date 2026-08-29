@@ -637,6 +637,18 @@
       }
     },
     {
+      "name": "clip",
+      "comment": "Legacy CSS 2.1 clipping (https://www.w3.org/TR/CSS21/visufx.html#clipping), superseded by clip-path above but kept for compatibility. cssom/string-stored, like clip-path - CssClipRectResolver re-tokenizes the raw declared text itself (ClipProperty.cs's own converter, Converters.ShapeConverter, already validates the grammar at declaration time).",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "Clip",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
       "name": "aspect-ratio",
       "inherited": false,
       "initialValue": "auto",
