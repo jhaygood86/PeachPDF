@@ -136,9 +136,13 @@ namespace PeachPDF.CSS
 
         public static readonly IValueConverter ShapeConverter = Construct(() =>
         {
-            var length = LengthConverter.Required();
-            return new FunctionValueConverter(FunctionNames.Rect, WithArgs(length, length, length, length)
-                .Or(WithArgs(LengthConverter.Many(4, 4))));
+            // Each rect() edge is <length> | auto (CSS 2.1 §11.1.2) - inlined as LengthConverter.OrAuto()
+            // rather than referencing the AutoLengthConverter field below, which is declared later in
+            // this class and would still be null here (C# runs static field initializers in textual
+            // declaration order).
+            var edge = LengthConverter.OrAuto().Required();
+            return new FunctionValueConverter(FunctionNames.Rect, WithArgs(edge, edge, edge, edge)
+                .Or(WithArgs(LengthConverter.OrAuto().Many(4, 4))));
         }).OrAuto();
 
         public static readonly IValueConverter LinearGradientConverter = Construct(() =>

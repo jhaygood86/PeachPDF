@@ -761,6 +761,49 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void CssClipShapeAutoEdgesLegal()
+        {
+            // CSS 2.1 §11.1.2: each rect() edge is <length> | auto - "don't clip that edge".
+            var snippet = "clip: rect(auto, 10px, auto, 5px)";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("clip", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<ClipProperty>(property);
+            var concrete = (ClipProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("rect(auto, 10px, auto, 5px)", concrete.Value);
+        }
+
+        [Fact]
+        public void CssClipShapeAutoEdgesBackwardsLegal()
+        {
+            var snippet = "clip: rect(auto 10px auto 5px)";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("clip", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<ClipProperty>(property);
+            var concrete = (ClipProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("rect(auto 10px auto 5px)", concrete.Value);
+        }
+
+        [Fact]
+        public void CssClipAutoLegal()
+        {
+            var snippet = "clip: auto";
+            var property = ParseDeclaration(snippet);
+            Assert.Equal("clip", property.Name);
+            Assert.False(property.IsImportant);
+            Assert.IsType<ClipProperty>(property);
+            var concrete = (ClipProperty)property;
+            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.HasValue);
+            Assert.Equal("auto", concrete.Value);
+        }
+
+        [Fact]
         public void CssCursorDefaultUppercaseLegal()
         {
             var snippet = "cursor: DEFAULT";

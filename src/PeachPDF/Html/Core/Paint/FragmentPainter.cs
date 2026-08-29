@@ -132,6 +132,21 @@ namespace PeachPDF.Html.Core.Paint
                         }
                     }
 
+                    // Legacy CSS 2.1 `clip` (§11.1.2): "Applies to: absolutely positioned elements" - no
+                    // independent `overflow` requirement (confirmed against the spec text directly), so
+                    // this is gated on `position` alone, matching real browsers too. Order relative to the
+                    // `clip-path` push above is not load-bearing - clip-stack intersection is commutative -
+                    // this is appended after purely for readability alongside the existing block.
+                    var legacyClipPushed = 0;
+                    var isAbsolutelyPositioned = box.Position.Value is PositionMode.Absolute or PositionMode.Fixed;
+                    if (isAbsolutelyPositioned && box.Clip != Keywords.Auto && !string.IsNullOrEmpty(box.Clip))
+                    {
+                        if (CssClipRectResolver.TryBuildClipRect(box.Clip, fragment.WholeBoxRect, box, out var clipRect))
+                        {
+                            legacyClipPushed = RenderUtils.ClipGraphicsByOverflow(g, clipRect, null);
+                        }
+                    }
+
                     if (box.IsOpaque)
                     {
                         PaintTagged(g, fragment);
@@ -140,6 +155,9 @@ namespace PeachPDF.Html.Core.Paint
                     {
                         PaintWithOpacity(g, fragment);
                     }
+
+                    for (var i = 0; i < legacyClipPushed; i++)
+                        g.PopClip();
 
                     if (clipped)
                         g.PopClip();
