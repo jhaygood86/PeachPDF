@@ -164,12 +164,79 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual(300, container.CssPageSize!.Value.Width, 3); // not the 30pt page font
         }
 
-        private static async Task<HtmlContainerInt> BuildAsync(string html)
+        [Fact]
+        public async Task Size_OrientationAlone_RotatesConfiguredPortraitPageSize()
+        {
+            // A bare orientation keyword now rotates whatever size would otherwise apply, rather than
+            // being a silent no-op (docs/html-css-support.md already claimed this - the code now
+            // matches). Configured 612x792 (portrait) rotates to 792x612 (landscape).
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { size: landscape; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.NotNull(container.CssPageSize);
+            Assert.Equal(SheetH, container.CssPageSize!.Value.Width, 3);
+            Assert.Equal(SheetW, container.CssPageSize!.Value.Height, 3);
+        }
+
+        [Fact]
+        public async Task Size_OrientationAlone_OnAlreadyMatchingOrientation_IsANoOp()
+        {
+            // `landscape` on an already-landscape configured size must not rotate a second time - this
+            // is also what keeps CascadeApplyPageStyles's own two-pass retry idempotent, since the
+            // retry re-enters with PageSize already rotated from the first pass.
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { size: landscape; }
+                </style></head><body><p>content</p></body></html>
+                """, configuredWidth: SheetH, configuredHeight: SheetW);
+
+            Assert.NotNull(container.CssPageSize);
+            Assert.Equal(SheetH, container.CssPageSize!.Value.Width, 3);
+            Assert.Equal(SheetW, container.CssPageSize!.Value.Height, 3);
+        }
+
+        [Fact]
+        public async Task Size_PortraitAlone_OnLandscapeConfiguredSize_Rotates()
+        {
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { size: portrait; }
+                </style></head><body><p>content</p></body></html>
+                """, configuredWidth: SheetH, configuredHeight: SheetW);
+
+            Assert.NotNull(container.CssPageSize);
+            Assert.Equal(SheetW, container.CssPageSize!.Value.Width, 3);
+            Assert.Equal(SheetH, container.CssPageSize!.Value.Height, 3);
+        }
+
+        [Fact]
+        public async Task Size_OrientationAlone_SurvivesApplyPageStylesOnceRetryPass()
+        {
+            // The base rule also sets a percentage margin, forcing CascadeApplyPageStyles's own
+            // "resolve once more in place" retry (issue #582) once the rotated size differs from the
+            // pre-resolution configured size. The final resolved size must still be rotated exactly
+            // once, not twice (which would silently un-rotate it back to portrait).
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { size: landscape; margin-left: 10%; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.NotNull(container.CssPageSize);
+            Assert.Equal(SheetH, container.CssPageSize!.Value.Width, 3);
+            Assert.Equal(SheetW, container.CssPageSize!.Value.Height, 3);
+        }
+
+        private static async Task<HtmlContainerInt> BuildAsync(
+            string html, double configuredWidth = SheetW, double configuredHeight = SheetH)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
-                PageSize = new RSize(SheetW, SheetH)
+                PageSize = new RSize(configuredWidth, configuredHeight)
             };
             await container.SetHtml(html, null);
             return container;
