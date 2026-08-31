@@ -1954,7 +1954,16 @@ namespace PeachPDF.Tests.Integration
             var idx = pdfText.IndexOf("\nW n\n", StringComparison.Ordinal);
             Assert.True(idx >= 0, "expected a clip operator (W n) in the content stream");
 
-            var start = Math.Max(0, idx - 240);
+            // Anchored to the nearest preceding "stream" keyword rather than a blind fixed-width
+            // lookback: a plain idx - 240 can straddle the PDF object header immediately before it
+            // (the "/Length NNN\n>>\nstream\n" line), and whether it does depends on the exact byte
+            // offset of "W n" - which shifts whenever anything upstream in the file changes size, even
+            // for reasons unrelated to this clip's own geometry. That let a stray length digit get
+            // counted as an extra "coordinate" in exactly one of the three variants below, depending on
+            // how their (slightly different-length) content streams happened to fall relative to the
+            // window boundary.
+            var streamIdx = pdfText.LastIndexOf("\nstream\n", idx, StringComparison.Ordinal);
+            var start = streamIdx >= 0 ? streamIdx + "\nstream\n".Length : Math.Max(0, idx - 240);
             var window = pdfText.Substring(start, idx - start);
             return Regex.Matches(window, @"-?\d+(?:\.\d+)?")
                 .Select(m => double.Parse(m.Value, System.Globalization.CultureInfo.InvariantCulture))

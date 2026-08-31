@@ -2426,7 +2426,15 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Per-page paint-window override set by <c>PdfGenerator.AddPdfPages</c>'s page loop, so a
         /// page whose margins are overridden by a per-page <c>@page</c> rule (e.g. <c>:first { margin: 0 }</c>) gets a
-        /// window matching its own margins instead of the base-margin <see cref="PageBoxRect"/>.
+        /// window matching its own margins instead of the base-margin <see cref="PageBoxRect"/>. This is
+        /// the CONTENT clip - the page area inside the margins (css-page-3's own term for it), not a fixed
+        /// box's own wider containing block (the page box, margins included, per CSS2.1 §10.1): a
+        /// <c>position: fixed</c> box's own paint reaches past this via
+        /// <c>RGraphics.SuspendClipping</c>, which always unwinds the whole clip stack down to the single
+        /// unconditionally-infinite clip <see cref="PeachPDF.Adapters.GraphicsAdapter"/>'s constructor
+        /// establishes before this is ever pushed - so this is the only page-level clip that needs to
+        /// exist, provided it is pushed through <c>RGraphics.PushClip</c> and not intersected directly on
+        /// the raw graphics object (see <c>FragmentPainter.Paint</c>'s own remarks, and issue #880).
         /// <see cref="PerformPaint"/> falls back to <see cref="PageBoxRect"/> when unset.
         /// </summary>
         internal RRect? PageClipOverride { get; set; }
