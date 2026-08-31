@@ -5176,9 +5176,11 @@ namespace PeachPDF.Html.Core.Dom
         /// Resolves a <c>left</c>/<c>top</c>/<c>right</c>/<c>bottom</c> offset for the absolute/fixed
         /// positioning branches below, where the counterpart edge is never consulted (unlike the
         /// relative-positioning near/far resolution in <see cref="ResolveNearFarOffset"/>) - an <c>auto</c>
-        /// offset simply contributes 0.
+        /// offset simply contributes 0. Internal (not private) so <see cref="Fragmentation.FragmentEmitter"/>
+        /// can re-run the same resolution against a per-slot basis for a fixed box on a mixed-page-size
+        /// document, mirroring exactly what this method already computes here for the base page.
         /// </summary>
-        private static double ResolveOffsetOrZero(
+        internal static double ResolveOffsetOrZero(
             CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>> offset, double basis, CssBox box) =>
             offset.Value.Value is { } value ? CssValueParser.ParseLength(value, basis, box) : 0;
 
