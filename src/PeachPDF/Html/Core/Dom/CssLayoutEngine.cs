@@ -1227,8 +1227,6 @@ namespace PeachPDF.Html.Core.Dom
 
             var containingBox = box.ContainingBlock!;
 
-            var limitRight = containingBox.ClientRight;
-
             //Get the start x and y of the blockBox
             var startX = containingBox.ClientLeft;
             var startY = box.Location.Y;
@@ -1238,16 +1236,26 @@ namespace PeachPDF.Html.Core.Dom
             switch (box.Float.Value)
             {
                 case Floating.Left:
-                    FloatBoxLeft(box, startX, startY, limitRight);
+                    FloatBoxLeft(box, containingBox, startX, startY);
                     break;
                 case Floating.Right:
-                    FloatBoxRight(box, startX, startY, limitRight);
+                    FloatBoxRight(box, containingBox, startX, startY);
                     break;
             }
 
             if (box.Clear.Value is not ClearMode.None)
             {
                 ClearBox(box, currentBoxIdx, containingBox);
+
+                // css-break-3 §5.1: clearance can carry the float several bands down, onto a
+                // fragmentainer whose inline-end edge differs from the one the scan above placed it
+                // against - and ClearBox rewrites Location wholesale, so a right float has lost its
+                // inline-end placement entirely by this point. Re-place it, once, at the clearance it
+                // landed on. Bounded by construction: ClearBox itself is not re-run.
+                if (box.Float.Value is Floating.Right)
+                    FloatBoxRight(box, containingBox, startX, box.Location.Y);
+                else if (box.Float.Value is Floating.Left)
+                    FloatBoxLeft(box, containingBox, startX, box.Location.Y);
             }
         }
 
@@ -1451,6 +1459,32 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The inline-end content edge of <paramref name="containingBlock"/> on the fragmentainer whose
+        /// band contains document Y <paramref name="blockTop"/> - per-page horizontal reflow (issue
+        /// #143): when a per-page <c>@page</c> rule overrides left/right margins (or, for a mixed
+        /// page-size document, the sheet width itself), content laid out on a page whose measure differs
+        /// from the base uses THAT page's own content-box width (CSS Paged Media 3: "the edges of the
+        /// page area act as a containing block for layout that occurs between page breaks" / css-break-3
+        /// §5.1: "recalculating sizes and positions using its own size"). Falls back to
+        /// <paramref name="containingBlock"/>'s own <see cref="CssBox.ClientRight"/> wherever per-page
+        /// measure does not apply (no <see cref="HtmlContainerInt"/>, <see cref="HtmlContainerInt.UseVariablePageWidth"/>
+        /// is off, or the containing block isn't an unconstrained main column - issue #143's own scope,
+        /// deferred further nesting as #199-#201), so callers may invoke it unconditionally. Shared by
+        /// <see cref="GetBoxWidth"/>'s own box-width resolution and <see cref="FloatBox"/>'s displacement
+        /// scan, rather than each re-deriving the same page-area-minus-inset expression independently.
+        /// </summary>
+        private static double ContentRightOf(CssBox containingBlock, double blockTop)
+        {
+            if (containingBlock.HtmlContainer is { UseVariablePageWidth: true } htmlContainer
+                && IsUnconstrainedMainColumn(containingBlock))
+            {
+                return htmlContainer.PageContentRightOf(blockTop) - MainColumnRightInset(containingBlock);
+            }
+
+            return containingBlock.ClientRight;
+        }
+
+        /// <summary>
         /// The used inline size of <paramref name="box"/>.
         /// </summary>
         /// <param name="g">the device context</param>
@@ -1463,30 +1497,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         public static async ValueTask<double> GetBoxWidth(RGraphics g, CssBox box, double? blockTop = null)
         {
-            // Per-page horizontal reflow (issue #143). When a per-page @page rule overrides left/right
-            // margins, content laid out on a page whose margins differ from the base uses THAT page's own
-            // content-box width as its measure (CSS Paged Media 3: "the edges of the page area act as a
-            // containing block for layout that occurs between page breaks"). Content stays anchored at the
-            // base left origin, so the painter's existing per-page deltaX translate moves the (already
-            // page-width) content to the page's true left edge. The available right edge is the page's own
-            // area right MINUS the containing block's right inset (mirroring ContainingBlock.ClientLeft on
-            // the left), so a margined body/html doesn't get overrun. Scoped to the unconstrained main
-            // column (containing block chain is auto-width root/html/body): a box nested inside some other
-            // (or constrained) block resolves against that block instead - deferred as an accepted gap
-            // (#199-#201), since only the auto-width main column is guaranteed to span the page area.
             // Keyed off `blockTop` - the border-box top the frame placing this box has just decided on, not
             // the box's own Location.Y, which on the pass that places it still holds whatever position an
             // earlier layout generation left there (page 0's measure, on the first). The frame's offset is
             // settled before this runs precisely so the measure can come from the page the box lands on;
             // where no frame is placing the box (an engine measuring its own container), the box's
             // Location.Y has already been written and is the same answer.
-            var availableRight = box.ContainingBlock.ClientRight;
-            if (box.HtmlContainer is { } htmlContainer && htmlContainer.UseVariablePageWidth
-                && IsUnconstrainedMainColumn(box.ContainingBlock))
-            {
-                availableRight = htmlContainer.PageContentRightOf(blockTop ?? box.Location.Y)
-                                 - MainColumnRightInset(box.ContainingBlock);
-            }
+            var availableRight = ContentRightOf(box.ContainingBlock, blockTop ?? box.Location.Y);
 
             var width = availableRight - box.ContainingBlock.ClientLeft - box.ActualMarginLeft - box.ActualMarginRight;
 
@@ -1915,8 +1932,10 @@ namespace PeachPDF.Html.Core.Dom
             return clearance;
         }
 
-        private static void FloatBoxLeft(CssBox box, double startX, double startY, double limitRight)
+        private static void FloatBoxLeft(CssBox box, CssBox containingBox, double startX, double startY)
         {
+            var limitRight = ContentRightOf(containingBox, startY);
+
             CssFloatCoordinates coordinates = new()
             {
                 Left = startX + box.ActualMarginLeft,
@@ -1953,6 +1972,13 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
                     coordinates.Left = startX + box.ActualMarginLeft;
+
+                    // css-break-3 §5.1: this drop may have carried the float onto a fragmentainer of a
+                    // different inline size, so the boundary later iterations test against is re-derived
+                    // at the Y it reached, rather than kept from the band the scan opened in. A
+                    // uniform-width document re-derives the same number, so nothing changes for it.
+                    limitRight = ContentRightOf(containingBox, coordinates.Top);
+                    coordinates.Right = limitRight;
                 }
             } while (true);
 
@@ -1960,8 +1986,10 @@ namespace PeachPDF.Html.Core.Dom
 
         }
 
-        private static void FloatBoxRight(CssBox box, double startX, double startY, double limitRight)
+        private static void FloatBoxRight(CssBox box, CssBox containingBox, double startX, double startY)
         {
+            var limitRight = ContentRightOf(containingBox, startY);
+
             CssFloatCoordinates coordinates = new()
             {
                 Left = startX,
@@ -1995,8 +2023,11 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (coordinates.Left > coordinates.FloatRightStartX)
                 {
-                    coordinates.Right = limitRight - box.ActualMarginRight;
                     coordinates.Top = coordinates.MaxBottom;
+
+                    // Re-derive at the band the drop reached (css-break-3 §5.1), mirroring FloatBoxLeft.
+                    limitRight = ContentRightOf(containingBox, coordinates.Top);
+                    coordinates.Right = limitRight - box.ActualMarginRight;
                 }
             } while (true);
 
