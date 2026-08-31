@@ -321,8 +321,6 @@ namespace PeachPDF.Html.Core.Dom
                 blockBox.AwaitPlacement();
             }
 
-            var limitRight = blockBox.ClientRight;
-
             //Get the start x and y of the blockBox
             var startX = blockBox.ClientLeft;
 
@@ -339,7 +337,19 @@ namespace PeachPDF.Html.Core.Dom
             // (a line box is monolithic, css-break-3 §4.1) - carrying its FollowsForcedBreak bit forward
             // is what lets `text-indent: each-line` (CSS Text 3 §3) still recognize a resumed line that
             // follows a forced break in the source, not just one born mid-fragmentainer.
-            var seedLine = new CssLineBox(blockBox) { FollowsForcedBreak = resume?.FollowsForcedBreak ?? false };
+            var seedLine = new CssLineBox(blockBox)
+            {
+                FollowsForcedBreak = resume?.FollowsForcedBreak ?? false,
+                // css-break-3 §5.1: this line begins in whatever fragmentainer startY falls in, and a
+                // stretch-fit/auto-width main-column box recalculates its inline size per fragmentainer -
+                // asked here, at the one moment the line's own Y is known and before a single word of it
+                // has been measured against a boundary, which is why no retry loop is needed for text:
+                // line-breaking is already Y-sequential. Falls back to blockBox.ClientRight (the box's own,
+                // start-page-fixed measure) for a box not eligible for per-fragmentainer re-wrap - see
+                // LineContentRightOf's own remarks.
+                ContentRight = LineContentRightOf(blockBox, startY),
+                ContentLeft = startX
+            };
 
             // text-indent's line-start-side placement (CSS Text 3 §3) is physical-left for LTR, so it is
             // added to the flow's starting X here; for RTL the line-start side is physical-right, which
@@ -367,7 +377,7 @@ namespace PeachPDF.Html.Core.Dom
             };
 
             //Flow words and boxes
-            await FlowBox(g, blockBox, blockBox, limitRight, 0, startX, coordinates);
+            await FlowBox(g, blockBox, blockBox, 0, startX, coordinates);
 
             // A resumed flow's seed line is abandoned when its first word forces a wrap - a <br>, or
             // content that no longer fits. Leaving it behind would put an empty line box in the middle
@@ -1122,7 +1132,7 @@ namespace PeachPDF.Html.Core.Dom
             if (leaderCount == 0) return; // fast path - leaders are rare on any given line
 
             var indent = GetLineTextIndent(lineBox.OwnerBox, lineBox.Equals(lineBox.OwnerBox.LineBoxes[0]), lineBox.FollowsForcedBreak);
-            var availWidth = lineBox.OwnerBox.ClientRectangle.Width - indent;
+            var availWidth = lineBox.ContentRight - lineBox.ContentLeft - indent;
 
             var nonLeaderWidth = 0d;
             foreach (var w in lineBox.Words)
@@ -1482,6 +1492,68 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return containingBlock.ClientRight;
+        }
+
+        /// <summary>
+        /// <paramref name="blockBox"/>'s own content-right edge for wrapping the line starting at document
+        /// Y <paramref name="y"/> - the per-line counterpart of <see cref="ContentRightOf"/> (which answers
+        /// the same question for a box being <i>placed inside</i> a containing block) for the box whose own
+        /// children are being flowed. Mirrors <see cref="GetBoxWidth"/>'s own auto-width branch: an
+        /// explicit-length or percentage <c>width</c> keeps <paramref name="blockBox"/>'s one already-
+        /// resolved <see cref="CssBox.ClientRight"/> - re-sizing the block's own border box per fragment is
+        /// <c>Draft.InlineExtent</c>, a separate, not-yet-built fragment-tree contract change - while an
+        /// auto-width block re-derives its content edge fresh from whichever page <paramref name="y"/> falls
+        /// in, exactly as it would if <see cref="GetBoxWidth"/> were resolving it for the first time there
+        /// (css-break-3 §5.1).
+        /// </summary>
+        private static double LineContentRightOf(CssBox blockBox, double y)
+        {
+            if (blockBox.Width != Keywords.Auto && !string.IsNullOrEmpty(blockBox.Width))
+            {
+                return blockBox.ClientRight;
+            }
+
+            // ContentRightOf(blockBox.ContainingBlock, y) names the CONTAINING block's own content edge -
+            // converting that into blockBox's OWN content-right by subtracting only its margin/border/
+            // padding below is only valid when blockBox actually spans its containing block's full width
+            // (CSS2.1 §10.3.3's auto-width-fills-container rule). A table cell (sized by the column-width
+            // algorithm, §17.5) or a flex/grid item (sized by its own engine) generally does not - each
+            // shares its containing block with sibling cells/items that also claim part of the same width,
+            // so blindly applying the ordinary-block arithmetic there substituted the *table's* or the
+            // *flex container's* width for the cell's/item's own (a multi-column table's rows collapsed to
+            // roughly the whole table's width instead of one column). Tables/flex/grid are Layers H/I, not
+            // this one, so their own children keep blockBox.ClientRight unchanged, exactly as before this
+            // layer - only an ordinary in-flow block genuinely re-derives per page.
+            if (!FillsContainingBlockWidth(blockBox))
+            {
+                return blockBox.ClientRight;
+            }
+
+            return ContentRightOf(blockBox.ContainingBlock, y)
+                   - blockBox.ActualMarginRight - blockBox.ActualBorderRightWidth - blockBox.ActualPaddingRight;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="blockBox"/> is an ordinary in-flow block that spans its containing
+        /// block's full content width (CSS2.1 §10.3.3) - the precondition <see cref="LineContentRightOf"/>
+        /// needs before it may derive blockBox's own edge from its containing block's. False for a float or
+        /// an absolutely/fixed-positioned box (sized against its own placement, not its container's
+        /// measure), a table cell/table/inline-table/table-caption (CSS2.1 §17.5's column-width algorithm),
+        /// or a flex/grid item (sized by its own engine) - each shares its containing block's width with
+        /// siblings, rather than claiming all of it alone.
+        /// </summary>
+        private static bool FillsContainingBlockWidth(CssBox blockBox)
+        {
+            if (blockBox.IsOutOfFlow) return false;
+
+            if (blockBox.DerivedStyle.ActualDisplay is Keywords.TableCell or Keywords.Table
+                or Keywords.InlineTable or Keywords.TableCaption)
+            {
+                return false;
+            }
+
+            var parentDisplay = blockBox.ParentBox?.DerivedStyle.ActualDisplay;
+            return parentDisplay is not (Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid);
         }
 
         /// <summary>
@@ -2258,7 +2330,6 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">Device Info</param>
         /// <param name="blockBox">Blockbox that contains the text flow</param>
         /// <param name="box">Current box to flow its content</param>
-        /// <param name="limitRight">Maximum reached right</param>
         /// <param name="lineSpacing">Space to use between rows of text</param>
         /// <param name="lineStartX">x starting coordinate for when breaking lines of text</param>
         /// <param name="coordinates">Current coordinates being used</param>
@@ -2269,7 +2340,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>). It
         /// is spent once, where the flow actually resumes. Always zero on a pass that is not resuming.
         /// </param>
-        private static async ValueTask FlowBox(RGraphics g, CssBox blockBox, CssBox box, double limitRight, double lineSpacing, double lineStartX, CssLineBoxCoordinates coordinates, double clonedResumeStart = 0)
+        private static async ValueTask FlowBox(RGraphics g, CssBox blockBox, CssBox box, double lineSpacing, double lineStartX, CssLineBoxCoordinates coordinates, double clonedResumeStart = 0)
         {
             var startX = coordinates.CurrentX;
             var startY = coordinates.CurrentY;
@@ -2415,8 +2486,8 @@ namespace PeachPDF.Html.Core.Dom
                             boxRight += word.FullWidth;
 
                         var noWrapLimitRight = isRtl
-                            ? limitRight - GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak)
-                            : limitRight;
+                            ? coordinates.Line.ContentRight - GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak)
+                            : coordinates.Line.ContentRight;
 
                         if (boxRight > noWrapLimitRight)
                             wrapNoWrapBox = true;
@@ -2440,7 +2511,7 @@ namespace PeachPDF.Html.Core.Dom
                         if (coordinates.MaxBottom - coordinates.CurrentY < box.ActualLineHeight)
                             coordinates.MaxBottom += box.ActualLineHeight - (coordinates.MaxBottom - coordinates.CurrentY);
 
-                        var actualLimitRight = limitRight;
+                        var actualLimitRight = coordinates.Line.ContentRight;
                         var lastRightIntersectingFloatBox = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
 
                         if (lastRightIntersectingFloatBox is not null)
@@ -2526,7 +2597,16 @@ namespace PeachPDF.Html.Core.Dom
                                 coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + leftSpacing;
                             }
 
-                            coordinates.Line = new CssLineBox(blockBox) { FollowsForcedBreak = word.IsLineBreak };
+                            coordinates.Line = new CssLineBox(blockBox)
+                            {
+                                FollowsForcedBreak = word.IsLineBreak,
+                                // Re-derived at the Y this wrap landed on (css-break-3 §5.1), mirroring the
+                                // seed line's own LineContentRightOf call in CreateLineBoxes - a straddling
+                                // block's later lines wrap against whatever page they actually reached, not
+                                // the page the block started on.
+                                ContentRight = LineContentRightOf(blockBox, coordinates.CurrentY),
+                                ContentLeft = lineStartX
+                            };
                             coordinates.LineStartOrdinal = wordOrdinal;
                             coordinates.Line.StartOrdinal = wordOrdinal;
 
@@ -2685,7 +2765,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    await FlowBox(g, blockBox, b, limitRight, lineSpacing, lineStartX, coordinates, childClonedResumeStart);
+                    await FlowBox(g, blockBox, b, lineSpacing, lineStartX, coordinates, childClonedResumeStart);
                     if (coordinates.Break is not null) return;
 
                     // Same as the branch above: an inset applies to the words this pass placed, and a
@@ -3752,7 +3832,7 @@ namespace PeachPDF.Html.Core.Dom
                 lineBox.FollowsForcedBreak);
             var textSum = 0d;
             var words = 0d;
-            var availWidth = lineBox.OwnerBox.ClientRectangle.Width - indent;
+            var availWidth = lineBox.ContentRight - lineBox.ContentLeft - indent;
 
             // Gather text sum
             foreach (var w in lineBox.Words)
@@ -3790,7 +3870,7 @@ namespace PeachPDF.Html.Core.Dom
             // edges bound - it never moves the span itself - so which edge carries the indent here is
             // what decides which physical side it ends up on after mirroring.
             var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
-            var currentX = lineBox.OwnerBox.ClientLeft + (isRtl ? 0 : indent);
+            var currentX = lineBox.ContentLeft + (isRtl ? 0 : indent);
 
             foreach (var word in lineBox.Words)
             {
@@ -3806,7 +3886,7 @@ namespace PeachPDF.Html.Core.Dom
                 // should keep.
                 if (word == lineBox.Words[^1] && (lineBox.Words.Count == 1 || !overflowsLine))
                 {
-                    word.Left = lineBox.OwnerBox.ClientRight - word.Width - (isRtl ? indent : 0);
+                    word.Left = lineBox.ContentRight - word.Width - (isRtl ? indent : 0);
                 }
             }
         }
@@ -3836,8 +3916,7 @@ namespace PeachPDF.Html.Core.Dom
             var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
 
             var lastWord = line.Words[^1];
-            var right = line.OwnerBox.ActualRight - line.OwnerBox.ActualPaddingRight - line.OwnerBox.ActualBorderRightWidth
-                        - (isRtl ? indent : 0);
+            var right = line.ContentRight - (isRtl ? indent : 0);
             var diff = right - lastWord.Right - lastWord.OwnerBox.ActualBorderRightWidth - lastWord.OwnerBox.ActualPaddingRight;
             diff /= 2;
 
@@ -3895,8 +3974,7 @@ namespace PeachPDF.Html.Core.Dom
             var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
 
             var lastWord = line.Words[^1];
-            var right = line.OwnerBox.ActualRight - line.OwnerBox.ActualPaddingRight - line.OwnerBox.ActualBorderRightWidth
-                        - (isRtl ? indent : 0);
+            var right = line.ContentRight - (isRtl ? indent : 0);
             var diff = right - lastWord.Right - lastWord.OwnerBox.ActualBorderRightWidth - lastWord.OwnerBox.ActualPaddingRight;
 
             // right - lastWord.Right is, by construction, exactly the shift needed to flush the line to

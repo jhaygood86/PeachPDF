@@ -61,6 +61,26 @@ namespace PeachPDF.Html.Core.Dom
         public bool FollowsForcedBreak { get; internal set; }
 
         /// <summary>
+        /// The content-box right edge this line was wrapped against — css-break-3 §5.1's per-fragmentainer
+        /// measure, resolved at the moment this line started (<c>CssLayoutEngine.FlowBox</c>), not
+        /// <c>OwnerBox.ClientRight</c>, which names only the measure of the page the box <i>started</i> on.
+        /// <c>ApplyRightAlignment</c>/<c>ApplyCenterAlignment</c>/<c>ApplyJustifyAlignment</c> flush against
+        /// this rather than the box's own edge, so a straddling box's continuation lines align correctly
+        /// against whichever page they actually landed on. Equal to <c>OwnerBox.ClientRight</c> for a box
+        /// that isn't eligible for per-fragmentainer re-wrap (the overwhelming majority), so alignment is
+        /// unaffected there.
+        /// </summary>
+        public double ContentRight { get; internal set; }
+
+        /// <summary>
+        /// The counterpart left edge. Always <c>OwnerBox.ClientLeft</c> today - layout stays anchored at
+        /// the base left origin and only the right edge varies per page (see
+        /// <c>HtmlContainerInt.PageContentRightOf</c>'s own remarks) - recorded here too so a future
+        /// left-varying design has a seam already in place rather than a rewrite.
+        /// </summary>
+        public double ContentLeft { get; internal set; }
+
+        /// <summary>
         /// Gets the words inside the linebox
         /// </summary>
         public List<CssRect> Words { get; }
