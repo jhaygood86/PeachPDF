@@ -1,5 +1,6 @@
 using PeachPDF.Adapters;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
 
@@ -7,8 +8,11 @@ namespace PeachPDF.Html.Core
 {
     /// <summary>
     /// One pagination slot's resolved geometry: its document-space band top and height (internal
-    /// pixel space, the same space all layout coordinates use) plus its four resolved page margins in
-    /// true PDF points (the space the paint loop's clip/translate and the margin-box renderer use).
+    /// pixel space, the same space all layout coordinates use) plus its four resolved page margins and
+    /// its resolved physical sheet width/height, all in true PDF points (the space the paint loop's
+    /// clip/translate and the margin-box renderer use). <see cref="SheetWidthPt"/>/
+    /// <see cref="SheetHeightPt"/> are always populated - the base/configured sheet size for a slot no
+    /// <c>@page</c> rule overrides, this slot's own resolved <c>size</c> otherwise.
     /// </summary>
     internal readonly record struct PageBandGeometry(
         int PageIndex,
@@ -17,7 +21,9 @@ namespace PeachPDF.Html.Core
         double MarginLeftPt,
         double MarginTopPt,
         double MarginRightPt,
-        double MarginBottomPt);
+        double MarginBottomPt,
+        double SheetWidthPt,
+        double SheetHeightPt);
 
     /// <summary>
     /// The per-page geometry table behind CSS Paged Media's page-box model: when per-page
@@ -41,6 +47,7 @@ namespace PeachPDF.Html.Core
         private readonly List<PageBandGeometry> _pages = [];
         private bool? _hasVerticalOverrides;
         private bool? _hasHorizontalOverrides;
+        private bool? _hasSizeOverrides;
 
         /// <summary>
         /// Whether any selector-carrying <c>@page</c> rule declares a top or bottom margin — the only
@@ -98,6 +105,35 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
+        /// <summary>
+        /// Whether any selector-carrying <c>@page</c> rule declares a physical <c>size</c> - when true,
+        /// a pagination slot's sheet width/height can differ from the document's base/configured size
+        /// (e.g. a named page in a different orientation), so <see cref="Compute"/> resolves it per
+        /// slot via <see cref="PageRuleResolver.ResolvePageSize"/> instead of the cheap global
+        /// reconstruction. When false (the overwhelming majority of documents), sheet size stays the
+        /// single base value for every slot and no per-slot resolution runs at all.
+        /// </summary>
+        internal bool HasSizeOverrides
+        {
+            get
+            {
+                _hasSizeOverrides ??= ComputeHasSizeOverrides();
+                return _hasSizeOverrides.Value;
+            }
+        }
+
+        private bool ComputeHasSizeOverrides()
+        {
+            foreach (var rule in container.PageRules)
+            {
+                if (rule.Selector is null) continue;
+                if (rule.Style.Size.Length > 0)
+                    return true;
+            }
+
+            return false;
+        }
+
         /// <summary>Drops every cached slot and re-evaluates the override scan — called at the start
         /// of every layout pass (and via <c>Clear</c>/<c>SetHtml</c>) so a fresh pass never sees the
         /// previous pass's geometry.</summary>
@@ -106,6 +142,7 @@ namespace PeachPDF.Html.Core
             _pages.Clear();
             _hasVerticalOverrides = null;
             _hasHorizontalOverrides = null;
+            _hasSizeOverrides = null;
         }
 
         /// <summary>
@@ -173,28 +210,62 @@ namespace PeachPDF.Html.Core
             var baseTPt = container.MarginTop / ppp;
             var baseRPt = container.MarginRight / ppp;
             var baseBPt = container.MarginBottom / ppp;
-            // The raw sheet height in layout px, recovered by construction: PdfGenerator.SetContent
+            // The raw sheet width/height in layout px, recovered by construction: PdfGenerator.SetContent
             // subtracts both point-space margins from the point-space sheet, and the public wrappers
             // scale PageSize and margins by the same PixelsPerPoint.
-            var sheetPx = container.PageSize.Height + container.MarginTop + container.MarginBottom;
+            var baseSheetPxWidth = container.PageSize.Width + container.MarginLeft + container.MarginRight;
+            var baseSheetPxHeight = container.PageSize.Height + container.MarginTop + container.MarginBottom;
 
             var activeName = PageRuleResolver.ActiveNameAtSlotStart(container.NamedPageElements, top);
             var rule = PageRuleResolver.SelectPageRule(container.PageRules, pageIndex + 1, activeName);
             var (mL, mT, mR, mB) = PageRuleResolver.ResolvePageMargins(
                 rule, baseLPt, baseTPt, baseRPt, baseBPt, container.PageLengthContext);
 
-            var bandHeight = sheetPx - (mT + mB) * ppp;
+            // Only resolve a per-slot sheet size when some rule in the document actually declares one -
+            // the cheap, overwhelmingly common case (including every slot of a document that HAS a size
+            // override elsewhere, but not on the rule that won here) stays the plain base reconstruction,
+            // with no PageRuleResolver.ResolvePageSize call/allocation at all.
+            double sheetPxHeight, sheetWidthPt, sheetHeightPt;
+            if (HasSizeOverrides)
+            {
+                var baseSizePt = new XSize(baseSheetPxWidth / ppp, baseSheetPxHeight / ppp);
+                var resolved = PageRuleResolver.ResolvePageSize(rule, baseSizePt, container.PageLengthContext);
+                sheetWidthPt = resolved.Width;
+                sheetHeightPt = resolved.Height;
+                sheetPxHeight = resolved.Height * ppp;
+            }
+            else
+            {
+                sheetWidthPt = baseSheetPxWidth / ppp;
+                sheetHeightPt = baseSheetPxHeight / ppp;
+                sheetPxHeight = baseSheetPxHeight;
+            }
+
+            var bandHeight = sheetPxHeight - (mT + mB) * ppp;
             if (bandHeight < 1.0)
             {
                 // Degenerate override (top+bottom margins consume the whole sheet): discard it for
-                // band purposes and fall back to the base band, so the pagination walk always
-                // advances and paint/clip stay consistent with the band actually used.
+                // band purposes and fall back to the base document margins against the SAME resolved
+                // sheet (not just the base one - only the margins are discarded, per the class doc
+                // comment), so the pagination walk always advances and paint/clip stay consistent with
+                // the band actually used.
                 mT = baseTPt;
                 mB = baseBPt;
-                bandHeight = container.PageSize.Height;
+                bandHeight = sheetPxHeight - (mT + mB) * ppp;
+
+                if (bandHeight < 1.0)
+                {
+                    // Still degenerate - the resolved sheet itself is smaller than even the base
+                    // margins allow (only reachable once a per-slot size override can make the sheet
+                    // arbitrarily small, e.g. a tiny named page). Discard margins entirely rather than
+                    // let pagination stall.
+                    mT = 0;
+                    mB = 0;
+                    bandHeight = sheetPxHeight;
+                }
             }
 
-            return new PageBandGeometry(pageIndex, top, bandHeight, mL, mT, mR, mB);
+            return new PageBandGeometry(pageIndex, top, bandHeight, mL, mT, mR, mB, sheetWidthPt, sheetHeightPt);
         }
     }
 }
