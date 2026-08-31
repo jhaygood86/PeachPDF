@@ -387,7 +387,7 @@ namespace PeachPDF.Tests.Integration
             var blocks = new List<CssBox>();
             CollectByClass(container.Root!, "b", blocks);
 
-            Assert.True(container.UseVariablePageWidth, "fixture must exercise per-page reflow");
+            Assert.True(container.UseVariableInlineMeasure, "fixture must exercise per-page reflow");
 
             // The invariant the reflow loop exists for still holds — the corrections are taken against the
             // settled assignment, so no block is left carrying a neighbouring page's width.
@@ -431,7 +431,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.True(container.UseVariablePageWidth, "fixture must exercise per-page reflow");
+            Assert.True(container.UseVariableInlineMeasure, "fixture must exercise per-page reflow");
             Assert.True(container.MeasureIsSharedBetween(0, 1));
 
             var paragraph = FindById(container.Root!, "p")!;
@@ -474,7 +474,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.True(container.UseVariablePageWidth, "fixture must exercise per-page reflow");
+            Assert.True(container.UseVariableInlineMeasure, "fixture must exercise per-page reflow");
 
             // The full-bleed first page and the base-margin second do not share a measure, so no §5.4
             // correction may move content between them.
@@ -552,6 +552,34 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task DegenerateOverride_SheetSmallerThanBaseMargins_DiscardsMarginsEntirely()
+        {
+            // A named page's own resolved sheet (80pt wide) is smaller than even the BASE margins
+            // (50+50=100) - PageContentRightOf's first fallback (base margins on the resolved sheet) is
+            // ALSO degenerate here, so it falls all the way to zero margin on the slot's own resolved
+            // sheet, mirroring PageGeometryTable.Compute's own second-level band-height clamp - reachable
+            // only via a per-slot size override (issue #143's mixed page-size case), never by a margin-only
+            // override.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page tiny { size: 80pt 400pt; }
+                body { margin: 0; }
+                p { margin: 0; }
+                </style></head><body>
+                <p>default page</p>
+                <p id='p0' style='page: tiny'>tiny-sheet paragraph</p>
+                </body></html>
+                """);
+
+            var p0 = FindById(container.Root!, "p0")!;
+            Assert.Equal(1, container.PageIndexOf(p0.Location.Y));
+
+            // Zero margin on the tiny page's own 80pt sheet: right edge = base MarginLeft(50) + 80 = 130.
+            Assert.Equal(BaseMargin + 80, container.PageContentRightOf(p0.Location.Y), 0.5);
+        }
+
+        [Fact]
         public async Task UniformMargins_NoHorizontalOverride_IdenticalToBase()
         {
             // Only a top-margin per-page override — no left/right override — so the horizontal reflow path
@@ -567,7 +595,7 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """);
 
-            Assert.False(container.UseVariablePageWidth);
+            Assert.False(container.UseVariableInlineMeasure);
             var p = FindById(container.Root!, "p")!;
             Assert.Equal(BaseRightEdge, p.ActualRight, 0.5);
             Assert.Equal(BaseRightEdge, container.PageContentRightOf(p.Location.Y), 0.5);

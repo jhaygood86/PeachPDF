@@ -1477,7 +1477,7 @@ namespace PeachPDF.Html.Core.Dom
         /// page area act as a containing block for layout that occurs between page breaks" / css-break-3
         /// §5.1: "recalculating sizes and positions using its own size"). Falls back to
         /// <paramref name="containingBlock"/>'s own <see cref="CssBox.ClientRight"/> wherever per-page
-        /// measure does not apply (no <see cref="HtmlContainerInt"/>, <see cref="HtmlContainerInt.UseVariablePageWidth"/>
+        /// measure does not apply (no <see cref="HtmlContainerInt"/>, <see cref="HtmlContainerInt.UseVariableInlineMeasure"/>
         /// is off, or the containing block isn't an unconstrained main column - issue #143's own scope,
         /// deferred further nesting as #199-#201), so callers may invoke it unconditionally. Shared by
         /// <see cref="GetBoxWidth"/>'s own box-width resolution and <see cref="FloatBox"/>'s displacement
@@ -1485,7 +1485,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static double ContentRightOf(CssBox containingBlock, double blockTop)
         {
-            if (containingBlock.HtmlContainer is { UseVariablePageWidth: true } htmlContainer
+            if (containingBlock.HtmlContainer is { UseVariableInlineMeasure: true } htmlContainer
                 && IsUnconstrainedMainColumn(containingBlock))
             {
                 return htmlContainer.PageContentRightOf(blockTop) - MainColumnRightInset(containingBlock);

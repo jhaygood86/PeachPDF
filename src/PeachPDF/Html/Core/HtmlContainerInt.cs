@@ -952,7 +952,7 @@ namespace PeachPDF.Html.Core
         /// against the new sizes - the same "wholesale redo" <see cref="PdfGenerator.SetContent"/>'s
         /// ShrinkToFit path already trusts, just re-triggered per container size rather than once per
         /// global scale factor. Capped at 3 refinement passes (4 total, matching
-        /// <see cref="UseVariablePageWidth"/>'s own established 3-iteration cap): on cap exceeded, the
+        /// <see cref="UseVariableInlineMeasure"/>'s own established 3-iteration cap): on cap exceeded, the
         /// last pass's result is accepted silently, the same bounded-not-perfect stance already used
         /// there for a structurally identical layout-depends-on-layout problem. A document with no size
         /// container anywhere - the overwhelming majority - pays for exactly one extra tree walk
@@ -1075,10 +1075,21 @@ namespace PeachPDF.Html.Core
             // via CssLayoutEngine.GetBoxWidth) BEFORE its Location is assigned, so on the first pass no
             // box's own page was yet known. Re-run layout so each auto-width box now keys its width off
             // its own page via its previous-pass Location.Y (GetBoxWidth -> PageContentRightOf), and
-            // repeat until the box->page assignment stops changing. For :first/:left/:right the bands are
-            // content-independent, so this converges in a single re-pass; the small cap bounds the
-            // deferred width->height->page-name feedback case (named-page L/R reflow - an accepted gap).
-            if (UseVariablePageWidth)
+            // repeat until the box->page assignment stops changing.
+            //
+            // Two bugs used to make more than one re-pass necessary for cases that are now closed instead -
+            // a box starting a named page was measured against the page-geometry slot BEFORE its own
+            // registration invalidated it (CssBox._measureResolvedAgainst now catches this the same pass it
+            // happens, rather than leaving it for a later re-pass to paper over), and the keep-with-next
+            // pull below (CssBox.PlaceAndSizeBlockChild's own OffsetTop translation) used to relocate a run
+            // across a measure change without re-measuring it. With both closed, every fixture this file's
+            // own tests exercise (including WidthFromTheSpaceNotTheLocationTests, which pins the exact
+            // LayoutGeneration count) now converges on the loop's very first iteration - proof that one
+            // re-pass is enough *for those documents*, not a formal guarantee for every one. The cap stays
+            // at 3 as the documented, not-yet-needed fallback for a case neither fix covers (the small
+            // remaining scope: a named-page L/R feedback loop deep enough to need a second genuine re-pass)
+            // rather than trading a real safety margin for a claim this session cannot independently prove.
+            if (UseVariableInlineMeasure)
             {
                 // The base seed the "real" pass(es) above used - NOT the current Root.Size.Width, which
                 // GetBoxWidth has already replaced with page 0's own (seam-adjusted) measure.
@@ -1117,7 +1128,7 @@ namespace PeachPDF.Html.Core
 
             // css-gcpm-3's float: footnote needs each page's footnote-area height fed back into that same
             // page's own available content band before the flow content there is judged to fit - the same
-            // "layout depends on layout" shape as UseVariablePageWidth's reflow loop above, solved the same
+            // "layout depends on layout" shape as UseVariableInlineMeasure's reflow loop above, solved the same
             // way: resolve every page's footnotes against the geometry the layout above already produced
             // (ResolveFootnotesForThisAttempt), re-run layout with the newly-discovered reservation seeded
             // in (see LayoutDocument's own ReserveBandEnd seed), and repeat until a round's per-page totals
@@ -1154,7 +1165,7 @@ namespace PeachPDF.Html.Core
             // css-content-3's target-counter(target, page) needs the final page a target box landed on,
             // which only exists once pagination has run - but the resolved page-number text's own width
             // can change line-breaking, which can change pagination. Same "layout depends on layout"
-            // shape as UseVariablePageWidth's reflow loop above and PerformLayout's own @container
+            // shape as UseVariableInlineMeasure's reflow loop above and PerformLayout's own @container
             // refinement loop, solved the same way: materialize a provisional fragment tree just far
             // enough to build a slot->page map, re-resolve every target-counter(_, page) against it, and
             // repeat (capped at the same 3 iterations those two loops already established) until a round
@@ -1166,7 +1177,7 @@ namespace PeachPDF.Html.Core
                 var targetPageRootWidth = MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width);
 
                 // Seeded from the state already on hand (the placeholder "1" text every target-counter(_,
-                // page) box currently holds), mirroring UseVariablePageWidth's own reflow loop above -
+                // page) box currently holds), mirroring UseVariableInlineMeasure's own reflow loop above -
                 // this only lets the loop exit after a single round in the edge case where a target
                 // genuinely resolves to page 1 (placeholder happens to already be correct), but costs
                 // nothing to seed correctly rather than from null.
@@ -2559,22 +2570,31 @@ namespace PeachPDF.Html.Core
         /// Whether the grid helpers consult the variable <see cref="PageGeometry"/> table instead of
         /// the closed-form uniform arithmetic: only when the page band is real (not the
         /// <c>double.MaxValue</c> measurement sentinel, not unset) AND some per-page <c>@page</c>
-        /// rule actually overrides a top/bottom margin. Keeping uniform documents on the literal
+        /// rule actually overrides a top/bottom margin OR the sheet size itself - the vertical mirror of
+        /// <see cref="UseVariableInlineMeasure"/>'s own reasoning: a size-only override (e.g. a landscape
+        /// named page, which changes height as well as width, typically with no margin override at all)
+        /// changes a slot's own band height exactly as a margin override does, so both have to gate the
+        /// same variable-geometry table lookup or pagination silently falls back to the base band height
+        /// for a slot whose sheet is genuinely a different size. Keeping uniform documents on the literal
         /// historical arithmetic eliminates any float-drift risk for the overwhelmingly common case.
         /// </summary>
         private bool UseVariablePageGeometry =>
-            HasRealPageGrid && PageGeometry.HasVerticalMarginOverrides;
+            HasRealPageGrid && (PageGeometry.HasVerticalMarginOverrides || PageGeometry.HasSizeOverrides);
 
         /// <summary>
         /// The horizontal analogue of <see cref="UseVariablePageGeometry"/>: whether layout should
         /// re-wrap content to each page's own content-box width. True only when the page width is real
         /// (not the <c>double.MaxValue</c> measurement sentinel, not unset) AND some per-page
-        /// <c>@page</c> rule actually overrides a left/right margin. When false, <see cref="PageContentRightOf"/>
-        /// returns the base measure and <see cref="CssLayoutEngine.GetBoxWidth"/> runs its exact
-        /// historical single-width arithmetic — zero change for the overwhelmingly common case.
+        /// <c>@page</c> rule actually overrides a left/right margin OR the sheet size itself (a mixed
+        /// page-size/orientation document, e.g. a landscape page for a wide table) - either changes the
+        /// page's own content-box width the same way, so both gate the same reflow. When false,
+        /// <see cref="PageContentRightOf"/> returns the base measure and
+        /// <see cref="CssLayoutEngine.GetBoxWidth"/> runs its exact historical single-width arithmetic —
+        /// zero change for the overwhelmingly common case.
         /// </summary>
-        internal bool UseVariablePageWidth =>
-            PageSize.Width > 0 && PageSize.Width < double.MaxValue - 1 && PageGeometry.HasHorizontalMarginOverrides;
+        internal bool UseVariableInlineMeasure =>
+            PageSize.Width > 0 && PageSize.Width < double.MaxValue - 1
+            && (PageGeometry.HasHorizontalMarginOverrides || PageGeometry.HasSizeOverrides);
 
         /// <summary>
         /// Whether the per-page reflow loop has settled which page each box is on, so a decision taken
@@ -2587,7 +2607,7 @@ namespace PeachPDF.Html.Core
         /// runs several layouts, and it is the loop rather than any one layout that settles the question.
         /// <c>ShrinkToFit</c> re-enters <see cref="PerformLayout"/> and so re-settles it from scratch.
         /// </remarks>
-        internal bool PageWidthsSettled => !UseVariablePageWidth || _pageWidthsSettled;
+        internal bool PageWidthsSettled => !UseVariableInlineMeasure || _pageWidthsSettled;
 
         /// <inheritdoc cref="PageWidthsSettled"/>
         private bool _pageWidthsSettled;
@@ -2619,7 +2639,7 @@ namespace PeachPDF.Html.Core
         /// </para>
         /// </remarks>
         internal bool MeasureIsSharedBetween(int from, int to) =>
-            !UseVariablePageWidth
+            !UseVariableInlineMeasure
             || from == to
             || Math.Abs(PageContentRightOf(PageTopOf(from) + PageBoundaryEpsilon)
                         - PageContentRightOf(PageTopOf(to) + PageBoundaryEpsilon)) < 0.01;
@@ -2633,7 +2653,7 @@ namespace PeachPDF.Html.Core
         /// machinery keeps document space anchored at the base content origin); the painter's per-page
         /// <c>deltaX</c> translate then moves it to that page's own physical left edge. Because the width
         /// is already the page's own width, the right edge lands correctly with no extra paint work.
-        /// When <see cref="UseVariablePageWidth"/> is off this returns the base
+        /// When <see cref="UseVariableInlineMeasure"/> is off this returns the base
         /// <c>MarginLeft + PageSize.Width</c>, so callers can invoke it unconditionally.
         /// The per-page left/right margins come from the same <see cref="PageGeometry"/> table layout
         /// paginated against; they resolve in true points, scaled into layout space by
@@ -2641,22 +2661,36 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal double PageContentRightOf(double y)
         {
-            if (!UseVariablePageWidth)
+            if (!UseVariableInlineMeasure)
                 return MarginLeft + PageSize.Width;
 
             var ppp = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             var geom = PageGeometry.GetPage(PageIndexOf(y));
-            // The raw sheet width in layout px, recovered by construction (mirror of PageGeometryTable's
-            // sheetPx height recovery): PdfGenerator.SetContent subtracts both point-space margins from
-            // the point-space sheet, and the public wrappers scale PageSize and margins by PixelsPerPoint.
-            var sheetPx = PageSize.Width + MarginLeft + MarginRight;
+            // This slot's OWN sheet width in layout px - not the document's base configured width, which
+            // a size-overriding rule (no margin override at all) leaves geom.MarginLeftPt/MarginRightPt at
+            // the base value while the sheet itself is genuinely a different width (issue #143's mixed
+            // page-size case). PdfGenerator.SetContent subtracts both point-space margins from the
+            // point-space sheet, and the public wrappers scale PageSize and margins by PixelsPerPoint - this
+            // mirrors that scaling for this slot's own (possibly overridden) sheet width instead.
+            var sheetPx = geom.SheetWidthPt * ppp;
             var bandWidth = sheetPx - (geom.MarginLeftPt + geom.MarginRightPt) * ppp;
 
-            // Degenerate override (left+right margins consume the whole sheet): fall back to the base
-            // measure, the horizontal mirror of PageGeometryTable.Compute's band-height clamp, so a
-            // pathological @page rule can never collapse content to a zero/negative width.
+            // Degenerate override (left+right margins consume the whole sheet): the same two-tier fallback
+            // PageGeometryTable.Compute's own band-height clamp uses, over the SLOT'S OWN resolved sheet
+            // (not the document's base sheet - a size-overriding slot's sheet is genuinely a different
+            // width, so reporting the base one would be wrong in the opposite direction: too wide for a
+            // narrow override, too narrow for a wide one). First retry with the base margins on this same
+            // resolved sheet (handles the common case: a margin-only override degenerate on its own but
+            // fine at the base margins, e.g. this method's own DegenerateOverride_MarginsConsumeSheet
+            // fixture); only fall further, to zero margin on the resolved sheet, if even that is still
+            // degenerate (reachable once a per-slot size override can make the sheet arbitrarily small).
             if (bandWidth < 1.0)
-                return MarginLeft + PageSize.Width;
+            {
+                bandWidth = sheetPx - (MarginLeft + MarginRight);
+
+                if (bandWidth < 1.0)
+                    bandWidth = sheetPx;
+            }
 
             return MarginLeft + bandWidth;
         }

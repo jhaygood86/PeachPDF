@@ -803,7 +803,7 @@ namespace PeachPDF.Html.Core.Dom
             if (container is null) return (null, null, null, null);
 
             var size = container.PageSize;
-            // Same double.MaxValue sentinel guard HasRealPageGrid/UseVariablePageWidth already use for an
+            // Same double.MaxValue sentinel guard HasRealPageGrid/UseVariableInlineMeasure already use for an
             // unpaginated/measurement pass with no real page geometry yet.
             double? width = size.Width is > 0 and < double.MaxValue - 1 ? size.Width : null;
             double? height = size.Height is > 0 and < double.MaxValue - 1 ? size.Height : null;
@@ -2104,6 +2104,23 @@ namespace PeachPDF.Html.Core.Dom
         /// layout. It runs once per box per layout, not once per fragmentainer pass.
         /// </summary>
         private bool _prologueDone;
+
+        /// <summary>
+        /// The per-page content-right edge (<see cref="HtmlContainerInt.PageContentRightOf"/>) actually in
+        /// effect when <see cref="ResolveOwnInlineSize"/> last resolved this box's own width - not a value
+        /// re-derived later, because a later re-derivation can no longer see what was true at resolve time.
+        /// <see cref="InlineSizeCameFromAnotherPagesMeasure"/> compares a fresh lookup against this stored
+        /// value rather than against a second fresh lookup, because this box's own placement
+        /// (<see cref="CommitBlockChildOffset"/>) registers its named page - and therefore invalidates the
+        /// page-geometry slot its own width was just resolved against - immediately AFTER
+        /// <see cref="ResolveOwnInlineSize"/> runs, not before: a box opening a named page is measured
+        /// against the *previous* page's geometry, and two fresh lookups taken any time after that
+        /// registration agree with each other and hide the staleness completely. <see cref="double.NaN"/>
+        /// (via <see cref="double.IsNaN"/>) marks "not yet resolved this layout" / "not resolved via
+        /// <see cref="CssLayoutEngine.GetBoxWidth"/> at all" (a table/flex/grid box sizes itself through its
+        /// own engine instead), for which the guard this field feeds is simply inapplicable.
+        /// </summary>
+        private double _measureResolvedAgainst = double.NaN;
 
         /// <summary>
         /// Whether <see cref="ResetForRefill"/> has already brought this box into the state a pass
@@ -4605,17 +4622,26 @@ namespace PeachPDF.Html.Core.Dom
             // into each other from spinning. Never entered by a document with one measure, which is every
             // document without per-page left/right margins.
             //
-            // Measured, and worth knowing before deleting it: it does fire (a `clear: both` block displaced
-            // past a float onto a narrower page enters it once, on every layout generation), but no fixture
-            // found makes it change the *final* geometry - a displacement big enough to change the measure
-            // has by definition crossed a page boundary, and in a fragmenting layout that is also a break
-            // decision, so the box is placed again at the resumed target and measured correctly there
-            // anyway. What it buys is that the first placement is self-consistent on its own terms rather
-            // than by way of a later mechanism: the descendants laid out inside this box immediately
-            // afterwards read its width, and a width belonging to a page the box is not on is the exact
-            // defect this whole reorder removes.
+            // Measured, and worth knowing before deleting the float/clear half of it: it does fire (a
+            // `clear: both` block displaced past a float onto a narrower page enters it once, on every
+            // layout generation), but no fixture found makes it change the *final* geometry there - a
+            // displacement big enough to change the measure has by definition crossed a page boundary, and
+            // in a fragmenting layout that is also a break decision, so the box is placed again at the
+            // resumed target and measured correctly there anyway. What that half buys is that the first
+            // placement is self-consistent on its own terms rather than by way of a later mechanism.
+            //
+            // The other case InlineSizeCameFromAnotherPagesMeasure catches - _measureResolvedAgainst
+            // disagreeing with a fresh lookup at the SAME Y (StaticTop == measuredAt, no displacement at
+            // all) - is not cosmetic: it is what a box opening its own named page hits, since
+            // CommitBlockChildOffset's tail registers that name (and so invalidates the page-geometry slot
+            // just read) immediately after ResolveOwnInlineSize already used the stale, pre-registration
+            // slot above. This IS the mechanism behind the width→height→page-name convergence-loop feedback
+            // named-page reflow already lives with (see PerformLayout's own remarks) - catching it here,
+            // the very pass that creates it, is strictly narrower than waiting for the outer reflow loop's
+            // signature comparison to notice, which it structurally cannot: that comparison only sees each
+            // box's page *index*, not the measure it used to get there.
             for (var guard = 0; guard < 4 && offset.PositionedInBlockFlow
-                                          && child.InlineSizeCameFromAnotherPagesMeasure(measuredAt); guard++)
+                                          && child.InlineSizeCameFromAnotherPagesMeasure(); guard++)
             {
                 measuredAt = child.StaticTop;
 
@@ -4627,19 +4653,21 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether this box's border-box top now sits on a page whose measure differs from the one at
-        /// <paramref name="measuredAt"/>, which its inline size was resolved against.
+        /// Whether this box's border-box top now sits on a page whose measure differs from the one its
+        /// inline size was actually resolved against (<see cref="_measureResolvedAgainst"/>).
         /// </summary>
         /// <remarks>
-        /// Asked about the <i>measure</i> rather than about the slot index, and with
-        /// <see cref="HtmlContainerInt.MeasureIsSharedBetween"/>'s own tolerance: two pages that differ only
-        /// in where their content begins (mirrored inner/outer margins) wrap identically, so a box moving
-        /// between them has nothing to re-resolve.
+        /// Compares a fresh lookup against the <i>stored</i> resolve-time value rather than against a
+        /// second fresh lookup at the original Y - see <see cref="_measureResolvedAgainst"/>'s own remarks
+        /// for why two fresh lookups can't see this box's own named-page registration invalidating the
+        /// very slot its width was just resolved against. Always false for a box whose width didn't come
+        /// from <see cref="ResolveOwnInlineSize"/>'s <see cref="CssLayoutEngine.GetBoxWidth"/> branch at
+        /// all (a table/flex/grid box, or one this method has not yet run for this layout).
         /// </remarks>
-        private bool InlineSizeCameFromAnotherPagesMeasure(double measuredAt) =>
-            HtmlContainer is { UseVariablePageWidth: true } container
-            && Math.Abs(container.PageContentRightOf(StaticTop)
-                        - container.PageContentRightOf(measuredAt)) >= 0.01;
+        private bool InlineSizeCameFromAnotherPagesMeasure() =>
+            HtmlContainer is { UseVariableInlineMeasure: true } container
+            && !double.IsNaN(_measureResolvedAgainst)
+            && Math.Abs(container.PageContentRightOf(StaticTop) - _measureResolvedAgainst) >= 0.01;
 
         /// <summary>
         /// Has the frame above this box assign its position.
@@ -4682,6 +4710,12 @@ namespace PeachPDF.Html.Core.Dom
 
             if (isVerticalTableCell || (DerivedStyle.ActualDisplay != Keywords.TableCell && DerivedStyle.ActualDisplay != Keywords.Table && DerivedStyle.ActualDisplay != Keywords.Flex && DerivedStyle.ActualDisplay != Keywords.InlineFlex && DerivedStyle.ActualDisplay != Keywords.Grid && DerivedStyle.ActualDisplay != Keywords.InlineGrid))
             {
+                // Captured before GetBoxWidth resolves the width below - see _measureResolvedAgainst's own
+                // remarks for why this specific moment (not a later one) is the one that matters.
+                _measureResolvedAgainst = HtmlContainer is { UseVariableInlineMeasure: true } container
+                    ? container.PageContentRightOf(blockTop)
+                    : double.NaN;
+
                 var width = await CssLayoutEngine.GetBoxWidth(g, this, blockTop);
                 ActualRight = Location.X + width + ActualBoxSizeIncludedWidth;
             }
@@ -5104,8 +5138,16 @@ namespace PeachPDF.Html.Core.Dom
                                 var runStartsOnSamePage =
                                     child.HtmlContainer!.SlotEndingAt(runTop) == boundary.Fragmentainer!.SlotIndex;
 
+                                // The run is translated in place (OffsetTop below) rather than re-measured,
+                                // so it only lands correctly when the page it is leaving and the page it is
+                                // pulled onto share one measure - otherwise it arrives still wrapped for the
+                                // page it left, which is exactly the defect the per-page reflow loop exists
+                                // to remove, and worse than the stranded-run this pull was trying to avoid
+                                // (mirrors CssBox.TryKeepFewerLinesForWidows's identical §5.4 decline).
                                 if (extraAbove > 0 && runStartsOnSamePage
-                                    && extraAbove <= boundary.AtNextSlot().NextBandHeight)
+                                    && extraAbove <= boundary.AtNextSlot().NextBandHeight
+                                    && child.HtmlContainer.MeasureIsSharedBetween(
+                                        boundary.Fragmentainer.SlotIndex, boundary.Fragmentainer.SlotIndex + 1))
                                 {
                                     var groupOffset = newTop - runTop;
 
@@ -5413,8 +5455,13 @@ namespace PeachPDF.Html.Core.Dom
                         var runStartsOnSamePage = HtmlContainer.PageIndexOf(runTop) == ownPage;
                         var pageStart = HtmlContainer.PageTopOf(firstLinePage);
 
+                        // Same decline as the sibling pull above (CssBox.PlaceAndSizeBlockChild's own
+                        // keep-with-next pull, a few hundred lines up in this file): OffsetTop translates
+                        // the run without re-measuring it, so the pull is only correct when the page it
+                        // leaves and the page it lands on share one measure.
                         if (extraAbove > 0 && runStartsOnSamePage
-                            && extraAbove + ActualBottom - firstWordTop <= HtmlContainer.PageBandHeightOf(firstLinePage))
+                            && extraAbove + ActualBottom - firstWordTop <= HtmlContainer.PageBandHeightOf(firstLinePage)
+                            && HtmlContainer.MeasureIsSharedBetween(ownPage, firstLinePage))
                         {
                             var runDelta = pageStart - runTop;
 
@@ -5688,7 +5735,7 @@ namespace PeachPDF.Html.Core.Dom
             // recomputes it fresh every pass from that pass's own line content, unlike ordinary text whose
             // measured width never changes once set. It must be reset here unconditionally, ahead of the
             // "already measured" guard below: a box whose content never changes across a multi-pass layout
-            // (UseVariablePageWidth's reflow loop, the @container convergence loop, or
+            // (UseVariableInlineMeasure's reflow loop, the @container convergence loop, or
             // HtmlContainerInt's target-page convergence loop - e.g. a leader()-only box with no
             // target-counter of its own, so nothing ever calls ParseToWords on it again) would otherwise
             // carry a previous pass's resolved (non-zero) width into this pass's initial flow, corrupting

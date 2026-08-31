@@ -336,7 +336,7 @@ namespace PeachPDF.Tests.Integration
                 after: "<p style='margin:0'>omega</p>",
                 pageCss: "@page{margin:10pt}@page :left{margin-left:60pt}@page :right{margin-right:60pt}");
 
-            Assert.True(container.UseVariablePageWidth, "the fixture must drive the reflow loop");
+            Assert.True(container.UseVariableInlineMeasure, "the fixture must drive the reflow loop");
             Assert.True(stall.FragmentingPerPass.Count > 3,
                 $"the fixture must lay out more than once, but the box was laid out {stall.FragmentingPerPass.Count} time(s)");
             Assert.Equal(1, container.LastResortRelayouts);

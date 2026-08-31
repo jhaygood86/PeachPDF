@@ -5,7 +5,7 @@ refinement passes, each a full re-parse/re-cascade/re-layout) stops either when 
 container's resolved size stops changing pass-over-pass, or when the pass cap is hit — whichever
 comes first. On cap exceeded, the last pass's result is accepted silently rather than detecting or
 specially resolving the non-convergence. This mirrors the same "bounded, not perfect" stance already
-accepted for `UseVariablePageWidth`'s own 3-iteration reflow loop (see the "named-page L/R reflow"
+accepted for `UseVariableInlineMeasure`'s own 3-iteration reflow loop (see the "named-page L/R reflow"
 note in `docs/architecture.md`'s per-page reflow section).
 
 CSS Containment 3 doesn't define a pass limit; a spec-conformant UA is expected to reach a stable
