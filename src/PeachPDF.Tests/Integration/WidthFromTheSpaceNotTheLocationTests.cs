@@ -102,7 +102,7 @@ namespace PeachPDF.Tests.Integration
 
             using (g)
             {
-                Assert.True(container.UseVariablePageWidth, "fixture must exercise per-page reflow");
+                Assert.True(container.UseVariableInlineMeasure, "fixture must exercise per-page reflow");
 
                 var blocks = BlocksOf(container);
                 Assert.True(container.PageIndexOf(blocks[^1].Location.Y) >= 4,
@@ -134,7 +134,7 @@ namespace PeachPDF.Tests.Integration
 
             using (g)
             {
-                Assert.True(container.UseVariablePageWidth, "fixture must exercise per-page reflow");
+                Assert.True(container.UseVariableInlineMeasure, "fixture must exercise per-page reflow");
                 AssertEveryBlockIsWrappedForItsOwnPage(container, BlocksOf(container));
             }
         }
@@ -181,6 +181,133 @@ namespace PeachPDF.Tests.Integration
                     "the two pages must have different measures for the claim to mean anything");
 
                 Assert.Equal(container.PageContentRightOf(cleared.Location.Y), cleared.ActualRight, 0.5);
+            }
+        }
+
+        /// <summary>
+        /// The self-measurement-before-registration bug behind issue #202's underlying mechanism: a box
+        /// carrying <c>page: &lt;name&gt;</c> is measured (<c>CssBox.ResolveOwnInlineSize</c>) BEFORE its
+        /// own <c>CommitBlockChildOffset</c> call registers that name
+        /// (<c>HtmlContainerInt.RegisterNamedPageElement</c>) - so without
+        /// <c>CssBox._measureResolvedAgainst</c>/<c>InlineSizeCameFromAnotherPagesMeasure</c> catching it
+        /// the same pass it happens, the box would silently keep whatever page-geometry slot was cached
+        /// under the PREVIOUS name, and nothing in the outer reflow loop's signature comparison
+        /// (page *index* only, not the measure used to get there) would ever notice.
+        /// </summary>
+        [Fact]
+        public async Task ABoxOpeningANamedPage_GetsThatPagesOwnMeasureImmediately()
+        {
+            var (container, g) = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 40pt 200pt; }
+                @page wide { margin: 40pt 20pt; }
+                body { margin: 0; }
+                p { margin: 0; }
+                </style></head><body>
+                <p>base-measure paragraph before the named page</p>
+                <p id='opens' style='page: wide'>the paragraph that opens the wide named page</p>
+                </body></html>
+                """);
+
+            using (g)
+            {
+                var opens = FindById(container.Root!, "opens")!;
+
+                Assert.True(container.PageIndexOf(opens.Location.Y) >= 1,
+                    "the named page must force a break onto a fresh page");
+                Assert.False(container.MeasureIsSharedBetween(0, container.PageIndexOf(opens.Location.Y)),
+                    "the named page's own margins must differ from the base page for the claim to mean anything");
+
+                // The box that OPENS the named page gets that page's own (wide) measure immediately - not
+                // the base page's, which is what a stale, pre-registration lookup would have given it.
+                Assert.Equal(container.PageContentRightOf(opens.Location.Y), opens.ActualRight, 0.5);
+            }
+        }
+
+        /// <summary>
+        /// The keep-with-next pull (<c>CssBox.PlaceBlockBox</c>'s own run relocation ahead of a break, and
+        /// its first-line-retry twin) translates a run's geometry in place (<c>CssBox.OffsetTop</c>) rather
+        /// than re-measuring it - correct only when the page it leaves and the page it lands on share one
+        /// measure (<c>HtmlContainerInt.MeasureIsSharedBetween</c>), now declined otherwise rather than
+        /// silently relocating a run to a page it was never measured against. Interspersing
+        /// <c>break-after: avoid</c> headings through a fixture that alternates measures gives many
+        /// independent chances for a pull to straddle a measure change; every heading and the paragraph it
+        /// is paired with must still end up wrapped for whichever page it actually landed on.
+        /// </summary>
+        [Fact]
+        public async Task KeepWithNextRun_PulledAcrossAMeasureChange_StaysCorrectlyWrapped()
+        {
+            var headed = string.Concat(Enumerable.Range(1, 60).Select(i =>
+                $"<h2 class='b' style='break-after:avoid;margin:0'>Heading {i}</h2>" +
+                $"<p class='b' style='margin:0'>Paragraph {i}: lorem ipsum dolor sit amet consectetur " +
+                "adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>"));
+
+            var (container, g) = await BuildLayoutAsync($$"""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 40pt 20pt; }
+                @page :left { margin: 40pt 260pt; }
+                @page :right { margin: 40pt 20pt; }
+                @page :first { margin: 0; }
+                body { margin: 0; }
+                </style></head><body>{{headed}}</body></html>
+                """);
+
+            using (g)
+            {
+                Assert.True(container.UseVariableInlineMeasure, "fixture must exercise per-page reflow");
+
+                var blocks = BlocksOf(container);
+                Assert.True(container.PageIndexOf(blocks[^1].Location.Y) >= 4,
+                    "fixture must span several pages of alternating measure");
+
+                AssertEveryBlockIsWrappedForItsOwnPage(container, blocks);
+            }
+        }
+
+        /// <summary>
+        /// <c>UseVariableInlineMeasure</c> (formerly <c>UseVariablePageWidth</c>) used to gate on
+        /// <c>PageGeometry.HasHorizontalMarginOverrides</c> alone - a document whose per-page rule changes
+        /// only the SHEET size (no margin override at all) left every page's own content measure computed
+        /// from the document's base sheet width, even though <c>PdfGenerator.AddPdfPages</c> already gives
+        /// that page a genuinely different, independent physical <c>/MediaBox</c>. Now gated on
+        /// <c>HasHorizontalMarginOverrides OR HasSizeOverrides</c>, and <c>PageContentRightOf</c> reads this
+        /// slot's own <c>PageBandGeometry.SheetWidthPt</c> rather than the document's base sheet width.
+        /// </summary>
+        [Fact]
+        public async Task SizeOnlyOverride_NoMarginOverride_StillReflowsToItsOwnMeasure()
+        {
+            // The named rule declares ONLY `size` - no margin-left/margin-right/margin-top/margin-bottom
+            // (nor the `margin` shorthand, which expands to all four) anywhere in its declaration block.
+            // PageGeometryTable.HasHorizontalMarginOverrides checks whether any selector-carrying rule
+            // declares a margin property AT ALL (not whether the value actually differs from the base
+            // rule's) - so redeclaring `margin: 20pt` here, even at the same value as the base rule, would
+            // satisfy the OLD (pre-widening) gate on its own and prove nothing about HasSizeOverrides.
+            var (container, g) = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { size: 300pt 400pt; margin: 20pt; }
+                @page wide { size: 700pt 400pt; }
+                body { margin: 0; }
+                p { margin: 0; }
+                </style></head><body>
+                <p>base paragraph</p>
+                <p id='opens' style='page: wide'>the paragraph on the wide-sheet named page</p>
+                </body></html>
+                """);
+
+            using (g)
+            {
+                Assert.True(container.UseVariableInlineMeasure,
+                    "a size-only per-page override (no margin override at all) must still enable per-page reflow");
+
+                var opens = FindById(container.Root!, "opens")!;
+                Assert.True(container.PageIndexOf(opens.Location.Y) >= 1);
+
+                // The named page's own sheet (700pt) minus its own 20pt margins each side = 660pt content
+                // width, at the base 20pt left origin, so its right edge is 680pt - well past the base
+                // page's own (300 - 40 = 260pt content, right edge 280pt).
+                Assert.True(opens.ActualRight > 280,
+                    "content on the wide-sheet named page must reflow to that page's own (much wider) measure");
+                Assert.Equal(container.PageContentRightOf(opens.Location.Y), opens.ActualRight, 0.5);
             }
         }
 

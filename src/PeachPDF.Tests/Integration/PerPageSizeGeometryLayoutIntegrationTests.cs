@@ -130,6 +130,38 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task SizeOnlyOverride_NoMarginOverride_VerticalPaginationUsesTheNamedPagesOwnBandHeight()
+        {
+            // The tests above read PageGeometryTable directly, bypassing HtmlContainerInt's own
+            // UseVariablePageGeometry gate - the CONSUMPTION side (PageTopOf/PageBandHeightOf/PageIndexOf),
+            // which used to fire only on HasVerticalMarginOverrides. A rule that changes only the sheet
+            // HEIGHT, with no margin override at all, left those helpers silently on the base document's
+            // closed-form uniform arithmetic even though the named page's own sheet is genuinely a
+            // different height - this fixture has no margin override anywhere, so the OLD gate would never
+            // engage the variable-geometry table at all for it.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page short { size: 300pt 200pt; }
+                div, p { margin: 0; }
+                </style></head><body>
+                <p>default page one</p>
+                <div style="page: short; height: 10pt">short section</div>
+                <p>default page three</p>
+                </body></html>
+                """);
+
+            // Slot 1 (the named page): base margins (no override), so band height = 200 - 60 - 60 = 80pt -
+            // NOT the base sheet's 792 - 60 - 60 = 672pt a stale gate would report.
+            const double namedBandHeight = 200 - BaseMt - BaseMb; // 80
+            Assert.Equal(namedBandHeight, container.PageBandHeightOf(1), 3);
+
+            // Slot 2 (reverted to default) starts exactly where slot 1's own (short) band ends - proving
+            // PageTopOf actually consulted the named page's own height rather than the base 672pt band.
+            Assert.Equal(container.PageTopOf(1) + namedBandHeight, container.PageTopOf(2), 0.5);
+        }
+
+        [Fact]
         public async Task NamedPageSizeSmallerThanBaseMargins_DiscardsMarginsEntirely_ReclaimsFullResolvedSheet()
         {
             // A resolved sheet so small even the BASE margins (60+60=120) don't fit its own 100pt
