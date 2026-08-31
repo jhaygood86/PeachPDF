@@ -1507,8 +1507,15 @@ namespace PeachPDF.Html.Core.Dom
                 && !(box.DerivedStyle.ActualDisplay == Keywords.Inline && box.Words.Count == 0))
             {
                 // Absolute boxes resolve a percentage width against their nearest positioned ancestor
-                // (CSS 2.1 §10.1), consistent with GetBoxHeight and the left/top positioning code.
-                width = CssValueParser.ParseLength(box.Width, PercentageBase(box).Size.Width, box);
+                // (CSS 2.1 §10.1), consistent with GetBoxHeight and the left/top positioning code. Fixed
+                // boxes resolve against the page area (CSS2.1 §10.1: the initial containing block), the
+                // same basis CommitBlockChildOffset already uses for a fixed box's left/top - previously
+                // missed here, so a fixed box's own percentage width fell through to the ordinary DOM
+                // ContainingBlock chain instead.
+                var widthBasis = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is { } wfc
+                    ? wfc.PageSize.Width
+                    : PercentageBase(box).Size.Width;
+                width = CssValueParser.ParseLength(box.Width, widthBasis, box);
             }
 
             if (box is { Width: Keywords.Auto, Position.Value: not PositionMode.Absolute })
@@ -1594,8 +1601,13 @@ namespace PeachPDF.Html.Core.Dom
             // container that ContainingBlock returns. (Positioning already uses GetNearestPositionedAncestor;
             // this keeps % height resolution consistent, so e.g. a Charts.css pie slice `td { position:
             // absolute; height: 100% }` fills its position:relative tbody even though its parent <tr> is
-            // static and zero-height.)
+            // static and zero-height.) A fixed box resolves against the page area instead (CSS2.1 §10.1:
+            // the initial containing block, the same basis CommitBlockChildOffset already uses for a fixed
+            // box's left/top) - always definite, since the page always has a real height.
             var heightCb = PercentageBase(box);
+            var isFixedToPage = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null;
+            var heightBasisIsCalculated = isFixedToPage || heightCb.IsHeightCalculated;
+            var heightBasis = isFixedToPage ? box.HtmlContainer!.PageSize.Height : heightCb.Size.Height;
 
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
             // content - content taller than it overflows past ActualBottom (clipped or not per
@@ -1603,7 +1615,7 @@ namespace PeachPDF.Html.Core.Dom
             // the previous order here had it), so min-height can still win on conflict per §10.7.
             if (CssValueParser.IsValidLength(box.Height))
             {
-                if (!heightCb.IsHeightCalculated && box.Height.EndsWith('%'))
+                if (!heightBasisIsCalculated && box.Height.EndsWith('%'))
                 {
                     // An indefinite percentage height behaves as automatic (CSS Box Sizing 4 §5): a
                     // preferred aspect ratio sizes the height from the (definite) width if there is one;
@@ -1615,21 +1627,21 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    height = CssValueParser.ParseLength(box.Height, heightCb.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                    height = CssValueParser.ParseLength(box.Height, heightBasis, box) + box.ActualBoxSizeIncludedHeight;
                 }
             }
             else if (box.Position.Value is PositionMode.Absolute
                      && box.Top.Value.IsValue && box.Bottom.Value.IsValue
-                     && heightCb.IsHeightCalculated)
+                     && heightBasisIsCalculated)
             {
                 // CSS 2.1 §10.6.4: an absolutely-positioned box with auto height but both `top` and `bottom`
                 // set fills the space between them in the containing block. The counterpart of the §10.3.7
                 // width rule above; sizes a Charts.css area/line `td::before` (auto height, `inset: 0`) to
                 // its cell's height.
-                var top = CssValueParser.ParseLength(box.Top.Value.Value!.Value, heightCb.Size.Height, box);
-                var bottom = CssValueParser.ParseLength(box.Bottom.Value.Value!.Value, heightCb.Size.Height, box);
+                var top = CssValueParser.ParseLength(box.Top.Value.Value!.Value, heightBasis, box);
+                var bottom = CssValueParser.ParseLength(box.Bottom.Value.Value!.Value, heightBasis, box);
                 // Over-constrained fill clamps to 0 (a used height is never negative), per CSS 2.1 §10.6.4.
-                height = Math.Max(0, heightCb.Size.Height - top - bottom - box.ActualMarginTop - box.ActualMarginBottom);
+                height = Math.Max(0, heightBasis - top - bottom - box.ActualMarginTop - box.ActualMarginBottom);
             }
             else if (TryGetAspectRatioHeight(box, out var ratioHeight))
             {
@@ -1640,9 +1652,9 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             if (CssValueParser.IsValidLength(box.MinHeight) &&
-                (heightCb.IsHeightCalculated || !box.MinHeight.EndsWith('%')))
+                (heightBasisIsCalculated || !box.MinHeight.EndsWith('%')))
             {
-                var minHeight = CssValueParser.ParseLength(box.MinHeight, heightCb.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                var minHeight = CssValueParser.ParseLength(box.MinHeight, heightBasis, box) + box.ActualBoxSizeIncludedHeight;
 
                 if (minHeight > height)
                 {
@@ -1682,7 +1694,13 @@ namespace PeachPDF.Html.Core.Dom
         internal static bool HasDefiniteHeight(CssBox box)
         {
             if (!CssValueParser.IsValidLength(box.Height)) return false;
-            if (box.Height.EndsWith('%')) return PercentageBase(box).IsHeightCalculated;
+            if (box.Height.EndsWith('%'))
+            {
+                // A fixed box's percentage height resolves against the page area (always definite),
+                // mirroring GetBoxHeight's own isFixedToPage treatment.
+                if (box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null) return true;
+                return PercentageBase(box).IsHeightCalculated;
+            }
             return true;
         }
 
