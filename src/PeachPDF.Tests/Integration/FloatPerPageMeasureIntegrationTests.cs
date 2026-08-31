@@ -112,6 +112,63 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(BaseMargin, f1.Location.X, 0.5);
         }
 
+        [Fact]
+        public async Task ClearedFloatLeft_ReplacedAtTheLandingPage_ViaTheLeftReplacementBranch()
+        {
+            // Mirrors ClearedFloatRight_ReplacedAtTheLandingPagesRightEdge for the Floating.Left half of
+            // FloatBox's post-clear re-placement (the two are separate branches - a float:right sibling
+            // contributes to clear:right's clearance per CSS 2.1 §9.5.2, pushing this float well past the
+            // page boundary; the base-anchored left edge doesn't itself vary by page, but the
+            // re-placement call must still run for the Left direction too).
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                div, p { margin: 0; }
+                </style></head><body>
+                <div id='tallRight' style='float:right; width:50pt; height:700pt;'></div>
+                <div id='clearedLeft' style='float:left; clear:right; width:100pt; height:20pt;'></div>
+                </body></html>
+                """);
+
+            var clearedLeft = FindById(container.Root!, "clearedLeft")!;
+
+            Assert.Equal(1, container.PageIndexOf(clearedLeft.Location.Y));
+            Assert.Equal(BaseMargin, clearedLeft.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task FloatRight_DroppedByANarrowedScanBoundary_RederivesAtTheLandingPage()
+        {
+            // Exercises FloatBoxRight's own mid-scan re-derivation (inside the drop branch, not the
+            // simpler "re-run from scratch after clear" path above). `ghost` is a float:right box with a
+            // (valid, if unusual) negative margin-left - IsFloatIntersecting's Floating.Right case reads
+            // an existing candidate's own margin-left-adjusted left edge, so a small negative value is
+            // what makes an already-in-bounds box register as "intersecting" at all under that formula,
+            // which is the only way this branch is reachable through DomUtils.GetFirstIntersectingFloatBox
+            // as it exists today. Once found, `ghost`'s height carries the drop's MaxBottom well past the
+            // page-0/page-1 boundary, and f2's own width (wider than either page's own remaining room
+            // once narrowed) forces the drop that must re-derive the boundary at the Y it lands on.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                div, p { margin: 0; }
+                </style></head><body>
+                <div id='ghost' style='float:right; width:10pt; margin-left:-20pt; height:700pt;'></div>
+                <div id='f2' style='float:right; width:560pt; height:20pt;'></div>
+                </body></html>
+                """);
+
+            var f2 = FindById(container.Root!, "f2")!;
+
+            Assert.Equal(1, container.PageIndexOf(f2.Location.Y));
+            Assert.Equal(BaseRightEdge, f2.ActualRight, 0.5);
+            Assert.Equal(container.PageContentRightOf(f2.Location.Y), f2.ActualRight, 0.5);
+        }
+
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html, double ppp = 1.0)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = ppp };
