@@ -1,6 +1,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -167,6 +168,30 @@ namespace PeachPDF.Html.Core.Dom
             double? Resolve(string value) => ctx is { } c
                 ? DomParser.ParseLengthToPdfPoints(value, c)
                 : DomParser.ParseLengthToPdfPoints(value);
+        }
+
+        /// <summary>
+        /// Resolves the physical sheet size for the winning rule, in true PDF points, falling back to
+        /// <paramref name="baseSizePt"/> when the rule declares no <c>size</c>, or declares one that
+        /// can't be resolved here (percentages/viewport units have no sheet-relative basis, css-page-3
+        /// §7.1) - <see cref="DomParser.ParsePageSizeToPdfPoints"/> already returns null for exactly
+        /// those cases. A bare orientation keyword rotates <paramref name="baseSizePt"/> itself (see
+        /// that method), so a named/pseudo rule's <c>size: landscape</c> rotates whichever size this
+        /// rule would otherwise fall back to - the same base-vs-per-page relationship
+        /// <see cref="ResolvePageMargins"/> already has with its own base-margin parameters, just for
+        /// one property instead of four.
+        /// </summary>
+        internal static XSize ResolvePageSize(PageRule? rule, XSize baseSizePt, PageLengthContext? context = null)
+        {
+            if (rule?.Style.Size is not { Length: > 0 } sizeValue) return baseSizePt;
+
+            // Re-base the em/ex length basis on the winning rule's own font-size, mirroring
+            // ResolvePageMargins's identical treatment (css-page-3 §7.1 / issue #162).
+            var ctx = context;
+            if (context is { } c0 && rule.Style.FontSize.Length > 0)
+                ctx = c0 with { EmPt = MarginBoxRenderer.ResolveFontSizePt(rule.Style.FontSize) };
+
+            return ctx is { } c ? DomParser.ParsePageSizeToPdfPoints(sizeValue, c, baseSizePt) ?? baseSizePt : baseSizePt;
         }
 
         /// <summary>

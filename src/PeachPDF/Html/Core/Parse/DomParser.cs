@@ -420,8 +420,12 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     // CssPageSize is documented/consumed as true PDF points (PdfGenerator.AddPdfPages
                     // assigns it straight to orgPageSize), not internal pixel space - unlike the
-                    // margins above, this one deliberately stays unscaled.
-                    htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext);
+                    // margins above, this one deliberately stays unscaled. The base rule's own
+                    // "otherwise-configured size" (for a bare orientation keyword to rotate) is the
+                    // caller-configured PdfGenerateConfig size, reconstructed the same way the retry
+                    // check above does.
+                    var baseSizePt = PeachPDF.Utilities.Utils.Convert(htmlContainer.PageSize, pixelsPerPoint);
+                    htmlContainer.CssPageSize = ParsePageSizeToPdfPoints(pageRule.Style.Size, lengthContext, baseSizePt);
                 }
             }
         }
@@ -443,7 +447,15 @@ namespace PeachPDF.Html.Core.Parse
             { "tabloid", new XSize(792,      1224)   },
         }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
-        private static XSize? ParsePageSizeToPdfPoints(string sizeValue, PageLengthContext context)
+        /// <summary>
+        /// Resolves an <c>@page { size: ... }</c> value to true PDF points, for the winning rule of
+        /// ANY selector kind (base, <c>:first</c>/<c>:left</c>/<c>:right</c>, or named) -
+        /// <paramref name="baseSizePt"/> is whichever size this rule would otherwise fall back to (the
+        /// document's configured/base size for a base rule; a named/pseudo rule's own base-rule
+        /// fallback via <see cref="Dom.PageRuleResolver.ResolvePageSize"/>), used both as the "no size
+        /// declared" fallback and as the size a bare orientation keyword rotates.
+        /// </summary>
+        internal static XSize? ParsePageSizeToPdfPoints(string sizeValue, PageLengthContext context, XSize baseSizePt)
         {
             var parts = sizeValue.Trim().Split(Array.Empty<char>(), StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0)
@@ -511,10 +523,27 @@ namespace PeachPDF.Html.Core.Parse
             if (firstLength.HasValue)
                 return new XSize(firstLength.Value, secondLength ?? firstLength.Value);
 
-            // Reached for an orientation keyword alone — no explicit size, so the configured page size
-            // is kept. (`auto` and any other unrecognized single token fall into the invalid branch
-            // above and also return null here, which is the same "keep the configured size" outcome
-            // `auto` calls for.)
+            if (landscape.HasValue)
+            {
+                // An orientation keyword alone (no <page-size>): css-page-3 §7.1 only defines this as
+                // "the size of the page sheet is chosen by the UA" - it does not itself mandate rotating
+                // an otherwise-configured size, but doing so is a common, defensible UA choice (Prince/
+                // WeasyPrint-style) and is what this codebase's own docs already (and, until this fix,
+                // incorrectly) claimed. Rotate baseSizePt only when the keyword's implied orientation
+                // actually differs from its current one - `landscape` on an already-landscape size is a
+                // no-op, not a second rotation. This also keeps CascadeApplyPageStyles's own two-pass
+                // retry idempotent: the retry re-enters with PageSize already rotated, so the second call
+                // correctly does nothing.
+                var size = baseSizePt;
+                if (landscape.Value && size.Width < size.Height)
+                    size = new XSize(size.Height, size.Width);
+                else if (!landscape.Value && size.Width > size.Height)
+                    size = new XSize(size.Height, size.Width);
+                return size;
+            }
+
+            // `auto` and any other unrecognized single token fall into the invalid branch above and
+            // return null here too - "keep whatever this rule would otherwise fall back to".
             return null;
         }
 

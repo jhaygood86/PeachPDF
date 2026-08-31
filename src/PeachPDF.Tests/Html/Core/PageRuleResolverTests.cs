@@ -1,6 +1,9 @@
+using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
+using PeachPDF.PdfSharpCore.Drawing;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachPDF.Tests.Html.Core
 {
@@ -70,6 +73,92 @@ namespace PeachPDF.Tests.Html.Core
             // At/after the reversion Y: reverted to the empty (default) name, NOT "chapter".
             Assert.Equal(string.Empty, PageRuleResolver.ActiveNameAtSlotStart(elements, slotTop: 1600));
             Assert.Equal(string.Empty, PageRuleResolver.ActiveNameAtPageEnd(elements, pageY: 1600, pageHeight: 800));
+        }
+
+        // ── ResolvePageSize ──────────────────────────────────────────────────────
+
+        private static readonly XSize BasePortrait = new(612, 792);
+        private static readonly PageLengthContext DefaultContext = new(EmPt: 12, RemPt: 12, HundredPercentPt: 612);
+
+        private static PageRule ParsePageRule(string css) =>
+            new StylesheetParser().Parse(css).Rules.OfType<PageRule>().First();
+
+        [Fact]
+        public void ResolvePageSize_NullRule_ReturnsBaseSize()
+        {
+            Assert.Equal(BasePortrait, PageRuleResolver.ResolvePageSize(null, BasePortrait, DefaultContext));
+        }
+
+        [Fact]
+        public void ResolvePageSize_RuleWithNoSizeDeclared_ReturnsBaseSize()
+        {
+            var rule = ParsePageRule("@page chapter { margin: 10mm; }");
+
+            Assert.Equal(BasePortrait, PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext));
+        }
+
+        [Fact]
+        public void ResolvePageSize_NamedKeywordWithOrientation_Resolves()
+        {
+            var rule = ParsePageRule("@page landscape-table { size: a4 landscape; }");
+
+            var size = PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext);
+
+            Assert.True(size.Width > size.Height);
+            Assert.Equal(841.89, size.Width, 2);
+            Assert.Equal(595.28, size.Height, 2);
+        }
+
+        [Fact]
+        public void ResolvePageSize_ExplicitLengths_Resolve()
+        {
+            var rule = ParsePageRule("@page wide { size: 400pt 300pt; }");
+
+            Assert.Equal(new XSize(400, 300), PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext));
+        }
+
+        [Fact]
+        public void ResolvePageSize_BareOrientationKeyword_RotatesBaseSizePt()
+        {
+            var rule = ParsePageRule("@page landscape-table { size: landscape; }");
+
+            Assert.Equal(new XSize(792, 612), PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext));
+        }
+
+        [Fact]
+        public void ResolvePageSize_BareOrientationKeyword_MatchingBaseOrientation_IsANoOp()
+        {
+            var rule = ParsePageRule("@page portrait-table { size: portrait; }");
+
+            Assert.Equal(BasePortrait, PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext));
+        }
+
+        [Fact]
+        public void ResolvePageSize_PercentageValue_FallsBackToBaseSize()
+        {
+            // Not a <length> for `size` (sheet geometry has no percentage basis, css-page-3 §7.1) -
+            // ParsePageSizeToPdfPoints returns null, so the base size is kept.
+            var rule = ParsePageRule("@page wide { size: 50%; }");
+
+            Assert.Equal(BasePortrait, PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext));
+        }
+
+        [Fact]
+        public void ResolvePageSize_NoContext_FallsBackToBaseSize()
+        {
+            var rule = ParsePageRule("@page wide { size: a4 landscape; }");
+
+            Assert.Equal(BasePortrait, PageRuleResolver.ResolvePageSize(rule, BasePortrait, context: null));
+        }
+
+        [Fact]
+        public void ResolvePageSize_EmDimension_RebasesOnTheWinningRulesOwnFontSize()
+        {
+            var rule = ParsePageRule("@page wide { font-size: 30pt; size: 10em; }");
+
+            var size = PageRuleResolver.ResolvePageSize(rule, BasePortrait, DefaultContext);
+
+            Assert.Equal(new XSize(300, 300), size);
         }
     }
 }
