@@ -1939,6 +1939,112 @@ await SaveShowcaseAsync("paged_media_named_pages", "Paged Media", "Named Pages",
     "Routing content to differently-styled pages with named @page rules and the page property.",
     namedPagesHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// ── Mixed page orientation showcase (issue #143's own headline capability) ─────
+// A named @page rule's own `size` gives that page a genuinely independent physical
+// PDF page (its own /MediaBox) - so one document can mix portrait and landscape
+// (or any other differently-sized) pages via `page: <name>`. Everything that makes
+// this a real showcase rather than just a size swap: the body text on the landscape
+// section genuinely RE-WRAPS to that page's own (much wider) measure rather than
+// keeping the portrait column width (mid-fragment block/text rewrap, issue #143),
+// and the fixed-position corner badge's own percentage `left`/`top`/`width` all
+// resolve against each page's own area too, so it stays correctly placed and sized
+// relative to the sheet it is actually on instead of drifting toward one edge on
+// the narrower pages or shrinking away from the correct corner on the wider one.
+//
+// Deliberately two pages, not three: a third (reverted-to-portrait) page after the
+// landscape section would exercise a genuine, already-tracked gap rather than this
+// layer's own new work - a <table> anywhere inside a named-page section currently
+// leaves that name "stuck" active for a later sibling section, even one that never
+// touches the table engine itself (see the named-page-reversion-outside-block-flow
+// accepted-gap note, issue #166).
+var mixedOrientationHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page {
+        size: A4;
+        margin: 25mm 20mm;
+        @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial; color: #888; }
+    }
+    @page landscape {
+        size: A4 landscape;
+        margin: 18mm 20mm;
+    }
+    body { font: 11pt Georgia, serif; margin: 0; text-align: justify; }
+    h1 { font-size: 20pt; text-align: center; margin: 0 0 5mm; font-family: Arial; }
+    h2 { font-size: 15pt; margin: 0 0 4mm; font-family: Arial; color: #2e5c8a; }
+    .note { font-style: italic; color: #555; }
+    .badge {
+      position: fixed;
+      left: 82%;
+      top: 4%;
+      width: 15%;
+      height: 14mm;
+      background: linear-gradient(135deg, #2e8bc0, #1d5c8a);
+      color: #f2f7fb;
+      font: bold 8pt Arial;
+      letter-spacing: 1pt;
+      border-radius: 2mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    table { width: 100%; border-collapse: collapse; margin-top: 4mm; }
+    th, td { border: 0.5pt solid #999; padding: 2mm 3mm; font-size: 9pt; text-align: left; }
+    th { background: #eef2f6; font-family: Arial; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    </style>
+    </head>
+    <body>
+    <div class="badge">Q3<br>REPORT</div>
+    <h1>Quarterly Regional Report</h1>
+    <p class="note">This cover page is ordinary A4 portrait. The corner badge (position: fixed,
+    sized and placed in percentages) tracks each page's own area - watch how it lands in the same
+    relative corner, at the same relative size, on the landscape page overleaf despite the sheet
+    itself changing shape.</p>
+    <p>Executive summary: regional performance improved across every territory this quarter, led by
+    continued growth in the eastern corridor. The detail overleaf is routed to a landscape page for
+    the width a full regional comparison needs - a single PDF document mixing page orientations,
+    with every layer of layout (text reflow, fixed-position content, and the physical page geometry
+    itself) agreeing about which page is which shape.</p>
+    <div style="page: landscape; page-break-before: always">
+      <h2>Regional Sales Detail &mdash; Landscape Page</h2>
+      <p>This section is routed to the named <code>landscape</code> page, whose own @page rule sets
+      <code>size: A4 landscape</code> with no change to the base font or column styling. Notice that
+      this paragraph's own text reaches noticeably further across the sheet than the cover page's did
+      overleaf - main-column content re-wraps to each page's own content-box width (CSS Paged Media:
+      "the edges of the page area act as a containing block for the layout that occurs between page
+      breaks"), so the wider landscape measure is genuine layout, not a stretched portrait column.</p>
+      <table>
+        <thead>
+          <tr><th>Territory</th><th>Q1</th><th>Q2</th><th>Q3</th><th>YoY Growth</th><th>Top Segment</th><th>Units Shipped</th><th>Lead Analyst</th></tr>
+        </thead>
+        <tbody>
+    """ +
+    string.Concat(new[]
+    {
+        ("North America", "$4.2M", "$4.6M", "$5.1M", "+21%", "Enterprise", "128,400", "R. Alvarez"),
+        ("EMEA", "$3.1M", "$3.4M", "$3.9M", "+18%", "Mid-market", "96,200", "L. Mensah"),
+        ("APAC", "$2.8M", "$3.3M", "$4.0M", "+29%", "Consumer", "211,700", "K. Tanaka"),
+        ("Latin America", "$1.4M", "$1.6M", "$1.9M", "+26%", "Consumer", "88,900", "P. Duarte"),
+        ("Eastern Corridor", "$0.9M", "$1.5M", "$2.4M", "+62%", "Enterprise", "54,300", "S. Ibrahim"),
+    }.Select(t =>
+        $"<tr><td>{t.Item1}</td><td>{t.Item2}</td><td>{t.Item3}</td><td>{t.Item4}</td>" +
+        $"<td>{t.Item5}</td><td>{t.Item6}</td><td>{t.Item7}</td><td>{t.Item8}</td></tr>")) +
+    """
+        </tbody>
+      </table>
+    </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_mixed_orientation", "Paged Media", "Mixed Page Orientation",
+    "One PDF mixing portrait and landscape pages via a named @page rule's own size - the landscape section's body text genuinely re-wraps to its own wider measure, and a fixed-position corner badge (percentage left/top/width) stays correctly placed and sized on every page despite the sheet itself changing shape.",
+    mixedOrientationHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // ── Directional page breaks showcase ───────────────────────────────────────
 // css-break-3 §3.1's left/right/recto/verso: each chapter opens on a right-hand
 // page, so a chapter whose predecessor ended on one gets a blank verso page
