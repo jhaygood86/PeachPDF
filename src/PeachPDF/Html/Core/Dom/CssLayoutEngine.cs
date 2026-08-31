@@ -1577,11 +1577,20 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box == box.ContainingBlock && box.HtmlContainer is not null)
             {
-                // Deliberately the BASE content band even when per-page @page margin overrides give
-                // individual pages taller/shorter bands: the initial containing block (and therefore
-                // percentage heights) resolves once for the whole document, not per page — see
-                // "Per-page margin variation" in docs/html-css-support.md.
-                height = Math.Max(height, box.HtmlContainer.PageSize.Height);
+                // Deliberately pinned to the FIRST page's own content band, not a per-page one, even
+                // when per-page @page margin (or, for a mixed page-size document, size) overrides give
+                // individual pages taller/shorter/differently-sized bands: css-page-3 §3 is explicit that
+                // "the edges of the page area on the first page establish the rectangle that is the
+                // initial containing block of the document" - singular, page 1 only. This is NOT the same
+                // question as an ordinary percentage-height box, which already resolves correctly against
+                // its own (already page-aware) ancestor's computed height with no special-casing needed
+                // here - css-break-3 §5.1's per-fragmentainer recalculation applies to that ordinary case,
+                // not to the true ICB itself. Reads page 0's own resolved band (narrower than the
+                // document's base configured size whenever `@page :first`/a first-page-targeting named
+                // rule overrides margins - issue #201's vertical dimension) rather than the base
+                // configured size directly, so a `:first`-overridden first page's own band is what a
+                // root-relative percentage resolves against - still always page 1, never a later page.
+                height = Math.Max(height, box.HtmlContainer.PageGeometry.GetPage(0).BandHeight);
             }
 
             if (box.Words.Count > 0)
