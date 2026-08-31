@@ -51,6 +51,27 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Pdf
         }
 
         [Fact]
+        public void Add_TwoPages_CanCarryIndependentWidthAndHeight()
+        {
+            // Confirms the PDF-writer layer already supports mixed page sizes/orientations within one
+            // document (PdfGenerator.AddPdfPages just needed to start reading a per-page value) - each
+            // PdfPage owns its own /MediaBox, so setting one page's Width/Height never affects another's.
+            var doc = new PdfDocument();
+            var portrait = doc.Pages.Add();
+            var landscape = doc.Pages.Add();
+
+            portrait.Width = 595.28;
+            portrait.Height = 841.89;
+            landscape.Width = 841.89;
+            landscape.Height = 595.28;
+
+            Assert.Equal(595.28, portrait.Width.Point, 2);
+            Assert.Equal(841.89, portrait.Height.Point, 2);
+            Assert.Equal(841.89, landscape.Width.Point, 2);
+            Assert.Equal(595.28, landscape.Height.Point, 2);
+        }
+
+        [Fact]
         public void FindPage_ExistingId_ReturnsPage()
         {
             var doc = new PdfDocument();
