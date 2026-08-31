@@ -786,6 +786,16 @@ namespace PeachPDF.Html.Core.Dom
         /// page's size along the root element's own inline/block axis (for <c>vi</c>/<c>vb</c>), which
         /// rotates onto the orthogonal physical axis under a <c>vertical-rl</c>/<c>vertical-lr</c> root
         /// (CSS Writing Modes 4 §7.1) - the two pairs only diverge for a vertical root.
+        /// <para>
+        /// Deliberately the document's single base/configured size, not a per-page one, even for a mixed
+        /// page-size document where a named page's own physical size differs from the base: CSS Values
+        /// and Units 4 §6.2 defines viewport units against one viewport for the whole rendering, with no
+        /// per-fragmentainer concept analogous to css-break-3 §5.1's percentage-resolution carve-out
+        /// (that section is scoped to a percentage resolving against a containing block, which viewport
+        /// units by definition don't do) - the same "pinned to a single reference, not per-page" role the
+        /// true initial containing block plays (<see cref="CssLayoutEngine.GetBoxHeight"/>'s
+        /// <c>box == box.ContainingBlock</c> branch, css-page-3 §3).
+        /// </para>
         /// </summary>
         internal (double? ViewportWidthPt, double? ViewportHeightPt, double? ViewportInlineSizePt, double? ViewportBlockSizePt) GetViewportUnitBasis()
         {
