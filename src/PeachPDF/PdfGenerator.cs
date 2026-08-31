@@ -359,8 +359,11 @@ namespace PeachPDF
                 var (mL, mT, mR, mB) = (geom.MarginLeftPt, geom.MarginTopPt, geom.MarginRightPt, geom.MarginBottomPt);
 
                 var page = document.PdfDocument.AddPage();
-                page.Height = orgPageSize.Height;
-                page.Width = orgPageSize.Width;
+                // This slot's own resolved physical sheet size, in true PDF points - already falls back
+                // to the document's base/configured size (orgPageSize) whenever no @page rule overrides
+                // `size` for this slot, so every existing (non-mixed-size) document is unaffected.
+                page.Height = geom.SheetHeightPt;
+                page.Width = geom.SheetWidthPt;
 
                 structureTagBuilder?.BeginPage(page);
 
@@ -422,7 +425,7 @@ namespace PeachPDF
                 {
                     await MarginBoxRenderer.Render(
                         g,
-                        orgPageSize,
+                        new XSize(page.Width, page.Height),
                         mL,
                         mT,
                         mR,
@@ -456,11 +459,11 @@ namespace PeachPDF
             // GetLinks() already performs (DomUtils.GetAllLinkAndBookmarkBoxes), so building the PDF
             // outline afterwards adds zero net full-tree traversals.
             var bookmarkBoxes = new List<CssBox>();
-            HandleLinks(document.PdfDocument, container, orgPageSize, fragmentainers, bookmarkBoxes, structureTagBuilder);
+            HandleLinks(document.PdfDocument, container, fragmentainers, bookmarkBoxes, structureTagBuilder);
 
             if (formFieldBuilder != null)
             {
-                HandleFormFields(document.PdfDocument, container, orgPageSize, fragmentainers, formFieldBuilder);
+                HandleFormFields(document.PdfDocument, container, fragmentainers, formFieldBuilder);
             }
 
             // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
@@ -616,7 +619,7 @@ namespace PeachPDF
         /// element (see the tagging-aware section below), completing the bidirectional PDF/UA
         /// linkage between the annotation and the structure tree.
         /// </summary>
-        private static void HandleLinks(PdfDocument document, HtmlContainer container, XSize orgPageSize, IReadOnlyList<FragmentainerFragment> fragmentainers, List<CssBox> bookmarkBoxes, StructureTagBuilder? structureTagBuilder = null)
+        private static void HandleLinks(PdfDocument document, HtmlContainer container, IReadOnlyList<FragmentainerFragment> fragmentainers, List<CssBox> bookmarkBoxes, StructureTagBuilder? structureTagBuilder = null)
         {
             var inner = container.HtmlContainerInt;
             var ppp = container.PixelsPerPoint;
@@ -659,9 +662,12 @@ namespace PeachPDF
                     var slotGeom = inner.PageGeometry.GetPage(slot);
                     var topPt = slotGeom.MarginTopPt + (link.Rectangle.Top * ppp - inner.PageTopOf(slot)) / ppp;
                     var leftPt = slotGeom.MarginLeftPt + (link.Rectangle.Left * ppp - inner.MarginLeft) / ppp;
+                    // This page's own resolved height (already written into /MediaBox by the paint loop
+                    // above) - reading it directly here, rather than threading a second value through,
+                    // means this can never disagree with what was actually emitted for the page.
                     var xRect = new XRect(
                         leftPt,
-                        orgPageSize.Height - (topPt + link.Rectangle.Height),
+                        document.Pages[pageIndex].Height - (topPt + link.Rectangle.Height),
                         link.Rectangle.Width,
                         link.Rectangle.Height);
 
@@ -679,9 +685,10 @@ namespace PeachPDF
                         // top-down (0 at the page's own top margin, increasing downward, matching every
                         // other rect this pass works with - see the xRect construction below), but /FitH's
                         // own "top" parameter is PDF default user space, which is bottom-up (0 at the page's
-                        // bottom edge) - flipping via orgPageSize.Height is required, exactly like the xRect
-                        // construction below already does for the same reason.
-                        document.AddNamedDestination(link.AnchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(orgPageSize.Height - t.TopPt));
+                        // bottom edge) - flipping against the TARGET page's own height is required (not the
+                        // current slot's - a link can jump between differently-sized pages), exactly like
+                        // the xRect construction below already does for the same reason.
+                        document.AddNamedDestination(link.AnchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(document.Pages[t.PageIndex].Height - t.TopPt));
                         annotation = document.Pages[pageIndex].AddDocumentLink(new PdfRectangle(xRect), link.AnchorId);
                     }
                     else
@@ -697,7 +704,7 @@ namespace PeachPDF
                 }
             }
 
-            HandleRunningElementLinks(document, container, orgPageSize, fragmentainers, ResolveAnchorTarget, structureTagBuilder);
+            HandleRunningElementLinks(document, container, fragmentainers, ResolveAnchorTarget, structureTagBuilder);
         }
 
         /// <summary>
@@ -709,7 +716,7 @@ namespace PeachPDF
         /// (see <c>MonolithicContent.IsReplaced</c>'s <c>CssBoxFormField</c> arm), so each
         /// field resolves to exactly one page and one rect.
         /// </summary>
-        private static void HandleFormFields(PdfDocument document, HtmlContainer container, XSize orgPageSize, IReadOnlyList<FragmentainerFragment> fragmentainers, FormFieldBuilder formFieldBuilder)
+        private static void HandleFormFields(PdfDocument document, HtmlContainer container, IReadOnlyList<FragmentainerFragment> fragmentainers, FormFieldBuilder formFieldBuilder)
         {
             var inner = container.HtmlContainerInt;
             var ppp = container.PixelsPerPoint;
@@ -739,7 +746,7 @@ namespace PeachPDF
                 if (widthPt <= 0 || heightPt <= 0)
                     continue;
 
-                var xRect = new XRect(leftPt, orgPageSize.Height - (topPt + heightPt), widthPt, heightPt);
+                var xRect = new XRect(leftPt, document.Pages[pageIndex].Height - (topPt + heightPt), widthPt, heightPt);
                 formFieldBuilder.AddField(document.Pages[pageIndex], new PdfRectangle(xRect), box, classification);
             }
         }
@@ -761,7 +768,6 @@ namespace PeachPDF
         private static void HandleRunningElementLinks(
             PdfDocument document,
             HtmlContainer container,
-            XSize orgPageSize,
             IReadOnlyList<FragmentainerFragment> fragmentainers,
             Func<string, (int PageIndex, double TopPt)?> resolveAnchorTarget,
             StructureTagBuilder? structureTagBuilder)
@@ -781,7 +787,7 @@ namespace PeachPDF
                         if (href.Length == 0) continue;
 
                         var rectPt = Utils.Convert(fragment.Rect, ppp);
-                        var xRect = new XRect(rectPt.X, orgPageSize.Height - (rectPt.Y + rectPt.Height), rectPt.Width, rectPt.Height);
+                        var xRect = new XRect(rectPt.X, document.Pages[pageIndex].Height - (rectPt.Y + rectPt.Height), rectPt.Width, rectPt.Height);
 
                         PdfLinkAnnotation annotation;
 
@@ -792,8 +798,9 @@ namespace PeachPDF
                             if (target is not { } t) continue;
 
                             // See the same flip's comment in HandleLinks above - TopPt is top-down, /FitH's
-                            // own top parameter needs bottom-up PDF default user space.
-                            document.AddNamedDestination(anchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(orgPageSize.Height - t.TopPt));
+                            // own top parameter needs bottom-up PDF default user space, flipped against the
+                            // TARGET page's own height (not the current page's).
+                            document.AddNamedDestination(anchorId, t.PageIndex + 1, PdfNamedDestinationParameters.CreateFitHorizontally(document.Pages[t.PageIndex].Height - t.TopPt));
                             annotation = document.Pages[pageIndex].AddDocumentLink(new PdfRectangle(xRect), anchorId);
                         }
                         else
