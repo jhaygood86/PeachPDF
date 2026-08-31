@@ -1,3 +1,4 @@
+using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -260,6 +261,24 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// <see cref="ClipIsInsideTheDisplacedRun"/>, its only reader.
             /// </summary>
             internal CssBox? DisplacementRoot { get; set; }
+
+            /// <summary>
+            /// How far this fragment's <c>position: fixed</c> subtree draws from its own (single,
+            /// globally-resolved) <see cref="CssBox.Location"/>, on THIS slot specifically — 0 for an
+            /// ordinary fragment, and 0 for a fixed one too whenever its percentage <c>left</c>/<c>top</c>
+            /// (if any) resolves to the same value on every page. A fixed box's own <c>Location</c> is
+            /// computed once, against the document's base page area (<c>CommitBlockChildOffset</c>); a
+            /// percentage offset is spec-required to resolve against EACH page's own area instead
+            /// (CSS2.1 §10.1 / CSS Position 3), so a mixed-page-size document needs this per-slot
+            /// correction on top of the single shared geometry every other slot's copy of the same fixed
+            /// subtree also reads. Applied directly to document-space rects (not through
+            /// <see cref="Localize"/>/<see cref="Displaced"/>): a fixed fragment's own <c>Shift</c> and
+            /// <c>OriginY</c> are always 0, so document space already IS this fragment's local space.
+            /// </summary>
+            internal double FixedOffsetX { get; set; }
+
+            /// <inheritdoc cref="FixedOffsetX"/>
+            internal double FixedOffsetY { get; set; }
 
             /// <summary>
             /// The box's own per-line decoration rectangles that landed in this slot, in document space.
@@ -1598,7 +1617,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             int instance,
             ref bool hasPrintableContent,
             ref bool subtreePrunable,
-            (CssBox Root, double Shift, RRect Band)? displacement = null)
+            (CssBox Root, double Shift, RRect Band)? displacement = null,
+            (double Dx, double Dy) fixedOffset = default)
         {
             // A display:none subtree paints nothing at all, so it produces no fragments either.
             if (box.DerivedStyle.ActualDisplay == Keywords.None) return null;
@@ -1607,6 +1627,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             // its fragments carry raw document coordinates (CSS Position 3: a fixed box's containing
             // block is the page box itself).
             var isFixed = box.IsFixed;
+
+            // Established exactly where a box IS the fixed root (not merely descends from one - only the
+            // root's own left/top ever resolve against the page), and inherited unchanged by descendants
+            // the same way `displacement` is: the whole subtree moves as one rigid unit, since only the
+            // fixed root's own position is ever page-relative.
+            if (box.Position.Value is PositionMode.Fixed)
+                fixedOffset = ComputeFixedPageOffset(box, slot);
 
             // A run being sliced across bands displaces its whole subtree, so an inherited displacement
             // stands until a box states one of its own - which only the root of such a run does.
@@ -1668,6 +1695,14 @@ namespace PeachPDF.Html.Core.Fragmentation
             var usesOwnBounds = false;
             RRect? shellRect = null;
 
+            // A percentage left/top on a fixed box resolves against THIS page's own area (see
+            // ComputeFixedPageOffset), so the delta is applied to the raw rect before anything else reads
+            // it - both the region-membership tests below and the value ultimately stored. A no-op
+            // (returns rect unchanged) whenever fixedOffset is (0, 0), which covers every box that isn't
+            // fixed at all and every fixed box whose offset happens to resolve the same on every page.
+            RRect Shifted(RRect r) =>
+                fixedOffset is (0, 0) ? r : new RRect(r.X + fixedOffset.Dx, r.Y + fixedOffset.Dy, r.Width, r.Height);
+
             // A proxy carries no content of its own - it stands in for its source subtree, whose
             // styles it copied wholesale, so painting its own decoration would draw a repeated
             // header's background twice.
@@ -1679,7 +1714,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 {
                     foreach (var (line, rect) in rectangles)
                     {
-                        if (region.Contains(Displaced(rect, shift))) lines.Add((line, rect));
+                        var shiftedRect = Shifted(rect);
+                        if (region.Contains(Displaced(shiftedRect, shift))) lines.Add((line, shiftedRect));
                     }
                 }
                 else
@@ -1696,9 +1732,10 @@ namespace PeachPDF.Html.Core.Fragmentation
                     if (box.Words[i].AwaitsTheNextFragmentainer) continue;
 
                     if (!TryGetWordRect(box, i, snapshot, out var rect)) continue;
+                    var shiftedRect = Shifted(rect);
 
-                    if (ClaimsWord(Displaced(rect, shift), slot.Index, region, isFixed))
-                        words.Add(new TextFragment(Localize(rect, originY), box.Words[i]));
+                    if (ClaimsWord(Displaced(shiftedRect, shift), slot.Index, region, isFixed))
+                        words.Add(new TextFragment(Localize(shiftedRect, originY), box.Words[i]));
                 }
             }
 
@@ -1713,7 +1750,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                 var childDraft = BuildDraft(
                     childBox, childOwner, childSnapshot, slot, childNested, childInstance,
-                    ref hasPrintableContent, ref childPrunable, displacement);
+                    ref hasPrintableContent, ref childPrunable, displacement, fixedOffset);
 
                 contiguous &= childPrunable;
 
@@ -1726,7 +1763,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             // exact for every box whose height is settled by the pass that freezes this slot - and a box whose
             // height is not settled is one that continues into a later fragmentainer, which by construction has
             // content of its own in this one.
-            var ownBoundsCoverRegion = usesOwnBounds && region.Contains(Displaced(BoundsOf(box, snapshot), shift));
+            var ownBoundsCoverRegion = usesOwnBounds && region.Contains(Displaced(Shifted(BoundsOf(box, snapshot)), shift));
 
             if (lines.Count == 0 && words.Count == 0 && children.Count == 0 && !ownBoundsCoverRegion)
             {
@@ -1811,6 +1848,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.ConfinedTo = displacement?.Band;
             draft.Shift = shift;
             draft.DisplacementRoot = displacement?.Root;
+            draft.FixedOffsetX = fixedOffset.Dx;
+            draft.FixedOffsetY = fixedOffset.Dy;
             draft.BoundsEndAtItsContent = boundsEndAtContentOnThePageGrid
                 || (nested is { } fragmentainer && fragmentainer.Continuing.Contains(box));
 
@@ -2276,6 +2315,16 @@ namespace PeachPDF.Html.Core.Fragmentation
             // fragmentainer that placed it, which is a different one.
             var bounds = draft.ShellRect ?? BoundsOf(draft.Box, draft.Snapshot);
 
+            // The box's own live bounds (the ShellRect-absent branch just above) were read fresh here,
+            // bypassing whatever BuildDraft already shifted its stored Lines/Words by for the same
+            // reason - re-apply the same per-slot fixed-position delta so a box with no per-line
+            // rectangles (UsesOwnBounds) agrees with one that has them.
+            if (draft.ShellRect is null && (draft.FixedOffsetX != 0 || draft.FixedOffsetY != 0))
+            {
+                bounds = new RRect(
+                    bounds.X + draft.FixedOffsetX, bounds.Y + draft.FixedOffsetY, bounds.Width, bounds.Height);
+            }
+
             if (draft.BoundsEndAtItsContent)
             {
                 var bottom = bounds.Bottom;
@@ -2346,6 +2395,36 @@ namespace PeachPDF.Html.Core.Fragmentation
             _rects[draft] = fragmentRect;
 
             return fragmentRect;
+        }
+
+        /// <summary>
+        /// How far <paramref name="box"/>'s (a <c>position: fixed</c> box) own <c>left</c>/<c>top</c>
+        /// would need to move on <paramref name="slot"/>'s own page, relative to the single value
+        /// <c>CssBox.CommitBlockChildOffset</c> already resolved once, globally, against the document's
+        /// base page area. Re-runs the exact same <c>CssBox.ResolveOffsetOrZero</c> calls against this
+        /// slot's own resolved sheet size (<see cref="PageBandGeometry.SheetWidthPt"/>/
+        /// <see cref="PageBandGeometry.SheetHeightPt"/>, minus this slot's own margins - the same
+        /// content-area basis <c>CommitBlockChildOffset</c> uses, reconstructed per slot instead of read
+        /// once from the document-global <c>HtmlContainerInt.PageSize</c>), so an absolute-length offset
+        /// (whose resolution doesn't depend on the basis at all) always yields a zero delta - the
+        /// existing per-page paint-time margin translate already positions those correctly, and this is
+        /// purely the correction a percentage offset needs on top of it. Zero whenever the document has
+        /// no <c>@page size</c> overrides at all (<see cref="PageGeometryTable.HasSizeOverrides"/>), so
+        /// this never even runs for the overwhelming majority of documents.
+        /// </summary>
+        private (double Dx, double Dy) ComputeFixedPageOffset(CssBox box, Slot slot)
+        {
+            if (!container.PageGeometry.HasSizeOverrides) return (0, 0);
+
+            var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var geom = slot.Geometry;
+            var basisWidthPx = (geom.SheetWidthPt - geom.MarginLeftPt - geom.MarginRightPt) * ppp;
+            var basisHeightPx = (geom.SheetHeightPt - geom.MarginTopPt - geom.MarginBottomPt) * ppp;
+
+            var left = box.ActualMarginLeft + CssBox.ResolveOffsetOrZero(box.Left, basisWidthPx, box);
+            var top = box.ActualMarginTop + CssBox.ResolveOffsetOrZero(box.Top, basisHeightPx, box);
+
+            return (left - box.Location.X, top - box.Location.Y);
         }
 
         private static RRect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
