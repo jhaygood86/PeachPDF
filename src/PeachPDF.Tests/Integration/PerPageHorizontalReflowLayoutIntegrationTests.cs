@@ -16,10 +16,10 @@ namespace PeachPDF.Tests.Integration
     /// that page's own content-box width — CSS Paged Media 3's "the edges of the page area act as a
     /// containing block for layout that occurs between page breaks" — instead of being laid out once at
     /// the base measure and merely shifted/clipped at paint time. A paragraph that spans a page boundary
-    /// keeps a single measure (its start page's) across its fragments, per CSS Fragmentation 3
-    /// ("Fragmentation splits boxes in the block flow dimension"): a box's used inline size is shared by
-    /// all its fragments. Follows the repo's layout-harness convention (build a container, PerformLayout,
-    /// assert box positions/sizes), with a harness mirroring PdfGenerator.SetContent's geometry derivation.
+    /// genuinely re-wraps at each fragment's own measure (css-break-3 §5.1: a fragment recalculates sizes
+    /// and positions using its own fragmentainer's size) rather than sharing one measure across every
+    /// fragment. Follows the repo's layout-harness convention (build a container, PerformLayout, assert
+    /// box positions/sizes), with a harness mirroring PdfGenerator.SetContent's geometry derivation.
     /// </summary>
     public class PerPageHorizontalReflowLayoutIntegrationTests
     {
@@ -102,12 +102,14 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task StraddlingParagraph_KeepsStartPageMeasure()
+        public async Task StraddlingParagraph_RewrapsToEachPagesOwnMeasure()
         {
             // A single long paragraph starts on the wide first page and flows onto the base-margin page 2.
-            // Per CSS Fragmentation 3 its fragments share ONE inline size (the start page's), so its
-            // continuation lines on page 2 keep the wider first-page measure rather than re-wrapping to
-            // the base measure. This is a characterization of the spec-correct behavior.
+            // css-break-3 §5.1: a fragment recalculates sizes and positions using its own fragmentainer's
+            // size - so the paragraph's continuation lines on page 2 re-wrap to the narrower base measure
+            // rather than keeping the wider first-page measure. This inverts what this test asserted before
+            // mid-fragment block/text rewrap landed (see .claude/migration-notes), when PeachPDF laid the
+            // whole paragraph out once at its start-page measure and merely shifted/clipped continuations.
             var words = string.Join(" ", Enumerable.Range(0, 900).Select(i => $"word{i}"));
             var container = await BuildLayoutAsync($$"""
                 <!DOCTYPE html><html><head><style>
@@ -126,15 +128,165 @@ namespace PeachPDF.Tests.Integration
             var flowWords = new List<CssRect>();
             CollectWords(flow, flowWords);
 
+            var pageZeroWords = flowWords
+                .Where(w => w.Width > 0 && container.PageIndexOf(w.Top) == 0)
+                .ToList();
             var pageOneWords = flowWords
                 .Where(w => w.Width > 0 && container.PageIndexOf(w.Top) >= 1)
                 .ToList();
 
             Assert.NotEmpty(pageOneWords); // the paragraph really does span onto page 2
-            // Continuation lines keep the wide start-page measure: some word extends past the base right
-            // edge, which it could not do had the paragraph re-wrapped to the base measure on page 2.
+
+            // Page 0's own lines still use the wide first-page measure - some word extends past the base
+            // right edge, which it could not do at the narrower base measure. Proves the two assertions
+            // below are a genuine per-page difference, not merely a uniformly narrow layout throughout.
+            Assert.True(pageZeroWords.Max(w => w.Right) > BaseRightEdge,
+                "page 0's own lines use its wider own-page measure");
+
+            // Continuation lines re-wrap to the narrower base measure: no word extends past the base right
+            // edge, which it could only avoid by having re-wrapped rather than kept the wide start-page
+            // measure.
+            Assert.True(pageOneWords.Max(w => w.Right) <= BaseRightEdge + 0.5,
+                "a spanning paragraph re-wraps to each page's own (narrower) measure");
+        }
+
+        [Fact]
+        public async Task StraddlingParagraph_RightAligned_FlushesEachPagesLinesToItsOwnRightEdge()
+        {
+            // text-align:right on a straddling paragraph must flush every line - on every page it lands
+            // on - to that page's own right edge (CssLayoutEngine.ApplyRightAlignment now reads the
+            // line's own ContentRight rather than the block's single start-page-fixed ClientRight). Proves
+            // per-line alignment tracks the per-line rewrap this layer adds, not just the words' wrap
+            // points.
+            var words = string.Join(" ", Enumerable.Range(0, 900).Select(i => $"word{i}"));
+            var container = await BuildLayoutAsync($$"""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                p { margin: 0; text-align: right; }
+                </style></head><body>
+                <p id='flow'>{{words}}</p>
+                </body></html>
+                """);
+
+            var flow = FindById(container.Root!, "flow")!;
+            Assert.Equal(0, container.PageIndexOf(flow.Location.Y)); // starts on page 0
+
+            var flowWords = new List<CssRect>();
+            CollectWords(flow, flowWords);
+
+            var pageZeroWords = flowWords.Where(w => w.Width > 0 && container.PageIndexOf(w.Top) == 0).ToList();
+            var pageOneWords = flowWords.Where(w => w.Width > 0 && container.PageIndexOf(w.Top) >= 1).ToList();
+
+            Assert.NotEmpty(pageOneWords); // the paragraph really does span onto page 2
+
+            // Page 0's own lines flush right to its own (wider) content edge.
+            const double firstPageRightEdge = BaseMargin + (SheetW - 0 - BaseMargin); // 612
+            Assert.Equal(firstPageRightEdge, pageZeroWords.Max(w => w.Right), 0.5);
+
+            // Continuation lines flush right to the narrower base content edge instead - not the wide
+            // first-page edge a shared, start-page-fixed measure would have flushed them to.
+            Assert.Equal(BaseRightEdge, pageOneWords.Max(w => w.Right), 0.5);
+        }
+
+        [Fact]
+        public async Task NestedBlock_InsideAFixedWidthContainer_KeepsOneMeasureAcrossPages()
+        {
+            // #199/#200's existing scope boundary: content whose containing block is NOT the main column
+            // itself (here, a fixed-width div) keeps one measure across a page straddle, exactly as before
+            // this layer - Layer D only reflows a block whose own containing-block chain is an unconstrained
+            // main column (CssLayoutEngine.ContentRightOf/IsUnconstrainedMainColumn), which a non-main-column
+            // containing block breaks regardless of what page a line inside it lands on. A fixed length
+            // (rather than a percentage) keeps the div's own width fully deterministic, independent of
+            // whatever the main-column chain above it resolves to - isolating exactly the property this test
+            // means to guard. Regression guard: this must stay the OLD (non-rewrapping) behavior even after
+            // Layer D, unlike the plain main-column case this file's other straddling-paragraph tests
+            // characterize.
+            var words = string.Join(" ", Enumerable.Range(0, 900).Select(i => $"word{i}"));
+            var container = await BuildLayoutAsync($$"""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                div { width: 600pt; }
+                p { margin: 0; }
+                </style></head><body>
+                <div><p id='flow'>{{words}}</p></div>
+                </body></html>
+                """);
+
+            var flow = FindById(container.Root!, "flow")!;
+            Assert.Equal(0, container.PageIndexOf(flow.Location.Y)); // starts on page 0
+
+            var flowWords = new List<CssRect>();
+            CollectWords(flow, flowWords);
+
+            var pageZeroWords = flowWords.Where(w => w.Width > 0 && container.PageIndexOf(w.Top) == 0).ToList();
+            var pageOneWords = flowWords.Where(w => w.Width > 0 && container.PageIndexOf(w.Top) >= 1).ToList();
+
+            Assert.NotEmpty(pageZeroWords);
+            Assert.NotEmpty(pageOneWords); // the paragraph really does span onto page 2
+
+            // Both pages' lines wrap against the same (div-derived, ~600pt) edge, well past the base
+            // per-page measure (562pt) - unlike the plain main-column case, page 2's continuation lines do
+            // NOT narrow down to it. (Exact equality isn't asserted between the two pages' own maxima: the
+            // last word before a wrap naturally lands a little short of the boundary itself, by whatever
+            // slack that particular word left, so the two pages' maxima are only approximately equal even
+            // when both wrap against the identical edge - see the >BaseRightEdge check on each instead.)
+            Assert.True(pageZeroWords.Max(w => w.Right) > BaseRightEdge);
             Assert.True(pageOneWords.Max(w => w.Right) > BaseRightEdge,
-                "a spanning paragraph keeps its start-page (wider) measure across fragments");
+                "a paragraph nested inside a non-main-column container keeps its start-page measure across fragments");
+        }
+
+        [Fact]
+        public async Task TableCell_TextWrapWidth_UnaffectedByPerPageMeasureOverride()
+        {
+            // Layer D's per-line rewrap must not reach into a table cell: a cell's own width comes from
+            // the table's column-width algorithm (CSS2.1 §17.5), not the auto-width-fills-containing-block
+            // rule LineContentRightOf otherwise assumes for an ordinary block. Feeding it the containing
+            // block's (the table's) edge instead of the cell's own would regress cell text to wrap at
+            // roughly the table's full width rather than its own narrow column - guarded against by
+            // CssLayoutEngine.FillsContainingBlockWidth. Deliberately no explicit `width` on the `td` here
+            // (its CSS `width` stays "auto", exactly as an unstyled cell's does) - LineContentRightOf's
+            // *first* guard already special-cases an explicit/percentage width, so an explicit `width: 80pt`
+            // would pass this test even with the table-cell exclusion removed, proving nothing about the
+            // fix this test exists to guard. Three equal-content columns, not two - a two-column table where
+            // one column is much narrower than the other lets "table width minus the cell's own spacing"
+            // coincidentally land close to the true (dominant) column's width even with the guard removed;
+            // three columns each wanting a roughly equal, genuinely narrow third of the table's width make
+            // the table's *whole* width a clearly distinguishable (~3x too wide) wrong answer.
+            var longText = string.Join(" ", Enumerable.Range(0, 40).Select(i => $"word{i}"));
+            var container = await BuildLayoutAsync($$"""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                table { border-collapse: collapse; width: 300pt; }
+                td { vertical-align: top; }
+                </style></head><body>
+                <table id='t'><tr>
+                <td id='cell'>{{longText}}</td><td>{{longText}}</td><td>{{longText}}</td>
+                </tr></table>
+                </body></html>
+                """);
+
+            var cell = FindById(container.Root!, "cell")!;
+            Assert.Equal(0, container.PageIndexOf(cell.Location.Y)); // page 0's per-page measure override is active
+            Assert.Equal("auto", cell.Width); // the guard this test exercises only matters while Width is auto
+
+            var cellWords = new List<CssRect>();
+            CollectWords(cell, cellWords);
+            Assert.NotEmpty(cellWords);
+
+            var wrapWidth = cellWords.Max(w => w.Right) - cellWords.Min(w => w.Left);
+
+            // Three equally-demanding columns split the table's constrained 300pt roughly evenly - the
+            // first column's wrapped text must stay near its own ~100pt share, not balloon toward the
+            // table's full 300pt (itself already far short of the page's much wider ~612pt per-page
+            // content measure on this wide first page).
+            Assert.True(wrapWidth < 150,
+                $"a table cell's text wrap width ({wrapWidth}) must track its own narrow column, not the whole table's (or page's) width");
         }
 
         [Fact]
