@@ -2114,15 +2114,37 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         /// <summary>
         /// <paramref name="slot"/>'s content band in document space. A fixed rectangle is measured against
-        /// the band at its own unshifted position, since it does not move with the page.
+        /// a zero-based window the size of its OWN page's sheet, not this slot's document-space band -
+        /// a fixed box is laid out exactly once (its raw rect is never re-anchored per slot: <c>Localize</c>
+        /// passes <c>originY: 0</c> for fixed content, and <see cref="ComputeFixedPageOffset"/> resolves its
+        /// offset against this slot's OWN basis, not the slot's cumulative document position), so every
+        /// slot's fixed content lives in the same zero-anchored frame regardless of which page it repeats
+        /// onto. Measuring membership against the slot's actual cumulative <c>BandTop</c> - as an earlier
+        /// version of this method did - matched only the slot whose cumulative top happens to be zero
+        /// (slot 0), silently dropping the fragment on every later page.
         /// </summary>
         private FragmentRegion PageRegionOf(bool isFixed, Slot slot)
         {
-            var top = isFixed ? container.MarginTop : slot.BandTop;
+            if (isFixed)
+            {
+                // A fixed box's containing block is the page box itself, margins included (CSS2.1 §10.1) -
+                // so its membership test has to span the FULL physical sheet, not just this slot's content
+                // band. Using container.MarginTop as the top bound (as an earlier version of this method
+                // did) silently excluded any fixed content actually positioned inside the page's margins -
+                // exactly where a realistic page-corner badge or watermark legitimately sits - discarding
+                // the fragment for it entirely (not merely clipping it at paint time - see
+                // FragmentPainter.Paint's own remarks on the parallel paint-clip half of this same defect).
+                // Derived from this slot's own geometry (not a document-global constant), so a mixed
+                // page-size document's differently-sized pages each get their own correct bounds too.
+                var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                var sheetHeight = slot.Geometry.SheetHeightPt * ppp;
+
+                return new FragmentRegion(0, sheetHeight, null, null);
+            }
 
             // Left/Right null: the page grid's fragmentainers differ in the block axis only, so the inline
             // axis is not a membership question there (§2 shares one inline size across a box's fragments).
-            return new FragmentRegion(top, top + slot.Geometry.BandHeight, null, null);
+            return new FragmentRegion(slot.BandTop, slot.BandTop + slot.Geometry.BandHeight, null, null);
         }
 
         /// <summary>

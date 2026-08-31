@@ -382,7 +382,16 @@ namespace PeachPDF
                 // Save state so the content transform can be undone for margin box rendering
                 var preContentState = g.Save();
 
-                g.IntersectClip(new XRect(mL, mT, page.Width - mL - mR, page.Height - mT - mB));
+                // No content-area clip pushed here (an earlier version of this method intersected one
+                // directly on the raw XGraphics, ahead of FragmentPainter.Paint's own push below) - a raw
+                // XGraphics.IntersectClip call made here is invisible to the RGraphics abstraction's own
+                // clip-stack bookkeeping, which is what RGraphics.SuspendClipping walks to let a
+                // position: fixed box's own paint reach back out to the full page box (margins included,
+                // its actual containing block per CSS2.1 §10.1). Baking the content clip in here put it
+                // permanently out of that call's reach, silently discarding every fixed box's own geometry
+                // that legitimately fell inside the page's margins. FragmentPainter.Paint pushes the
+                // equivalent content-area clip itself now (HtmlContainerInt.PageClipOverride, set below) -
+                // PaintFootnoteArea, which paints outside that wrapper, pushes its own.
 
                 var deltaX = mL - container.MarginLeft;
                 var deltaY = mT - container.MarginTop;
@@ -599,6 +608,12 @@ namespace PeachPDF
             var pixelsPerPoint = (adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             using var graphicsAdapter = new GraphicsAdapter(adapter, g, pixelsPerPoint);
 
+            // Bypasses FragmentPainter.Paint's own clip push (this is called directly, not through that
+            // wrapper), so it needs its own content-area bound - previously provided for free by a raw
+            // XGraphics.IntersectClip AddPdfPages applied ahead of this call, removed because it also
+            // (wrongly) bounded position: fixed content the same way; see AddPdfPages's own remarks.
+            graphicsAdapter.PushClip(htmlContainer.PageClipOverride ?? htmlContainer.PageBoxRect);
+
             var rect = footnoteArea.DividerRect;
             graphicsAdapter.DrawRectangle(graphicsAdapter.GetSolidBrush(RColor.Black), rect.X, rect.Y, rect.Width, rect.Height);
 
@@ -607,6 +622,8 @@ namespace PeachPDF
             {
                 painter.PaintFragment(graphicsAdapter, body);
             }
+
+            graphicsAdapter.PopClip();
         }
 
         /// <summary>
