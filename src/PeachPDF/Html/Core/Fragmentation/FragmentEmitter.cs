@@ -3,6 +3,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
@@ -279,6 +280,27 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             /// <inheritdoc cref="FixedOffsetX"/>
             internal double FixedOffsetY { get; set; }
+
+            /// <summary>
+            /// How far wider/taller this fragment's <c>position: fixed</c> subtree's own extent
+            /// (<see cref="FragmentEmitter.ExtentOf"/>) is on THIS slot than the single, globally-resolved
+            /// size <see cref="CssBox.ActualWidth"/>/<see cref="CssBox.ActualHeight"/> already carries — 0
+            /// for an ordinary fragment, and 0 for a fixed one too whenever its percentage
+            /// <c>width</c>/<c>height</c> (if any) resolves to the same value on every page. Mirrors
+            /// <see cref="FixedOffsetX"/>/<see cref="FixedOffsetY"/> exactly, for the box's SIZE rather
+            /// than its position: a percentage width/height on a fixed box is spec-required to resolve
+            /// against EACH page's own area (CSS2.1 §10.1 / CSS Position 3), same as a percentage offset,
+            /// but the box's own content (lines/words, an internal wrapping algorithm) is laid out once and
+            /// is NOT re-flowed to the new size — only its own outer extent is, which is exactly what feeds
+            /// its background/border/clip/replaced-content painting. A non-replaced fixed box with
+            /// percentage sizing and its own text/child content therefore gets a correctly resized frame
+            /// with content that does not re-wrap to fit it (an accepted gap - see
+            /// docs/html-css-support.md's `position: fixed` per-page notes).
+            /// </summary>
+            internal double FixedSizeDeltaWidth { get; set; }
+
+            /// <inheritdoc cref="FixedSizeDeltaWidth"/>
+            internal double FixedSizeDeltaHeight { get; set; }
 
             /// <summary>
             /// The box's own per-line decoration rectangles that landed in this slot, in document space.
@@ -1635,6 +1657,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (box.Position.Value is PositionMode.Fixed)
                 fixedOffset = ComputeFixedPageOffset(box, slot);
 
+            // Unlike fixedOffset, deliberately NOT threaded to descendants: a percentage width/height
+            // resize is this box's own outer extent only (ExtentOf), never its content's - see
+            // Draft.FixedSizeDeltaWidth's own remarks on why the subtree's own layout is not re-flowed.
+            var fixedSizeDelta = box.Position.Value is PositionMode.Fixed
+                ? ComputeFixedSizeOverride(box, slot)
+                : default;
+
             // A run being sliced across bands displaces its whole subtree, so an inherited displacement
             // stands until a box states one of its own - which only the root of such a run does.
             //
@@ -1850,6 +1879,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.DisplacementRoot = displacement?.Root;
             draft.FixedOffsetX = fixedOffset.Dx;
             draft.FixedOffsetY = fixedOffset.Dy;
+            draft.FixedSizeDeltaWidth = fixedSizeDelta.DeltaWidth;
+            draft.FixedSizeDeltaHeight = fixedSizeDelta.DeltaHeight;
             draft.BoundsEndAtItsContent = boundsEndAtContentOnThePageGrid
                 || (nested is { } fragmentainer && fragmentainer.Continuing.Contains(box));
 
@@ -2325,7 +2356,27 @@ namespace PeachPDF.Html.Core.Fragmentation
                     bounds.X + draft.FixedOffsetX, bounds.Y + draft.FixedOffsetY, bounds.Width, bounds.Height);
             }
 
-            if (draft.BoundsEndAtItsContent)
+            // A percentage width/height on a fixed box resolves against THIS slot's own page area (see
+            // ComputeFixedSizeOverride) - applied only here, at the box's own outer extent, never to its
+            // content: the box's lines/words were laid out once and are not re-flowed to the new size (see
+            // Draft.FixedSizeDeltaWidth's own remarks). Same ShellRect-absent guard as the offset above -
+            // a stated (sliced) fragment's declared bounds are not this box's own live extent to begin with.
+            if (draft.ShellRect is null && (draft.FixedSizeDeltaWidth != 0 || draft.FixedSizeDeltaHeight != 0))
+            {
+                bounds = new RRect(
+                    bounds.X, bounds.Y,
+                    Math.Max(0, bounds.Width + draft.FixedSizeDeltaWidth),
+                    Math.Max(0, bounds.Height + draft.FixedSizeDeltaHeight));
+            }
+
+            // A nonzero FixedSizeDeltaHeight means this box's height came from an explicit per-page
+            // percentage override (ComputeFixedSizeOverride never touches an auto height), not from its
+            // content - so BoundsEndAtItsContent's usual "grow to whatever the content actually reached"
+            // extension must not run here: the box's own content was laid out once, globally, and is not
+            // re-flowed to the resized frame (Draft.FixedSizeDeltaWidth's own remarks), so content that
+            // overflows a page whose measure shrank the box must overflow visibly rather than silently
+            // re-growing the very frame this layer exists to resize.
+            if (draft.BoundsEndAtItsContent && draft.FixedSizeDeltaHeight == 0)
             {
                 var bottom = bounds.Bottom;
 
@@ -2425,6 +2476,90 @@ namespace PeachPDF.Html.Core.Fragmentation
             var top = box.ActualMarginTop + CssBox.ResolveOffsetOrZero(box.Top, basisHeightPx, box);
 
             return (left - box.Location.X, top - box.Location.Y);
+        }
+
+        /// <summary>
+        /// How much wider/taller <paramref name="box"/>'s (a <c>position: fixed</c> box) own outer extent
+        /// would need to be on <paramref name="slot"/>'s own page, relative to the single value
+        /// <c>CssLayoutEngine.GetBoxWidth</c>/<c>GetBoxHeight</c> already resolved once, globally, against
+        /// the document's base page area (<see cref="CssBox.ActualWidth"/>/<see cref="CssBox.ActualHeight"/>).
+        /// Only a percentage <c>width</c>/<c>height</c> depends on that basis at all - an absolute length,
+        /// or <c>auto</c>, always yields a zero delta for that dimension, since the box's own content isn't
+        /// re-measured per slot (see <see cref="Draft.FixedSizeDeltaWidth"/>'s own remarks on why: doing so
+        /// would require re-flowing the box's content, which css-position-3 explicitly does not require of
+        /// a fixed box). Zero whenever the document has no <c>@page size</c> overrides at all
+        /// (<see cref="PageGeometryTable.HasSizeOverrides"/>), so this never even runs for the overwhelming
+        /// majority of documents.
+        /// </summary>
+        private (double DeltaWidth, double DeltaHeight) ComputeFixedSizeOverride(CssBox box, Slot slot)
+        {
+            if (!container.PageGeometry.HasSizeOverrides) return (0, 0);
+
+            // Mirrors CssLayoutEngine.GetBoxWidth's own percentage-width gate exactly (a fixed box always
+            // computes to display:block per CSS2.1 §9.7, so GetBoxWidth's inline-with-no-words exclusion
+            // never applies here) - not narrowed to values textually ending in '%', so a calc() expression
+            // with a percentage leaf (e.g. `calc(50% + 10pt)`) is recomputed too. An absolute length
+            // naturally yields a zero delta on its own, since ParseLength doesn't depend on the basis for
+            // one - no separate "is this a percentage" branch is needed to get that for free.
+            var widthIsDefinite = box.Width != Keywords.Auto && !string.IsNullOrEmpty(box.Width);
+            var heightIsDefinite = box.Height != Keywords.Auto && !string.IsNullOrEmpty(box.Height)
+                && CssValueParser.IsValidLength(box.Height);
+            if (!widthIsDefinite && !heightIsDefinite) return (0, 0);
+
+            var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+            var geom = slot.Geometry;
+            var basisWidthPx = (geom.SheetWidthPt - geom.MarginLeftPt - geom.MarginRightPt) * ppp;
+            var basisHeightPx = (geom.SheetHeightPt - geom.MarginTopPt - geom.MarginBottomPt) * ppp;
+
+            var deltaWidth = 0.0;
+            var deltaHeight = 0.0;
+
+            if (widthIsDefinite)
+            {
+                var width = CssValueParser.ParseLength(box.Width, basisWidthPx, box) + box.ActualBoxSizeIncludedWidth;
+
+                // Same min/max-width clamps GetBoxWidth itself applies, against the same basis
+                // (box.ContainingBlock.Size.Width - the DOM containing block, not the fixed page area;
+                // min/max-width isn't given the fixed-page special case width/height themselves get) -
+                // reproduced here rather than shared, since GetBoxWidth computes the box's one global width
+                // inline rather than through a reusable helper.
+                if (CssValueParser.IsValidLength(box.MaxWidth))
+                {
+                    var maxW = CssValueParser.ParseLength(box.MaxWidth, box.ContainingBlock.Size.Width, box);
+                    width = Math.Min(width, maxW);
+                }
+
+                if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+                {
+                    var minW = CssValueParser.ParseLength(box.MinWidth, box.ContainingBlock.Size.Width, box);
+                    width = Math.Max(width, minW);
+                }
+
+                deltaWidth = width - box.ActualWidth;
+            }
+
+            if (heightIsDefinite)
+            {
+                var height = CssValueParser.ParseLength(box.Height, basisHeightPx, box) + box.ActualBoxSizeIncludedHeight;
+
+                // Same min/max-height clamps GetBoxHeight/ApplyHeight apply, against the same basis
+                // (box.ContainingBlock.Size.Height, mirroring the width side above).
+                if (CssValueParser.IsValidLength(box.MaxHeight))
+                {
+                    var maxH = CssValueParser.ParseLength(box.MaxHeight, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                    height = Math.Min(height, maxH);
+                }
+
+                if (CssValueParser.IsValidLength(box.MinHeight))
+                {
+                    var minH = CssValueParser.ParseLength(box.MinHeight, box.ContainingBlock.Size.Height, box) + box.ActualBoxSizeIncludedHeight;
+                    height = Math.Max(height, minH);
+                }
+
+                deltaHeight = height - box.ActualHeight;
+            }
+
+            return (deltaWidth, deltaHeight);
         }
 
         private static RRect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
