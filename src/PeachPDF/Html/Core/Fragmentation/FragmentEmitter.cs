@@ -303,6 +303,24 @@ namespace PeachPDF.Html.Core.Fragmentation
             internal double FixedSizeDeltaHeight { get; set; }
 
             /// <summary>
+            /// How much wider this fragment's own outer frame is on THIS slot than the single,
+            /// globally-resolved <see cref="CssBox.Size"/> already carries — 0 outside a mixed-page-size
+            /// document, and 0 for a box that isn't eligible at all (issue #876). Unlike
+            /// <see cref="FixedSizeDeltaWidth"/> (a fixed box's own content is never re-flowed to its
+            /// resized frame), this box's own text/inline content ALREADY re-wraps per fragment
+            /// (<c>CssLayoutEngine.LineContentRightOf</c>, issue #143's own line-level layer) - only its
+            /// outer border/background box was still pinned to whichever page originally placed it. This
+            /// field is what catches the frame up to content that was already correct, computed by
+            /// <see cref="ComputeInlineExtentDelta"/> using the exact same eligibility test
+            /// (<c>CssLayoutEngine.IsUnconstrainedMainColumn</c>) and formula (<c>CssLayoutEngine.GetBoxWidth</c>'s
+            /// own auto-width branch) the box's single global width was originally resolved with, just
+            /// substituting THIS slot's own content-right edge for the document-wide one. There is no
+            /// block-axis (height) counterpart: a box's height is already free to vary per fragment via
+            /// <see cref="BoundsEndAtItsContent"/> - only the inline axis lacked a per-fragment seam.
+            /// </summary>
+            internal double InlineExtentDeltaWidth { get; set; }
+
+            /// <summary>
             /// The box's own per-line decoration rectangles that landed in this slot, in document space.
             /// Kept raw because <see cref="SliceGeometry"/> is defined over <i>every</i> rectangle the box
             /// produces across every fragmentainer, and a later pass can still add one.
@@ -1664,6 +1682,14 @@ namespace PeachPDF.Html.Core.Fragmentation
                 ? ComputeFixedSizeOverride(box, slot)
                 : default;
 
+            // Also not threaded to descendants - unlike the fixed case above, this is deliberate for a
+            // different reason: each descendant box asks this same question independently, of its OWN
+            // containing block (exactly as CssLayoutEngine.GetBoxWidth/LineContentRightOf already do), so
+            // a nested box that isn't itself eligible (its containing block isn't root/html/body) simply
+            // gets 0 here on its own, without needing to inherit anything from an ancestor that IS
+            // eligible - see ComputeInlineExtentDelta's own remarks.
+            var inlineExtentDeltaWidth = ComputeInlineExtentDelta(box, slot);
+
             // A run being sliced across bands displaces its whole subtree, so an inherited displacement
             // stands until a box states one of its own - which only the root of such a run does.
             //
@@ -1881,6 +1907,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.FixedOffsetY = fixedOffset.Dy;
             draft.FixedSizeDeltaWidth = fixedSizeDelta.DeltaWidth;
             draft.FixedSizeDeltaHeight = fixedSizeDelta.DeltaHeight;
+            draft.InlineExtentDeltaWidth = inlineExtentDeltaWidth;
             draft.BoundsEndAtItsContent = boundsEndAtContentOnThePageGrid
                 || (nested is { } fragmentainer && fragmentainer.Continuing.Contains(box));
 
@@ -2391,6 +2418,16 @@ namespace PeachPDF.Html.Core.Fragmentation
                     Math.Max(0, bounds.Height + draft.FixedSizeDeltaHeight));
             }
 
+            // An ordinary in-flow box's own outer frame catching up to content that already re-wraps per
+            // fragment (issue #876) - same ShellRect-absent guard as above, and mutually exclusive with
+            // FixedSizeDeltaWidth (ComputeInlineExtentDelta explicitly excludes out-of-flow boxes, which
+            // includes every fixed one). Left edge (bounds.X) is unaffected - only the box's own
+            // content-right edge moves per page, never its content-left one.
+            if (draft.ShellRect is null && draft.InlineExtentDeltaWidth != 0)
+            {
+                bounds = new RRect(bounds.X, bounds.Y, Math.Max(0, bounds.Width + draft.InlineExtentDeltaWidth), bounds.Height);
+            }
+
             // A nonzero FixedSizeDeltaHeight means this box's height came from an explicit per-page
             // percentage override (ComputeFixedSizeOverride never touches an auto height), not from its
             // content - so BoundsEndAtItsContent's usual "grow to whatever the content actually reached"
@@ -2582,6 +2619,70 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             return (deltaWidth, deltaHeight);
+        }
+
+        /// <summary>
+        /// How much wider <paramref name="box"/>'s own outer frame would need to be on <paramref name="slot"/>'s
+        /// own page than the single value <c>CssLayoutEngine.GetBoxWidth</c> already resolved once,
+        /// globally, against the document's base content-right edge (issue #876). Zero for any box
+        /// <c>GetBoxWidth</c>'s own auto-width, containing-block-relative branch doesn't apply to in the
+        /// first place: an explicit-length or percentage <c>width</c> (already page-independent), an
+        /// out-of-flow box (a float/absolutely-positioned box is sized against its own placement, and a
+        /// fixed box already has its own separate mechanism, <see cref="ComputeFixedSizeOverride"/>), a
+        /// box with its own words (a non-replaced inline box measures from its content, not its
+        /// containing block), a table/table-cell/flex/grid box (its own width comes from
+        /// <c>CssLayoutEngineTable</c>/<c>CssLayoutEngineFlex</c>/<c>CssLayoutEngineGrid</c> instead of
+        /// <c>GetBoxWidth</c>'s auto-width branch at all - see <c>CssBox.ResolveOwnInlineSize</c>'s own
+        /// exact display-type exclusion, mirrored here; this box's OWN display, not merely whether its
+        /// containing block is a main column, since a table/flex/grid box sitting directly under
+        /// <c>&lt;body&gt;</c> otherwise satisfies every other guard below), or a box whose containing
+        /// block isn't an unconstrained main column at all (<c>CssLayoutEngine.IsUnconstrainedMainColumn</c>
+        /// - the exact same gate <c>CssLayoutEngine.ContentRightOf</c>/<c>LineContentRightOf</c> already
+        /// use to decide whether THIS box's own text re-wraps per page, so its frame and its
+        /// already-reflowing content agree on eligibility). Reproduces <c>GetBoxWidth</c>'s own auto-width
+        /// formula and min/max-width clamps against THIS slot's own content-right edge
+        /// (<see cref="HtmlContainerInt.PageContentRightOf"/>) rather than the document-wide one -
+        /// reproduced here rather than shared, for the same reason <see cref="ComputeFixedSizeOverride"/>'s
+        /// own remarks give (GetBoxWidth computes its result inline rather than through a reusable helper).
+        /// </summary>
+        private double ComputeInlineExtentDelta(CssBox box, Slot slot)
+        {
+            // Cheapest possible check first: UseVariableInlineMeasure is a precomputed bool, so this
+            // avoids ever walking the containing-block chain (IsUnconstrainedMainColumn, below) for the
+            // overwhelming majority of documents, which don't mix page sizes/margins at all - this runs
+            // once per box per slot, so a per-call ancestor walk needs to stay off the common path.
+            if (!container.UseVariableInlineMeasure) return 0;
+            if (box.Width != Keywords.Auto && !string.IsNullOrEmpty(box.Width)) return 0;
+            if (box.IsOutOfFlow) return 0;
+            if (box.Words.Count > 0) return 0;
+
+            if (box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.TableCell
+                or Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid)
+            {
+                return 0;
+            }
+
+            var containingBlock = box.ContainingBlock;
+            if (!CssLayoutEngine.IsUnconstrainedMainColumn(containingBlock)) return 0;
+
+            var availableRight = container.PageContentRightOf(slot.BandTop)
+                - CssLayoutEngine.MainColumnRightInset(containingBlock);
+            var width = availableRight - containingBlock.ClientLeft - box.ActualMarginLeft - box.ActualMarginRight
+                - box.ActualBoxSizeIncludedWidth;
+
+            if (CssValueParser.IsValidLength(box.MaxWidth))
+            {
+                var maxW = CssValueParser.ParseLength(box.MaxWidth, containingBlock.Size.Width, box);
+                width = Math.Min(width, maxW);
+            }
+
+            if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+            {
+                var minW = CssValueParser.ParseLength(box.MinWidth, containingBlock.Size.Width, box);
+                width = Math.Max(width, minW);
+            }
+
+            return width - box.Size.Width;
         }
 
         private static RRect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
