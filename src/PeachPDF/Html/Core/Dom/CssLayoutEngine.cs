@@ -1437,7 +1437,14 @@ namespace PeachPDF.Html.Core.Dom
         /// chain no longer spans the page area, so per-page reflow is not applied there (an accepted gap -
         /// see docs / issues #199-#201).
         /// </summary>
-        private static bool IsUnconstrainedMainColumn(CssBox box)
+        /// <remarks>
+        /// <c>internal</c> rather than <c>private</c> so <see cref="Fragmentation.FragmentEmitter"/> can
+        /// ask the same question when deciding whether a box's own OUTER frame (as opposed to the text
+        /// inside it, which this method's callers already reflow) is eligible for a per-fragment inline
+        /// extent (issue #876) — the two must agree on eligibility exactly, so this is shared rather than
+        /// re-derived.
+        /// </remarks>
+        internal static bool IsUnconstrainedMainColumn(CssBox box)
         {
             for (var b = box; b is not null; b = b.ParentBox)
             {
@@ -1456,7 +1463,8 @@ namespace PeachPDF.Html.Core.Dom
         /// respects its containing block's own right margin/border/padding (e.g. <c>body</c>'s UA-default
         /// 8px margin) instead of overrunning it to the page edge (issue #143).
         /// </summary>
-        private static double MainColumnRightInset(CssBox box)
+        /// <remarks><c>internal</c> for the same reason as <see cref="IsUnconstrainedMainColumn"/>.</remarks>
+        internal static double MainColumnRightInset(CssBox box)
         {
             var inset = 0.0;
             for (var b = box; b is not null; b = b.ParentBox)
