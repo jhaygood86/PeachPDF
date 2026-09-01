@@ -109,17 +109,23 @@ namespace PeachPDF.Html.Core.Dom
                     else
                     {
                         var start = text.Length;
+
+                        // Recorded before recursing so this box's own override(s) can be inserted here -
+                        // ahead of any overrides a nested box contributes while sharing the same Start (a
+                        // nested box with no preceding sibling text of its own) - rather than appended
+                        // after recursion returns, which would put a child's override before its
+                        // parent's for any index the two happen to share. BidiResolver.Resolve pushes
+                        // overrides sharing a start in list order and (deliberately) pops overrides
+                        // sharing an end in the reverse order, so outer-to-inner list order is what makes
+                        // both same-index nesting and a multi-push box's own two pushes resolve correctly.
+                        var insertAt = overrides.Count;
                         Flatten(child, text, ranges, overrides);
                         var length = text.Length - start;
 
-                        // Added in outer-to-inner order (e.g. isolate-override's LRI before its nested
-                        // LRO) - BidiResolver.Resolve pushes overrides sharing a start in that same
-                        // order and (deliberately) pops overrides sharing an end in the reverse order,
-                        // so this list order is what makes both ends of a multi-push box nest correctly.
                         if (length > 0)
                         {
-                            foreach (var push in pushes)
-                                overrides.Add(new BidiIsolateOverride(start, length, push));
+                            for (var i = 0; i < pushes.Count; i++)
+                                overrides.Insert(insertAt + i, new BidiIsolateOverride(start, length, pushes[i]));
                         }
                     }
                 }
