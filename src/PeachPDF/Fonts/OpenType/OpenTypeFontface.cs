@@ -154,6 +154,8 @@ namespace PeachPDF.Fonts.OpenType
         internal GlyphDataTable glyf = null!;
         internal IndexToLocationTable loca = null!;
         internal GlyphSubstitutionTable gsub = null!;
+        internal GlyphDefinitionTable gdef = null!; // optional - absent on many fonts
+        internal GlyphPositioningTable gpos = null!; // optional - absent on many fonts
         internal ColrTable colr = null!;
         internal CpalTable cpal = null!;
         internal VerticalHeaderTable vhea = null!; // optional - absent on purely-horizontal fonts
@@ -172,7 +174,7 @@ namespace PeachPDF.Fonts.OpenType
         }
 
         // AddTable's per-tag field assignment, keyed by DirectoryEntry.Tag. A tag with no entry here
-        // (e.g. GDEF/GPOS/kern) is recorded in TableDictionary but has no dedicated typed field.
+        // (e.g. kern) is recorded in TableDictionary but has no dedicated typed field.
         static readonly FrozenDictionary<string, Action<OpenTypeFontface, OpenTypeFontTable>> TableAssigners =
             new Dictionary<string, Action<OpenTypeFontface, OpenTypeFontTable>>
             {
@@ -189,6 +191,8 @@ namespace PeachPDF.Fonts.OpenType
                 [TableTagNames.Glyf] = (f, t) => f.glyf = t as GlyphDataTable,
                 [TableTagNames.Loca] = (f, t) => f.loca = t as IndexToLocationTable,
                 [TableTagNames.GSUB] = (f, t) => f.gsub = t as GlyphSubstitutionTable,
+                [TableTagNames.GDEF] = (f, t) => f.gdef = t as GlyphDefinitionTable,
+                [TableTagNames.GPOS] = (f, t) => f.gpos = t as GlyphPositioningTable,
                 [TableTagNames.Prep] = (f, t) => f.prep = t as ControlValueProgram,
             }.ToFrozenDictionary();
 
@@ -322,6 +326,14 @@ namespace PeachPDF.Fonts.OpenType
 
                 if (TableDictionary.ContainsKey(TableTagNames.Colr))
                     colr = new ColrTable(this);
+
+                // Optional glyph-definition/positioning tables (GDEF/GPOS). Absent on many fonts -
+                // no kerning/mark-attachment/mark-filtering data at all in that case.
+                if (TableDictionary.ContainsKey(TableTagNames.GDEF))
+                    gdef = new GlyphDefinitionTable(this);
+
+                if (TableDictionary.ContainsKey(TableTagNames.GPOS))
+                    gpos = new GlyphPositioningTable(this);
 
                 // Optional vertical-writing-mode tables. Absent on purely-horizontal fonts. Unlike
                 // COLR/CPAL above (which self-position from their own DirectoryEntry.Offset), these read

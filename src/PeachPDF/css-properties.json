@@ -2340,6 +2340,17 @@
       }
     },
     {
+      "name": "font-kerning",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": "cssom",
+      "html": {
+        "propertyPath": "FontKerning",
+        "csharpDataType": "string",
+        "area": "FontArea"
+      }
+    },
+    {
       "name": "font-variant-numeric",
       "inherited": true,
       "initialValue": "normal",

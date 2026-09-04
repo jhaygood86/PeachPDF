@@ -22,11 +22,12 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// shared ones) avoids renumbering their existing <c>PatchU16</c> offsets.
     ///
     /// Layout: one script "aaaa" (DefaultLangSys, no required feature) referencing features "salt"
-    /// (-&gt; lookup 0, Type 3 format 1), "swsh" (-&gt; lookup 1, Type 9 wrapping Type 3), "ss01"
-    /// (-&gt; lookup 2, Type 9 wrapping Type 1 - proves the alternate reader correctly declines a
+    /// (-&gt; lookup 0, Type 3 format 1), "swsh" (-&gt; lookup 1, Type 7 wrapping Type 3), "ss01"
+    /// (-&gt; lookup 2, Type 7 wrapping Type 1 - proves the alternate reader correctly declines a
     /// wrapped type it doesn't handle) and "ss02" (-&gt; lookup 3, Type 2 multiple substitution -
-    /// unsupported by either reader, proving <see cref="GsubTable.SupportsAllFeatureTags"/>'s fix
-    /// actually reports unsupported instead of trusting tag presence alone).
+    /// unsupported by the single/alternate readers <see cref="GsubTable.SupportsAllFeatureTags"/>
+    /// checks (font-variant-caps/-numeric/-east-asian gating only ever routes through those two),
+    /// proving that method actually reports unsupported instead of trusting tag presence alone).
     /// </summary>
     public class GsubAlternateSubstitutionSyntheticTests
     {
@@ -143,10 +144,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             b.PatchU16(lookup0SubOffsetAt, lookup0SubStart - lookup0Start);
             WriteAlternateSubtable(b, [10, 11], [[15, 16, 17], [25, 26]]);
 
-            // Lookup 1: Type 9 (Extension) wrapping a valid Type 3 - glyph 50 -> alternates {55, 56}.
+            // Lookup 1: Type 7 (Extension) wrapping a valid Type 3 - glyph 50 -> alternates {55, 56}.
             int lookup1Start = b.Position;
             b.PatchU16(lookup1OffsetAt, lookup1Start - lookupListStart);
-            b.U16(9); b.U16(0); b.U16(1);
+            b.U16(7); b.U16(0); b.U16(1);
             int lookup1SubOffsetAt = b.PlaceholderU16();
             int lookup1SubStart = b.Position;
             b.PatchU16(lookup1SubOffsetAt, lookup1SubStart - lookup1Start);
@@ -158,11 +159,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             b.PatchU32(lookup1ExtOffsetAt, (uint)(lookup1TargetStart - lookup1SubStart));
             WriteAlternateSubtable(b, [50], [[55, 56]]);
 
-            // Lookup 2: Type 9 (Extension) wrapping a *non-3* type (1) - must be skipped for
+            // Lookup 2: Type 7 (Extension) wrapping a *non-3* type (1) - must be skipped for
             // alternate-substitution, even though it's a real, applicable lookup for single-substitution.
             int lookup2Start = b.Position;
             b.PatchU16(lookup2OffsetAt, lookup2Start - lookupListStart);
-            b.U16(9); b.U16(0); b.U16(1);
+            b.U16(7); b.U16(0); b.U16(1);
             int lookup2SubOffsetAt = b.PlaceholderU16();
             int lookup2SubStart = b.Position;
             b.PatchU16(lookup2SubOffsetAt, lookup2SubStart - lookup2Start);
@@ -270,7 +271,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var (face, tableStart) = BuildFaceWithSyntheticGsub();
             var gsub = new GsubTable(face, tableStart);
 
-            // Lookup 2 is a real, applicable Type 1 lookup (wrapped in Type 9) - the alternate reader
+            // Lookup 2 is a real, applicable Type 1 lookup (wrapped in Type 7) - the alternate reader
             // must not mis-apply it, even though the single-substitution reader can.
             Assert.Null(gsub.GetAlternateSubstitutionLookup(2));
             Assert.NotNull(gsub.GetSingleSubstitutionLookup(2));
@@ -306,8 +307,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         [Theory]
         [InlineData(0, 3)]
-        [InlineData(1, 3)] // Type 9 wrapping Type 3 resolves to the wrapped type
-        [InlineData(2, 1)] // Type 9 wrapping Type 1 resolves to 1, not 3
+        [InlineData(1, 3)] // Type 7 wrapping Type 3 resolves to the wrapped type
+        [InlineData(2, 1)] // Type 7 wrapping Type 1 resolves to 1, not 3
         [InlineData(3, 2)]
         public void GetResolvedLookupType_ReturnsRealType(int lookupIndex, int expectedType)
         {
@@ -323,7 +324,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             var (face, tableStart) = BuildFaceWithSyntheticGsub();
             var gsub = new GsubTable(face, tableStart);
 
-            // "salt" (lookup 0) and "swsh" (lookup 1, Type 9 wrapping Type 3) are both real,
+            // "salt" (lookup 0) and "swsh" (lookup 1, Type 7 wrapping Type 3) are both real,
             // applicable Alternate Substitution lookups.
             Assert.True(gsub.SupportsAllFeatureTags(["aaaa"], new HashSet<string> { "salt" }));
             Assert.True(gsub.SupportsAllFeatureTags(["aaaa"], new HashSet<string> { "swsh" }));

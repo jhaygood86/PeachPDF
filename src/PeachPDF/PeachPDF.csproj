@@ -49,6 +49,8 @@
 		<EmbeddedResource Include="Text\Resources\Patterns\*.br" />
 		<None Remove="Text\Resources\language-tags.txt" />
 		<EmbeddedResource Include="Text\Resources\language-tags.txt" />
+		<None Remove="Text\Resources\opentype-language-tags.txt" />
+		<EmbeddedResource Include="Text\Resources\opentype-language-tags.txt" />
 		<None Remove="Text\Resources\Bidi\*.br" />
 		<EmbeddedResource Include="Text\Resources\Bidi\*.br" />
 		<None Remove="Text\Resources\VerticalOrientation\*.br" />

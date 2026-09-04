@@ -285,6 +285,7 @@ namespace PeachPDF.CSS
                 PropertyNames.FontVariantLigatures,
                 PropertyNames.FontVariantNumeric,
                 PropertyNames.FontVariantEastAsian,
+                PropertyNames.FontKerning,
                 PropertyNames.FontWeight,
                 PropertyNames.LineHeight);
             AddLonghand(PropertyNames.FontFamily, () => new FontFamilyProperty(), false, true);
@@ -306,6 +307,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.FontVariantNumeric, () => new FontVariantNumericProperty());
             AddLonghand(PropertyNames.FontVariantEastAsian, () => new FontVariantEastAsianProperty());
             AddLonghand(PropertyNames.FontFeatureSettings, () => new FontFeatureSettingsProperty());
+            AddLonghand(PropertyNames.FontKerning, () => new FontKerningProperty());
             AddLonghand(PropertyNames.FontWeight, () => new FontWeightProperty(), true, true);
             AddLonghand(PropertyNames.FontStretch, () => new FontStretchProperty(), true, true);
             AddLonghand(PropertyNames.FontPalette, () => new FontPaletteProperty());

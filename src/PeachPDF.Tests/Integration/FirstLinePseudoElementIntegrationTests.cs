@@ -427,6 +427,27 @@ namespace PeachPDF.Tests.Integration
             }
         }
 
+        [Fact]
+        public async Task TextTransform_OnBidiReorderedWord_PaintsMirroredNotLogicalOrder()
+        {
+            // Issue #553: a ::first-line rule's own text-transform (differing from the box's own) made
+            // CssBox.ApplyFirstLineStyleOverride derive FirstLineText from the pre-bidi OriginalText,
+            // discarding the bidi L2/L4 reordering+mirroring CssLayoutEngine.PlaceBidiRunWord already
+            // applied to Text - FragmentPainter.PaintWords prefers FirstLineText when present, so the
+            // painted output was the wrong, unmirrored, logical-order string ("HELLO") instead of the
+            // required reordered/mirrored one ("OLLEH").
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<style>p::first-line { text-transform: uppercase }</style>" +
+                "<p id='p'><bdo id='b' dir='rtl'>hello</bdo></p>"));
+            var p = FindById(root, "p")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, p, g);
+
+            var draw = Assert.Single(g.DrawStringCalls);
+            Assert.Equal("OLLEH", draw.Text);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 

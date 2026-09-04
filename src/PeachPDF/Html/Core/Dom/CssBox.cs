@@ -849,6 +849,26 @@ namespace PeachPDF.Html.Core.Dom
         public HtmlTag? HtmlTag { get; }
 
         /// <summary>
+        /// This element's resolved language: its own `lang` attribute if non-empty, else the nearest
+        /// ancestor's, else (at the root) <see cref="HtmlContainerInt.DocumentLanguage"/> - the
+        /// HTML Living Standard's "language of a node" algorithm (a per-element, inherited concept),
+        /// computed on demand rather than cached on the box so it always reflects
+        /// <see cref="HtmlContainerInt.DocumentLanguage"/>'s current value (which can still change
+        /// after this box's own tree position is fixed - see <c>PdfGenerator</c>'s config
+        /// <c>DefaultLanguage</c> fallback, applied after the document's own tree is first parsed).
+        /// Feeds both hyphenation (see <see cref="ParseToWords"/>) and GSUB per-language feature
+        /// selection (see <see cref="DerivedStyle.ActualTextShapingFeatures"/>).
+        /// </summary>
+        internal string? Language
+        {
+            get
+            {
+                var own = GetAttribute("lang");
+                return !string.IsNullOrEmpty(own) ? own : ParentBox?.Language ?? HtmlContainer?.DocumentLanguage;
+            }
+        }
+
+        /// <summary>
         /// Gets if this box represents an image
         /// </summary>
         public bool IsImage => Words is [{ IsImage: true }];
@@ -1215,7 +1235,7 @@ namespace PeachPDF.Html.Core.Dom
 
                                 if (Hyphens.Value == PeachPDF.CSS.Hyphens.Auto)
                                 {
-                                    var language = HtmlContainer?.DocumentLanguage;
+                                    var language = Language;
                                     if (!string.IsNullOrEmpty(language))
                                     {
                                         var autoPoints = PeachPDF.Text.HyphenationEngine.FindHyphenationPoints(cleanWord, language);
@@ -5944,11 +5964,21 @@ namespace PeachPDF.Html.Core.Dom
                 // A ::first-line rule's own text-transform (if it declares one different from this
                 // box's own) must be re-derived from OriginalText rather than Text - Text may already be
                 // case-transformed by this box's own TextTransform, which for a value like uppercase has
-                // irreversibly destroyed the casing information capitalize/lowercase would need.
+                // irreversibly destroyed the casing information capitalize/lowercase would need. The
+                // result is then re-mirrored (a no-op for an even bidi level) so a bidi-reordered word's
+                // FirstLineText stays in the same reordered/mirrored visual order as Text itself, rather
+                // than reverting to unmirrored logical order (issue #553) - BidiLevel is assigned per-word
+                // at ParseToWords time, independent of whether the per-line mirroring pass has run yet.
                 boxWord.FirstLineText = firstLineStyle.TextTransform != TextTransform && boxWord.Text != "\n"
-                    ? ApplyTextTransform(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform)
+                    ? PeachPDF.Text.Bidi.BidiMirrorResolver.ApplyMirroring(
+                        ApplyTextTransform(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform), boxWord.BidiLevel)
                     : null;
-                var effectiveText = boxWord.FirstLineText ?? boxWord.Text;
+                // When FirstLineText is null (this box's own TextTransform already matches the
+                // first-line rule's, so Text needs no separate re-derivation), prefer PreMirrorText
+                // over Text for the same reason RemeasureWordsTail does (issue #553's secondary
+                // finding) - Text may already be mirrored/reversed from a prior layout pass, and
+                // ligature formation is order-sensitive.
+                var effectiveText = boxWord.FirstLineText ?? (boxWord as CssRectWord)?.PreMirrorText ?? boxWord.Text;
 
                 var font = ResolveWordFont(boxWord, firstLineStyle);
                 // A preserved tab (still identifiable via OriginalText even though this word's own Text
@@ -6000,11 +6030,17 @@ namespace PeachPDF.Html.Core.Dom
                 boxWord.FirstLineText = null;
 
                 var font = ResolveWordFont(boxWord, this);
-                boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualTextShapingFeatures).Width : 0;
+                // Measures from PreMirrorText (stable across passes) rather than Text when available -
+                // on any layout pass after bidi mirroring has already run once, Text is the reversed
+                // string, and since GSUB ligature formation is order-sensitive, re-measuring a reversed
+                // run can form different ligatures than the first pass measured against (issue #553's
+                // secondary finding), drifting this word's width from what the rest of layout was built on.
+                var measureText = (boxWord as CssRectWord)?.PreMirrorText ?? boxWord.Text!;
+                boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(measureText, font, ActualTextShapingFeatures).Width : 0;
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-glyph word, not N-1,
                 // and the shaped glyph count rather than the character count.
                 if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
-                    boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ActualTextShapingFeatures) * ActualLetterSpacing;
+                    boxWord.Width += g.CountShapedGlyphs(measureText, font, ActualTextShapingFeatures) * ActualLetterSpacing;
                 boxWord.Height = font.Height;
             }
         }

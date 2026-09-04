@@ -21,13 +21,13 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// Layout: one script "aaaa" (DefaultLangSys, no required feature) referencing features "smcp"
     /// (-> lookup 0) and "onum" (-> lookup 1) - deliberately no "c2sc" feature anywhere in this font,
     /// so <see cref="GsubTable.SupportsAllFeatureTags"/> can prove the "both tags required" case.
-    /// Lookups: 0 = Type 1 format 1 (delta); 1 = Type 1 format 2 (explicit array); 2 = Type 9 wrapping
-    /// a valid Type 1; 3 = Type 9 wrapping a non-1 type (Type 4); 4 = plain Type 4 (ligature, for
+    /// Lookups: 0 = Type 1 format 1 (delta); 1 = Type 1 format 2 (explicit array); 2 = Type 7 wrapping
+    /// a valid Type 1; 3 = Type 7 wrapping a non-1 type (Type 4); 4 = plain Type 4 (ligature, for
     /// GetResolvedLookupType's cross-type dispatch); 5 = unsupported type (2, multiple substitution);
     /// 6 = Type 1 with an invalid substFormat (3); 7 = Type 1 format 2 with a coverage table listing
     /// more glyphs than the substitute array has entries (malformed, but must fail closed rather than
-    /// index out of range); 8 = Type 9 (Extension) with zero subtables (malformed - resolves to the
-    /// wrapper type 9 itself rather than reading past the end of the lookup).
+    /// index out of range); 8 = Type 7 (Extension) with zero subtables (malformed - resolves to the
+    /// wrapper type 7 itself rather than reading past the end of the lookup).
     /// </summary>
     public class GsubSingleSubstitutionSyntheticTests
     {
@@ -135,10 +135,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             b.PatchU16(lookup1SubOffsetAt, lookup1SubStart - lookup1Start);
             WriteType1Format2Subtable(b, [40, 41], [45, 46]);
 
-            // Lookup 2: Type 9 (Extension) wrapping a valid Type 1 - glyph 50 -> 55.
+            // Lookup 2: Type 7 (Extension) wrapping a valid Type 1 - glyph 50 -> 55.
             int lookup2Start = b.Position;
             b.PatchU16(lookup2OffsetAt, lookup2Start - lookupListStart);
-            b.U16(9); b.U16(0); b.U16(1);
+            b.U16(7); b.U16(0); b.U16(1);
             int lookup2SubOffsetAt = b.PlaceholderU16();
             int lookup2SubStart = b.Position;
             b.PatchU16(lookup2SubOffsetAt, lookup2SubStart - lookup2Start);
@@ -150,10 +150,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             b.PatchU32(lookup2ExtOffsetAt, (uint)(lookup2TargetStart - lookup2SubStart));
             WriteType1Format1Subtable(b, firstGlyph: 50, delta: 5);
 
-            // Lookup 3: Type 9 (Extension) wrapping a *non-1* type (4) - must be skipped for single-sub.
+            // Lookup 3: Type 7 (Extension) wrapping a *non-1* type (4) - must be skipped for single-sub.
             int lookup3Start = b.Position;
             b.PatchU16(lookup3OffsetAt, lookup3Start - lookupListStart);
-            b.U16(9); b.U16(0); b.U16(1);
+            b.U16(7); b.U16(0); b.U16(1);
             int lookup3SubOffsetAt = b.PlaceholderU16();
             int lookup3SubStart = b.Position;
             b.PatchU16(lookup3SubOffsetAt, lookup3SubStart - lookup3Start);
@@ -191,11 +191,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             b.PatchU16(lookup7SubOffsetAt, lookup7SubStart - lookup7Start);
             WriteType1Format2Subtable(b, coverageGlyphs: [70, 71], substitutes: [75]);
 
-            // Lookup 8: Type 9 (Extension) with zero subtables - malformed, but GetResolvedLookupType
+            // Lookup 8: Type 7 (Extension) with zero subtables - malformed, but GetResolvedLookupType
             // must return the wrapper type itself rather than reading a subtable offset that isn't there.
             int lookup8Start = b.Position;
             b.PatchU16(lookup8OffsetAt, lookup8Start - lookupListStart);
-            b.U16(9); b.U16(0); b.U16(0); // subtableCount = 0
+            b.U16(7); b.U16(0); b.U16(0); // subtableCount = 0
 
             return b.ToArray();
         }
@@ -322,11 +322,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
         [Theory]
         [InlineData(0, 1)]
-        [InlineData(2, 1)] // Type 9 wrapping Type 1 resolves to the wrapped type
-        [InlineData(3, 4)] // Type 9 wrapping Type 4 resolves to 4
+        [InlineData(2, 1)] // Type 7 wrapping Type 1 resolves to the wrapped type
+        [InlineData(3, 4)] // Type 7 wrapping Type 4 resolves to 4
         [InlineData(4, 4)]
         [InlineData(5, 2)]
-        [InlineData(8, 9)] // Type 9 with zero subtables - falls back to the wrapper type itself
+        [InlineData(8, 7)] // Type 7 with zero subtables - falls back to the wrapper type itself
         [InlineData(-1, -1)]
         [InlineData(999, -1)]
         public void GetResolvedLookupType_ReturnsRealType(int lookupIndex, int expectedType)

@@ -63,14 +63,16 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double penX = 0;
             foreach (ShapedGlyph glyph in _descriptor.Shape(text, features))
             {
-                PaintGlyph(glyph.GlyphIndex, _baselineX + penX);
-                penX += _descriptor.GlyphIndexToWidth(glyph.GlyphIndex) * _scale + _letterSpacing;
+                // GPOS positioning (kerning's XOffset, mark attachment's XOffset/YOffset) shifts where
+                // this glyph paints without changing its own outline shape - see GposPositioner.
+                PaintGlyph(glyph.GlyphIndex, _baselineX + penX + glyph.XOffset * _scale, glyph.YOffset * _scale);
+                penX += (_descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
             }
         }
 
-        private void PaintGlyph(int glyphId, double originX)
+        private void PaintGlyph(int glyphId, double originX, double originYOffset = 0)
         {
-            ColrAffine placement = Placement(originX);
+            ColrAffine placement = Placement(originX, originYOffset);
             ColrTable colr = _descriptor.ColorTable;
 
             // Per the COLR processing model a v1-aware renderer resolves the v1 BaseGlyphList first,
@@ -133,12 +135,16 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         private static XPoint Map(ColrAffine t, double x, double y)
             => new(t.XX * x + t.XY * y + t.DX, t.YX * x + t.YY * y + t.DY);
 
-        /// <summary>The design-units-&gt;world placement affine for a glyph at the given pen origin.</summary>
-        private ColrAffine Placement(double originX)
+        /// <summary>The design-units-&gt;world placement affine for a glyph at the given pen origin -
+        /// <paramref name="originYOffset"/> is a GPOS mark-positioning Y delta (world units, already
+        /// scaled and sign-adjusted for page direction the same way X is by the caller).</summary>
+        private ColrAffine Placement(double originX, double originYOffset = 0)
         {
-            // Font em-square is y-up; the page (when downwards) is y-down, so flip Y.
+            // Font em-square is y-up; the page (when downwards) is y-down, so flip Y - the offset
+            // flips the same way, since it moves the glyph up in font space regardless of page direction.
             double yy = _pageDownwards ? -_scale : _scale;
-            return new ColrAffine(_scale, 0, 0, yy, originX, _baselineY);
+            double baselineY = _pageDownwards ? _baselineY - originYOffset : _baselineY + originYOffset;
+            return new ColrAffine(_scale, 0, 0, yy, originX, baselineY);
         }
 
         private XColor ResolveColor(int paletteIndex) => ResolveColor(paletteIndex, 1.0);

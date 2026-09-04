@@ -15,13 +15,13 @@ using System.Text;
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
-    /// PeachPDF applies GSUB ligature substitution (<c>liga</c>/<c>clig</c>/<c>rlig</c>, see
-    /// <see cref="GsubShaper"/>) and a real UAX#9 Unicode Bidi Algorithm (see
-    /// <see cref="PeachPDF.Text.Bidi.BidiResolver"/>), but still has no full OpenType Layout
-    /// engine: no <c>GPOS</c> (kerning/mark positioning), no contextual substitution (GSUB lookup
-    /// types 5-8), no Arabic/Indic complex-script joining. These tests characterize what remains a
-    /// <b>known limitation</b> (contextual-forms independence) alongside the ligature and bidi
-    /// reordering/mirroring behavior real UAX#9 support added. See docs/html-css-support.md "Text
+    /// PeachPDF applies GSUB substitution (ligature/single/multiple/alternate, plus contextual/
+    /// chaining - Lookup Types 1-6, formats 1/2/3 - see <see cref="GsubShaper"/>), GPOS positioning
+    /// (kerning and mark-to-base/mark-to-mark attachment - Lookup Types 1/2/4/6, see
+    /// <see cref="PeachPDF.Text.GposPositioner"/>), and a real UAX#9 Unicode Bidi Algorithm (see
+    /// <see cref="PeachPDF.Text.Bidi.BidiResolver"/>). Still no Arabic/Indic complex-script joining,
+    /// GSUB Lookup Type 8 (reverse chaining single substitution), or GPOS Types 3/5/7/8 (cursive
+    /// attachment, mark-to-ligature, contextual positioning). See docs/html-css-support.md "Text
     /// shaping" for the reader-facing note and .claude/accepted-gaps/no-text-shaping.md for what's
     /// still out of scope.
     /// </summary>

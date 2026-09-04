@@ -277,7 +277,12 @@ namespace PeachPDF.Fonts.OpenType
         /// requests and the font has a GSUB table for. The single glyph-walk shared by measurement,
         /// painting, outline extraction and glyph subsetting/embedding - see <see cref="GsubShaper"/>.
         /// </summary>
-        public IReadOnlyList<ShapedGlyph> Shape(string text, TextShapingFeatures features) => GsubShaper.Shape(this, text, features);
+        public IReadOnlyList<ShapedGlyph> Shape(string text, TextShapingFeatures features)
+        {
+            List<ShapedGlyph> glyphs = GsubShaper.Shape(this, text, features);
+            GposPositioner.Apply(this, glyphs, features);
+            return glyphs;
+        }
 
         /// <summary>
         /// Whether this font's GSUB table defines an active lookup for every tag in

@@ -404,8 +404,34 @@ namespace PeachPDF.Svg
                 ? BidiParagraphDirection.Rtl
                 : BidiParagraphDirection.Ltr;
 
-            var result = BidiResolver.Resolve(paragraphText, direction, overrides);
-            var runs = BidiResolver.ReorderLine(result.Levels, 0, glyphs.Count);
+            // paragraphText is a UTF-16 string (a surrogate pair - any astral character, e.g. U+10800
+            // and above - is two code units), but glyphs is exactly one GlyphInfo per Rune (FlattenRun),
+            // so paragraphText.Length can exceed glyphs.Count. BidiResolver.Resolve returns one level
+            // per UTF-16 code unit of its input, and overrides (built by FlattenRun) are expressed in
+            // glyph ordinals - both need translating against a per-glyph UTF-16 start-offset map before/
+            // after crossing into BidiResolver's own code-unit-indexed world, or everything from the
+            // first astral character onward misindexes (issue #555). The equivalent HTML path never hits
+            // this because it keys levels to UTF-16 string indices consistently throughout, never
+            // re-indexing into a separately-counted glyph list.
+            var utf16Starts = new int[glyphs.Count + 1];
+            for (var i = 0; i < glyphs.Count; i++)
+                utf16Starts[i + 1] = utf16Starts[i] + glyphs[i].Glyph.Length;
+
+            var codeUnitOverrides = overrides.Count == 0
+                ? overrides
+                : overrides.Select(o => o with
+                {
+                    Start = utf16Starts[o.Start],
+                    Length = utf16Starts[o.Start + o.Length] - utf16Starts[o.Start],
+                }).ToList();
+
+            var result = BidiResolver.Resolve(paragraphText, direction, codeUnitOverrides);
+
+            var glyphLevels = new byte[glyphs.Count];
+            for (var i = 0; i < glyphs.Count; i++)
+                glyphLevels[i] = result.Levels[utf16Starts[i]];
+
+            var runs = BidiResolver.ReorderLine(glyphLevels, 0, glyphs.Count);
 
             if (runs.Count == 1 && !runs[0].IsRtl) return;
 

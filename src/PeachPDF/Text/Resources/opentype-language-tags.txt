@@ -1,0 +1,91 @@
+# Curated BCP-47 -> OpenType language-system tag table, consulted by OpenTypeLanguageTags.Resolve
+# for GsubShaper's per-language GSUB feature (LangSys) selection.
+#
+# This is a deliberately curated SUBSET (the real OpenType Language System Tags registry has
+# ~7000 entries and is not mechanically derivable from BCP-47 - see
+# https://learn.microsoft.com/en-us/typography/opentype/spec/languagetags) covering the languages
+# already in Text/Resources/Patterns (the hyphenation pattern set) plus other major languages with
+# a well-known, unambiguous OpenType tag. A BCP-47 tag absent from this file simply isn't matched -
+# GsubTable.GetActiveLookupIndices falls back to the script's DefaultLangSys exactly as if no
+# language were declared, never a regression relative to not having this table at all.
+#
+# Format: bcp47=OTTAG (OpenType tags are exactly 4 characters; a shorter tag is space-padded here
+# for clarity, though GsubTable compares the raw 4-byte tag read from the font, not this text).
+en=ENG
+en-us=ENG
+en-gb=ENG
+fr=FRA
+de=DEU
+it=ITA
+es=ESP
+pt=PTG
+pt-br=PTG
+nl=NLD
+ru=RUS
+pl=PLK
+cs=CSY
+sk=SKY
+hu=HUN
+ro=ROM
+bg=BGR
+uk=UKR
+el=ELL
+tr=TRK
+ar=ARA
+he=IWR
+hi=HIN
+bn=BEN
+ja=JAN
+ko=KOR
+zh=ZHS
+zh-hans=ZHS
+zh-cn=ZHS
+zh-hant=ZHT
+zh-tw=ZHT
+zh-hk=ZHH
+vi=VIT
+th=THA
+id=IND
+ms=MLY
+fi=FIN
+sv=SVE
+nb=NOR
+nn=NYN
+no=NOR
+da=DAN
+is=ISL
+hr=HRV
+sr=SRB
+sl=SLV
+lt=LTH
+lv=LVI
+et=ETI
+ca=CAT
+eu=EUQ
+gl=GAL
+cy=WEL
+ga=IRI
+gd=GAE
+sq=SQI
+mk=MKD
+hy=HYE
+ka=KAT
+az=AZE
+kk=KAZ
+uz=UZB
+mn=MON
+fa=FAR
+ur=URD
+ta=TAM
+te=TEL
+kn=KAN
+ml=MAL
+mr=MAR
+gu=GUJ
+pa=PAN
+ne=NEP
+km=KHM
+lo=LAO
+af=AFK
+sw=SWK
+am=AMH

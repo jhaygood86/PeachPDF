@@ -221,22 +221,29 @@ namespace PeachPDF.Adapters
                 // with no `glyf` table - either way there's nothing to add for this glyph.
                 if (descriptor.TryGetGlyphOutline(glyphId, out GlyphOutline outline))
                 {
+                    // GPOS positioning (kerning's XOffset, mark attachment's XOffset/YOffset) shifts
+                    // where this glyph paints without changing its own outline shape - see
+                    // GposPositioner. Y is subtracted (em-square is y-up, user space is y-down), same
+                    // as the outline's own Y coordinates just below.
+                    double glyphX = penX + glyph.XOffset * scale;
+                    double glyphY = baseY - glyph.YOffset * scale;
+
                     foreach (GlyphContour contour in outline.Contours)
                     {
-                        path.AddMove(penX + contour.Start.X * scale, baseY - contour.Start.Y * scale);
+                        path.AddMove(glyphX + contour.Start.X * scale, glyphY - contour.Start.Y * scale);
 
                         foreach (GlyphSegment segment in contour.Segments)
                         {
                             if (segment.IsCubic)
                             {
                                 path.AddBezierTo(
-                                    penX + segment.Control1.X * scale, baseY - segment.Control1.Y * scale,
-                                    penX + segment.Control2.X * scale, baseY - segment.Control2.Y * scale,
-                                    penX + segment.End.X * scale, baseY - segment.End.Y * scale);
+                                    glyphX + segment.Control1.X * scale, glyphY - segment.Control1.Y * scale,
+                                    glyphX + segment.Control2.X * scale, glyphY - segment.Control2.Y * scale,
+                                    glyphX + segment.End.X * scale, glyphY - segment.End.Y * scale);
                             }
                             else
                             {
-                                path.LineTo(penX + segment.End.X * scale, baseY - segment.End.Y * scale);
+                                path.LineTo(glyphX + segment.End.X * scale, glyphY - segment.End.Y * scale);
                             }
                         }
 
@@ -245,7 +252,7 @@ namespace PeachPDF.Adapters
                     }
                 }
 
-                penX += descriptor.GlyphIndexToWidth(glyphId) * scale + letterSpacing;
+                penX += (descriptor.GlyphIndexToWidth(glyphId) + glyph.XAdvanceDelta) * scale + letterSpacing;
             }
 
             // No geometry at all means the font produced no `glyf` outlines (CFF/bitmap) - signal the

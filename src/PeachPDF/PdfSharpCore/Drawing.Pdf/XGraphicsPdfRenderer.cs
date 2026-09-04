@@ -504,11 +504,18 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 realizedFont.AddShapedText(s, features);
 
                 string text = null;
+                IReadOnlyList<ShapedGlyph> shapedGlyphs = null;
+                bool hasGposDeltas = false;
                 if (font.Unicode)
                 {
+                    shapedGlyphs = descriptor.Shape(s, features);
                     StringBuilder sb = new StringBuilder();
-                    foreach (ShapedGlyph glyph in descriptor.Shape(s, features))
+                    foreach (ShapedGlyph glyph in shapedGlyphs)
+                    {
                         sb.Append((char)glyph.GlyphIndex);
+                        if (glyph.XAdvanceDelta != 0 || glyph.YAdvanceDelta != 0 || glyph.XOffset != 0 || glyph.YOffset != 0)
+                            hasGposDeltas = true;
+                    }
                     s = sb.ToString();
 
                     byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(s);
@@ -566,6 +573,16 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                         _gfxState.ItalicSimulationOn = false;
                         AdjustTdOffset(ref pos, verticalOffset, null);
                     }
+                    else if (hasGposDeltas)
+                    {
+                        // At least one glyph carries a nonzero GPOS delta (kerning's XAdvanceDelta/
+                        // XOffset, or mark positioning's XOffset/YOffset - see GposPositioner) that a
+                        // static per-glyph-id /W array entry can't express. Paint each glyph as its own
+                        // individually positioned Td+Tj instead of one Tj over the whole run - the
+                        // common case (no GPOS deltas) never reaches this branch, so existing output is
+                        // otherwise byte-for-byte unchanged.
+                        DrawPositionedGlyphs(shapedGlyphs, font, descriptor, new XPoint(x, y + verticalOffset));
+                    }
                     else
                     {
                         AdjustTdOffset(ref pos, verticalOffset, null);
@@ -598,6 +615,48 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     ? y - strikeoutPosition
                     : y + strikeoutPosition - strikeoutSize;
                 DrawRectangle(null, brush, x, strikeoutRectY, width, strikeoutSize);
+            }
+        }
+
+        /// <summary>
+        /// Paints <paramref name="glyphs"/> (already shaped, in <paramref name="startPos"/>'s world
+        /// space) as a sequence of individually positioned Td+Tj pairs, one glyph at a time, instead
+        /// of a single Tj over the whole run - see the one caller in <see cref="DrawString"/>. Only
+        /// horizontal (X) positioning is affected by page direction sign flips the same way the rest
+        /// of this renderer's Y math already is; <see cref="ShapedGlyph.YAdvanceDelta"/> (vertical
+        /// writing mode's own advance axis) is intentionally not applied here - this renderer draws
+        /// horizontal text only.
+        /// </summary>
+        void DrawPositionedGlyphs(IReadOnlyList<ShapedGlyph> glyphs, XFont font, OpenTypeDescriptor descriptor, XPoint startPos)
+        {
+            const string format2 = Config.SignificantFigures4;
+            double scale = font.Size / descriptor.UnitsPerEm;
+            bool pageDownwards = Gfx.PageDirection == XPageDirection.Downwards;
+
+            double penX = startPos.X;
+            double penY = startPos.Y;
+
+            foreach (ShapedGlyph glyph in glyphs)
+            {
+                double glyphX = penX + glyph.XOffset * scale;
+                // Font em-square is y-up; a downwards page is y-down, so a positive OpenType YOffset
+                // (moves a glyph up in font space) subtracts in downwards-page Y, adds otherwise -
+                // the same convention ColorGlyphPainter.Placement uses for its own Y offset.
+                double glyphY = pageDownwards ? penY - glyph.YOffset * scale : penY + glyph.YOffset * scale;
+
+                XPoint glyphPos = WorldToView(new XPoint(glyphX, glyphY));
+                AdjustTdOffset(ref glyphPos, 0, null);
+
+                byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
+                bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
+                string glyphText = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
+
+                AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", glyphPos.X, glyphPos.Y, glyphText);
+
+                // XOffset is a placement-only shift (doesn't move where the next glyph starts) - the
+                // pen only ever advances by the natural width plus GPOS's own XAdvanceDelta, matching
+                // FontHelper.MeasureString/GraphicsAdapter.GetTextOutline's identical advance math.
+                penX += (descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * scale;
             }
         }
 

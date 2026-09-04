@@ -80,8 +80,12 @@ namespace PeachPDF.PdfSharpCore.Drawing
                 void FlushLine()
                 {
                     width = 0;
+                    // GPOS's XAdvanceDelta (kerning) must be folded into the measured width here, not
+                    // just applied at paint time - line-breaking/text-align/justification all key off
+                    // this value, and must agree with what XGraphicsPdfRenderer.DrawString actually
+                    // paints (see GposPositioner).
                     foreach (ShapedGlyph glyph in descriptor.Shape(lineText.ToString(), features))
-                        width += descriptor.GlyphIndexToWidth(glyph.GlyphIndex);
+                        width += (int)Math.Round(descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta);
                     lineText.Clear();
                 }
 
