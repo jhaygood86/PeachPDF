@@ -404,7 +404,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["color", "rgb(7, 8, 9)"], ["content", "normal"], ["display", "block"], ["direction", "rtl"], ["empty-cells", "hide"], ["caption-side", "bottom"],
             ["clear", "both"], ["position", "absolute"], ["line-height", "1.5"], ["vertical-align", "middle"], ["text-indent", "20px"],
             ["text-align", "center"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
-            ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"],
+            ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"], ["tab-size", "4"], ["tab-size", "2em"],
             ["font-style", "italic"], ["font-variant-caps", "small-caps"], ["font-weight", "bold"], ["font-stretch", "condensed"],
             ["list-style-position", "inside"], ["list-style-type", "square"], ["overflow", "hidden"], ["z-index", "5"],
             ["flex-direction", "column"], ["flex-wrap", "wrap"], ["justify-content", "center"], ["align-items", "stretch"], ["align-content", "center"],
@@ -837,6 +837,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("flex-shrink", "-1", "2")]
         [InlineData("font-size", "xxx-large", "large")]
         [InlineData("line-height", "auto", "1.5")]
+        [InlineData("tab-size", "-1", "4")]
+        [InlineData("tab-size", "-1px", "4")]
+        [InlineData("tab-size", "50%", "4")]
         public async Task SetPropertyValue_InvalidValue_IsRejected(string name, string invalid, string valid)
         {
             var (box, parser) = await FindDivBoxAndParser("");

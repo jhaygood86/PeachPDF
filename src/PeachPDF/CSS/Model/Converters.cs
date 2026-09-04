@@ -490,6 +490,14 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter LineHeightConverter =
             LengthOrPercentConverter.Or(NumberConverter).Or(Keywords.Normal);
 
+        // CSS Text 4 §3.6: <number [0,∞]> | <length [0,∞]> - no keyword side (unlike LineHeightConverter's
+        // "normal"), so this is just the plain length-or-number union. The [0,∞] lower bound isn't
+        // enforced here - Layer B's own customValidator (css-properties.json's "tab-size" entry) re-checks
+        // it against the raw declaration text before it ever reaches CssBox.TabSize, matching how
+        // FlexGrowShrinkConverter also lets a negative <number> through Layer A for the same reason.
+        public static readonly IValueConverter TabSizeConverter =
+            LengthConverter.Or(NumberConverter).OrGlobalValue().OrDefault(8f);
+
         public static readonly IValueConverter BorderSliceConverter = PercentConverter.Or(NumberConverter);
 
         public static readonly IValueConverter ImageBorderWidthConverter =
