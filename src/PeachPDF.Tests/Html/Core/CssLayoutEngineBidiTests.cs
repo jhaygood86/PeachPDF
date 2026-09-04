@@ -267,6 +267,34 @@ namespace PeachPDF.Tests.Html.Core
                 $"expected the plaintext span's own content to be detected as RTL and reordered; שלום.Left={shalom.Left}, עולם.Left={olam.Left}");
         }
 
+        [Fact]
+        public async Task GeneratedContent_OnBeforeBox_ParticipatesInBidiResolution()
+        {
+            // Issue #551: CssContentEngine.ApplyContent sets Text directly on a ::before/::after
+            // pseudo-element's own generated-content box, rather than on a further anonymous child
+            // text box the way ordinary DOM text always is - and (per DomParser.CorrectTextBoxes)
+            // does so only *after* CssBidiParagraphResolver.AssignBidiLevels's own whole-tree walk has
+            // already completed (the box exists by then, empty, from selector-match time, but its
+            // `content` isn't resolved onto it until CorrectTextBoxes reaches it). Without a bidi pass
+            // re-run once the box's own text actually exists, ParseToWords falls back to a uniform
+            // Direction-derived level and fully reverses/mirrors even plain Latin text and digits,
+            // which UAX#9 (I1/I2) says must stay left-to-right inside RTL content.
+            var html = LayoutHarness.Wrap("""
+                <style>p::before { content: "abc 123 "; }</style>
+                <p id="p" dir="rtl">שלום</p>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var p = LayoutHarness.FindById(root, "p");
+            Assert.NotNull(p);
+
+            var words = WordsOf(p!);
+            Assert.Contains(words, w => w.Text == "abc");
+            Assert.Contains(words, w => w.Text == "123");
+            Assert.DoesNotContain(words, w => w.Text == "cba");
+            Assert.DoesNotContain(words, w => w.Text == "321");
+        }
+
         private static List<CssRectWord> WordsOf(CssBox box) =>
             LayoutHarness.Descendants(box)
                 .SelectMany(b => b.Words.OfType<CssRectWord>())

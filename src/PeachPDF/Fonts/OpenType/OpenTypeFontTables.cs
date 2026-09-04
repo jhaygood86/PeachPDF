@@ -1255,4 +1255,64 @@ namespace PeachPDF.Fonts.OpenType
             }
         }
     }
+
+    /// <summary>Locator for the optional `GDEF` (Glyph Definition) table - mirrors
+    /// <see cref="GlyphSubstitutionTable"/>'s shape. Absent on many fonts, so unlike GSUB this is
+    /// constructed only when present (see <c>OpenTypeFontface.Read</c>'s `ContainsKey` guard).</summary>
+    internal class GlyphDefinitionTable : OpenTypeFontTable
+    {
+        public const string Tag = TableTagNames.GDEF;
+
+        public GlyphDefinitionTable(OpenTypeFontface fontData)
+            : base(fontData, Tag)
+        {
+            DirectoryEntry.Tag = TableTagNames.GDEF;
+            DirectoryEntry = fontData.TableDictionary[TableTagNames.GDEF];
+            Read();
+        }
+
+        public GdefTable? Table { get; private set; }
+
+        public void Read()
+        {
+            try
+            {
+                Table = new GdefTable(_fontData, DirectoryEntry.Offset);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+            }
+        }
+    }
+
+    /// <summary>Locator for the optional `GPOS` (Glyph Positioning) table - mirrors
+    /// <see cref="GlyphSubstitutionTable"/>'s shape. Absent on many fonts, so unlike GSUB this is
+    /// constructed only when present (see <c>OpenTypeFontface.Read</c>'s `ContainsKey` guard).</summary>
+    internal class GlyphPositioningTable : OpenTypeFontTable
+    {
+        public const string Tag = TableTagNames.GPOS;
+
+        public GlyphPositioningTable(OpenTypeFontface fontData)
+            : base(fontData, Tag)
+        {
+            DirectoryEntry.Tag = TableTagNames.GPOS;
+            DirectoryEntry = fontData.TableDictionary[TableTagNames.GPOS];
+            Read();
+        }
+
+        public GposTable? Table { get; private set; }
+
+        public void Read()
+        {
+            try
+            {
+                Table = new GposTable(_fontData, DirectoryEntry.Offset);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+            }
+        }
+    }
 }

@@ -2200,7 +2200,11 @@ namespace PeachPDF.Html.Core
                     if (childBox.Content.Contains("string("))
                     {
                         CssContentEngine.ApplyContent(childBox);
-                        // Re-parse words after content changes
+                        // Re-parse words after content changes - re-resolve bidi levels for the new
+                        // text first (see CssBidiParagraphResolver.ResolveOwnTextAsParagraph's own
+                        // remarks), since childBox.BidiLevels would otherwise still reflect whatever
+                        // (possibly now-stale) content the last resolution saw.
+                        CssBidiParagraphResolver.ResolveOwnTextAsParagraph(childBox);
                         if (!string.IsNullOrEmpty(childBox.Text))
                         {
                             childBox.ParseToWords();
@@ -2368,6 +2372,7 @@ namespace PeachPDF.Html.Core
             if (box.HasPendingTargetPageContent)
             {
                 CssContentEngine.ApplyContent(box);
+                CssBidiParagraphResolver.ResolveOwnTextAsParagraph(box);
                 if (!string.IsNullOrEmpty(box.Text))
                 {
                     box.ParseToWords();

@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 {
     /// <summary>
     /// Coverage for <see cref="GsubTable"/> branches no bundled font exercises: Source Sans 3's real
-    /// GSUB data has no required feature, no Extension Substitution (type 9) lookup, no out-of-range
+    /// GSUB data has no required feature, no Extension Substitution (type 7) lookup, no out-of-range
     /// feature/lookup index, and always resolves its script on the first try. Rather than author a
     /// whole new font (COLR/CPAL's fixture-font precedent), this hand-crafts a minimal GSUB table's
     /// bytes directly and appends them past the end of a real, already-valid font file - SFNT table
@@ -26,8 +26,8 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     ///   1 "extr" -> lookup 1, an Extension Substitution wrapping a valid Type 4 subtable - AND an
     ///   *out-of-range* feature index in its regular feature list, to hit both branches from one
     ///   script), "cccc" (no DefaultLangSys at all).
-    /// - Lookups: 0 = plain Type 4 (glyph 10 + component 11 -> ligature 12); 1 = Type 9 wrapping a
-    ///   valid Type 4 (glyph 20 + component 21 -> ligature 22); 2 = Type 9 wrapping a *non-4* type
+    /// - Lookups: 0 = plain Type 4 (glyph 10 + component 11 -> ligature 12); 1 = Type 7 wrapping a
+    ///   valid Type 4 (glyph 20 + component 21 -> ligature 22); 2 = Type 7 wrapping a *non-4* type
     ///   (skipped, yields no subtables); 3 = an unsupported lookup type (1, single substitution);
     ///   4 = Type 4 whose subtable has an invalid substFormat (2).
     /// </summary>
@@ -160,10 +160,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             b.PatchU16(lookup0SubOffsetAt, lookup0SubStart - lookup0Start);
             WriteType4Subtable(b, firstGlyph: 10, componentGlyph: 11, ligatureGlyph: 12);
 
-            // Lookup 1: Type 9 (Extension) wrapping a valid Type 4.
+            // Lookup 1: Type 7 (Extension) wrapping a valid Type 4.
             int lookup1Start = b.Position;
             b.PatchU16(lookup1OffsetAt, lookup1Start - lookupListStart);
-            b.U16(9); b.U16(0); b.U16(1);
+            b.U16(7); b.U16(0); b.U16(1);
             int lookup1SubOffsetAt = b.PlaceholderU16();
             int lookup1SubStart = b.Position;
             b.PatchU16(lookup1SubOffsetAt, lookup1SubStart - lookup1Start);
@@ -175,10 +175,10 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             b.PatchU32(lookup1ExtOffsetAt, (uint)(lookup1TargetStart - lookup1SubStart));
             WriteType4Subtable(b, firstGlyph: 20, componentGlyph: 21, ligatureGlyph: 22);
 
-            // Lookup 2: Type 9 (Extension) wrapping a *non-4* type - must be skipped, not mis-applied.
+            // Lookup 2: Type 7 (Extension) wrapping a *non-4* type - must be skipped, not mis-applied.
             int lookup2Start = b.Position;
             b.PatchU16(lookup2OffsetAt, lookup2Start - lookupListStart);
-            b.U16(9); b.U16(0); b.U16(1);
+            b.U16(7); b.U16(0); b.U16(1);
             int lookup2SubOffsetAt = b.PlaceholderU16();
             int lookup2SubStart = b.Position;
             b.PatchU16(lookup2SubOffsetAt, lookup2SubStart - lookup2Start);

@@ -359,6 +359,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the resolved GSUB ligature features (CSS <c>font-variant-ligatures</c>) for this box's text.</summary>
         public LigatureFeatures ActualFontVariantLigatures => DerivedStyle.ActualFontVariantLigatures;
 
+        /// <summary>Gets the resolved CSS <c>font-kerning</c> value - false only for <c>none</c>.</summary>
+        public bool ActualFontKerning => DerivedStyle.ActualFontKerning;
+
         /// <summary>
         /// Gets the resolved CSS <c>font-variant-caps</c> feature - <see cref="FontVariantCapsFeature.None"/>
         /// when the value is <c>normal</c>, when it's a keyword the resolved font lacks full GSUB

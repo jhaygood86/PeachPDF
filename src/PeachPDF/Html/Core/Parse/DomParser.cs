@@ -1072,10 +1072,12 @@ namespace PeachPDF.Html.Core.Parse
             // other provisional digit-width estimate in this codebase.
             CssContentEngine.ApplyContent(callBox);
             callBox.ApplyNumber(1);
+            CssBidiParagraphResolver.ResolveOwnTextAsParagraph(callBox);
             if (!string.IsNullOrEmpty(callBox.Text)) callBox.ParseToWords();
 
             CssContentEngine.ApplyContent(markerBox);
             markerBox.ApplyNumber(1);
+            CssBidiParagraphResolver.ResolveOwnTextAsParagraph(markerBox);
             if (!string.IsNullOrEmpty(markerBox.Text)) markerBox.ParseToWords();
 
             htmlContainer.FootnoteCalls.Add(callBox);
@@ -1967,6 +1969,13 @@ namespace PeachPDF.Html.Core.Parse
                 var childBox = box.Boxes[i];
 
                 CssContentEngine.ApplyContent(childBox);
+
+                // CssBidiParagraphResolver.AssignBidiLevels's own whole-tree walk (CascadeApplyStyles's
+                // later, dedicated pass) runs before this method - childBox's generated content (a
+                // ::before/::after/::marker box) exists by then but is still textless, so that walk
+                // can't assign it real bidi levels. Now that ApplyContent just gave it real text,
+                // resolve it (see that method's own remarks) before ParseToWords runs on it below.
+                CssBidiParagraphResolver.ResolveOwnTextAsParagraph(childBox);
 
                 if (childBox is CssBoxMarker markerBox)
                 {

@@ -319,6 +319,13 @@ namespace PeachPDF.CSS
                 {Keywords.Ltr, DirectionMode.Ltr},
                 {Keywords.Rtl, DirectionMode.Rtl}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, FontKerningMode> FontKerningModes =
+            new Dictionary<string, FontKerningMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, FontKerningMode.Auto},
+                {Keywords.Normal, FontKerningMode.Normal},
+                {Keywords.None, FontKerningMode.None}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, AutoKeyword> AutoKeywords =
             new Dictionary<string, AutoKeyword>(StringComparer.OrdinalIgnoreCase)
             {

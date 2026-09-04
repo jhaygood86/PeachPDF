@@ -57,6 +57,25 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void Text_DirectionRtl_AstralCharacterAmongLatinText_StaysLogicalNoMisindexing()
+        {
+            // Issue #555: ApplyBidiReordering built its per-glyph level array by indexing a UTF-16
+            // string's BidiResolver.Resolve output (one entry per code unit) directly by glyph ordinal
+            // (one entry per Rune/FlattenRun glyph) - a surrogate pair (any codepoint above U+FFFF,
+            // like the grinning-face emoji U+1F600 here) is 2 code units for 1 glyph, so everything
+            // from the first astral character onward read the wrong level, corrupting reordering and
+            // (before the fix) risking an out-of-range read entirely for text ending in/after one.
+            // Plain Latin text plus a neutral emoji, both surrounded by strong-L characters, resolves
+            // to one uniform logical (unreversed) run under UAX#9 N1/N2 even inside an RTL paragraph -
+            // mirroring Text_DirectionRtl_PlainLatinContent_StaysLogical's own reasoning.
+            const string text = "AB\U0001F600CD";
+            var g = Render($"""<text x="10" y="50" font-size="20" direction="rtl">{text}</text>""");
+
+            var draw = Assert.Single(g.DrawStringCalls);
+            Assert.Equal(text, draw.Text);
+        }
+
+        [Fact]
         public void Text_DirectionRtl_MirrorsParentheses()
         {
             const string hebrew = "שלום (עולם)";

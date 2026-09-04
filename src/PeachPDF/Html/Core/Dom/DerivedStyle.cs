@@ -843,14 +843,14 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// The resolved GSUB ligature features (see <see cref="LigatureFeatures"/>) for this box's
-        /// text, from the CSS <c>font-variant-ligatures</c> value. The common-ligatures axis (and
-        /// <c>none</c>) and the discretionary/historical axes all change shaping (real <c>dlig</c>/
-        /// <c>hlig</c> GSUB substitution, since both are Lookup Type 4 like common ligatures) -
-        /// <c>contextual</c> still parses but doesn't yet affect it (no <c>calt</c> lookup application,
-        /// which needs GSUB chaining-context lookup types this codebase doesn't read). Per the CSS
-        /// Fonts spec, required ligatures (<c>rlig</c>) are never affected by this property - not even
-        /// by <c>none</c> - so the common-ligatures-off case still resolves to
-        /// <see cref="LigatureFeatures.Required"/> rather than <see cref="LigatureFeatures.None"/>.
+        /// text, from the CSS <c>font-variant-ligatures</c> value - the common-ligatures,
+        /// discretionary, historical, and contextual (<c>calt</c>, via GSUB Lookup Types 5/6) axes
+        /// all independently change shaping. Per the CSS Fonts spec, required ligatures (<c>rlig</c>)
+        /// are never affected by this property - not even by <c>none</c> - so the
+        /// common-ligatures-off case still resolves to <see cref="LigatureFeatures.Required"/> rather
+        /// than <see cref="LigatureFeatures.None"/>; likewise <c>no-common-ligatures</c> alone (without
+        /// a separate <c>no-contextual</c>) leaves contextual alternates on, and vice versa - each
+        /// axis is resolved independently rather than as one all-or-nothing default.
         /// </summary>
         public LigatureFeatures ActualFontVariantLigatures
         {
@@ -866,7 +866,9 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 var tokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                var resolved = tokens.Contains(Keywords.NoCommonLigatures) ? LigatureFeatures.Required : LigatureFeatures.Default;
+                var resolved = LigatureFeatures.Required;
+                if (!tokens.Contains(Keywords.NoCommonLigatures)) resolved |= LigatureFeatures.Common;
+                if (!tokens.Contains(Keywords.NoContextual)) resolved |= LigatureFeatures.Contextual;
                 if (tokens.Contains(Keywords.DiscretionaryLigatures)) resolved |= LigatureFeatures.Discretionary;
                 if (tokens.Contains(Keywords.HistoricalLigatures)) resolved |= LigatureFeatures.Historical;
 
@@ -1024,6 +1026,29 @@ namespace PeachPDF.Html.Core.Dom
             return entries;
         }
 
+        private bool? _actualFontKerning;
+
+        /// <summary>
+        /// The resolved CSS <c>font-kerning</c> value: <c>false</c> only for <c>none</c> - both
+        /// <c>auto</c> (the initial value) and <c>normal</c> mean "apply GPOS kerning when the font
+        /// and script support it," matching real browser behavior for <c>auto</c>'s UA-discretion
+        /// wording. Gates GPOS Lookup Types 1/2 (<c>kern</c>) only - mark-to-base/mark-to-mark
+        /// positioning (<c>mark</c>/<c>mkmk</c>) is requested unconditionally by
+        /// <see cref="PeachPDF.Text.GposPositioner"/>, since combining-mark attachment isn't a
+        /// stylistic opt-out the way kerning is.
+        /// </summary>
+        public bool ActualFontKerning
+        {
+            get
+            {
+                if (_actualFontKerning is { } cached) return cached;
+
+                var resolved = Style.Font.FontKerning != Keywords.None;
+                _actualFontKerning = resolved;
+                return resolved;
+            }
+        }
+
         private TextShapingFeatures? _actualTextShapingFeatures;
 
         /// <summary>
@@ -1043,7 +1068,9 @@ namespace PeachPDF.Html.Core.Dom
                     ActualFontVariantCaps,
                     ActualFontVariantNumeric,
                     ActualFontVariantEastAsian,
-                    ActualFontFeatureSettings);
+                    ActualFontFeatureSettings,
+                    Kerning: ActualFontKerning,
+                    Language: Owner.Language);
 
                 _actualTextShapingFeatures = resolved;
                 return resolved;

@@ -49,6 +49,41 @@ namespace PeachPDF.Html.Core.Dom
             }
         }
 
+        /// <summary>
+        /// Resolves <paramref name="box"/>'s own directly-set <see cref="CssBox.Text"/> (a
+        /// <c>::before</c>/<c>::after</c>/<c>::marker</c>/footnote-call/footnote-marker
+        /// generated-content box - see <c>CssContentEngine.ApplyContent</c>) as its own standalone
+        /// paragraph. Called from every site that runs <c>ApplyContent</c> against a pseudo-element
+        /// box outside <see cref="AssignBidiLevels"/>'s own whole-tree walk - both the first time
+        /// (<c>DomParser.CorrectTextBoxes</c>: that walk runs *before* <c>CorrectTextBoxes</c> per its
+        /// own ordering requirement, so it only ever sees the box empty and never assigns it a
+        /// <see cref="CssBox.BidiLevels"/> array, leaving <see cref="CssBox.ParseToWords"/> to fall
+        /// back to a uniform, wrongly-reversing level - issue #551) and on every later re-application
+        /// (<c>HtmlContainerInt.ReapplyPseudoElementContent</c>/<c>ResolveTargetPageContent</c>, e.g. a
+        /// <c>target-counter(_, page)</c> or <c>string()</c> value changing across a convergence
+        /// round - re-resolving is required there since the box's text, and so its correct
+        /// <see cref="CssBox.BidiLevels"/> array length, can genuinely change between rounds).
+        /// Treating the generated text as its own independent paragraph (using this box's own resolved
+        /// <c>Direction</c>/<c>UnicodeBidi</c>) is not a perfect substitute for weaving it into a
+        /// shared paragraph with its element siblings - it won't cross-reorder against adjacent inline
+        /// sibling text the way ordinary DOM text does - but it correctly keeps Latin/digit content
+        /// left-to-right inside RTL generated content, the actual defect reported.
+        /// <para>
+        /// Only acts on an actual pseudo-element box (<see cref="CssBox.IsPseudoElement"/>) -
+        /// <b>never</b> call this for an ordinary text box (one whose text was already present at
+        /// DOM-parse time, long before <see cref="AssignBidiLevels"/>'s own tree walk ran):
+        /// <see cref="AssignBidiLevels"/> already resolved every such box correctly (as part of a
+        /// real, possibly cross-element, shared paragraph, honoring isolate-override pushes from
+        /// ancestors like <c>&lt;bdo&gt;</c>), and re-resolving it here in isolation would discard
+        /// that context - a regression, not a fix.
+        /// </para>
+        /// </summary>
+        public static void ResolveOwnTextAsParagraph(CssBox box)
+        {
+            if (box.IsPseudoElement && box.Text is { Length: > 0 })
+                ResolveParagraph(box);
+        }
+
         private static bool EstablishesOwnParagraph(CssBox box) =>
             box.IsRoot || box.DerivedStyle.ActualDisplay != Keywords.Inline || box is CssBoxMarker;
 
@@ -60,6 +95,18 @@ namespace PeachPDF.Html.Core.Dom
             var text = new StringBuilder();
             var ranges = new List<(CssBox Box, int Start, int Length)>();
             var overrides = new List<BidiIsolateOverride>();
+
+            // A paragraph root can carry its own Text directly (a ::before/::after pseudo-element's
+            // generated-content box, set by CssContentEngine.ApplyContent) rather than only through a
+            // child text box - Flatten below only ever walks box.Boxes, so a childless paragraph root
+            // with its own Text would otherwise never get appended anywhere and never receive a
+            // BidiLevels array, falling back to ParseToWords' uniform-Direction-derived level and
+            // getting fully reversed/mirrored even when it's plain Latin text (issue #551).
+            if (paragraphRoot.Text is { Length: > 0 } rootText)
+            {
+                ranges.Add((paragraphRoot, 0, rootText.Length));
+                text.Append(rootText);
+            }
 
             Flatten(paragraphRoot, text, ranges, overrides);
 

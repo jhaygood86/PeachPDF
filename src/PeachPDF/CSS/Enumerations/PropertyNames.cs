@@ -119,6 +119,7 @@ namespace PeachPDF.CSS
         public static readonly string Float = "float";
         public static readonly string FontFamily = "font-family";
         public static readonly string FontFeatureSettings = "font-feature-settings";
+        public static readonly string FontKerning = "font-kerning";
         public static readonly string FontPalette = "font-palette";
         public static readonly string FontSize = "font-size";
         public static readonly string FontSizeAdjust = "font-size-adjust";
