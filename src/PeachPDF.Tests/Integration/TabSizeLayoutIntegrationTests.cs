@@ -233,6 +233,77 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain(words, w => w.Text != null && w.Text.Contains('\t'));
         }
 
+        // ─── Issue #885: tab stops measured from the *true* rendered line start, not a per-box
+        // approximation - CssLayoutEngine.FlowBox's per-word placement loop re-derives the exact
+        // expansion once each word's real position on its real line is known ────────────────
+
+        [Fact]
+        public async Task Pre_TabAfterSiblingInlineBox_AccountsForSiblingsWidth()
+        {
+            // "ab" and "cd" live in two different CssBox.Words lists (the <pre>'s own text, and its
+            // nested <span>'s text) - the tab word's own box has no way to know "ab" precedes it on the
+            // same rendered line except via CssLayoutEngine.FlowBox's shared, cross-box coordinates.
+            // If the tab were still measured from column 0 of its own box (the pre-fix approximation),
+            // its expansion would differ from the single-box control below despite identical rendered
+            // text and an identical true starting column.
+            var (splitRoot, _) = await BuildAndLayout(Wrap("<pre id='p'>ab<span>cd</span>\tX</pre>"));
+            var pSplit = FindById(splitRoot, "p")!;
+            var splitTabWord = pSplit.LineBoxes[0].Words.First(w => w.Text != null && w.Text != "\n" && w.Text.All(char.IsWhiteSpace));
+
+            var (singleRoot, _) = await BuildAndLayout(Wrap("<pre id='p'>abcd\tX</pre>"));
+            var pSingle = FindById(singleRoot, "p")!;
+            var singleTabWord = pSingle.LineBoxes[0].Words.First(w => w.Text != null && w.Text != "\n" && w.Text.All(char.IsWhiteSpace));
+
+            Assert.Equal(singleTabWord.Text!.Length, splitTabWord.Text!.Length);
+        }
+
+        [Fact]
+        public async Task PreWrap_TabAfterSoftWrap_ResetsColumnAtTheWrappedLine()
+        {
+            // Forces a soft wrap (no explicit \n) between "aaaaaaaaaa" and "bbbbbbbbbb bbbbbbbbbb\tX" by
+            // narrowing the line - under the pre-fix per-box approximation (which only reset its column
+            // tracker at an explicit "\n"), the tab's column would still include "aaaaaaaaaa"'s width even
+            // though it never renders on the same line as the tab. The control lays the wrapped line's own
+            // content out alone, with no earlier content to wrongly accumulate.
+            var wrappedHtml = Wrap("<pre id='p' style='white-space:pre-wrap; width:60pt'>aaaaaaaaaa bbbbbbbbbb\tX</pre>");
+            var (wrappedRoot, _) = await BuildAndLayout(wrappedHtml);
+            var pWrapped = FindById(wrappedRoot, "p")!;
+            Assert.True(pWrapped.LineBoxes.Count > 1, "expected the narrow width to force a soft wrap");
+            // Whichever line "bbbbbbbbbb" and the tab actually landed on - the point under test is that
+            // the tab's own expansion matches the control below, not which line index it's on (the tab
+            // itself never triggers a wrap, being space-only, but may push a later word to wrap away).
+            // The ordinary inter-word space between "aaaaaaaaaa" and "bbbbbbbbbb" is also whitespace-only
+            // and precedes the tab-expanded word in document order - Last() picks the tab word itself.
+            var wrappedTabWord = pWrapped.LineBoxes.SelectMany(lb => lb.Words)
+                .Last(w => w.Text != null && w.Text != "\n" && w.Text.All(char.IsWhiteSpace));
+
+            var controlHtml = Wrap("<pre id='p' style='white-space:pre-wrap; width:60pt'>bbbbbbbbbb\tX</pre>");
+            var (controlRoot, _) = await BuildAndLayout(controlHtml);
+            var pControl = FindById(controlRoot, "p")!;
+            var controlTabWord = pControl.LineBoxes.SelectMany(lb => lb.Words)
+                .Last(w => w.Text != null && w.Text != "\n" && w.Text.All(char.IsWhiteSpace));
+
+            Assert.Equal(controlTabWord.Text!.Length, wrappedTabWord.Text!.Length);
+        }
+
+        [Fact]
+        public async Task Pre_LetterSpacing_AddsToFlowBoxCorrectedTabWidth()
+        {
+            // CssLayoutEngine.FlowBox's own tab-correction adds letter-spacing for the expanded glyphs
+            // exactly like CssBox.MeasureWordsSize's provisional pass does - a positive letter-spacing
+            // must still widen the final, FlowBox-corrected tab word, not just the provisional one.
+            var (plainRoot, _) = await BuildAndLayout(Wrap("<pre id='p'>a\tb</pre>"));
+            var pPlain = FindById(plainRoot, "p")!;
+            var plainTabWord = pPlain.LineBoxes[0].Words.First(w => w.Text != null && w.Text != "\n" && w.Text.All(char.IsWhiteSpace));
+
+            var (spacedRoot, _) = await BuildAndLayout(Wrap("<pre id='p' style='letter-spacing:3px'>a\tb</pre>"));
+            var pSpaced = FindById(spacedRoot, "p")!;
+            var spacedTabWord = pSpaced.LineBoxes[0].Words.First(w => w.Text != null && w.Text != "\n" && w.Text.All(char.IsWhiteSpace));
+
+            Assert.True(spacedTabWord.Width > plainTabWord.Width,
+                $"expected positive letter-spacing to widen the tab word (got {spacedTabWord.Width} vs {plainTabWord.Width})");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

@@ -2670,6 +2670,38 @@ namespace PeachPDF.Html.Core.Dom
                             coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + appliedLeftSpacing;
                         }
 
+                        // A preserved tab (CssRect.OriginalText - stable even though CssBox.MeasureWordsSize/
+                        // ApplyFirstLineStyleOverride already overwrote Text/FirstLineText with an earlier,
+                        // approximated expansion - see CssBox.ExpandTabs' own doc comment) gets its final,
+                        // exact expansion right here, using this word's real distance from its real rendered
+                        // line's own start (coordinates.CurrentX - coordinates.Line.ContentLeft) - a value
+                        // shared across every sibling box already placed on this line, and correctly reset
+                        // by the wrap/new-line handling above whether the break was explicit or a soft wrap.
+                        // This is the one point in layout where that real position is actually known, which
+                        // is exactly what closes the two gaps the per-box approximation couldn't (issue #885).
+                        if (word is CssRectWord tabRectWord && tabRectWord.OriginalText is { } rawTabText &&
+                            rawTabText.IndexOf('\t') >= 0)
+                        {
+                            var tabStyleSource = word.FirstLineStyle ?? word.OwnerBox;
+                            var tabFont = CssBox.ResolveWordFont(word, tabStyleSource);
+                            var trueLineX = coordinates.CurrentX - coordinates.Line.ContentLeft;
+                            var expandedTabText = CssBox.ExpandTabs(rawTabText, g, tabFont,
+                                tabStyleSource.ActualTextShapingFeatures, tabStyleSource.ResolvedTabSize, ref trueLineX);
+
+                            if (word.FirstLineStyle != null)
+                                word.FirstLineText = expandedTabText;
+                            else
+                                tabRectWord.ReplaceText(expandedTabText);
+
+                            var expandedWidth = g.MeasureString(expandedTabText, tabFont, tabStyleSource.ActualTextShapingFeatures).Width;
+                            if (tabStyleSource.ActualLetterSpacing != 0)
+                            {
+                                expandedWidth += g.CountShapedGlyphs(expandedTabText, tabFont, tabStyleSource.ActualTextShapingFeatures) *
+                                                 tabStyleSource.ActualLetterSpacing;
+                            }
+                            word.Width = expandedWidth;
+                        }
+
                         word.Left = coordinates.CurrentX;
                         word.Top = coordinates.CurrentY;
 
