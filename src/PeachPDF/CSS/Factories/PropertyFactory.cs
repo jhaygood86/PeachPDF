@@ -419,6 +419,7 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.PrinceBookmarkTarget, () => new PrinceBookmarkTargetProperty());
             AddLonghand(PropertyNames.BookmarkTarget, () => new BookmarkTargetAliasProperty());
             AddLonghand(PropertyNames.TableLayout, () => new TableLayoutProperty());
+            AddLonghand(PropertyNames.TabSize, () => new TabSizeProperty());
             AddLonghand(PropertyNames.TextAlign, () => new TextAlignProperty());
             AddLonghand(PropertyNames.TextAlignLast, () => new TextAlignLastProperty());
             AddLonghand(PropertyNames.TextAnchor, () => new TextAnchorProperty());

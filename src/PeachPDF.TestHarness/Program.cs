@@ -5347,6 +5347,54 @@ await SaveShowcaseAsync("letter_word_spacing", "Typography & Text", "Letter & Wo
     "letter-spacing and word-spacing adjustments across text runs.",
     spacingHtml, pdfConfig);
 
+// --- tab-size showcase (CSS Text 4 §3.6) ---
+
+const string TabSizeCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    .label { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 2px }
+    pre { font-family: "Courier New", monospace; font-size: 10pt; background: #f4f4f4; border: 1px solid #ccc; padding: 6px 8px; margin: 0 0 0.8em }
+    </style>
+    """;
+
+const string TabbedCode =
+    "function greet(name) {\n" +
+    "\tif (name) {\n" +
+    "\t\tconsole.log(\"Hello, \" + name);\n" +
+    "\t} else {\n" +
+    "\t\tconsole.log(\"Hello!\");\n" +
+    "\t}\n" +
+    "}";
+
+var tabSizeHtml = "<!DOCTYPE html><html><head>" + TabSizeCss + "</head><body>" +
+
+    "<h1>CSS Text 4 tab-size Test Page</h1>" +
+
+    "<h2>Default (tab-size: 8, initial value)</h2>" +
+    "<div class=\"label\">Each tab indents to the next multiple of 8 space widths</div>" +
+    $"<pre>{TabbedCode}</pre>" +
+
+    "<h2>tab-size: 4</h2>" +
+    "<div class=\"label\">A narrower numeric tab stop - same source, tighter indentation</div>" +
+    $"<pre style=\"tab-size:4\">{TabbedCode}</pre>" +
+
+    "<h2>tab-size: 2</h2>" +
+    "<div class=\"label\">An even narrower numeric tab stop</div>" +
+    $"<pre style=\"tab-size:2\">{TabbedCode}</pre>" +
+
+    "<h2>tab-size: 40px (a &lt;length&gt;, not a multiplier)</h2>" +
+    "<div class=\"label\">An explicit length fixes the stop width regardless of the font's own space width</div>" +
+    $"<pre style=\"tab-size:40px\">{TabbedCode}</pre>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("tab_size", "Typography & Text", "tab-size",
+    "tab-size (CSS Text 4): controlling how far a preserved tab character indents inside white-space:pre content.",
+    tabSizeHtml, pdfConfig);
+
 // --- ::first-letter showcase ---
 
 const string FirstLetterCss = """

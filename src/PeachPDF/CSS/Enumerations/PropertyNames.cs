@@ -279,6 +279,7 @@ namespace PeachPDF.CSS
         public static readonly string StrokeWidth = "stroke-width";
         public static readonly string StringSet = "string-set";
         public static readonly string TableLayout = "table-layout";
+        public static readonly string TabSize = "tab-size";
         public static readonly string TextAlign = "text-align";
         public static readonly string TextAlignLast = "text-align-last";
         public static readonly string TextAnchor = "text-anchor";

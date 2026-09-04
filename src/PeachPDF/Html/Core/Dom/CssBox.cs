@@ -5728,6 +5728,88 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Upper bound on how many literal space characters a single tab can expand to in
+        /// <see cref="ExpandTabs"/> - see that method's doc comment for why this cap exists.
+        /// </summary>
+        private const int MaxTabExpansionSpaces = 1000;
+
+        /// <summary>
+        /// Expands the tab characters (U+0009) in a preserved-whitespace word into the literal space
+        /// characters needed to reach <c>tab-size</c>'s next tab stop (CSS Text 4 §3.6), given
+        /// <paramref name="lineX"/> - the horizontal offset, in points, already accumulated since the
+        /// most recent explicit line break in this box's own <see cref="Words"/>. <see cref="AppendWordsFromText"/>
+        /// only ever produces a run of pure whitespace (spaces and/or tabs, never mixed with other
+        /// characters) as a single word under <c>white-space: pre</c>/<c>pre-wrap</c>, and both call
+        /// sites only reach this method once they've already confirmed <paramref name="text"/> contains
+        /// at least one tab, so every character here is either a space to pass through or a tab to
+        /// expand.
+        /// <para>
+        /// This approximates the spec's "block container's own content edge" as "the most recent explicit
+        /// line break in this box's own word list" - correct for <c>pre</c> (which never soft-wraps) and
+        /// for the common leading-tab-indent case, but a tab preceded by other inline content in a
+        /// *sibling* box on the same rendered line (this box's own <see cref="Words"/> only ever holds
+        /// text that's directly its own), or one that lands after a soft wrap under <c>pre-wrap</c>, can
+        /// be a stop or two off - see <c>.claude/accepted-gaps/tab-size-line-start-approximation.md</c>.
+        /// </para>
+        /// The shift to the target stop is expressed as N literal space characters (rounded from the
+        /// shift over one space's own measured width) rather than leaving the raw tab character in the
+        /// returned text - <see cref="Paint.FragmentPainter"/> draws <see cref="CssRect.Text"/> through
+        /// the font's ordinary glyph path, which has no defined glyph for U+0009, so this is also what
+        /// lets tab-size need zero changes to painting. <c>tab-size: 0</c> is spec-legal (the grammar is
+        /// <c>&lt;number [0,∞]&gt;</c>) and, combined with a font whose space glyph has no measurable
+        /// advance, or a non-finite <paramref name="tabSize"/> (an unresolvable relative-unit
+        /// <c>calc()</c>), collapses every tab in <paramref name="text"/> to zero width rather than
+        /// dividing by zero below. The number of spaces one tab can expand to is capped at
+        /// <see cref="MaxTabExpansionSpaces"/> - PeachPDF renders arbitrary, often untrusted HTML, so an
+        /// unbounded <c>tab-size</c> declaration (e.g. <c>tab-size: 1e9</c>) must not be able to turn a
+        /// single tab character into a multi-gigabyte string allocation.
+        /// </summary>
+        private static string ExpandTabs(string text, RGraphics g, RFont font, TextShapingFeatures shapingFeatures,
+            (bool IsNumber, double Value) tabSize, ref double lineX)
+        {
+            var spaceWidth = font.GetWhitespaceWidth(g);
+            var tabStopWidth = tabSize.IsNumber ? tabSize.Value * spaceWidth : tabSize.Value;
+            var tabStopIsUsable = double.IsFinite(tabStopWidth) && tabStopWidth > 0 &&
+                                  double.IsFinite(spaceWidth) && spaceWidth > 0;
+
+            var sb = new StringBuilder(text.Length);
+            var runStart = 0;
+
+            for (var i = 0; i < text.Length; i++)
+            {
+                if (text[i] != '\t') continue;
+
+                // Flush the plain-text run since the last tab (or the start) as a single MeasureString
+                // call - measuring one character at a time here would defeat font shaping (kerning,
+                // ligatures, contextual substitution) for that run, so lineX could drift from the width
+                // FragmentPainter actually draws it at.
+                if (i > runStart)
+                {
+                    var run = text.Substring(runStart, i - runStart);
+                    sb.Append(run);
+                    lineX += g.MeasureString(run, font, shapingFeatures).Width;
+                }
+                runStart = i + 1;
+
+                if (!tabStopIsUsable) continue;
+
+                var nextStop = (Math.Floor(lineX / tabStopWidth) + 1) * tabStopWidth;
+                var spaceCount = Math.Clamp((int)Math.Round((nextStop - lineX) / spaceWidth), 1, MaxTabExpansionSpaces);
+                sb.Append(' ', spaceCount);
+                lineX += spaceCount * spaceWidth;
+            }
+
+            if (runStart < text.Length)
+            {
+                var run = text[runStart..];
+                sb.Append(run);
+                lineX += g.MeasureString(run, font, shapingFeatures).Width;
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>
         /// Assigns words its width and height
         /// </summary>
         /// <param name="g"></param>
@@ -5771,6 +5853,9 @@ namespace PeachPDF.Html.Core.Dom
 
             if (Words.Count > 0)
             {
+                var lineX = 0d;
+                var tabSize = ResolvedTabSize;
+
                 foreach (var boxWord in Words)
                 {
                     // Already reset (Width/Height) by the unconditional pre-guard loop above, on every
@@ -5779,7 +5864,23 @@ namespace PeachPDF.Html.Core.Dom
                     if (boxWord is CssRectLeader) continue;
                     if (boxWord.IsImage) continue;
                     var font = ResolveWordFont(boxWord, this);
-                    boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(boxWord.Text!, font, ActualTextShapingFeatures).Width : 0;
+
+                    if (boxWord.Text == "\n")
+                    {
+                        boxWord.Width = 0;
+                        lineX = 0;
+                    }
+                    else if (boxWord is CssRectWord tabWord && tabWord.Text.IndexOf('\t') >= 0)
+                    {
+                        tabWord.ReplaceText(ExpandTabs(tabWord.Text, g, font, ActualTextShapingFeatures, tabSize, ref lineX));
+                        boxWord.Width = g.MeasureString(boxWord.Text!, font, ActualTextShapingFeatures).Width;
+                    }
+                    else
+                    {
+                        boxWord.Width = g.MeasureString(boxWord.Text!, font, ActualTextShapingFeatures).Width;
+                        lineX += boxWord.Width;
+                    }
+
                     // Letter-spacing adds space after every glyph shown including the last (N gaps for
                     // an N-glyph word) - matching both the PDF Tc operator's actual per-glyph behavior
                     // (PaintWords/RealizeFont) and CSS Text 3 §7.2, which only exempts the start/end of a
@@ -5814,6 +5915,9 @@ namespace PeachPDF.Html.Core.Dom
             firstLineStyle.MeasureWordSpacing(g);
             firstLineStyle.MeasureLetterSpacing();
 
+            var lineX = 0d;
+            var tabSize = firstLineStyle.ResolvedTabSize;
+
             foreach (var boxWord in Words)
             {
                 if (boxWord is CssRectLeader leaderWord)
@@ -5836,7 +5940,28 @@ namespace PeachPDF.Html.Core.Dom
                 var effectiveText = boxWord.FirstLineText ?? boxWord.Text;
 
                 var font = ResolveWordFont(boxWord, firstLineStyle);
-                boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font, firstLineStyle.ActualTextShapingFeatures).Width : 0;
+
+                if (effectiveText == "\n")
+                {
+                    boxWord.Width = 0;
+                    lineX = 0;
+                }
+                else if (effectiveText!.IndexOf('\t') >= 0)
+                {
+                    // A tab can only still be here because FirstLineText was just (re-)derived from
+                    // OriginalText above - MeasureWordsSize has already expanded every tab out of
+                    // boxWord.Text itself by the time this runs (see its own doc comment: this method is
+                    // always called right after that one-time pass), so the no-FirstLineText-override
+                    // case (effectiveText == boxWord.Text) can never reach here with a tab still in it.
+                    effectiveText = boxWord.FirstLineText = ExpandTabs(effectiveText, g, font, firstLineStyle.ActualTextShapingFeatures, tabSize, ref lineX);
+                    boxWord.Width = g.MeasureString(effectiveText, font, firstLineStyle.ActualTextShapingFeatures).Width;
+                }
+                else
+                {
+                    boxWord.Width = g.MeasureString(effectiveText!, font, firstLineStyle.ActualTextShapingFeatures).Width;
+                    lineX += boxWord.Width;
+                }
+
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-glyph word, not N-1,
                 // and the shaped glyph count rather than the character count.
                 if (effectiveText != "\n" && firstLineStyle.ActualLetterSpacing != 0)

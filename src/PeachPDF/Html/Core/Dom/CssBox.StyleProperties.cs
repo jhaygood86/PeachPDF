@@ -192,6 +192,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Measures the extra space added between each pair of adjacent characters (set <see cref="ActualLetterSpacing"/>).</summary>
         protected void MeasureLetterSpacing() => DerivedStyle.MeasureLetterSpacing();
 
+        /// <summary>Resolves <c>tab-size</c> - see <see cref="Dom.DerivedStyle.ResolvedTabSize"/>.</summary>
+        internal (bool IsNumber, double Value) ResolvedTabSize => DerivedStyle.ResolvedTabSize;
+
         #endregion
 
         #region Font

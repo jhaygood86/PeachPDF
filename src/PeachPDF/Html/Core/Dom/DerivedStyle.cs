@@ -703,6 +703,31 @@ namespace PeachPDF.Html.Core.Dom
                 : 0;
         }
 
+        /// <summary>
+        /// Resolves <c>tab-size</c>'s (<see href="https://www.w3.org/TR/css-text-4/#tab-size-property">CSS
+        /// Text 4 §3.6</see>) <c>&lt;number&gt; | &lt;length&gt;</c> grammar against <see cref="Owner"/>'s
+        /// own raw cascaded string. Unlike <c>line-height</c>'s bare-number grammar (which multiplies the
+        /// element's own font-size), a bare number here is a multiple of the *space glyph's* advance
+        /// width - only known once the preserved tab's actual font is resolved - so this stops short of a
+        /// final point value for that case: <c>IsNumber</c> true means <c>Value</c> is that raw
+        /// multiplier, for <see cref="CssBox.MeasureWordsSize"/> (and its first-line-style siblings) to
+        /// scale by the word's own measured space width; <c>IsNumber</c> false means <c>Value</c> is
+        /// already a resolved absolute tab-stop width in points. <see cref="Owner"/>'s
+        /// <see cref="CssBox.TabSize"/> is only ever set through the cascade's own customValidator
+        /// (css-properties.json's "tab-size" entry), which already re-checks this exact grammar, so
+        /// <see cref="CssValueParser.TryParseLengthOrUnitless"/> parsing it here is not re-validated.
+        /// </summary>
+        internal (bool IsNumber, double Value) ResolvedTabSize
+        {
+            get
+            {
+                CssValueParser.TryParseLengthOrUnitless(Owner.TabSize, out var parsed);
+                return parsed.IsUnitless
+                    ? (true, parsed.Unitless!.Value)
+                    : (false, CssValueParser.ParseLength(parsed.LengthOrCalc!.Value, 0, Owner));
+            }
+        }
+
         /// <summary>The length/percentage component of <c>text-indent</c>, resolved to layout units. Which
         /// line(s) it applies to depends on <see cref="ActualTextIndentHanging"/>/
         /// <see cref="ActualTextIndentEachLine"/> - see <c>CssLayoutEngine.GetLineTextIndent</c>.</summary>
