@@ -1,0 +1,18 @@
+NotoSansGujaratiSubset.ttf is a subset (the consonants KA/TA/RA/SSA/HA/GA, VIRAMA, the vowel sign
+I, a post-base vowel sign AA, NUKTA, ANUSVARA, VISARGA, the independent vowel A, common
+punctuation, digits, space, and the basic Latin alphabet) of the "Noto Sans Gujarati" font,
+Copyright 2022 The Noto Project Authors (https://github.com/notofonts/NotoSansGujarati), licensed
+under the SIL Open Font License, Version 1.1 (OFL-1.1). Unlike Noto Sans Devanagari/Bengali/Tamil,
+upstream Noto Sans Gujarati ships only as static weight instances (no variable font) - this
+subsets the Regular instance directly.
+
+The font is bundled solely as a showcase/test asset so Gujarati's Universal Shaping Engine (USE)
+syllable reordering (issue #533, Phase 5c) - GSUB nukt/ccmp/locl/akhn/rphf/half/rkrf/cjct/abvs/
+blws/pres/psts substitution and the resulting glyph reorder (repha repositioning, pre-base matra
+movement) - renders with real, readable Gujarati glyphs and can be verified by rasterizing actual
+output, rather than only unit-tested against synthetic byte-blob GSUB tables. Only the glyphs the
+showcase/tests actually use are retained, with every GSUB/GPOS layout feature kept intact; the
+glyph outlines themselves are unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Sans+Gujarati

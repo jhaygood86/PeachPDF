@@ -8277,6 +8277,78 @@ await SaveShowcaseAsync("devanagari_use", "Text &amp; Fonts", "Devanagari Univer
     "matra movement) - ported from HarfBuzz's own Universal Shaping Engine.",
     devanagariUseHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// Universal Shaping Engine (USE) syllable reordering extended to Bengali, Gujarati, and Tamil
+// (issue #533, Phase 5c) - the same classify/scan/reorder pipeline as devanagari_use above, now
+// also covering Bengali's own two USE categories Devanagari never reaches (GB - Consonant
+// Placeholder, U+0980 BENGALI ANJI; FMAbv - Syllable Modifier, U+09FE BENGALI SANDHI MARK) and a
+// real Noto Sans Gujarati font whose abvs feature needed a GSUB fix (nested contextual-lookup
+// recursion) to pick the correct pre-base-matra glyph variant - see this feature's own
+// recent-fixes entry.
+var notoBengaliB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansBengaliSubset.ttf")));
+var notoGujaratiB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansGujaratiSubset.ttf")));
+var notoTamilB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansTamilSubset.ttf")));
+var bengaliGujaratiTamilUseHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Bengali'; src: url('data:font/truetype;base64,{notoBengaliB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Gujarati'; src: url('data:font/truetype;base64,{notoGujaratiB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Tamil'; src: url('data:font/truetype;base64,{notoTamilB64}') format('truetype'); }}" +
+    "body { font-family: 'SS3', sans-serif; margin: 0; color: #222; font-size: 11pt }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 12pt; margin: 1.2em 0 0.2em }" +
+    "h3 { font-size: 10.5pt; margin: 0.8em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.8em; color: #555 }" +
+    "p.sample { margin: 0.3em 0; padding: 0.4em 0.7em; background: #f5f6f8; border-left: 3px solid #4a8fd9; font-size: 20pt }" +
+    "p.sample.bengali { font-family: 'Bengali', sans-serif }" +
+    "p.sample.gujarati { font-family: 'Gujarati', sans-serif; border-left-color: #7fbf4a }" +
+    "p.sample.tamil { font-family: 'Tamil', sans-serif; border-left-color: #d94a8f }" +
+    "table.forms { border-collapse: collapse; margin: 0.3em 0; font-size: 9pt }" +
+    "table.forms th, table.forms td { border: 1px solid #ccc; padding: 0.3em 0.6em; text-align: center }" +
+    "table.forms td.bengali { font-family: 'Bengali', sans-serif; font-size: 16pt }" +
+    "</style></head><body>" +
+    "<h1>Universal Shaping Engine (USE): Bengali, Gujarati &amp; Tamil</h1>" +
+    "<p class=\"intro\">The same Indic_Syllabic_Category/Indic_Positional_Category-driven classify/" +
+    "scan/reorder pipeline as Devanagari, extended to three more Brahmic scripts.</p>" +
+
+    "<h2>Bengali</h2>" +
+    "<h3>Pre-base vowel sign reordering and conjunct formation</h3>" +
+    "<p class=\"intro\">কি (\"ki\") reorders its pre-base matra before the base; ক্ষি (\"kṣi\") fuses " +
+    "the KA+VIRAMA+SSA conjunct via the font's own <code>cjct</code> feature before reordering the " +
+    "following matra:</p>" +
+    "<p class=\"sample bengali\">কি &nbsp; ক্ষি</p>" +
+    "<h3>Bengali's own USE categories: Consonant Placeholder (GB) and Syllable Modifier (FMAbv)</h3>" +
+    "<p class=\"intro\">ঀ (BENGALI ANJI, U+0980) is a Consonant Placeholder - grouped with an " +
+    "ordinary base consonant as a syllable start; a base consonant followed by the Sandhi Mark " +
+    "(U+09FE, a Syllable Modifier) stays in logical order, resolved to above-base position by its " +
+    "own GPOS mark anchoring - two categories no Devanagari codepoint ever reaches:</p>" +
+    "<table class=\"forms\">" +
+    "<tr><th>Consonant Placeholder (Anji) alone</th><th>Base + Sandhi Mark</th></tr>" +
+    "<tr><td class=\"bengali\">ঀ</td><td class=\"bengali\">ক৾</td></tr>" +
+    "</table>" +
+
+    "<h2>Gujarati</h2>" +
+    "<h3>Pre-base vowel sign reordering, conjunct and reph formation</h3>" +
+    "<p class=\"intro\">કિ (\"ki\") reorders its pre-base matra; ક્ષિ (\"kṣi\") fuses the conjunct; " +
+    "ર્કિ (\"rki\") forms a reph via <code>rphf</code> and fuses it with the repositioned matra into " +
+    "one combined presentation glyph via <code>pres</code> - the same mechanism as Devanagari's own " +
+    "reph+matra fusion, verified against this real font too:</p>" +
+    "<p class=\"sample gujarati\">કિ &nbsp; ક્ષિ &nbsp; ર્કિ</p>" +
+
+    "<h2>Tamil</h2>" +
+    "<h3>Pre-base vowel sign reordering and a Grantha-loanword conjunct</h3>" +
+    "<p class=\"intro\">கெ (\"ke\") reorders its pre-base matra; க்ஷெ (\"kṣe\") fuses KA+VIRAMA+SSA " +
+    "(SSA is a Grantha-origin letter Tamil borrows for Sanskrit loanwords) into one conjunct glyph " +
+    "via the font's own <code>cjct</code>/<code>half</code> features, exactly like a native Indic " +
+    "conjunct:</p>" +
+    "<p class=\"sample tamil\">கெ &nbsp; க்ஷெ</p>" +
+    "</body></html>";
+await SaveShowcaseAsync("bengali_gujarati_tamil_use", "Text &amp; Fonts", "USE: Bengali, Gujarati &amp; Tamil",
+    "Universal Shaping Engine syllable reordering extended to three more Brahmic scripts - pre-base " +
+    "matra movement, conjunct (cjct)/reph (rphf) formation, and Bengali's own two additional USE " +
+    "categories (Consonant Placeholder, Syllable Modifier) no Devanagari codepoint reaches.",
+    bengaliGujaratiTamilUseHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // visibility: collapse on table rows/row-groups/columns/column-groups (CSS 2.1 §17.6.1): unlike
 // visibility: hidden, which only skips painting and still reserves the element's layout space, a
 // collapsed table row/column is removed from the table's geometry entirely - the rows/columns after

@@ -43,24 +43,37 @@ namespace PeachPDF.Text.Shaping.Use
     /// plan/precedent for why a hand-written scanner replaces the state machine specifically, while
     /// the category/reorder logic elsewhere is still a direct algorithmic port).
     ///
-    /// <b>Grammar</b> (HarfBuzz's real grammar, reduced to exactly the alternatives a Devanagari-only
-    /// <see cref="UseCategory"/> stream can ever exercise - see <see cref="UseCategoryClassifier"/>'s
-    /// own remarks on scope):
+    /// <b>Grammar</b> (HarfBuzz's real grammar, reduced to exactly the alternatives a
+    /// Devanagari/Bengali/Gujarati/Tamil-only <see cref="UseCategory"/> stream can ever exercise - see
+    /// <see cref="UseCategoryClassifier"/>'s own remarks on scope):
     /// <code>
     /// consonant_modifiers = CMAbv* CMBlw* ( (H B) CMAbv* CMBlw* )*
     /// dependent_vowels    = VPre* VAbv* VBlw* VPst* | H
     /// vowel_modifiers     = VMPre* VMAbv* VMBlw* VMPst*
-    /// tail                = consonant_modifiers dependent_vowels vowel_modifiers
-    /// standard_cluster    = B tail
-    /// broken_cluster      = tail                       (tail's own first token, no leading B)
+    /// final_modifiers     = FMAbv*
+    /// tail                = consonant_modifiers dependent_vowels vowel_modifiers final_modifiers
+    /// standard_cluster    = (B | GB) tail
+    /// broken_cluster      = tail                       (tail's own first token, no leading B/GB)
     /// symbol_cluster      = O tail?
     /// </code>
-    /// Every real Devanagari syllable type HarfBuzz's own grammar defines beyond these three
-    /// (<c>virama_terminated_cluster</c>, <c>sakot_terminated_cluster</c>,
+    /// <c>final_modifiers</c> and <see cref="UseCategory.GB"/> as an alternate cluster-start token are
+    /// this scanner's own Bengali-driven extension of the grammar (HarfBuzz's real
+    /// <c>complex_syllable_start = (R | CS)? (B | GB)</c> and <c>final_modifiers = FMAbv* FMBlw* |
+    /// FMPst?</c>, reduced to the FM-family member this classifier's scope actually produces - see
+    /// <see cref="UseCategory.FMAbv"/>'s own remarks). A GB-led syllable is scanned identically to a
+    /// B-led one (<see cref="UseSyllableType.StandardCluster"/>, fully reorderable) - real HarfBuzz's
+    /// own grammar also lists <c>GB</c> as an alternative <c>symbol_cluster</c> leading token, but since
+    /// its Ragel machine always prefers the longest match and <c>standard_cluster</c>'s own grammar is
+    /// a strict superset of <c>symbol_cluster</c>'s whenever a GB glyph is followed by tail content,
+    /// treating GB exactly like B here reproduces the identical practical outcome without needing a
+    /// backtracking scanner.
+    ///
+    /// Every real Devanagari/Bengali/Gujarati/Tamil syllable type HarfBuzz's own grammar defines beyond
+    /// these three (<c>virama_terminated_cluster</c>, <c>sakot_terminated_cluster</c>,
     /// <c>number_joiner_terminated_cluster</c>, <c>numeral_cluster</c>, <c>hieroglyph_cluster</c>)
     /// structurally requires a <see cref="UseCategory"/> member (<c>IS</c>/<c>RK</c>/<c>Sk</c>/
-    /// <c>N</c>/<c>HN</c>/hieroglyph categories) this classifier never produces for a Devanagari
-    /// codepoint, so they can never match - omitted rather than dead code.
+    /// <c>N</c>/<c>HN</c>/hieroglyph categories) this classifier never produces for a codepoint in any
+    /// of these four scripts, so they can never match - omitted rather than dead code.
     ///
     /// Unlike HarfBuzz's own Ragel machine (which tries every alternative at each position and keeps
     /// the longest match, since some scripts' grammars are genuinely ambiguous at the first token),
@@ -116,7 +129,7 @@ namespace PeachPDF.Text.Shaping.Use
                     continue;
                 }
 
-                if (cat == UseCategory.B)
+                if (cat == UseCategory.B || cat == UseCategory.GB)
                 {
                     i = ConsumeTail(categories, i + 1);
                     i = ConsumeTrailingZwnj(categories, i);
@@ -155,16 +168,18 @@ namespace PeachPDF.Text.Shaping.Use
             UseCategory.CMAbv or UseCategory.CMBlw or
             UseCategory.VPre or UseCategory.VAbv or UseCategory.VBlw or UseCategory.VPst or
             UseCategory.VMPre or UseCategory.VMAbv or UseCategory.VMBlw or UseCategory.VMPst or
+            UseCategory.FMAbv or
             UseCategory.H;
 
-        /// <summary><c>tail = consonant_modifiers dependent_vowels vowel_modifiers</c> - may consume
-        /// zero tokens (every component can be empty), which is exactly what lets
+        /// <summary><c>tail = consonant_modifiers dependent_vowels vowel_modifiers final_modifiers</c> -
+        /// may consume zero tokens (every component can be empty), which is exactly what lets
         /// <see cref="UseSyllableType.SymbolCluster"/>'s own trailing <c>tail?</c> be optional.</summary>
         private static int ConsumeTail(IReadOnlyList<UseCategory> categories, int i)
         {
             i = ConsumeConsonantModifiers(categories, i);
             i = ConsumeDependentVowels(categories, i);
             i = ConsumeVowelModifiers(categories, i);
+            i = ConsumeFinalModifiers(categories, i);
             return i;
         }
 
@@ -212,6 +227,13 @@ namespace PeachPDF.Text.Shaping.Use
             i = ConsumeWhile(categories, i, UseCategory.VMPst);
             return i;
         }
+
+        /// <summary>HarfBuzz's own <c>final_modifiers = FMAbv* FMBlw* | FMPst?</c>, reduced to
+        /// <c>FMAbv*</c> - the only FM-family member reachable for Devanagari/Bengali/Gujarati/Tamil
+        /// (Bengali's own Sandhi Mark, U+09FE - see <see cref="UseCategory.FMAbv"/>'s own
+        /// remarks).</summary>
+        private static int ConsumeFinalModifiers(IReadOnlyList<UseCategory> categories, int i) =>
+            ConsumeWhile(categories, i, UseCategory.FMAbv);
 
         private static int ConsumeTrailingZwnj(IReadOnlyList<UseCategory> categories, int i) =>
             i < categories.Count && categories[i] == UseCategory.ZWNJ ? i + 1 : i;

@@ -84,6 +84,39 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Devanagari => Path.Combine(AppContext.BaseDirectory, "NotoSansDevanagariSubset.ttf");
 
         /// <summary>
+        /// A subset of "Noto Sans Bengali" (see NotoSansBengaliSubset.LICENSE.txt): the same
+        /// consonant/matra/nukta/vowel-modifier set as <see cref="Devanagari"/>, plus Bengali's own two
+        /// USE categories Devanagari never reaches: BENGALI ANJI (U+0980, Consonant Placeholder -
+        /// <c>UseCategory.GB</c>) and BENGALI SANDHI MARK (U+09FE, Syllable Modifier -
+        /// <c>UseCategory.FMAbv</c>) - a real font proving Bengali's Universal Shaping Engine syllable
+        /// reordering (issue #533, Phase 5c) renders correctly, including the two categories this
+        /// script needed beyond Devanagari's own reachable set.
+        /// </summary>
+        internal static string Bengali => Path.Combine(AppContext.BaseDirectory, "NotoSansBengaliSubset.ttf");
+
+        /// <summary>
+        /// A subset of "Noto Sans Gujarati" (see NotoSansGujaratiSubset.LICENSE.txt): the same
+        /// consonant/matra/nukta/vowel-modifier set as <see cref="Devanagari"/> - Gujarati needs no new
+        /// <c>UseCategory</c>/classifier/scanner code beyond what Devanagari already exercises
+        /// (verified by enumerating every codepoint in the Gujarati block against the real UCD data -
+        /// see this feature's own recent-fixes entry), so this font is what actually proves the
+        /// existing pipeline shapes a second script correctly (issue #533, Phase 5c).
+        /// </summary>
+        internal static string Gujarati => Path.Combine(AppContext.BaseDirectory, "NotoSansGujaratiSubset.ttf");
+
+        /// <summary>
+        /// A subset of "Noto Sans Tamil" (see NotoSansTamilSubset.LICENSE.txt): KA/TA/RA/SSA/HA (SSA/HA
+        /// are Grantha-origin letters Tamil borrows for Sanskrit loanwords, kept to exercise a real
+        /// conjunct ligature), VIRAMA (pulli), a pre-base matra (vowel sign E), a post-base matra
+        /// (vowel sign AA), ANUSVARA, AAYTHAM (Tamil's own Modifying_Letter - USE category O, unlike
+        /// the other three scripts' combining-mark Visarga), an independent vowel (A) - Tamil needs no
+        /// new <c>UseCategory</c>/classifier/scanner code beyond what Devanagari already exercises
+        /// (verified the same way as <see cref="Gujarati"/>), so this font is what actually proves the
+        /// existing pipeline shapes a third script correctly (issue #533, Phase 5c).
+        /// </summary>
+        internal static string Tamil => Path.Combine(AppContext.BaseDirectory, "NotoSansTamilSubset.ttf");
+
+        /// <summary>
         /// A subset of "Noto Sans JP" (see NotoSansJPSubset.LICENSE.txt): a handful of CJK ideographs
         /// plus the full basic-Latin alphabet/digits/punctuation, all in one face - a real font covering
         /// both scripts <see cref="Ttf"/> (Source Sans 3, Latin-only) does not, so tests can embed this

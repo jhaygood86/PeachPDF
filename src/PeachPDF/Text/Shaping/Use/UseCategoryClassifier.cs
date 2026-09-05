@@ -22,32 +22,38 @@ namespace PeachPDF.Text.Shaping.Use
     /// (<see cref="CharUnicodeInfo.GetUnicodeCategory(int)"/> - no separate UCD-derived
     /// General_Category table is needed, since the BCL already ships one).
     ///
-    /// <b>Scope: only the predicate subset a Devanagari (U+0900-U+097F) codepoint can ever satisfy is
-    /// ported</b> - HarfBuzz's real classifier has ~20 `is_*` predicates covering every USE-driven
-    /// script (Hieroglyphs, Tibetan's Sakot, Javanese/Sundanese/Batak's medial consonants, scripts
-    /// with a static Repha codepoint, etc.); none of those extra categories are reachable from any
-    /// codepoint the Devanagari block's own <c>Indic_Syllabic_Category</c> data actually assigns (see
-    /// <c>.claude/recent-fixes</c>'s own entry for the research this was verified against). A
-    /// codepoint whose real UISC value would need one of the omitted predicates (e.g. a Tibetan
-    /// Sakot, U+0F19 - <see cref="IndicSyllabicCategory"/>'s own <c>InvisibleStacker</c> without also
-    /// being U+1A60) falls through to <see cref="UseCategory.O"/> here rather than its true category
-    /// - a deliberate, documented v1 simplification (see
+    /// <b>Scope: only the predicate subset a Devanagari (U+0900-U+097F), Bengali (U+0980-U+09FF),
+    /// Gujarati (U+0A80-U+0AFF), or Tamil (U+0B80-U+0BFF) codepoint can ever satisfy is ported</b> -
+    /// HarfBuzz's real classifier has ~20 `is_*` predicates covering every USE-driven script
+    /// (Hieroglyphs, Tibetan's Sakot, Javanese/Sundanese/Batak's medial consonants, scripts with a
+    /// static Repha codepoint, etc.); none of those extra categories are reachable from any codepoint
+    /// these four blocks' own `Indic_Syllabic_Category` data actually assigns (verified by enumerating
+    /// every codepoint in all four blocks against the real UCD data, not assumed - see
+    /// `.claude/recent-fixes`'s own entry for the research this was verified against). Of the three
+    /// scripts added alongside Devanagari, only Bengali needs a category Devanagari's own reachable set
+    /// didn't already carry (<see cref="UseCategory.GB"/> for its Consonant Placeholder, U+0980;
+    /// <see cref="UseCategory.FMAbv"/> for its one Syllable Modifier, U+09FE) - Gujarati and Tamil
+    /// produce no codepoint needing a category beyond what Devanagari's own classifier already
+    /// resolves. A codepoint whose real UISC value would need one of the omitted predicates (e.g. a
+    /// Tibetan Sakot, U+0F19 - <see cref="IndicSyllabicCategory"/>'s own <c>InvisibleStacker</c>
+    /// without also being U+1A60) falls through to <see cref="UseCategory.O"/> here rather than its
+    /// true category - a deliberate, documented v1 simplification (see
     /// <c>.claude/accepted-gaps/no-text-shaping.md</c>): this classifier is only ever invoked for a
-    /// word already resolved to the <c>"deva"</c> OpenType script tag (see <c>GsubShaper</c>'s own
-    /// USE-stage), so a genuinely foreign codepoint reaching it at all is already an edge case, and treating it as
-    /// an inert "other" character (its own single-glyph syllable, never reordered) degrades safely
-    /// rather than guessing wrong.
+    /// word already resolved to one of the four scripts' own OpenType script tags (see
+    /// <c>GsubShaper</c>'s own USE-stage), so a genuinely foreign codepoint reaching it at all is
+    /// already an edge case, and treating it as an inert "other" character (its own single-glyph
+    /// syllable, never reordered) degrades safely rather than guessing wrong.
     ///
-    /// Also omitted: the `AJT` (Arabic Joining Type) term in HarfBuzz's own `is_BASE` - Devanagari
-    /// codepoints have no `ArabicShaping.txt`/`DerivedJoiningType.txt` entry at all, so that clause
-    /// never fires for anything this classifier is ever asked about; and the `UDI`
+    /// Also omitted: the `AJT` (Arabic Joining Type) term in HarfBuzz's own `is_BASE` - none of these
+    /// four scripts' own codepoints have an `ArabicShaping.txt`/`DerivedJoiningType.txt` entry at all,
+    /// so that clause never fires for anything this classifier is ever asked about; and the `UDI`
     /// (Default_Ignorable_Code_Point) term in `is_CGJ`'s second clause - ZWJ/ZWNJ (the only
-    /// default-ignorable codepoints that actually matter for Devanagari-adjacent text) are each
-    /// already given their own explicit `Indic_Syllabic_Category` value (`Joiner`/`Non_Joiner`), so
-    /// UDI is only needed to additionally catch a bare Combining Grapheme Joiner (U+034F) or a
-    /// variation selector immediately after Devanagari text - both real but rare enough in practice
-    /// to accept as a narrow, documented gap rather than adding a third UCD-derived
-    /// (`DerivedCoreProperties.txt`) table for it.
+    /// default-ignorable codepoints that actually matter for text in these scripts) are each already
+    /// given their own explicit `Indic_Syllabic_Category` value (`Joiner`/`Non_Joiner`), so UDI is only
+    /// needed to additionally catch a bare Combining Grapheme Joiner (U+034F) or a variation selector
+    /// immediately after such text - both real but rare enough in practice to accept as a narrow,
+    /// documented gap rather than adding a third UCD-derived (`DerivedCoreProperties.txt`) table for
+    /// it.
     /// </summary>
     internal static class UseCategoryClassifier
     {
@@ -57,16 +63,30 @@ namespace PeachPDF.Text.Shaping.Use
             IndicPositionalCategory uipc = IndicPositionalCategoryTable.Of(codepoint);
             UnicodeCategory ugc = CharUnicodeInfo.GetUnicodeCategory(codepoint);
 
-            // is_BASE (gen-use-table.py), minus its AJT clause (see this class's own remarks).
+            // is_BASE (gen-use-table.py), minus its AJT clause (see this class's own remarks). Bindu
+            // is listed here (rather than only in is_VOWEL_MOD's own Bindu clause below) because
+            // HarfBuzz's real predicate includes it in this Lo-gated list too - unreachable for
+            // Devanagari (no Devanagari Bindu codepoint is General_Category=Lo) but real for Bengali's
+            // U+09FC BENGALI LETTER VEDIC ANUSVARA, a full letter rather than a combining mark.
             if (uisc is IndicSyllabicCategory.Number or IndicSyllabicCategory.Consonant
                     or IndicSyllabicCategory.ConsonantHeadLetter or IndicSyllabicCategory.ToneLetter
                     or IndicSyllabicCategory.VowelIndependent)
                 return UseCategory.B;
             if (ugc == UnicodeCategory.OtherLetter &&
-                uisc is IndicSyllabicCategory.Avagraha or IndicSyllabicCategory.ConsonantFinal
-                    or IndicSyllabicCategory.ConsonantMedial or IndicSyllabicCategory.ConsonantSubjoined
-                    or IndicSyllabicCategory.Vowel or IndicSyllabicCategory.VowelDependent)
+                uisc is IndicSyllabicCategory.Avagraha or IndicSyllabicCategory.Bindu
+                    or IndicSyllabicCategory.ConsonantFinal or IndicSyllabicCategory.ConsonantMedial
+                    or IndicSyllabicCategory.ConsonantSubjoined or IndicSyllabicCategory.Vowel
+                    or IndicSyllabicCategory.VowelDependent)
                 return UseCategory.B;
+
+            // is_BASE_OTHER (Consonant_Placeholder) - Bengali's own U+0980 BENGALI ANJI. Real
+            // HarfBuzz's own predicate also covers a handful of unrelated punctuation codepoints
+            // (U+2015, U+2022, U+25FB-U+25FE) that fall outside all four in-scope scripts' own blocks -
+            // left resolving to UseCategory.O here (this classifier's existing catch-all for them, same
+            // as before Bengali support existed) rather than widened to cover codepoints no in-scope
+            // script actually needs, matching this classifier's own documented scope limitation.
+            if (uisc == IndicSyllabicCategory.ConsonantPlaceholder)
+                return UseCategory.GB;
 
             // is_CGJ, minus its UDI clause (see this class's own remarks) - covers ZWJ via its own
             // dedicated Joiner syllabic-category value.
@@ -77,6 +97,14 @@ namespace PeachPDF.Text.Shaping.Use
             if (uisc is IndicSyllabicCategory.Nukta or IndicSyllabicCategory.GeminationMark
                     or IndicSyllabicCategory.ConsonantKiller)
                 return ResolveModifierPosition(uipc, UseCategory.CMAbv, UseCategory.CMBlw);
+
+            // is_CONS_FINAL_MOD (Syllable_Modifier) - reachable only via Bengali's own Sandhi Mark
+            // (U+09FE), whose Indic_Positional_Category is Top, resolving (per HarfBuzz's own
+            // use_positions['FM'] = {'Abv': [Top], 'Blw': [Bottom], 'Pst': [Not_Applicable]} mapping)
+            // to FMAbv - the only FM-family member this classifier's scope needs (see
+            // UseCategory.FMAbv's own remarks on why FMBlw/FMPst are omitted).
+            if (uisc == IndicSyllabicCategory.SyllableModifier)
+                return UseCategory.FMAbv;
 
             // is_HALANT - Virama, except U+0DCA (Sinhala's HALANT_OR_VOWEL_MODIFIER split-off,
             // unreachable for a Devanagari codepoint but kept for fidelity to the ported predicate).

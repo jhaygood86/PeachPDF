@@ -149,30 +149,39 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The Unicode <c>Script</c> property values <see cref="UseCategoryClassifier"/> is scoped to
+        /// (see its own remarks) - a run resolving to one of these is the only case
+        /// <see cref="ResolveScriptsAndJoining"/> ever classifies/allocates USE categories for.
+        /// </summary>
+        private static readonly HashSet<string> UseShapedScripts = ["Devanagari", "Bengali", "Gujarati", "Tamil"];
+
+        /// <summary>
         /// Resolves <paramref name="paragraphText"/>'s per-character Unicode <c>Script</c> (already
         /// run-resolved against surrounding text, see <see cref="ScriptRunResolver"/>), Arabic-family
-        /// <see cref="ArabicJoiningForm"/>, and (when the paragraph contains any Devanagari text)
-        /// per-character <see cref="UseCategory"/>, all indexed by UTF-16 offset (matching
-        /// <see cref="BidiResolver.Resolve"/>'s own <c>Levels</c> array) rather than by codepoint/Rune -
-        /// <see cref="ScriptTable"/>/<see cref="ArabicShapingTable"/>/<see cref="ArabicJoiningShaper"/>/
-        /// <see cref="UseCategoryClassifier"/> all operate per-codepoint, so a codepoint's resolved
-        /// value is duplicated across both UTF-16 units of a surrogate pair here, the same "one value
-        /// per source character, computed once" convention <see cref="CssBox.CharScripts"/>/
-        /// <see cref="CssBox.JoiningForms"/>/<see cref="CssBox.UseCategories"/> share with
-        /// <see cref="CssBox.BidiLevels"/>. <see cref="ArabicJoiningShaper.Resolve"/> runs
-        /// unconditionally over the whole paragraph regardless of script - a codepoint outside every
-        /// Arabic-family joining block already resolves to <see cref="ArabicJoiningType.U"/>
-        /// (Non-Joining) in <see cref="ArabicShapingTable"/>, so this is a correct no-op for ordinary
-        /// text, not a wasted computation guarded by a check that would cost nearly as much itself.
+        /// <see cref="ArabicJoiningForm"/>, and (when the paragraph contains any text in one of
+        /// <see cref="UseShapedScripts"/>) per-character <see cref="UseCategory"/>, all indexed by
+        /// UTF-16 offset (matching <see cref="BidiResolver.Resolve"/>'s own <c>Levels</c> array) rather
+        /// than by codepoint/Rune - <see cref="ScriptTable"/>/<see cref="ArabicShapingTable"/>/
+        /// <see cref="ArabicJoiningShaper"/>/<see cref="UseCategoryClassifier"/> all operate
+        /// per-codepoint, so a codepoint's resolved value is duplicated across both UTF-16 units of a
+        /// surrogate pair here, the same "one value per source character, computed once" convention
+        /// <see cref="CssBox.CharScripts"/>/<see cref="CssBox.JoiningForms"/>/
+        /// <see cref="CssBox.UseCategories"/> share with <see cref="CssBox.BidiLevels"/>.
+        /// <see cref="ArabicJoiningShaper.Resolve"/> runs unconditionally over the whole paragraph
+        /// regardless of script - a codepoint outside every Arabic-family joining block already
+        /// resolves to <see cref="ArabicJoiningType.U"/> (Non-Joining) in
+        /// <see cref="ArabicShapingTable"/>, so this is a correct no-op for ordinary text, not a wasted
+        /// computation guarded by a check that would cost nearly as much itself.
         /// <see cref="UseCategoryClassifier"/> is different: unlike <see cref="ArabicJoiningType.U"/>,
         /// <see cref="UseCategory.O"/> is a real, meaningfully-processed category (not an inert "skip
         /// this codepoint" sentinel), so running it unconditionally over every document would activate
-        /// syllable scanning/reordering for every word ever laid out, not just Devanagari ones - the
-        /// per-codepoint result is only classified (and the whole per-paragraph array only allocated at
-        /// all) when <paramref name="paragraphText"/> contains at least one Devanagari-scripted
-        /// codepoint; a non-Devanagari codepoint that happens to share a paragraph with Devanagari text
-        /// gets the inert <see cref="UseCategory.O"/> placeholder instead, exactly like a non-joining
-        /// script's codepoint already does in <see cref="ArabicJoiningForm"/>'s own None value.
+        /// syllable scanning/reordering for every word ever laid out, not just ones in
+        /// <see cref="UseShapedScripts"/> - the per-codepoint result is only classified (and the whole
+        /// per-paragraph array only allocated at all) when <paramref name="paragraphText"/> contains at
+        /// least one codepoint scripted to one of <see cref="UseShapedScripts"/>; a codepoint outside
+        /// all four that happens to share a paragraph with such text gets the inert
+        /// <see cref="UseCategory.O"/> placeholder instead, exactly like a non-joining script's
+        /// codepoint already does in <see cref="ArabicJoiningForm"/>'s own None value.
         /// </summary>
         private static (string[] Scripts, ArabicJoiningForm[] Forms, UseCategory[]? UseCategories) ResolveScriptsAndJoining(string paragraphText)
         {
@@ -199,11 +208,12 @@ namespace PeachPDF.Html.Core.Dom
             var joiningForms = ArabicJoiningShaper.Resolve(codepoints);
 
             // See this method's own remarks on why, unlike ArabicJoiningShaper, this only classifies
-            // (and only allocates at all) when the paragraph actually contains Devanagari text.
+            // (and only allocates at all) when the paragraph actually contains text in one of
+            // UseShapedScripts.
             UseCategory[]? useCategories = null;
             for (var c = 0; c < resolvedScripts.Count; c++)
             {
-                if (resolvedScripts[c] != "Devanagari")
+                if (!UseShapedScripts.Contains(resolvedScripts[c]))
                     continue;
                 useCategories ??= new UseCategory[codepoints.Count];
                 useCategories[c] = UseCategoryClassifier.Classify(codepoints[c]);

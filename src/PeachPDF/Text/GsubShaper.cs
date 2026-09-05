@@ -124,8 +124,9 @@ namespace PeachPDF.Text
     /// <summary>
     /// The combined set of GSUB/GPOS feature requests for one shaped run - ligatures, caps, numeric,
     /// east-asian, kerning, an explicit document language, an explicit OpenType script tag, per-character
-    /// Arabic-family joining forms, per-character Universal-Shaping-Engine categories (Devanagari), and
-    /// arbitrary explicit <c>font-feature-settings</c> tags all fold into one request so
+    /// Arabic-family joining forms, per-character Universal-Shaping-Engine categories (Devanagari/
+    /// Bengali/Gujarati/Tamil), and arbitrary explicit <c>font-feature-settings</c> tags all fold into
+    /// one request so
     /// <see cref="GsubShaper.Shape"/> can activate every requested lookup in a single pass, ordered by
     /// the font's own <c>LookupList</c> index, instead of several independently-ordered passes.
     /// <see cref="JoiningForms"/> and <see cref="UseCategories"/> are the exceptions to "single pass" -
@@ -621,19 +622,20 @@ namespace PeachPDF.Text
 
         /// <summary>
         /// Applies the Universal Shaping Engine's own pre-reorder GSUB stages, then reorders the
-        /// resulting glyphs - Devanagari's own use of HarfBuzz's <c>collect_features_use</c>/
-        /// <c>reorder_use</c> pipeline (ported per <see cref="UseCategoryClassifier"/>/
-        /// <see cref="UseSyllableScanner"/>/<see cref="UseReorderer"/>'s own remarks), reduced to the
-        /// stages a Devanagari-scoped port actually needs: default glyph pre-processing
-        /// (<c>locl</c>/<c>ccmp</c>/<c>nukt</c>/<c>akhn</c>), reph formation (<c>rphf</c>, tried once
-        /// at each syllable's own start - see <see cref="TryApplyRphf"/> for why this needs no general
-        /// OpenType-mask mechanism), the 7 "orthographic unit shaping" features (conjunct/half-form
-        /// formation), and finally the glyph reorder itself. The remaining two HarfBuzz stages -
-        /// <c>pref</c> (pre-base-reordering consonants) and the topographical
-        /// (<c>isol</c>/<c>init</c>/<c>medi</c>/<c>fina</c>) features - are both skipped: Devanagari
-        /// has no codepoint that classifies as a pre-base-reordering consonant at all (see
-        /// <see cref="UseCategoryClassifier"/>'s own remarks), and the topographical features exist
-        /// for scripts that share Arabic's own joining-form model, which Devanagari doesn't use. The
+        /// resulting glyphs - Devanagari/Bengali/Gujarati/Tamil's own use of HarfBuzz's
+        /// <c>collect_features_use</c>/<c>reorder_use</c> pipeline (ported per
+        /// <see cref="UseCategoryClassifier"/>/<see cref="UseSyllableScanner"/>/
+        /// <see cref="UseReorderer"/>'s own remarks), reduced to the stages this four-script-scoped port
+        /// actually needs: default glyph pre-processing (<c>locl</c>/<c>ccmp</c>/<c>nukt</c>/<c>akhn</c>),
+        /// reph formation (<c>rphf</c>, tried once at each syllable's own start - see
+        /// <see cref="TryApplyRphf"/> for why this needs no general OpenType-mask mechanism), the 7
+        /// "orthographic unit shaping" features (conjunct/half-form formation), and finally the glyph
+        /// reorder itself. The remaining two HarfBuzz stages - <c>pref</c> (pre-base-reordering
+        /// consonants) and the topographical (<c>isol</c>/<c>init</c>/<c>medi</c>/<c>fina</c>) features
+        /// - are both skipped: none of these four scripts has a codepoint that classifies as a
+        /// pre-base-reordering consonant at all (see <see cref="UseCategoryClassifier"/>'s own
+        /// remarks), and the topographical features exist for scripts that share Arabic's own
+        /// joining-form model, which none of these four use. The
         /// final "standard typographic presentation" group (<c>abvs</c>/<c>blws</c>/<c>haln</c>/
         /// <c>pres</c>/<c>psts</c>) runs afterward, folded into <see cref="Shape"/>'s own ordered
         /// general feature pass (see <see cref="GetActiveLookupIndices(GsubTable, TextShapingFeatures)"/>'s
@@ -1076,13 +1078,27 @@ namespace PeachPDF.Text
             int i = 0;
             while (i < glyphs.Count)
             {
-                int consumed = TryApplySequenceContextAt(gsub, subtables, glyphs, i, gdef, lookupFlag, markFilteringSet);
+                int consumed = TryApplySequenceContextAt(gsub, subtables, glyphs, i, gdef, lookupFlag, markFilteringSet, depth: 0);
                 i += consumed > 0 ? consumed : 1;
             }
         }
 
+        /// <summary>
+        /// Tries every subtable in <paramref name="subtables"/> (in lookup order) against
+        /// <paramref name="pos"/>, applying the first one that matches - the single implementation
+        /// shared by a lookup's own top-level per-position walk (<see cref="ApplySequenceContextLookup"/>,
+        /// always <paramref name="depth"/> 0) and a <c>SequenceLookupRecord</c> that targets another
+        /// contextual/chaining-context lookup (<see cref="ApplyNestedLookup"/>'s own case 5/6, one
+        /// <paramref name="depth"/> deeper) - real fonts commonly resolve a matra/consonant's final
+        /// presentation form through exactly this kind of lookup-referencing-another-contextual-lookup
+        /// chain (e.g. a font's own class-based `abvs` rule narrowing to a specific glyph variant only
+        /// after a second, independently-classed contextual lookup narrows further - see this
+        /// feature's own recent-fixes entry for a real Gujarati font that needs two levels of this to
+        /// pick the correct pre-base-matra glyph), which <see cref="ApplyMatchedLookups"/>'s own
+        /// <paramref name="depth"/> guard against runaway recursion already accounts for.
+        /// </summary>
         private static int TryApplySequenceContextAt(GsubTable gsub, IReadOnlyList<GsubSequenceContextSubtable> subtables,
-            List<ShapedGlyph> glyphs, int pos, GdefTable? gdef, ushort lookupFlag, CoverageTable? markFilteringSet)
+            List<ShapedGlyph> glyphs, int pos, GdefTable? gdef, ushort lookupFlag, CoverageTable? markFilteringSet, int depth)
         {
             foreach (GsubSequenceContextSubtable subtable in subtables)
             {
@@ -1090,7 +1106,7 @@ namespace PeachPDF.Text
                     (int[] inputIndices, GsubSequenceLookupRecord[] records))
                     continue;
 
-                int[] finalIndices = ApplyMatchedLookups(gsub, glyphs, inputIndices, records, depth: 0, gdef);
+                int[] finalIndices = ApplyMatchedLookups(gsub, glyphs, inputIndices, records, depth, gdef);
                 int lastIndex = finalIndices.Length > 0 ? finalIndices[^1] : pos;
                 return Math.Max(1, lastIndex - pos + 1);
             }
@@ -1300,12 +1316,13 @@ namespace PeachPDF.Text
         /// (not necessarily contiguous - a non-participating glyph, e.g. a mark, may sit between two
         /// matched input positions) - each record's <c>SequenceIndex</c> is resolved against the
         /// *current* real glyph-list index of that original input position, re-derived after every
-        /// earlier record's own application, since a nested Ligature/Multiple Substitution changes
-        /// the glyph count and shifts every later position. Returns the (possibly further-shifted)
-        /// real indices, so the caller can resume scanning immediately after the last one. Only
-        /// nested lookup types 1/2/3/4 are supported (matching real fonts' near-universal practice
-        /// for `calt`-style rules and this file's existing "unsupported type is silently skipped"
-        /// convention) - a nested contextual/chaining lookup is skipped, guarded further by
+        /// earlier record's own application, since a nested Ligature/Multiple Substitution (or a
+        /// nested contextual lookup that itself nests one) changes the glyph count and shifts every
+        /// later position. Returns the (possibly further-shifted) real indices, so the caller can
+        /// resume scanning immediately after the last one. Nested lookup types 1/2/3/4/5/6 are all
+        /// supported (see <see cref="ApplyNestedLookup"/>) - real fonts routinely resolve a matra's
+        /// final presentation form through a chain of contextual lookups each narrowing by a
+        /// differently-classed context (see that method's own remarks) - guarded by
         /// <paramref name="depth"/> against a pathological/adversarial font nesting indefinitely.
         /// </summary>
         private static int[] ApplyMatchedLookups(GsubTable gsub, List<ShapedGlyph> glyphs, int[] inputIndices,
@@ -1326,7 +1343,7 @@ namespace PeachPDF.Text
                     continue;
 
                 int countBefore = glyphs.Count;
-                ApplyNestedLookup(gsub, glyphs, realIndex, record.LookupListIndex, gdef);
+                ApplyNestedLookup(gsub, glyphs, realIndex, record.LookupListIndex, depth, gdef);
                 int delta = glyphs.Count - countBefore;
 
                 if (delta != 0)
@@ -1342,7 +1359,22 @@ namespace PeachPDF.Text
             return slotIndex;
         }
 
-        private static void ApplyNestedLookup(GsubTable gsub, List<ShapedGlyph> glyphs, int position, int lookupListIndex, GdefTable? gdef)
+        /// <summary>
+        /// Applies one <c>SequenceLookupRecord</c>'s own target lookup at the single matched
+        /// <paramref name="position"/> it names. Lookup types 1/2/3/4 (single/multiple/alternate/
+        /// ligature substitution) apply directly; types 5/6 (contextual/chaining-context
+        /// substitution) recurse into <see cref="TryApplySequenceContextAt"/> at that exact position
+        /// with <paramref name="depth"/> incremented - a real, spec-legal, and real-font-exercised
+        /// pattern: a font can resolve one glyph's final presentation form through a *chain* of
+        /// contextual lookups, each with its own independent <c>ClassDef</c> narrowing the same
+        /// coverage glyph by a progressively more specific context (found via a real Noto Sans
+        /// Gujarati font whose `abvs` feature needs exactly two such nested levels to pick a
+        /// pre-base matra's correct contextual glyph variant - see this feature's own recent-fixes
+        /// entry). Type 8 (reverse chaining) and an unresolved lookup type are not supported as a
+        /// nested target - left unmodified, matching this file's existing "unsupported type is
+        /// silently skipped" convention.
+        /// </summary>
+        private static void ApplyNestedLookup(GsubTable gsub, List<ShapedGlyph> glyphs, int position, int lookupListIndex, int depth, GdefTable? gdef)
         {
             switch (gsub.GetResolvedLookupType(lookupListIndex))
             {
@@ -1362,8 +1394,21 @@ namespace PeachPDF.Text
                     if (gsub.GetLigatureLookup(lookupListIndex) is { } lig)
                         ApplyLigatureAt(lig, glyphs, position, gdef);
                     break;
-                // 5, 6, 7-wrapping-5-or-6, 8, unresolved: a nested contextual/chaining lookup is not
-                // supported (see ApplyMatchedLookups' own doc comment) - left unmodified.
+                case 5:
+                    if (gsub.GetContextualLookup(lookupListIndex) is { } nestedContextual)
+                    {
+                        CoverageTable? mfs = nestedContextual.MarkFilteringSetIndex is { } m ? gdef?.GetMarkGlyphSet(m) : null;
+                        TryApplySequenceContextAt(gsub, nestedContextual.Subtables, glyphs, position, gdef, nestedContextual.LookupFlag, mfs, depth + 1);
+                    }
+                    break;
+                case 6:
+                    if (gsub.GetChainingContextLookup(lookupListIndex) is { } nestedChaining)
+                    {
+                        CoverageTable? mfs = nestedChaining.MarkFilteringSetIndex is { } m ? gdef?.GetMarkGlyphSet(m) : null;
+                        TryApplySequenceContextAt(gsub, nestedChaining.Subtables, glyphs, position, gdef, nestedChaining.LookupFlag, mfs, depth + 1);
+                    }
+                    break;
+                // 8, unresolved: not supported as a nested target - left unmodified.
             }
         }
     }

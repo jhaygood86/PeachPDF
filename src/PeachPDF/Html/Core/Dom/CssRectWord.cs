@@ -49,14 +49,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// This word's own resolved <see cref="UseCategory"/> per codepoint of <see cref="Text"/> (one
         /// entry per <see cref="System.Text.Rune"/>, matching <see cref="_logicalJoiningForms"/>'s own
-        /// indexing convention) - null for a word with no Devanagari codepoint in it at all (the
-        /// overwhelming common case - see <see cref="CssBox.UseCategories"/>, this word's own slice of
-        /// it). Set once at construction, never mutated. Unlike <see cref="_logicalJoiningForms"/>,
-        /// Devanagari is never reversed for display, so there is no analogous
-        /// <see cref="DisplayOrderReversed"/> concern for this field - <c>GsubShaper</c>'s own USE
-        /// stage still needs true logical order to resolve syllable/conjunct structure, but the
-        /// resulting glyph list is never reversed afterward the way an Arabic-family joining word's is
-        /// (only locally reordered within each syllable - see <c>PeachPDF.Text.Shaping.Use.UseReorderer</c>).
+        /// indexing convention) - null for a word with no codepoint in a USE-shaped script (Devanagari/
+        /// Bengali/Gujarati/Tamil) in it at all (the overwhelming common case - see
+        /// <see cref="CssBox.UseCategories"/>, this word's own slice of it). Set once at construction,
+        /// never mutated. Unlike <see cref="_logicalJoiningForms"/>, none of these four scripts are ever
+        /// reversed for display, so there is no analogous <see cref="DisplayOrderReversed"/> concern for
+        /// this field - <c>GsubShaper</c>'s own USE stage still needs true logical order to resolve
+        /// syllable/conjunct structure, but the resulting glyph list is never reversed afterward the way
+        /// an Arabic-family joining word's is (only locally reordered within each syllable - see
+        /// <c>PeachPDF.Text.Shaping.Use.UseReorderer</c>).
         /// </summary>
         private readonly UseCategory[]? _logicalUseCategories;
 
@@ -103,7 +104,8 @@ namespace PeachPDF.Html.Core.Dom
         internal ArabicJoiningForm[]? EffectiveJoiningForms => _logicalJoiningForms;
 
         /// <summary>This word's resolved USE categories (see <see cref="_logicalUseCategories"/>) -
-        /// null for a word with no Devanagari codepoint in it.</summary>
+        /// null for a word with no codepoint in a USE-shaped script (Devanagari/Bengali/Gujarati/Tamil)
+        /// in it.</summary>
         internal UseCategory[]? EffectiveUseCategories => _logicalUseCategories;
 
         /// <summary>

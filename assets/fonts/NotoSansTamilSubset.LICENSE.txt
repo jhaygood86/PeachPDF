@@ -1,0 +1,18 @@
+NotoSansTamilSubset.ttf is a subset (the consonants KA/TA/RA/SSA/HA - SSA and HA are Grantha-origin
+letters Tamil borrows for Sanskrit loanwords, kept to exercise a real conjunct ligature - VIRAMA
+(pulli), a pre-base vowel sign E, a post-base vowel sign AA, ANUSVARA, AAYTHAM, the independent
+vowel A, common punctuation, digits, space, and the basic Latin alphabet) of the "Noto Sans Tamil"
+font, Copyright 2022 The Noto Project Authors (https://github.com/notofonts/NotoSansTamil),
+licensed under the SIL Open Font License, Version 1.1 (OFL-1.1). Instantiated to a single static
+(Regular weight, normal width) instance from the upstream variable font before subsetting.
+
+The font is bundled solely as a showcase/test asset so Tamil's Universal Shaping Engine (USE)
+syllable reordering (issue #533, Phase 5c) - GSUB nukt/ccmp/locl/akhn/rphf/half/rkrf/cjct/abvs/
+blws/pres/psts substitution and the resulting glyph reorder (pre-base matra movement) - renders
+with real, readable Tamil glyphs and can be verified by rasterizing actual output, rather than
+only unit-tested against synthetic byte-blob GSUB tables. Only the glyphs the showcase/tests
+actually use are retained, with every GSUB/GPOS layout feature kept intact; the glyph outlines
+themselves are unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Sans+Tamil

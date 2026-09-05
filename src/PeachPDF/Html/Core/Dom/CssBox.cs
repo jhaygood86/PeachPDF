@@ -962,16 +962,19 @@ namespace PeachPDF.Html.Core.Dom
         /// One resolved <see cref="UseCategory"/> per character of <see cref="Text"/>, set alongside
         /// <see cref="BidiLevels"/>/<see cref="CharScripts"/>/<see cref="JoiningForms"/> by the same
         /// pass (see <see cref="UseCategoryClassifier"/>) - null (not an all-<see cref="UseCategory.O"/>
-        /// array) for a paragraph with no Devanagari text in it at all, unlike <see cref="JoiningForms"/>'s
-        /// own always-allocated convention: <see cref="UseCategory.O"/> is a real, actively-processed
-        /// category (not an inert "skip this codepoint" sentinel the way <see cref="ArabicJoiningForm.None"/>
-        /// is), so this array is only worth allocating when the *paragraph* actually contains Devanagari.
+        /// array) for a paragraph with no text in one of the USE-shaped scripts (Devanagari/Bengali/
+        /// Gujarati/Tamil - see <see cref="CssBidiParagraphResolver"/>'s own <c>UseShapedScripts</c>) at
+        /// all, unlike <see cref="JoiningForms"/>'s own always-allocated convention:
+        /// <see cref="UseCategory.O"/> is a real, actively-processed category (not an inert "skip this
+        /// codepoint" sentinel the way <see cref="ArabicJoiningForm.None"/> is), so this array is only
+        /// worth allocating when the *paragraph* actually contains text in one of those scripts.
         /// This allocation is paragraph-wide, not per-box: every box <see cref="CssBidiParagraphResolver.ResolveParagraph"/>
-        /// slices this from - including one whose own text has no Devanagari in it at all, if some
-        /// sibling/ancestor text in the same paragraph does - gets a non-null (but all-<see cref="UseCategory.O"/>)
-        /// slice. <c>ToRuneIndexedUseCategories</c> is what narrows this back down to "does *this specific
-        /// word* need USE shaping" before <see cref="ResolveWordShapingFeatures"/> ever sees it - never
-        /// read this field directly to decide whether to request USE shaping.
+        /// slices this from - including one whose own text has none of that script's text in it at all,
+        /// if some sibling/ancestor text in the same paragraph does - gets a non-null (but
+        /// all-<see cref="UseCategory.O"/>) slice. <c>ToRuneIndexedUseCategories</c> is what narrows
+        /// this back down to "does *this specific word* need USE shaping" before
+        /// <see cref="ResolveWordShapingFeatures"/> ever sees it - never read this field directly to
+        /// decide whether to request USE shaping.
         /// </summary>
         internal UseCategory[]? UseCategories { get; set; }
 
@@ -1532,16 +1535,17 @@ namespace PeachPDF.Html.Core.Dom
         /// its "every character in this span resolved to an inert placeholder" check (unlike a first
         /// version of this method, which reasoned - incorrectly - that skipping that check was safe
         /// here because <see cref="UseCategories"/> is only ever allocated when the *paragraph* contains
-        /// Devanagari; that allocation is paragraph-wide, but <see cref="CssBidiParagraphResolver.ResolveParagraph"/>
-        /// then slices and assigns it to *every* contributing box in that paragraph, including one whose
-        /// own text is pure Latin/Arabic/etc. - so without this check, an ordinary non-Devanagari word
-        /// sharing a paragraph with Devanagari text would get a spurious non-null, all-<see cref="UseCategory.O"/>
+        /// text in a USE-shaped script (Devanagari/Bengali/Gujarati/Tamil); that allocation is
+        /// paragraph-wide, but <see cref="CssBidiParagraphResolver.ResolveParagraph"/> then slices and
+        /// assigns it to *every* contributing box in that paragraph, including one whose own text is
+        /// pure Latin/Arabic/etc. - so without this check, an ordinary word in none of those scripts
+        /// sharing a paragraph with one that is would get a spurious non-null, all-<see cref="UseCategory.O"/>
         /// array, and <c>ResolveWordShapingFeatures</c> would request USE shaping for it purely because of
         /// unrelated content elsewhere in the same paragraph - found by an adversarial post-change review
         /// pass, not by any test that shipped with this feature's first version). Returns null when
-        /// <see cref="UseCategories"/> itself is null (no paragraph in this box contains Devanagari text
-        /// at all - the overwhelming common case) or when every character in this specific span resolved
-        /// to <see cref="UseCategory.O"/>.
+        /// <see cref="UseCategories"/> itself is null (no paragraph in this box contains text in a
+        /// USE-shaped script at all - the overwhelming common case) or when every character in this
+        /// specific span resolved to <see cref="UseCategory.O"/>.
         /// </summary>
         private UseCategory[]? ToRuneIndexedUseCategories(int textStart, string fragmentText)
         {

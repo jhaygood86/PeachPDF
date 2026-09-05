@@ -32,7 +32,18 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
     /// lookup 12); 12 = Type 5 format 1 (coverage {120}, rule: input=[121], seqLookupRecords=
     /// [(0, 11)]); 13 = Type 3 (glyph 130, alternates=[135, 136], nested target for lookup 14 - the
     /// nested dispatch always requests alternate index 0, i.e. 135); 14 = Type 5 format 1 (coverage
-    /// {130}, rule: input=[131], seqLookupRecords=[(0, 13)]).
+    /// {130}, rule: input=[131], seqLookupRecords=[(0, 13)]); 15 = Type 1 (glyph 150 -&gt; 155, the
+    /// innermost nested target); 16 = Type 5 format 1 (coverage {150}, rule: input=[151],
+    /// seqLookupRecords=[(0, 15)], the middle nested target); 17 = Type 5 format 1 (coverage {150},
+    /// rule: input=[151], seqLookupRecords=[(0, 16)] - a contextual lookup whose own nested target is
+    /// itself another contextual lookup (16), the real-font pattern (issue #533, Phase 5c's Gujarati
+    /// font) this file's own recent-fixes entry found and fixed - two levels of nested Type 5, not
+    /// just one); 18 = Type 1 (glyph 200 -&gt; 205, the innermost nested target); 19 = Type 6 format 1
+    /// (coverage {200}, rule: backtrack=[199], lookahead=[201], seqLookupRecords=[(0, 18)], the
+    /// middle nested target); 20 = Type 6 format 1 (coverage {200}, rule: backtrack=[199],
+    /// lookahead=[201], seqLookupRecords=[(0, 19)] - the chaining-context (Type 6) counterpart of
+    /// lookup 17's own Type-5-nested-in-Type-5 case, proving <c>ApplyNestedLookup</c>'s case 6
+    /// recurses exactly like its case 5).
     /// </summary>
     public class GsubMultipleAndContextualSyntheticTests
     {
@@ -59,7 +70,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             // ---- LookupList ----
             int lookupListStart = b.Position;
             b.PatchU16(lookupListOffsetAt, lookupListStart);
-            b.U16(15); // lookupCount
+            b.U16(21); // lookupCount
             int lookup0At = b.PlaceholderU16();
             int lookup1At = b.PlaceholderU16();
             int lookup2At = b.PlaceholderU16();
@@ -75,6 +86,12 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             int lookup12At = b.PlaceholderU16();
             int lookup13At = b.PlaceholderU16();
             int lookup14At = b.PlaceholderU16();
+            int lookup15At = b.PlaceholderU16();
+            int lookup16At = b.PlaceholderU16();
+            int lookup17At = b.PlaceholderU16();
+            int lookup18At = b.PlaceholderU16();
+            int lookup19At = b.PlaceholderU16();
+            int lookup20At = b.PlaceholderU16();
 
             // Lookup 0: Type 2, Multiple Substitution - glyph 10 -> [11, 12, 13].
             int lookup0Start = b.Position;
@@ -424,6 +441,151 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 b.U16(1); b.U16(1); b.U16(130);
             }
 
+            // Lookup 15: Type 1 format 1 - glyph 150 -> 155 (delta 5). Innermost nested target for
+            // lookup 16.
+            int lookup15Start = b.Position;
+            b.PatchU16(lookup15At, lookup15Start - lookupListStart);
+            b.U16(1); b.U16(0); b.U16(1);
+            int lookup15SubAt = b.PlaceholderU16();
+            int lookup15SubStart = b.Position;
+            b.PatchU16(lookup15SubAt, lookup15SubStart - lookup15Start);
+            WriteSingleSubFormat1(b, firstGlyph: 150, delta: 5);
+
+            // Lookup 16: Type 5 format 1 - coverage {150}; rule: input=[151], records=[(0,15)]. The
+            // middle nested target for lookup 17 - a contextual lookup that is itself another
+            // contextual lookup's own nested target.
+            int lookup16Start = b.Position;
+            b.PatchU16(lookup16At, lookup16Start - lookupListStart);
+            b.U16(5); b.U16(0); b.U16(1);
+            int lookup16SubAt = b.PlaceholderU16();
+            int lookup16SubStart = b.Position;
+            b.PatchU16(lookup16SubAt, lookup16SubStart - lookup16Start);
+            {
+                int subtableStart = b.Position;
+                b.U16(1); // format
+                int coverageOffsetAt = b.PlaceholderU16();
+                b.U16(1); // seqRuleSetCount
+                int ruleSetOffsetAt = b.PlaceholderU16();
+                int ruleSetStart = b.Position;
+                b.PatchU16(ruleSetOffsetAt, ruleSetStart - subtableStart);
+                b.U16(1); // seqRuleCount
+                int ruleOffsetAt = b.PlaceholderU16();
+                int ruleStart = b.Position;
+                b.PatchU16(ruleOffsetAt, ruleStart - ruleSetStart);
+                b.U16(2); // glyphCount (first glyph + 1 more)
+                b.U16(1); // seqLookupCount
+                b.U16(151); // inputSequence[0]
+                b.U16(0); b.U16(15); // seqLookupRecords[0]: sequenceIndex=0, lookupListIndex=15
+                int coverageStart = b.Position;
+                b.PatchU16(coverageOffsetAt, coverageStart - subtableStart);
+                b.U16(1); b.U16(1); b.U16(150);
+            }
+
+            // Lookup 17: Type 5 format 1 - coverage {150}; rule: input=[151], records=[(0,16)]. Its
+            // own nested target (16) is itself Type 5, not a plain single/multiple/alternate/ligature
+            // substitution - the real Gujarati-font pattern this file's own recent-fixes entry found
+            // and fixed (a class-based `abvs` rule narrowing to a specific matra glyph variant only
+            // after a second, independently-classed contextual lookup narrows further).
+            int lookup17Start = b.Position;
+            b.PatchU16(lookup17At, lookup17Start - lookupListStart);
+            b.U16(5); b.U16(0); b.U16(1);
+            int lookup17SubAt = b.PlaceholderU16();
+            int lookup17SubStart = b.Position;
+            b.PatchU16(lookup17SubAt, lookup17SubStart - lookup17Start);
+            {
+                int subtableStart = b.Position;
+                b.U16(1); // format
+                int coverageOffsetAt = b.PlaceholderU16();
+                b.U16(1); // seqRuleSetCount
+                int ruleSetOffsetAt = b.PlaceholderU16();
+                int ruleSetStart = b.Position;
+                b.PatchU16(ruleSetOffsetAt, ruleSetStart - subtableStart);
+                b.U16(1); // seqRuleCount
+                int ruleOffsetAt = b.PlaceholderU16();
+                int ruleStart = b.Position;
+                b.PatchU16(ruleOffsetAt, ruleStart - ruleSetStart);
+                b.U16(2); // glyphCount (first glyph + 1 more)
+                b.U16(1); // seqLookupCount
+                b.U16(151); // inputSequence[0]
+                b.U16(0); b.U16(16); // seqLookupRecords[0]: sequenceIndex=0, lookupListIndex=16
+                int coverageStart = b.Position;
+                b.PatchU16(coverageOffsetAt, coverageStart - subtableStart);
+                b.U16(1); b.U16(1); b.U16(150);
+            }
+
+            // Lookup 18: Type 1 format 1 - glyph 200 -> 205 (delta 5). Innermost nested target for
+            // lookup 19.
+            int lookup18Start = b.Position;
+            b.PatchU16(lookup18At, lookup18Start - lookupListStart);
+            b.U16(1); b.U16(0); b.U16(1);
+            int lookup18SubAt = b.PlaceholderU16();
+            int lookup18SubStart = b.Position;
+            b.PatchU16(lookup18SubAt, lookup18SubStart - lookup18Start);
+            WriteSingleSubFormat1(b, firstGlyph: 200, delta: 5);
+
+            // Lookup 19: Type 6 format 1 - coverage {200}; rule: backtrack=[199], lookahead=[201],
+            // records=[(0,18)]. The middle nested target for lookup 20 - a chaining-context lookup
+            // that is itself another chaining-context lookup's own nested target.
+            int lookup19Start = b.Position;
+            b.PatchU16(lookup19At, lookup19Start - lookupListStart);
+            b.U16(6); b.U16(0); b.U16(1);
+            int lookup19SubAt = b.PlaceholderU16();
+            int lookup19SubStart = b.Position;
+            b.PatchU16(lookup19SubAt, lookup19SubStart - lookup19Start);
+            {
+                int subtableStart = b.Position;
+                b.U16(1); // format
+                int coverageOffsetAt = b.PlaceholderU16();
+                b.U16(1); // chainedSeqRuleSetCount
+                int ruleSetOffsetAt = b.PlaceholderU16();
+                int ruleSetStart = b.Position;
+                b.PatchU16(ruleSetOffsetAt, ruleSetStart - subtableStart);
+                b.U16(1); // chainedSeqRuleCount
+                int ruleOffsetAt = b.PlaceholderU16();
+                int ruleStart = b.Position;
+                b.PatchU16(ruleOffsetAt, ruleStart - ruleSetStart);
+                b.U16(1); b.U16(199); // backtrackGlyphCount, backtrackSequence[0]
+                b.U16(1); // inputGlyphCount (glyphCount-1 = 0 further entries)
+                b.U16(1); b.U16(201); // lookaheadGlyphCount, lookaheadSequence[0]
+                b.U16(1); // seqLookupCount
+                b.U16(0); b.U16(18); // seqLookupRecords[0]: sequenceIndex=0, lookupListIndex=18
+                int coverageStart = b.Position;
+                b.PatchU16(coverageOffsetAt, coverageStart - subtableStart);
+                b.U16(1); b.U16(1); b.U16(200);
+            }
+
+            // Lookup 20: Type 6 format 1 - coverage {200}; rule: backtrack=[199], lookahead=[201],
+            // records=[(0,19)]. Its own nested target (19) is itself Type 6, not a plain
+            // single/multiple/alternate/ligature substitution - the chaining-context counterpart of
+            // lookup 17's own Type-5-nested-in-Type-5 case.
+            int lookup20Start = b.Position;
+            b.PatchU16(lookup20At, lookup20Start - lookupListStart);
+            b.U16(6); b.U16(0); b.U16(1);
+            int lookup20SubAt = b.PlaceholderU16();
+            int lookup20SubStart = b.Position;
+            b.PatchU16(lookup20SubAt, lookup20SubStart - lookup20Start);
+            {
+                int subtableStart = b.Position;
+                b.U16(1); // format
+                int coverageOffsetAt = b.PlaceholderU16();
+                b.U16(1); // chainedSeqRuleSetCount
+                int ruleSetOffsetAt = b.PlaceholderU16();
+                int ruleSetStart = b.Position;
+                b.PatchU16(ruleSetOffsetAt, ruleSetStart - subtableStart);
+                b.U16(1); // chainedSeqRuleCount
+                int ruleOffsetAt = b.PlaceholderU16();
+                int ruleStart = b.Position;
+                b.PatchU16(ruleOffsetAt, ruleStart - ruleSetStart);
+                b.U16(1); b.U16(199); // backtrackGlyphCount, backtrackSequence[0]
+                b.U16(1); // inputGlyphCount (glyphCount-1 = 0 further entries)
+                b.U16(1); b.U16(201); // lookaheadGlyphCount, lookaheadSequence[0]
+                b.U16(1); // seqLookupCount
+                b.U16(0); b.U16(19); // seqLookupRecords[0]: sequenceIndex=0, lookupListIndex=19
+                int coverageStart = b.Position;
+                b.PatchU16(coverageOffsetAt, coverageStart - subtableStart);
+                b.U16(1); b.U16(1); b.U16(200);
+            }
+
             return b.ToArray();
         }
 
@@ -660,6 +822,44 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([135, 131], glyphs.ConvertAll(g => g.GlyphIndex));
+        }
+
+        [Fact]
+        public void ContextualFormat1_NestedContextualLookup_RecursesToItsOwnNestedSingleSubstitution()
+        {
+            // Lookup 17's own nested target (16) is itself a Type 5 contextual lookup, not a plain
+            // single/multiple/alternate/ligature substitution - real HarfBuzz and real fonts allow
+            // this (a SequenceLookupRecord may target any lookup type, including another contextual
+            // one), and a real Noto Sans Gujarati font's own `abvs` feature relies on exactly two
+            // levels of it to pick a pre-base matra's correct contextual glyph variant (see this
+            // file's own recent-fixes entry). Before that fix, ApplyNestedLookup silently skipped a
+            // nested lookup type 5/6 entirely, leaving glyph 150 unsubstituted.
+            var (face, tableStart) = BuildFaceWithSyntheticGsub();
+            var gsub = new GsubTable(face, tableStart);
+            var lookup = gsub.GetContextualLookup(17);
+            Assert.NotNull(lookup);
+
+            var glyphs = new List<ShapedGlyph> { new(150, 0, 1), new(151, 1, 1) };
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
+
+            Assert.Equal([155, 151], glyphs.ConvertAll(g => g.GlyphIndex));
+        }
+
+        [Fact]
+        public void ChainingContextFormat1_NestedChainingContextLookup_RecursesToItsOwnNestedSingleSubstitution()
+        {
+            // The chaining-context (Type 6) counterpart of the Type-5-nested-in-Type-5 test above -
+            // lookup 20's own nested target (19) is itself a Type 6 chaining-context lookup, proving
+            // ApplyNestedLookup's case 6 recurses exactly like its case 5 does.
+            var (face, tableStart) = BuildFaceWithSyntheticGsub();
+            var gsub = new GsubTable(face, tableStart);
+            var lookup = gsub.GetChainingContextLookup(20);
+            Assert.NotNull(lookup);
+
+            var glyphs = new List<ShapedGlyph> { new(199, 0, 1), new(200, 1, 1), new(201, 2, 1) };
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
+
+            Assert.Equal([199, 205, 201], glyphs.ConvertAll(g => g.GlyphIndex));
         }
 
         [Fact]

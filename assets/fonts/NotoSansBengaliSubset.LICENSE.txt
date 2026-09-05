@@ -1,0 +1,20 @@
+NotoSansBengaliSubset.ttf is a subset (the consonants KA/TA/RA/SSA/HA/GA, VIRAMA, the vowel sign
+I, a post-base vowel sign AA, NUKTA, CANDRABINDU, VISARGA, the independent vowel A, BENGALI ANJI
+(the Consonant Placeholder that becomes USE category GB) and BENGALI SANDHI MARK (the Syllable
+Modifier that becomes USE category FMAbv), common punctuation, digits, space, and the basic Latin
+alphabet) of the "Noto Sans Bengali" font, Copyright 2022 The Noto Project Authors
+(https://github.com/notofonts/NotoSansBengali), licensed under the SIL Open Font License, Version
+1.1 (OFL-1.1). Instantiated to a single static (Regular weight, normal width) instance from the
+upstream variable font before subsetting.
+
+The font is bundled solely as a showcase/test asset so Bengali's Universal Shaping Engine (USE)
+syllable reordering (issue #533, Phase 5c) - GSUB nukt/ccmp/locl/akhn/rphf/half/rkrf/cjct/abvs/
+blws/pres/psts substitution and the resulting glyph reorder (repha repositioning, pre-base matra
+movement), including Bengali's own two USE categories Devanagari never reaches (GB, FMAbv) -
+renders with real, readable Bengali glyphs and can be verified by rasterizing actual output,
+rather than only unit-tested against synthetic byte-blob GSUB tables. Only the glyphs the
+showcase/tests actually use are retained, with every GSUB/GPOS layout feature kept intact; the
+glyph outlines themselves are unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Sans+Bengali
