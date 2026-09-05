@@ -500,7 +500,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             var glyphs = new List<ShapedGlyph> { new(20, 0, 1), new(21, 1, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([25, 21], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -515,7 +515,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             // Glyph 20 followed by something other than 21 - the rule shouldn't match.
             var glyphs = new List<ShapedGlyph> { new(20, 0, 1), new(999, 1, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([20, 999], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -529,7 +529,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             var glyphs = new List<ShapedGlyph> { new(30, 0, 1), new(31, 1, 1), new(32, 2, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([30, 35, 32], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -544,7 +544,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             // No backtrack glyph at all (31/32 start the run) - the chaining rule requires one before it.
             var glyphs = new List<ShapedGlyph> { new(31, 0, 1), new(32, 1, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([31, 32], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -558,7 +558,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             var glyphs = new List<ShapedGlyph> { new(40, 0, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([45], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -572,7 +572,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             var glyphs = new List<ShapedGlyph> { new(41, 0, 1) }; // not in Coverage
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([41], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -586,7 +586,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             var glyphs = new List<ShapedGlyph> { new(90, 0, 1), new(91, 1, 1), new(92, 2, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([90, 95, 92], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -600,7 +600,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             var glyphs = new List<ShapedGlyph> { new(90, 0, 1), new(91, 1, 1) }; // no lookahead glyph
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([90, 91], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -614,7 +614,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             var glyphs = new List<ShapedGlyph> { new(99, 0, 1), new(100, 1, 1), new(102, 2, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([99, 105, 102], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -629,7 +629,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             // glyph 999 isn't classified into class 1 by the backtrack ClassDef - no match.
             var glyphs = new List<ShapedGlyph> { new(999, 0, 1), new(100, 1, 1), new(102, 2, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([999, 100, 102], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -643,7 +643,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             var glyphs = new List<ShapedGlyph> { new(120, 0, 1), new(121, 1, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([124, 125, 121], glyphs.ConvertAll(g => g.GlyphIndex));
         }
@@ -657,7 +657,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.NotNull(lookup);
 
             var glyphs = new List<ShapedGlyph> { new(130, 0, 1), new(131, 1, 1) };
-            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null);
+            GsubShaper.ApplySequenceContextLookup(gsub, lookup.Subtables, glyphs, gdef: null, lookupFlag: 0, markFilteringSet: null);
 
             Assert.Equal([135, 131], glyphs.ConvertAll(g => g.GlyphIndex));
         }

@@ -1,0 +1,17 @@
+NotoSansArabicSubset.ttf is a subset (the Arabic letters BEH/YEH/TEH/ALEF/LAM/
+FEH, common punctuation, digits, space, and the basic Latin alphabet) of the
+"Noto Sans Arabic" font, Copyright 2022 The Noto Project Authors, licensed
+under the SIL Open Font License, Version 1.1 (OFL-1.1). Instantiated to a
+single static (Regular weight, normal width) instance from the upstream
+variable font before subsetting.
+
+The font is bundled solely as a showcase/test asset so Arabic-family cursive
+joining (issue #533) - GSUB isol/init/medi/fina positional substitution and
+rlig lam-alef ligature formation - renders with real, readable Arabic glyphs
+and can be verified by rasterizing actual output, rather than only unit-
+tested against synthetic byte-blob GSUB tables. Only the glyphs the showcase/
+tests actually use are retained, with every GSUB/GPOS layout feature kept
+intact; the glyph outlines themselves are unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Sans+Arabic

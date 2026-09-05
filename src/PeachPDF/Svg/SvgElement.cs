@@ -13,6 +13,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Text;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -134,7 +135,7 @@ namespace PeachPDF.Svg
     /// in <see cref="XList"/>/<see cref="YList"/>/<see cref="DxList"/>/<see cref="DyList"/>/<see cref="RotateList"/>;
     /// they address this run's own characters (a value list on an ancestor also carries into a nested
     /// run's characters, innermost-wins). A solid <see cref="SvgElement.Fill"/> without positioning/rotation
-    /// paints via the fast selectable <see cref="Html.Adapters.RGraphics.DrawString"/> path; positioned/
+    /// paints via the fast selectable <see cref="Html.Adapters.RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> path; positioned/
     /// rotated glyphs, a gradient/pattern fill, or any <see cref="SvgElement.Stroke"/> outline each glyph.
     /// When <see cref="PathData"/> is set (a <c>&lt;textPath&gt;</c>), the run's glyphs lay along that path.
     /// </summary>
@@ -188,6 +189,33 @@ namespace PeachPDF.Svg
 
         /// <summary>The <c>&lt;textPath&gt;</c> <c>side</c> (default <see cref="SvgTextPathSide.Left"/>).</summary>
         public SvgTextPathSide Side { get; set; } = SvgTextPathSide.Left;
+
+        /// <summary>Resolved <c>letter-spacing</c>, in user units - added to every glyph's own advance
+        /// (see <c>SvgRenderer.LayoutGlyphs</c>), the same "per shown glyph" semantics HTML text uses.</summary>
+        public double LetterSpacing { get; set; }
+
+        /// <summary>Resolved <c>word-spacing</c>, in user units - added to a whitespace glyph's own
+        /// advance, mirroring <see cref="LetterSpacing"/>.</summary>
+        public double WordSpacing { get; set; }
+
+        /// <summary>The combined GSUB/GPOS feature request (ligatures/caps/numeric/east-asian/explicit
+        /// <c>font-feature-settings</c>/kerning) this run's text should shape with - resolved the same
+        /// way HTML text's <c>DerivedStyle.ActualTextShapingFeatures</c> is, via the shared
+        /// <see cref="Html.Core.Utils.TextShapingFeatureResolver"/>.</summary>
+        public TextShapingFeatures ShapingFeatures { get; set; } = TextShapingFeatures.Default;
+
+        /// <summary>Resolved <c>text-decoration-line</c> (space-separated <c>underline</c>/<c>overline</c>/
+        /// <c>line-through</c>, or <c>none</c>) - this run's own value only, never inherited (CSS Text
+        /// Decoration 3), unlike every other font/paint property this element carries.</summary>
+        public string TextDecorationLine { get; set; } = "none";
+
+        /// <summary>Resolved <c>text-decoration-style</c> (<c>solid</c>/<c>double</c>/<c>dotted</c>/
+        /// <c>dashed</c>/<c>wavy</c>) - own value only, same as <see cref="TextDecorationLine"/>.</summary>
+        public string TextDecorationStyle { get; set; } = "solid";
+
+        /// <summary>Resolved <c>text-decoration-color</c> - null means <c>currentColor</c> (paint with
+        /// the run's own resolved fill-adjacent context color at paint time).</summary>
+        public RColor? TextDecorationColor { get; set; }
 
         /// <summary>Null when the resolved font family (and the library-wide default fallback) couldn't be found - the run then renders nothing rather than throwing, unlike ordinary HTML text.</summary>
         public RFont? Font { get; set; }

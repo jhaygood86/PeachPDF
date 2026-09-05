@@ -230,6 +230,83 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             return b.ToArray();
         }
 
+        /// <summary>A GSUB table with two scripts, "aaaa" (feature "liga" -&gt; lookup 0) listed first
+        /// and "DFLT" (feature "liga" -&gt; lookup 1) listed second - for
+        /// <see cref="ScriptPreference_PrefersDflt_OverTrueFirstRecord_WhenNothingElseMatches"/>, which
+        /// needs a real "DFLT" script coexisting with a non-DFLT first record to actually distinguish
+        /// <see cref="GsubTable.FindScript"/>'s new "DFLT" fallback step from its older "true first
+        /// record" one - the main synthetic table above never defines a "DFLT" script at all, so it
+        /// cannot tell the two apart.</summary>
+        private static byte[] BuildScriptListWithDfltGsub()
+        {
+            var b = new SfntByteBuilder();
+
+            b.U16(1); b.U16(0);
+            int scriptListOffsetAt = b.PlaceholderU16();
+            int featureListOffsetAt = b.PlaceholderU16();
+            int lookupListOffsetAt = b.PlaceholderU16();
+
+            int scriptListStart = b.Position;
+            b.PatchU16(scriptListOffsetAt, scriptListStart);
+            b.U16(2); // scriptCount
+            b.Tag("aaaa"); int aaaaOffsetAt = b.PlaceholderU16();
+            b.Tag("DFLT"); int dfltOffsetAt = b.PlaceholderU16();
+
+            int aaaaStart = b.Position;
+            b.PatchU16(aaaaOffsetAt, aaaaStart - scriptListStart);
+            int aaaaLangSysOffsetAt = b.PlaceholderU16();
+            b.U16(0); // langSysCount
+            int aaaaLangSysStart = b.Position;
+            b.PatchU16(aaaaLangSysOffsetAt, aaaaLangSysStart - aaaaStart);
+            b.U16(0); b.U16(0xFFFF); b.U16(1); b.U16(0); // lookupOrder, no required feature, feature 0
+
+            int dfltStart = b.Position;
+            b.PatchU16(dfltOffsetAt, dfltStart - scriptListStart);
+            int dfltLangSysOffsetAt = b.PlaceholderU16();
+            b.U16(0); // langSysCount
+            int dfltLangSysStart = b.Position;
+            b.PatchU16(dfltLangSysOffsetAt, dfltLangSysStart - dfltStart);
+            b.U16(0); b.U16(0xFFFF); b.U16(1); b.U16(1); // lookupOrder, no required feature, feature 1
+
+            int featureListStart = b.Position;
+            b.PatchU16(featureListOffsetAt, featureListStart);
+            b.U16(2); // featureCount
+            b.Tag("liga"); int feature0OffsetAt = b.PlaceholderU16();
+            b.Tag("liga"); int feature1OffsetAt = b.PlaceholderU16();
+
+            int feature0Start = b.Position;
+            b.PatchU16(feature0OffsetAt, feature0Start - featureListStart);
+            b.U16(0); b.U16(1); b.U16(0); // featureParams, lookupIndexCount, lookup 0
+
+            int feature1Start = b.Position;
+            b.PatchU16(feature1OffsetAt, feature1Start - featureListStart);
+            b.U16(0); b.U16(1); b.U16(1); // featureParams, lookupIndexCount, lookup 1
+
+            int lookupListStart = b.Position;
+            b.PatchU16(lookupListOffsetAt, lookupListStart);
+            b.U16(2); // lookupCount
+            int lookup0At = b.PlaceholderU16();
+            int lookup1At = b.PlaceholderU16();
+
+            int lookup0Start = b.Position;
+            b.PatchU16(lookup0At, lookup0Start - lookupListStart);
+            b.U16(4); b.U16(0); b.U16(1); // Type 4, no flags, 1 subtable
+            int lookup0SubAt = b.PlaceholderU16();
+            int lookup0SubStart = b.Position;
+            b.PatchU16(lookup0SubAt, lookup0SubStart - lookup0Start);
+            WriteType4Subtable(b, 10, 11, 12);
+
+            int lookup1Start = b.Position;
+            b.PatchU16(lookup1At, lookup1Start - lookupListStart);
+            b.U16(4); b.U16(0); b.U16(1);
+            int lookup1SubAt = b.PlaceholderU16();
+            int lookup1SubStart = b.Position;
+            b.PatchU16(lookup1SubAt, lookup1SubStart - lookup1Start);
+            WriteType4Subtable(b, 20, 21, 22);
+
+            return b.ToArray();
+        }
+
         private static byte[] Concat(byte[] a, byte[] b)
         {
             var combined = new byte[a.Length + b.Length];
@@ -305,6 +382,23 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
 
             // "yyyy" doesn't exist; the search must move on to "bbbb" rather than stopping.
             var indices = gsub.GetActiveLookupIndices(["yyyy", "bbbb"], new HashSet<string> { "extr" });
+
+            Assert.Equal([1], indices);
+        }
+
+        [Fact]
+        public void ScriptPreference_PrefersDflt_OverTrueFirstRecord_WhenNothingElseMatches()
+        {
+            byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            int tableStart = fontBytes.Length;
+            byte[] combined = Concat(fontBytes, BuildScriptListWithDfltGsub());
+            var face = XFontSource.GetOrCreateFrom(combined).Fontface;
+            var gsub = new GsubTable(face, tableStart);
+
+            // Neither "arab" nor "latn" exist - "DFLT" (the second-listed script) must win over "aaaa"
+            // (the true first-listed record), unlike the pre-fix behavior that always fell straight to
+            // ScriptList[0] regardless of a real "DFLT" entry existing elsewhere in the list.
+            var indices = gsub.GetActiveLookupIndices(["arab", "latn"], new HashSet<string> { "liga" });
 
             Assert.Equal([1], indices);
         }

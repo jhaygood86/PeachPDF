@@ -13,6 +13,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Utils;
 using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
 using System;
@@ -313,6 +314,19 @@ namespace PeachPDF.Svg
             /// <summary>Settable (not <c>init</c>) so bidi L4 mirroring can rewrite an RTL glyph's
             /// character to its mirror-image codepoint in place (see <c>ApplyBidiReordering</c>).</summary>
             public required string Glyph { get; set; }
+
+            /// <summary>
+            /// This glyph's true logical-order source character, when <see cref="Glyph"/> was rewritten
+            /// to its mirror image by <see cref="ApplyBidiReordering"/> (L4) - null (the overwhelming
+            /// common case: never mirrored) means <see cref="Glyph"/> itself is already the logical
+            /// source. Read by <see cref="PaintGlyphs"/>/<see cref="PaintUprightGlyph"/>/
+            /// <see cref="PaintRotatedGlyph"/> to build each painted string's positionally-aligned
+            /// ToUnicode logical source (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks
+            /// on that contract) - unlike HTML's whole-word reversal, SVG's bidi pass physically reorders
+            /// individual <see cref="GlyphInfo"/> instances, so each glyph already carries its own
+            /// correct logical value directly; nothing needs recomputing from a run-wide position formula.
+            /// </summary>
+            public string? LogicalGlyph { get; set; }
             public required SvgTextElement Run { get; init; }
             public required RFont Font { get; init; }
             public double Opacity { get; init; }
@@ -345,13 +359,20 @@ namespace PeachPDF.Svg
             /// Font.Ascent</c>. Zero for a font without a real <c>VORG</c> table, reproducing the plain
             /// top-of-cell anchor exactly.</summary>
             public double OriginYOffset { get; set; }
+
+            /// <summary>Every ancestor run (including <see cref="Run"/> itself) whose own
+            /// <c>text-decoration-line</c> is not <c>none</c> and so paints a line across this glyph -
+            /// lazily allocated (most text has none). Set by <see cref="FlattenRun"/>; survives
+            /// <see cref="ApplyBidiReordering"/>'s physical list reordering automatically, since that
+            /// moves <see cref="GlyphInfo"/> instances themselves, not indices into a separate array.</summary>
+            public List<SvgTextElement>? Decorators { get; set; }
         }
 
         /// <summary>
         /// Renders a whole <c>&lt;text&gt;</c> element: its subtree is flattened to an addressable-character
         /// stream (SVG 1.1 §10.4), laid out (per-character x/y/dx/dy/rotate lists, text chunks, per-chunk
         /// <c>text-anchor</c>), and painted - consecutive same-run, unrotated, in-flow characters as one
-        /// selectable <see cref="RGraphics.DrawString"/>, anything positioned/rotated/gradient/stroked per
+        /// selectable <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>, anything positioned/rotated/gradient/stroked per
         /// glyph. A <c>&lt;textPath&gt;</c> descendant lays out independently along its path.
         /// </summary>
         private static void RenderText(RGraphics g, SvgDocument document, SvgTextElement text, double opacity)
@@ -370,6 +391,12 @@ namespace PeachPDF.Svg
                 LayoutGlyphs(g, glyphs, isVertical);
                 ApplyBidiReordering(text, glyphs, overrides, isVertical);
                 PaintGlyphs(g, document, glyphs, opacity, isVertical);
+
+                // v1 scope: horizontal-tb, straight-baseline text only - see PaintTextDecorations' own
+                // remarks on why vertical writing modes and <textPath> (RenderTextPath, a separate
+                // method entirely) are excluded for now.
+                if (!isVertical)
+                    PaintTextDecorations(g, glyphs, opacity);
             }
 
             // A <textPath> positions itself entirely along its path; render each in document order after
@@ -461,6 +488,9 @@ namespace PeachPDF.Svg
                         if (System.Text.Rune.DecodeFromUtf16(gi.Glyph, out var rune, out _) == System.Buffers.OperationStatus.Done
                             && BidiMirroring.TryGetMirror(rune.Value, out var mirrored))
                         {
+                            // The pre-mirror value is this glyph's true logical-order source - captured
+                            // before Glyph itself is overwritten below.
+                            gi.LogicalGlyph = gi.Glyph;
                             gi.Glyph = char.ConvertFromUtf32(mirrored);
                             // LayoutGlyphs classified IsUpright from the pre-mirror codepoint; a mirror
                             // pair could in principle have differing Vertical_Orientation classes (most
@@ -565,6 +595,12 @@ namespace PeachPDF.Svg
                     overrides.Add(new BidiIsolateOverride(startIndex, contributedLength, push));
             }
 
+            if (contributedLength > 0 && run.TextDecorationLine != "none")
+            {
+                for (var k = startIndex; k < glyphs.Count; k++)
+                    (glyphs[k].Decorators ??= []).Add(run);
+            }
+
             AssignPositionLists(run, glyphs, startIndex);
         }
 
@@ -627,7 +663,7 @@ namespace PeachPDF.Svg
                     // cross-axis centering needs this same width too, cached on GlyphInfo.Size so paint
                     // reads it back instead of re-measuring (real glyph shaping) a second time - see
                     // GlyphInfo.Size's own remarks.
-                    var measured = g.MeasureString(gi.Glyph, gi.Font);
+                    var measured = g.MeasureString(gi.Glyph, gi.Font, gi.Run.ShapingFeatures);
                     gi.Size = measured;
 
                     // An upright glyph's down-the-column advance is its real vmtx advance height when
@@ -659,6 +695,10 @@ namespace PeachPDF.Svg
                         gi.Advance = measured.Width;
                     }
 
+                    gi.Advance += gi.Run.LetterSpacing;
+                    if (gi.Run.WordSpacing != 0 && IsWhitespaceGlyph(gi.Glyph))
+                        gi.Advance += gi.Run.WordSpacing;
+
                     penY += gi.Advance;
                 }
                 else
@@ -677,8 +717,10 @@ namespace PeachPDF.Svg
 
                     gi.Px = penX;
                     gi.Py = penY;
-                    gi.Size = g.MeasureString(gi.Glyph, gi.Font);
-                    gi.Advance = gi.Size.Width;
+                    gi.Size = g.MeasureString(gi.Glyph, gi.Font, gi.Run.ShapingFeatures);
+                    gi.Advance = gi.Size.Width + gi.Run.LetterSpacing;
+                    if (gi.Run.WordSpacing != 0 && IsWhitespaceGlyph(gi.Glyph))
+                        gi.Advance += gi.Run.WordSpacing;
 
                     penX += gi.Advance;
                 }
@@ -733,9 +775,15 @@ namespace PeachPDF.Svg
                  && VerticalOrientationTable.IsEffectivelyUpright(rune)
         };
 
+        /// <summary>Whether <paramref name="glyph"/> (one <see cref="System.Text.Rune"/>-worth of
+        /// text, per <see cref="GlyphInfo"/>'s own per-character granularity) is whitespace - the same
+        /// test <c>TextWhitespaceState.Collapse</c> uses, so <c>word-spacing</c> targets exactly the
+        /// space characters that survive collapsing.</summary>
+        private static bool IsWhitespaceGlyph(string glyph) => glyph.Length > 0 && char.IsWhiteSpace(glyph[0]);
+
         /// <summary>
         /// Paints the laid-out character stream. Under <c>horizontal-tb</c>: a maximal contiguous group
-        /// of same-run, unrotated, in-flow characters is painted as one <see cref="RGraphics.DrawString"/>
+        /// of same-run, unrotated, in-flow characters is painted as one <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
         /// (kept selectable); an explicitly-rotated character is painted on its own, rotated about its
         /// own position (<see cref="PaintRotatedGlyph"/>). Under a vertical writing mode, every glyph
         /// paints individually - never batched into one string - since consecutive upright glyphs stack
@@ -779,20 +827,180 @@ namespace PeachPDF.Svg
                 }
 
                 var builder = new StringBuilder(start.Glyph);
+                // Built in parallel with builder (same append points, same order) - each position holds
+                // this glyph's true logical source (LogicalGlyph when bidi-mirrored it, else Glyph
+                // itself/identity), so the result is always positionally aligned with `text` per
+                // CMapInfo.AddShapedText's own contract - collapsed to null below when no glyph in this
+                // batch was actually mirrored, the overwhelmingly common case.
+                var logicalBuilder = new StringBuilder(start.LogicalGlyph ?? start.Glyph);
                 i++;
-                while (i < glyphs.Count)
+
+                // word-spacing has no per-character mid-string paint primitive to reuse (unlike
+                // letter-spacing, which DrawString/GetTextOutline apply uniformly - see
+                // PaintTextGlyphs), so the extra gap after a word-spaced whitespace glyph is made
+                // visible by forcing a fresh batch here: the next batch's own Px already reflects
+                // the added word-spacing (LayoutGlyphs' pen-advance included it), so starting a new
+                // DrawString call exactly there reproduces the gap. A no-word-spacing run (the
+                // overwhelmingly common case) never takes this break, so its batching is unchanged.
+                // This also has to apply when `start` itself is the word-spaced glyph (e.g. a run
+                // boundary lands exactly on a space) - otherwise the gap silently never renders,
+                // since nothing downstream re-checks the batch's own first character.
+                var startIsWordSpacedWhitespace = start.Run.WordSpacing != 0 && IsWhitespaceGlyph(start.Glyph);
+                while (!startIsWordSpacedWhitespace && i < glyphs.Count)
                 {
                     var gc = glyphs[i];
                     if (!ReferenceEquals(gc.Run, start.Run) || (gc.Rotate ?? 0) != 0
                         || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0)
                         break;
                     builder.Append(gc.Glyph);
+                    logicalBuilder.Append(gc.LogicalGlyph ?? gc.Glyph);
                     i++;
+
+                    if (start.Run.WordSpacing != 0 && IsWhitespaceGlyph(gc.Glyph))
+                        break;
                 }
 
                 var text = builder.ToString();
-                var size = g.MeasureString(text, font);
-                PaintTextGlyphs(g, document, start.Run, text, font, start.Px, start.Py - font.Ascent, size, opacity * start.Opacity);
+                var logicalText = logicalBuilder.ToString();
+                if (logicalText == text) logicalText = null;
+                var size = g.MeasureString(text, font, start.Run.ShapingFeatures);
+                PaintTextGlyphs(g, document, start.Run, text, font, start.Px, start.Py - font.Ascent, size, opacity * start.Opacity,
+                    start.Run.LetterSpacing, start.Run.ShapingFeatures, logicalText);
+            }
+        }
+
+        /// <summary>
+        /// Paints <c>text-decoration-line</c> (underline/overline/line-through) for every run that
+        /// requested one, over <paramref name="glyphs"/>' already-laid-out (and, if applicable,
+        /// bidi-reordered) horizontal-tb positions. <b>v1 scope</b>: horizontal-tb straight-baseline
+        /// text only - a per-glyph-rotated character (an explicit <c>rotate=""</c>, or a vertical
+        /// writing mode's own rotated/upright glyphs, which never reach here at all - see
+        /// <see cref="RenderText"/>'s own <c>isVertical</c> gate) has no well-defined single decoration
+        /// line and is skipped; <c>&lt;textPath&gt;</c> text (laid out and painted entirely by
+        /// <see cref="RenderTextPath"/>, a separate method this one is never called from) doesn't get
+        /// decorations at all yet. Both are documented, narrower-than-HTML gaps for this first cut, not
+        /// silently dropped behavior - see <c>.claude/accepted-gaps</c>.
+        ///
+        /// For each distinct decorator element (in first-seen order, for stable output) this finds
+        /// every maximal run of consecutive, eligible glyphs it decorates that also share one baseline
+        /// (<see cref="GlyphInfo.Py"/>) - a decorated span whose baseline shifts (a nested <c>dy</c>)
+        /// draws as separate segments rather than one line jumping between baselines - and draws one
+        /// line per <c>text-decoration-line</c> keyword the decorator itself requested, using the
+        /// decorator's <em>own</em> font metrics (not each individual glyph's), matching how a real
+        /// UA keeps decoration thickness/position constant across a span even if a nested element
+        /// changes font-size - the same "decorating box" model <c>FragmentPainter.Decorations.cs</c>
+        /// documents for HTML, whose exact underline/overline/line-through offset formulas this reuses
+        /// verbatim, translated from that file's line-box-top-relative terms into this one's
+        /// baseline-relative <c>Py - Ascent</c> convention (see <see cref="PaintTextGlyphs"/>, which
+        /// already computes glyph draw origins the same way).
+        /// </summary>
+        private static void PaintTextDecorations(RGraphics g, List<GlyphInfo> glyphs, double opacity)
+        {
+            // One forward pass tracking every decorator's currently-open span at once (keyed by
+            // decorator, bounded by nesting depth per glyph, not the total distinct-decorator count),
+            // instead of rescanning the whole glyph list once per distinct decorator. `order` records
+            // first-seen order so multi-decorator output stays stable, matching the original per-
+            // decorator draw sequence.
+            var order = new List<SvgTextElement>();
+            var openStart = new Dictionary<SvgTextElement, GlyphInfo>();
+            var openEnd = new Dictionary<SvgTextElement, GlyphInfo>();
+            var spans = new Dictionary<SvgTextElement, List<(GlyphInfo Start, GlyphInfo End)>>();
+
+            void Close(SvgTextElement decorator)
+            {
+                if (!openStart.TryGetValue(decorator, out var start))
+                    return;
+
+                if (!spans.TryGetValue(decorator, out var list))
+                    spans[decorator] = list = [];
+                list.Add((start, openEnd[decorator]));
+                openStart.Remove(decorator);
+                openEnd.Remove(decorator);
+            }
+
+            foreach (var gi in glyphs)
+            {
+                var active = !gi.IsUpright && (gi.Rotate ?? 0) == 0 ? gi.Decorators : null;
+
+                // Close every currently-open span whose decorator this glyph no longer continues
+                // (dropped out of scope, or the baseline moved).
+                if (openStart.Count > 0)
+                {
+                    List<SvgTextElement>? toClose = null;
+                    foreach (var decorator in openStart.Keys)
+                    {
+                        var continues = active is not null && active.Contains(decorator) && gi.Py == openStart[decorator].Py;
+                        if (!continues)
+                            (toClose ??= []).Add(decorator);
+                    }
+
+                    if (toClose is not null)
+                        foreach (var decorator in toClose)
+                            Close(decorator);
+                }
+
+                if (active is null)
+                    continue;
+
+                foreach (var decorator in active)
+                {
+                    if (!openStart.ContainsKey(decorator))
+                    {
+                        openStart[decorator] = gi;
+                        if (!order.Contains(decorator))
+                            order.Add(decorator);
+                    }
+
+                    openEnd[decorator] = gi;
+                }
+            }
+
+            foreach (var decorator in openStart.Keys.ToList())
+                Close(decorator);
+
+            foreach (var decorator in order)
+            {
+                if (decorator.Font is not { } font || !spans.TryGetValue(decorator, out var decoratorSpans))
+                    continue;
+
+                foreach (var (start, end) in decoratorSpans)
+                    DrawDecorationSpan(g, decorator, font, start, end, opacity);
+            }
+        }
+
+        private static void DrawDecorationSpan(RGraphics g, SvgTextElement decorator, RFont font, GlyphInfo start, GlyphInfo end, double opacity)
+        {
+            var x1 = start.Px;
+            var x2 = end.Px + end.Advance;
+            if (x2 <= x1)
+                return;
+
+            // currentColor (SvgTreeBuilder resolves an explicit color eagerly, leaving
+            // TextDecorationColor null for both "unset" and literal "currentColor") falls back to the
+            // decorator's own solid fill - SVG has no separate tracked `color` property the way HTML
+            // does, and the text's own fill is the closest available proxy for what a reader perceives
+            // as "this text's color".
+            var color = decorator.TextDecorationColor
+                ?? (decorator.Fill.Kind == SvgPaintKind.Solid ? decorator.Fill.Color : RColor.Black);
+            var pen = g.GetPen(ApplyOpacity(color, opacity * decorator.Opacity * decorator.FillOpacity));
+            pen.Width = 1;
+            pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(decorator.TextDecorationStyle);
+
+            foreach (var line in decorator.TextDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var top = start.Py - font.Ascent;
+                double y = line switch
+                {
+                    "underline" => Math.Round(top + font.UnderlineOffset),
+                    "line-through" => top + font.Height / 2,
+                    "overline" => top,
+                    _ => double.NaN,
+                };
+
+                if (double.IsNaN(y))
+                    continue;
+
+                g.DrawLine(pen, x1, y, x2, y);
             }
         }
 
@@ -816,7 +1024,8 @@ namespace PeachPDF.Svg
             var rotate = new RMatrix(cos, sin, -sin, cos, 0, 0);
             var fromOrigin = new RMatrix(1, 0, 0, 1, start.Px, start.Py);
             g.PushTransform(MultiplyMatrix(MultiplyMatrix(toOrigin, rotate), fromOrigin));
-            PaintTextGlyphs(g, document, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity);
+            PaintTextGlyphs(g, document, start.Run, start.Glyph, font, start.Px, start.Py - font.Ascent, glyphSize, opacity * start.Opacity,
+                start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph);
             g.PopTransform();
         }
 
@@ -871,25 +1080,31 @@ namespace PeachPDF.Svg
                 // avoids that without reintroducing any real cross-axis clipping risk.
                 var crossAxisMargin = Math.Max(glyphSize.Width, font.Size) * 8;
                 g.PushClip(new RRect(start.Px - crossAxisMargin, start.Py, crossAxisMargin * 2, start.Advance));
-                PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, y, glyphSize, opacity * start.Opacity);
+                PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, y, glyphSize, opacity * start.Opacity,
+                    start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph);
                 g.PopClip();
             }
             else
             {
-                PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, y, glyphSize, opacity * start.Opacity);
+                PaintTextGlyphs(g, document, start.Run, start.Glyph, font, drawX, y, glyphSize, opacity * start.Opacity,
+                    start.Run.LetterSpacing, start.Run.ShapingFeatures, start.LogicalGlyph);
             }
         }
 
         /// <summary>
         /// Paints one straight-baseline group of characters (<paramref name="text"/>, all sharing one run's
         /// font/fill/stroke) at a given top-left origin. Plain solid, non-stroked text keeps the fast
-        /// <see cref="RGraphics.DrawString"/> path (a single-color PDF text show, so it stays
+        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> path (a single-color PDF text show, so it stays
         /// selectable and tagged-PDF-friendly). A gradient/pattern <c>fill</c> or any <c>stroke</c>
         /// needs the glyphs as an addressable vector path (<see cref="RGraphics.GetTextOutline"/>),
         /// filled/stroked through the same brush/pen machinery shapes use - outlined text is vector art
         /// (not selectable). A CFF/bitmap font yields no outline, so it falls back to a solid fill.
+        /// <paramref name="logicalText"/> is <paramref name="text"/>'s true logical-order source,
+        /// positionally aligned with it (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks) -
+        /// null (the common case) when this run of characters was never bidi-mirrored.
         /// </summary>
-        private static void PaintTextGlyphs(RGraphics g, SvgDocument document, SvgTextElement run, string text, RFont font, double drawX, double drawY, RSize size, double opacity)
+        private static void PaintTextGlyphs(RGraphics g, SvgDocument document, SvgTextElement run, string text, RFont font, double drawX, double drawY, RSize size, double opacity,
+            double letterSpacing = 0, TextShapingFeatures? features = null, string? logicalText = null)
         {
             var hasStroke = run.Stroke.Kind != SvgPaintKind.None && run.StrokeWidth > 0;
             var needsOutline = run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
@@ -901,7 +1116,7 @@ namespace PeachPDF.Svg
                     return;
 
                 var solid = ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity);
-                g.DrawString(text, font, solid, new RPoint(drawX, drawY), size);
+                g.DrawString(text, font, solid, new RPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
                 return;
             }
 
@@ -910,18 +1125,24 @@ namespace PeachPDF.Svg
             // the objectBoundingBox reference for gradient/pattern paint - SvgGeometryBounds can't
             // measure text statically.
             var baseline = new RPoint(drawX, drawY + font.Ascent);
-            var outline = g.GetTextOutline(text, font, baseline);
+            var outline = g.GetTextOutline(text, font, baseline, letterSpacing, features);
 
             if (outline is null)
             {
                 // CFF/bitmap font: no glyf outlines. Best-effort solid fill; a gradient/pattern/stroke
                 // simply can't be honored here (documented gap).
                 if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size);
+                    g.DrawString(text, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(drawX, drawY), size, letterSpacing, fontPalette: null, features: features, logicalText: logicalText);
                 return;
             }
 
-            var textBounds = new RRect(drawX, drawY, size.Width, size.Height);
+            // `size` comes from RGraphics.MeasureString, which (like HTML's own CssBox/CssLayoutEngine
+            // word measurement) has no letterSpacing parameter of its own - widen it the same
+            // established way those callers do, via CountShapedGlyphs, so the objectBoundingBox
+            // reference actually bounds the letter-spaced outline painted below rather than the
+            // narrower unspaced advance.
+            var spacedWidth = size.Width + (letterSpacing != 0 ? g.CountShapedGlyphs(text, font, features) * letterSpacing : 0);
+            var textBounds = new RRect(drawX, drawY, spacedWidth, size.Height);
 
             // Fill then stroke, matching SVG paint order.
             if (run.Fill.Kind != SvgPaintKind.None)
@@ -986,7 +1207,9 @@ namespace PeachPDF.Svg
             double runWidth = 0;
             foreach (var gi in glyphs)
             {
-                gi.Advance = g.MeasureString(gi.Glyph, gi.Font).Width;
+                gi.Advance = g.MeasureString(gi.Glyph, gi.Font, gi.Run.ShapingFeatures).Width + gi.Run.LetterSpacing;
+                if (gi.Run.WordSpacing != 0 && IsWhitespaceGlyph(gi.Glyph))
+                    gi.Advance += gi.Run.WordSpacing;
                 runWidth += gi.Advance;
             }
 
@@ -1037,31 +1260,31 @@ namespace PeachPDF.Svg
                 var needsOutline = gi.Run.Fill.Kind is SvgPaintKind.GradientRef or SvgPaintKind.PatternRef || hasStroke;
 
                 g.PushTransform(frame);
-                PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, needsOutline, hasStroke);
+                PaintGlyphAlongPath(g, document, gi.Run, gi.Font, gi.Glyph, advance, opacity * gi.Opacity, needsOutline, hasStroke, gi.LogicalGlyph);
                 g.PopTransform();
             }
         }
 
-        /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin.</summary>
-        private static void PaintGlyphAlongPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, string glyph, double advance, double opacity, bool needsOutline, bool hasStroke)
+        /// <summary>Paints one glyph of a <c>&lt;textPath&gt;</c> at the current (already rotated/translated) frame, centered on the local origin. <paramref name="logicalGlyph"/> is <paramref name="glyph"/>'s true logical-order source when bidi-mirrored it (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks) - null (the common case) otherwise.</summary>
+        private static void PaintGlyphAlongPath(RGraphics g, SvgDocument document, SvgTextElement run, RFont font, string glyph, double advance, double opacity, bool needsOutline, bool hasStroke, string? logicalGlyph = null)
         {
             var leftX = -advance / 2;
-            var glyphSize = g.MeasureString(glyph, font);
+            var glyphSize = g.MeasureString(glyph, font, run.ShapingFeatures);
 
             if (!needsOutline)
             {
                 if (run.Fill.Kind != SvgPaintKind.Solid)
                     return;
 
-                g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize);
+                g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
                 return;
             }
 
-            var outline = g.GetTextOutline(glyph, font, new RPoint(leftX, 0));
+            var outline = g.GetTextOutline(glyph, font, new RPoint(leftX, 0), features: run.ShapingFeatures);
             if (outline is null)
             {
                 if (run.Fill.Kind == SvgPaintKind.Solid)
-                    g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize);
+                    g.DrawString(glyph, font, ApplyOpacity(run.Fill.Color, opacity * run.FillOpacity), new RPoint(leftX, -font.Ascent), glyphSize, letterSpacing: 0, fontPalette: null, features: run.ShapingFeatures, logicalText: logicalGlyph);
                 return;
             }
 

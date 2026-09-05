@@ -55,6 +55,32 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void GradientFillText_LetterSpacing_WidensTheObjectBoundingBoxToMatchTheOutline()
+        {
+            // Regression: RGraphics.MeasureString has no letterSpacing parameter, so the size used to
+            // build the gradient's objectBoundingBox reference must be widened separately (the same
+            // CountShapedGlyphs(text, font, features) * letterSpacing pattern CssBox/CssLayoutEngine
+            // already use for their own letter-spacing-aware measurements) - otherwise the box stays
+            // narrower than the letter-spaced outline actually painted, misaligning the gradient.
+            // TestRecordingGraphics.MeasureString returns str.Length * font.Size * 0.6, so "AB" at
+            // font-size 40 measures 48 unspaced; +5 letter-spacing across 2 glyphs adds exactly 10.
+            var spaced = Render(
+                """<text x="10" y="50" font-size="40" letter-spacing="5" fill="url(#grad)">AB</text>""",
+                """<linearGradient id="grad"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>""");
+            var unspaced = Render(
+                """<text x="10" y="50" font-size="40" fill="url(#grad)">AB</text>""",
+                """<linearGradient id="grad"><stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/></linearGradient>""");
+
+            var spacedFill = PathCalls(spaced)[0];
+            var unspacedFill = PathCalls(unspaced)[0];
+
+            Assert.NotNull(spacedFill.GradientStart);
+            Assert.NotNull(spacedFill.GradientEnd);
+            Assert.Equal(48.0, unspacedFill.GradientEnd!.Value.X - unspacedFill.GradientStart!.Value.X);
+            Assert.Equal(58.0, spacedFill.GradientEnd!.Value.X - spacedFill.GradientStart!.Value.X);
+        }
+
+        [Fact]
         public void StrokedText_EmitsFillThenStroke_InThatOrder()
         {
             var g = Render(

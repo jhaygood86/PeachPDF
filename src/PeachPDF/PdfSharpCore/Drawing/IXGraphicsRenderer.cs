@@ -128,7 +128,14 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// COLR/CPAL color font; <c>null</c> selects palette 0 with no overrides (the default color-glyph path).
         /// </param>
         /// <param name="features">Which GSUB features (see <see cref="TextShapingFeatures"/>) to apply when shaping <paramref name="s"/>.</param>
-        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, TextShapingFeatures features);
+        /// <param name="logicalText">
+        /// The true logical-order (pre-bidi-mirroring) source text <paramref name="s"/> was derived
+        /// from, when the two differ (<c>null</c> when they're the same - the common case). A real PDF
+        /// backend records ToUnicode CMap entries against this instead of <paramref name="s"/> itself,
+        /// so a reversed/mirrored RTL word's glyphs map back to their true source characters rather than
+        /// whichever character occupies that position in the *painted* string.
+        /// </param>
+        void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, TextShapingFeatures features, string? logicalText = null);
 
         /// <summary>
         /// Draws an image.

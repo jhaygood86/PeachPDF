@@ -19,6 +19,8 @@ using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Text;
+using PeachPDF.Text.Shaping.Arabic;
+using PeachPDF.Text.Shaping.Use;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -932,6 +934,48 @@ namespace PeachPDF.Html.Core.Dom
         internal byte[]? BidiLevels { get; set; }
 
         /// <summary>
+        /// One resolved Unicode <c>Script</c> value (already run-resolved against surrounding text - see
+        /// <see cref="ScriptRunResolver"/> - never <c>Common</c>/<c>Inherited</c>) per character of
+        /// <see cref="Text"/>, set alongside <see cref="BidiLevels"/> by the same
+        /// <see cref="CssBidiParagraphResolver.AssignBidiLevels"/> pass (and subject to the same "null
+        /// outside any paragraph that pass reached" caveat). Feeds <see cref="ParseToWords"/>'s per-word
+        /// <see cref="CssRectWord.ScriptTag"/> resolution (read from a word's own first character - there
+        /// is deliberately no dedicated script-boundary word split the way there is for a bidi-level
+        /// boundary, see <c>AppendWordsFromText</c>'s own remarks) and
+        /// <see cref="DerivedStyle.ActualTextShapingFeatures"/>'s per-word GSUB script-tag selection
+        /// (<see cref="OpenTypeScriptTags"/>).
+        /// </summary>
+        internal string[]? CharScripts { get; set; }
+
+        /// <summary>
+        /// One resolved <see cref="ArabicJoiningForm"/> per character of <see cref="Text"/>, set
+        /// alongside <see cref="BidiLevels"/>/<see cref="CharScripts"/> by the same pass (see
+        /// <see cref="ArabicJoiningShaper"/>) - <see cref="ArabicJoiningForm.None"/> for every character
+        /// of a paragraph with no Arabic-family joining script in it at all (the overwhelming common
+        /// case), computed unconditionally alongside <see cref="CharScripts"/> anyway since a
+        /// per-paragraph "does this text need it" pre-scan would cost close to the same
+        /// <see cref="ArabicShapingTable"/> lookups it's trying to avoid.
+        /// </summary>
+        internal ArabicJoiningForm[]? JoiningForms { get; set; }
+
+        /// <summary>
+        /// One resolved <see cref="UseCategory"/> per character of <see cref="Text"/>, set alongside
+        /// <see cref="BidiLevels"/>/<see cref="CharScripts"/>/<see cref="JoiningForms"/> by the same
+        /// pass (see <see cref="UseCategoryClassifier"/>) - null (not an all-<see cref="UseCategory.O"/>
+        /// array) for a paragraph with no Devanagari text in it at all, unlike <see cref="JoiningForms"/>'s
+        /// own always-allocated convention: <see cref="UseCategory.O"/> is a real, actively-processed
+        /// category (not an inert "skip this codepoint" sentinel the way <see cref="ArabicJoiningForm.None"/>
+        /// is), so this array is only worth allocating when the *paragraph* actually contains Devanagari.
+        /// This allocation is paragraph-wide, not per-box: every box <see cref="CssBidiParagraphResolver.ResolveParagraph"/>
+        /// slices this from - including one whose own text has no Devanagari in it at all, if some
+        /// sibling/ancestor text in the same paragraph does - gets a non-null (but all-<see cref="UseCategory.O"/>)
+        /// slice. <c>ToRuneIndexedUseCategories</c> is what narrows this back down to "does *this specific
+        /// word* need USE shaping" before <see cref="ResolveWordShapingFeatures"/> ever sees it - never
+        /// read this field directly to decide whether to request USE shaping.
+        /// </summary>
+        internal UseCategory[]? UseCategories { get; set; }
+
+        /// <summary>
         /// Gets the line-boxes of this box (if block box)
         /// </summary>
         internal List<CssLineBox> LineBoxes { get; } = [];
@@ -1208,6 +1252,19 @@ namespace PeachPDF.Html.Core.Dom
                         if (endIdx > startIdx)
                         {
                             var wordBidiLevel = BidiLevels is { } wordLevels ? wordLevels[startIdx] : fallbackLevel;
+                            // No dedicated script-boundary word split (unlike the bidi-level one above) -
+                            // a script change with no adjacent whitespace/hyphen/CJK/bidi-level boundary
+                            // (e.g. Katakana directly followed by Latin) is rare in practice and, unlike a
+                            // bidi-level change, is not itself a meaningful UAX#9 break opportunity; adding
+                            // one here would introduce a wrap point that was never there before and isn't
+                            // glued back together the way AddWord/EmitPerCodepointFragments's own font/
+                            // orientation splits are (see TextOrientationIntegrationTests's own regression
+                            // coverage for exactly this "stays glued in horizontal mode" expectation). This
+                            // word's ScriptTag is instead resolved once from its own first character - a
+                            // reasonable approximation for the rare mixed-script-with-no-boundary case,
+                            // and still strictly better than GsubShaper's prior always-"latn"/"DFLT"
+                            // behavior for every other (script-homogeneous) word.
+                            var wordScriptTag = CharScripts is { } wordScripts ? OpenTypeScriptTags.Resolve(wordScripts[startIdx]) : null;
                             var hasSpaceBefore = !preserveSpaces && (startIdx > 0 && Words.Count == 0 && HtmlUtils.IsCollapsibleWhitespace(text[startIdx - 1]));
                             var hasSpaceAfter = !preserveSpaces && (endIdx < text.Length && HtmlUtils.IsCollapsibleWhitespace(text[endIdx]));
                             var rawWord = text.Substring(startIdx, endIdx - startIdx);
@@ -1250,9 +1307,13 @@ namespace PeachPDF.Html.Core.Dom
                             // call stays within this already level-homogeneous span, so they all share
                             // the same bidi level.
                             var wordsBefore = Words.Count;
-                            AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates, cleanOriginalWord);
+                            AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates, cleanOriginalWord, startIdx);
                             for (var wi = wordsBefore; wi < Words.Count; wi++)
+                            {
                                 Words[wi].BidiLevel = wordBidiLevel;
+                                if (Words[wi] is CssRectWord rectWord)
+                                    rectWord.ScriptTag = wordScriptTag;
+                            }
                         }
                     }
 
@@ -1320,7 +1381,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (see <see cref="CssRect.HyphenationCandidates"/>) is only attached when the word is kept
         /// whole — small-caps splitting and hyphenation are a separate, non-composing pair of features.
         /// </summary>
-        private void AddWord(string text, bool hasSpaceBefore, bool hasSpaceAfter, List<int>? hyphenationCandidates = null, string? originalText = null)
+        private void AddWord(string text, bool hasSpaceBefore, bool hasSpaceAfter, List<int>? hyphenationCandidates = null, string? originalText = null, int wordStart = 0)
         {
             // The small-caps split path below re-slices by run position, which only lines up against
             // originalText when the two strings are the same length (true for the vast majority of real
@@ -1352,7 +1413,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (!needsPerCodepoint && !needsOrientationSplit)
                 {
-                    Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText)
+                    Words.Add(new CssRectWord(this, text, hasSpaceBefore, hasSpaceAfter, originalText, ToRuneIndexedJoiningForms(wordStart, text), ToRuneIndexedUseCategories(wordStart, text))
                     {
                         HyphenationCandidates = hyphenationCandidates,
                         IsUprightOrientation = WholeTextOrientationIsUpright(text)
@@ -1360,7 +1421,7 @@ namespace PeachPDF.Html.Core.Dom
                     return;
                 }
 
-                EmitPerCodepointFragments(text, originalText, hasSpaceBefore, hasSpaceAfter, fontSizeScale: 1.0, alwaysSuppressWrap: false);
+                EmitPerCodepointFragments(text, originalText, hasSpaceBefore, hasSpaceAfter, fontSizeScale: 1.0, alwaysSuppressWrap: false, textStart: wordStart);
                 return;
             }
 
@@ -1394,7 +1455,10 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (!needsPerCodepoint && !NeedsOrientationSplit(displayText))
                 {
-                    Words.Add(new CssRectWord(this, displayText, runSpaceBefore, runSpaceAfter, runOriginalText)
+                    // Sliced by this run's own position within the ORIGINAL (pre-case-flip) text - joining
+                    // forms depend on codepoint identity, not case (moot for Arabic-family text anyway,
+                    // which has no case and so never reaches this synthesis path in practice).
+                    Words.Add(new CssRectWord(this, displayText, runSpaceBefore, runSpaceAfter, runOriginalText, ToRuneIndexedJoiningForms(wordStart + start, runText), ToRuneIndexedUseCategories(wordStart + start, runText))
                     {
                         FontSizeScale = scale,
                         SuppressWrapBefore = i > 0,
@@ -1406,9 +1470,115 @@ namespace PeachPDF.Html.Core.Dom
                     // Per-codepoint/per-orientation splitting composes inside each small-caps case-run.
                     // Every fragment after the very first of the whole word suppresses wrap: run i>0 is
                     // never first, and within run 0 only its own first fragment is.
-                    EmitPerCodepointFragments(displayText, runOriginalText, runSpaceBefore, runSpaceAfter, scale, alwaysSuppressWrap: i > 0);
+                    EmitPerCodepointFragments(displayText, runOriginalText, runSpaceBefore, runSpaceAfter, scale, alwaysSuppressWrap: i > 0, textStart: wordStart + start);
                 }
             }
+        }
+
+        /// <summary>
+        /// Slices <see cref="JoiningForms"/> (this box's own UTF-16-char-indexed, paragraph-resolved
+        /// joining forms) down to <paramref name="fragmentText"/>'s own span - <paramref name="textStart"/>
+        /// codepoints into this box's own <see cref="Text"/> - and re-indexes it per <see cref="Rune"/>
+        /// to match how <c>GsubShaper.ApplyArabicJoiningFeatures</c>/<c>MapToGlyphs</c> index a shaped
+        /// glyph run (one glyph per Rune, not per UTF-16 char). Returns null when
+        /// <see cref="JoiningForms"/> itself is null (no paragraph-level bidi/joining resolution ever
+        /// ran over this box's text - see <see cref="BidiLevels"/>'s own such-boxes-are-rare caveat) or
+        /// when every character in this specific span resolved to <see cref="ArabicJoiningForm.None"/>
+        /// (the overwhelming common case for non-Arabic-family text) - so a plain Latin/CJK/etc. word
+        /// costs one linear scan here and nothing more, never a wasted per-word array allocation.
+        /// </summary>
+        private ArabicJoiningForm[]? ToRuneIndexedJoiningForms(int textStart, string fragmentText)
+        {
+            if (JoiningForms is not { } charIndexed || fragmentText.Length == 0)
+                return null;
+
+            var any = false;
+            for (var c = textStart; c < textStart + fragmentText.Length; c++)
+            {
+                if (charIndexed[c] != ArabicJoiningForm.None)
+                {
+                    any = true;
+                    break;
+                }
+            }
+
+            if (!any)
+                return null;
+
+            var runeCount = 0;
+            for (var i = 0; i < fragmentText.Length;)
+            {
+                Rune.DecodeFromUtf16(fragmentText.AsSpan(i), out _, out var consumed);
+                i += consumed;
+                runeCount++;
+            }
+
+            var result = new ArabicJoiningForm[runeCount];
+            var r = 0;
+            for (var i = 0; i < fragmentText.Length;)
+            {
+                Rune.DecodeFromUtf16(fragmentText.AsSpan(i), out _, out var consumed);
+                result[r++] = charIndexed[textStart + i];
+                i += consumed;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Slices <see cref="UseCategories"/> (this box's own UTF-16-char-indexed, paragraph-resolved
+        /// USE categories) down to <paramref name="fragmentText"/>'s own span and re-indexes it per
+        /// <see cref="Rune"/> - the exact mirror of <see cref="ToRuneIndexedJoiningForms"/>, including
+        /// its "every character in this span resolved to an inert placeholder" check (unlike a first
+        /// version of this method, which reasoned - incorrectly - that skipping that check was safe
+        /// here because <see cref="UseCategories"/> is only ever allocated when the *paragraph* contains
+        /// Devanagari; that allocation is paragraph-wide, but <see cref="CssBidiParagraphResolver.ResolveParagraph"/>
+        /// then slices and assigns it to *every* contributing box in that paragraph, including one whose
+        /// own text is pure Latin/Arabic/etc. - so without this check, an ordinary non-Devanagari word
+        /// sharing a paragraph with Devanagari text would get a spurious non-null, all-<see cref="UseCategory.O"/>
+        /// array, and <c>ResolveWordShapingFeatures</c> would request USE shaping for it purely because of
+        /// unrelated content elsewhere in the same paragraph - found by an adversarial post-change review
+        /// pass, not by any test that shipped with this feature's first version). Returns null when
+        /// <see cref="UseCategories"/> itself is null (no paragraph in this box contains Devanagari text
+        /// at all - the overwhelming common case) or when every character in this specific span resolved
+        /// to <see cref="UseCategory.O"/>.
+        /// </summary>
+        private UseCategory[]? ToRuneIndexedUseCategories(int textStart, string fragmentText)
+        {
+            if (UseCategories is not { } charIndexed || fragmentText.Length == 0)
+                return null;
+
+            var any = false;
+            for (var c = textStart; c < textStart + fragmentText.Length; c++)
+            {
+                if (charIndexed[c] != UseCategory.O)
+                {
+                    any = true;
+                    break;
+                }
+            }
+
+            if (!any)
+                return null;
+
+            var runeCount = 0;
+            for (var i = 0; i < fragmentText.Length;)
+            {
+                Rune.DecodeFromUtf16(fragmentText.AsSpan(i), out _, out var consumed);
+                i += consumed;
+                runeCount++;
+            }
+
+            var result = new UseCategory[runeCount];
+            var r = 0;
+            for (var i = 0; i < fragmentText.Length;)
+            {
+                Rune.DecodeFromUtf16(fragmentText.AsSpan(i), out _, out var consumed);
+                result[r++] = charIndexed[textStart + i];
+                i += consumed;
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -1423,7 +1593,7 @@ namespace PeachPDF.Html.Core.Dom
         /// the first) and only the boundary fragments carry the surrounding whitespace flags, exactly
         /// like the small-caps split it composes with.
         /// </summary>
-        private void EmitPerCodepointFragments(string text, string originalText, bool hasSpaceBefore, bool hasSpaceAfter, double fontSizeScale, bool alwaysSuppressWrap)
+        private void EmitPerCodepointFragments(string text, string originalText, bool hasSpaceBefore, bool hasSpaceAfter, double fontSizeScale, bool alwaysSuppressWrap, int textStart)
         {
             if (originalText.Length != text.Length)
                 originalText = text;
@@ -1452,7 +1622,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 var fragText = text.Substring(start, index - start);
-                Words.Add(new CssRectWord(this, fragText, first && hasSpaceBefore, index >= text.Length && hasSpaceAfter, originalText.Substring(start, index - start))
+                Words.Add(new CssRectWord(this, fragText, first && hasSpaceBefore, index >= text.Length && hasSpaceAfter, originalText.Substring(start, index - start), ToRuneIndexedJoiningForms(textStart + start, fragText), ToRuneIndexedUseCategories(textStart + start, fragText))
                 {
                     FontSizeScale = fontSizeScale,
                     SuppressWrapBefore = !first || alwaysSuppressWrap,
@@ -1634,93 +1804,8 @@ namespace PeachPDF.Html.Core.Dom
         /// input - callers rely on word/whitespace boundary indices computed against the transformed
         /// text remaining valid.
         /// </summary>
-        private static string ApplyTextTransform(string text, CssProperty<TextTransform> transform)
-        {
-            if (string.IsNullOrEmpty(text))
-                return text;
-
-            switch (transform.Value)
-            {
-                case PeachPDF.CSS.TextTransform.Uppercase:
-                {
-                    var chars = text.ToCharArray();
-                    for (var i = 0; i < chars.Length; i++)
-                        chars[i] = char.ToUpperInvariant(chars[i]);
-                    return new string(chars);
-                }
-                case PeachPDF.CSS.TextTransform.Lowercase:
-                {
-                    var chars = text.ToCharArray();
-                    for (var i = 0; i < chars.Length; i++)
-                        chars[i] = char.ToLowerInvariant(chars[i]);
-                    return new string(chars);
-                }
-                case PeachPDF.CSS.TextTransform.Capitalize:
-                {
-                    var chars = text.ToCharArray();
-                    var atWordStart = true;
-                    for (var i = 0; i < chars.Length; i++)
-                    {
-                        if (char.IsWhiteSpace(chars[i]))
-                        {
-                            atWordStart = true;
-                        }
-                        else if (atWordStart && char.IsLetter(chars[i]))
-                        {
-                            chars[i] = char.ToUpperInvariant(chars[i]);
-                            atWordStart = false;
-                        }
-                    }
-                    return new string(chars);
-                }
-                case PeachPDF.CSS.TextTransform.FullWidth:
-                {
-                    var chars = text.ToCharArray();
-                    for (var i = 0; i < chars.Length; i++)
-                        chars[i] = ToFullWidth(chars[i]);
-                    return new string(chars);
-                }
-                default:
-                    return text;
-            }
-        }
-
-        /// <summary>
-        /// Maps a single character to its fullwidth compatibility form per Unicode's &lt;wide&gt;
-        /// decomposition mapping (used by CSS Text Module Level 3's <c>text-transform: full-width</c>).
-        /// ASCII 0x21-0x7E map to U+FF01-FF5E (offset by U+FEE0), space maps to the ideographic space
-        /// U+3000, and a handful of Latin-1 currency/symbol characters map to their own fullwidth forms
-        /// in the U+FFE0-FFE6 range. Characters with no fullwidth form are returned unchanged. Does not
-        /// implement the spec's &lt;narrow&gt;-tagged half (halfwidth katakana/Hangul jamo/symbol forms
-        /// converting the other direction) - see
-        /// .claude/accepted-gaps/text-transform-full-width-halfwidth-cjk-forms.md.
-        /// </summary>
-        private static char ToFullWidth(char c)
-        {
-            switch (c)
-            {
-                case ' ':
-                    return '　';
-                case >= '!' and <= '~':
-                    return (char)(c + 0xfee0);
-                case '¢':
-                    return '￠';
-                case '£':
-                    return '￡';
-                case '¬':
-                    return '￢';
-                case '¯':
-                    return '￣';
-                case '¦':
-                    return '￤';
-                case '¥':
-                    return '￥';
-                case '₩':
-                    return '￦';
-                default:
-                    return c;
-            }
-        }
+        private static string ApplyTextTransform(string text, CssProperty<TextTransform> transform) =>
+            TextTransformer.Apply(text, transform.Value);
 
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
@@ -5906,12 +5991,13 @@ namespace PeachPDF.Html.Core.Dom
                     // a reasonable width, and so nothing ever paints a literal, un-expanded tab character.
                     else if (boxWord is CssRectWord tabWord && tabWord.Text.IndexOf('\t') >= 0)
                     {
-                        tabWord.ReplaceText(ExpandTabs(tabWord.Text, g, font, ActualTextShapingFeatures, tabSize, ref lineX));
-                        boxWord.Width = g.MeasureString(boxWord.Text!, font, ActualTextShapingFeatures).Width;
+                        var wordFeatures = ResolveWordShapingFeatures(boxWord);
+                        tabWord.ReplaceText(ExpandTabs(tabWord.Text, g, font, wordFeatures, tabSize, ref lineX));
+                        boxWord.Width = g.MeasureString(boxWord.Text!, font, wordFeatures).Width;
                     }
                     else
                     {
-                        boxWord.Width = g.MeasureString(boxWord.Text!, font, ActualTextShapingFeatures).Width;
+                        boxWord.Width = g.MeasureString(boxWord.Text!, font, ResolveWordShapingFeatures(boxWord)).Width;
                         lineX += boxWord.Width;
                     }
 
@@ -5926,7 +6012,7 @@ namespace PeachPDF.Html.Core.Dom
                     // one glyph, so Tc (applied once per glyph shown) fires fewer times than Text.Length
                     // would suggest.
                     if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
-                        boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ActualTextShapingFeatures) * ActualLetterSpacing;
+                        boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ResolveWordShapingFeatures(boxWord)) * ActualLetterSpacing;
                     boxWord.Height = ActualFont.Height;
                 }
             }
@@ -5988,12 +6074,13 @@ namespace PeachPDF.Html.Core.Dom
                 // rendered line - the only place that position is actually known - immediately before
                 // placing this same word, so anything computed here from a tab-containing effectiveText is
                 // always superseded before it can be observed by painting or measurement.
-                boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font, firstLineStyle.ActualTextShapingFeatures).Width : 0;
+                var firstLineWordFeatures = firstLineStyle.ResolveWordShapingFeatures(boxWord);
+                boxWord.Width = effectiveText != "\n" ? g.MeasureString(effectiveText!, font, firstLineWordFeatures).Width : 0;
 
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-glyph word, not N-1,
                 // and the shaped glyph count rather than the character count.
                 if (effectiveText != "\n" && firstLineStyle.ActualLetterSpacing != 0)
-                    boxWord.Width += g.CountShapedGlyphs(effectiveText!, font, firstLineStyle.ActualTextShapingFeatures) * firstLineStyle.ActualLetterSpacing;
+                    boxWord.Width += g.CountShapedGlyphs(effectiveText!, font, firstLineWordFeatures) * firstLineStyle.ActualLetterSpacing;
                 boxWord.Height = font.Height;
             }
         }
@@ -6036,11 +6123,12 @@ namespace PeachPDF.Html.Core.Dom
                 // run can form different ligatures than the first pass measured against (issue #553's
                 // secondary finding), drifting this word's width from what the rest of layout was built on.
                 var measureText = (boxWord as CssRectWord)?.PreMirrorText ?? boxWord.Text!;
-                boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(measureText, font, ActualTextShapingFeatures).Width : 0;
+                var tailWordFeatures = ResolveWordShapingFeatures(boxWord);
+                boxWord.Width = boxWord.Text != "\n" ? g.MeasureString(measureText, font, tailWordFeatures).Width : 0;
                 // See MeasureWordsSize's identical fix/comment - N gaps for an N-glyph word, not N-1,
                 // and the shaped glyph count rather than the character count.
                 if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
-                    boxWord.Width += g.CountShapedGlyphs(measureText, font, ActualTextShapingFeatures) * ActualLetterSpacing;
+                    boxWord.Width += g.CountShapedGlyphs(measureText, font, tailWordFeatures) * ActualLetterSpacing;
                 boxWord.Height = font.Height;
             }
         }

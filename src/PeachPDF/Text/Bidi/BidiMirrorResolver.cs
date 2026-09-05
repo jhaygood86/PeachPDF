@@ -42,5 +42,37 @@ namespace PeachPDF.Text.Bidi
 
             return sb.ToString();
         }
+
+        /// <summary>
+        /// The position-only half of <see cref="ApplyMirroring"/>'s reverse-then-mirror pass: reverses
+        /// <paramref name="text"/> by <see cref="Rune"/> (respecting surrogate pairs), performing no
+        /// mirror substitution. Used to build a ToUnicode text-extraction "logical source" string that
+        /// is positionally aligned with an already-mirrored, already-reversed visual string - each
+        /// position holds the true, original (unmirrored) character whose mirrored image was painted at
+        /// that same visual position (see <c>PeachPDF.Fonts.CMapInfo.AddShapedText</c>'s own remarks).
+        /// Unlike <see cref="ApplyMirroring"/>, always reverses regardless of <c>level</c> - the caller
+        /// already knows whether reversal actually happened (that's exactly what decides whether it has
+        /// a distinct logical source worth passing at all).
+        /// </summary>
+        public static string ReverseRunes(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return text;
+
+            var runes = new System.Collections.Generic.List<Rune>(text.Length);
+            var i = 0;
+            while (i < text.Length)
+            {
+                Rune.DecodeFromUtf16(text.AsSpan(i), out var rune, out var consumed);
+                runes.Add(rune);
+                i += consumed;
+            }
+
+            var sb = new StringBuilder(text.Length);
+            for (var k = runes.Count - 1; k >= 0; k--)
+                sb.Append(runes[k]);
+
+            return sb.ToString();
+        }
     }
 }

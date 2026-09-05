@@ -30,6 +30,7 @@
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.Text;
+using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -43,6 +44,12 @@ namespace PeachPDF.Fonts.OpenType
     /// </summary>
     internal sealed class OpenTypeDescriptor : FontDescriptor
     {
+        // Guards ResolveDesiredDisplayX's own attachment-chain walk against a pathological/adversarial
+        // font stacking marks arbitrarily deep - real fonts never chain more than a couple of combining
+        // marks (e.g. a vowel plus a tone mark). Mirrors GsubShaper.MaxNestedContextDepth's identical
+        // rationale for nested contextual lookups.
+        private const int MaxAttachmentChainDepth = 8;
+
         /// <summary>
         /// New...
         /// </summary>
@@ -277,19 +284,175 @@ namespace PeachPDF.Fonts.OpenType
         /// requests and the font has a GSUB table for. The single glyph-walk shared by measurement,
         /// painting, outline extraction and glyph subsetting/embedding - see <see cref="GsubShaper"/>.
         /// </summary>
+        /// <remarks>
+        /// <paramref name="text"/> is always shaped in true logical (source) order - GSUB/GPOS need real
+        /// logical adjacency to match contextual rules a font author actually wrote against (e.g. a
+        /// Format-3 <c>rlig</c> rule pairing Arabic lam with a following alef only matches lam-then-alef,
+        /// never the reverse). A plain RTL word (Hebrew, or Arabic text with no joining-form request) is
+        /// instead pre-reversed/mirrored at the character level before it ever reaches here
+        /// (<c>CssLayoutEngine.MirrorWordTextIfNeeded</c>), so for that caller "logical order" and
+        /// "display order" are already the same string by the time <paramref name="text"/> arrives.
+        /// <see cref="TextShapingFeatures.ReverseForDisplay"/> is the other caller's escape hatch: an
+        /// Arabic-family joining word never mutates its own text (see <c>CssRectWord</c>'s own remarks),
+        /// so its shaped glyphs still need reversing to paint in the correct right-to-left visual order -
+        /// done here, as the very last step, once GSUB/GPOS have both already run in the logical order
+        /// they need. This mirrors how real shaping engines apply features in logical order and reverse
+        /// only at the end for an RTL run.
+        /// </remarks>
         public IReadOnlyList<ShapedGlyph> Shape(string text, TextShapingFeatures features)
         {
             List<ShapedGlyph> glyphs = GsubShaper.Shape(this, text, features);
             GposPositioner.Apply(this, glyphs, features);
+
+            if (features.ReverseForDisplay)
+                ReverseGlyphsForDisplay(glyphs, text);
+
             return glyphs;
+        }
+
+        /// <summary>
+        /// Reverses <paramref name="glyphs"/> in place for right-to-left display, and remaps any glyph
+        /// whose entire source cluster is one <c>Bidi_Mirrored</c> character (UAX #9 L4 - e.g. a
+        /// parenthesis embedded in an Arabic-family joining word) to that character's own mirror-image
+        /// glyph, when the font has one. Arabic-family letters themselves have no mirror-image codepoint
+        /// (joining, not character substitution, is what makes them read right-to-left), so this rarely
+        /// changes anything in practice - it exists for the rare case a joining word carries an
+        /// embedded mirrorable character, matching what <c>BidiMirrorResolver.ApplyMirroring</c> already
+        /// does for every other RTL word's own (pre-reversed) text.
+        /// </summary>
+        /// <remarks>
+        /// A plain list reversal is correct for every glyph's own natural (advance-based) position -
+        /// walking the reversed list with fresh left-to-right pen accumulation reproduces an exact
+        /// mirror image of the logical-order layout, since reflecting an interval <c>[origin, origin +
+        /// advance]</c> around the run's total width is mathematically identical to summing advances in
+        /// reverse order. It is NOT correct for a mark <see cref="GposPositioner.ApplyMarkAnchor"/>
+        /// positioned via <see cref="ShapedGlyph.XOffset"/>: that offset bakes in the pen-distance from
+        /// the mark's own base to the mark itself, under the walk order GPOS actually computed it in
+        /// (logical order) - after reversal, the mark's new neighbors (and so its own natural pen
+        /// position relative to its base) are completely different, so reusing the old offset
+        /// mis-positions the mark by roughly its base's own advance width. Found by rasterizing real
+        /// Arabic text (a two-dot combining mark landing tens of points away from its own letter) rather
+        /// than by reasoning about the math in the abstract - see this fix's own recent-fixes entry.
+        /// Fixed by resolving each glyph's desired absolute X position before reversing - an unattached
+        /// glyph's own interval-mirror position, or (recursively, for a glyph with
+        /// <see cref="ShapedGlyph.AttachedToIndex"/> set) its base's own resolved position plus the same
+        /// relative offset it had from that base in logical order, which is a purely geometric
+        /// relationship reversal must not disturb - then, after reversing, assigning each glyph whatever
+        /// new <see cref="ShapedGlyph.XOffset"/> reproduces that resolved position under the new walk
+        /// order. <see cref="ShapedGlyph.YOffset"/> needs no such correction: it is never pen-position-
+        /// dependent (vertical placement doesn't accumulate along the line the way horizontal advance
+        /// does), so it carries over unchanged.
+        /// </remarks>
+        private void ReverseGlyphsForDisplay(List<ShapedGlyph> glyphs, string text)
+        {
+            int count = glyphs.Count;
+
+            // The position fix-up/reversal below is a genuine no-op for a single glyph (nothing to
+            // reorder), but the mirror remap after it is not - a lone glyph can still be one
+            // Bidi_Mirrored character in its own right - so this guard must not skip that part too.
+            if (count > 1)
+            {
+                // Each glyph's own natural advance, computed once and reused by both this method's own
+                // reassembly loop and ResolveDesiredDisplayX's unattached-glyph branch, rather than
+                // calling GlyphIndexToWidth up to 3 times per glyph.
+                var advance = new double[count];
+                var naturalPos = new double[count];
+                double pos = 0;
+                for (var i = 0; i < count; i++)
+                {
+                    naturalPos[i] = pos;
+                    advance[i] = GlyphIndexToWidth(glyphs[i].GlyphIndex) + glyphs[i].XAdvanceDelta;
+                    pos += advance[i];
+                }
+                double totalWidth = pos;
+
+                var desiredX = new double?[count];
+                for (var i = 0; i < count; i++)
+                    ResolveDesiredDisplayX(glyphs, naturalPos, advance, totalWidth, desiredX, i, depth: 0);
+
+                glyphs.Reverse();
+
+                double newPos = 0;
+                for (var newIndex = 0; newIndex < count; newIndex++)
+                {
+                    int oldIndex = count - 1 - newIndex;
+                    ShapedGlyph glyph = glyphs[newIndex];
+                    glyphs[newIndex] = glyph with { XOffset = desiredX[oldIndex]!.Value - newPos, AttachedToIndex = null };
+                    // advance[oldIndex] is still this exact glyph's own advance - Reverse() only
+                    // reorders list elements, it never mutates the (immutable record struct) values.
+                    newPos += advance[oldIndex];
+                }
+            }
+
+            for (var i = 0; i < glyphs.Count; i++)
+            {
+                var glyph = glyphs[i];
+                if (glyph.ClusterLength <= 0)
+                    continue;
+
+                if (!Rune.TryGetRuneAt(text, glyph.ClusterStart, out var rune) || rune.Utf16SequenceLength != glyph.ClusterLength)
+                    continue;
+
+                if (!BidiMirroring.TryGetMirror(rune.Value, out var mirroredCodepoint))
+                    continue;
+
+                var mirroredGlyphIndex = CharCodeToGlyphIndex(new Rune(mirroredCodepoint));
+                if (mirroredGlyphIndex != 0)
+                    glyphs[i] = glyph with { GlyphIndex = mirroredGlyphIndex };
+            }
+        }
+
+        /// <summary>
+        /// Resolves (and memoizes into <paramref name="desiredX"/>) glyph <paramref name="i"/>'s desired
+        /// absolute X position in the not-yet-built display order - see <see cref="ReverseGlyphsForDisplay"/>'s
+        /// own remarks. <paramref name="depth"/> guards a pathological/adversarial font's attachment
+        /// chain the same way <c>GsubShaper.MaxNestedContextDepth</c> guards nested contextual lookups -
+        /// real fonts never stack more than a couple of combining marks; past the guard a glyph is
+        /// simply treated as unattached rather than resolved incorrectly or overflowing the stack.
+        /// </summary>
+        private double ResolveDesiredDisplayX(List<ShapedGlyph> glyphs, double[] naturalPos, double[] advance, double totalWidth, double?[] desiredX, int i, int depth)
+        {
+            if (desiredX[i] is { } cached)
+                return cached;
+
+            ShapedGlyph glyph = glyphs[i];
+            double logicalAbsX = naturalPos[i] + glyph.XOffset;
+            double result;
+
+            if (glyph.AttachedToIndex is { } baseIndex && baseIndex != i && depth < MaxAttachmentChainDepth)
+            {
+                double baseDesiredX = ResolveDesiredDisplayX(glyphs, naturalPos, advance, totalWidth, desiredX, baseIndex, depth + 1);
+                double baseLogicalAbsX = naturalPos[baseIndex] + glyphs[baseIndex].XOffset;
+                result = baseDesiredX + (logicalAbsX - baseLogicalAbsX);
+            }
+            else
+            {
+                result = totalWidth - logicalAbsX - advance[i];
+            }
+
+            desiredX[i] = result;
+            return result;
         }
 
         /// <summary>
         /// Whether this font's GSUB table defines an active lookup for every tag in
         /// <paramref name="requiredTags"/> - checked independently per tag (see
-        /// <see cref="GsubTable.SupportsAllFeatureTags"/>), under the same script preference
-        /// <see cref="GsubShaper.Shape"/> itself resolves against, so "supported" and "actually
-        /// applied" never disagree.
+        /// <see cref="GsubTable.SupportsAllFeatureTags"/>), under <see cref="GsubShaper.ScriptPreference"/>
+        /// (the no-script-tag fallback chain `Shape` itself resolves against for a run that carries no
+        /// <see cref="TextShapingFeatures.ScriptTag"/>). This method has no per-run script tag to check
+        /// against - every caller (<c>RFont.SupportsFontVariantCaps</c>, resolved once per box via
+        /// <c>DerivedStyle.ActualFontVariantCaps</c>/<c>SvgTreeBuilder.ComputeFontContext</c>) queries at
+        /// element granularity, before per-word script-run splitting (<see cref="PeachPDF.Html.Core.Dom.CssBox.CharScripts"/>)
+        /// has happened - so "supported" and "actually applied" can disagree for a run whose own
+        /// resolved <see cref="TextShapingFeatures.ScriptTag"/> is non-null (currently: Arabic-family
+        /// joining text) when the requested tags exist in this font only under that specific script's
+        /// `LangSys`, not under `"latn"`/`"DFLT"`: `Shape` would still find and apply them (it prepends
+        /// the run's own tag - see <see cref="GsubShaper"/>'s own <c>ResolveScriptPreference</c>), but
+        /// this method would report false, since it always checks the same script-agnostic chain
+        /// regardless of which run is asking. Narrow in practice (most fonts author caps/ligature
+        /// features under `DFLT`/`latn` regardless of what other scripts they also support), but a real
+        /// gap worth knowing about before trusting this as a strict "will `Shape` actually do this"
+        /// oracle for script-tagged text.
         /// </summary>
         public bool SupportsFeatureTags(IReadOnlySet<string> requiredTags)
             => FontFace.gsub?.Table?.SupportsAllFeatureTags(GsubShaper.ScriptPreference, requiredTags) ?? false;

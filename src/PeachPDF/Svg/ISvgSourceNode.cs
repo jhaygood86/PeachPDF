@@ -69,6 +69,16 @@ namespace PeachPDF.Svg
         /// CSS context, or null if the value is guaranteed-invalid.
         /// </summary>
         string? ResolveVar(string value) => value;
+
+        /// <summary>
+        /// The language this document/embedding context resolves to when nothing in the SVG's own tree
+        /// sets <c>lang</c>/<c>xml:lang</c> - the root's seed value for <see cref="SvgTreeBuilder"/>'s own
+        /// per-element language inheritance (mirrors <c>CssBox.Language</c>'s GSUB per-language feature
+        /// selection). Null (the default) for a source with no such context - a standalone SVG document
+        /// has nothing to fall back to beyond its own tree, so its text always resolves each script's
+        /// default <c>LangSys</c> unless something in the SVG itself sets <c>lang</c>/<c>xml:lang</c>.
+        /// </summary>
+        string? DocumentLanguageFallback => null;
     }
 
     /// <summary>

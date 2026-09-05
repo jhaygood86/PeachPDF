@@ -48,6 +48,15 @@
     <None Include="..\..\assets\fonts\NotoSansJPSubset.ttf" Link="NotoSansJPSubset.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\NotoSansArabicSubset.ttf" Link="NotoSansArabicSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ArefRuqaaSubset.ttf" Link="ArefRuqaaSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansDevanagariSubset.ttf" Link="NotoSansDevanagariSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

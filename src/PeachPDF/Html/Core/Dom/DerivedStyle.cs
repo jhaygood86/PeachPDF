@@ -852,30 +852,8 @@ namespace PeachPDF.Html.Core.Dom
         /// a separate <c>no-contextual</c>) leaves contextual alternates on, and vice versa - each
         /// axis is resolved independently rather than as one all-or-nothing default.
         /// </summary>
-        public LigatureFeatures ActualFontVariantLigatures
-        {
-            get
-            {
-                if (_actualFontVariantLigatures is { } cached) return cached;
-
-                var value = Style.Font.FontVariantLigatures;
-                if (value == Keywords.None)
-                {
-                    _actualFontVariantLigatures = LigatureFeatures.Required;
-                    return LigatureFeatures.Required;
-                }
-
-                var tokens = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                var resolved = LigatureFeatures.Required;
-                if (!tokens.Contains(Keywords.NoCommonLigatures)) resolved |= LigatureFeatures.Common;
-                if (!tokens.Contains(Keywords.NoContextual)) resolved |= LigatureFeatures.Contextual;
-                if (tokens.Contains(Keywords.DiscretionaryLigatures)) resolved |= LigatureFeatures.Discretionary;
-                if (tokens.Contains(Keywords.HistoricalLigatures)) resolved |= LigatureFeatures.Historical;
-
-                _actualFontVariantLigatures = resolved;
-                return resolved;
-            }
-        }
+        public LigatureFeatures ActualFontVariantLigatures =>
+            _actualFontVariantLigatures ??= TextShapingFeatureResolver.ResolveLigatures(Style.Font.FontVariantLigatures);
 
         private FontVariantCapsFeature? _actualFontVariantCaps;
 
@@ -892,16 +870,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (_actualFontVariantCaps is { } cached) return cached;
 
-                var requested = Style.Font.FontVariantCaps switch
-                {
-                    Keywords.SmallCaps => FontVariantCapsFeature.SmallCaps,
-                    Keywords.AllSmallCaps => FontVariantCapsFeature.AllSmallCaps,
-                    Keywords.PetiteCaps => FontVariantCapsFeature.PetiteCaps,
-                    Keywords.AllPetiteCaps => FontVariantCapsFeature.AllPetiteCaps,
-                    Keywords.Unicase => FontVariantCapsFeature.Unicase,
-                    Keywords.TitlingCaps => FontVariantCapsFeature.TitlingCaps,
-                    _ => FontVariantCapsFeature.None,
-                };
+                var requested = TextShapingFeatureResolver.ResolveCapsRequested(Style.Font.FontVariantCaps);
 
                 var resolved = requested != FontVariantCapsFeature.None && ActualFont.SupportsFontVariantCaps(requested)
                     ? requested
@@ -917,66 +886,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>The resolved GSUB numeric features (CSS <c>font-variant-numeric</c>) for this box's
         /// text - no capability gating (unlike caps): a tag the resolved font lacks simply activates no
         /// lookup and is silently inert.</summary>
-        public NumericFeatures ActualFontVariantNumeric
-        {
-            get
-            {
-                if (_actualFontVariantNumeric is { } cached) return cached;
-
-                var resolved = NumericFeatures.None;
-                foreach (var token in Style.Font.FontVariantNumeric.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-                {
-                    resolved |= token switch
-                    {
-                        Keywords.LiningNums => NumericFeatures.LiningNums,
-                        Keywords.OldstyleNums => NumericFeatures.OldstyleNums,
-                        Keywords.ProportionalNums => NumericFeatures.ProportionalNums,
-                        Keywords.TabularNums => NumericFeatures.TabularNums,
-                        Keywords.DiagonalFractions => NumericFeatures.DiagonalFractions,
-                        Keywords.StackedFractions => NumericFeatures.StackedFractions,
-                        Keywords.Ordinal => NumericFeatures.Ordinal,
-                        Keywords.SlashedZero => NumericFeatures.SlashedZero,
-                        _ => NumericFeatures.None,
-                    };
-                }
-
-                _actualFontVariantNumeric = resolved;
-                return resolved;
-            }
-        }
+        public NumericFeatures ActualFontVariantNumeric =>
+            _actualFontVariantNumeric ??= TextShapingFeatureResolver.ResolveNumeric(Style.Font.FontVariantNumeric);
 
         private EastAsianFeatures? _actualFontVariantEastAsian;
 
         /// <summary>The resolved GSUB east-asian features (CSS <c>font-variant-east-asian</c>) for this
         /// box's text - no capability gating, same rationale as <see cref="ActualFontVariantNumeric"/>.</summary>
-        public EastAsianFeatures ActualFontVariantEastAsian
-        {
-            get
-            {
-                if (_actualFontVariantEastAsian is { } cached) return cached;
-
-                var resolved = EastAsianFeatures.None;
-                foreach (var token in Style.Font.FontVariantEastAsian.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-                {
-                    resolved |= token switch
-                    {
-                        Keywords.Jis78Forms => EastAsianFeatures.Jis78,
-                        Keywords.Jis83Forms => EastAsianFeatures.Jis83,
-                        Keywords.Jis90Forms => EastAsianFeatures.Jis90,
-                        Keywords.Jis04Forms => EastAsianFeatures.Jis04,
-                        Keywords.Simplified => EastAsianFeatures.Simplified,
-                        Keywords.Traditional => EastAsianFeatures.Traditional,
-                        Keywords.FullWidth => EastAsianFeatures.FullWidth,
-                        Keywords.ProportionalWidth => EastAsianFeatures.ProportionalWidth,
-                        Keywords.Ruby => EastAsianFeatures.Ruby,
-                        _ => EastAsianFeatures.None,
-                    };
-                }
-
-                _actualFontVariantEastAsian = resolved;
-                return resolved;
-            }
-        }
+        public EastAsianFeatures ActualFontVariantEastAsian =>
+            _actualFontVariantEastAsian ??= TextShapingFeatureResolver.ResolveEastAsian(Style.Font.FontVariantEastAsian);
 
         private IReadOnlyList<(string Tag, int Value)>? _actualFontFeatureSettings;
 
@@ -986,45 +904,8 @@ namespace PeachPDF.Html.Core.Dom
         /// (tag, value) pairs - <c>on</c>/<c>off</c> resolve to 1/0, a bare tag with no value defaults
         /// to 1. <c>normal</c> resolves to an empty list.
         /// </summary>
-        public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings
-        {
-            get
-            {
-                if (_actualFontFeatureSettings is { } cached) return cached;
-
-                var value = Style.Font.FontFeatureSettings;
-                var resolved = value == Keywords.Normal
-                    ? []
-                    : ParseFontFeatureSettings(value);
-
-                _actualFontFeatureSettings = resolved;
-                return resolved;
-            }
-        }
-
-        private static IReadOnlyList<(string Tag, int Value)> ParseFontFeatureSettings(string value)
-        {
-            var entries = new List<(string, int)>();
-
-            foreach (var rawEntry in value.Split(',', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var parts = rawEntry.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 0) continue;
-
-                var tag = parts[0].Trim('"');
-                var settingValue = 1;
-                if (parts.Length > 1)
-                {
-                    var rawValue = parts[1];
-                    if (rawValue == Keywords.Off) settingValue = 0;
-                    else if (rawValue != Keywords.On) int.TryParse(rawValue, out settingValue);
-                }
-
-                entries.Add((tag, settingValue));
-            }
-
-            return entries;
-        }
+        public IReadOnlyList<(string Tag, int Value)> ActualFontFeatureSettings =>
+            _actualFontFeatureSettings ??= TextShapingFeatureResolver.ResolveFeatureSettings(Style.Font.FontFeatureSettings);
 
         private bool? _actualFontKerning;
 
@@ -1037,17 +918,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="PeachPDF.Text.GposPositioner"/>, since combining-mark attachment isn't a
         /// stylistic opt-out the way kerning is.
         /// </summary>
-        public bool ActualFontKerning
-        {
-            get
-            {
-                if (_actualFontKerning is { } cached) return cached;
-
-                var resolved = Style.Font.FontKerning != Keywords.None;
-                _actualFontKerning = resolved;
-                return resolved;
-            }
-        }
+        public bool ActualFontKerning =>
+            _actualFontKerning ??= TextShapingFeatureResolver.ResolveKerning(Style.Font.FontKerning);
 
         private TextShapingFeatures? _actualTextShapingFeatures;
 

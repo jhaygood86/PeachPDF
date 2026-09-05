@@ -1199,9 +1199,9 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         /// <summary>
         /// Draws the specified text string.
         /// </summary>
-        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, TextShapingFeatures? features = null)
+        public void DrawString(string s, XFont font, XBrush brush, double x, double y, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, TextShapingFeatures? features = null, string? logicalText = null)
         {
-            DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing, fontPalette, features);
+            DrawString(s, font, brush, new XRect(x, y, 0, 0), format, letterSpacing, fontPalette, features, logicalText);
         }
 
 
@@ -1214,9 +1214,12 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
-        /// Draws the specified text string.
+        /// Draws the specified text string. <paramref name="logicalText"/> is the true logical-order
+        /// (pre-bidi-mirroring) source <paramref name="text"/> was derived from, when the two differ -
+        /// see <see cref="PeachPDF.Html.Adapters.RGraphics"/>'s own equivalent overload for why this
+        /// exists (ToUnicode CMap fidelity for a reversed/mirrored RTL word).
         /// </summary>
-        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, TextShapingFeatures? features = null)
+        public void DrawString(string text, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing = 0, XGlyphPalette? fontPalette = null, TextShapingFeatures? features = null, string? logicalText = null)
         {
             if (text == null)
                 throw new ArgumentNullException("text");
@@ -1235,7 +1238,7 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
                 format = XStringFormats.Default;
 
             if (_renderer != null)
-                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, features ?? TextShapingFeatures.Default);
+                _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, features ?? TextShapingFeatures.Default, logicalText);
         }
 
         // ----- MeasureString ------------------------------------------------------------------------

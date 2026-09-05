@@ -85,16 +85,45 @@ namespace PeachPDF.Fonts
         /// Unicode scalar to key on, so its source text is recorded in <see cref="LigatureGlyphToText"/>
         /// instead of <see cref="CharacterToGlyphIndex"/> - <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfToUnicodeMap"/>
         /// merges both when building the PDF ToUnicode map.
+        ///
+        /// <paramref name="logicalText"/> is <paramref name="text"/>'s true logical-order source,
+        /// <b>positionally aligned</b> with it - same length, same UTF-16 index for the same glyph's
+        /// cluster - when a caller supplies one because the two differ: null (the common case: LTR
+        /// text, or any word never reversed/mirrored/reordered for display) means they're the same, and
+        /// every glyph's ToUnicode destination is simply its own substring of <paramref name="text"/>, as
+        /// before this parameter existed. When they differ, shaping still runs on <paramref name="text"/>
+        /// (the real glyph IDs/positions depend on the visually-correct, already-transformed string), but
+        /// each glyph's ToUnicode destination is instead the same cluster range read from
+        /// <paramref name="logicalText"/>, so copy/pasting a reversed/mirrored/reordered RTL run out of
+        /// the PDF recovers its true source characters in their true order - confirmed as a real
+        /// extraction defect against real PDFium/MuPDF output otherwise (a parenthesized Hebrew word's
+        /// parentheses landing in the wrong position on extraction).
+        ///
+        /// Building a correctly-aligned <paramref name="logicalText"/> is the caller's job, since only
+        /// the caller knows which transform actually produced <paramref name="text"/>: a whole-run L2
+        /// reversal + L4 mirroring (<c>BidiMirrorResolver.ApplyMirroring</c>) is undone position-wise by
+        /// <c>BidiMirrorResolver.ReverseRunes</c> (reverse the stable pre-transform source, without
+        /// mirroring - mirroring only changes a character's *value*, reversal alone already recovers its
+        /// *position*); a per-character physical list reorder (SVG's own bidi pass) instead has each
+        /// transformed character's own true source directly at hand already, positioned according to
+        /// wherever that character ended up. Both end up needing to satisfy the exact same
+        /// positional-alignment contract this method reads. A theoretical astral-codepoint RTL character
+        /// (no real script in current use) reversed via <c>ReverseRunes</c> stays alignment-correct since
+        /// that reversal is itself already Rune-based (surrogate pairs move as one unit).
         /// </summary>
-        public void AddShapedText(string text, TextShapingFeatures features)
+        public void AddShapedText(string text, TextShapingFeatures features, string? logicalText = null)
         {
             if (text == null)
                 return;
 
+            var source = logicalText != null && logicalText.Length == text.Length && logicalText != text
+                ? logicalText
+                : text;
+
             foreach (ShapedGlyph glyph in _descriptor.Shape(text, features))
             {
                 GlyphIndices[glyph.GlyphIndex] = null;
-                LigatureGlyphToText[glyph.GlyphIndex] = text.Substring(glyph.ClusterStart, glyph.ClusterLength);
+                LigatureGlyphToText[glyph.GlyphIndex] = source.Substring(glyph.ClusterStart, glyph.ClusterLength);
             }
         }
 

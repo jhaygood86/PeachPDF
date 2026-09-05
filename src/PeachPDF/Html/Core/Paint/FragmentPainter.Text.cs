@@ -4,8 +4,10 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace PeachPDF.Html.Core.Paint
@@ -90,7 +92,19 @@ namespace PeachPDF.Html.Core.Paint
                 }
 
                 var text = word.FirstLineText ?? word.Text!;
-                DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new RSize(word.Width, word.Height));
+                // A ::first-line override (FirstLineText) is its own independently-mirrored string
+                // derived from OriginalText, not from PreMirrorText - only the ordinary (non-overridden)
+                // path has a known logical-order source to recover for ToUnicode text extraction. text
+                // itself equals PreMirrorText whenever this word was never actually mirrored (the
+                // overwhelming common case) - CMapInfo.AddShapedText's own remap formula needs a
+                // *positionally-aligned* logical source (see its own remarks), so only a genuinely
+                // mirrored word's PreMirrorText gets reversed (ReverseRunes - position only, no
+                // re-mirroring) before being handed down; passing it unconditionally would misalign an
+                // unmirrored word's own already-correct (identity) logical text.
+                string? logicalText = null;
+                if (word.FirstLineText is null && word is CssRectWord { } rectWord && rectWord.PreMirrorText != text)
+                    logicalText = PeachPDF.Text.Bidi.BidiMirrorResolver.ReverseRunes(rectWord.PreMirrorText);
+                DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new RSize(word.Width, word.Height), logicalText: logicalText);
             }
         }
 
@@ -122,7 +136,14 @@ namespace PeachPDF.Html.Core.Paint
         /// cut word's font for it silently drew nothing when that font's family didn't include a "…"
         /// glyph (e.g. a narrow embedded script subset).
         /// </param>
-        private static void DrawWordGlyphs(RGraphics g, CssBox box, CssRect word, RRect rect, string text, RSize textSize, RFont? fontOverride = null)
+        /// <param name="logicalText">
+        /// <paramref name="text"/>'s true logical-order (pre-bidi-mirroring) source, when known and
+        /// different - see <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?, string?)"/>.
+        /// Null for a truncated/ellipsis <paramref name="text"/> (a caller-kept substring or a synthesized
+        /// "…" glyph, neither of which is <paramref name="word"/>'s own full text) and for any word with
+        /// no distinct logical-order source to recover.
+        /// </param>
+        private static void DrawWordGlyphs(RGraphics g, CssBox box, CssRect word, RRect rect, string text, RSize textSize, RFont? fontOverride = null, string? logicalText = null)
         {
             // A word on the target's first formatted line, under a ::first-line rule, uses that
             // resolved shadow box's font/color/letter-spacing instead of the box's own - it was
@@ -138,6 +159,10 @@ namespace PeachPDF.Html.Core.Paint
             // word (font == ActualFont), so it is a no-op there.
             var font = fontOverride ?? CssBox.ResolveWordFont(word, styleSource);
             var baselineAdjust = styleSource.ActualFont.Ascent - font.Ascent;
+            // A word's own resolved script tag/Arabic-family joining forms (CssBox.CharScripts/
+            // JoiningForms, sliced per word by AppendWordsFromText) override styleSource's own
+            // box-level shaping-feature request - see ResolveWordShapingFeatures.
+            var wordFeatures = styleSource.ResolveWordShapingFeatures(word);
 
             if (box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr)
             {
@@ -154,7 +179,7 @@ namespace PeachPDF.Html.Core.Paint
 
                 if (isUpright)
                 {
-                    PaintUprightVerticalRun(g, text, font, styleSource, rect, baselineAdjust);
+                    PaintUprightVerticalRun(g, text, font, styleSource, rect, baselineAdjust, wordFeatures, logicalText);
                 }
                 else
                 {
@@ -166,14 +191,14 @@ namespace PeachPDF.Html.Core.Paint
                     var rotation = SidewaysRotation(rect);
                     g.PushTransform(rotation);
                     g.DrawString(text, font, styleSource.ActualColor, new RPoint(0, baselineAdjust), naturalSize,
-                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                     g.PopTransform();
                 }
             }
             else
             {
                 var wordPoint = new RPoint(rect.X, rect.Y + baselineAdjust);
-                g.DrawString(text, font, styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                g.DrawString(text, font, styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
             }
         }
 
@@ -198,7 +223,7 @@ namespace PeachPDF.Html.Core.Paint
         /// or layout's reservation and paint's actual step disagree. The line-height fallback is
         /// deliberately not each character's individually-measured horizontal advance width
         /// (<see cref="CssLayoutEngine.MeasureUprightRunCharacters"/>'s own per-character <c>Size</c>,
-        /// still used below for cross-axis centering only): <see cref="RGraphics.DrawString"/> always
+        /// still used below for cross-axis centering only): <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> always
         /// renders a glyph across the font's full line-height span from its anchor regardless of that
         /// glyph's own advance width, so stepping by a narrower advance (a real CJK codepoint can
         /// measure a materially narrower hmtx advance than its font's line height) visibly overlapped
@@ -209,18 +234,18 @@ namespace PeachPDF.Html.Core.Paint
         /// A real <c>vmtx</c> advance is legitimately, routinely *smaller* than the font's line height (a
         /// CJK vertical font typically advances by one em; ascent+descent is usually well over one em) -
         /// so once real metrics make the per-character step narrower than <see cref="RFont.Height"/>
-        /// again, <see cref="RGraphics.DrawString"/>'s own "always paints a full line-height-tall span"
+        /// again, <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>'s own "always paints a full line-height-tall span"
         /// behavior reintroduces precisely the bleed-into-the-next-character overlap the line-height
         /// fallback above exists to avoid, unless each character's paint is confined to its own reserved
         /// cell. <see cref="RGraphics.PushClip(RRect)"/>/<see cref="RGraphics.PopClip"/> around each
-        /// <see cref="RGraphics.DrawString"/> call does exactly that when real metrics are in play; the
+        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> call does exactly that when real metrics are in play; the
         /// line-height fallback needs no clip, since its advance already equals the full painted span by
         /// construction.
         ///
         /// When <paramref name="font"/> additionally carries a real <c>VORG</c> table
         /// (<see cref="RFont.HasVerticalOrigin"/> - issue #775), the anchor is nudged by
         /// <see cref="RFont.GetVerticalOriginY"/> instead of staying at the plain top-of-cell position:
-        /// <see cref="RGraphics.DrawString"/> always renders <paramref name="font"/>'s baseline at
+        /// <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/> always renders <paramref name="font"/>'s baseline at
         /// <c>point.Y + font.Ascent</c> (traced through <c>XGraphicsPdfRenderer.DrawString</c>'s own
         /// <c>cyAscent</c> shift, which uses the exact same <c>Ascender</c> field <see cref="RFont.Ascent"/>
         /// is built from), while the OpenType spec defines a glyph's vertical origin as a baseline-relative,
@@ -249,19 +274,31 @@ namespace PeachPDF.Html.Core.Paint
         /// margin above a glyph's cap-height, never real ink. Do not "fix" this by shifting the clip to
         /// track the anchor without re-verifying against real rendered output first.
         /// </remarks>
-        private static void PaintUprightVerticalRun(RGraphics g, string text, RFont font, CssBox styleSource, RRect rect, double baselineAdjust)
+        private static void PaintUprightVerticalRun(RGraphics g, string text, RFont font, CssBox styleSource, RRect rect, double baselineAdjust, TextShapingFeatures wordFeatures, string? logicalText = null)
         {
             double offset = 0;
             var hasVerticalMetrics = font.HasVerticalMetrics;
             var hasVerticalOrigin = font.HasVerticalOrigin;
 
-            foreach (var (charText, rune, charSize) in CssLayoutEngine.MeasureUprightRunCharacters(g, text, font, styleSource.ActualTextShapingFeatures))
+            // Each character here paints as its own single-glyph DrawString call (unlike the horizontal/
+            // sideways branches' one whole-word call), so the whole-word logicalText (mismatched length
+            // against a 1-character text) can't be handed through as-is - CMapInfo.AddShapedText's remap
+            // needs a per-character logical source instead. logicalText is already positionally aligned
+            // with `text` (see CMapInfo.AddShapedText's own remarks) - the i-th rune painted from `text`
+            // corresponds directly to logicalText's i-th rune, no reversal needed here.
+            Rune[]? logicalRunes = logicalText != null && logicalText.Length == text.Length && logicalText != text
+                ? logicalText.EnumerateRunes().ToArray()
+                : null;
+
+            var index = 0;
+            foreach (var (charText, rune, charSize) in CssLayoutEngine.MeasureUprightRunCharacters(g, text, font, wordFeatures))
             {
                 var x = rect.X + Math.Max(0, (rect.Width - charSize.Width) / 2);
                 var y = rect.Y + offset + baselineAdjust;
                 if (hasVerticalOrigin)
                     y += font.GetVerticalOriginY(rune) - font.Ascent;
                 var advance = hasVerticalMetrics ? font.GetVerticalAdvance(rune) : font.Height;
+                var charLogicalText = logicalRunes != null ? logicalRunes[index].ToString() : null;
 
                 // A VORG-shifted anchor can push the painted span past the reserved cell even when the
                 // line-height fallback advance is in play (its "advance already equals the full painted
@@ -271,16 +308,17 @@ namespace PeachPDF.Html.Core.Paint
                 {
                     g.PushClip(new RRect(rect.X, rect.Y + offset, rect.Width, advance));
                     g.DrawString(charText, font, styleSource.ActualColor, new RPoint(x, y), charSize,
-                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, charLogicalText);
                     g.PopClip();
                 }
                 else
                 {
                     g.DrawString(charText, font, styleSource.ActualColor, new RPoint(x, y), charSize,
-                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, styleSource.ActualTextShapingFeatures);
+                        styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, charLogicalText);
                 }
 
                 offset += advance + styleSource.ActualLetterSpacing;
+                index++;
             }
         }
 

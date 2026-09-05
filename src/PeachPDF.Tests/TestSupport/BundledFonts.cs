@@ -48,6 +48,42 @@ namespace PeachPDF.Tests.TestSupport
         internal static string Hebrew => Path.Combine(AppContext.BaseDirectory, "NotoSansHebrewSubset.ttf");
 
         /// <summary>
+        /// A subset of "Noto Sans Arabic" (see NotoSansArabicSubset.LICENSE.txt): BEH/YEH/TEH/ALEF/
+        /// LAM/FEH (Dual- and Right-joining letters, enough to exercise every joining-type column and
+        /// the lam-alef <c>rlig</c> ligature) plus common punctuation/digits/basic Latin, with every
+        /// GSUB/GPOS layout feature preserved - a real font whose <c>isol</c>/<c>init</c>/<c>medi</c>/
+        /// <c>fina</c>/<c>rlig</c> data can prove Arabic-family cursive joining (issue #533) actually
+        /// renders joined glyphs, not just that synthetic byte-blob GSUB tables dispatch correctly.
+        /// </summary>
+        internal static string Arabic => Path.Combine(AppContext.BaseDirectory, "NotoSansArabicSubset.ttf");
+
+        /// <summary>
+        /// A subset of "Aref Ruqaa" (see ArefRuqaaSubset.LICENSE.txt): the same BEH/YEH/TEH/ALEF/LAM/
+        /// FEH letters as <see cref="Arabic"/>, but from a font whose own Arabic joining also relies on
+        /// GPOS Lookup Type 3 (Cursive Attachment) for its flowing baseline connections, layered on top
+        /// of its own <c>isol</c>/<c>init</c>/<c>medi</c>/<c>fina</c> positional substitution - unlike
+        /// <see cref="Arabic"/>'s font, which defines no <c>curs</c> GPOS feature at all. Used to prove
+        /// <c>GposPositioner.ApplyCursiveAttachment</c> - including its <c>RIGHT_TO_LEFT</c> lookup-flag
+        /// cascade direction and its own glyph-list-reversal survival - against a real font's real
+        /// cursive anchors and rasterized output, not just synthetic byte-blob GPOS tables.
+        /// </summary>
+        internal static string ArabicCursive => Path.Combine(AppContext.BaseDirectory, "ArefRuqaaSubset.ttf");
+
+        /// <summary>
+        /// A subset of "Noto Sans Devanagari" (see NotoSansDevanagariSubset.LICENSE.txt):
+        /// KA/TA/RA/SSA/HA/GA (enough consonants to form the conjunct क्ष and to exercise reph via
+        /// RA+VIRAMA), VIRAMA, the two pre-base matras (vowel signs I and PRISHTHAMATRA E), a
+        /// post-base matra (vowel sign AA), NUKTA, ANUSVARA, VISARGA, an independent vowel (A), plus
+        /// common punctuation/digits/basic Latin, with every GSUB/GPOS layout feature preserved - a
+        /// real font whose <c>nukt</c>/<c>ccmp</c>/<c>locl</c>/<c>akhn</c>/<c>rphf</c>/<c>half</c>/
+        /// <c>rkrf</c>/<c>cjct</c>/<c>abvs</c>/<c>blws</c>/<c>pres</c>/<c>psts</c> data can prove
+        /// Devanagari's Universal Shaping Engine syllable reordering (issue #533, Phase 5b) actually
+        /// renders correctly-formed conjuncts/reph/pre-base matras, not just that synthetic
+        /// byte-blob GSUB tables dispatch correctly.
+        /// </summary>
+        internal static string Devanagari => Path.Combine(AppContext.BaseDirectory, "NotoSansDevanagariSubset.ttf");
+
+        /// <summary>
         /// A subset of "Noto Sans JP" (see NotoSansJPSubset.LICENSE.txt): a handful of CJK ideographs
         /// plus the full basic-Latin alphabet/digits/punctuation, all in one face - a real font covering
         /// both scripts <see cref="Ttf"/> (Source Sans 3, Latin-only) does not, so tests can embed this

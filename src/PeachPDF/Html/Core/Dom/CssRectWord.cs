@@ -6,9 +6,12 @@
 // like the days and months;
 // they die and are reborn,
 // like the four seasons."
-// 
+//
 // - Sun Tsu,
 // "The Art of War"
+
+using PeachPDF.Text.Shaping.Arabic;
+using PeachPDF.Text.Shaping.Use;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -31,6 +34,33 @@ namespace PeachPDF.Html.Core.Dom
         private readonly string _preMirrorText;
 
         /// <summary>
+        /// This word's own resolved Arabic-family <see cref="ArabicJoiningForm"/> per codepoint of
+        /// <see cref="PreMirrorText"/> (true logical order, never mutated - see
+        /// <see cref="_preMirrorText"/>'s own remarks for why a stable source matters across repeated
+        /// layout passes), one entry per <see cref="System.Text.Rune"/> rather than per UTF-16 char -
+        /// null for a word with no Arabic-family joining codepoint in it at all (the overwhelming common
+        /// case - see <see cref="CssBox.JoiningForms"/>, this word's own slice of it). Set once at
+        /// construction, never mutated, and - unlike a plain RTL word's own text - never reversed either:
+        /// see <see cref="DisplayOrderReversed"/> for why a joining word always shapes in this same true
+        /// logical order regardless of its own display direction.
+        /// </summary>
+        private readonly ArabicJoiningForm[]? _logicalJoiningForms;
+
+        /// <summary>
+        /// This word's own resolved <see cref="UseCategory"/> per codepoint of <see cref="Text"/> (one
+        /// entry per <see cref="System.Text.Rune"/>, matching <see cref="_logicalJoiningForms"/>'s own
+        /// indexing convention) - null for a word with no Devanagari codepoint in it at all (the
+        /// overwhelming common case - see <see cref="CssBox.UseCategories"/>, this word's own slice of
+        /// it). Set once at construction, never mutated. Unlike <see cref="_logicalJoiningForms"/>,
+        /// Devanagari is never reversed for display, so there is no analogous
+        /// <see cref="DisplayOrderReversed"/> concern for this field - <c>GsubShaper</c>'s own USE
+        /// stage still needs true logical order to resolve syllable/conjunct structure, but the
+        /// resulting glyph list is never reversed afterward the way an Arabic-family joining word's is
+        /// (only locally reordered within each syllable - see <c>PeachPDF.Text.Shaping.Use.UseReorderer</c>).
+        /// </summary>
+        private readonly UseCategory[]? _logicalUseCategories;
+
+        /// <summary>
         /// Init.
         /// </summary>
         /// <param name="owner">the CSS box owner of the word</param>
@@ -38,7 +68,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="hasSpaceBefore">was there a whitespace before the word chars (before trim)</param>
         /// <param name="hasSpaceAfter">was there a whitespace after the word chars (before trim)</param>
         /// <param name="originalText">the pre-text-transform source text (see <see cref="CssRect.OriginalText"/>), if different from <paramref name="text"/></param>
-        public CssRectWord(CssBox owner, string text, bool hasSpaceBefore, bool hasSpaceAfter, string? originalText = null)
+        /// <param name="joiningForms">this word's own resolved joining forms in true logical order (see <see cref="_logicalJoiningForms"/>), if any</param>
+        /// <param name="useCategories">this word's own resolved USE categories (see <see cref="_logicalUseCategories"/>), if any</param>
+        public CssRectWord(CssBox owner, string text, bool hasSpaceBefore, bool hasSpaceAfter, string? originalText = null,
+            ArabicJoiningForm[]? joiningForms = null, UseCategory[]? useCategories = null)
             : base(owner)
         {
             _text = text;
@@ -46,7 +79,57 @@ namespace PeachPDF.Html.Core.Dom
             HasSpaceBefore = hasSpaceBefore;
             HasSpaceAfter = hasSpaceAfter;
             OriginalText = originalText ?? text;
+            _logicalJoiningForms = joiningForms;
+            _logicalUseCategories = useCategories;
         }
+
+        /// <summary>This word's own resolved OpenType script tag (<c>OpenTypeScriptTags</c>), or null
+        /// when unresolved (a script absent from that curated table, or a word whose script resolved to
+        /// a script-neutral value). Unlike <see cref="_logicalJoiningForms"/>, set post-construction by
+        /// <c>CssBox.AppendWordsFromText</c>'s own script-boundary word split - the same
+        /// settable-property pattern <see cref="CssRect.BidiLevel"/> already uses, since a single tag
+        /// applies uniformly across every fragment <c>AddWord</c> may split this word into (small-caps
+        /// case-runs, per-codepoint font fragments) the same way one <c>BidiLevel</c> does - the
+        /// script-boundary split guarantees script-homogeneity across those fragments the same way the
+        /// existing bidi-level-boundary split already guarantees level-homogeneity. Feeds
+        /// <see cref="DerivedStyle.ActualTextShapingFeatures"/>'s per-word GSUB/GPOS script selection.</summary>
+        internal string? ScriptTag { get; set; }
+
+        /// <summary>This word's resolved joining forms, in true logical order (see
+        /// <see cref="_logicalJoiningForms"/>) - null for a word with no Arabic-family joining codepoint
+        /// in it. Unlike a plain RTL word's <see cref="Text"/>, this never reverses: <c>GsubShaper</c>
+        /// needs the forms in the same true logical adjacency it shapes <see cref="Text"/> in (see
+        /// <see cref="DisplayOrderReversed"/>).</summary>
+        internal ArabicJoiningForm[]? EffectiveJoiningForms => _logicalJoiningForms;
+
+        /// <summary>This word's resolved USE categories (see <see cref="_logicalUseCategories"/>) -
+        /// null for a word with no Devanagari codepoint in it.</summary>
+        internal UseCategory[]? EffectiveUseCategories => _logicalUseCategories;
+
+        /// <summary>
+        /// Whether this word currently reads right-to-left on the page - set by
+        /// <c>CssLayoutEngine.MirrorWordTextIfNeeded</c> once bidi placement resolves it, in place of
+        /// that same method's ordinary <see cref="ReplaceText"/> character-level reversal/mirroring.
+        /// An Arabic-family joining word (<see cref="EffectiveJoiningForms"/> non-null) never gets that
+        /// treatment - <see cref="Text"/> stays true logical order permanently, because a real font's own
+        /// contextual <c>rlig</c> rules (e.g. Arabic lam-alef) are keyed on true logical adjacency and
+        /// silently stop matching once the text they'd apply to has been reversed. Instead, whoever
+        /// shapes this word for display (paint, outline extraction, ToUnicode text extraction - all funnel
+        /// through <c>CssBox.ResolveWordShapingFeatures</c>) requests
+        /// <c>TextShapingFeatures.ReverseForDisplay</c>, so GSUB/GPOS still run in the logical
+        /// order they need and only the resulting glyph list - never the source string - reverses, right
+        /// before painting. A no-op read for every other word (plain RTL words keep the older
+        /// text-level mirroring path unchanged).
+        /// </summary>
+        internal bool DisplayOrderReversed { get; private set; }
+
+        /// <summary>Marks this word as currently reading right-to-left - see
+        /// <see cref="DisplayOrderReversed"/>. Idempotent, and (like <see cref="ReplaceText"/>'s own
+        /// mirroring) never reset back to false: a word's own bidi embedding level is resolved from the
+        /// full paragraph text and does not change across a page-width reflow's repeated layout passes,
+        /// so once a word is known to display right-to-left it stays that way for the object's lifetime.
+        /// </summary>
+        internal void MarkDisplayOrderReversed() => DisplayOrderReversed = true;
 
         /// <summary>
         /// was there a whitespace before the word chars (before trim)

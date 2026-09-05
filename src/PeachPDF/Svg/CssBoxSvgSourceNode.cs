@@ -86,5 +86,11 @@ namespace PeachPDF.Svg
 
         public string? ResolveVar(string value) =>
             _cssData is null ? value : CssVarResolver.Resolve(new SvgCssBoxDomNode(_box, _svgRoot), value, _varContext);
+
+        /// <summary>An inline <c>&lt;svg&gt;</c> falls back to its surrounding HTML document's own
+        /// resolved language (<see cref="CssBox.Language"/> - the box's own <c>lang</c> if set, else its
+        /// nearest HTML ancestor's, else <see cref="HtmlContainerInt.DocumentLanguage"/>) when nothing in
+        /// the SVG subtree itself sets <c>lang</c>/<c>xml:lang</c>.</summary>
+        public string? DocumentLanguageFallback => _box.Language;
     }
 }

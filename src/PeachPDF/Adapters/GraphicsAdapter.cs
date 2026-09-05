@@ -162,7 +162,14 @@ namespace PeachPDF.Adapters
             throw new NotSupportedException();
         }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) =>
+            DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText: null);
+
+        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?, string?)"/>'s
+        /// own remarks for <paramref name="logicalText"/> - threaded straight through to
+        /// <see cref="XGraphics.DrawString(string, XFont, XBrush, double, double, XStringFormat, double, XGlyphPalette?, TextShapingFeatures?, string?)"/>,
+        /// the one real PDF-writing path that acts on it.</summary>
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, TextShapingFeatures? features, string? logicalText)
         {
             var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
             var xPoint = Utils.Convert(point, PixelsPerPoint);
@@ -173,7 +180,7 @@ namespace PeachPDF.Adapters
             // extra draw calls and the string stays a single, contiguous, copy/paste- and
             // tagged-PDF-friendly text run regardless of its value.
             var xLetterSpacing = letterSpacing / PixelsPerPoint;
-            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), features ?? TextShapingFeatures.Default);
+            _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), features ?? TextShapingFeatures.Default, logicalText);
         }
 
         /// <summary>
