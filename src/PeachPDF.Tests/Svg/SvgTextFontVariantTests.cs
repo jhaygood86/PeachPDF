@@ -3,6 +3,8 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using PeachPDF.Text;
+using System.IO;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
@@ -106,14 +108,21 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
-        public void FontVariantCaps_SmallCaps_RequestedWhenFontSupportsIt()
+        public async Task FontVariantCaps_SmallCaps_RequestedWhenFontSupportsIt()
         {
             // Gated through RFont.SupportsFontVariantCaps, matching HTML's own
-            // DerivedStyle.ActualFontVariantCaps - the default resolved test font supports smcp, so the
-            // request is forwarded as-is. No small-caps synthesis fallback exists for SVG (a
-            // deliberately smaller scope than HTML - see .claude/accepted-gaps) - this only proves real
-            // GSUB substitution gets requested when the font can honor it.
-            var g = Render("""<text x="10" y="50" font-size="20" font-variant-caps="small-caps">Hi</text>""");
+            // DerivedStyle.ActualFontVariantCaps - explicitly registers BundledFonts.Ttf (Source Sans 3,
+            // confirmed real smcp support - see FontVariantCapsIntegrationTests) rather than relying on
+            // whatever font the platform's own default-family resolution happens to pick, which is not
+            // guaranteed to support smcp and differs between CI platforms (this test previously depended
+            // on the ambient default font and failed on Linux CI while passing on Windows). No small-caps
+            // synthesis fallback exists for SVG (a deliberately smaller scope than HTML - see
+            // .claude/accepted-gaps) - this only proves real GSUB substitution gets requested when the
+            // font can honor it.
+            await using var stream = File.OpenRead(BundledFonts.Ttf);
+            await Adapter.AddFont(stream, "SmallCapsTest");
+
+            var g = Render("""<text x="10" y="50" font-size="20" font-family="SmallCapsTest" font-variant-caps="small-caps">Hi</text>""");
 
             var draw = Assert.Single(g.DrawStringCalls);
             Assert.Equal(FontVariantCapsFeature.SmallCaps, draw.Features!.Value.Caps);
