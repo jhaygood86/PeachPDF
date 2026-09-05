@@ -386,6 +386,74 @@ When `EnableInteractivePdfForms` is left at its default (`false`), none of this 
 
 The field-kind inference is CSS-driven and author-overridable via the `-peachpdf-pdf-form-field` custom property (plus three text-field-only sub-setting properties for auto-sizing, comb layout, and scroll behavior) — see [Interactive PDF Forms Support](html-css-support.md#interactive-pdf-forms-support) in HTML & CSS Support for the full property reference and default inference table.
 
+## Generating PDF/A-conformant output
+
+PeachPDF can optionally produce a PDF/A (ISO 19005) conformant file — the archival PDF profile many government, legal, and long-term-records workflows require. PDF/A conformance is **off by default**; opt in with `PdfGenerateConfig.PdfAConformance`:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PdfAConformance = PdfAConformance.PdfA2B,
+    // XMP metadata needs a real creation date - see "The XMP creation date" below.
+    Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow }
+};
+```
+
+### Choosing a conformance level
+
+`PdfAConformance` covers all three ISO 19005 parts, each with a "B" (visual-only), "U" (guaranteed Unicode text extraction), and accessible "A" variant:
+
+| Part | Levels | Notes |
+|---|---|---|
+| PDF/A-1 | `PdfA1B`, `PdfA1A` | Based on PDF 1.4. **Forbids PDF transparency groups entirely** — see below. |
+| PDF/A-2 | `PdfA2B`, `PdfA2U`, `PdfA2A` | Based on PDF 1.7. Permits transparency. |
+| PDF/A-3 | `PdfA3B`, `PdfA3U`, `PdfA3A` | Same as PDF/A-2, plus permission to embed arbitrary files (PeachPDF has no "attach a file" API, so this allowance goes unused). |
+
+If you don't have a specific requirement for PDF/A-1 or PDF/A-3, `PdfA2B` (or `PdfA2U`, effectively free once you're already targeting 2B — see below) is the least restrictive, most broadly useful choice.
+
+`U` levels cost nothing extra over the matching `B` level: every embedded font already carries a `ToUnicode` CMap, so the guaranteed-text-extraction requirement is already met.
+
+### PDF/A-1 and transparency
+
+CSS/SVG `opacity` below 1, `fill-opacity`/`stroke-opacity` below 1, a semi-transparent gradient color stop, and an SVG `<mask>` all render via a PDF transparency group — a construct PDF/A-1 forbids outright. PeachPDF has no engine to flatten these into a PDF/A-1-legal form, so rather than silently emit a non-conformant file, generation throws an `InvalidOperationException` naming the offending feature if the document uses any of them under `PdfA1B`/`PdfA1A`. A document that doesn't use any of these features generates normally under PDF/A-1. If your content needs transparency, target `PdfA2*`/`PdfA3*` instead — both permit it.
+
+### The accessible "A" levels
+
+`PdfA1A`/`PdfA2A`/`PdfA3A` build on the same tagged-structure-tree machinery as [tagged PDF](#enabling-tagged-pdf-pdfua-output) — requesting one of them enables tagging for that render even if `EnableTaggedPdf` is left `false`. Two things follow:
+
+- **A document language is required.** Generation throws an `InvalidOperationException` if neither the document's own `<html lang="...">` nor `PdfGenerateConfig.DefaultLanguage` resolves to a language.
+- **Every tagged image gets an `/Alt` entry**, even one with no `alt` attribute (an empty `/Alt` marks it decorative — PDF/A-a validation requires the entry to be *present*, not necessarily meaningful). Plain tagged-PDF output (`EnableTaggedPdf` alone, no PDF/A) is unaffected — a missing `alt` there still produces no `/Alt` entry, exactly as before.
+
+### XMP metadata
+
+Requesting any `PdfAConformance` level writes an XMP metadata stream (the document catalog's `/Metadata` entry), since PDF/A requires one. You can also opt into an XMP stream independently of PDF/A conformance with `EnableXmpMetadata`:
+
+```csharp
+var config = new PdfGenerateConfig { EnableXmpMetadata = true };
+```
+
+The XMP packet's Dublin Core/`pdf:`/`xmp:` fields are always derived from the same Document Information dictionary values `PdfDocumentMetadata` already controls (`Title`, `Author`, `Subject`, `Keywords`), so the two stay consistent by construction. `pdfaid:part`/`pdfaid:conformance` are added only when `PdfAConformance` is set — they're derived from it, not independently settable (a caller can't claim a conformance level the actual output doesn't meet).
+
+To include your own additional XMP metadata (an internal provenance or records-management schema, for example), add `System.Xml.Linq.XElement`s to `PdfDocumentMetadata.CustomXmpProperties` — each becomes its own `rdf:Description` in the packet, alongside the built-in one:
+
+```csharp
+using System.Xml.Linq;
+
+XNamespace acme = "urn:acme:records";
+var metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow };
+metadata.CustomXmpProperties.Add(new XElement(acme + "retentionPolicy", "7-years"));
+
+var config = new PdfGenerateConfig { EnableXmpMetadata = true, Metadata = metadata };
+```
+
+#### The XMP creation date
+
+`xmp:CreateDate` needs a real value. PeachPDF uses the same date HTML `<meta>`-extraction already populates the Document Information dictionary's `/CreationDate` from, or `PdfDocumentMetadata.CreationDate` when you set it explicitly (it wins over the HTML-extracted date, same override pattern as `Title`/`Author`/etc.). Whenever an XMP stream is being written (`EnableXmpMetadata` or `PdfAConformance`) and neither is available, generation throws an `InvalidOperationException` rather than writing a placeholder date — set `PdfDocumentMetadata.CreationDate` to fix it.
+
+### Color and ICC profiles
+
+A PDF/A `OutputIntent` needs a device-independent ICC profile to name — PeachPDF embeds the ICC's own freely-redistributable `sRGB2014.icc` profile for this and identifies it as `"sRGB IEC61966-2.1"`. This matches PeachPDF's only supported color mode (RGB) — there is no public API surface for CMYK output, so no CMYK output intent is ever needed.
+
 ## ASP.NET Core controller endpoint
 
 Render to a `MemoryStream`, rewind it, and return it with `File()` so ASP.NET Core streams it to the client with the right content type. `BuildInvoiceHtml` below stands in for whatever HTML-generation logic you use (a Razor template, a string builder, etc.) — the PDF-specific part is everything after `var html = ...`.

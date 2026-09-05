@@ -5091,6 +5091,40 @@ await SaveShowcaseAsync("tagged_pdf", "Standards & Accessibility", "Tagged PDF (
     "Accessible, tagged PDF output: a logical structure tree with headings, lists, tables, alt text, links, and tag-type overrides.",
     taggedPdfHtml, taggedPdfConfig);
 
+// --- PDF/A Conformance showcase ---
+// PDF/A output is otherwise visually identical to ordinary output - its value is in the file's own
+// object structure (an /OutputIntents ICC profile, an XMP /Metadata stream with pdfaid:part/
+// conformance, and - since this uses the accessible PdfA2A level - the same tagged structure tree as
+// the Tagged PDF showcase above) rather than anything a reader sees on the page, but it's included
+// per this repo's showcase convention anyway.
+
+const string PdfACss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 10pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 16pt }
+    p.intro { color: #555 }
+    </style>
+    """;
+
+var pdfAHtml = "<!DOCTYPE html><html lang=\"en-US\"><head><title>PDF/A Conformance Showcase</title>" + PdfACss + "</head><body>" +
+    "<h1>PDF/A Conformance Showcase</h1>" +
+    "<p class=\"intro\">This document is generated with <code>PdfGenerateConfig.PdfAConformance = PdfAConformance.PdfA2A</code> - the accessible level of PDF/A-2. " +
+    "It carries an embedded sRGB ICC output intent, an XMP metadata stream with <code>pdfaid:part</code>/<code>pdfaid:conformance</code>, and - because \"A\" levels build on tagged-PDF output - the same logical structure tree the Tagged PDF showcase demonstrates.</p>" +
+    $"<img src=\"data:image/png;base64,{TaggedPdfTinyPngBase64}\" alt=\"A small red square\" width=\"16\" height=\"16\" />" +
+    "<p>PDF/A-1 (not shown here) forbids PDF transparency groups entirely - PeachPDF rejects a document that uses CSS/SVG opacity, an SVG mask, or a semi-transparent gradient stop under that level rather than silently producing a non-conformant file. PDF/A-2 and PDF/A-3, used here, permit transparency normally.</p>" +
+    "</body></html>";
+
+var pdfAConfig = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PdfAConformance = PdfAConformance.PdfA2A,
+    Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+};
+await SaveShowcaseAsync("pdf_a_conformance", "Standards & Accessibility", "PDF/A Conformance",
+    "Archival PDF/A output: an embedded sRGB ICC output intent, XMP metadata with pdfaid:part/conformance, and (at the accessible \"A\" level shown here) a tagged structure tree.",
+    pdfAHtml, pdfAConfig);
+
 // --- PDF Bookmarks (Outline) showcase ---
 // Like tagged PDF above, the outline is invisible in a normal page render - its value is manual
 // inspection of the reader's bookmark/outline sidebar (e.g. Acrobat's or a browser PDF viewer's

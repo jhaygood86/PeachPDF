@@ -389,10 +389,19 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// <summary>
         /// Activates a separable/HSL PDF blend mode (a <c>/BM</c> ExtGState) for subsequent painting.
         /// Scope it with a surrounding q/Q; the Q restores the blend mode to Normal. Used by the
-        /// COLRv1 PaintComposite interpreter.
+        /// COLRv1 PaintComposite interpreter and by <c>outline-color: invert</c>
+        /// (<see cref="Html.Core.Handlers.OutlineDrawHandler"/>, via <c>RGraphics.PushBlendMode</c>).
         /// </summary>
         internal void SetBlendMode(string pdfBlendModeName)
         {
+            // A non-Normal /BM (any value other than "Normal"/"Compatible") is itself a transparency
+            // -group-requiring construct PDF/A-1 forbids, same as an alpha ExtGState - see
+            // PdfATransparencyGuard's remarks.
+            if (pdfBlendModeName is not ("Normal" or "Compatible"))
+            {
+                PdfATransparencyGuard.RequireAllowed(Owner, _page, $"A non-default blend mode ({pdfBlendModeName})");
+            }
+
             var extGState = new PdfExtGState(Owner);
             extGState.Elements.SetName("/BM", pdfBlendModeName);
             string gs = Resources.AddExtGState(extGState);
@@ -1816,6 +1825,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             image.Finish();
             maskImage.Finish();
 
+            // Checked before any group/mask/ExtGState object is built, so a PDF/A-1 rejection never
+            // leaves partially-built objects registered in the document's resources/iref table.
+            PdfATransparencyGuard.RequireAllowed(Owner, _page, "An SVG <mask>");
+
             // A /Luminosity SMask's /G target must itself be a transparency group (PDF 32000-1 §11.6.4.3)
             // - XForm/PdfFormXObject don't set this up automatically, so it's added here rather than
             // generalizing CreateTile's caller-agnostic form creation for a mask-only requirement.
@@ -1899,6 +1912,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             BeginPage();
             image.Finish();
 
+            // Checked before any group/ExtGState object is built, so a PDF/A-1 rejection never leaves
+            // partially-built objects registered in the document's resources/iref table.
+            PdfATransparencyGuard.RequireAllowed(Owner, _page, "CSS/SVG opacity less than 1");
+
             // Must be an isolated transparency group so the tile's own (possibly overlapping) content is
             // flattened once before the constant alpha below is applied to the flattened result - see
             // the remarks above and on DrawImageMasked for why plain (non-group) content wouldn't work.
@@ -1911,9 +1928,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             var extGState = Owner.ExtGStateTable.GetExtGState(opacity);
             var gsName = Resources.AddExtGState(extGState);
-
-            if (_page != null)
-                _page.TransparencyUsed = true;
 
             double cx = width / image.PointWidth;
             double cy = height / image.PointHeight;

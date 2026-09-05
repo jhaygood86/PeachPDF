@@ -133,5 +133,34 @@ namespace PeachPDF.PdfSharpCore.Pdf
             set { _maximumDownscaleMultiplier = value; }
         }
         double _maximumDownscaleMultiplier = 1.0;
+
+        /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.PdfAConformance"/> - see there for behavior.
+        /// Read by <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfATransparencyGuard"/> to reject
+        /// PDF/A-1-incompatible transparency usage, and by <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfCatalog"/>/
+        /// <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfOutputIntent"/>/metadata wiring.
+        /// </summary>
+        public PdfAConformance PdfAConformance
+        {
+            get { return _pdfAConformance; }
+            set { _pdfAConformance = value; }
+        }
+        PdfAConformance _pdfAConformance = PdfAConformance.None;
+
+        /// <summary>
+        /// Whether <see cref="PdfAConformance"/> has already been established by a prior
+        /// <c>PdfGenerator.AddPdfPages</c> call on this document. PDF/A conformance is a whole-document
+        /// property - <c>AddPdfPages</c> is a repeatable, public API (a caller can add more pages to an
+        /// existing <c>PeachPdfDocument</c>), so this flag lets it detect and reject a second call that
+        /// requests a different <see cref="PdfAConformance"/> than the first, rather than silently
+        /// producing a document whose already-written <c>/OutputIntents</c>/<c>/Metadata</c> claim a
+        /// conformance level some of its pages were never actually painted under.
+        /// </summary>
+        public bool PdfAConformanceEstablished
+        {
+            get { return _pdfAConformanceEstablished; }
+            set { _pdfAConformanceEstablished = value; }
+        }
+        bool _pdfAConformanceEstablished;
     }
 }

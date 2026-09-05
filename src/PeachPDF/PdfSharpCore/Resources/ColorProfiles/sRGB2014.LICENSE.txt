@@ -1,0 +1,22 @@
+sRGB2014.icc
+
+Source: https://registry.color.org/rgb-registry/profiles/sRGB2014.icc
+  (linked from https://registry.color.org/rgb-registry/srgbprofiles, the ICC's
+  "Three Component Color Encoding Registry" sRGB Profiles page)
+
+Copyright (c) International Color Consortium, 2015 (embedded in the profile's own
+"cprt" tag: "Copyright International Color Consortium, 2015").
+
+License (from https://registry.color.org/profile-library/#license, "Licensing",
+which the sRGB Profiles page explicitly states this profile is subject to):
+
+"This profile is made available by the International Color Consortium, and may be
+copied, distributed, embedded, made, used, and sold without restriction. Altered
+versions of this profile shall have the original identification and copyright
+information removed and shall not be misrepresented as the original profile."
+
+This file is embedded unmodified in the PeachPDF assembly and referenced as the
+ICC profile of the PDF/A "/OutputIntent" PeachPDF writes when PDF/A conformance is
+requested (see PdfAConformance / PdfOutputIntent) - identifying "sRGB IEC61966-2.1"
+as the device-independent color space the document's DeviceRGB/DeviceGray content is
+defined relative to, per ISO 19005 §6.2.2.

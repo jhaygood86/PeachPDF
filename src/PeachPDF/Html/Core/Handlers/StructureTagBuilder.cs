@@ -36,10 +36,21 @@ namespace PeachPDF.Html.Core.Handlers
         PdfPage? _currentPage;
         int _currentPageStructParentsKey;
         int _nextMcidOnCurrentPage;
+        readonly bool _requireAltText;
 
-        public StructureTagBuilder(PdfDocument document)
+        /// <param name="document">The document to build the structure tree for.</param>
+        /// <param name="requireAltText">
+        /// When <c>true</c> (only for PDF/A's accessible "A" conformance levels - see
+        /// <see cref="PeachPDF.PdfAConformance"/>), a <c>/Figure</c>-mapped content element with no
+        /// <c>alt</c> text still gets an empty <c>/Alt</c> entry, rather than none at all - PDF/A-a
+        /// (and PDF/UA) validation requires the entry to be present (empty marks it decorative), even
+        /// though a missing one is legal for ordinary tagged-PDF output. Defaults to <c>false</c>,
+        /// leaving plain <see cref="PeachPDF.PdfGenerateConfig.EnableTaggedPdf"/> output unaffected.
+        /// </param>
+        public StructureTagBuilder(PdfDocument document, bool requireAltText = false)
         {
             _document = document;
+            _requireAltText = requireAltText;
 
             var catalog = document.Catalog;
             catalog.MarkInfo.Marked = true;
@@ -105,6 +116,11 @@ namespace PeachPDF.Html.Core.Handlers
 
             if (!string.IsNullOrEmpty(altText))
                 element.AlternateText = altText;
+            else if (_requireAltText && structureType == "Figure")
+                // PDF/A-a (and PDF/UA) validation requires a /Figure element to carry an /Alt entry -
+                // present-but-empty is valid (marks it decorative), absent is not. Ordinary tagged-PDF
+                // output (EnableTaggedPdf alone, _requireAltText false) is unaffected.
+                element.AlternateText = string.Empty;
 
             if (g.IsOffscreenTile)
                 // Struct element still created above (keeps the tree shape well-formed), but no

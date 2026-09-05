@@ -15,6 +15,7 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 - CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers via `string-set`/`string()` and `position: running()`/`element()`
 - Automatic [PDF metadata extraction](https://peachpdf.net/html-css-support.html#pdf-metadata-extraction) from HTML `<title>` and `<meta>` elements
 - Optional Tagged PDF (PDF/UA) output — logical structure tree, automatic document language, CSS-driven tag mapping via `-peachpdf-pdf-tag-type` (see `PdfGenerateConfig.EnableTaggedPdf`)
+- Optional PDF/A (ISO 19005) conformance — parts 1, 2, and 3, each with visual-only (B), guaranteed-text-extraction (U), and accessible (A) levels (see `PdfGenerateConfig.PdfAConformance`)
 - Automatic PDF outline (bookmark sidebar) generation from headings, with full CSS control via `bookmark-level`/`bookmark-label`/`bookmark-state` (CSS Generated Content Module Level 3) — no configuration required
 - Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery — with per-character font matching (`@font-face` `unicode-range` and coverage-based fallback across the `font-family` stack) and monochrome emoji / supplementary-plane (astral) text via `cmap` format-12 (outlines only; color-emoji tables are not embedded)
 

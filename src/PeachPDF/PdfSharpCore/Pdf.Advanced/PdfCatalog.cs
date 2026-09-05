@@ -187,6 +187,35 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         PdfMarkInformation _markInfo = null!;
 
         /// <summary>
+        /// Sets the document's single PDF/A output intent (see <see cref="PdfOutputIntent"/>) - a
+        /// one-element <c>/OutputIntents</c> array, per <see cref="PeachPDF.PdfGenerateConfig.PdfAConformance"/>.
+        /// Only ever called when PDF/A conformance is requested - untouched, no <c>/OutputIntents</c>
+        /// entry is added at all.
+        /// </summary>
+        internal void SetOutputIntent(PdfOutputIntent outputIntent)
+        {
+            // Registered as its own indirect object (matching SetMetadata's own pattern just below,
+            // and common real-world PDF/A-writer practice) rather than embedded inline in the array -
+            // the bare PDF spec permits either, but this is the safer, more broadly-compatible choice.
+            Owner.Internals.AddObject(outputIntent);
+            var array = new PdfArray(Owner);
+            array.Elements.Add(outputIntent.Reference);
+            Elements[Keys.OutputIntents] = array;
+        }
+
+        /// <summary>
+        /// Sets the document's XMP metadata stream (<c>/Metadata</c>, see <see cref="PdfMetadataStream"/>) -
+        /// only ever called when <see cref="PeachPDF.PdfGenerateConfig.EnableXmpMetadata"/> or
+        /// <see cref="PeachPDF.PdfGenerateConfig.PdfAConformance"/> requests one. Untouched, no
+        /// <c>/Metadata</c> entry is added at all.
+        /// </summary>
+        internal void SetMetadata(PdfMetadataStream metadata)
+        {
+            Owner.Internals.AddObject(metadata);
+            Elements.SetReference(Keys.Metadata, metadata);
+        }
+
+        /// <summary>
         /// Dispatches PrepareForSave to the objects that need it.
         /// </summary>
         internal override void PrepareForSave()

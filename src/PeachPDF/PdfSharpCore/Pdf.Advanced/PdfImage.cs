@@ -314,6 +314,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 }
                 if (hasMask && hasAlphaMask && pdfVersion >= 14)
                 {
+                    // An image /SMask (e.g. a transparent PNG's alpha channel) is a transparency
+                    // -group-requiring construct PDF/A-1 forbids just as much as an alpha ExtGState -
+                    // checked before any mask object is built. No page-flag tracking here: unlike an
+                    // ExtGState-driven fill/stroke/opacity, an image's own /SMask is honored directly by
+                    // the imaging model without requiring the containing page to carry its own /Group.
+                    PdfATransparencyGuard.RequireAllowed(_document, "An image with an alpha channel (e.g. a transparent PNG)");
+
                     // The image provides an alpha mask (requires Arcrobat 5.0 or higher)
                     byte[] alphaMaskCompressed = fd.Encode(alphaMask, _document.Options.FlateEncodeMode);
                     PdfDictionary smask = new PdfDictionary(_document);
