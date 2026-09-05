@@ -8349,6 +8349,68 @@ await SaveShowcaseAsync("bengali_gujarati_tamil_use", "Text &amp; Fonts", "USE: 
     "categories (Consonant Placeholder, Syllable Modifier) no Devanagari codepoint reaches.",
     bengaliGujaratiTamilUseHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
+// SVG <text> Arabic-family joining / Devanagari USE reordering: the same real per-character
+// joining-form resolution, GSUB shaping, and USE syllable reordering the two HTML showcases above
+// demonstrate, now applied to native SVG <text>/<tspan> content - previously SVG rendered Arabic and
+// Devanagari text as isolated, unjoined, unreordered nominal glyphs only (see
+// .claude/accepted-gaps/no-text-shaping.md's prior "SVG does not resolve script, joining forms, or
+// USE categories at all" entry). SvgRenderer.ResolveComplexScriptRuns detects each maximal run of
+// mutually-joining/reordering characters and shapes/measures/paints it as one atomic unit, exactly
+// like HTML's per-word CssRectWord treatment, including reversing only the resulting glyph list (never
+// the source text) for a right-to-left run so a font's own contextual rlig rules still match.
+var svgArabicDevanagariHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'ArabicNaskh'; src: url('data:font/truetype;base64,{notoArabicB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'ArabicRuqaa'; src: url('data:font/truetype;base64,{arefRuqaaB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Devanagari'; src: url('data:font/truetype;base64,{notoDevanagariB64}') format('truetype'); }}" +
+    "body { font-family: 'SS3', sans-serif; margin: 0; color: #222; font-size: 11pt }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.8em; color: #555 }" +
+    "</style></head><body>" +
+    "<h1>SVG Text: Arabic-Family Joining &amp; Devanagari USE Reordering</h1>" +
+    "<p class=\"intro\">The same real joining-form resolution, GSUB shaping, and USE syllable " +
+    "reordering as HTML text (see the two showcases above), now applied inside a native SVG " +
+    "&lt;text&gt; element.</p>" +
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 700 520\" width=\"700\" height=\"520\">" +
+    "<style>" +
+    ".label { font-family: 'SS3', sans-serif; font-size: 12px; fill: #555 }" +
+    ".naskh { font-family: 'ArabicNaskh', sans-serif; font-size: 30px }" +
+    ".ruqaa { font-family: 'ArabicRuqaa', sans-serif; font-size: 40px }" +
+    ".deva { font-family: 'Devanagari', sans-serif; font-size: 30px }" +
+    ".box { fill: #f5f6f8; stroke: #ddd }" +
+    "</style>" +
+
+    "<rect class=\"box\" x=\"10\" y=\"10\" width=\"680\" height=\"90\"/>" +
+    "<text class=\"label\" x=\"20\" y=\"30\">Positional joining forms (Beh-Yeh-Teh, direction=\"rtl\")</text>" +
+    "<text class=\"naskh\" x=\"670\" y=\"75\" direction=\"rtl\" text-anchor=\"end\">بيت</text>" +
+
+    "<rect class=\"box\" x=\"10\" y=\"110\" width=\"680\" height=\"90\"/>" +
+    "<text class=\"label\" x=\"20\" y=\"130\">Lam-alef ligature (rlig), direction=\"rtl\"</text>" +
+    "<text class=\"naskh\" x=\"670\" y=\"180\" direction=\"rtl\" text-anchor=\"end\">لا</text>" +
+
+    "<rect class=\"box\" x=\"10\" y=\"210\" width=\"680\" height=\"110\"/>" +
+    "<text class=\"label\" x=\"20\" y=\"230\">GPOS cursive attachment (Aref Ruqaa), direction=\"rtl\"</text>" +
+    "<text class=\"ruqaa\" x=\"670\" y=\"295\" direction=\"rtl\" text-anchor=\"end\">بيتالف</text>" +
+
+    "<rect class=\"box\" x=\"10\" y=\"330\" width=\"680\" height=\"90\"/>" +
+    "<text class=\"label\" x=\"20\" y=\"350\">Devanagari pre-base matra / conjunct / reph reordering</text>" +
+    "<text class=\"deva\" x=\"20\" y=\"400\">कि — क्षि — र्कि</text>" +
+
+    "<rect class=\"box\" x=\"10\" y=\"430\" width=\"680\" height=\"80\"/>" +
+    "<text class=\"label\" x=\"20\" y=\"450\">Mixed script: Latin, embedded Arabic, embedded Devanagari in one line</text>" +
+    "<text x=\"20\" y=\"495\" font-size=\"20px\">Hello <tspan class=\"naskh\" font-size=\"24px\">بيت</tspan> " +
+    "<tspan class=\"deva\" font-size=\"24px\">कि</tspan></text>" +
+    "</svg>" +
+    "</body></html>";
+await SaveShowcaseAsync("svg_arabic_devanagari_shaping", "Graphics & Effects", "SVG Text: Arabic-Family Joining & Devanagari USE",
+    "Native SVG <text>/<tspan> content shaped with the same real per-character joining-form " +
+    "resolution, GSUB substitution (including a font's own rlig lam-alef ligature and GPOS cursive " +
+    "attachment), and Devanagari USE syllable reordering HTML text already had - previously SVG " +
+    "rendered this text as isolated, unjoined, unreordered nominal glyphs only.",
+    svgArabicDevanagariHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // visibility: collapse on table rows/row-groups/columns/column-groups (CSS 2.1 §17.6.1): unlike
 // visibility: hidden, which only skips painting and still reserves the element's layout space, a
 // collapsed table row/column is removed from the table's geometry entirely - the rows/columns after

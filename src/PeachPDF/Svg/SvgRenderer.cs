@@ -16,6 +16,8 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
+using PeachPDF.Text.Shaping.Arabic;
+using PeachPDF.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -366,6 +368,58 @@ namespace PeachPDF.Svg
             /// <see cref="ApplyBidiReordering"/>'s physical list reordering automatically, since that
             /// moves <see cref="GlyphInfo"/> instances themselves, not indices into a separate array.</summary>
             public List<SvgTextElement>? Decorators { get; set; }
+
+            /// <summary>
+            /// Non-null when this glyph participates in a multi-character Arabic-family joining or
+            /// Devanagari USE shaping run - a reference to the run's own first <see cref="GlyphInfo"/>
+            /// (which may be this instance itself, for a lone participating character), carrying the
+            /// run's shared state (<see cref="RunText"/>/<see cref="RunJoiningForms"/>/
+            /// <see cref="RunUseCategories"/>/<see cref="RunScriptTag"/>/<see cref="RunMeasuredWidth"/>/
+            /// <see cref="RunReverseForDisplay"/>). Null - the overwhelming common case - means this
+            /// glyph shapes/measures/reorders/paints exactly as it did before this feature existed,
+            /// entirely on its own. Assigned once by <see cref="ResolveComplexScriptRuns"/>, which runs
+            /// right after <see cref="FlattenRun"/> and before <see cref="LayoutGlyphs"/>/
+            /// <see cref="ApplyBidiReordering"/> (both of which read it).
+            /// </summary>
+            public GlyphInfo? ShapingRunFirst { get; set; }
+
+            /// <summary>This run's full logical-order (never reordered/mirrored) text - only meaningful
+            /// on the run's own first glyph (<see cref="ShapingRunFirst"/> referencing itself).</summary>
+            public string? RunText { get; set; }
+
+            /// <summary>This run's per-character Arabic-family joining forms (parallel to
+            /// <see cref="RunText"/>'s Runes), or null for a USE run - only meaningful on the run's own
+            /// first glyph.</summary>
+            public ArabicJoiningForm[]? RunJoiningForms { get; set; }
+
+            /// <summary>This run's per-character Devanagari USE categories (parallel to
+            /// <see cref="RunText"/>'s Runes), or null for an Arabic-family joining run - only
+            /// meaningful on the run's own first glyph.</summary>
+            public UseCategory[]? RunUseCategories { get; set; }
+
+            /// <summary>This run's requested OpenType script tag - only meaningful on the run's own
+            /// first glyph.</summary>
+            public string? RunScriptTag { get; set; }
+
+            /// <summary>
+            /// This run's total shaped advance width, measured once as a whole string (only meaningful
+            /// on the run's own first glyph, set by <see cref="LayoutGlyphs"/>) - every other member of
+            /// the run gets <see cref="Advance"/> 0, since its position/width is subsumed into the run's
+            /// own single shaped span (a GSUB ligature's component characters have no independently
+            /// addressable position either - SVG 2 §11.5). Vertical writing modes never form a run at
+            /// all (see <see cref="ResolveComplexScriptRuns"/>'s own remarks), so this is always 0 there.
+            /// </summary>
+            public double RunMeasuredWidth { get; set; }
+
+            /// <summary>
+            /// Whether this run's shaped glyph list should reverse for display - only meaningful on the
+            /// run's own first glyph. Set true by <see cref="ApplyBidiReordering"/> for an Arabic-family
+            /// joining run (<see cref="RunJoiningForms"/> non-null) that falls inside a right-to-left
+            /// visual run; a USE (Devanagari) run is never display-reversed, mirroring
+            /// <c>CssRectWord.DisplayOrderReversed</c>'s own <c>EffectiveJoiningForms</c>-only gating on
+            /// the HTML side.
+            /// </summary>
+            public bool RunReverseForDisplay { get; set; }
         }
 
         /// <summary>
@@ -388,6 +442,13 @@ namespace PeachPDF.Svg
                 // text-orientation (genuinely meaningful per nested <tspan>, see IsUprightGlyph), a
                 // change of pen-advance axis mid-text has no defined real-world meaning to preserve.
                 var isVertical = IsVerticalWritingMode(text.WritingMode);
+
+                // Arabic-family joining/Devanagari USE shaping runs are horizontal-tb-only (see
+                // ResolveComplexScriptRuns's own remarks) - must run before LayoutGlyphs, which reads
+                // GlyphInfo.ShapingRunFirst to decide per-run vs per-glyph measurement.
+                if (!isVertical)
+                    ResolveComplexScriptRuns(glyphs);
+
                 LayoutGlyphs(g, glyphs, isVertical);
                 ApplyBidiReordering(text, glyphs, overrides, isVertical);
                 PaintGlyphs(g, document, glyphs, opacity, isVertical);
@@ -481,10 +542,51 @@ namespace PeachPDF.Svg
 
                 if (run.IsRtl)
                 {
-                    for (var k = run.Length - 1; k >= 0; k--)
+                    var k = run.Length - 1;
+                    while (k >= 0)
                     {
                         var idx = run.Start + k;
                         var gi = glyphs[idx];
+
+                        if (gi.ShapingRunFirst is { } shapingFirst)
+                        {
+                            // A complex-shaping run (Arabic-family joining or Devanagari USE) reorders as
+                            // one atomic block, preserving its own internal logical-order adjacency -
+                            // mirroring CssLayoutEngine.MirrorWordTextIfNeeded's HTML precedent (a
+                            // joining word's text is never itself reversed/mirrored; only the resulting
+                            // shaped glyph list is, via TextShapingFeatures.ReverseForDisplay - see
+                            // ResolveShapingFeatures). It can never straddle this bidi run's own
+                            // boundary: ResolveComplexScriptRuns never lets a run cross an
+                            // SvgTextElement (tspan) boundary, and every bidi-level change from an
+                            // explicit unicode-bidi push occurs at exactly such a boundary (FlattenRun
+                            // only ever emits one there) - so scanning backward from any of a run's
+                            // member glyphs always finds the whole run still inside this bidi run.
+                            var blockEnd = idx;
+                            var blockStart = idx;
+                            while (blockStart > run.Start && ReferenceEquals(glyphs[blockStart - 1].ShapingRunFirst, shapingFirst))
+                                blockStart--;
+
+                            var blockOffsetFromRunStart = originalPos[blockStart] - runOldStart;
+                            var blockWidth = shapingFirst.RunMeasuredWidth;
+
+                            // USE (Devanagari) never display-reverses - only Arabic-family joining does,
+                            // matching CssRectWord.DisplayOrderReversed's own EffectiveJoiningForms-only
+                            // gating on the HTML side.
+                            if (shapingFirst.RunJoiningForms is not null)
+                                shapingFirst.RunReverseForDisplay = true;
+
+                            var newLeftEdge = runNewStart + runContentWidth - (blockOffsetFromRunStart + blockWidth);
+                            for (var m = blockStart; m <= blockEnd; m++)
+                            {
+                                var mgi = glyphs[m];
+                                setPos(mgi, ReferenceEquals(mgi, shapingFirst) ? newLeftEdge : newLeftEdge + blockWidth);
+                                reordered.Add(mgi);
+                            }
+
+                            k = blockStart - run.Start - 1;
+                            continue;
+                        }
+
                         if (System.Text.Rune.DecodeFromUtf16(gi.Glyph, out var rune, out _) == System.Buffers.OperationStatus.Done
                             && BidiMirroring.TryGetMirror(rune.Value, out var mirrored))
                         {
@@ -515,6 +617,7 @@ namespace PeachPDF.Svg
                         var offsetFromRunStart = originalPos[idx] - runOldStart;
                         setPos(gi, runNewStart + runContentWidth - (offsetFromRunStart + gi.Advance));
                         reordered.Add(gi);
+                        k--;
                     }
                 }
                 else
@@ -620,6 +723,151 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// Resolves per-character Arabic-family joining forms and Devanagari USE categories over
+        /// <paramref name="glyphs"/>' full logical (document) order - the SVG-side equivalent of
+        /// <c>CssBidiParagraphResolver.ResolveScriptsAndJoining</c>, simpler here since
+        /// <see cref="FlattenRun"/> already produces exactly one <see cref="GlyphInfo"/> per Rune (no
+        /// UTF-16 surrogate-pair re-indexing needed the way <c>CssBox</c>'s char-indexed arrays require -
+        /// see <see cref="ApplyBidiReordering"/>'s own remarks on that distinction). Then groups maximal
+        /// contiguous runs of participating characters - sharing one <see cref="SvgTextElement"/> run,
+        /// one participating script (Arabic-family or Devanagari), zero <c>letter-spacing</c> (non-zero
+        /// letter-spacing inserts space between glyphs, which real shapers - and real browsers - already
+        /// treat as disabling optional ligature/cursive joining, so this simply never forms a run rather
+        /// than forming an incorrect one), and no explicit per-character <c>x</c>/<c>y</c>/<c>dx</c>/<c>dy</c>/
+        /// <c>rotate</c> on any but the run's own first character (SVG 2 §11.5: a ligature/joined glyph's
+        /// component characters have no independently addressable position) - into a shared
+        /// <see cref="GlyphInfo.ShapingRunFirst"/> run, so <see cref="LayoutGlyphs"/>/
+        /// <see cref="ApplyBidiReordering"/>/<see cref="PaintGlyphs"/> can shape, measure, reorder and
+        /// paint the whole run as one atomic unit - real joined/reordered glyphs - instead of nominal,
+        /// unjoined, unreordered isolated-form characters (the prior, and still SVG <c>&lt;textPath&gt;</c>,
+        /// behavior - see <see cref="RenderTextPath"/>'s own remarks on why that path is out of scope).
+        /// A run's own first character is also required to carry no explicit <c>rotate</c> - unlike
+        /// <see cref="PaintGlyphs"/>'s own batching, which lets a batch's start glyph rotate freely,
+        /// <see cref="PaintRotatedGlyph"/> paints only that one <see cref="GlyphInfo"/>'s own
+        /// <see cref="GlyphInfo.Glyph"/> string, which would silently drop the rest of a multi-character
+        /// run's text.
+        /// </summary>
+        private static void ResolveComplexScriptRuns(List<GlyphInfo> glyphs)
+        {
+            var count = glyphs.Count;
+            if (count == 0)
+                return;
+
+            var codepoints = new int[count];
+            for (var i = 0; i < count; i++)
+                codepoints[i] = Rune.GetRuneAt(glyphs[i].Glyph, 0).Value;
+
+            var rawScripts = new string[count];
+            for (var i = 0; i < count; i++)
+                rawScripts[i] = ScriptTable.Of(codepoints[i]);
+            var resolvedScripts = ScriptRunResolver.ResolveRaw(rawScripts);
+
+            // Run unconditionally over the whole stream, like CssBidiParagraphResolver does - a
+            // non-joining codepoint's ArabicJoiningType is already Non_Joining (U), which
+            // ArabicJoiningShaper resolves to ArabicJoiningForm.None for free.
+            var joiningForms = ArabicJoiningShaper.Resolve(codepoints);
+
+            // Only classified (and only allocated at all) when the stream actually contains Devanagari
+            // text - same "don't activate syllable scanning for every run" reasoning as the HTML side.
+            UseCategory[]? useCategories = null;
+            for (var i = 0; i < count; i++)
+            {
+                if (resolvedScripts[i] != "Devanagari")
+                    continue;
+                useCategories ??= new UseCategory[count];
+                useCategories[i] = UseCategoryClassifier.Classify(codepoints[i]);
+            }
+
+            var pos = 0;
+            while (pos < count)
+            {
+                var isArabicParticipant = ArabicShapingTable.Of(codepoints[pos]) != ArabicJoiningType.U;
+                var isUseParticipant = !isArabicParticipant && resolvedScripts[pos] == "Devanagari";
+
+                if (!isArabicParticipant && !isUseParticipant)
+                {
+                    pos++;
+                    continue;
+                }
+
+                var first = glyphs[pos];
+
+                // A character whose own explicit rotate/letter-spacing disqualifies it from anchoring a
+                // run can't retroactively be un-scanned by the extend-loop below - checking eligibility
+                // up front and only advancing by one position (not skipping the whole contiguous
+                // participant span) lets a LATER character in that same span still validly start its
+                // own run (e.g. "بيت" with rotate="15 0 0": Beh can't anchor a run, but Yeh+Teh still can).
+                if ((first.Rotate ?? 0) != 0 || first.Run.LetterSpacing != 0)
+                {
+                    pos++;
+                    continue;
+                }
+
+                var end = pos + 1;
+                while (end < count
+                       && ReferenceEquals(glyphs[end].Run, first.Run)
+                       && first.Run.LetterSpacing == 0
+                       && (glyphs[end].Rotate ?? 0) == 0
+                       && glyphs[end].X is null && glyphs[end].Y is null
+                       && glyphs[end].Dx is null && glyphs[end].Dy is null
+                       && (isArabicParticipant
+                           ? ArabicShapingTable.Of(codepoints[end]) != ArabicJoiningType.U
+                           : resolvedScripts[end] == "Devanagari"))
+                {
+                    end++;
+                }
+
+                var length = end - pos;
+                var text = new StringBuilder(length);
+                for (var m = pos; m < end; m++)
+                    text.Append(glyphs[m].Glyph);
+
+                first.ShapingRunFirst = first;
+                first.RunText = text.ToString();
+                first.RunScriptTag = OpenTypeScriptTags.Resolve(resolvedScripts[pos]);
+
+                if (isArabicParticipant)
+                {
+                    var forms = new ArabicJoiningForm[length];
+                    Array.Copy(joiningForms, pos, forms, 0, length);
+                    first.RunJoiningForms = forms;
+                }
+                else
+                {
+                    var categories = new UseCategory[length];
+                    Array.Copy(useCategories!, pos, categories, 0, length);
+                    first.RunUseCategories = categories;
+                }
+
+                for (var m = pos + 1; m < end; m++)
+                    glyphs[m].ShapingRunFirst = first;
+
+                pos = end;
+            }
+        }
+
+        /// <summary>
+        /// This glyph's effective <see cref="TextShapingFeatures"/> for measurement/painting: its own
+        /// run's <see cref="SvgTextElement.ShapingFeatures"/>, layered with the run-wide script tag/
+        /// joining forms/USE categories/reverse-for-display request when <paramref name="gi"/> is part
+        /// of a multi-character complex-script shaping run (see <see cref="GlyphInfo.ShapingRunFirst"/>/
+        /// <see cref="ResolveComplexScriptRuns"/>) - the SVG-side equivalent of HTML's
+        /// <c>CssBox.ResolveWordShapingFeatures</c>. Returns <paramref name="gi"/>'s own run features
+        /// unchanged (today's exact behavior) for every glyph outside such a run - the overwhelming
+        /// common case.
+        /// </summary>
+        private static TextShapingFeatures ResolveShapingFeatures(GlyphInfo gi) =>
+            gi.ShapingRunFirst is not { } first
+                ? gi.Run.ShapingFeatures
+                : gi.Run.ShapingFeatures with
+                {
+                    ScriptTag = first.RunScriptTag,
+                    JoiningForms = first.RunJoiningForms,
+                    UseCategories = first.RunUseCategories,
+                    ReverseForDisplay = first.RunReverseForDisplay,
+                };
+
+        /// <summary>
         /// Lays out the flattened character stream: advances a pen along the writing mode's own inline
         /// (pen-advance) axis - X for <c>horizontal-tb</c>, Y for <c>vertical-rl</c>/<c>vertical-lr</c> -
         /// applying each character's absolute x/y on that axis (starting a new text chunk) and relative
@@ -717,10 +965,34 @@ namespace PeachPDF.Svg
 
                     gi.Px = penX;
                     gi.Py = penY;
-                    gi.Size = g.MeasureString(gi.Glyph, gi.Font, gi.Run.ShapingFeatures);
-                    gi.Advance = gi.Size.Width + gi.Run.LetterSpacing;
-                    if (gi.Run.WordSpacing != 0 && IsWhitespaceGlyph(gi.Glyph))
-                        gi.Advance += gi.Run.WordSpacing;
+
+                    if (gi.ShapingRunFirst is { } shapingFirst)
+                    {
+                        // A complex-script shaping run is measured once, as a whole shaped string, on
+                        // its own first glyph - a real joined/reordered glyph run's total advance is not
+                        // generally the sum of its component characters' isolated-form widths (most
+                        // visibly: a lam-alef ligature consumes two characters into one glyph with one
+                        // advance). Every other member gets Advance 0 - see ShapingRunFirst's own
+                        // remarks on why that's exactly right, not merely a placeholder.
+                        if (ReferenceEquals(gi, shapingFirst))
+                        {
+                            gi.Size = g.MeasureString(shapingFirst.RunText!, gi.Font, ResolveShapingFeatures(gi));
+                            shapingFirst.RunMeasuredWidth = gi.Size.Width;
+                            gi.Advance = gi.Size.Width;
+                        }
+                        else
+                        {
+                            gi.Size = new RSize(0, gi.Font.Height);
+                            gi.Advance = 0;
+                        }
+                    }
+                    else
+                    {
+                        gi.Size = g.MeasureString(gi.Glyph, gi.Font, gi.Run.ShapingFeatures);
+                        gi.Advance = gi.Size.Width + gi.Run.LetterSpacing;
+                        if (gi.Run.WordSpacing != 0 && IsWhitespaceGlyph(gi.Glyph))
+                            gi.Advance += gi.Run.WordSpacing;
+                    }
 
                     penX += gi.Advance;
                 }
@@ -849,8 +1121,15 @@ namespace PeachPDF.Svg
                 while (!startIsWordSpacedWhitespace && i < glyphs.Count)
                 {
                     var gc = glyphs[i];
+                    // A complex-script shaping run's own members (sharing ShapingRunFirst) always merge
+                    // together (ResolveComplexScriptRuns already required them to share Run and carry no
+                    // mid-run explicit position/rotate); a boundary between two different runs, or
+                    // between a run and plain text, always breaks the batch - each needs its own
+                    // TextShapingFeatures (see ResolveShapingFeatures), so merging them would apply one
+                    // run's joining forms/USE categories to the other's text.
                     if (!ReferenceEquals(gc.Run, start.Run) || (gc.Rotate ?? 0) != 0
-                        || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0)
+                        || gc.X is not null || gc.Y is not null || (gc.Dx ?? 0) != 0 || (gc.Dy ?? 0) != 0
+                        || !ReferenceEquals(gc.ShapingRunFirst, start.ShapingRunFirst))
                         break;
                     builder.Append(gc.Glyph);
                     logicalBuilder.Append(gc.LogicalGlyph ?? gc.Glyph);
@@ -863,9 +1142,10 @@ namespace PeachPDF.Svg
                 var text = builder.ToString();
                 var logicalText = logicalBuilder.ToString();
                 if (logicalText == text) logicalText = null;
-                var size = g.MeasureString(text, font, start.Run.ShapingFeatures);
+                var features = ResolveShapingFeatures(start);
+                var size = g.MeasureString(text, font, features);
                 PaintTextGlyphs(g, document, start.Run, text, font, start.Px, start.Py - font.Ascent, size, opacity * start.Opacity,
-                    start.Run.LetterSpacing, start.Run.ShapingFeatures, logicalText);
+                    start.Run.LetterSpacing, features, logicalText);
             }
         }
 
@@ -1527,6 +1807,8 @@ namespace PeachPDF.Svg
             if (glyphs.Count > 0)
             {
                 var isVertical = IsVerticalWritingMode(text.WritingMode);
+                if (!isVertical)
+                    ResolveComplexScriptRuns(glyphs);
                 LayoutGlyphs(g, glyphs, isVertical);
                 ApplyBidiReordering(text, glyphs, overrides, isVertical);
                 foreach (var gi in glyphs)

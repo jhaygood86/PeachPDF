@@ -34,7 +34,12 @@ font's `nukt`/`ccmp`/`locl`/`akhn`/`rphf`/`rkrf`/`abvf`/`blwf`/`half`/`pstf`/`va
 `haln`/`pres`/`psts` features and repositions reph/pre-base matras in the resulting glyph list (verified
 byte-for-byte against real HarfBuzz's own output for a real font per script, `uharfbuzz`, and against
 two PDF renderers - see this feature's own recent-fixes entries); and a real UAX#9 Unicode Bidi
-Algorithm (see `PeachPDF.Text.Bidi.BidiResolver`).
+Algorithm (see `PeachPDF.Text.Bidi.BidiResolver`). Arabic-family joining and Devanagari USE shaping (not
+Bengali/Gujarati/Tamil - see the SVG-specific remaining gaps below) also apply to SVG `<text>`/`<tspan>`
+content, resolved over each `<text>` element's own flattened character stream via
+`SvgRenderer.ResolveComplexScriptRuns` (a maximal run of mutually-joining/same-syllable characters
+shapes, measures, and - for a right-to-left run - display-reverses as one atomic unit, the same
+per-word treatment HTML text gets).
 
 ## Remaining gaps
 
@@ -103,11 +108,47 @@ Algorithm (see `PeachPDF.Text.Bidi.BidiResolver`).
   as a pre-base-reordering consonant, and the topographical features exist for scripts that share
   Arabic's own joining-form model, which none of these four scripts use. Both are real HarfBuzz USE
   stages a future USE script outside this four-script family could need.
-- **SVG `<text>`/`<tspan>`/`<textPath>` does not resolve script, joining forms, or USE categories at
-  all** - Arabic-family and USE-shaped (Devanagari/Bengali/Gujarati/Tamil) text in SVG both still use
-  isolated nominal glyphs (in logical, unreordered order for the USE-shaped scripts), unlike HTML text.
-  SVG's own bidi reordering is a separate implementation from HTML's, and unifying them for this wasn't
-  in scope alongside HTML support landing.
+- **SVG `<text>`/`<tspan>` only resolves script/joining forms/USE categories for Arabic-family joining
+  and Devanagari USE shaping, not Bengali/Gujarati/Tamil** - `SvgRenderer.ResolveComplexScriptRuns`
+  only recognizes those two kinds; Bengali/Gujarati/Tamil text in SVG still renders as isolated nominal
+  glyphs in logical order, exactly as it did before this SVG support landed. Extending it to the other
+  three USE-shaped scripts is expected to be a small, low-risk addition (the same
+  `ScriptRunResolver`-resolved script already drives which `UseCategoryClassifier` branch applies on the
+  HTML side) - not attempted here since HTML's own three-script extension landed in parallel with this
+  SVG work rather than before it.
+- **SVG `<textPath>` does not resolve script, joining forms, or USE categories at all** - unlike
+  `<text>`/`<tspan>`, a `<textPath>`'s glyphs each paint individually, positioned along the path's own
+  curve (`SvgRenderer.PaintGlyphAlongPath`) - a shaped multi-character glyph run has no well-defined
+  single point/tangent to lay along a curve at, so extending real joining/USE shaping to `<textPath>`
+  would mean treating a whole shaping run as one positioned-and-rotated unit along the path (consuming
+  one arc-length span, like a single wide glyph) rather than each character getting its own point - real
+  architectural work not attempted here. `<textPath>` text still renders as isolated nominal glyphs (in
+  logical, unreordered order for the USE-shaped scripts), exactly as before this landed for
+  `<text>`/`<tspan>`.
+- **SVG Arabic-family joining/Devanagari USE shaping is horizontal-tb only** - a vertical `writing-mode`
+  never forms a shaping run (`SvgRenderer.ResolveComplexScriptRuns` is only called for `!isVertical`),
+  so Arabic/Devanagari text under `writing-mode: vertical-rl`/`vertical-lr` still renders as isolated
+  nominal glyphs. Neither script is ever vertically typeset in practice, and no bundled test font/
+  fixture exercises the combination, so this was scoped out rather than guessed at.
+- **An SVG shaping run never crosses a `<tspan>` boundary**, even when two adjacent `<tspan>`s share the
+  same script/font and would otherwise join or reorder as one unit in a real UA - `SvgTreeBuilder`
+  builds one `SvgTextElement` per `<tspan>`, and `ResolveComplexScriptRuns` requires every member of a
+  run to share the same `Run` reference (needed regardless, since a `<tspan>`'s own explicit
+  `unicode-bidi`/direction/position lists are keyed to exactly its own characters). An author splitting
+  one Arabic or Devanagari word across sibling `<tspan>`s (uncommon - CSS styling seams rarely fall
+  mid-word) loses joining/reordering across that seam.
+- **An SVG shaping run never forms across an explicit per-character `x`/`y`/`dx`/`dy`/`rotate`** (SVG 2
+  §11.5: such a character has no well-defined position inside a shaped multi-character glyph) -
+  falling back to per-character nominal-form rendering for the whole contiguous span it would have
+  otherwise joined, rather than guessing a position. Joining forms/USE categories themselves are still
+  resolved over the *whole* flattened character stream first and only sliced per resulting run
+  afterward (mirroring `CssBidiParagraphResolver`'s own paragraph-wide resolution), so a character's
+  own true form still reflects its real neighbors even when an unrelated positioning tweak elsewhere
+  splits how the word paints.
+- **An SVG shaping run never forms under non-zero `letter-spacing`** - inserting space between glyphs is
+  what real shapers (and real browsers) already do to disable optional ligature/cursive joining, so
+  this reproduces that instead of forming an incorrect joined run that letter-spacing would then pull
+  apart.
 - **GPOS cursive attachment's `RIGHT_TO_LEFT` lookup-flag cascade is validated**, but its main-direction
   (X) formula is hardcoded to HarfBuzz's own RTL buffer-direction branch, since the only caller
   (Arabic-family joining) is always RTL-treated - an LTR-buffer-direction cursive script would need that
@@ -142,6 +183,11 @@ all four scripts), and per-script real-font characterization test pairs -
 `TamilUseShapingCharacterizationTests`/`TamilUseCharacterizationTests` (each cross-checked
 glyph-for-glyph against real HarfBuzz's own output via `uharfbuzz` for that script's own bundled
 font), plus `MixedUseShapedScriptsCharacterizationTests` (a paragraph mixing two different USE-shaped
-scripts, and one mixing a USE-shaped script with plain Latin text); the remaining gaps above are
-pinned by their own doc comments in those files rather than by a dedicated negative test per gap. See
-[Text shaping](docs/html-css-support.md#text-shaping).
+scripts, and one mixing a USE-shaped script with plain Latin text); SVG's own wiring (Arabic-family
+joining and Devanagari USE only, per the remaining-gaps bullets above) is covered by
+`SvgTextArabicJoiningTests`/`SvgTextDevanagariUseTests` (mock-recorded `TextShapingFeatures` reaching
+`RGraphics.DrawString`) and
+`SvgTextArabicJoiningCharacterizationTests`/`SvgTextDevanagariUseCharacterizationTests` (the exact
+`(text, TextShapingFeatures)` pair SVG computes, re-shaped through a real font); the remaining gaps
+above are pinned by their own doc comments in those files rather than by a dedicated negative test per
+gap. See [Text shaping](docs/html-css-support.md#text-shaping).
