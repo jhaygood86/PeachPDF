@@ -6,17 +6,18 @@ namespace PeachPDF.Text.Shaping.Use
     /// <c>virama_terminated_cluster</c>, <c>sakot_terminated_cluster</c>,
     /// <c>number_joiner_terminated_cluster</c>, <c>numeral_cluster</c>, <c>hieroglyph_cluster</c> -
     /// each structurally require a <see cref="UseCategory"/> member this classifier never produces
-    /// for Devanagari, so they can never actually be scanned - see
+    /// for Devanagari/Bengali/Gujarati/Tamil, so they can never actually be scanned - see
     /// <see cref="UseSyllableScanner"/>'s own remarks). Only <see cref="StandardCluster"/> is
-    /// reordered by <see cref="UseReorderer"/> in practice for well-formed Devanagari text -
+    /// reordered by <see cref="UseReorderer"/> in practice for well-formed text in these scripts -
     /// <see cref="BrokenCluster"/>/<see cref="SymbolCluster"/> can still carry a pre-base vowel
     /// (rare, malformed input) and are reordered too, matching HarfBuzz's own eligible-type set.
     /// </summary>
     internal enum UseSyllableType : byte
     {
-        /// <summary>A well-formed syllable: a base consonant/independent-vowel/digit, optionally
-        /// extended by one or more halant-joined conjunct members, followed by any dependent
-        /// vowel signs and vowel modifiers.</summary>
+        /// <summary>A well-formed syllable: a base consonant/independent-vowel/digit/Consonant
+        /// Placeholder (<see cref="UseCategory.GB"/>, Bengali only), optionally extended by one or
+        /// more halant-joined conjunct members, followed by any dependent vowel signs, vowel
+        /// modifiers, and final modifiers.</summary>
         StandardCluster,
 
         /// <summary>Dependent-vowel/modifier/halant content with no leading base at all (e.g. a word

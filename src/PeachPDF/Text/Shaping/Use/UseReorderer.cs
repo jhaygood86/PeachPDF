@@ -68,8 +68,8 @@ namespace PeachPDF.Text.Shaping.Use
         /// (its own early-return checks a flag set covering <c>virama_terminated_cluster</c>/
         /// <c>sakot_terminated_cluster</c>/<c>standard_cluster</c>/<c>symbol_cluster</c>/
         /// <c>broken_cluster</c> - the first two are never produced by <see cref="UseSyllableScanner"/>
-        /// for Devanagari, per its own remarks, so only the latter three ever reach here in
-        /// practice).</summary>
+        /// for Devanagari/Bengali/Gujarati/Tamil, per its own remarks, so only the latter three ever
+        /// reach here in practice).</summary>
         private static bool IsReorderable(UseSyllableType type) => type is
             UseSyllableType.StandardCluster or UseSyllableType.BrokenCluster or UseSyllableType.SymbolCluster;
 
@@ -155,15 +155,18 @@ namespace PeachPDF.Text.Shaping.Use
 
         /// <summary>HarfBuzz's own <c>POST_BASE_FLAGS64</c>, reduced to the members
         /// <see cref="UseCategory"/> can actually hold (the full macro also lists <c>FAbv</c>/
-        /// <c>FBlw</c>/<c>FPst</c>/<c>FMAbv</c>/<c>FMBlw</c>/<c>FMPst</c>/<c>MAbv</c>/<c>MBlw</c>/
-        /// <c>MPst</c>/<c>MPre</c> - final-consonant and medial-consonant categories no Devanagari
-        /// codepoint ever produces, per <see cref="UseCategoryClassifier"/>'s own remarks). Notably
-        /// does NOT include <see cref="UseCategory.CMAbv"/>/<see cref="UseCategory.CMBlw"/> (a nukta)
-        /// - matching HarfBuzz's own macro exactly - so a nukta between a repha and its target
-        /// position does not stop pass 1's forward search.</summary>
+        /// <c>FBlw</c>/<c>FPst</c>/<c>FMBlw</c>/<c>FMPst</c>/<c>MAbv</c>/<c>MBlw</c>/<c>MPst</c>/
+        /// <c>MPre</c> - final-consonant and medial-consonant categories no Devanagari/Bengali/
+        /// Gujarati/Tamil codepoint ever produces, per <see cref="UseCategoryClassifier"/>'s own
+        /// remarks; <see cref="UseCategory.FMAbv"/> IS included, exactly like real HarfBuzz's own
+        /// macro, so a reph forming before Bengali's Sandhi Mark still stops its forward move before
+        /// that glyph rather than past it). Notably does NOT include <see cref="UseCategory.CMAbv"/>/
+        /// <see cref="UseCategory.CMBlw"/> (a nukta) - matching HarfBuzz's own macro exactly - so a
+        /// nukta between a repha and its target position does not stop pass 1's forward search.</summary>
         private static bool IsPostBaseCategory(UseCategory category) => category is
             UseCategory.VPre or UseCategory.VAbv or UseCategory.VBlw or UseCategory.VPst or
-            UseCategory.VMPre or UseCategory.VMAbv or UseCategory.VMBlw or UseCategory.VMPst;
+            UseCategory.VMPre or UseCategory.VMAbv or UseCategory.VMBlw or UseCategory.VMPst or
+            UseCategory.FMAbv;
 
         /// <summary>HarfBuzz's own <c>is_halant_use</c>, minus its "not ligated" guard - a virama that
         /// a font's <c>half</c>/<c>cjct</c> feature merged away as part of a conjunct ligature simply

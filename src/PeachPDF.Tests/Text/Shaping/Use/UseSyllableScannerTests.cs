@@ -5,9 +5,10 @@ using Xunit;
 namespace PeachPDF.Tests.Text.Shaping.Use
 {
     /// <summary>
-    /// Coverage for <see cref="UseSyllableScanner"/>'s reduced Devanagari grammar (issue #533, Phase
-    /// 5b) - operates directly on hand-built <see cref="UseCategory"/> sequences (bypassing
-    /// <see cref="UseCategoryClassifier"/> entirely) so each test isolates one grammar shape.
+    /// Coverage for <see cref="UseSyllableScanner"/>'s reduced Devanagari/Bengali/Gujarati/Tamil
+    /// grammar (issue #533, Phases 5b/5c) - operates directly on hand-built <see cref="UseCategory"/>
+    /// sequences (bypassing <see cref="UseCategoryClassifier"/> entirely) so each test isolates one
+    /// grammar shape.
     /// </summary>
     public class UseSyllableScannerTests
     {
@@ -133,5 +134,58 @@ namespace PeachPDF.Tests.Text.Shaping.Use
         [Fact]
         public void EmptyInput_ProducesNoSyllables() =>
             Assert.Empty(UseSyllableScanner.Scan([]));
+
+        [Fact]
+        public void ConsonantPlaceholder_IsOneStandardClusterOfLengthOne()
+        {
+            // GB (Bengali's own Consonant Placeholder, U+0980) is grouped with B as an alternate
+            // syllable-start token by real HarfBuzz's own grammar (complex_syllable_start = (R | CS)?
+            // (B | GB)) - a bare GB scans exactly like a bare B.
+            var syllables = Scan(UseCategory.GB);
+
+            Assert.Equal([new UseSyllable(0, 1, UseSyllableType.StandardCluster)], syllables);
+        }
+
+        [Fact]
+        public void ConsonantPlaceholderFollowedByVowelSign_IsOneStandardCluster()
+        {
+            var syllables = Scan(UseCategory.GB, UseCategory.VPst);
+
+            var syllable = Assert.Single(syllables);
+            Assert.Equal(new UseSyllable(0, 2, UseSyllableType.StandardCluster), syllable);
+        }
+
+        [Fact]
+        public void FinalModifier_IsConsumedByTheSameSyllable()
+        {
+            // Bengali's own Sandhi Mark (FMAbv, U+09FE) sits at the very end of tail's own grammar -
+            // consumed as part of the same standard_cluster as its preceding base, not split off into
+            // its own syllable.
+            var syllables = Scan(UseCategory.B, UseCategory.FMAbv);
+
+            var syllable = Assert.Single(syllables);
+            Assert.Equal(new UseSyllable(0, 2, UseSyllableType.StandardCluster), syllable);
+        }
+
+        [Fact]
+        public void FinalModifierAfterVowelModifiers_IsConsumedLast()
+        {
+            // tail = consonant_modifiers dependent_vowels vowel_modifiers final_modifiers - FMAbv is
+            // ordered after vowel_modifiers, matching real HarfBuzz's own complex_syllable_tail.
+            var syllables = Scan(UseCategory.B, UseCategory.VMAbv, UseCategory.FMAbv);
+
+            var syllable = Assert.Single(syllables);
+            Assert.Equal(new UseSyllable(0, 3, UseSyllableType.StandardCluster), syllable);
+        }
+
+        [Fact]
+        public void LeadingFinalModifierWithNoBase_IsABrokenCluster()
+        {
+            // FMAbv is a tail-starting category (IsTailStart), so a lone one with no leading base/GB
+            // scans as a broken_cluster, matching every other tail-starting category's own behavior.
+            var syllables = Scan(UseCategory.FMAbv);
+
+            Assert.Equal([new UseSyllable(0, 1, UseSyllableType.BrokenCluster)], syllables);
+        }
     }
 }

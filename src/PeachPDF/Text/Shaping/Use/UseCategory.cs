@@ -8,13 +8,18 @@ namespace PeachPDF.Text.Shaping.Use
     /// two reorder passes dispatch on.
     ///
     /// This enum carries only the subset of HarfBuzz's real ~35-member USE category set that a
-    /// Devanagari-scoped classifier can ever produce (see <see cref="UseCategoryClassifier"/>'s own
-    /// remarks on why) - the categories a font's own GSUB `rphf`/basic-feature substitution can also
-    /// produce dynamically (<see cref="R"/>) are included even though nothing in
-    /// <see cref="UseCategoryClassifier"/> assigns them statically. Extending this to another
-    /// USE-driven script (Bengali, Tamil, etc.) will need new members for that script's own reachable
-    /// categories (medial consonants, Sakot, Reordering_Killer, etc. - see
-    /// <c>.claude/accepted-gaps/no-text-shaping.md</c>).
+    /// Devanagari/Bengali/Tamil/Gujarati-scoped classifier can ever produce (see
+    /// <see cref="UseCategoryClassifier"/>'s own remarks on why) - the categories a font's own GSUB
+    /// `rphf`/basic-feature substitution can also produce dynamically (<see cref="R"/>) are included
+    /// even though nothing in <see cref="UseCategoryClassifier"/> assigns them statically. Bengali is
+    /// the only one of the four that needs categories beyond Devanagari's own reachable set
+    /// (<see cref="GB"/>, <see cref="FMAbv"/>) - Gujarati and Tamil produce no codepoint whose real
+    /// Indic_Syllabic_Category value needs a category this enum didn't already carry for Devanagari
+    /// (verified against the real Unicode Character Database, not assumed - see this feature's own
+    /// recent-fixes entry). Extending this to a script family beyond these four (a script needing
+    /// medial consonants - Javanese/Sundanese/Batak, or a static Sakot/Reordering_Killer/
+    /// Consonant_With_Stacker codepoint - Tibetan, others) will need new members for that script's own
+    /// reachable categories - see <c>.claude/accepted-gaps/no-text-shaping.md</c>.
     /// </summary>
     internal enum UseCategory : byte
     {
@@ -86,5 +91,25 @@ namespace PeachPDF.Text.Shaping.Use
 
         /// <summary>Vowel modifier, post-base position - Devanagari's Visarga (U+0903).</summary>
         VMPst,
+
+        /// <summary>BASE_OTHER (Consonant Placeholder) - Bengali's own base-consonant-substitute
+        /// construct, U+0980 BENGALI ANJI (the only Bengali/Devanagari/Gujarati/Tamil codepoint with
+        /// Indic_Syllabic_Category=Consonant_Placeholder). Real HarfBuzz's own <c>is_BASE_OTHER</c> also
+        /// covers a handful of unrelated punctuation marks (em dash, bullet, etc.) that this classifier
+        /// leaves as <see cref="O"/> instead (out of scope - see <see cref="UseCategoryClassifier"/>'s
+        /// own remarks). Grouped with <see cref="B"/> as an alternate syllable-start token by
+        /// <see cref="UseSyllableScanner"/> (HarfBuzz's own grammar: <c>complex_syllable_start = (R |
+        /// CS)? (B | GB)</c>) - a GB-led syllable is reordered exactly like a B-led one.</summary>
+        GB,
+
+        /// <summary>CONS_FINAL_MOD (Syllable Modifier), above-base position - Bengali's Sandhi Mark
+        /// (U+09FE), the only Bengali/Devanagari/Gujarati/Tamil codepoint with
+        /// Indic_Syllabic_Category=Syllable_Modifier (Indic_Positional_Category=Top, HarfBuzz's own
+        /// <c>use_positions['FM']</c> mapping: <c>{'Abv': [Top], 'Blw': [Bottom], 'Pst':
+        /// [Not_Applicable]}</c>). <c>FMBlw</c>/<c>FMPst</c> are omitted - no codepoint reachable by
+        /// this classifier ever needs them (see <see cref="UseCategoryClassifier"/>'s own remarks).
+        /// Included in <see cref="UseReorderer"/>'s post-base-glyph set (HarfBuzz's own
+        /// <c>POST_BASE_FLAGS64</c>), so a reph's forward move still stops before it correctly.</summary>
+        FMAbv,
     }
 }

@@ -57,6 +57,15 @@
     <None Include="..\..\assets\fonts\NotoSansDevanagariSubset.ttf" Link="NotoSansDevanagariSubset.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\NotoSansBengaliSubset.ttf" Link="NotoSansBengaliSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansGujaratiSubset.ttf" Link="NotoSansGujaratiSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansTamilSubset.ttf" Link="NotoSansTamilSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

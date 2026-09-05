@@ -8,7 +8,7 @@ namespace PeachPDF.Tests.Text.Shaping.Use
 {
     /// <summary>
     /// Coverage for <see cref="UseReorderer"/>, the ported <c>reorder_syllable_use</c> two-pass
-    /// glyph-array reorder (issue #533, Phase 5b). Glyph indices below are arbitrary but distinct, so
+    /// glyph-array reorder (issue #533, Phases 5b/5c). Glyph indices below are arbitrary but distinct, so
     /// asserting the resulting <see cref="ShapedGlyph.GlyphIndex"/> order directly proves which glyph
     /// physically moved where - not just that reordering "did something".
     /// </summary>
@@ -113,6 +113,20 @@ namespace PeachPDF.Tests.Text.Shaping.Use
             UseReorderer.ReorderSyllable(glyphs, categories, 0, 4);
 
             Assert.Equal([101, 102, 100, 103], glyphs.Select(g => g.GlyphIndex));
+        }
+
+        [Fact]
+        public void RephaWithFinalModifier_StopsBeforeIt()
+        {
+            // Repha + KA + Bengali Sandhi Mark - R B FMAbv. FMAbv IS included in HarfBuzz's own
+            // POST_BASE_FLAGS64 (unlike CMBlw/nukta), so pass 1's forward search must stop right before
+            // it rather than sailing past it to the syllable's end.
+            var glyphs = new List<ShapedGlyph> { G(100), G(101), G(102) };
+            var categories = new[] { UseCategory.R, UseCategory.B, UseCategory.FMAbv };
+
+            UseReorderer.ReorderSyllable(glyphs, categories, 0, 3);
+
+            Assert.Equal([101, 100, 102], glyphs.Select(g => g.GlyphIndex));
         }
 
         [Fact]
