@@ -1472,6 +1472,8 @@ PeachPDF can optionally produce a *tagged* PDF — one with a logical structure 
 
 Tagging is **off by default** and enabled with a single `PdfGenerateConfig` flag — see [Enabling tagged PDF (PDF/UA) output](usage-examples.md#enabling-tagged-pdf-pdfua-output) in Usage Examples for the configuration snippet and everything that turning it on does (automatic `/Lang` from `<html lang>`, `alt`-attribute `/Alt` entries, `/Link` structure elements cross-referenced with their annotations, and `/Lbl`/`/LBody` list-item splitting). When `EnableTaggedPdf` is left at its default (`false`), none of this runs — output is byte-for-byte the same as if tagging didn't exist in the codebase at all.
 
+This same structure tree is also what the accessible "A" levels of PDF/A conformance (`PdfA1A`/`PdfA2A`/`PdfA3A`) build on — see [Generating PDF/A-conformant output](usage-examples.md#generating-pdf-a-conformant-output) in Usage Examples.
+
 ### `-peachpdf-pdf-tag-type` (tagged PDF structure type)
 
 The HTML-tag → PDF-structure-type mapping is not hardcoded — it's driven entirely by a custom CSS property, `-peachpdf-pdf-tag-type`, applied via ordinary CSS rules (PeachPDF's own default stylesheet sets it for standard HTML elements; author stylesheets can override it like any other property).

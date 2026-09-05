@@ -204,6 +204,34 @@ namespace PeachPDF
             document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
             document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
             document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
+            // PDF/A conformance is a whole-document property, but AddPdfPages is a repeatable public
+            // API (a caller can append more pages to an existing PeachPdfDocument) - a second call
+            // requesting a different level than the first would otherwise silently leave the document's
+            // already-written /OutputIntents/XMP conformance claim disagreeing with how some of its
+            // pages were actually painted (earlier pages painted under a different transparency-guard
+            // regime than the level the file now claims). Reject that outright rather than produce a
+            // self-contradictory document; the same level requested again across multiple calls is fine.
+            if (document.PdfDocument.Options.PdfAConformanceEstablished
+                && document.PdfDocument.Options.PdfAConformance != config.PdfAConformance)
+            {
+                throw new InvalidOperationException(
+                    $"PdfGenerateConfig.PdfAConformance must be the same on every AddPdfPages call for a " +
+                    $"given document - this document was already established as '{document.PdfDocument.Options.PdfAConformance}' " +
+                    $"by an earlier call, and this call specifies '{config.PdfAConformance}'. A single PDF " +
+                    "document can only claim one PDF/A conformance level (or none) as a whole.");
+            }
+
+            document.PdfDocument.Options.PdfAConformance = config.PdfAConformance;
+            document.PdfDocument.Options.PdfAConformanceEstablished = true;
+
+            // ISO 19005-2/3 (PDF/A-2/3) are defined in terms of PDF 1.7/ISO 32000-1. ISO 19005-1
+            // (PDF/A-1) is defined in terms of PDF 1.4 - the version PeachPDF already always emits -
+            // so PdfA1B/PdfA1A need no version change at all.
+            if (config.PdfAConformance is PdfAConformance.PdfA2B or PdfAConformance.PdfA2U or PdfAConformance.PdfA2A
+                or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U or PdfAConformance.PdfA3A)
+            {
+                document.PdfDocument.Version = 17;
+            }
 
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;
@@ -281,7 +309,13 @@ namespace PeachPDF
                 await container.PerformLayout(measure);
             }
 
-            ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata, config.Metadata);
+            var resolvedCreationDate = ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata, config.Metadata);
+
+            // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally
+            // require a real document language - both checked here, once, ahead of the per-page paint
+            // loop that would otherwise be wasted work on a document that's about to be rejected.
+            var isAccessibleConformance = config.PdfAConformance is
+                PdfAConformance.PdfA1A or PdfAConformance.PdfA2A or PdfAConformance.PdfA3A;
 
             // Wired unconditionally (independent of tagged-PDF output) - a document's own /Lang is
             // useful metadata regardless, and DocumentLanguage is already resolved by SetContent
@@ -291,12 +325,64 @@ namespace PeachPDF
             {
                 document.PdfDocument.Language = container.HtmlContainerInt.DocumentLanguage;
             }
+            else if (isAccessibleConformance)
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.PdfAConformance is set to an accessible ('A') level, which requires " +
+                    "a document language, but neither the source HTML declares <html lang=\"...\"> nor is " +
+                    "PdfGenerateConfig.DefaultLanguage set. Set DefaultLanguage, or add a lang attribute to the document.");
+            }
+
+            var pdfAConformanceRequested = config.PdfAConformance != PdfAConformance.None;
+
+            // An XMP metadata stream (EnableXmpMetadata or PdfAConformance) needs a real xmp:CreateDate -
+            // fail loudly rather than write a placeholder/default date, same stance as the language
+            // check above. Independent of PdfAConformance: a plain EnableXmpMetadata with no resolvable
+            // date throws too.
+            var writeXmpMetadata = config.EnableXmpMetadata
+                || pdfAConformanceRequested
+                || config.Metadata?.CustomXmpProperties.Count > 0;
+            if (writeXmpMetadata && resolvedCreationDate is not { } creationDate)
+            {
+                throw new InvalidOperationException(
+                    "An XMP metadata stream is being written (EnableXmpMetadata, PdfAConformance, or " +
+                    "CustomXmpProperties is set), but no creation date is available: the source HTML has " +
+                    "no extractable date, and PdfGenerateConfig.Metadata.CreationDate was not set. " +
+                    "Set PdfDocumentMetadata.CreationDate.");
+            }
+
+            if (writeXmpMetadata)
+            {
+                // Rewritten on every call (not just the first) - unlike the output intent below, the
+                // packet's content (title/dates/custom properties) can legitimately differ call to call,
+                // so always refreshing it is more useful than freezing it at whatever the first call saw.
+                var metadataStream = new PdfMetadataStream(
+                    document.PdfDocument,
+                    document.PdfDocument.Info,
+                    resolvedCreationDate!.Value,
+                    config.PdfAConformance,
+                    config.Metadata?.CustomXmpProperties ?? []);
+                document.PdfDocument.Catalog.SetMetadata(metadataStream);
+            }
+
+            // Guarded on "not already present" (rather than unconditionally, like SetMetadata above) -
+            // the sRGB output intent never varies call to call, so re-adding it on a second AddPdfPages
+            // call with the same PdfAConformance would only leave the first call's ICC-profile stream
+            // orphaned (still written into the file, just unreferenced) for no benefit.
+            if (pdfAConformanceRequested && !document.PdfDocument.Catalog.Elements.ContainsKey("/OutputIntents"))
+            {
+                var outputIntent = new PdfOutputIntent(document.PdfDocument, PdfAResources.SRgbIccProfile);
+                document.PdfDocument.Catalog.SetOutputIntent(outputIntent);
+            }
 
             // Only constructed when tagging is enabled - CssBox.PaintImp's tagging wrapper checks
             // HtmlContainerInt.StructureTagBuilder for null and skips all classification/bookkeeping
             // when it's not set, so this is the single point that gates the whole feature off by
-            // default.
-            var structureTagBuilder = config.EnableTaggedPdf ? new StructureTagBuilder(document.PdfDocument) : null;
+            // default. An accessible PdfAConformance level forces this on even if EnableTaggedPdf was
+            // left false - config itself is never mutated.
+            var structureTagBuilder = (config.EnableTaggedPdf || isAccessibleConformance)
+                ? new StructureTagBuilder(document.PdfDocument, requireAltText: isAccessibleConformance)
+                : null;
             container.HtmlContainerInt.StructureTagBuilder = structureTagBuilder;
 
             // Same shape as structureTagBuilder above: only constructed when interactive PDF forms are
@@ -485,7 +571,12 @@ namespace PeachPDF
 
         #region Private/Protected methods
 
-        private static void ApplyDocumentMetadata(PdfDocument pdfDocument, HtmlDocumentMetadata? metadata, PdfDocumentMetadata? overrides)
+        /// <summary>
+        /// Returns the resolved creation date (override wins over the HTML-extracted date), or
+        /// <c>null</c> if neither is available - the caller decides whether that's acceptable (it
+        /// isn't when an XMP metadata stream is being written, which needs a real <c>xmp:CreateDate</c>).
+        /// </summary>
+        private static DateTimeOffset? ApplyDocumentMetadata(PdfDocument pdfDocument, HtmlDocumentMetadata? metadata, PdfDocumentMetadata? overrides)
         {
             var info = pdfDocument.Info;
             info.Producer = PeachPdfProductInfo.Generator;
@@ -506,7 +597,40 @@ namespace PeachPDF
             if (!string.IsNullOrEmpty(overrides?.Keywords))      info.Keywords = overrides.Keywords;
             else if (!string.IsNullOrEmpty(metadata?.Keywords))  info.Keywords = metadata.Keywords;
 
-            if (metadata?.Date.HasValue == true)                 info.CreationDate = metadata.Date.Value;
+            DateTimeOffset? resolvedCreationDate;
+            if (overrides?.CreationDate is { } overrideDate)
+            {
+                resolvedCreationDate = overrideDate;
+
+                // .LocalDateTime (not .DateTime) - PdfDocumentInformation.CreationDate's underlying
+                // PdfDate writes the DateTime's "zzz" offset directly (PdfDate.cs), and for a
+                // Kind=Unspecified DateTime (what .DateTime would return) .NET's "zzz" specifier uses
+                // the machine's CURRENT local offset regardless of what offset the value actually
+                // carried - silently mislabeling the instant whenever overrideDate's own offset isn't
+                // the local machine's (e.g. a UTC CreationDate on a non-UTC machine). .LocalDateTime
+                // converts to the equivalent Kind=Local DateTime first, so "zzz" then reports the
+                // correct offset for that same instant instead.
+                info.CreationDate = overrideDate.LocalDateTime;
+            }
+            else if (metadata?.Date is { } htmlDate)
+            {
+                // An HTML-extracted date (e.g. <meta name="date" content="2024-03-15">) carries no
+                // explicit timezone of its own - htmlDate.Kind is Unspecified. info.CreationDate is set
+                // to it completely unchanged (not wrapped/reinterpreted as UTC or converted at all),
+                // preserving this method's exact pre-XMP behavior for this path. To still get a
+                // DateTimeOffset for XMP that agrees with what PdfDate's "zzz" will independently
+                // compute for the very same Unspecified value (which treats it as local, per the same
+                // .NET rule noted above), explicitly mark it Local before deriving the offset here -
+                // this does not change htmlDate's own wall-clock digits, only which offset is attached.
+                resolvedCreationDate = new DateTimeOffset(DateTime.SpecifyKind(htmlDate, DateTimeKind.Local));
+                info.CreationDate = htmlDate;
+            }
+            else
+            {
+                resolvedCreationDate = null;
+            }
+
+            return resolvedCreationDate;
         }
 
         /// <summary>

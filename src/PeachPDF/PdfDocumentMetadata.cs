@@ -1,5 +1,9 @@
 #nullable enable
 
+using System;
+using System.Collections.Generic;
+using System.Xml.Linq;
+
 namespace PeachPDF
 {
     /// <summary>
@@ -30,5 +34,29 @@ namespace PeachPDF
 
         /// <summary>Overrides the PDF document creator (from <c>&lt;meta name="generator"&gt;</c>).</summary>
         public string? Creator { get; set; }
+
+        /// <summary>
+        /// Overrides the PDF document's creation date. When non-null, wins over any date extracted
+        /// from the HTML source; when null (the default), the HTML-extracted date is used unchanged.
+        /// Required (directly or via a <c>&lt;meta&gt;</c> date in the source HTML) whenever an XMP
+        /// metadata stream is written (<see cref="PdfGenerateConfig.EnableXmpMetadata"/> or
+        /// <see cref="PdfGenerateConfig.PdfAConformance"/>) - <c>xmp:CreateDate</c> needs a real value,
+        /// and generation throws rather than writing a default/placeholder date if neither is present.
+        /// </summary>
+        public DateTimeOffset? CreationDate { get; set; }
+
+        /// <summary>
+        /// Arbitrary additional XMP metadata to include in the document's XMP stream (see
+        /// <see cref="PdfGenerateConfig.EnableXmpMetadata"/>/<see cref="PdfGenerateConfig.PdfAConformance"/>),
+        /// beyond the built-in Dublin Core/<c>pdf:</c>/<c>xmp:</c> fields - e.g. an internal provenance
+        /// or records-management schema. Each element is appended into the XMP packet as its own
+        /// <c>rdf:Description</c>, using the element's own namespace unchanged; accepting
+        /// <see cref="XElement"/> rather than a raw XML string keeps the packet well-formed by
+        /// construction. Has no effect unless an XMP stream is actually written for the render, in
+        /// which case a non-empty collection here also forces one to be written even if
+        /// <see cref="PdfGenerateConfig.EnableXmpMetadata"/> is left <c>false</c> and
+        /// <see cref="PdfGenerateConfig.PdfAConformance"/> is <see cref="PeachPDF.PdfAConformance.None"/>.
+        /// </summary>
+        public ICollection<XElement> CustomXmpProperties { get; } = [];
     }
 }

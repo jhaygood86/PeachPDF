@@ -187,6 +187,14 @@ namespace PeachPDF.Html.Core.Paint
                     g.ResumeClipping();
                 }
             }
+            catch (PeachPDF.PdfSharpCore.Pdf.Advanced.PdfAConformanceException)
+            {
+                // A PDF/A-1 rejection (the document uses a feature that needs a transparency group,
+                // which PDF/A-1 forbids) is a deliberate validation failure, not an unexpected paint
+                // error - let it propagate as the InvalidOperationException it is, rather than folding
+                // it into a generic HtmlRenderException the way the catch below would.
+                throw;
+            }
             catch (Exception ex)
             {
                 if (box.HtmlContainer is { } container)

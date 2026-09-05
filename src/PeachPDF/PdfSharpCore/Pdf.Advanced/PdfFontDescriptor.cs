@@ -148,6 +148,23 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfFontDescriptorFlags flags = 0;
             _isSymbolFont = descriptor.FontFace.cmap.symbol;
             flags |= descriptor.FontFace.cmap.symbol ? PdfFontDescriptorFlags.Symbolic : PdfFontDescriptorFlags.Nonsymbolic;
+
+            // The 'post' table's isFixedPitch is the authoritative OpenType signal for a monospaced
+            // font (unlike PANOSE, which is advisory) - nonzero means every glyph advances by the
+            // same width.
+            if (descriptor.FontFace.post.isFixedPitch != 0)
+                flags |= PdfFontDescriptorFlags.FixedPitch;
+
+            // 'OS/2' sFamilyClassID's high byte: 1-7 are the serif classes (Oldstyle/Transitional/
+            // Modern/Clarendon/Slab/(6 reserved)/Freeform Serifs), 8 is Sans Serif, the rest (9
+            // Ornamentals, 10 Scripts, 12 Symbolic) are neither - so only 1-7 map to PDF's Serif flag.
+            var familyClassId = (descriptor.FontFace.os2.sFamilyClass >> 8) & 0xFF;
+            if (familyClassId is >= 1 and <= 7)
+                flags |= PdfFontDescriptorFlags.Serif;
+
+            if (descriptor.FontFace.os2.IsItalic)
+                flags |= PdfFontDescriptorFlags.Italic;
+
             return flags;
         }
 

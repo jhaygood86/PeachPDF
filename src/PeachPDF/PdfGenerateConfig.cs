@@ -236,6 +236,29 @@ namespace PeachPDF
         public bool EnableInteractivePdfForms { get; set; } = false;
 
         /// <summary>
+        /// The PDF/A (ISO 19005) conformance level to target. Defaults to <see cref="PeachPDF.PdfAConformance.None"/>
+        /// - no PDF/A-specific work is done (see <see cref="PeachPDF.PdfAConformance.None"/> for exactly
+        /// what that means). See <see cref="PeachPDF.PdfAConformance"/> for what each other level
+        /// requires, including PDF/A-1's restriction on transparency and the accessible "A" levels'
+        /// language requirement. Requesting any level other than <see cref="PeachPDF.PdfAConformance.None"/>
+        /// implicitly enables an XMP metadata stream for that render regardless of
+        /// <see cref="EnableXmpMetadata"/>.
+        /// </summary>
+        public PdfAConformance PdfAConformance { get; set; } = PdfAConformance.None;
+
+        /// <summary>
+        /// When set to <c>true</c>, PeachPDF emits an XMP metadata stream (the document catalog's
+        /// <c>/Metadata</c> entry) alongside the classic Document Information dictionary - useful for
+        /// digital-asset-management/archival pipelines that read XMP directly. This is independent of
+        /// <see cref="PdfAConformance"/>: a caller can opt into an XMP stream without requesting PDF/A
+        /// conformance at all. Defaults to <c>false</c>. <see cref="PdfAConformance"/> being anything
+        /// other than <see cref="PeachPDF.PdfAConformance.None"/> forces an XMP stream to be written
+        /// for that render regardless of this flag's value (PDF/A requires one), without mutating this
+        /// config object.
+        /// </summary>
+        public bool EnableXmpMetadata { get; set; } = false;
+
+        /// <summary>
         /// When set to <c>true</c> (the default), a raster image whose decoded pixel size is larger than
         /// its on-page display size is resized down before being embedded in the PDF, shrinking output
         /// file size with no visible quality loss. Set to <c>false</c> to always embed images at their

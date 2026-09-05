@@ -228,13 +228,17 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.A != strokeAlpha || _realizedStrokeOverPrint != overPrint))
             {
+                // Must create transparency group - checked before any object/resource is built, so a
+                // PDF/A-1 rejection never leaves a partially-built ExtGState behind.
+                if (strokeAlpha < 1)
+                {
+                    PdfATransparencyGuard.RequireAllowed(_renderer.Owner, _renderer._page,
+                        "A stroke with alpha less than 1 (CSS/SVG stroke-opacity or a semi-transparent stroke color)");
+                }
+
                 PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateStroke(strokeAlpha, overPrint);
                 string gs = _renderer.Resources.AddExtGState(extGState);
                 _renderer.AppendFormatString("{0} gs\n", gs);
-
-                // Must create transparency group.
-                if (_renderer._page != null && strokeAlpha < 1)
-                    _renderer._page.TransparencyUsed = true;
             }
             // A brush stroke switched the stroke color space to /Pattern and painted through the brush;
             // invalidate the tracked stroke color (as RealizeBrush already does for the fill side) so a
@@ -292,10 +296,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
                     if (pattern.AlphaExtGState != null)
                     {
+                        PdfATransparencyGuard.RequireAllowed(_renderer.Owner, _renderer._page, "A gradient with a semi-transparent color stop");
                         string gsName = _renderer.Resources.AddExtGState(pattern.AlphaExtGState);
                         _renderer.AppendFormatString("{0} gs\n", gsName);
-                        if (_renderer._page != null)
-                            _renderer._page.TransparencyUsed = true;
                     }
 
                     if (isForPen)
@@ -339,14 +342,17 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             if (_renderer.Owner.Version >= 14 && (_realizedFillColor.A != color.A || _realizedNonStrokeOverPrint != overPrint))
             {
+                // Must create transparency group - checked before any object/resource is built, so a
+                // PDF/A-1 rejection never leaves a partially-built ExtGState behind.
+                if (color.A < 1)
+                {
+                    PdfATransparencyGuard.RequireAllowed(_renderer.Owner, _renderer._page,
+                        "A fill with alpha less than 1 (CSS/SVG fill-opacity or a semi-transparent fill color)");
+                }
 
                 PdfExtGState extGState = _renderer.Owner.ExtGStateTable.GetExtGStateNonStroke(color.A, overPrint);
                 string gs = _renderer.Resources.AddExtGState(extGState);
                 _renderer.AppendFormatString("{0} gs\n", gs);
-
-                // Must create transparency group.
-                if (_renderer._page != null && color.A < 1)
-                    _renderer._page.TransparencyUsed = true;
             }
             _realizedFillColor = color;
             _realizedNonStrokeOverPrint = overPrint;
