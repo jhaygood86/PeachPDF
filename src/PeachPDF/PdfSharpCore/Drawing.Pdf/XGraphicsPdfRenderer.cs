@@ -401,7 +401,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         // ----- DrawString ---------------------------------------------------------------------------
 
-        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, TextShapingFeatures features)
+        public void DrawString(string s, XFont font, XBrush brush, XRect rect, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, TextShapingFeatures features, string? logicalText = null)
         {
             double x = rect.X;
             double y = rect.Y;
@@ -501,7 +501,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             {
                 PdfFont realizedFont = _gfxState._realizedFont;
                 Debug.Assert(realizedFont != null);
-                realizedFont.AddShapedText(s, features);
+                realizedFont.AddShapedText(s, features, logicalText);
 
                 string text = null;
                 IReadOnlyList<ShapedGlyph> shapedGlyphs = null;

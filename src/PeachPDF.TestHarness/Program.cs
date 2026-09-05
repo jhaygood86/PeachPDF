@@ -3883,6 +3883,20 @@ var svgHtml = "<!DOCTYPE html><html><head>" + SvgShowcaseCss + "</head><body>" +
             """<svg viewBox="0 0 100 100" width="80" height="80"><defs><path id="tp" d="M8,72 Q50,8 92,72"/></defs><path d="M8,72 Q50,8 92,72" fill="none" stroke="#d5dbdb"/><text font-size="13" fill="#8e44ad"><textPath href="#tp">Pe<tspan fill="#c0392b" font-weight="bold">ach</tspan></textPath></text></svg>""",
             "restyled tspan laid along the curve too")
     ) +
+    Row(
+        SvgSwatch("letter-spacing &amp; word-spacing",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect width="100" height="100" fill="#fdf2e9"/><text x="6" y="35" font-size="13" letter-spacing="2" fill="#2c3e50">Spaced Out</text><text x="6" y="65" font-size="13" word-spacing="10" fill="#8e44ad">Word by word</text></svg>""",
+            "both properties reach the same GSUB/GPOS pipeline HTML text uses"),
+        SvgSwatch("text-transform",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect width="100" height="100" fill="#eafaf1"/><text x="6" y="30" font-size="12" text-transform="uppercase" fill="#16a085">shout</text><text x="6" y="55" font-size="12" text-transform="capitalize" fill="#2980b9">each word</text><text x="6" y="80" font-size="12" text-transform="lowercase" fill="#c0392b">QUIET</text></svg>""",
+            "uppercase / capitalize / lowercase"),
+        SvgSwatch("font-variant-caps: small-caps",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect width="100" height="100" fill="#fef9e7"/><text x="6" y="55" font-size="18" font-variant-caps="small-caps" fill="#8e44ad">Small Caps</text></svg>""",
+            "real GSUB smcp/c2sc substitution, gated on font support"),
+        SvgSwatch("text-decoration-line/-style/-color",
+            """<svg viewBox="0 0 100 100" width="80" height="80"><rect width="100" height="100" fill="#2c3e50"/><text x="8" y="35" font-size="14" fill="#ecf0f1" text-decoration-line="underline">Underlined</text><text x="8" y="65" font-size="14" fill="#ecf0f1" text-decoration-line="overline line-through underline" text-decoration-color="#e74c3c" text-decoration-style="dashed">Decorated</text></svg>""",
+            "own value only (not inherited), flows across a plain descendant tspan")
+    ) +
 
     "<h2>20 — Inline &lt;svg&gt; vs &lt;img src=\"data:image/svg+xml\"&gt;</h2>" +
     "<p class=\"intro\">The identical SVG markup rendered two ways: embedded directly in the HTML, and encoded as a base64 data: URI on an &lt;img&gt; tag. Both go through the same vector renderer.</p>" +
@@ -8141,6 +8155,127 @@ await SaveShowcaseAsync("bidi_text", "Text &amp; Fonts", "Bidirectional Text (di
     "bdo/bdi, and CSS direction/unicode-bidi, with per-character reordering, digit/Latin run " +
     "embedding, and bracket mirroring in real Hebrew text.",
     bidiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// Arabic-family complex-script joining (issue #533): each character's initial/medial/final/isolated
+// GSUB form is resolved from its own Unicode Joining_Type (not just rendered as its isolated nominal
+// glyph), a font's own rlig ligature rules (lam-alef) fire correctly because shaping always runs in
+// true logical order regardless of the word's own right-to-left display order, and GPOS cursive
+// attachment (curs) connects a calligraphic font's own flowing baseline strokes for fonts whose
+// joining relies on it rather than purely on positional substitution.
+var notoArabicB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansArabicSubset.ttf")));
+var arefRuqaaB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "ArefRuqaaSubset.ttf")));
+var arabicJoiningHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'ArabicNaskh'; src: url('data:font/truetype;base64,{notoArabicB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'ArabicRuqaa'; src: url('data:font/truetype;base64,{arefRuqaaB64}') format('truetype'); }}" +
+    "body { font-family: 'SS3', sans-serif; margin: 0; color: #222; font-size: 11pt }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.2em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.8em; color: #555 }" +
+    "p.sample { margin: 0.4em 0; padding: 0.5em 0.7em; background: #f5f6f8; border-left: 3px solid #4a90d9; font-size: 20pt }" +
+    "p.sample.naskh { font-family: 'ArabicNaskh', sans-serif }" +
+    "p.sample.ruqaa { font-family: 'ArabicRuqaa', sans-serif; font-size: 28pt }" +
+    "table.forms { border-collapse: collapse; margin: 0.4em 0; font-size: 9pt }" +
+    "table.forms th, table.forms td { border: 1px solid #ccc; padding: 0.3em 0.6em; text-align: center }" +
+    "table.forms td.letters { font-family: 'ArabicNaskh', sans-serif; font-size: 16pt }" +
+    "</style></head><body>" +
+    "<h1>Arabic-Family Complex-Script Joining</h1>" +
+    "<p class=\"intro\">Each character's initial/medial/final/isolated GSUB form is resolved from its " +
+    "own Unicode <code>Joining_Type</code>, not rendered as an unjoined isolated glyph - the same " +
+    "shaping a browser applies.</p>" +
+
+    "<h2>Positional joining forms</h2>" +
+    "<p class=\"intro\">بيت (\"house\", Beh-Yeh-Teh) - each letter takes its own " +
+    "initial/medial/final connected form:</p>" +
+    "<p class=\"sample naskh\">بيت</p>" +
+
+    "<p class=\"intro\">The same dual-joining letter (Beh) repeated once, twice, and three times in a " +
+    "row forces isolated, then initial+final, then initial+medial+final forms of the identical " +
+    "character - the standard way to demonstrate all four forms unambiguously:</p>" +
+    "<table class=\"forms\">" +
+    "<tr><th>Isolated</th><th>Initial + Final</th><th>Initial + Medial + Final</th></tr>" +
+    "<tr><td class=\"letters\">ب</td><td class=\"letters\">بب</td><td class=\"letters\">ببب</td></tr>" +
+    "</table>" +
+
+    "<h2>Lam-alef ligature (<code>rlig</code>)</h2>" +
+    "<p class=\"intro\">لا (\"no\", Lam-Alef) - a font's own required ligature connects the " +
+    "two letters into one glyph. This needs shaping to run in true logical (Lam-then-Alef) order even " +
+    "though the word displays right-to-left - reversing the source text before shaping (as a naive " +
+    "implementation might) would prevent this exact ligature rule from ever matching.</p>" +
+    "<p class=\"sample naskh\">لا</p>" +
+
+    "<h2>GPOS cursive attachment (<code>curs</code>)</h2>" +
+    "<p class=\"intro\">A calligraphic font (\"Aref Ruqaa\") whose flowing baseline connections rely on " +
+    "GPOS cursive attachment, not only positional substitution - each letter's own exit/entry anchor " +
+    "points connect edge to edge:</p>" +
+    "<p class=\"sample ruqaa\">بيتالف</p>" +
+    "</body></html>";
+await SaveShowcaseAsync("arabic_joining", "Text &amp; Fonts", "Arabic-Family Complex-Script Joining",
+    "Positional initial/medial/final/isolated GSUB joining forms resolved from each character's own " +
+    "Unicode Joining_Type, a font's rlig lam-alef ligature, and GPOS cursive attachment (curs) for a " +
+    "calligraphic font whose joining relies on it.",
+    arabicJoiningHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
+// Devanagari Universal Shaping Engine (USE) syllable reordering (issue #533, Phase 5b): each
+// character's Indic_Syllabic_Category/Indic_Positional_Category (not just its raw joining/ligature
+// behavior) drives syllable classification, a font's own nukt/ccmp/locl/akhn/rphf/half/rkrf/cjct
+// GSUB features form conjuncts and reph, and the resulting glyph list is reordered (repha
+// repositioning, pre-base matra movement) before the font's own abvs/blws/pres/psts features apply
+// their final presentation forms - all ported from HarfBuzz's own USE shaper.
+var notoDevanagariB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansDevanagariSubset.ttf")));
+var devanagariUseHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'SS3'; src: url('data:font/truetype;base64,{sourceSans3B64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'Devanagari'; src: url('data:font/truetype;base64,{notoDevanagariB64}') format('truetype'); }}" +
+    "body { font-family: 'SS3', sans-serif; margin: 0; color: #222; font-size: 11pt }" +
+    "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
+    "h2 { font-size: 11pt; margin: 1.2em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
+    "p.intro { font-size: 9pt; margin: 0 0 0.8em; color: #555 }" +
+    "p.sample { margin: 0.4em 0; padding: 0.5em 0.7em; background: #f5f6f8; border-left: 3px solid #d9824a; font-size: 24pt; font-family: 'Devanagari', sans-serif }" +
+    "table.forms { border-collapse: collapse; margin: 0.4em 0; font-size: 9pt }" +
+    "table.forms th, table.forms td { border: 1px solid #ccc; padding: 0.3em 0.6em; text-align: center }" +
+    "table.forms td.letters { font-family: 'Devanagari', sans-serif; font-size: 18pt }" +
+    "</style></head><body>" +
+    "<h1>Devanagari Universal Shaping Engine (USE) Syllable Reordering</h1>" +
+    "<p class=\"intro\">Each character's Unicode <code>Indic_Syllabic_Category</code>/" +
+    "<code>Indic_Positional_Category</code> drives syllable classification and glyph reordering - " +
+    "the same shaping a browser applies, ported from HarfBuzz's own Universal Shaping Engine.</p>" +
+
+    "<h2>Pre-base vowel sign (matra) reordering</h2>" +
+    "<p class=\"intro\">कि (\"ki\") - the vowel sign I is a pre-base matra: in the source text it " +
+    "follows the consonant it belongs to, but a real font expects it drawn <em>before</em> the " +
+    "consonant, so the shaped glyph list is reordered accordingly:</p>" +
+    "<p class=\"sample\">कि</p>" +
+
+    "<h2>Conjunct formation (<code>cjct</code>) with a pre-base matra</h2>" +
+    "<p class=\"intro\">क्षि (\"kṣi\") - the two-consonant conjunct क्ष (KA+VIRAMA+SSA) fuses into a " +
+    "single glyph via the font's own <code>cjct</code> feature, and the following vowel sign still " +
+    "reorders to before the whole fused conjunct:</p>" +
+    "<p class=\"sample\">क्षि</p>" +
+
+    "<h2>Reph formation (<code>rphf</code>) and repositioning</h2>" +
+    "<p class=\"intro\">र्कि (\"rki\") - a word-initial रँ (RA+VIRAMA) forms a reph via the font's own " +
+    "<code>rphf</code> feature, which the shaping engine then moves forward past the base consonant " +
+    "to sit beside the pre-base vowel sign - the font's own <code>pres</code> feature then fuses the " +
+    "repositioned reph with the vowel sign into one combined presentation glyph:</p>" +
+    "<p class=\"sample\">र्कि</p>" +
+
+    "<h2>Vowel modifiers (anusvara, visarga) - not reordered</h2>" +
+    "<p class=\"intro\">कं (anusvara) and कः (visarga) attach after the base without any glyph " +
+    "reordering - only pre-base vowel signs move:</p>" +
+    "<table class=\"forms\">" +
+    "<tr><th>Anusvara</th><th>Visarga</th><th>Post-base vowel (contrast)</th></tr>" +
+    "<tr><td class=\"letters\">कं</td><td class=\"letters\">कः</td><td class=\"letters\">का</td></tr>" +
+    "</table>" +
+    "</body></html>";
+await SaveShowcaseAsync("devanagari_use", "Text &amp; Fonts", "Devanagari Universal Shaping Engine (USE)",
+    "Indic_Syllabic_Category/Indic_Positional_Category-driven syllable classification, GSUB conjunct " +
+    "(cjct)/reph (rphf) formation, and the resulting glyph reorder (repha repositioning, pre-base " +
+    "matra movement) - ported from HarfBuzz's own Universal Shaping Engine.",
+    devanagariUseHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // visibility: collapse on table rows/row-groups/columns/column-groups (CSS 2.1 §17.6.1): unlike
 // visibility: hidden, which only skips painting and still reserves the element's layout space, a

@@ -1,0 +1,17 @@
+NotoSansDevanagariSubset.ttf is a subset (the consonants KA/TA/RA/SSA/HA/GA, VIRAMA, the vowel
+signs I/PRISHTHAMATRA E/AA, NUKTA, ANUSVARA, VISARGA, the independent vowel A, common punctuation,
+digits, space, and the basic Latin alphabet) of the "Noto Sans Devanagari" font, Copyright 2022
+The Noto Project Authors (https://github.com/notofonts/devanagari), licensed under the SIL Open
+Font License, Version 1.1 (OFL-1.1). Instantiated to a single static (Regular weight, normal
+width) instance from the upstream variable font before subsetting.
+
+The font is bundled solely as a showcase/test asset so Devanagari's Universal Shaping Engine
+(USE) syllable reordering (issue #533, Phase 5b) - GSUB nukt/ccmp/locl/akhn/rphf/half/rkrf/cjct/
+abvs/blws/pres/psts substitution and the resulting repha repositioning/pre-base matra movement -
+renders with real, readable Devanagari glyphs and can be verified by rasterizing actual output,
+rather than only unit-tested against synthetic byte-blob GSUB tables. Only the glyphs the
+showcase/tests actually use are retained, with every GSUB/GPOS layout feature kept intact; the
+glyph outlines themselves are unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Sans+Devanagari

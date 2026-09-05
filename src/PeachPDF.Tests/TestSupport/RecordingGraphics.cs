@@ -21,8 +21,8 @@ namespace PeachPDF.Tests.TestSupport
         DrawString
     }
 
-    /// <summary>One paint call, in the order it happened - the single ordered log <see cref="RecordingGraphics.Log"/> keeps, per this repo's own preference (CLAUDE.md's testing conventions) for one ordered log over parallel per-call-type counts/lists when order across different call types matters. <see cref="Matrix"/> is set only for <see cref="PaintOpKind.PushTransform"/>, <see cref="Text"/> only for <see cref="PaintOpKind.DrawString"/>.</summary>
-    internal readonly record struct PaintOp(PaintOpKind Kind, RRect Bounds, RMatrix? Matrix = null, string? Text = null);
+    /// <summary>One paint call, in the order it happened - the single ordered log <see cref="RecordingGraphics.Log"/> keeps, per this repo's own preference (CLAUDE.md's testing conventions) for one ordered log over parallel per-call-type counts/lists when order across different call types matters. <see cref="Matrix"/> is set only for <see cref="PaintOpKind.PushTransform"/>, <see cref="Text"/> (and optionally <see cref="LogicalText"/>) only for <see cref="PaintOpKind.DrawString"/>.</summary>
+    internal readonly record struct PaintOp(PaintOpKind Kind, RRect Bounds, RMatrix? Matrix = null, string? Text = null, string? LogicalText = null);
 
     /// <summary>
     /// Minimal <see cref="RGraphics"/> implementation that records paint calls so tests can verify paint
@@ -179,10 +179,18 @@ namespace PeachPDF.Tests.TestSupport
         public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth) { charFit = str?.Length ?? 0; charFitWidth = 0; }
 
-        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) =>
+            DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText: null);
+
+        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?, string?)"/>'s
+        /// own remarks for <paramref name="logicalText"/> - a test asserting on it reads
+        /// <see cref="Log"/>'s <see cref="PaintOp.LogicalText"/> field, not <see cref="DrawnStrings"/>
+        /// (which stays a plain (Text, Y) pair for every existing consumer, unaffected by this
+        /// overload's mere existence).</summary>
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, TextShapingFeatures? features, string? logicalText)
         {
             DrawnStrings.Add((str, point.Y));
-            Log.Add(new PaintOp(PaintOpKind.DrawString, new RRect(point.X, point.Y, size.Width, size.Height), Text: str));
+            Log.Add(new PaintOp(PaintOpKind.DrawString, new RRect(point.X, point.Y, size.Width, size.Height), Text: str, LogicalText: logicalText));
         }
 
         public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }

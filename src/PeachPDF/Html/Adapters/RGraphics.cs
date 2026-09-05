@@ -314,8 +314,8 @@ namespace PeachPDF.Html.Adapters
         /// <param name="font">the font to measure string with</param>
         /// <param name="features">
         /// which GSUB features (see <see cref="TextShapingFeatures"/>) to apply when shaping
-        /// <paramref name="str"/> - must match what <see cref="DrawString"/> will use for the same
-        /// text, so the measured width matches what's actually drawn.
+        /// <paramref name="str"/> - must match what <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// will use for the same text, so the measured width matches what's actually drawn.
         /// </param>
         /// <returns>the size of the string</returns>
         public abstract RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null);
@@ -326,8 +326,8 @@ namespace PeachPDF.Html.Adapters
         /// than one character into a single glyph (single substitution never changes the count). Used
         /// to size the per-glyph <c>letter-spacing</c> gap count a word's box must reserve (the PDF
         /// <c>Tc</c> operator adds one gap per glyph actually shown, not per source character), so it
-        /// stays in sync with what <see cref="DrawString"/> paints for the same text/font/
-        /// <paramref name="features"/>.
+        /// stays in sync with what <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// paints for the same text/font/<paramref name="features"/>.
         /// </summary>
         public abstract int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null);
 
@@ -370,13 +370,39 @@ namespace PeachPDF.Html.Adapters
         public abstract void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null);
 
         /// <summary>
+        /// Same as the other <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// overload, plus <paramref name="logicalText"/>: the
+        /// true logical-order (pre-bidi-mirroring) source text <paramref name="str"/> was derived from,
+        /// when the two differ - <c>null</c> (the default) means they're the same (the overwhelming
+        /// common case: LTR text, or any word that was never reversed/mirrored for RTL display) and the
+        /// real implementation should behave identically to the other overload. A word whose own
+        /// <c>Text</c> WAS reversed/mirrored for RTL display (<c>CssLayoutEngine.MirrorWordTextIfNeeded</c>'s
+        /// ordinary path - not an Arabic-family joining word, which never mutates its own text at all)
+        /// passes its own stable <c>PreMirrorText</c> here, so the PDF's ToUnicode CMap records each
+        /// glyph's true source character(s) rather than whichever reversed/mirrored character happens to
+        /// occupy that glyph's position in the *painted* string - see this overload's own introduction
+        /// for the real-world extraction corruption this fixes (a parenthesized RTL word extracting with
+        /// its parentheses in the wrong position, confirmed against real MuPDF/PDFium output).
+        ///
+        /// A default (non-abstract) implementation forwarding to the other overload - ignoring
+        /// <paramref name="logicalText"/> - is deliberate: only a real PDF-writing backend
+        /// (<see cref="PeachPDF.Adapters.GraphicsAdapter"/>) needs to act on it; every other
+        /// implementation (test mocks recording draw calls, measuring-only contexts) is unaffected by
+        /// this overload's mere existence and needs no changes to keep compiling/behaving identically.
+        /// </summary>
+        public virtual void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, TextShapingFeatures? features, string? logicalText) =>
+            DrawString(str, font, color, point, size, letterSpacing, fontPalette, features);
+
+        /// <summary>
         /// Builds the vector outline of a glyph run as a fillable/strokeable <see cref="RGraphicsPath"/>,
         /// with the text baseline at <paramref name="baselineOrigin"/> (user-space units) and glyphs
-        /// advancing left-to-right. Unlike <see cref="DrawString"/> (a single-color PDF text show), the
+        /// advancing left-to-right. Unlike <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// (a single-color PDF text show), the
         /// returned path can be filled with a gradient/pattern brush or stroked - used by the SVG
         /// renderer for gradient/pattern <c>fill</c>, <c>stroke</c>, and <c>&lt;textPath&gt;</c> on text.
         /// Returns <c>null</c> when the font produces no glyph outlines (e.g. a CFF/bitmap font, which
-        /// has no <c>glyf</c> table) - the caller's cue to fall back to <see cref="DrawString"/>.
+        /// has no <c>glyf</c> table) - the caller's cue to fall back to
+        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>.
         /// </summary>
         /// <param name="str">the run to outline</param>
         /// <param name="font">the font to outline with</param>

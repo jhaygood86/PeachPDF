@@ -55,6 +55,12 @@
 		<EmbeddedResource Include="Text\Resources\Bidi\*.br" />
 		<None Remove="Text\Resources\VerticalOrientation\*.br" />
 		<EmbeddedResource Include="Text\Resources\VerticalOrientation\*.br" />
+		<None Remove="Text\Resources\Script\*.br" />
+		<EmbeddedResource Include="Text\Resources\Script\*.br" />
+		<None Remove="Text\Resources\ArabicJoining\*.br" />
+		<EmbeddedResource Include="Text\Resources\ArabicJoining\*.br" />
+		<None Remove="Text\Resources\Use\*.br" />
+		<EmbeddedResource Include="Text\Resources\Use\*.br" />
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="PdfSharpCore\Resources\images\" />

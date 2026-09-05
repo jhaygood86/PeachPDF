@@ -50,7 +50,7 @@ namespace PeachPDF.Tests.TestSupport
         protected override RBrush CreateLinearGradientBrush(RRect rect, RColor color1, RColor color2, double angle) => new TestBrush(color1);
 
         protected override RBrush CreateLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool isRepeating = false) =>
-            new TestBrush(stops.Length > 0 ? stops[0].Color : RColor.Black);
+            new TestBrush(stops.Length > 0 ? stops[0].Color : RColor.Black) { GradientStart = p1, GradientEnd = p2 };
 
         protected override RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false, RPoint? focalCenter = null) =>
             new TestBrush(stops.Length > 0 ? stops[0].Color : RColor.Black);
@@ -77,10 +77,14 @@ namespace PeachPDF.Tests.TestSupport
         protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachPDF.RuneRange>? unicodeRanges = null) => Task.FromResult(false);
     }
 
-    /// <summary>A solid-color brush that remembers the color it was created with.</summary>
+    /// <summary>A solid-color brush that remembers the color it was created with, and (for a linear
+    /// gradient) the endpoints it was resolved against - lets a test assert the actual gradient span
+    /// reflects the objectBoundingBox it was sized from, not just the fill's first stop color.</summary>
     internal sealed class TestBrush(RColor color) : RBrush
     {
         public RColor Color { get; } = color;
+        public RPoint? GradientStart { get; init; }
+        public RPoint? GradientEnd { get; init; }
         public override void Dispose() { }
     }
 
@@ -177,7 +181,7 @@ namespace PeachPDF.Tests.TestSupport
     /// </summary>
     internal class TestRecordingGraphics : RGraphics
     {
-        public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, double LetterSpacing = 0);
+        public sealed record DrawStringCall(string Text, RFont Font, RColor Color, RPoint Point, RSize Size, double LetterSpacing = 0, TextShapingFeatures? Features = null, string? LogicalText = null);
         public sealed record DrawRectCall(RColor Color, double X, double Y, double Width, double Height);
         /// <summary>
         /// A filled or stroked path. <see cref="Points"/> is the path's recorded geometry, which is the only
@@ -191,6 +195,11 @@ namespace PeachPDF.Tests.TestSupport
             public RRect Bounds => Points.Count == 0
                 ? RRect.Empty
                 : RRect.FromLTRB(Points.Min(p => p.X), Points.Min(p => p.Y), Points.Max(p => p.X), Points.Max(p => p.Y));
+
+            /// <summary>The linear gradient endpoints this fill was resolved against (null for a solid
+            /// fill/stroke, or a non-gradient brush) - see <see cref="TestBrush.GradientStart"/>.</summary>
+            public RPoint? GradientStart { get; init; }
+            public RPoint? GradientEnd { get; init; }
         }
         public sealed record DrawLineCall(RColor Color, double Width, RDashStyle DashStyle, double X1, double Y1, double X2, double Y2);
         public sealed record DrawPolygonCall(RColor Color, RPoint[] Points);
@@ -224,9 +233,25 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
         {
-            var call = new DrawStringCall(str, font, color, point, size, letterSpacing);
+            var call = new DrawStringCall(str, font, color, point, size, letterSpacing, features);
             DrawStringCalls.Add(call);
             Log.Add(call);
+        }
+
+        /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?, string?)"/>'s
+        /// own remarks for <paramref name="logicalText"/>. Dispatches through the virtual 8-arg overload
+        /// first (rather than recording independently) so a subclass that overrides only that one (e.g.
+        /// <c>RenderErrorReportingTests.ThrowingGraphics</c>) still intercepts every call made through
+        /// this overload too - then attaches <paramref name="logicalText"/> to the record that call just
+        /// appended.</summary>
+        public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing, RFontPalette? fontPalette, TextShapingFeatures? features, string? logicalText)
+        {
+            DrawString(str, font, color, point, size, letterSpacing, fontPalette, features);
+            if (logicalText is null) return;
+
+            var withLogicalText = DrawStringCalls[^1] with { LogicalText = logicalText };
+            DrawStringCalls[^1] = withLogicalText;
+            Log[^1] = withLogicalText;
         }
 
         public override void DrawRectangle(RBrush brush, double x, double y, double width, double height)
@@ -243,7 +268,8 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void DrawPath(RBrush brush, RGraphicsPath path)
         {
-            Log.Add(new DrawPathCall(brush is TestBrush tb ? tb.Color : RColor.Empty, PointsOf(path)));
+            var tb = brush as TestBrush;
+            Log.Add(new DrawPathCall(tb?.Color ?? RColor.Empty, PointsOf(path)) { GradientStart = tb?.GradientStart, GradientEnd = tb?.GradientEnd });
         }
 
         public override void DrawPath(RPen pen, RGraphicsPath path)

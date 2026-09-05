@@ -67,17 +67,153 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Unicode Character Database (bidi data tables)
+## Unicode Character Database (text-processing data tables)
 
-- **Location:** [`src/PeachPDF/Text/Resources/Bidi/`](src/PeachPDF/Text/Resources/Bidi/) — `DerivedBidiClass.txt.br`, `BidiBrackets.txt.br`, `BidiMirroring.txt.br` (Brotli-compressed, consumed by `PeachPDF.Text.Bidi.BidiClassTable`/`BidiBrackets`/`BidiMirroring`)
-- **Upstream source:** the Unicode Character Database (UCD), version 17.0.0, mirrored unmodified at [`assets/unicode/DerivedBidiClass.txt`](assets/unicode/DerivedBidiClass.txt), [`assets/unicode/BidiBrackets.txt`](assets/unicode/BidiBrackets.txt), [`assets/unicode/BidiMirroring.txt`](assets/unicode/BidiMirroring.txt) — see [`assets/unicode/UnicodeCharacterDatabase.LICENSE.txt`](assets/unicode/UnicodeCharacterDatabase.LICENSE.txt)
-- **Generation script:** [`assets/unicode/generate_bidi_tables.py`](assets/unicode/generate_bidi_tables.py), which reparses the three UCD source files above into the compact per-codepoint-range records the embedded resources actually ship
-- **Also present, not shipped:** `assets/unicode/BidiCharacterTest.txt`, the Unicode Consortium's own bidi conformance test suite, used only by `PeachPDF.Tests` to verify the Unicode Bidirectional Algorithm (UAX #9) implementation against real test vectors — never embedded in the library or its NuGet package
+- **Location:** [`src/PeachPDF/Text/Resources/Bidi/`](src/PeachPDF/Text/Resources/Bidi/) — `DerivedBidiClass.txt.br`, `BidiBrackets.txt.br`, `BidiMirroring.txt.br` (consumed by `PeachPDF.Text.Bidi.BidiClassTable`/`BidiBrackets`/`BidiMirroring`); [`src/PeachPDF/Text/Resources/VerticalOrientation/`](src/PeachPDF/Text/Resources/VerticalOrientation/) — `VerticalOrientation.txt.br` (`PeachPDF.Text.VerticalOrientationTable`); [`src/PeachPDF/Text/Resources/Script/`](src/PeachPDF/Text/Resources/Script/) — `Scripts.txt.br` (`PeachPDF.Text.ScriptTable`); [`src/PeachPDF/Text/Resources/ArabicJoining/`](src/PeachPDF/Text/Resources/ArabicJoining/) — `DerivedJoiningType.txt.br` (`PeachPDF.Text.ArabicShapingTable`). All Brotli-compressed.
+- **Upstream source:** the Unicode Character Database (UCD), version 17.0.0, mirrored unmodified at [`assets/unicode/DerivedBidiClass.txt`](assets/unicode/DerivedBidiClass.txt), [`assets/unicode/BidiBrackets.txt`](assets/unicode/BidiBrackets.txt), [`assets/unicode/BidiMirroring.txt`](assets/unicode/BidiMirroring.txt), [`assets/unicode/VerticalOrientation.txt`](assets/unicode/VerticalOrientation.txt), [`assets/unicode/Scripts.txt`](assets/unicode/Scripts.txt), [`assets/unicode/DerivedJoiningType.txt`](assets/unicode/DerivedJoiningType.txt) — see [`assets/unicode/UnicodeCharacterDatabase.LICENSE.txt`](assets/unicode/UnicodeCharacterDatabase.LICENSE.txt)
+- **Generation scripts:** [`assets/unicode/generate_bidi_tables.py`](assets/unicode/generate_bidi_tables.py), [`assets/unicode/generate_vertical_orientation_table.py`](assets/unicode/generate_vertical_orientation_table.py), [`assets/unicode/generate_script_table.py`](assets/unicode/generate_script_table.py), [`assets/unicode/generate_arabic_joining_table.py`](assets/unicode/generate_arabic_joining_table.py) — each reparses its own UCD source file(s) above into the compact per-codepoint-range records the embedded resources actually ship
+- **Also present, not shipped:** `assets/unicode/BidiCharacterTest.txt`, the Unicode Consortium's own bidi conformance test suite, used only by `PeachPDF.Tests` to verify the Unicode Bidirectional Algorithm (UAX #9) implementation against real test vectors; `assets/unicode/ArabicShaping.txt`, kept alongside `DerivedJoiningType.txt` as the normative source that file is itself derived from, for provenance — neither is ever embedded in the library or its NuGet package
 - **License:** [Unicode License v3](https://www.unicode.org/license.txt) ("Unicode® License Agreement — Data Files and Software")
 
 Each UCD source file carries this notice in its own header, reproduced here rather than the full license text (see the license file linked above for that):
 
 > © 2025 Unicode®, Inc. Unicode and the Unicode Logo are registered trademarks of Unicode, Inc. in the U.S. and other countries. For terms of use and license, see https://www.unicode.org/terms_of_use.html
+
+## HarfBuzz (ported Arabic/Syriac joining state machine)
+
+- **Location:** [`src/PeachPDF/Text/Shaping/Arabic/ArabicJoiningStateTable.cs`](src/PeachPDF/Text/Shaping/Arabic/ArabicJoiningStateTable.cs), [`src/PeachPDF/Text/Shaping/Arabic/ArabicJoiningShaper.cs`](src/PeachPDF/Text/Shaping/Arabic/ArabicJoiningShaper.cs) — a line-by-line C# port of the cursive-joining state machine (`arabic_state_table`/`arabic_joining`), not merely inspired by it
+- **Upstream source:** [HarfBuzz](https://github.com/harfbuzz/harfbuzz), `src/hb-ot-shaper-arabic.cc`, retrieved 2026-09-04 from the `main` branch
+- **License:** the "Old MIT" license HarfBuzz is licensed under project-wide (see HarfBuzz's own [`COPYING`](https://github.com/harfbuzz/harfbuzz/blob/main/COPYING)) — functionally MIT-equivalent, reproduced in full below
+
+Each ported file's header reproduces this exact notice (as it appeared in the original `hb-ot-shaper-arabic.cc`), plus a comment naming the specific upstream function it was ported from:
+
+```
+Copyright © 2010,2012  Google, Inc.
+
+ This is part of HarfBuzz, a text shaping library.
+
+Permission is hereby granted, without written agreement and without
+license or royalty fees, to use, copy, modify, and distribute this
+software and its documentation for any purpose, provided that the
+above copyright notice and the following two paragraphs appear in
+all copies of this software.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE TO ANY PARTY FOR
+DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES
+ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN
+IF THE COPYRIGHT HOLDER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.
+
+THE COPYRIGHT HOLDER SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS
+ON AN "AS IS" BASIS, AND THE COPYRIGHT HOLDER HAS NO OBLIGATION TO
+PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+Google Author(s): Behdad Esfahbod
+```
+
+Everything else in `src/PeachPDF/Text/Shaping/Arabic/` (`ArabicJoiningForm.cs`) is original PeachPDF code (BSD 3-Clause, the project's own license) written to consume the ported state machine — not itself derived from HarfBuzz, so it carries no HarfBuzz notice.
+
+## HarfBuzz (ported GPOS cursive attachment formula)
+
+- **Location:** [`src/PeachPDF/Text/GposPositioner.cs`](src/PeachPDF/Text/GposPositioner.cs) — the `TryApplyCursivePair` method's main-direction (X) correction only (the surrounding dispatch/iteration and the cross-direction Y correction are original PeachPDF code)
+- **Upstream source:** [HarfBuzz](https://github.com/harfbuzz/harfbuzz), `src/OT/Layout/GPOS/CursivePosFormat1.hh` (`CursivePosFormat1::apply`, the `HB_DIRECTION_RTL` branch of its main-direction adjustment), retrieved 2026-09-04 from the `main` branch
+- **License:** the "Old MIT" license HarfBuzz is licensed under project-wide (see HarfBuzz's own [`COPYING`](https://github.com/harfbuzz/harfbuzz/blob/main/COPYING)) — functionally MIT-equivalent. This specific file carries no individual per-file header (true of most files under `src/OT/Layout/`), so the notice below is HarfBuzz's own project-wide one from `COPYING`, naming every contributor `COPYING` lists rather than one individual file's own (narrower) header:
+
+```
+Copyright © 2010-2022  Google, Inc.
+Copyright © 2015-2020  Ebrahim Byagowi
+Copyright © 2019,2020  Facebook, Inc.
+Copyright © 2012,2015  Mozilla Foundation
+Copyright © 2011  Codethink Limited
+Copyright © 2008,2010  Nokia Corporation and/or its subsidiary(-ies)
+Copyright © 2009  Keith Stribley
+Copyright © 2011  Martin Hosken and SIL International
+Copyright © 2007  Chris Wilson
+Copyright © 2005,2006,2020,2021,2022,2023  Behdad Esfahbod
+Copyright © 2004,2007,2008,2009,2010,2013,2021,2022,2023  Red Hat, Inc.
+Copyright © 1998-2005  David Turner and Werner Lemberg
+Copyright © 2016  Igalia S.L.
+Copyright © 2022  Matthias Clasen
+Copyright © 2018,2021  Khaled Hosny
+Copyright © 2018,2019,2020  Adobe, Inc
+Copyright © 2013-2015  Alexei Podtelezhnikov
+
+For full copyright notices consult the individual files in the package.
+
+Permission is hereby granted, without written agreement and without
+license or royalty fees, to use, copy, modify, and distribute this
+software and its documentation for any purpose, provided that the
+above copyright notice and the following two paragraphs appear in
+all copies of this software.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE TO ANY PARTY FOR
+DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES
+ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN
+IF THE COPYRIGHT HOLDER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.
+
+THE COPYRIGHT HOLDER SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS
+ON AN "AS IS" BASIS, AND THE COPYRIGHT HOLDER HAS NO OBLIGATION TO
+PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+```
+
+A first implementation of this method derived its own formula directly from the OpenType spec's prose
+instead of porting HarfBuzz's real algorithm, and was wrong against a real font (see this fix's own
+recent-fixes entry) — replaced with this direct port once the divergence was found.
+
+## HarfBuzz (ported Universal Shaping Engine algorithm)
+
+- **Location:** [`src/PeachPDF/Text/Shaping/Use/UseSyllableScanner.cs`](src/PeachPDF/Text/Shaping/Use/UseSyllableScanner.cs) (a hand-written scanner implementing the same grammar as the ported `.rl` source below, standing in for HarfBuzz's own Ragel-generated state machine since this repo has no Ragel toolchain) and [`src/PeachPDF/Text/Shaping/Use/UseReorderer.cs`](src/PeachPDF/Text/Shaping/Use/UseReorderer.cs) (`ReorderSyllable`, a line-by-line port of `reorder_syllable_use`)
+- **Upstream source:** [HarfBuzz](https://github.com/harfbuzz/harfbuzz) — the syllable grammar from `src/hb-ot-shaper-use-machine.rl`, the reorder algorithm from `src/hb-ot-shaper-use.cc` (`reorder_syllable_use`), both retrieved 2026-09-05 from the `main` branch
+- **License:** the "Old MIT" license HarfBuzz is licensed under project-wide (see HarfBuzz's own [`COPYING`](https://github.com/harfbuzz/harfbuzz/blob/main/COPYING)) — functionally MIT-equivalent, reproduced below
+
+Both upstream files carry the same header notice, reproduced in each ported file:
+
+```
+Copyright © 2015  Mozilla Foundation.
+Copyright © 2015  Google, Inc.
+
+ This is part of HarfBuzz, a text shaping library.
+
+Permission is hereby granted, without written agreement and without
+license or royalty fees, to use, copy, modify, and distribute this
+software and its documentation for any purpose, provided that the
+above copyright notice and the following two paragraphs appear in
+all copies of this software.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE TO ANY PARTY FOR
+DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES
+ARISING OUT OF THE USE OF THIS SOFTWARE AND ITS DOCUMENTATION, EVEN
+IF THE COPYRIGHT HOLDER HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
+DAMAGE.
+
+THE COPYRIGHT HOLDER SPECIFICALLY DISCLAIMS ANY WARRANTIES, INCLUDING,
+BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE.  THE SOFTWARE PROVIDED HEREUNDER IS
+ON AN "AS IS" BASIS, AND THE COPYRIGHT HOLDER HAS NO OBLIGATION TO
+PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+
+Mozilla Author(s): Jonathan Kew
+Google Author(s): Behdad Esfahbod
+```
+
+`UseCategoryClassifier.cs` ports the category-derivation *algorithm* from HarfBuzz's build-time
+generator script (`src/gen-use-table.py`, same upstream project/license) rather than any single
+runtime `.cc`/`.hh` file — that script's own predicates are what this class's
+`is_BASE`/`is_VOWEL`/etc.-equivalent branches are ported from, since the runtime category lookup
+itself (`hb-ot-shaper-use-table.hh`) is a bit-packed lookup trie with no human-readable per-codepoint
+mapping to port from directly (see that class's own remarks). `gen-use-table.py` carries no individual
+per-file header (true of most build-time/tooling scripts under `src/`), so - same as the cursive
+attachment port above - it falls under HarfBuzz's own project-wide notice from `COPYING`, naming every
+contributor `COPYING` lists rather than one individual file's own (narrower) header; see that section
+above for the full text (identical here). Everything else in `src/PeachPDF/Text/Shaping/Use/`
+(`UseCategory.cs`, `UseSyllableType.cs`, `UseSyllable.cs`) is original PeachPDF code (BSD 3-Clause, the
+project's own license) written to consume the ported algorithm — not itself derived from HarfBuzz, so
+it carries no HarfBuzz notice.
 
 ## Bundled font assets
 

@@ -556,19 +556,9 @@ namespace PeachPDF.Html.Core.Paint
             if (hasRightEdge)
                 x2 -= box.ActualPaddingRight + box.ActualBorderRightWidth;
 
-            var dashStyle = textDecorationStyle switch
-            {
-                Keywords.Solid => RDashStyle.Solid,
-                Keywords.Double => RDashStyle.Solid,
-                Keywords.Dotted => RDashStyle.Dot,
-                Keywords.Dashed => RDashStyle.Dash,
-                Keywords.Wavy => RDashStyle.Solid,
-                _ => RDashStyle.Solid
-            };
-
             var pen = g.GetPen(textDecorationActualColor);
             pen.Width = 1;
-            pen.DashStyle = dashStyle;
+            pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(textDecorationStyle);
 
             // text-decoration-line may list several keywords (e.g. "underline overline"); draw each.
             var bottomInset = box.ActualPaddingBottom - box.ActualBorderBottomWidth;

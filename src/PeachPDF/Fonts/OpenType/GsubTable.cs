@@ -17,8 +17,9 @@
 // filtering is honored via `GdefTable` (see `PeachPDF.Text.GlyphSequenceFilter`), and feature
 // selection can pick a language-specific `LangSys` instead of always using `DefaultLangSys`.
 //
-// Not implemented (see .claude/accepted-gaps/no-text-shaping.md): Lookup Type 8 (Reverse Chaining
-// Context Single Substitution - Arabic-joining-shaped, processes end-to-start).
+// Also implemented: Lookup Type 8 (Reverse Chaining Context Single Substitution) - the one GSUB
+// lookup type that processes its input end-to-start rather than start-to-end, and substitutes a
+// single matched glyph directly (by Coverage index) rather than via nested SequenceLookupRecords.
 //
 // https://learn.microsoft.com/en-us/typography/opentype/spec/gsub
 // https://learn.microsoft.com/en-us/typography/opentype/spec/chapter2
@@ -254,6 +255,34 @@ namespace PeachPDF.Fonts.OpenType
         public int? MarkFilteringSetIndex { get; init; }
     }
 
+    /// <summary>One <c>ReverseChainSingleSubstFormat1</c> subtable: <see cref="Coverage"/> selects the
+    /// single glyph position this rule substitutes (its own real index is what backtrack/lookahead
+    /// are anchored around) - <see cref="SubstituteGlyphIds"/> is parallel to <see cref="Coverage"/>'s
+    /// own index, so there is no nested <c>SequenceLookupRecord</c> indirection the way GSUB Types
+    /// 5/6 have: a match is always a direct 1:1 glyph-id remap.</summary>
+    internal sealed class GsubReverseChainSingleSubstSubtable
+    {
+        public required CoverageTable Coverage { get; init; }
+
+        /// <summary>Reverse logical order - index 0 is the participating glyph immediately before the
+        /// matched position, same convention as <see cref="GsubSequenceRule.Backtrack"/>.</summary>
+        public required CoverageTable[] BacktrackCoverages { get; init; }
+
+        /// <summary>Forward logical order - index 0 is the participating glyph immediately after the
+        /// matched position, same convention as <see cref="GsubSequenceRule.Lookahead"/>.</summary>
+        public required CoverageTable[] LookaheadCoverages { get; init; }
+
+        public required ushort[] SubstituteGlyphIds { get; init; }
+    }
+
+    /// <summary>A GSUB lookup of type 8 (or type 7 wrapping type 8), as one or more subtables.</summary>
+    internal sealed class GsubReverseChainSingleSubstLookup
+    {
+        public required IReadOnlyList<GsubReverseChainSingleSubstSubtable> Subtables { get; init; }
+        public ushort LookupFlag { get; init; }
+        public int? MarkFilteringSetIndex { get; init; }
+    }
+
     internal sealed class GsubTable
     {
         private readonly OpenTypeFontface _face;
@@ -276,6 +305,7 @@ namespace PeachPDF.Fonts.OpenType
         private readonly ConcurrentDictionary<int, GsubMultipleSubstitutionLookup?> _multipleSubstitutionLookupCache = new();
         private readonly ConcurrentDictionary<int, GsubContextualLookup?> _contextualLookupCache = new();
         private readonly ConcurrentDictionary<int, GsubChainingContextLookup?> _chainingContextLookupCache = new();
+        private readonly ConcurrentDictionary<int, GsubReverseChainSingleSubstLookup?> _reverseChainSingleSubstLookupCache = new();
         private readonly ConcurrentDictionary<int, int> _resolvedLookupTypeCache = new();
 
         public GsubTable(OpenTypeFontface face, int tableStart)
@@ -393,6 +423,12 @@ namespace PeachPDF.Fonts.OpenType
         public GsubChainingContextLookup? GetChainingContextLookup(int lookupListIndex)
             => _chainingContextLookupCache.GetOrAdd(lookupListIndex, ReadChainingContextLookup);
 
+        /// <summary>Parses (and caches) the lookup at <paramref name="lookupListIndex"/> as a
+        /// reverse-chaining-context single-substitution lookup, or null if it isn't one (or is an
+        /// unsupported type).</summary>
+        public GsubReverseChainSingleSubstLookup? GetReverseChainSingleSubstLookup(int lookupListIndex)
+            => _reverseChainSingleSubstLookupCache.GetOrAdd(lookupListIndex, ReadReverseChainSingleSubstLookup);
+
         /// <summary>
         /// The real lookup type at <paramref name="lookupListIndex"/> - a Type 7 (Extension
         /// Substitution) lookup resolves to whatever type it wraps, so callers that need to dispatch
@@ -453,6 +489,19 @@ namespace PeachPDF.Fonts.OpenType
             return records;
         }
 
+        /// <summary>
+        /// Resolves the <c>ScriptList</c> record to use, trying <paramref name="scriptTagPreference"/>
+        /// in order first. If none of those tags are present, falls back to the font's own explicit
+        /// <c>"DFLT"</c> script (a neutral, script-agnostic entry real fonts define exactly for this
+        /// situation) rather than an arbitrary first-listed record - important now that
+        /// <paramref name="scriptTagPreference"/> can start with a specific script tag (e.g. `"arab"`,
+        /// via <see cref="PeachPDF.Text.TextShapingFeatures.ScriptTag"/>) that a given font may simply not define: an
+        /// arbitrary <c>ScriptList[0]</c> could be any other script the font happens to list first,
+        /// whose feature set has no particular relationship to the requested one, whereas `"DFLT"` (when
+        /// present) is specifically authored to behave reasonably for scripts the font doesn't otherwise
+        /// distinguish. Only falls through to the true first-listed record if the font defines no
+        /// `"DFLT"` script either.
+        /// </summary>
         private int FindScript(IReadOnlyList<string> scriptTagPreference)
         {
             _face.Position = _scriptListOffset;
@@ -472,6 +521,12 @@ namespace PeachPDF.Fonts.OpenType
                     if (record.Tag == preferred)
                         return record.Offset;
                 }
+            }
+
+            foreach (var record in records)
+            {
+                if (record.Tag == "DFLT")
+                    return record.Offset;
             }
 
             return records.Length > 0 ? records[0].Offset : -1;
@@ -786,6 +841,75 @@ namespace PeachPDF.Fonts.OpenType
                     ? new GsubChainingContextLookup { Subtables = subtables, LookupFlag = header.LookupFlag, MarkFilteringSetIndex = header.MarkFilteringSetIndex }
                     : null;
             }
+        }
+
+        private GsubReverseChainSingleSubstLookup? ReadReverseChainSingleSubstLookup(int lookupListIndex)
+        {
+            // Same locking rationale as ReadLigatureLookup above - see issue #543.
+            lock (_face)
+            {
+                if (ReadLookupHeader(lookupListIndex, 8) is not { } header)
+                    return null;
+
+                var subtables = new List<GsubReverseChainSingleSubstSubtable>(header.SubtableOffsets.Count);
+                foreach (int subtableOffset in header.SubtableOffsets)
+                {
+                    GsubReverseChainSingleSubstSubtable? subtable = ReadReverseChainSingleSubstSubtable(subtableOffset);
+                    if (subtable is not null)
+                        subtables.Add(subtable);
+                }
+
+                return subtables.Count > 0
+                    ? new GsubReverseChainSingleSubstLookup { Subtables = subtables, LookupFlag = header.LookupFlag, MarkFilteringSetIndex = header.MarkFilteringSetIndex }
+                    : null;
+            }
+        }
+
+        /// <summary>Reads a `ReverseChainSingleSubstFormat1` subtable (Lookup Type 8) - the only GSUB
+        /// format read entirely before any of its own offsets are dereferenced (backtrack/lookahead
+        /// coverage offsets, then <paramref name="offset"/>'s own <see cref="CoverageTable"/> last),
+        /// matching this file's established "read every raw offset array before dereferencing any of
+        /// them" convention (see <see cref="ReadLigatureSubtable"/> for the same reasoning applied to
+        /// GSUB Type 4).</summary>
+        private GsubReverseChainSingleSubstSubtable? ReadReverseChainSingleSubstSubtable(int offset)
+        {
+            _face.Position = offset;
+            int format = _face.ReadUShort();
+            if (format != 1)
+                return null;
+
+            int coverageOffset = offset + _face.ReadUShort();
+
+            int backtrackGlyphCount = _face.ReadUShort();
+            var backtrackOffsets = new int[backtrackGlyphCount];
+            for (int i = 0; i < backtrackGlyphCount; i++)
+                backtrackOffsets[i] = offset + _face.ReadUShort();
+
+            int lookaheadGlyphCount = _face.ReadUShort();
+            var lookaheadOffsets = new int[lookaheadGlyphCount];
+            for (int i = 0; i < lookaheadGlyphCount; i++)
+                lookaheadOffsets[i] = offset + _face.ReadUShort();
+
+            int glyphCount = _face.ReadUShort();
+            var substituteGlyphIds = new ushort[glyphCount];
+            for (int i = 0; i < glyphCount; i++)
+                substituteGlyphIds[i] = _face.ReadUShort();
+
+            var backtrackCoverages = new CoverageTable[backtrackGlyphCount];
+            for (int i = 0; i < backtrackGlyphCount; i++)
+                backtrackCoverages[i] = CoverageTable.Read(_face, backtrackOffsets[i]);
+
+            var lookaheadCoverages = new CoverageTable[lookaheadGlyphCount];
+            for (int i = 0; i < lookaheadGlyphCount; i++)
+                lookaheadCoverages[i] = CoverageTable.Read(_face, lookaheadOffsets[i]);
+
+            return new GsubReverseChainSingleSubstSubtable
+            {
+                Coverage = CoverageTable.Read(_face, coverageOffset),
+                BacktrackCoverages = backtrackCoverages,
+                LookaheadCoverages = lookaheadCoverages,
+                SubstituteGlyphIds = substituteGlyphIds,
+            };
         }
 
         /// <summary>Reads a non-chaining `SequenceContext` subtable (Lookup Type 5), formats 1/2/3.</summary>

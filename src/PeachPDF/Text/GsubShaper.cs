@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
 using PeachPDF.Fonts.OpenType;
+using PeachPDF.Text.Shaping.Arabic;
+using PeachPDF.Text.Shaping.Use;
 
 namespace PeachPDF.Text
 {
@@ -17,11 +19,30 @@ namespace PeachPDF.Text
     /// are GPOS positioning deltas (font design units, same space <c>OpenTypeDescriptor.GlyphIndexToWidth</c>
     /// returns), applied by <see cref="GposPositioner"/> after GSUB substitution - all zero for a
     /// glyph GPOS doesn't touch, so every pre-GPOS call site is unaffected by their mere existence.
+    /// <see cref="LigatureComponentClusterStarts"/> is null for every glyph except one produced by a
+    /// GSUB ligature merge (see <see cref="GsubShaper.TryMatchLigature"/>), where it records each
+    /// original component's own <see cref="ClusterStart"/> (component 0 = the coverage-matched first
+    /// glyph) - the bookkeeping <see cref="GposPositioner.ApplyMarkToLigature"/> (GPOS Lookup Type 5)
+    /// needs to identify which ligature component a later-attaching mark belongs to.
+    /// <see cref="AttachedToIndex"/> is null for every glyph except a mark <see cref="GposPositioner.ApplyMarkAnchor"/>
+    /// just positioned via mark-to-base/mark-to-ligature/mark-to-mark attachment (GPOS Types 4/5/6),
+    /// where it records the glyph-list index (stable for the lifetime of one
+    /// <see cref="OpenTypeDescriptor.Shape"/> call - GPOS never inserts/removes glyphs) of whatever it
+    /// anchored to. <see cref="XOffset"/> alone can't reconstruct that relationship once the list is
+    /// reordered (see <see cref="OpenTypeDescriptor.Shape"/>'s remarks on <c>ReverseForDisplay</c>): the
+    /// offset bakes in the pen-distance to the base under the walk order GPOS actually ran in, so
+    /// reordering without this back-reference would silently mis-position the mark. Cursive attachment
+    /// (GPOS Type 3, <see cref="GposPositioner.ApplyCursiveAttachment"/>) needs no equivalent
+    /// back-reference - its own correction is self-contained per glyph (depends only on that glyph's own
+    /// anchor, never on the other glyph's position), so it survives reversal via a plain interval-mirror
+    /// with no special-casing - see <see cref="GposPositioner.TryApplyCursivePair"/>'s own remarks.
     /// </summary>
     internal readonly record struct ShapedGlyph(
         int GlyphIndex, int ClusterStart, int ClusterLength,
         double XAdvanceDelta = 0, double YAdvanceDelta = 0,
-        double XOffset = 0, double YOffset = 0);
+        double XOffset = 0, double YOffset = 0,
+        int[]? LigatureComponentClusterStarts = null,
+        int? AttachedToIndex = null);
 
     /// <summary>Which GSUB ligature features <see cref="GsubShaper.Shape"/> should apply.</summary>
     [Flags]
@@ -102,14 +123,28 @@ namespace PeachPDF.Text
 
     /// <summary>
     /// The combined set of GSUB/GPOS feature requests for one shaped run - ligatures, caps, numeric,
-    /// east-asian, kerning, an explicit document language, and arbitrary explicit
-    /// <c>font-feature-settings</c> tags all fold into one request so <see cref="GsubShaper.Shape"/>
-    /// can activate every requested lookup in a single pass, ordered by the font's own <c>LookupList</c>
-    /// index, instead of several independently-ordered passes.
-    /// <see cref="ExplicitFeatures"/> uses default (reference) equality when this struct is used as a
-    /// cache key (see <see cref="GsubShaper"/>'s lookup-index cache) - two logically-identical but
-    /// distinct list instances cache separately, which only costs a redundant lookup-index computation,
-    /// never an incorrect one.
+    /// east-asian, kerning, an explicit document language, an explicit OpenType script tag, per-character
+    /// Arabic-family joining forms, per-character Universal-Shaping-Engine categories (Devanagari), and
+    /// arbitrary explicit <c>font-feature-settings</c> tags all fold into one request so
+    /// <see cref="GsubShaper.Shape"/> can activate every requested lookup in a single pass, ordered by
+    /// the font's own <c>LookupList</c> index, instead of several independently-ordered passes.
+    /// <see cref="JoiningForms"/> and <see cref="UseCategories"/> are the exceptions to "single pass" -
+    /// see <see cref="GsubShaper.Shape"/>'s own remarks on why each must run in its own dedicated
+    /// stage(s) before the ordered pass, not folded into it (never both at once for one run - a word
+    /// resolves to exactly one script, so only one of the two is ever non-null). <see cref="ExplicitFeatures"/>/
+    /// <see cref="JoiningForms"/>/<see cref="UseCategories"/> use default (reference) equality when this
+    /// struct is used as a cache key (see <see cref="GsubShaper"/>'s lookup-index cache) - two
+    /// logically-identical but distinct list instances cache separately, which only costs a redundant
+    /// lookup-index computation, never an incorrect one (for <see cref="JoiningForms"/>/<see cref="UseCategories"/>
+    /// specifically, this means the cache essentially never hits across two different complex-script
+    /// runs, since each has its own distinct per-character sequence - still correct, just without the
+    /// caching benefit ordinary Latin text gets).
+    /// <see cref="ReverseForDisplay"/> requests <see cref="OpenTypeDescriptor.Shape"/>'s own final step:
+    /// reverse the shaped <c>ShapedGlyph</c> list (never the source text GSUB/GPOS themselves ran
+    /// against) and remap any mirrorable glyph via <c>BidiMirroring</c> - see
+    /// <see cref="OpenTypeDescriptor.Shape"/>'s remarks for why Arabic-family joining words shape this
+    /// way instead of shaping already-visually-reversed text the way a plain RTL word (Hebrew, etc.)
+    /// still does.
     /// </summary>
     internal readonly record struct TextShapingFeatures(
         LigatureFeatures Ligatures = LigatureFeatures.Default,
@@ -118,7 +153,11 @@ namespace PeachPDF.Text
         EastAsianFeatures EastAsian = EastAsianFeatures.None,
         IReadOnlyList<(string Tag, int Value)>? ExplicitFeatures = null,
         bool Kerning = true,
-        string? Language = null)
+        string? Language = null,
+        string? ScriptTag = null,
+        IReadOnlyList<ArabicJoiningForm>? JoiningForms = null,
+        IReadOnlyList<UseCategory>? UseCategories = null,
+        bool ReverseForDisplay = false)
     {
         // NOT `new()` - for a record struct, a bare `new()` invokes the struct's implicit,
         // zero-initializing parameterless constructor, NOT this primary constructor's own declared
@@ -149,24 +188,29 @@ namespace PeachPDF.Text
     /// </summary>
     internal static class GsubShaper
     {
-        // A fixed, deliberately narrow (not spec-complete) simplification: contextual/chaining
-        // (Lookup Types 5/6) backtrack/input/lookahead matching is done against literal glyph
-        // adjacency, without consulting `lookupFlag`/GDEF to skip an intervening mark the way
-        // ligature matching does (see TryMatchLigature) - the overwhelming common `calt` case (no
-        // mark interspersed inside the matched window) is unaffected; a font whose contextual rule
-        // specifically depends on skipping a mark mid-context may under-match. Recorded as an
-        // accepted gap rather than attempted here, given the added complexity of position-tracking
-        // through a skip-aware backtrack/input/lookahead walk.
+        // Guards ApplyMatchedLookups against a pathological/adversarial font nesting indefinitely -
+        // real fonts never chain nested contextual lookups anywhere near this deep.
         private const int MaxNestedContextDepth = 8;
 
-        // Real per-language script selection (which script, e.g. "latn" vs "DFLT") is out of scope -
-        // "latn" covers the common case, "DFLT" the fallback GsubTable itself falls back to the
-        // font's first script if neither is present. Per-language *LangSys* selection (which of a
-        // script's language systems to use) IS supported - see TextShapingFeatures.Language below.
-        // Internal (not private) so OpenTypeDescriptor.SupportsFeatureTags can check support against
-        // the exact same script preference Shape itself resolves against - otherwise "supported" and
-        // "actually applied" could disagree.
+        // The fallback script preference used when a run carries no TextShapingFeatures.ScriptTag (or
+        // that tag isn't in the font's own ScriptList) - "latn" covers the common case, "DFLT" the
+        // fallback GsubTable itself falls back to the font's first script if neither is present.
+        // Internal (not private) so OpenTypeDescriptor.SupportsFeatureTags can check general capability
+        // against this same default chain.
         internal static readonly IReadOnlyList<string> ScriptPreference = ["latn", "DFLT"];
+
+        /// <summary>
+        /// Builds the ordered script-tag preference <c>GsubTable.GetActiveLookupIndices</c> tries: the
+        /// run's own resolved OpenType script tag first (when the caller supplied one - see
+        /// <see cref="TextShapingFeatures.ScriptTag"/>, typically <see cref="OpenTypeScriptTags.Resolve"/>
+        /// applied to a run's <see cref="ScriptRunResolver"/>-resolved script), falling back to
+        /// <see cref="ScriptPreference"/>'s existing <c>"latn"</c>/<c>"DFLT"</c> chain - never worse than
+        /// before this parameter existed for a run that doesn't supply one, or whose script isn't in the
+        /// font's own <c>ScriptList</c> (<c>GetActiveLookupIndices</c> already tries each preference in
+        /// order and falls through).
+        /// </summary>
+        private static IReadOnlyList<string> ResolveScriptPreference(string? scriptTag) =>
+            scriptTag is null ? ScriptPreference : [scriptTag, .. ScriptPreference];
 
         // GsubTable instances are cached and shared process-wide (owned by the cached
         // OpenTypeFontface), so the lookup-index sets computed from them are cached the same way -
@@ -239,6 +283,61 @@ namespace PeachPDF.Text
 
             GdefTable? gdef = descriptor.FontFace.gdef?.Table;
 
+            if (features.JoiningForms is { Count: > 0 } joiningForms)
+            {
+                var languageTag = OpenTypeLanguageTags.Resolve(features.Language);
+                var scriptPreference = ResolveScriptPreference(features.ScriptTag);
+
+                // Captured by ClusterStart BEFORE the ccmp/locl pre-stage runs just below - that stage
+                // can change glyphs' count (e.g. decomposing one codepoint into a base + mark glyph, see
+                // its own remarks), so "joiningForms[i] describes glyphs[i]" stops being true the moment
+                // it does. ClusterStart (the source codepoint's own UTF-16 offset) survives a Type 2
+                // expansion untouched on the resulting first/primary glyph (ApplyMultipleSubstitutionAt's
+                // own convention), so keying on it instead of raw position is what keeps every later
+                // lookup pointed at the right glyph regardless of how many glyphs an earlier stage
+                // inserted or removed.
+                Dictionary<int, ArabicJoiningForm>? formsByClusterStart = null;
+                for (var i = 0; i < glyphs.Count && i < joiningForms.Count; i++)
+                {
+                    if (joiningForms[i] == ArabicJoiningForm.None)
+                        continue;
+                    (formsByClusterStart ??= new Dictionary<int, ArabicJoiningForm>())[glyphs[i].ClusterStart] = joiningForms[i];
+                }
+
+                if (formsByClusterStart is not null)
+                {
+                    // ccmp/locl run in their own stage BEFORE positional joining-form substitution,
+                    // matching HarfBuzz's own collect_features_arabic staging (both are enabled ahead of
+                    // its own isol/init/medi/fina loop). This is not a stylistic nicety: some real fonts
+                    // (confirmed directly against Noto Sans Arabic) define ccmp rules that decompose a
+                    // precomposed dotted letter into a base glyph + separate combining-mark glyph, and
+                    // the base glyph - not the original precomposed one - is what the font's own
+                    // init/medi/fina coverage tables are actually keyed on. Skipping this stage means
+                    // positional substitution silently no-ops for exactly the letters that need
+                    // decomposing first, on a real font that happens to use this technique - found by
+                    // rasterizing real output during development, not by reading the spec alone (see
+                    // this fix's own recent-fixes entry).
+                    foreach (int lookupIndex in gsub.GetActiveLookupIndices(scriptPreference, languageTag, CcmpLoclTags))
+                        ApplyLookup(gsub, lookupIndex, alternateIndex: 0, glyphs, gdef);
+
+                    // Positional joining-form substitution (isol/fina/fin2/fin3/medi/med2/init) runs in
+                    // its own dedicated stage BEFORE the general feature pass below, matching HarfBuzz's
+                    // own staged application order (see ArabicJoiningShaper's own remarks): rlig/calt/liga
+                    // must see the already-joining-form-selected glyphs (e.g. a lam-alef ligature rule is
+                    // keyed on the specific joining-form glyphs, not the nominal isolated ones), never the
+                    // reverse. This runs independent of whether any other feature is requested, so it
+                    // can't be skipped by the "no active lookups at all" early-return just below.
+                    ApplyArabicJoiningFeatures(gsub, glyphs, formsByClusterStart, languageTag, scriptPreference);
+                }
+            }
+
+            if (features.UseCategories is { Count: > 0 } useCategories)
+            {
+                var languageTag = OpenTypeLanguageTags.Resolve(features.Language);
+                var scriptPreference = ResolveScriptPreference(features.ScriptTag);
+                ApplyUseShaping(gsub, glyphs, useCategories, languageTag, scriptPreference, gdef);
+            }
+
             SortedDictionary<int, int> lookupIndices = GetActiveLookupIndices(gsub, features);
             if (lookupIndices.Count == 0)
                 return glyphs;
@@ -248,47 +347,78 @@ namespace PeachPDF.Text
             // substitution feeding into a later ligature match, or vice versa) match real OpenType
             // application order, rather than an arbitrary code-imposed order from separate passes.
             foreach ((int lookupIndex, int alternateIndex) in lookupIndices)
-            {
-                switch (gsub.GetResolvedLookupType(lookupIndex))
-                {
-                    case 1:
-                        if (gsub.GetSingleSubstitutionLookup(lookupIndex) is { } singleSub)
-                            ApplySingleSubstitutionLookup(singleSub, glyphs);
-                        break;
-                    case 2:
-                        if (gsub.GetMultipleSubstitutionLookup(lookupIndex) is { } multiSub)
-                            ApplyMultipleSubstitutionLookup(multiSub, glyphs);
-                        break;
-                    case 3:
-                        if (gsub.GetAlternateSubstitutionLookup(lookupIndex) is { } altSub)
-                            ApplyAlternateSubstitutionLookup(altSub, glyphs, alternateIndex);
-                        break;
-                    case 4:
-                        if (gsub.GetLigatureLookup(lookupIndex) is { } lig)
-                            ApplyLigatureLookup(lig, glyphs, gdef);
-                        break;
-                    case 5:
-                        if (gsub.GetContextualLookup(lookupIndex) is { } contextual)
-                            ApplySequenceContextLookup(gsub, contextual.Subtables, glyphs, gdef);
-                        break;
-                    case 6:
-                        if (gsub.GetChainingContextLookup(lookupIndex) is { } chaining)
-                            ApplySequenceContextLookup(gsub, chaining.Subtables, glyphs, gdef);
-                        break;
-                    // 7, 8, and any other/unresolved type: silently skipped, matching the pre-existing
-                    // behavior for unsupported lookup types (see file-header gap note).
-                }
-            }
+                ApplyLookup(gsub, lookupIndex, alternateIndex, glyphs, gdef);
 
             return glyphs;
         }
 
-        private static bool IsEmpty(TextShapingFeatures features) =>
+        /// <summary>The <c>ccmp</c>/<c>locl</c> feature tags - see <see cref="Shape"/>'s own remarks on
+        /// why these need their own pre-stage ahead of positional joining-form substitution.</summary>
+        private static readonly IReadOnlySet<string> CcmpLoclTags = new HashSet<string> { "ccmp", "locl" };
+
+        /// <summary>
+        /// Dispatches one lookup by its real (post-Extension-unwrapping) type - the single switch every
+        /// stage of <see cref="Shape"/> shares (the main per-feature pass, and the <c>ccmp</c>/<c>locl</c>
+        /// pre-stage <see cref="TextShapingFeatures.JoiningForms"/> needs), so a lookup type gains
+        /// support in exactly one place regardless of which stage ends up needing it.
+        /// </summary>
+        private static void ApplyLookup(GsubTable gsub, int lookupIndex, int alternateIndex, List<ShapedGlyph> glyphs, GdefTable? gdef)
+        {
+            switch (gsub.GetResolvedLookupType(lookupIndex))
+            {
+                case 1:
+                    if (gsub.GetSingleSubstitutionLookup(lookupIndex) is { } singleSub)
+                        ApplySingleSubstitutionLookup(singleSub, glyphs);
+                    break;
+                case 2:
+                    if (gsub.GetMultipleSubstitutionLookup(lookupIndex) is { } multiSub)
+                        ApplyMultipleSubstitutionLookup(multiSub, glyphs);
+                    break;
+                case 3:
+                    if (gsub.GetAlternateSubstitutionLookup(lookupIndex) is { } altSub)
+                        ApplyAlternateSubstitutionLookup(altSub, glyphs, alternateIndex);
+                    break;
+                case 4:
+                    if (gsub.GetLigatureLookup(lookupIndex) is { } lig)
+                        ApplyLigatureLookup(lig, glyphs, gdef);
+                    break;
+                case 5:
+                    if (gsub.GetContextualLookup(lookupIndex) is { } contextual)
+                    {
+                        CoverageTable? contextualMfs = contextual.MarkFilteringSetIndex is { } cMfs ? gdef?.GetMarkGlyphSet(cMfs) : null;
+                        ApplySequenceContextLookup(gsub, contextual.Subtables, glyphs, gdef, contextual.LookupFlag, contextualMfs);
+                    }
+                    break;
+                case 6:
+                    if (gsub.GetChainingContextLookup(lookupIndex) is { } chaining)
+                    {
+                        CoverageTable? chainingMfs = chaining.MarkFilteringSetIndex is { } chMfs ? gdef?.GetMarkGlyphSet(chMfs) : null;
+                        ApplySequenceContextLookup(gsub, chaining.Subtables, glyphs, gdef, chaining.LookupFlag, chainingMfs);
+                    }
+                    break;
+                case 8:
+                    if (gsub.GetReverseChainSingleSubstLookup(lookupIndex) is { } reverseChain)
+                    {
+                        CoverageTable? reverseChainMfs = reverseChain.MarkFilteringSetIndex is { } rcMfs ? gdef?.GetMarkGlyphSet(rcMfs) : null;
+                        ApplyReverseChainSingleSubstitutionLookup(reverseChain, glyphs, gdef, reverseChainMfs);
+                    }
+                    break;
+                // Any other/unresolved type: silently skipped, matching the pre-existing behavior for
+                // unsupported lookup types (see file-header gap note).
+            }
+        }
+
+        // internal rather than private: lets a test prove JoiningForms alone (with every other field at
+        // its "empty" value) does NOT trip this early-return - see ApplyArabicJoiningFeatures's own
+        // synthetic tests.
+        internal static bool IsEmpty(TextShapingFeatures features) =>
             features.Ligatures == LigatureFeatures.None
             && features.Caps == FontVariantCapsFeature.None
             && features.Numeric == NumericFeatures.None
             && features.EastAsian == EastAsianFeatures.None
-            && (features.ExplicitFeatures is null || features.ExplicitFeatures.Count == 0);
+            && (features.ExplicitFeatures is null || features.ExplicitFeatures.Count == 0)
+            && (features.JoiningForms is null || features.JoiningForms.Count == 0)
+            && (features.UseCategories is null || features.UseCategories.Count == 0);
 
         private static List<ShapedGlyph> MapToGlyphs(OpenTypeDescriptor descriptor, string text)
         {
@@ -320,6 +450,16 @@ namespace PeachPDF.Text
                 // be Type 3 - only an explicit font-feature-settings value greater than 1 asks for a
                 // later one (collected into customAltIndexByTag below instead).
                 var defaultTags = new HashSet<string>();
+
+                // The Universal Shaping Engine's own "standard typographic presentation" group -
+                // applied AFTER reordering (see ApplyUseShaping's own staging), so it belongs in this
+                // general, font-LookupList-ordered pass rather than ApplyUseShaping's own dedicated
+                // pre-reorder stages.
+                if (key.UseCategories is { Count: > 0 })
+                {
+                    defaultTags.Add("abvs"); defaultTags.Add("blws"); defaultTags.Add("haln");
+                    defaultTags.Add("pres"); defaultTags.Add("psts");
+                }
 
                 if ((key.Ligatures & LigatureFeatures.Common) != 0) { defaultTags.Add("liga"); defaultTags.Add("clig"); }
                 if ((key.Ligatures & LigatureFeatures.Required) != 0) defaultTags.Add("rlig");
@@ -364,11 +504,12 @@ namespace PeachPDF.Text
                 }
 
                 string? languageTag = OpenTypeLanguageTags.Resolve(key.Language);
+                IReadOnlyList<string> scriptPreference = ResolveScriptPreference(key.ScriptTag);
 
                 var result = new SortedDictionary<int, int>();
                 if (defaultTags.Count > 0)
                 {
-                    foreach (int lookupIndex in gsub.GetActiveLookupIndices(ScriptPreference, languageTag, defaultTags))
+                    foreach (int lookupIndex in gsub.GetActiveLookupIndices(scriptPreference, languageTag, defaultTags))
                         result[lookupIndex] = 0;
                 }
 
@@ -376,13 +517,278 @@ namespace PeachPDF.Text
                 {
                     foreach ((string tag, int altIndex) in customAltIndexByTag)
                     {
-                        foreach (int lookupIndex in gsub.GetActiveLookupIndices(ScriptPreference, languageTag, new HashSet<string> { tag }))
+                        foreach (int lookupIndex in gsub.GetActiveLookupIndices(scriptPreference, languageTag, new HashSet<string> { tag }))
                             result[lookupIndex] = altIndex;
                     }
                 }
 
                 return result;
             });
+        }
+
+        private static readonly IReadOnlyDictionary<ArabicJoiningForm, string> JoiningFormTags = new Dictionary<ArabicJoiningForm, string>
+        {
+            [ArabicJoiningForm.Isol] = "isol",
+            [ArabicJoiningForm.Fina] = "fina",
+            [ArabicJoiningForm.Fin2] = "fin2",
+            [ArabicJoiningForm.Fin3] = "fin3",
+            [ArabicJoiningForm.Medi] = "medi",
+            [ArabicJoiningForm.Med2] = "med2",
+            [ArabicJoiningForm.Init] = "init",
+        };
+
+        /// <summary>
+        /// Applies each participating glyph's own resolved <see cref="ArabicJoiningForm"/> (see
+        /// <see cref="ArabicJoiningShaper"/>) as a GSUB substitution - <c>isol</c>/<c>fina</c>/<c>fin2</c>/
+        /// <c>fin3</c>/<c>medi</c>/<c>med2</c>/<c>init</c> are conventionally Lookup Type 1 (a 1:1 glyph
+        /// swap), but a real font can equally implement one as Lookup Type 2 (Multiple Substitution)
+        /// with a single-glyph output sequence - confirmed directly against Noto Sans Arabic, whose own
+        /// <c>init</c>/<c>medi</c>/<c>fina</c> lookups are Type 2 despite being semantically 1:1 - so
+        /// both are handled here. <paramref name="formsByClusterStart"/> is keyed by each source
+        /// codepoint's own UTF-16 offset (<see cref="ShapedGlyph.ClusterStart"/>) rather than by glyph
+        /// position, since <paramref name="glyphs"/> may already have been expanded by an earlier stage
+        /// (the <c>ccmp</c>/<c>locl</c> pre-stage <see cref="Shape"/> runs immediately before this) - a
+        /// glyph with <see cref="ShapedGlyph.ClusterLength"/> 0 is one of that expansion's own trailing
+        /// output glyphs (e.g. a mark split off a decomposed base letter), never itself a joining
+        /// position, so it's skipped rather than mis-keyed against the wrong source codepoint entirely.
+        /// A font whose positional forms are (unusually) implemented as a contextual/chaining lookup
+        /// instead of a plain Type 1/2 swap silently gets no substitution here - a documented,
+        /// narrower-than-ideal v1 scope (see <c>.claude/accepted-gaps</c>), not a crash.
+        /// </summary>
+        // internal rather than private: lets tests exercise this directly against a synthetic GsubTable
+        // + hand-built glyph list, bypassing cmap/real-text shaping - same rationale as
+        // ApplySequenceContextLookup's own internal visibility.
+        internal static void ApplyArabicJoiningFeatures(GsubTable gsub, List<ShapedGlyph> glyphs, IReadOnlyDictionary<int, ArabicJoiningForm> formsByClusterStart, string? languageTag, IReadOnlyList<string> scriptPreference)
+        {
+            // Resolve each requested tag's active lookups once, not once per position.
+            Dictionary<string, IReadOnlyList<int>>? lookupsByTag = null;
+
+            for (var pos = 0; pos < glyphs.Count; pos++)
+            {
+                var glyph = glyphs[pos];
+                if (glyph.ClusterLength == 0)
+                    continue;
+                if (!formsByClusterStart.TryGetValue(glyph.ClusterStart, out var form) || form == ArabicJoiningForm.None)
+                    continue;
+                if (!JoiningFormTags.TryGetValue(form, out var tag))
+                    continue;
+
+                lookupsByTag ??= new Dictionary<string, IReadOnlyList<int>>();
+                if (!lookupsByTag.TryGetValue(tag, out var lookupIndices))
+                {
+                    var resolved = new List<int>(gsub.GetActiveLookupIndices(scriptPreference, languageTag, new HashSet<string> { tag }));
+                    lookupsByTag[tag] = lookupIndices = resolved;
+                }
+
+                foreach (var lookupIndex in lookupIndices)
+                {
+                    switch (gsub.GetResolvedLookupType(lookupIndex))
+                    {
+                        case 1:
+                            if (gsub.GetSingleSubstitutionLookup(lookupIndex) is { } singleSub)
+                                ApplySingleSubstitutionAt(singleSub, glyphs, pos);
+                            break;
+                        case 2:
+                            // A further expansion here (unusual, but not spec-forbidden) inserts its own
+                            // trailing zero-length-cluster glyphs right after `pos`, exactly like the
+                            // ccmp pre-stage's own decomposition does - this loop's own ClusterLength==0
+                            // skip above handles them the same way on a later iteration, so no offset
+                            // bookkeeping is needed here the way a purely positional design would need.
+                            if (gsub.GetMultipleSubstitutionLookup(lookupIndex) is { } multiSub)
+                                ApplyMultipleSubstitutionAt(multiSub, glyphs, pos);
+                            break;
+                    }
+                }
+            }
+        }
+
+        /// <summary>The Universal Shaping Engine's own "default glyph pre-processing" feature
+        /// tags - applied globally rather than per-syllable-masked (see <see cref="ApplyUseShaping"/>'s
+        /// own remarks on why that's an acceptable v1 simplification for well-formed text).</summary>
+        private static readonly IReadOnlySet<string> UseNuktaCcmpLoclAkhnTags = new HashSet<string> { "nukt", "ccmp", "locl", "akhn" };
+
+        /// <summary>The `rphf` (Reph Form) feature tag - see <see cref="TryApplyRphf"/>.</summary>
+        private static readonly IReadOnlySet<string> RphfTags = new HashSet<string> { "rphf" };
+
+        /// <summary>The Universal Shaping Engine's own "orthographic unit shaping" feature tags
+        /// (conjunct/half-form/subjoined-form formation) - applied globally, before
+        /// <see cref="UseReorderer"/> runs, matching HarfBuzz's own <c>collect_features_use</c>
+        /// staging.</summary>
+        private static readonly IReadOnlySet<string> UseBasicFeatureTags = new HashSet<string>
+        {
+            "rkrf", "abvf", "blwf", "half", "pstf", "vatu", "cjct",
+        };
+
+        /// <summary>
+        /// Applies the Universal Shaping Engine's own pre-reorder GSUB stages, then reorders the
+        /// resulting glyphs - Devanagari's own use of HarfBuzz's <c>collect_features_use</c>/
+        /// <c>reorder_use</c> pipeline (ported per <see cref="UseCategoryClassifier"/>/
+        /// <see cref="UseSyllableScanner"/>/<see cref="UseReorderer"/>'s own remarks), reduced to the
+        /// stages a Devanagari-scoped port actually needs: default glyph pre-processing
+        /// (<c>locl</c>/<c>ccmp</c>/<c>nukt</c>/<c>akhn</c>), reph formation (<c>rphf</c>, tried once
+        /// at each syllable's own start - see <see cref="TryApplyRphf"/> for why this needs no general
+        /// OpenType-mask mechanism), the 7 "orthographic unit shaping" features (conjunct/half-form
+        /// formation), and finally the glyph reorder itself. The remaining two HarfBuzz stages -
+        /// <c>pref</c> (pre-base-reordering consonants) and the topographical
+        /// (<c>isol</c>/<c>init</c>/<c>medi</c>/<c>fina</c>) features - are both skipped: Devanagari
+        /// has no codepoint that classifies as a pre-base-reordering consonant at all (see
+        /// <see cref="UseCategoryClassifier"/>'s own remarks), and the topographical features exist
+        /// for scripts that share Arabic's own joining-form model, which Devanagari doesn't use. The
+        /// final "standard typographic presentation" group (<c>abvs</c>/<c>blws</c>/<c>haln</c>/
+        /// <c>pres</c>/<c>psts</c>) runs afterward, folded into <see cref="Shape"/>'s own ordered
+        /// general feature pass (see <see cref="GetActiveLookupIndices(GsubTable, TextShapingFeatures)"/>'s
+        /// own <c>UseCategories</c> check) rather than applied here directly - unlike <c>rphf</c>/the
+        /// basic features, HarfBuzz runs this group after clearing per-syllable state entirely, so it
+        /// has no per-syllable masking concern this method's own stages need to replicate.
+        ///
+        /// Every stage here keys a glyph's own semantic content by <see cref="ShapedGlyph.ClusterStart"/>,
+        /// never by raw glyph-list position - the same technique <see cref="ApplyArabicJoiningFeatures"/>
+        /// uses and for the identical reason: an earlier stage (nukt/ccmp composing or decomposing a
+        /// glyph, rphf/the basic features merging a conjunct into one ligature glyph) can change
+        /// <paramref name="glyphs"/>'s own count before a later stage runs, and ClusterStart is what
+        /// keeps every later stage pointed at the right semantic content regardless.
+        /// </summary>
+        private static void ApplyUseShaping(GsubTable gsub, List<ShapedGlyph> glyphs, IReadOnlyList<UseCategory> useCategories,
+            string? languageTag, IReadOnlyList<string> scriptPreference, GdefTable? gdef)
+        {
+            // Snapshot: ClusterStart -> initial category, computed before any substitution in this
+            // stage runs (mirrors ApplyArabicJoiningFeatures' own formsByClusterStart exactly).
+            var categoryByClusterStart = new Dictionary<int, UseCategory>();
+            for (var i = 0; i < glyphs.Count && i < useCategories.Count; i++)
+                categoryByClusterStart[glyphs[i].ClusterStart] = useCategories[i];
+
+            // Syllable boundaries are computed once, over the initial (pre-substitution) category
+            // sequence - matching HarfBuzz's own setup_syllables_use, which runs before any lookup at
+            // all (add_gsub_pause(setup_syllables_use) is the very first thing collect_features_use
+            // does). Recorded as ClusterStart ranges (not raw indices), so they too survive later
+            // glyph-count changes exactly like categoryByClusterStart does.
+            List<UseSyllable> initialSyllables = UseSyllableScanner.Scan(useCategories);
+            var syllableRanges = new (int ClusterStart, int ClusterEnd, UseSyllableType Type)[initialSyllables.Count];
+            for (var s = 0; s < initialSyllables.Count; s++)
+            {
+                UseSyllable syllable = initialSyllables[s];
+                int clusterStart = glyphs[syllable.Start].ClusterStart;
+                int clusterEnd = syllable.Start + syllable.Length < glyphs.Count
+                    ? glyphs[syllable.Start + syllable.Length].ClusterStart
+                    : int.MaxValue;
+                syllableRanges[s] = (clusterStart, clusterEnd, syllable.Type);
+            }
+
+            // Stage: default glyph pre-processing - applied globally rather than per-syllable-masked.
+            // HarfBuzz masks this (and the basic features below) to each syllable's own span mainly so
+            // one syllable's substitution can never reach into its neighbor's glyphs; for well-formed
+            // text a font's own coverage/context tables already only match the sequences they're
+            // authored for, so applying globally produces the same result in practice - a documented,
+            // narrower-than-ideal v1 simplification rather than building a general OpenType-mask
+            // mechanism this codebase has no other use for yet.
+            foreach (int lookupIndex in gsub.GetActiveLookupIndices(scriptPreference, languageTag, UseNuktaCcmpLoclAkhnTags))
+                ApplyLookup(gsub, lookupIndex, alternateIndex: 0, glyphs, gdef);
+
+            // Stage: rphf, tried once at each syllable's own current start position - retagging that
+            // position's category to R on success, mirroring record_rphf_use exactly (the first
+            // masked glyph the GSUB engine actually substituted becomes the reph).
+            foreach ((int clusterStart, _, _) in syllableRanges)
+            {
+                int startIndex = FindGlyphIndexByClusterStart(glyphs, clusterStart);
+                if (startIndex < 0)
+                    continue;
+                if (TryApplyRphf(gsub, glyphs, startIndex, gdef, languageTag, scriptPreference))
+                    categoryByClusterStart[glyphs[startIndex].ClusterStart] = UseCategory.R;
+            }
+
+            // Stage: the 7 "orthographic unit shaping" features - global, same rationale as the
+            // pre-processing stage above.
+            foreach (int lookupIndex in gsub.GetActiveLookupIndices(scriptPreference, languageTag, UseBasicFeatureTags))
+                ApplyLookup(gsub, lookupIndex, alternateIndex: 0, glyphs, gdef);
+
+            // Stage: reorder. Re-derive each CURRENT glyph's category from its own ClusterStart (never
+            // stale positional data - see this method's own remarks), and each syllable's CURRENT
+            // [start, length) span from its own ClusterStart range, then run the two-pass reorder over
+            // exactly that. A glyph with ClusterLength 0 (a Multiple Substitution's own trailing output
+            // glyph - see ApplyMultipleSubstitutionAt's convention) always resolves to O rather than
+            // whatever categoryByClusterStart happens to hold for its ClusterStart: that ClusterStart is
+            // by construction the very next source character's own offset (original.ClusterStart +
+            // original.ClusterLength), so looking it up here would silently borrow a neighboring
+            // syllable's real category for an unrelated expansion artifact - the same ClusterLength == 0
+            // skip ApplyArabicJoiningFeatures already applies for the identical hazard (see its own
+            // remarks), applied here to the category re-derivation instead of a substitution guard.
+            var currentCategories = new UseCategory[glyphs.Count];
+            for (var i = 0; i < glyphs.Count; i++)
+                currentCategories[i] = glyphs[i].ClusterLength > 0 && categoryByClusterStart.TryGetValue(glyphs[i].ClusterStart, out var category)
+                    ? category
+                    : UseCategory.O;
+
+            var currentSyllables = new List<UseSyllable>(syllableRanges.Length);
+            foreach ((int clusterStart, int clusterEnd, UseSyllableType type) in syllableRanges)
+            {
+                int start = FindGlyphIndexByClusterStart(glyphs, clusterStart);
+                if (start < 0)
+                    continue;
+                int end = clusterEnd == int.MaxValue ? glyphs.Count : FindGlyphIndexByClusterStart(glyphs, clusterEnd);
+                if (end < 0)
+                    end = glyphs.Count;
+                if (end > start)
+                    currentSyllables.Add(new UseSyllable(start, end - start, type));
+            }
+
+            UseReorderer.ReorderAll(glyphs, currentCategories, currentSyllables);
+        }
+
+        /// <summary>
+        /// Applies the font's own `rphf` feature at exactly <paramref name="start"/> - never scanning
+        /// further into the run - mirroring HarfBuzz's own <c>setup_rphf_mask</c> (which masks `rphf`
+        /// to a syllable's own leading up-to-3 glyphs) without needing a general OpenType-mask
+        /// mechanism: since a real font's `rphf` rule only ever needs to try matching starting at one
+        /// specific position (a syllable's own start), restricting the search itself to that position
+        /// achieves the identical observable result with no masking infrastructure at all. Returns
+        /// true if a substitution actually fired (mirroring <c>record_rphf_use</c>'s own check via
+        /// HarfBuzz's <c>_hb_glyph_info_substituted</c> bit), in which case the caller retags that
+        /// position's category to <see cref="UseCategory.R"/>.
+        ///
+        /// Only Lookup Type 1 (single) and Type 4 (ligature) are tried, matching
+        /// <see cref="ApplyArabicJoiningFeatures"/>'s own identical, documented v1 scope limit - a
+        /// font whose `rphf` is (unusually) implemented as a contextual/chaining lookup instead
+        /// silently produces no reph.
+        /// </summary>
+        private static bool TryApplyRphf(GsubTable gsub, List<ShapedGlyph> glyphs, int start, GdefTable? gdef,
+            string? languageTag, IReadOnlyList<string> scriptPreference)
+        {
+            foreach (int lookupIndex in gsub.GetActiveLookupIndices(scriptPreference, languageTag, RphfTags))
+            {
+                switch (gsub.GetResolvedLookupType(lookupIndex))
+                {
+                    case 1:
+                        if (gsub.GetSingleSubstitutionLookup(lookupIndex) is { } single)
+                        {
+                            int before = glyphs[start].GlyphIndex;
+                            ApplySingleSubstitutionAt(single, glyphs, start);
+                            if (glyphs[start].GlyphIndex != before)
+                                return true;
+                        }
+                        break;
+                    case 4:
+                        if (gsub.GetLigatureLookup(lookupIndex) is { } ligature && ApplyLigatureAt(ligature, glyphs, start, gdef) > 0)
+                            return true;
+                        break;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Finds the glyph that genuinely represents source position <paramref name="clusterStart"/> -
+        /// skipping any glyph with <see cref="ShapedGlyph.ClusterLength"/> 0, since a Multiple
+        /// Substitution's own trailing output glyph carries the *next* source character's own
+        /// ClusterStart (see <c>ApplyMultipleSubstitutionAt</c>'s convention), not its own; without this
+        /// skip, such a glyph could be returned instead of the real next-syllable-start glyph whenever
+        /// the two happen to share that value, corrupting the caller's own syllable-boundary resolution.
+        /// </summary>
+        private static int FindGlyphIndexByClusterStart(List<ShapedGlyph> glyphs, int clusterStart)
+        {
+            for (var i = 0; i < glyphs.Count; i++)
+                if (glyphs[i].ClusterStart == clusterStart && glyphs[i].ClusterLength > 0)
+                    return i;
+            return -1;
         }
 
         /// <summary>
@@ -472,13 +878,74 @@ namespace PeachPDF.Text
                     spanLength = pos - index;
                     ShapedGlyph first = glyphs[index];
                     ShapedGlyph last = glyphs[matched.Count > 0 ? matched[^1] : index];
-                    merged = new ShapedGlyph(ligature.LigatureGlyph, first.ClusterStart, last.ClusterStart + last.ClusterLength - first.ClusterStart);
+
+                    // Component 0 is the coverage-matched first glyph; components 1..N are each
+                    // matched component's own real glyph-list position, in the same order
+                    // TryMatchLigature just matched them - see ShapedGlyph.LigatureComponentClusterStarts.
+                    var componentClusterStarts = new int[matched.Count + 1];
+                    componentClusterStarts[0] = first.ClusterStart;
+                    for (int c = 0; c < matched.Count; c++)
+                        componentClusterStarts[c + 1] = glyphs[matched[c]].ClusterStart;
+
+                    merged = new ShapedGlyph(ligature.LigatureGlyph, first.ClusterStart, last.ClusterStart + last.ClusterLength - first.ClusterStart,
+                        LigatureComponentClusterStarts: componentClusterStarts);
                     skippedOffsets = skipped;
                     return true;
                 }
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Applies one Lookup Type 8 (Reverse Chaining Context Single Substitution) lookup - the one
+        /// GSUB lookup type specified to process its input glyphs end-to-start rather than
+        /// start-to-end (per spec: "the input glyph sequence is processed from the end of the string
+        /// to the start"), substituting each coverage-matched position whose backtrack/lookahead
+        /// context also matches directly (no nested <c>SequenceLookupRecord</c>s - the substitute
+        /// glyph id is read straight off <see cref="GsubReverseChainSingleSubstSubtable.SubstituteGlyphIds"/>,
+        /// parallel to the matched position's own Coverage index). Reuses the same skip-aware
+        /// backtrack/lookahead walk Types 5/6 use (<see cref="FindParticipatingIndices"/>), so an
+        /// intervening non-participating glyph (per <paramref name="lookup"/>'s own `lookupFlag`/GDEF
+        /// filtering) is skipped the same way. Never changes
+        /// <paramref name="glyphs"/>'s count, so the end-to-start walk needs no index reconciliation
+        /// as earlier (higher-index) positions are substituted.
+        /// </summary>
+        internal static void ApplyReverseChainSingleSubstitutionLookup(GsubReverseChainSingleSubstLookup lookup, List<ShapedGlyph> glyphs, GdefTable? gdef, CoverageTable? markFilteringSet)
+        {
+            for (int i = glyphs.Count - 1; i >= 0; i--)
+            {
+                ushort glyphId = (ushort)glyphs[i].GlyphIndex;
+
+                foreach (GsubReverseChainSingleSubstSubtable subtable in lookup.Subtables)
+                {
+                    int coverageIndex = subtable.Coverage.IndexOfGlyph(glyphId);
+                    if (coverageIndex < 0 || coverageIndex >= subtable.SubstituteGlyphIds.Length)
+                        continue;
+
+                    if (FindParticipatingIndices(glyphs, i - 1, -1, subtable.BacktrackCoverages.Length, lookup.LookupFlag, gdef, markFilteringSet) is not { } backtrackIndices)
+                        continue;
+                    bool backtrackMatches = true;
+                    for (int k = 0; k < subtable.BacktrackCoverages.Length && backtrackMatches; k++)
+                        backtrackMatches = subtable.BacktrackCoverages[k].IndexOfGlyph((ushort)glyphs[backtrackIndices[k]].GlyphIndex) >= 0;
+                    if (!backtrackMatches)
+                        continue;
+
+                    if (FindParticipatingIndices(glyphs, i + 1, +1, subtable.LookaheadCoverages.Length, lookup.LookupFlag, gdef, markFilteringSet) is not { } lookaheadIndices)
+                        continue;
+                    bool lookaheadMatches = true;
+                    for (int k = 0; k < subtable.LookaheadCoverages.Length && lookaheadMatches; k++)
+                        lookaheadMatches = subtable.LookaheadCoverages[k].IndexOfGlyph((ushort)glyphs[lookaheadIndices[k]].GlyphIndex) >= 0;
+                    if (!lookaheadMatches)
+                        continue;
+
+                    // GlyphIndex=null clears any stale LigatureComponentClusterStarts a `with` would
+                    // otherwise carry forward from whatever this position held before - the substitute
+                    // glyph is no longer the ligature merge (if any) that bookkeeping described.
+                    glyphs[i] = glyphs[i] with { GlyphIndex = subtable.SubstituteGlyphIds[coverageIndex], LigatureComponentClusterStarts = null };
+                    break;
+                }
+            }
         }
 
         /// <summary>
@@ -499,7 +966,9 @@ namespace PeachPDF.Text
             {
                 if (subtable.TryGetSubstitute(glyphId, out ushort substitute))
                 {
-                    glyphs[i] = glyphs[i] with { GlyphIndex = substitute };
+                    // See ApplyReverseChainSingleSubstitutionLookup's identical comment on why
+                    // LigatureComponentClusterStarts must be cleared, not merely left as-is, by `with`.
+                    glyphs[i] = glyphs[i] with { GlyphIndex = substitute, LigatureComponentClusterStarts = null };
                     break;
                 }
             }
@@ -524,7 +993,9 @@ namespace PeachPDF.Text
             {
                 if (subtable.TryGetAlternate(glyphId, alternateIndex, out ushort substitute))
                 {
-                    glyphs[i] = glyphs[i] with { GlyphIndex = substitute };
+                    // See ApplyReverseChainSingleSubstitutionLookup's identical comment on why
+                    // LigatureComponentClusterStarts must be cleared, not merely left as-is, by `with`.
+                    glyphs[i] = glyphs[i] with { GlyphIndex = substitute, LigatureComponentClusterStarts = null };
                     break;
                 }
             }
@@ -590,39 +1061,48 @@ namespace PeachPDF.Text
         /// first subtable (in lookup order) whose backtrack/input/lookahead pattern matches wins,
         /// its <c>SequenceLookupRecord</c>s are applied in the order given (see
         /// <see cref="ApplyMatchedLookups"/>), and scanning resumes past the matched input span
-        /// (adjusted for any glyph count change a nested substitution made). Lookup Types 5 and 6
-        /// share this one implementation since <see cref="GsubSequenceContextSubtable"/> already
-        /// represents a non-chaining rule as one with empty backtrack/lookahead.
+        /// (adjusted for any glyph count change a nested substitution made, and for any
+        /// non-participating glyph - per <paramref name="lookupFlag"/>/GDEF - skipped over while
+        /// matching). Lookup Types 5 and 6 share this one implementation since
+        /// <see cref="GsubSequenceContextSubtable"/> already represents a non-chaining rule as one
+        /// with empty backtrack/lookahead. The *outer* per-position walk below (which positions are
+        /// even tried as a match anchor) is not itself skip-aware - only the inner backtrack/input/
+        /// lookahead walk is - mirroring <see cref="ApplyLigatureLookup"/>'s own precedent.
         /// </summary>
         // internal rather than private - see ApplyMultipleSubstitutionLookup's identical rationale.
-        internal static void ApplySequenceContextLookup(GsubTable gsub, IReadOnlyList<GsubSequenceContextSubtable> subtables, List<ShapedGlyph> glyphs, GdefTable? gdef)
+        internal static void ApplySequenceContextLookup(GsubTable gsub, IReadOnlyList<GsubSequenceContextSubtable> subtables,
+            List<ShapedGlyph> glyphs, GdefTable? gdef, ushort lookupFlag, CoverageTable? markFilteringSet)
         {
             int i = 0;
             while (i < glyphs.Count)
             {
-                int consumed = TryApplySequenceContextAt(gsub, subtables, glyphs, i, gdef);
+                int consumed = TryApplySequenceContextAt(gsub, subtables, glyphs, i, gdef, lookupFlag, markFilteringSet);
                 i += consumed > 0 ? consumed : 1;
             }
         }
 
-        private static int TryApplySequenceContextAt(GsubTable gsub, IReadOnlyList<GsubSequenceContextSubtable> subtables, List<ShapedGlyph> glyphs, int pos, GdefTable? gdef)
+        private static int TryApplySequenceContextAt(GsubTable gsub, IReadOnlyList<GsubSequenceContextSubtable> subtables,
+            List<ShapedGlyph> glyphs, int pos, GdefTable? gdef, ushort lookupFlag, CoverageTable? markFilteringSet)
         {
             foreach (GsubSequenceContextSubtable subtable in subtables)
             {
-                if (TryMatchSequenceContext(subtable, glyphs, pos) is not (int inputLength, GsubSequenceLookupRecord[] records))
+                if (TryMatchSequenceContext(subtable, glyphs, pos, lookupFlag, gdef, markFilteringSet) is not
+                    (int[] inputIndices, GsubSequenceLookupRecord[] records))
                     continue;
 
-                int countBefore = glyphs.Count;
-                ApplyMatchedLookups(gsub, glyphs, pos, inputLength, records, depth: 0, gdef);
-                int delta = glyphs.Count - countBefore;
-                return Math.Max(1, inputLength + delta);
+                int[] finalIndices = ApplyMatchedLookups(gsub, glyphs, inputIndices, records, depth: 0, gdef);
+                int lastIndex = finalIndices.Length > 0 ? finalIndices[^1] : pos;
+                return Math.Max(1, lastIndex - pos + 1);
             }
 
             return 0;
         }
 
-        private static (int InputLength, GsubSequenceLookupRecord[] Records)? TryMatchSequenceContext(
-            GsubSequenceContextSubtable subtable, List<ShapedGlyph> glyphs, int pos)
+        /// <summary>Real glyph-list indices of every matched input position (index 0 is always
+        /// <c>pos</c> itself - the outer walk's own anchor is never skip-adjusted), or null if no
+        /// rule in <paramref name="subtable"/> matches at <paramref name="pos"/>.</summary>
+        private static (int[] InputIndices, GsubSequenceLookupRecord[] Records)? TryMatchSequenceContext(
+            GsubSequenceContextSubtable subtable, List<ShapedGlyph> glyphs, int pos, ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
             switch (subtable.Format)
             {
@@ -635,8 +1115,8 @@ namespace PeachPDF.Text
                         return null;
                     foreach (GsubSequenceRule rule in ruleSets[coverageIndex])
                     {
-                        if (TryMatchRule(rule, glyphs, pos, matchGlyph: true, null, null, null))
-                            return (rule.Input.Length + 1, rule.SeqLookupRecords);
+                        if (TryMatchRule(rule, glyphs, pos, matchGlyph: true, null, null, null, lookupFlag, gdef, markFilteringSet) is { } indices)
+                            return (indices, rule.SeqLookupRecords);
                     }
                     return null;
                 }
@@ -656,8 +1136,9 @@ namespace PeachPDF.Text
                         return null;
                     foreach (GsubSequenceRule rule in classRuleSets[classValue])
                     {
-                        if (TryMatchRule(rule, glyphs, pos, matchGlyph: false, inputClassDef, subtable.BacktrackClassDef, subtable.LookaheadClassDef))
-                            return (rule.Input.Length + 1, rule.SeqLookupRecords);
+                        if (TryMatchRule(rule, glyphs, pos, matchGlyph: false, inputClassDef, subtable.BacktrackClassDef, subtable.LookaheadClassDef,
+                                lookupFlag, gdef, markFilteringSet) is { } indices)
+                            return (indices, rule.SeqLookupRecords);
                     }
                     return null;
                 }
@@ -666,9 +1147,10 @@ namespace PeachPDF.Text
                 {
                     if (subtable.InputCoverages is not { } inputCoverages || subtable.SeqLookupRecords is not { } records)
                         return null;
-                    if (!TryMatchCoverageSequence(subtable.BacktrackCoverages, inputCoverages, subtable.LookaheadCoverages, glyphs, pos))
+                    if (TryMatchCoverageSequence(subtable.BacktrackCoverages, inputCoverages, subtable.LookaheadCoverages, glyphs, pos,
+                            lookupFlag, gdef, markFilteringSet) is not { } coverageIndices)
                         return null;
-                    return (inputCoverages.Length, records);
+                    return (coverageIndices, records);
                 }
 
                 default:
@@ -676,96 +1158,167 @@ namespace PeachPDF.Text
             }
         }
 
-        private static bool TryMatchRule(GsubSequenceRule rule, List<ShapedGlyph> glyphs, int pos, bool matchGlyph,
-            ClassDefTable? inputClassDef, ClassDefTable? backtrackClassDef, ClassDefTable? lookaheadClassDef)
+        /// <summary>
+        /// Matches <paramref name="rule"/> against <paramref name="glyphs"/> starting at
+        /// <paramref name="pos"/> (already known to satisfy the rule's first input position via the
+        /// owning subtable's own Coverage/ClassDef test), walking backtrack/input/lookahead through
+        /// <see cref="FindParticipatingIndices"/> so an intervening glyph that doesn't participate
+        /// under <paramref name="lookupFlag"/>/GDEF (e.g. a mark) is skipped rather than counted as
+        /// its own position - mirroring <see cref="TryMatchLigature"/>'s own mark-skipping. Returns
+        /// the real glyph-list index of every input position (index 0 is <paramref name="pos"/>
+        /// itself), or null if the rule doesn't match.
+        /// </summary>
+        private static int[]? TryMatchRule(GsubSequenceRule rule, List<ShapedGlyph> glyphs, int pos, bool matchGlyph,
+            ClassDefTable? inputClassDef, ClassDefTable? backtrackClassDef, ClassDefTable? lookaheadClassDef,
+            ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
-            // Backtrack is stored in reverse logical order: rule.Backtrack[0] is the glyph
-            // immediately before `pos`, [1] is the one before that, and so on.
+            // Backtrack is stored in reverse logical order: rule.Backtrack[0] is the participating
+            // glyph immediately before `pos`, [1] is the one before that, and so on.
+            if (FindParticipatingIndices(glyphs, pos - 1, -1, rule.Backtrack.Length, lookupFlag, gdef, markFilteringSet) is not { } backtrackIndices)
+                return null;
             for (int k = 0; k < rule.Backtrack.Length; k++)
             {
-                int idx = pos - 1 - k;
-                if (idx < 0 || !MatchesRulePosition(glyphs[idx].GlyphIndex, rule.Backtrack[k], matchGlyph, backtrackClassDef))
-                    return false;
+                if (!MatchesRulePosition(glyphs[backtrackIndices[k]].GlyphIndex, rule.Backtrack[k], matchGlyph, backtrackClassDef))
+                    return null;
             }
 
             // Input positions after the first (which the caller already matched via Coverage/ClassDef).
+            var inputIndices = new int[rule.Input.Length + 1];
+            inputIndices[0] = pos;
+            if (FindParticipatingIndices(glyphs, pos + 1, +1, rule.Input.Length, lookupFlag, gdef, markFilteringSet) is not { } restInput)
+                return null;
             for (int k = 0; k < rule.Input.Length; k++)
             {
-                int idx = pos + 1 + k;
-                if (idx >= glyphs.Count || !MatchesRulePosition(glyphs[idx].GlyphIndex, rule.Input[k], matchGlyph, inputClassDef))
-                    return false;
+                if (!MatchesRulePosition(glyphs[restInput[k]].GlyphIndex, rule.Input[k], matchGlyph, inputClassDef))
+                    return null;
+                inputIndices[k + 1] = restInput[k];
             }
 
-            // Lookahead begins immediately after the input sequence, in forward logical order.
-            int lookaheadStart = pos + 1 + rule.Input.Length;
+            // Lookahead begins immediately after the last matched input position, in forward logical order.
+            int lookaheadStart = inputIndices[^1] + 1;
+            if (FindParticipatingIndices(glyphs, lookaheadStart, +1, rule.Lookahead.Length, lookupFlag, gdef, markFilteringSet) is not { } lookaheadIndices)
+                return null;
             for (int k = 0; k < rule.Lookahead.Length; k++)
             {
-                int idx = lookaheadStart + k;
-                if (idx >= glyphs.Count || !MatchesRulePosition(glyphs[idx].GlyphIndex, rule.Lookahead[k], matchGlyph, lookaheadClassDef))
-                    return false;
+                if (!MatchesRulePosition(glyphs[lookaheadIndices[k]].GlyphIndex, rule.Lookahead[k], matchGlyph, lookaheadClassDef))
+                    return null;
             }
 
-            return true;
+            return inputIndices;
         }
 
         private static bool MatchesRulePosition(int glyphIndex, ushort expected, bool matchGlyph, ClassDefTable? classDef)
             => matchGlyph ? glyphIndex == expected : classDef is not null && classDef.GetClass((ushort)glyphIndex) == expected;
 
-        private static bool TryMatchCoverageSequence(
-            CoverageTable[]? backtrack, CoverageTable[] input, CoverageTable[]? lookahead, List<ShapedGlyph> glyphs, int pos)
+        /// <summary>Walks from <paramref name="start"/> in <paramref name="direction"/> (+1/-1) over
+        /// <paramref name="glyphs"/>, skipping any glyph that doesn't participate under
+        /// <paramref name="lookupFlag"/>/GDEF (see <see cref="GlyphSequenceFilter.Participates"/>),
+        /// collecting the real glyph-list index of each of the next <paramref name="count"/>
+        /// participating glyphs found. Returns null if the walk runs off either end of
+        /// <paramref name="glyphs"/> before finding all <paramref name="count"/> positions (or
+        /// immediately, if <paramref name="count"/> is 0). Internal (not private) so
+        /// <see cref="GposPositioner"/>'s own Type 7/8 contextual-positioning matcher can reuse this
+        /// same skip-aware walk - it operates purely on <see cref="ShapedGlyph"/>/`lookupFlag`/GDEF,
+        /// with nothing GSUB-specific about it.</summary>
+        internal static int[]? FindParticipatingIndices(List<ShapedGlyph> glyphs, int start, int direction, int count,
+            ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
+        {
+            if (count == 0)
+                return [];
+
+            var result = new int[count];
+            int pos = start;
+            int found = 0;
+            while (found < count)
+            {
+                if (pos < 0 || pos >= glyphs.Count)
+                    return null;
+
+                if (GlyphSequenceFilter.Participates((ushort)glyphs[pos].GlyphIndex, lookupFlag, gdef, markFilteringSet))
+                {
+                    result[found] = pos;
+                    found++;
+                }
+
+                pos += direction;
+            }
+
+            return result;
+        }
+
+        /// <summary>Format 3's per-position Coverage matching, walked the same skip-aware way as
+        /// <see cref="TryMatchRule"/> (format 3 has no rule-set indirection - every position,
+        /// including the first, is its own <see cref="CoverageTable"/>). Returns the real glyph-list
+        /// index of every input position, or null if the sequence doesn't match.</summary>
+        private static int[]? TryMatchCoverageSequence(
+            CoverageTable[]? backtrack, CoverageTable[] input, CoverageTable[]? lookahead, List<ShapedGlyph> glyphs, int pos,
+            ushort lookupFlag, GdefTable? gdef, CoverageTable? markFilteringSet)
         {
             backtrack ??= [];
             lookahead ??= [];
 
+            if (FindParticipatingIndices(glyphs, pos - 1, -1, backtrack.Length, lookupFlag, gdef, markFilteringSet) is not { } backtrackIndices)
+                return null;
             for (int k = 0; k < backtrack.Length; k++)
             {
-                int idx = pos - 1 - k;
-                if (idx < 0 || backtrack[k].IndexOfGlyph((ushort)glyphs[idx].GlyphIndex) < 0)
-                    return false;
+                if (backtrack[k].IndexOfGlyph((ushort)glyphs[backtrackIndices[k]].GlyphIndex) < 0)
+                    return null;
             }
 
-            for (int k = 0; k < input.Length; k++)
+            if (input.Length == 0 || pos >= glyphs.Count || input[0].IndexOfGlyph((ushort)glyphs[pos].GlyphIndex) < 0)
+                return null;
+
+            var inputIndices = new int[input.Length];
+            inputIndices[0] = pos;
+            if (input.Length > 1)
             {
-                int idx = pos + k;
-                if (idx >= glyphs.Count || input[k].IndexOfGlyph((ushort)glyphs[idx].GlyphIndex) < 0)
-                    return false;
+                if (FindParticipatingIndices(glyphs, pos + 1, +1, input.Length - 1, lookupFlag, gdef, markFilteringSet) is not { } restInput)
+                    return null;
+                for (int k = 1; k < input.Length; k++)
+                {
+                    if (input[k].IndexOfGlyph((ushort)glyphs[restInput[k - 1]].GlyphIndex) < 0)
+                        return null;
+                    inputIndices[k] = restInput[k - 1];
+                }
             }
 
-            int lookaheadStart = pos + input.Length;
+            int lookaheadStart = inputIndices[^1] + 1;
+            if (FindParticipatingIndices(glyphs, lookaheadStart, +1, lookahead.Length, lookupFlag, gdef, markFilteringSet) is not { } lookaheadIndices)
+                return null;
             for (int k = 0; k < lookahead.Length; k++)
             {
-                int idx = lookaheadStart + k;
-                if (idx >= glyphs.Count || lookahead[k].IndexOfGlyph((ushort)glyphs[idx].GlyphIndex) < 0)
-                    return false;
+                if (lookahead[k].IndexOfGlyph((ushort)glyphs[lookaheadIndices[k]].GlyphIndex) < 0)
+                    return null;
             }
 
-            return true;
+            return inputIndices;
         }
 
         /// <summary>
         /// Applies <paramref name="records"/> (in the order given, per spec) to the glyph sequence
-        /// matched at <paramref name="matchStart"/>/<paramref name="inputLength"/> - each record's
-        /// <c>SequenceIndex</c> is resolved against the *current* real glyph-list index of that
-        /// original input position, re-derived after every earlier record's own application, since a
-        /// nested Ligature/Multiple Substitution changes the glyph count and shifts every later
-        /// position. Only nested lookup types 1/2/3/4 are supported (matching real fonts' near-universal
-        /// practice for `calt`-style rules and this file's existing "unsupported type is silently
-        /// skipped" convention) - a nested contextual/chaining lookup is skipped, guarded further by
+        /// whose matched input positions' real glyph-list indices are <paramref name="inputIndices"/>
+        /// (not necessarily contiguous - a non-participating glyph, e.g. a mark, may sit between two
+        /// matched input positions) - each record's <c>SequenceIndex</c> is resolved against the
+        /// *current* real glyph-list index of that original input position, re-derived after every
+        /// earlier record's own application, since a nested Ligature/Multiple Substitution changes
+        /// the glyph count and shifts every later position. Returns the (possibly further-shifted)
+        /// real indices, so the caller can resume scanning immediately after the last one. Only
+        /// nested lookup types 1/2/3/4 are supported (matching real fonts' near-universal practice
+        /// for `calt`-style rules and this file's existing "unsupported type is silently skipped"
+        /// convention) - a nested contextual/chaining lookup is skipped, guarded further by
         /// <paramref name="depth"/> against a pathological/adversarial font nesting indefinitely.
         /// </summary>
-        private static void ApplyMatchedLookups(GsubTable gsub, List<ShapedGlyph> glyphs, int matchStart, int inputLength,
+        private static int[] ApplyMatchedLookups(GsubTable gsub, List<ShapedGlyph> glyphs, int[] inputIndices,
             GsubSequenceLookupRecord[] records, int depth, GdefTable? gdef)
         {
-            if (depth >= MaxNestedContextDepth || inputLength <= 0)
-                return;
+            if (depth >= MaxNestedContextDepth || inputIndices.Length == 0)
+                return inputIndices;
 
-            var slotIndex = new int[inputLength];
-            for (int s = 0; s < inputLength; s++)
-                slotIndex[s] = matchStart + s;
+            var slotIndex = (int[])inputIndices.Clone();
 
             foreach (GsubSequenceLookupRecord record in records)
             {
-                if (record.SequenceIndex < 0 || record.SequenceIndex >= inputLength)
+                if (record.SequenceIndex < 0 || record.SequenceIndex >= slotIndex.Length)
                     continue;
 
                 int realIndex = slotIndex[record.SequenceIndex];
@@ -778,13 +1331,15 @@ namespace PeachPDF.Text
 
                 if (delta != 0)
                 {
-                    for (int s = 0; s < inputLength; s++)
+                    for (int s = 0; s < slotIndex.Length; s++)
                     {
                         if (slotIndex[s] > realIndex)
                             slotIndex[s] += delta;
                     }
                 }
             }
+
+            return slotIndex;
         }
 
         private static void ApplyNestedLookup(GsubTable gsub, List<ShapedGlyph> glyphs, int position, int lookupListIndex, GdefTable? gdef)

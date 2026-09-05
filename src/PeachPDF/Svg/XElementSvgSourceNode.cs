@@ -57,6 +57,12 @@ namespace PeachPDF.Svg
             if (name == "xlink:href")
                 return _element.Attribute(XlinkNamespace + "href")?.Value ?? _element.Attribute("href")?.Value;
 
+            // xml:lang is bound to the reserved XML namespace, not a bare "xml:lang"-named attribute -
+            // XNamespace.Xml is System.Xml.Linq's own constant for it (mirrors the xlink:href handling
+            // just above).
+            if (name == "xml:lang")
+                return _element.Attribute(XNamespace.Xml + "lang")?.Value;
+
             return _element.Attribute(name)?.Value;
         }
 

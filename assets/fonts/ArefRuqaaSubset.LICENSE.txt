@@ -1,0 +1,18 @@
+ArefRuqaaSubset.ttf is a subset (the Arabic letters BEH/YEH/TEH/ALEF/LAM/FEH,
+common punctuation, digits, space, and the basic Latin alphabet) of "Aref
+Ruqaa", Copyright 2015-2020 The Aref Ruqaa Project Authors
+(https://github.com/alif-type/aref-ruqaa), licensed under the SIL Open Font
+License, Version 1.1 (OFL-1.1).
+
+The font is bundled solely as a showcase/test asset: unlike NotoSansArabicSubset.ttf
+(GSUB isol/init/medi/fina positional substitution only), Aref Ruqaa's own
+Arabic joining also relies on GPOS Lookup Type 3 (Cursive Attachment,
+GposPositioner.ApplyCursiveAttachment) for its flowing baseline connections -
+this font lets that code path be verified against a real font's real cursive
+anchors and rasterized output, rather than only unit-tested against synthetic
+byte-blob GPOS tables. Only the glyphs the showcase/tests actually use are
+retained, with every GSUB/GPOS layout feature kept intact; the glyph outlines
+themselves are unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/specimen/Aref+Ruqaa

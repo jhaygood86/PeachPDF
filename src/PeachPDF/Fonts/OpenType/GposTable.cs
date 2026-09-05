@@ -3,22 +3,33 @@
 // Reader for the OpenType `GPOS` (Glyph Positioning) table: its own ScriptList/FeatureList/LookupList
 // common tables (independent of GSUB's - GPOS has its own tag registry, e.g. `kern`/`mark`/`mkmk`),
 // Lookup Type 1 (Single Adjustment, formats 1/2), Lookup Type 2 (Pair Adjustment, formats 1/2),
-// Lookup Type 4 (MarkToBase Attachment), and Lookup Type 6 (MarkToMark Attachment) subtables -
-// Type 9 (Extension Positioning) is unwrapped down to the real subtable it wraps when present
-// (GPOS's own extension type; GSUB's is type 7 - see `GsubTable`, and don't confuse the two: this
-// is the one place in this codebase where "9" is the correct Extension type, deliberately). This is
-// the subset needed for kerning (`kern`, via Types 1/2) and mark-to-base/mark-to-mark positioning
-// (`mark`/`mkmk`, via Types 4/6) - see `PeachPDF.Text.GposPositioner`.
+// Lookup Type 4 (MarkToBase Attachment), Lookup Type 6 (MarkToMark Attachment), and Lookup Types 7/8
+// (Context/Chained Context Positioning, formats 1/2/3 - byte-for-byte the same common tables GSUB's
+// own Lookup Types 5/6 use, just referencing GPOS lookups instead of GSUB ones) subtables - Type 9
+// (Extension Positioning) is unwrapped down to the real subtable it wraps when present (GPOS's own
+// extension type; GSUB's is type 7 - see `GsubTable`, and don't confuse the two: this is the one
+// place in this codebase where "9" is the correct Extension type, deliberately). This is the subset
+// needed for kerning (`kern`, via Types 1/2), mark-to-base/mark-to-mark positioning (`mark`/`mkmk`,
+// via Types 4/6), and contextual positioning - see `PeachPDF.Text.GposPositioner`.
 //
-// Not implemented (see .claude/accepted-gaps/no-text-shaping.md): Lookup Type 3 (Cursive Attachment -
-// needs complex-script joining support to have real fonts/scripts exercising it, out of scope),
-// Lookup Type 5 (MarkToLigature Attachment - needs deeper integration with GSUB's ligature-merge
-// cluster bookkeeping to identify the right ligature component), and Lookup Types 7/8 (Context/
-// Chained Context Positioning - mirrors GSUB Lookup Types 5-8's own deferred complexity/value
-// tradeoff, for the rarer positioning case). `lookupFlag`'s GDEF-based mark filtering is read (and
-// its `markFilteringSet` extra field correctly skipped for cursor alignment) but not yet consulted
-// during matching - GposPositioner's mark-to-base/mark-to-mark base search uses GdefTable directly
-// via the shared PeachPDF.Text.GlyphSequenceFilter instead.
+// Also implemented: Lookup Type 3 (Cursive Attachment, `CursivePosFormat1`) - requested via the `curs`
+// feature tag whenever a run carries resolved Arabic-family joining forms (see
+// `GposPositioner.GetActiveLookupIndices`/`TryApplyCursivePair`, the latter a direct port of real
+// HarfBuzz's own main-direction formula, verified against a real cursive-attachment font - see
+// .claude/accepted-gaps/no-text-shaping.md); and Lookup Type 5 (MarkToLigature Attachment,
+// `MarkLigPosFormat1`) - identifying which ligature *component* a
+// mark attaches to relies on `PeachPDF.Text.ShapedGlyph.LigatureComponentClusterStarts`, bookkeeping
+// GSUB's own ligature-merge logic (`GsubShaper.TryMatchLigature`) now carries forward for exactly this.
+//
+// `lookupFlag`'s GDEF-based mark filtering (the plain ignore-bits) is honored everywhere via GDEF glyph
+// classification. The extra, more targeted `markFilteringSet` field (present only when lookupFlag's
+// USE_MARK_FILTERING_SET bit is set - see `ReadLookupHeader`) narrows that further to one specific
+// GDEF `MarkGlyphSetsDef` set; it is read for every lookup type whose own application actually does a
+// backward/forward participant *search* to skip past non-participating glyphs - Type 3's cursive
+// successor search and Type 4/5's own base/ligature-predecessor search (see
+// `PeachPDF.Text.GposPositioner`'s `TryApplyCursivePair`/`ApplyMarkToBaseAt`/`ApplyMarkToLigatureAt`),
+// plus Types 7/8's own skip-aware matching. Type 6 (MarkToMark) always targets the immediately
+// preceding glyph with no search at all, so it has nothing for a mark filtering set to narrow.
 //
 // https://learn.microsoft.com/en-us/typography/opentype/spec/gpos
 // https://learn.microsoft.com/en-us/typography/opentype/spec/chapter2
@@ -79,6 +90,28 @@ namespace PeachPDF.Fonts.OpenType
     {
         public required IReadOnlyList<GposSingleAdjustmentSubtable> Subtables { get; init; }
         public ushort LookupFlag { get; init; }
+    }
+
+    /// <summary>One <c>EntryExitRecord</c>: either anchor may be absent (a glyph can have only an
+    /// entry, only an exit, both, or - if it's covered but has neither - effectively no cursive
+    /// attachment at all).</summary>
+    internal readonly record struct GposEntryExitRecord(GposAnchor? EntryAnchor, GposAnchor? ExitAnchor);
+
+    /// <summary>One `CursivePosFormat1` subtable: a <see cref="Coverage"/> table over every glyph this
+    /// subtable defines cursive attachment behavior for, each (by coverage index) naming its own
+    /// entry/exit anchor pair.</summary>
+    internal sealed class GposCursiveAttachmentSubtable
+    {
+        public required CoverageTable Coverage { get; init; }
+        public required GposEntryExitRecord[] EntryExitRecords { get; init; }
+    }
+
+    /// <summary>A GPOS lookup of type 3 (or type 9 wrapping type 3), as one or more subtables.</summary>
+    internal sealed class GposCursiveAttachmentLookup
+    {
+        public required IReadOnlyList<GposCursiveAttachmentSubtable> Subtables { get; init; }
+        public ushort LookupFlag { get; init; }
+        public int? MarkFilteringSetIndex { get; init; }
     }
 
     internal readonly record struct GposPairValueRecord(ushort SecondGlyph, GposValueRecord Value1, GposValueRecord Value2);
@@ -166,13 +199,101 @@ namespace PeachPDF.Fonts.OpenType
     {
         public required IReadOnlyList<GposMarkAttachmentSubtable> Subtables { get; init; }
         public ushort LookupFlag { get; init; }
+        public int? MarkFilteringSetIndex { get; init; }
+    }
+
+    /// <summary>One ligature glyph's `LigatureAttach` table: one anchor-table-set per ligature
+    /// *component* (not per ligature glyph as a whole) - <see cref="AnchorsByComponent"/>[component][markClass].</summary>
+    internal sealed class GposLigatureAttach
+    {
+        public required GposAnchor?[][] AnchorsByComponent { get; init; }
+    }
+
+    /// <summary>One MarkToLigature (Lookup Type 5, `MarkLigPosFormat1`) subtable - `MarkArray` is the
+    /// same shared structure Types 4/6 use (see <see cref="GposMarkAttachmentSubtable.Marks"/>'s own
+    /// remarks), reused directly via <c>GposTable.ReadMarkArray</c>; `LigatureArray` is the one piece
+    /// genuinely specific to this lookup type.</summary>
+    internal sealed class GposMarkToLigatureSubtable
+    {
+        public required CoverageTable MarkCoverage { get; init; }
+        public required CoverageTable LigatureCoverage { get; init; }
+        public required int MarkClassCount { get; init; }
+        public required (int MarkClass, GposAnchor Anchor)[] Marks { get; init; }
+
+        /// <summary>By <see cref="LigatureCoverage"/> index.</summary>
+        public required GposLigatureAttach[] LigatureAttachments { get; init; }
+    }
+
+    /// <summary>A GPOS lookup of type 5 (or type 9 wrapping type 5), as one or more subtables.</summary>
+    internal sealed class GposMarkToLigatureLookup
+    {
+        public required IReadOnlyList<GposMarkToLigatureSubtable> Subtables { get; init; }
+        public ushort LookupFlag { get; init; }
+        public int? MarkFilteringSetIndex { get; init; }
     }
 
     /// <summary>A GPOS lookup of type 6 (or type 9 wrapping type 6), as one or more subtables.</summary>
     internal sealed class GposMarkToMarkLookup
     {
         public required IReadOnlyList<GposMarkAttachmentSubtable> Subtables { get; init; }
+        // No MarkFilteringSetIndex: Type 6 always targets the immediately preceding glyph with no
+        // participant search to narrow - see this file's own header note.
         public ushort LookupFlag { get; init; }
+    }
+
+    /// <summary>One <c>SequenceLookupRecord</c>/<c>ChainedSequenceLookupRecord</c> - byte-identical to
+    /// <see cref="PeachPDF.Text.GsubShaper"/>'s GSUB equivalent, except <see cref="LookupListIndex"/>
+    /// here indexes GPOS's own <c>LookupList</c> (positioning lookups), not GSUB's.</summary>
+    internal readonly record struct GposSequenceLookupRecord(int SequenceIndex, int LookupListIndex);
+
+    /// <summary>One contextual/chaining rule - same shape as GSUB's <c>GsubSequenceRule</c> (see its
+    /// own doc comment for the field semantics), duplicated rather than shared per this file's own
+    /// header note on GSUB/GPOS table-reading duplication.</summary>
+    internal sealed class GposSequenceRule
+    {
+        public required ushort[] Backtrack { get; init; }
+        public required ushort[] Input { get; init; }
+        public required ushort[] Lookahead { get; init; }
+        public required GposSequenceLookupRecord[] SeqLookupRecords { get; init; }
+    }
+
+    internal enum GposSequenceContextFormat
+    {
+        Glyph = 1,
+        Class = 2,
+        Coverage = 3,
+    }
+
+    /// <summary>One Contextual (Lookup Type 7) or Chained Context (Lookup Type 8) subtable - same
+    /// shape as GSUB's <c>GsubSequenceContextSubtable</c> (see its own doc comment).</summary>
+    internal sealed class GposSequenceContextSubtable
+    {
+        public required GposSequenceContextFormat Format { get; init; }
+        public CoverageTable? Coverage { get; init; }
+        public ClassDefTable? InputClassDef { get; init; }
+        public ClassDefTable? BacktrackClassDef { get; init; }
+        public ClassDefTable? LookaheadClassDef { get; init; }
+        public GposSequenceRule[][]? RuleSets { get; init; }
+        public CoverageTable[]? BacktrackCoverages { get; init; }
+        public CoverageTable[]? InputCoverages { get; init; }
+        public CoverageTable[]? LookaheadCoverages { get; init; }
+        public GposSequenceLookupRecord[]? SeqLookupRecords { get; init; }
+    }
+
+    /// <summary>A GPOS lookup of type 7 (or type 9 wrapping type 7), as one or more subtables.</summary>
+    internal sealed class GposContextualLookup
+    {
+        public required IReadOnlyList<GposSequenceContextSubtable> Subtables { get; init; }
+        public ushort LookupFlag { get; init; }
+        public int? MarkFilteringSetIndex { get; init; }
+    }
+
+    /// <summary>A GPOS lookup of type 8 (or type 9 wrapping type 8), as one or more subtables.</summary>
+    internal sealed class GposChainingContextLookup
+    {
+        public required IReadOnlyList<GposSequenceContextSubtable> Subtables { get; init; }
+        public ushort LookupFlag { get; init; }
+        public int? MarkFilteringSetIndex { get; init; }
     }
 
     internal sealed class GposTable
@@ -188,9 +309,13 @@ namespace PeachPDF.Fonts.OpenType
         // _face GsubTable already locks on, so GSUB- and GPOS-table reads against one cached font
         // stay correctly serialized against each other too.
         private readonly ConcurrentDictionary<int, GposSingleAdjustmentLookup?> _singleAdjustmentCache = new();
+        private readonly ConcurrentDictionary<int, GposCursiveAttachmentLookup?> _cursiveAttachmentCache = new();
         private readonly ConcurrentDictionary<int, GposPairAdjustmentLookup?> _pairAdjustmentCache = new();
         private readonly ConcurrentDictionary<int, GposMarkToBaseLookup?> _markToBaseCache = new();
         private readonly ConcurrentDictionary<int, GposMarkToMarkLookup?> _markToMarkCache = new();
+        private readonly ConcurrentDictionary<int, GposMarkToLigatureLookup?> _markToLigatureCache = new();
+        private readonly ConcurrentDictionary<int, GposContextualLookup?> _contextualLookupCache = new();
+        private readonly ConcurrentDictionary<int, GposChainingContextLookup?> _chainingContextLookupCache = new();
         private readonly ConcurrentDictionary<int, int> _resolvedLookupTypeCache = new();
 
         public GposTable(OpenTypeFontface face, int tableStart)
@@ -268,6 +393,9 @@ namespace PeachPDF.Fonts.OpenType
         public GposSingleAdjustmentLookup? GetSingleAdjustmentLookup(int lookupListIndex)
             => _singleAdjustmentCache.GetOrAdd(lookupListIndex, ReadSingleAdjustmentLookup);
 
+        public GposCursiveAttachmentLookup? GetCursiveAttachmentLookup(int lookupListIndex)
+            => _cursiveAttachmentCache.GetOrAdd(lookupListIndex, ReadCursiveAttachmentLookup);
+
         public GposPairAdjustmentLookup? GetPairAdjustmentLookup(int lookupListIndex)
             => _pairAdjustmentCache.GetOrAdd(lookupListIndex, ReadPairAdjustmentLookup);
 
@@ -276,6 +404,15 @@ namespace PeachPDF.Fonts.OpenType
 
         public GposMarkToMarkLookup? GetMarkToMarkLookup(int lookupListIndex)
             => _markToMarkCache.GetOrAdd(lookupListIndex, ReadMarkToMarkLookup);
+
+        public GposMarkToLigatureLookup? GetMarkToLigatureLookup(int lookupListIndex)
+            => _markToLigatureCache.GetOrAdd(lookupListIndex, ReadMarkToLigatureLookup);
+
+        public GposContextualLookup? GetContextualLookup(int lookupListIndex)
+            => _contextualLookupCache.GetOrAdd(lookupListIndex, ReadContextualLookup);
+
+        public GposChainingContextLookup? GetChainingContextLookup(int lookupListIndex)
+            => _chainingContextLookupCache.GetOrAdd(lookupListIndex, ReadChainingContextLookup);
 
         /// <summary>The real lookup type at <paramref name="lookupListIndex"/> - a Type 9 (Extension
         /// Positioning) lookup resolves to whatever type it wraps. Returns -1 for an out-of-range index.</summary>
@@ -296,6 +433,12 @@ namespace PeachPDF.Fonts.OpenType
             return records;
         }
 
+        /// <summary>
+        /// Resolves the <c>ScriptList</c> record to use - same fallback rationale as
+        /// <see cref="GsubTable"/>'s identical method (duplicated per this file's own GSUB/GPOS
+        /// convention): tries <paramref name="scriptTagPreference"/> in order, then this font's own
+        /// explicit <c>"DFLT"</c> script if present, and only then the true first-listed record.
+        /// </summary>
         private int FindScript(IReadOnlyList<string> scriptTagPreference)
         {
             _face.Position = _scriptListOffset;
@@ -317,10 +460,16 @@ namespace PeachPDF.Fonts.OpenType
                 }
             }
 
+            foreach (var record in records)
+            {
+                if (record.Tag == "DFLT")
+                    return record.Offset;
+            }
+
             return records.Length > 0 ? records[0].Offset : -1;
         }
 
-        private readonly record struct LookupHeader(ushort LookupFlag, IReadOnlyList<int> SubtableOffsets);
+        private readonly record struct LookupHeader(ushort LookupFlag, int? MarkFilteringSetIndex, IReadOnlyList<int> SubtableOffsets);
 
         /// <summary>
         /// Reads the Lookup table at <paramref name="lookupListIndex"/>'s header and subtable offsets,
@@ -346,13 +495,12 @@ namespace PeachPDF.Fonts.OpenType
             for (int i = 0; i < subtableCount; i++)
                 subtableOffsets[i] = lookupTableStart + _face.ReadUShort();
 
-            // The extra markFilteringSet field (present only when lookupFlag's USE_MARK_FILTERING_SET
-            // bit, 0x0010, is set) sits immediately after the subtable-offset array - read-and-discard
-            // it here for correct cursor alignment even though this reader doesn't consult it yet (see
-            // file header), or every later sequential read on this shared cursor misaligns.
+            // The extra markFilteringSet field is present only when lookupFlag's USE_MARK_FILTERING_SET
+            // bit (0x0010) is set - read it (Types 7/8's own skip-aware matching resolves it via GDEF's
+            // MarkGlyphSetsDef, same as GsubTable's identical field) rather than merely discarding it,
+            // since leaving the cursor unadvanced here would misalign every later sequential read.
             const ushort useMarkFilteringSet = 0x0010;
-            if ((lookupFlag & useMarkFilteringSet) != 0)
-                _face.ReadUShort();
+            int? markFilteringSetIndex = (lookupFlag & useMarkFilteringSet) != 0 ? _face.ReadUShort() : null;
 
             if (lookupType != expectedType && lookupType != 9)
                 return null;
@@ -374,7 +522,7 @@ namespace PeachPDF.Fonts.OpenType
                 resolvedOffsets.Add(resolvedOffset);
             }
 
-            return new LookupHeader(lookupFlag, resolvedOffsets);
+            return new LookupHeader(lookupFlag, markFilteringSetIndex, resolvedOffsets);
         }
 
         private static GposValueRecord ReadValueRecord(OpenTypeFontface face, ushort valueFormat)
@@ -451,6 +599,58 @@ namespace PeachPDF.Fonts.OpenType
             }
 
             return null;
+        }
+
+        private GposCursiveAttachmentLookup? ReadCursiveAttachmentLookup(int lookupListIndex)
+        {
+            // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
+            lock (_face)
+            {
+                if (ReadLookupHeader(lookupListIndex, 3) is not { } header)
+                    return null;
+
+                var subtables = new List<GposCursiveAttachmentSubtable>(header.SubtableOffsets.Count);
+                foreach (int offset in header.SubtableOffsets)
+                {
+                    GposCursiveAttachmentSubtable? subtable = ReadCursiveAttachmentSubtable(offset);
+                    if (subtable is not null)
+                        subtables.Add(subtable);
+                }
+
+                return subtables.Count > 0
+                    ? new GposCursiveAttachmentLookup { Subtables = subtables, LookupFlag = header.LookupFlag, MarkFilteringSetIndex = header.MarkFilteringSetIndex }
+                    : null;
+            }
+        }
+
+        private GposCursiveAttachmentSubtable? ReadCursiveAttachmentSubtable(int offset)
+        {
+            _face.Position = offset;
+            int format = _face.ReadUShort();
+            if (format != 1)
+                return null;
+
+            int coverageOffset = offset + _face.ReadUShort();
+            int entryExitCount = _face.ReadUShort();
+            var entryOffsets = new int[entryExitCount];
+            var exitOffsets = new int[entryExitCount];
+            for (int i = 0; i < entryExitCount; i++)
+            {
+                int entryRel = _face.ReadUShort();
+                int exitRel = _face.ReadUShort();
+                entryOffsets[i] = entryRel != 0 ? offset + entryRel : 0;
+                exitOffsets[i] = exitRel != 0 ? offset + exitRel : 0;
+            }
+
+            var records = new GposEntryExitRecord[entryExitCount];
+            for (int i = 0; i < entryExitCount; i++)
+            {
+                GposAnchor? entry = entryOffsets[i] != 0 ? ReadAnchor(_face, entryOffsets[i]) : null;
+                GposAnchor? exit = exitOffsets[i] != 0 ? ReadAnchor(_face, exitOffsets[i]) : null;
+                records[i] = new GposEntryExitRecord(entry, exit);
+            }
+
+            return new GposCursiveAttachmentSubtable { Coverage = CoverageTable.Read(_face, coverageOffset), EntryExitRecords = records };
         }
 
         private GposPairAdjustmentLookup? ReadPairAdjustmentLookup(int lookupListIndex)
@@ -557,7 +757,7 @@ namespace PeachPDF.Fonts.OpenType
                 }
 
                 return subtables.Count > 0
-                    ? new GposMarkToBaseLookup { Subtables = subtables, LookupFlag = header.LookupFlag }
+                    ? new GposMarkToBaseLookup { Subtables = subtables, LookupFlag = header.LookupFlag, MarkFilteringSetIndex = header.MarkFilteringSetIndex }
                     : null;
             }
         }
@@ -654,6 +854,416 @@ namespace PeachPDF.Fonts.OpenType
                     result[i][c] = anchorOffsets[i][c] != 0 ? ReadAnchor(_face, anchorOffsets[i][c]) : null;
             }
             return result;
+        }
+
+        private GposMarkToLigatureLookup? ReadMarkToLigatureLookup(int lookupListIndex)
+        {
+            // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
+            lock (_face)
+            {
+                if (ReadLookupHeader(lookupListIndex, 5) is not { } header)
+                    return null;
+
+                var subtables = new List<GposMarkToLigatureSubtable>(header.SubtableOffsets.Count);
+                foreach (int offset in header.SubtableOffsets)
+                {
+                    GposMarkToLigatureSubtable? subtable = ReadMarkToLigatureSubtable(offset);
+                    if (subtable is not null)
+                        subtables.Add(subtable);
+                }
+
+                return subtables.Count > 0
+                    ? new GposMarkToLigatureLookup { Subtables = subtables, LookupFlag = header.LookupFlag, MarkFilteringSetIndex = header.MarkFilteringSetIndex }
+                    : null;
+            }
+        }
+
+        private GposMarkToLigatureSubtable? ReadMarkToLigatureSubtable(int offset)
+        {
+            _face.Position = offset;
+            int format = _face.ReadUShort();
+            if (format != 1)
+                return null;
+
+            int markCoverageOffset = offset + _face.ReadUShort();
+            int ligatureCoverageOffset = offset + _face.ReadUShort();
+            int markClassCount = _face.ReadUShort();
+            int markArrayOffset = offset + _face.ReadUShort();
+            int ligatureArrayOffset = offset + _face.ReadUShort();
+
+            // MarkArray is byte-identical to Type 4/6's own - reused directly rather than re-read.
+            (int MarkClass, GposAnchor Anchor)[] marks = ReadMarkArray(markArrayOffset);
+            GposLigatureAttach[] ligatureAttachments = ReadLigatureArray(ligatureArrayOffset, markClassCount);
+
+            return new GposMarkToLigatureSubtable
+            {
+                MarkCoverage = CoverageTable.Read(_face, markCoverageOffset),
+                LigatureCoverage = CoverageTable.Read(_face, ligatureCoverageOffset),
+                MarkClassCount = markClassCount,
+                Marks = marks,
+                LigatureAttachments = ligatureAttachments,
+            };
+        }
+
+        private GposLigatureAttach[] ReadLigatureArray(int ligatureArrayOffset, int markClassCount)
+        {
+            _face.Position = ligatureArrayOffset;
+            int ligatureCount = _face.ReadUShort();
+            var attachOffsets = new int[ligatureCount];
+            for (int i = 0; i < ligatureCount; i++)
+                attachOffsets[i] = ligatureArrayOffset + _face.ReadUShort();
+
+            var result = new GposLigatureAttach[ligatureCount];
+            for (int i = 0; i < ligatureCount; i++)
+                result[i] = ReadLigatureAttach(attachOffsets[i], markClassCount);
+            return result;
+        }
+
+        /// <summary>Same shape as <see cref="ReadBaseArray"/>, one anchor-table-set per ligature
+        /// *component* instead of per base glyph.</summary>
+        private GposLigatureAttach ReadLigatureAttach(int ligatureAttachOffset, int markClassCount)
+        {
+            _face.Position = ligatureAttachOffset;
+            int componentCount = _face.ReadUShort();
+            var anchorOffsets = new int[componentCount][];
+            for (int c = 0; c < componentCount; c++)
+            {
+                var offsets = new int[markClassCount];
+                for (int m = 0; m < markClassCount; m++)
+                {
+                    int rel = _face.ReadUShort();
+                    offsets[m] = rel != 0 ? ligatureAttachOffset + rel : 0;
+                }
+                anchorOffsets[c] = offsets;
+            }
+
+            var anchorsByComponent = new GposAnchor?[componentCount][];
+            for (int c = 0; c < componentCount; c++)
+            {
+                anchorsByComponent[c] = new GposAnchor?[markClassCount];
+                for (int m = 0; m < markClassCount; m++)
+                    anchorsByComponent[c][m] = anchorOffsets[c][m] != 0 ? ReadAnchor(_face, anchorOffsets[c][m]) : null;
+            }
+
+            return new GposLigatureAttach { AnchorsByComponent = anchorsByComponent };
+        }
+
+        private GposContextualLookup? ReadContextualLookup(int lookupListIndex)
+        {
+            // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
+            lock (_face)
+            {
+                if (ReadLookupHeader(lookupListIndex, 7) is not { } header)
+                    return null;
+
+                var subtables = new List<GposSequenceContextSubtable>(header.SubtableOffsets.Count);
+                foreach (int subtableOffset in header.SubtableOffsets)
+                {
+                    GposSequenceContextSubtable? subtable = ReadSequenceContextSubtable(subtableOffset);
+                    if (subtable is not null)
+                        subtables.Add(subtable);
+                }
+
+                return subtables.Count > 0
+                    ? new GposContextualLookup { Subtables = subtables, LookupFlag = header.LookupFlag, MarkFilteringSetIndex = header.MarkFilteringSetIndex }
+                    : null;
+            }
+        }
+
+        private GposChainingContextLookup? ReadChainingContextLookup(int lookupListIndex)
+        {
+            // Same locking rationale as GsubTable's own per-lookup readers - see issue #543.
+            lock (_face)
+            {
+                if (ReadLookupHeader(lookupListIndex, 8) is not { } header)
+                    return null;
+
+                var subtables = new List<GposSequenceContextSubtable>(header.SubtableOffsets.Count);
+                foreach (int subtableOffset in header.SubtableOffsets)
+                {
+                    GposSequenceContextSubtable? subtable = ReadChainedSequenceContextSubtable(subtableOffset);
+                    if (subtable is not null)
+                        subtables.Add(subtable);
+                }
+
+                return subtables.Count > 0
+                    ? new GposChainingContextLookup { Subtables = subtables, LookupFlag = header.LookupFlag, MarkFilteringSetIndex = header.MarkFilteringSetIndex }
+                    : null;
+            }
+        }
+
+        /// <summary>Reads a non-chaining `SequenceContext` subtable (Lookup Type 7), formats 1/2/3 -
+        /// byte-for-byte the same layout as GSUB's own Lookup Type 5 subtable (see
+        /// <see cref="GsubTable"/>'s equivalent reader), duplicated per this file's own header note.</summary>
+        private GposSequenceContextSubtable? ReadSequenceContextSubtable(int offset)
+        {
+            _face.Position = offset;
+            int format = _face.ReadUShort();
+
+            if (format == 1)
+            {
+                int coverageOffset = offset + _face.ReadUShort();
+                int ruleSetCount = _face.ReadUShort();
+                var ruleSetOffsets = new int[ruleSetCount];
+                for (int i = 0; i < ruleSetCount; i++)
+                {
+                    int rel = _face.ReadUShort();
+                    ruleSetOffsets[i] = rel != 0 ? offset + rel : 0;
+                }
+
+                var ruleSets = new GposSequenceRule[ruleSetCount][];
+                for (int i = 0; i < ruleSetCount; i++)
+                    ruleSets[i] = ruleSetOffsets[i] != 0 ? ReadSequenceRuleSet(ruleSetOffsets[i]) : [];
+
+                return new GposSequenceContextSubtable
+                {
+                    Format = GposSequenceContextFormat.Glyph,
+                    Coverage = CoverageTable.Read(_face, coverageOffset),
+                    RuleSets = ruleSets,
+                };
+            }
+
+            if (format == 2)
+            {
+                int coverageOffset = offset + _face.ReadUShort();
+                int classDefOffset = offset + _face.ReadUShort();
+                int ruleSetCount = _face.ReadUShort();
+                var ruleSetOffsets = new int[ruleSetCount];
+                for (int i = 0; i < ruleSetCount; i++)
+                {
+                    int rel = _face.ReadUShort();
+                    ruleSetOffsets[i] = rel != 0 ? offset + rel : 0;
+                }
+
+                var ruleSets = new GposSequenceRule[ruleSetCount][];
+                for (int i = 0; i < ruleSetCount; i++)
+                    ruleSets[i] = ruleSetOffsets[i] != 0 ? ReadSequenceRuleSet(ruleSetOffsets[i]) : [];
+
+                return new GposSequenceContextSubtable
+                {
+                    Format = GposSequenceContextFormat.Class,
+                    Coverage = CoverageTable.Read(_face, coverageOffset),
+                    InputClassDef = ClassDefTable.Read(_face, classDefOffset),
+                    RuleSets = ruleSets,
+                };
+            }
+
+            if (format == 3)
+            {
+                int glyphCount = _face.ReadUShort();
+                int seqLookupCount = _face.ReadUShort();
+                var coverageOffsets = new int[glyphCount];
+                for (int i = 0; i < glyphCount; i++)
+                    coverageOffsets[i] = offset + _face.ReadUShort();
+                var records = new GposSequenceLookupRecord[seqLookupCount];
+                for (int i = 0; i < seqLookupCount; i++)
+                {
+                    int sequenceIndex = _face.ReadUShort();
+                    int lookupListIndex = _face.ReadUShort();
+                    records[i] = new GposSequenceLookupRecord(sequenceIndex, lookupListIndex);
+                }
+
+                var inputCoverages = new CoverageTable[glyphCount];
+                for (int i = 0; i < glyphCount; i++)
+                    inputCoverages[i] = CoverageTable.Read(_face, coverageOffsets[i]);
+
+                return new GposSequenceContextSubtable
+                {
+                    Format = GposSequenceContextFormat.Coverage,
+                    InputCoverages = inputCoverages,
+                    SeqLookupRecords = records,
+                };
+            }
+
+            return null;
+        }
+
+        /// <summary>Reads a `ChainedSequenceContext` subtable (Lookup Type 8), formats 1/2/3 - same
+        /// layout as GSUB's own Lookup Type 6 subtable.</summary>
+        private GposSequenceContextSubtable? ReadChainedSequenceContextSubtable(int offset)
+        {
+            _face.Position = offset;
+            int format = _face.ReadUShort();
+
+            if (format == 1)
+            {
+                int coverageOffset = offset + _face.ReadUShort();
+                int ruleSetCount = _face.ReadUShort();
+                var ruleSetOffsets = new int[ruleSetCount];
+                for (int i = 0; i < ruleSetCount; i++)
+                {
+                    int rel = _face.ReadUShort();
+                    ruleSetOffsets[i] = rel != 0 ? offset + rel : 0;
+                }
+
+                var ruleSets = new GposSequenceRule[ruleSetCount][];
+                for (int i = 0; i < ruleSetCount; i++)
+                    ruleSets[i] = ruleSetOffsets[i] != 0 ? ReadChainedSequenceRuleSet(ruleSetOffsets[i]) : [];
+
+                return new GposSequenceContextSubtable
+                {
+                    Format = GposSequenceContextFormat.Glyph,
+                    Coverage = CoverageTable.Read(_face, coverageOffset),
+                    RuleSets = ruleSets,
+                };
+            }
+
+            if (format == 2)
+            {
+                int coverageOffset = offset + _face.ReadUShort();
+                int backtrackClassDefOffset = offset + _face.ReadUShort();
+                int inputClassDefOffset = offset + _face.ReadUShort();
+                int lookaheadClassDefOffset = offset + _face.ReadUShort();
+                int ruleSetCount = _face.ReadUShort();
+                var ruleSetOffsets = new int[ruleSetCount];
+                for (int i = 0; i < ruleSetCount; i++)
+                {
+                    int rel = _face.ReadUShort();
+                    ruleSetOffsets[i] = rel != 0 ? offset + rel : 0;
+                }
+
+                var ruleSets = new GposSequenceRule[ruleSetCount][];
+                for (int i = 0; i < ruleSetCount; i++)
+                    ruleSets[i] = ruleSetOffsets[i] != 0 ? ReadChainedSequenceRuleSet(ruleSetOffsets[i]) : [];
+
+                return new GposSequenceContextSubtable
+                {
+                    Format = GposSequenceContextFormat.Class,
+                    Coverage = CoverageTable.Read(_face, coverageOffset),
+                    BacktrackClassDef = ClassDefTable.Read(_face, backtrackClassDefOffset),
+                    InputClassDef = ClassDefTable.Read(_face, inputClassDefOffset),
+                    LookaheadClassDef = ClassDefTable.Read(_face, lookaheadClassDefOffset),
+                    RuleSets = ruleSets,
+                };
+            }
+
+            if (format == 3)
+            {
+                int backtrackGlyphCount = _face.ReadUShort();
+                var backtrackOffsets = new int[backtrackGlyphCount];
+                for (int i = 0; i < backtrackGlyphCount; i++)
+                    backtrackOffsets[i] = offset + _face.ReadUShort();
+
+                int inputGlyphCount = _face.ReadUShort();
+                var inputOffsets = new int[inputGlyphCount];
+                for (int i = 0; i < inputGlyphCount; i++)
+                    inputOffsets[i] = offset + _face.ReadUShort();
+
+                int lookaheadGlyphCount = _face.ReadUShort();
+                var lookaheadOffsets = new int[lookaheadGlyphCount];
+                for (int i = 0; i < lookaheadGlyphCount; i++)
+                    lookaheadOffsets[i] = offset + _face.ReadUShort();
+
+                int seqLookupCount = _face.ReadUShort();
+                var records = new GposSequenceLookupRecord[seqLookupCount];
+                for (int i = 0; i < seqLookupCount; i++)
+                {
+                    int sequenceIndex = _face.ReadUShort();
+                    int lookupListIndex = _face.ReadUShort();
+                    records[i] = new GposSequenceLookupRecord(sequenceIndex, lookupListIndex);
+                }
+
+                var backtrackCoverages = new CoverageTable[backtrackGlyphCount];
+                for (int i = 0; i < backtrackGlyphCount; i++)
+                    backtrackCoverages[i] = CoverageTable.Read(_face, backtrackOffsets[i]);
+
+                var inputCoverages = new CoverageTable[inputGlyphCount];
+                for (int i = 0; i < inputGlyphCount; i++)
+                    inputCoverages[i] = CoverageTable.Read(_face, inputOffsets[i]);
+
+                var lookaheadCoverages = new CoverageTable[lookaheadGlyphCount];
+                for (int i = 0; i < lookaheadGlyphCount; i++)
+                    lookaheadCoverages[i] = CoverageTable.Read(_face, lookaheadOffsets[i]);
+
+                return new GposSequenceContextSubtable
+                {
+                    Format = GposSequenceContextFormat.Coverage,
+                    BacktrackCoverages = backtrackCoverages,
+                    InputCoverages = inputCoverages,
+                    LookaheadCoverages = lookaheadCoverages,
+                    SeqLookupRecords = records,
+                };
+            }
+
+            return null;
+        }
+
+        private GposSequenceRule[] ReadSequenceRuleSet(int ruleSetOffset)
+        {
+            _face.Position = ruleSetOffset;
+            int ruleCount = _face.ReadUShort();
+            var ruleOffsets = new int[ruleCount];
+            for (int i = 0; i < ruleCount; i++)
+                ruleOffsets[i] = ruleSetOffset + _face.ReadUShort();
+
+            var rules = new GposSequenceRule[ruleCount];
+            for (int i = 0; i < ruleCount; i++)
+                rules[i] = ReadSequenceRule(ruleOffsets[i]);
+            return rules;
+        }
+
+        private GposSequenceRule ReadSequenceRule(int ruleOffset)
+        {
+            _face.Position = ruleOffset;
+            int glyphCount = _face.ReadUShort();
+            int seqLookupCount = _face.ReadUShort();
+            var input = new ushort[glyphCount - 1];
+            for (int i = 0; i < input.Length; i++)
+                input[i] = _face.ReadUShort();
+            var records = new GposSequenceLookupRecord[seqLookupCount];
+            for (int i = 0; i < seqLookupCount; i++)
+            {
+                int sequenceIndex = _face.ReadUShort();
+                int lookupListIndex = _face.ReadUShort();
+                records[i] = new GposSequenceLookupRecord(sequenceIndex, lookupListIndex);
+            }
+
+            return new GposSequenceRule { Backtrack = [], Input = input, Lookahead = [], SeqLookupRecords = records };
+        }
+
+        private GposSequenceRule[] ReadChainedSequenceRuleSet(int ruleSetOffset)
+        {
+            _face.Position = ruleSetOffset;
+            int ruleCount = _face.ReadUShort();
+            var ruleOffsets = new int[ruleCount];
+            for (int i = 0; i < ruleCount; i++)
+                ruleOffsets[i] = ruleSetOffset + _face.ReadUShort();
+
+            var rules = new GposSequenceRule[ruleCount];
+            for (int i = 0; i < ruleCount; i++)
+                rules[i] = ReadChainedSequenceRule(ruleOffsets[i]);
+            return rules;
+        }
+
+        private GposSequenceRule ReadChainedSequenceRule(int ruleOffset)
+        {
+            _face.Position = ruleOffset;
+
+            int backtrackGlyphCount = _face.ReadUShort();
+            var backtrack = new ushort[backtrackGlyphCount];
+            for (int i = 0; i < backtrack.Length; i++)
+                backtrack[i] = _face.ReadUShort();
+
+            int inputGlyphCount = _face.ReadUShort();
+            var input = new ushort[inputGlyphCount - 1];
+            for (int i = 0; i < input.Length; i++)
+                input[i] = _face.ReadUShort();
+
+            int lookaheadGlyphCount = _face.ReadUShort();
+            var lookahead = new ushort[lookaheadGlyphCount];
+            for (int i = 0; i < lookahead.Length; i++)
+                lookahead[i] = _face.ReadUShort();
+
+            int seqLookupCount = _face.ReadUShort();
+            var records = new GposSequenceLookupRecord[seqLookupCount];
+            for (int i = 0; i < seqLookupCount; i++)
+            {
+                int sequenceIndex = _face.ReadUShort();
+                int lookupListIndex = _face.ReadUShort();
+                records[i] = new GposSequenceLookupRecord(sequenceIndex, lookupListIndex);
+            }
+
+            return new GposSequenceRule { Backtrack = backtrack, Input = input, Lookahead = lookahead, SeqLookupRecords = records };
         }
 
         private int ReadResolvedLookupType(int lookupListIndex)

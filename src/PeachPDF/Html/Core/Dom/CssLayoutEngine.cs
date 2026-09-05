@@ -956,9 +956,19 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var styleSource = word.FirstLineStyle ?? word.OwnerBox;
                     var font = CssBox.ResolveWordFont(word, styleSource);
-                    var width = word.Text != "\n" ? g.MeasureString(word.Text!, font, styleSource.ActualTextShapingFeatures).Width : 0;
+                    // Per-word ScriptTag/JoiningForms, not the box-level ActualTextShapingFeatures alone
+                    // (see ResolveWordShapingFeatures' own remarks) - a rotated (sideways) run still
+                    // shapes as one horizontal glyph run before being reoriented as a whole, so it needs
+                    // the same per-word script/joining-form-aware shaping request FragmentPainter.Text.cs's
+                    // PaintWords resolves for the matching upright-vs-rotated paint path; measuring with
+                    // only the box-level default here would under/over-reserve width for a script whose
+                    // GSUB joining substitution changes glyph count or advances (e.g. Arabic-family
+                    // joining), the same class of layout/paint desync issue #770's per-character advance
+                    // fix addressed on the other axis.
+                    var wordFeatures = styleSource.ResolveWordShapingFeatures(word);
+                    var width = word.Text != "\n" ? g.MeasureString(word.Text!, font, wordFeatures).Width : 0;
                     if (word.Text != "\n" && styleSource.ActualLetterSpacing != 0)
-                        width += g.CountShapedGlyphs(word.Text!, font, styleSource.ActualTextShapingFeatures) * styleSource.ActualLetterSpacing;
+                        width += g.CountShapedGlyphs(word.Text!, font, wordFeatures) * styleSource.ActualLetterSpacing;
 
                     natural = (width, styleSource.ActualFont.Height);
                 }
@@ -3381,15 +3391,26 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static void MirrorWordTextIfNeeded(CssRect word, byte level, bool mirror)
         {
-            if (mirror && word is CssRectWord { IsSpaces: false, IsLineBreak: false } rectWord)
+            if (!mirror || word is not CssRectWord { IsSpaces: false, IsLineBreak: false } rectWord)
+                return;
+
+            if (rectWord.EffectiveJoiningForms is not null)
             {
-                // Mirrors from the word's own stable pre-mirror text, not its current (possibly already
-                // mirrored) Text - mirroring is an involution, so a box tree laid out more than once
-                // against the same word objects (HtmlContainerInt's variable-page-width reflow re-runs
-                // LayoutDocument, re-deriving line boxes and re-applying this on every pass) would
-                // otherwise toggle back to unmirrored on every second application.
-                rectWord.ReplaceText(BidiMirrorResolver.ApplyMirroring(rectWord.PreMirrorText, level));
+                // An Arabic-family joining word never mutates its own text - GSUB needs it in true
+                // logical order to match real fonts' contextual rlig rules (e.g. lam-alef), which
+                // wouldn't match the reversed/mirrored order every other RTL word gets here. Only record
+                // that it displays right-to-left; CssRectWord.DisplayOrderReversed's own remarks cover
+                // how that reaches shaping instead.
+                rectWord.MarkDisplayOrderReversed();
+                return;
             }
+
+            // Mirrors from the word's own stable pre-mirror text, not its current (possibly already
+            // mirrored) Text - mirroring is an involution, so a box tree laid out more than once
+            // against the same word objects (HtmlContainerInt's variable-page-width reflow re-runs
+            // LayoutDocument, re-deriving line boxes and re-applying this on every pass) would
+            // otherwise toggle back to unmirrored on every second application.
+            rectWord.ReplaceText(BidiMirrorResolver.ApplyMirroring(rectWord.PreMirrorText, level));
         }
 
         /// <summary>

@@ -1,6 +1,9 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
+using PeachPDF.Text.Shaping.Arabic;
+using PeachPDF.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -120,13 +123,105 @@ namespace PeachPDF.Html.Core.Dom
                     : BidiParagraphDirection.Ltr;
 
             var result = BidiResolver.Resolve(paragraphText, direction, overrides);
+            var (charScripts, joiningForms, useCategories) = ResolveScriptsAndJoining(paragraphText);
 
             foreach (var (box, start, length) in ranges)
             {
                 var levels = new byte[length];
                 result.Levels.AsSpan(start, length).CopyTo(levels);
                 box.BidiLevels = levels;
+
+                var scripts = new string[length];
+                Array.Copy(charScripts, start, scripts, 0, length);
+                box.CharScripts = scripts;
+
+                var forms = new ArabicJoiningForm[length];
+                Array.Copy(joiningForms, start, forms, 0, length);
+                box.JoiningForms = forms;
+
+                if (useCategories is not null)
+                {
+                    var categories = new UseCategory[length];
+                    Array.Copy(useCategories, start, categories, 0, length);
+                    box.UseCategories = categories;
+                }
             }
+        }
+
+        /// <summary>
+        /// Resolves <paramref name="paragraphText"/>'s per-character Unicode <c>Script</c> (already
+        /// run-resolved against surrounding text, see <see cref="ScriptRunResolver"/>), Arabic-family
+        /// <see cref="ArabicJoiningForm"/>, and (when the paragraph contains any Devanagari text)
+        /// per-character <see cref="UseCategory"/>, all indexed by UTF-16 offset (matching
+        /// <see cref="BidiResolver.Resolve"/>'s own <c>Levels</c> array) rather than by codepoint/Rune -
+        /// <see cref="ScriptTable"/>/<see cref="ArabicShapingTable"/>/<see cref="ArabicJoiningShaper"/>/
+        /// <see cref="UseCategoryClassifier"/> all operate per-codepoint, so a codepoint's resolved
+        /// value is duplicated across both UTF-16 units of a surrogate pair here, the same "one value
+        /// per source character, computed once" convention <see cref="CssBox.CharScripts"/>/
+        /// <see cref="CssBox.JoiningForms"/>/<see cref="CssBox.UseCategories"/> share with
+        /// <see cref="CssBox.BidiLevels"/>. <see cref="ArabicJoiningShaper.Resolve"/> runs
+        /// unconditionally over the whole paragraph regardless of script - a codepoint outside every
+        /// Arabic-family joining block already resolves to <see cref="ArabicJoiningType.U"/>
+        /// (Non-Joining) in <see cref="ArabicShapingTable"/>, so this is a correct no-op for ordinary
+        /// text, not a wasted computation guarded by a check that would cost nearly as much itself.
+        /// <see cref="UseCategoryClassifier"/> is different: unlike <see cref="ArabicJoiningType.U"/>,
+        /// <see cref="UseCategory.O"/> is a real, meaningfully-processed category (not an inert "skip
+        /// this codepoint" sentinel), so running it unconditionally over every document would activate
+        /// syllable scanning/reordering for every word ever laid out, not just Devanagari ones - the
+        /// per-codepoint result is only classified (and the whole per-paragraph array only allocated at
+        /// all) when <paramref name="paragraphText"/> contains at least one Devanagari-scripted
+        /// codepoint; a non-Devanagari codepoint that happens to share a paragraph with Devanagari text
+        /// gets the inert <see cref="UseCategory.O"/> placeholder instead, exactly like a non-joining
+        /// script's codepoint already does in <see cref="ArabicJoiningForm"/>'s own None value.
+        /// </summary>
+        private static (string[] Scripts, ArabicJoiningForm[] Forms, UseCategory[]? UseCategories) ResolveScriptsAndJoining(string paragraphText)
+        {
+            var length = paragraphText.Length;
+            var codepoints = new List<int>(length);
+            var codepointIndexOfChar = new int[length];
+
+            var i = 0;
+            while (i < length)
+            {
+                Rune.DecodeFromUtf16(paragraphText.AsSpan(i), out var rune, out var consumed);
+                var codepointIndex = codepoints.Count;
+                codepoints.Add(rune.Value);
+                for (var k = 0; k < consumed; k++)
+                    codepointIndexOfChar[i + k] = codepointIndex;
+                i += consumed;
+            }
+
+            var rawScripts = new string[codepoints.Count];
+            for (var c = 0; c < codepoints.Count; c++)
+                rawScripts[c] = ScriptTable.Of(codepoints[c]);
+            var resolvedScripts = ScriptRunResolver.ResolveRaw(rawScripts);
+
+            var joiningForms = ArabicJoiningShaper.Resolve(codepoints);
+
+            // See this method's own remarks on why, unlike ArabicJoiningShaper, this only classifies
+            // (and only allocates at all) when the paragraph actually contains Devanagari text.
+            UseCategory[]? useCategories = null;
+            for (var c = 0; c < resolvedScripts.Count; c++)
+            {
+                if (resolvedScripts[c] != "Devanagari")
+                    continue;
+                useCategories ??= new UseCategory[codepoints.Count];
+                useCategories[c] = UseCategoryClassifier.Classify(codepoints[c]);
+            }
+
+            var charScripts = new string[length];
+            var charJoiningForms = new ArabicJoiningForm[length];
+            var charUseCategories = useCategories is not null ? new UseCategory[length] : null;
+            for (var c = 0; c < length; c++)
+            {
+                var codepointIndex = codepointIndexOfChar[c];
+                charScripts[c] = resolvedScripts[codepointIndex];
+                charJoiningForms[c] = joiningForms[codepointIndex];
+                if (charUseCategories is not null)
+                    charUseCategories[c] = useCategories![codepointIndex];
+            }
+
+            return (charScripts, charJoiningForms, charUseCategories);
         }
 
         private static void Flatten(

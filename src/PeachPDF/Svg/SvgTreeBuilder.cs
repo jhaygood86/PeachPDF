@@ -18,6 +18,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
+using PeachPDF.Text;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -153,9 +154,18 @@ namespace PeachPDF.Svg
         /// against <see cref="Size"/> (the parent's used size); <c>rem</c> against the root's (see
         /// <see cref="_rootFontSize"/>).
         /// </summary>
-        private readonly record struct FontContext(string Family, double Size, bool Bold, bool Italic)
+        private readonly record struct FontContext(
+            string Family, double Size, bool Bold, bool Italic, int Stretch,
+            double LetterSpacing, double WordSpacing, TextTransform TextTransform,
+            LigatureFeatures Ligatures, FontVariantCapsFeature CapsRequested,
+            NumericFeatures Numeric, EastAsianFeatures EastAsian,
+            IReadOnlyList<(string Tag, int Value)> FeatureSettings, bool Kerning, string? Language = null)
         {
-            public static readonly FontContext Default = new(Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false);
+            public static readonly FontContext Default = new(
+                Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
+                Html.Core.Utils.FontStretchResolver.Normal, 0, 0, TextTransform.None,
+                LigatureFeatures.Default, FontVariantCapsFeature.None, NumericFeatures.None, EastAsianFeatures.None,
+                [], true);
         }
 
         /// <param name="root">The root node to build from.</param>
@@ -362,8 +372,11 @@ namespace PeachPDF.Svg
             CollectDefinitions(root);
 
             // The root <svg>'s own font-* seeds inheritance for the whole tree, and its font-size is the
-            // basis for rem. (When the root sets no font-size, this stays the UA default.)
-            var rootFont = ComputeFontContext(root, FontContext.Default);
+            // basis for rem. (When the root sets no font-size, this stays the UA default.) Language
+            // inheritance seeds from the embedding context's own fallback (an inline <svg>'s surrounding
+            // HTML document's resolved lang, if any) - root's own lang/xml:lang, resolved right below,
+            // still wins over this when present.
+            var rootFont = ComputeFontContext(root, FontContext.Default with { Language = root.DocumentLanguageFallback });
             _rootFontSize = rootFont.Size;
 
             foreach (var child in root.Children)
@@ -1071,7 +1084,100 @@ namespace PeachPDF.Svg
                 ? inherited.Italic
                 : styleAttr.Equals("italic", StringComparison.OrdinalIgnoreCase) || styleAttr.Equals("oblique", StringComparison.OrdinalIgnoreCase);
 
-            return new FontContext(family, size, bold, italic);
+            var stretchAttr = ResolveStyledAttr(node, "font-stretch");
+            var stretch = stretchAttr is null || stretchAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.Stretch
+                : Html.Core.Utils.FontStretchResolver.Resolve(stretchAttr.Trim());
+
+            // letter-spacing/word-spacing's em/ex resolve against THIS element's own font-size (the
+            // just-computed `size` above), unlike font-size's own em/ex (which resolve against the
+            // PARENT's) - see ResolveSpacingLength's own remarks.
+            var letterSpacing = ResolveSpacingLength(ResolveStyledAttr(node, "letter-spacing"), size, inherited.LetterSpacing);
+            var wordSpacing = ResolveSpacingLength(ResolveStyledAttr(node, "word-spacing"), size, inherited.WordSpacing);
+
+            var textTransformAttr = ResolveStyledAttr(node, "text-transform");
+            var textTransform = textTransformAttr is null || textTransformAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.TextTransform
+                : Map.TextTransforms.GetValueOrDefault(textTransformAttr.Trim(), inherited.TextTransform);
+
+            // font-variant-*/font-kerning are plain CSS keyword grammars (unlike font-feature-settings
+            // just below, whose quoted OpenType tag literal is genuinely case-sensitive per spec and must
+            // NOT be folded) - lowercase before resolving so a presentation attribute's raw, unnormalized
+            // case (e.g. font-kerning="NONE") matches the resolvers' keyword constants the same way a
+            // CSS-cascade-tokenized value would for HTML.
+            var ligaturesAttr = ResolveStyledAttr(node, "font-variant-ligatures");
+            var ligatures = ligaturesAttr is null || ligaturesAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.Ligatures
+                : TextShapingFeatureResolver.ResolveLigatures(ligaturesAttr.Trim().ToLowerInvariant());
+
+            var capsAttr = ResolveStyledAttr(node, "font-variant-caps");
+            var capsRequested = capsAttr is null || capsAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.CapsRequested
+                : TextShapingFeatureResolver.ResolveCapsRequested(capsAttr.Trim().ToLowerInvariant());
+
+            var numericAttr = ResolveStyledAttr(node, "font-variant-numeric");
+            var numeric = numericAttr is null || numericAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.Numeric
+                : TextShapingFeatureResolver.ResolveNumeric(numericAttr.Trim().ToLowerInvariant());
+
+            var eastAsianAttr = ResolveStyledAttr(node, "font-variant-east-asian");
+            var eastAsian = eastAsianAttr is null || eastAsianAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.EastAsian
+                : TextShapingFeatureResolver.ResolveEastAsian(eastAsianAttr.Trim().ToLowerInvariant());
+
+            var featureSettingsAttr = ResolveStyledAttr(node, "font-feature-settings");
+            var featureSettings = featureSettingsAttr is null || featureSettingsAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.FeatureSettings
+                : TextShapingFeatureResolver.ResolveFeatureSettings(featureSettingsAttr.Trim());
+
+            var kerningAttr = ResolveStyledAttr(node, "font-kerning");
+            var kerning = kerningAttr is null || kerningAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                ? inherited.Kerning
+                : TextShapingFeatureResolver.ResolveKerning(kerningAttr.Trim().ToLowerInvariant());
+
+            // lang/xml:lang are plain XML/HTML attributes, not a CSS-styled property - read directly
+            // (SVG2's own unprefixed lang first, falling back to the legacy xml:lang, same href/xlink:href
+            // precedence tref/textPath already use), never through ResolveStyledAttr's style=""/matched-
+            // rule tiers. Mirrors CssBox.Language's own "own value, else nearest ancestor's" resolution -
+            // an empty lang="" falls through to the inherited value rather than resetting to "no language",
+            // the same simplification CssBox.Language already makes.
+            var langAttr = node.GetAttribute("lang") ?? node.GetAttribute("xml:lang");
+            var language = string.IsNullOrEmpty(langAttr) ? inherited.Language : langAttr;
+
+            return new FontContext(family, size, bold, italic, stretch, letterSpacing, wordSpacing, textTransform,
+                ligatures, capsRequested, numeric, eastAsian, featureSettings, kerning, language);
+        }
+
+        /// <summary>
+        /// Resolves a <c>letter-spacing</c>/<c>word-spacing</c> value: <c>normal</c> is 0, relative
+        /// units (<c>em</c>/<c>ex</c>/<c>rem</c>) resolve against <paramref name="fontSize"/> (the
+        /// current element's own resolved font-size - unlike <see cref="ResolveFontSize"/>'s em/ex,
+        /// which resolve against the PARENT's, per each property's own CSS definition), absolute units
+        /// defer to <see cref="SvgValueParsers.ParseLength(string?, double?)"/>. Unset/<c>inherit</c>/
+        /// unparseable all fall back to <paramref name="inheritedValue"/>.
+        /// </summary>
+        private double ResolveSpacingLength(string? value, double fontSize, double inheritedValue)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return inheritedValue;
+
+            var t = value.Trim();
+            if (t.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+                return inheritedValue;
+            if (t.Equals("normal", StringComparison.OrdinalIgnoreCase))
+                return 0;
+
+            static double? Number(string s) =>
+                double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : null;
+
+            if (t.EndsWith("rem", StringComparison.OrdinalIgnoreCase))
+                return Number(t[..^3]) is { } r ? r * _rootFontSize : inheritedValue;
+            if (t.EndsWith("em", StringComparison.OrdinalIgnoreCase))
+                return Number(t[..^2]) is { } e ? e * fontSize : inheritedValue;
+            if (t.EndsWith("ex", StringComparison.OrdinalIgnoreCase))
+                return Number(t[..^2]) is { } x ? x * fontSize * 0.5 : inheritedValue;
+
+            return SvgValueParsers.ParseLength(t) ?? inheritedValue;
         }
 
         /// <summary>
@@ -1174,8 +1280,32 @@ namespace PeachPDF.Svg
             if (runFont.Bold) fontStyle |= RFontStyle.Bold;
             if (runFont.Italic) fontStyle |= RFontStyle.Italic;
 
-            run.Font = _adapter.GetFont(runFont.Family, runFont.Size, fontStyle)
-                       ?? _adapter.GetFont(Html.Core.Utils.DefaultFontResolver.DefaultFont, runFont.Size, fontStyle);
+            run.Font = _adapter.GetFont(runFont.Family, runFont.Size, fontStyle, stretch: runFont.Stretch)
+                       ?? _adapter.GetFont(Html.Core.Utils.DefaultFontResolver.DefaultFont, runFont.Size, fontStyle, stretch: runFont.Stretch);
+
+            // font-variant-caps is gated by the resolved font's own GSUB support (same rule
+            // DerivedStyle.ActualFontVariantCaps applies for HTML) - real substitution only, no
+            // small-caps synthesis fallback for SVG (a smaller, deliberately scoped gap; see
+            // .claude/accepted-gaps/no-text-shaping.md).
+            var resolvedCaps = runFont.CapsRequested != FontVariantCapsFeature.None && run.Font is { } font && font.SupportsFontVariantCaps(runFont.CapsRequested)
+                ? runFont.CapsRequested
+                : FontVariantCapsFeature.None;
+
+            run.LetterSpacing = runFont.LetterSpacing;
+            run.WordSpacing = runFont.WordSpacing;
+            run.ShapingFeatures = new TextShapingFeatures(
+                runFont.Ligatures, resolvedCaps, runFont.Numeric, runFont.EastAsian,
+                runFont.FeatureSettings, Kerning: runFont.Kerning, Language: runFont.Language);
+
+            // text-decoration is this run's own value only - CSS Text Decoration 3 §2 explicitly makes
+            // it non-inherited (a descendant's decoration "flows across" via painting every glyph whose
+            // ancestor chain requested one, not via the property inheriting).
+            run.TextDecorationLine = ResolveStyledAttr(node, "text-decoration-line")?.Trim().ToLowerInvariant() ?? "none";
+            run.TextDecorationStyle = ResolveStyledAttr(node, "text-decoration-style")?.Trim().ToLowerInvariant() ?? "solid";
+            var decorationColorAttr = ResolveStyledAttr(node, "text-decoration-color")?.Trim();
+            run.TextDecorationColor = !string.IsNullOrEmpty(decorationColorAttr) && !decorationColorAttr.Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                ? new CssValueParser(_adapter).GetActualColor(decorationColorAttr)
+                : null;
 
             var childFontContext = runFont;
 
@@ -1185,7 +1315,8 @@ namespace PeachPDF.Svg
             {
                 if (content.IsText)
                 {
-                    var text = state.Collapse(content.Text ?? "");
+                    var transformed = ApplyTextTransform(content.Text ?? "", runFont.TextTransform, state);
+                    var text = state.Collapse(transformed);
                     if (text.Length > 0)
                         run.Content.Add(new SvgTextFragment { Text = text });
                     continue;
@@ -1200,15 +1331,25 @@ namespace PeachPDF.Svg
 
                     case "tref":
                     {
+                        // A <tref> is required to be empty by the SVG content model, but nothing here
+                        // rejects a document that violates that - so build defensively: snapshot/restore
+                        // the shared whitespace-collapse/capitalize state around this call, since its
+                        // return value (trefRun.Content) is unconditionally discarded below and any state
+                        // the walk advanced along the way must not leak into the text that follows.
+                        var stateSnapshot = state.Snapshot();
                         var trefRun = BuildTextRun(child, resolved, childFontContext, state);
+                        state.Restore(stateSnapshot);
                         var href = child.GetAttribute("href") ?? child.GetAttribute("xlink:href");
                         var id = href?.TrimStart('#');
                         if (!string.IsNullOrEmpty(id) && _nodesById.TryGetValue(id, out var target))
                         {
                             // A tref's own text is the referenced element's text, collapsed as part of the
-                            // same subtree stream (replacing whatever the tref element itself contained).
+                            // same subtree stream (replacing whatever the tref element itself contained) -
+                            // text-transform still applies using the <tref>'s own resolved font context.
                             trefRun.Content.Clear();
-                            var text = state.Collapse(target.GetTextContent());
+                            var trefFont = ComputeFontContext(child, childFontContext);
+                            var transformed = ApplyTextTransform(target.GetTextContent(), trefFont.TextTransform, state);
+                            var text = state.Collapse(transformed);
                             if (text.Length > 0)
                                 trefRun.Content.Add(new SvgTextFragment { Text = text });
                         }
@@ -1253,6 +1394,20 @@ namespace PeachPDF.Svg
         }
 
         /// <summary>
+        /// Applies <paramref name="transform"/> to <paramref name="raw"/> before whitespace collapsing
+        /// (<see cref="TextWhitespaceState.Collapse"/> runs on the result) - <c>capitalize</c> threads
+        /// its word-start tracking through <paramref name="state"/> so a word split across a
+        /// <c>&lt;tspan&gt;</c>/<c>&lt;tref&gt;</c> boundary still capitalizes correctly, even when the
+        /// two runs have different <c>text-transform</c> values (the shared state reflects real
+        /// whitespace seen so far across the whole subtree, independent of which run is currently
+        /// applying <c>capitalize</c>).
+        /// </summary>
+        private static string ApplyTextTransform(string raw, TextTransform transform, TextWhitespaceState state) =>
+            transform == TextTransform.Capitalize
+                ? TextTransformer.ApplyCapitalize(raw, ref state.CapitalizeAtWordStart)
+                : TextTransformer.Apply(raw, transform);
+
+        /// <summary>
         /// Parses a <c>&lt;textPath&gt;</c> <c>startOffset</c>: a length (user units) or a percentage of
         /// the path's total length. A percentage is stored as its 0..1 fraction plus the percent flag,
         /// so the render side can resolve it against the (build-time-unknown) total path length.
@@ -1281,6 +1436,13 @@ namespace PeachPDF.Svg
             private bool _atStart = true;      // still trimming the whole subtree's leading whitespace
             private bool _pendingSpace;        // a whitespace run has ended; emit one space before the next glyph
 
+            /// <summary>Cross-run <c>text-transform: capitalize</c> word-start tracking (see
+            /// <see cref="ApplyTextTransform"/>) - shared across the whole subtree the same way
+            /// whitespace-collapsing state is, independent of <see cref="_atStart"/>/<see cref="_pendingSpace"/>
+            /// since it must reflect real whitespace seen so far even for a run that doesn't itself use
+            /// <c>capitalize</c>.</summary>
+            public bool CapitalizeAtWordStart = true;
+
             /// <summary>Collapses one text fragment, advancing the shared cross-run state.</summary>
             public string Collapse(string raw)
             {
@@ -1308,6 +1470,20 @@ namespace PeachPDF.Svg
                 }
 
                 return sb.ToString();
+            }
+
+            /// <summary>Captures the mutable collapse/capitalize state so a discarded speculative walk
+            /// (see the <c>&lt;tref&gt;</c> case in <see cref="BuildTextRun"/>, where any content nodes the
+            /// tref element itself carries are invalid per SVG's content model and thrown away) can be
+            /// undone rather than leaking into whatever text follows in the same subtree.</summary>
+            public (bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart) Snapshot() =>
+                (_atStart, _pendingSpace, CapitalizeAtWordStart);
+
+            public void Restore((bool AtStart, bool PendingSpace, bool CapitalizeAtWordStart) snapshot)
+            {
+                _atStart = snapshot.AtStart;
+                _pendingSpace = snapshot.PendingSpace;
+                CapitalizeAtWordStart = snapshot.CapitalizeAtWordStart;
             }
         }
 

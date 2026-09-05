@@ -93,6 +93,59 @@ namespace PeachPDF.Tests.Svg
         }
 
         [Fact]
+        public void Text_DirectionRtl_MirroredPunctuation_LogicalTextIsPositionallyAligned()
+        {
+            // Regression: SvgRenderer.ApplyBidiReordering has the identical bidi-mirroring bug HTML's
+            // ToUnicode fix addresses (see CMapInfoLogicalTextTests/RtlToUnicodeIntegrationTests) - a
+            // parenthesized RTL word swaps parenthesis identity, not just position, and painting must
+            // hand DrawString a positionally-aligned logical source so text extraction recovers it.
+            // unicode-bidi="bidi-override" (like Text_BidiOverrideReversesGlyphsOfDifferingAdvance_NoGapOrOverlap
+            // above) forces every character, parens and Latin letters alike, to one uniform RTL level -
+            // without it, plain direction="rtl" alone would bump the Latin letters to their own even
+            // level (UAX#9 I2, see Text_DirectionRtl_PlainLatinContent_StaysLogical) and split this into
+            // more than one run/DrawString call, the same mechanism the HTML embedding-level-split test
+            // (CssLayoutEngineBidiTests.RtlParagraph_DigitRunWithNoSurroundingWhitespace_SplitsIntoItsOwnWord)
+            // covers.
+            var g = Render("""<text x="10" y="50" font-size="20" direction="rtl" unicode-bidi="bidi-override">(AB)</text>""");
+
+            var draw = Assert.Single(g.DrawStringCalls);
+            Assert.Equal("(BA)", draw.Text);
+            // '(' at the painted string's start stands in for the logical closing ')', and vice versa
+            // for the trailing ')' - logicalText must be positionally aligned with draw.Text, not simply
+            // the original "(AB)" left as-is.
+            Assert.Equal(")BA(", draw.LogicalText);
+        }
+
+        [Fact]
+        public void Text_ExplicitRotatePerCharacter_MirroredPunctuation_LogicalTextIsPerCharacterAligned()
+        {
+            // An explicit rotate="" forces PaintRotatedGlyph's own single-glyph-per-DrawString path
+            // (distinct from PaintGlyphs' batched-run path the test above covers) - each call's
+            // logicalText must be that one glyph's own true logical source (GlyphInfo.LogicalGlyph),
+            // not a whole-batch string.
+            var g = Render(
+                """<text x="10" y="50" font-size="20" direction="rtl" unicode-bidi="bidi-override" rotate="10 10 10 10">(AB)</text>""");
+
+            // One DrawString call per character, in painted (visual, post-reorder) order: '(' 'B' 'A' ')'.
+            // 'B'/'A' were never mirrored, so GlyphInfo.LogicalGlyph (unlike HTML's whole-word logicalText)
+            // stays null for them - there is nothing distinct to recover per character, and CMapInfo
+            // treats null the same as "identical to what's painted".
+            Assert.Equal(4, g.DrawStringCalls.Count);
+            Assert.Equal([("(", ")"), ("B", null), ("A", null), (")", "(")],
+                g.DrawStringCalls.Select(c => (c.Text, c.LogicalText)));
+        }
+
+        [Fact]
+        public void Text_DirectionLtr_PlainContent_HasNoLogicalTextOverride()
+        {
+            // The overwhelming common case: nothing was mirrored, so there is nothing to recover.
+            var g = Render("""<text x="10" y="50" font-size="20">AB CD</text>""");
+
+            var draw = Assert.Single(g.DrawStringCalls);
+            Assert.Null(draw.LogicalText);
+        }
+
+        [Fact]
         public void TSpan_UnicodeBidiIsolate_DoesNotLeakIntoSurroundingLtrText()
         {
             // An isolated RTL tspan's own reordering must not affect how the surrounding LTR text's own

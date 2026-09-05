@@ -380,6 +380,48 @@ namespace PeachPDF.Html.Core.Dom
         public TextShapingFeatures ActualTextShapingFeatures => DerivedStyle.ActualTextShapingFeatures;
 
         /// <summary>
+        /// <see cref="ActualTextShapingFeatures"/>, overridden with <paramref name="word"/>'s own
+        /// <see cref="CssRectWord.ScriptTag"/>/<see cref="CssRectWord.EffectiveJoiningForms"/>/
+        /// <see cref="CssRectWord.EffectiveUseCategories"/> when it carries any of them -
+        /// <see cref="ActualTextShapingFeatures"/> is a box-level (not per-word) cached value, but
+        /// script tag/joining forms/USE categories are resolved per word (see <see cref="CssBox.CharScripts"/>/
+        /// <see cref="CssBox.JoiningForms"/>/<see cref="CssBox.UseCategories"/>), so every measure/paint
+        /// call site that shapes one specific word's own text needs this instead of the plain box-level
+        /// property. A no-op (returns the unmodified box-level value) for the overwhelming common case
+        /// of a word with none of the three - only evaluates <see cref="ActualTextShapingFeatures"/>
+        /// once either way, so this costs nothing beyond the existing cached-property read. When the
+        /// word also carries joining forms, this also copies
+        /// its own <see cref="CssRectWord.DisplayOrderReversed"/> into <see cref="TextShapingFeatures.ReverseForDisplay"/>
+        /// - see that property's remarks for why an Arabic-family joining word needs shaping told to
+        /// reverse its own output instead of being handed already-reversed text the way every other RTL
+        /// word is. Always false at measurement time (bidi placement, which is what sets
+        /// <see cref="CssRectWord.DisplayOrderReversed"/>, hasn't run yet), which is correct - a shaped
+        /// run's total advance is order-independent, so measurement never needs the reversal.
+        /// </summary>
+        internal TextShapingFeatures ResolveWordShapingFeatures(CssRect word)
+        {
+            var features = ActualTextShapingFeatures;
+            if (word is not CssRectWord
+                {
+                    ScriptTag: var scriptTag,
+                    EffectiveJoiningForms: var joiningForms,
+                    EffectiveUseCategories: var useCategories,
+                } rectWord
+                || (scriptTag is null && joiningForms is null && useCategories is null))
+            {
+                return features;
+            }
+
+            return features with
+            {
+                ScriptTag = scriptTag,
+                JoiningForms = joiningForms,
+                UseCategories = useCategories,
+                ReverseForDisplay = joiningForms is not null && rectWord.DisplayOrderReversed,
+            };
+        }
+
+        /// <summary>
         /// This box's own <see cref="FontWeight"/>, resolved to a concrete CSS Fonts numeric weight (1-1000).
         /// </summary>
         internal int ActualNumericWeight => DerivedStyle.ActualNumericWeight;
