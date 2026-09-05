@@ -36,6 +36,7 @@
 //
 #endregion
 
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 
@@ -1207,7 +1208,12 @@ namespace PeachPDF.Fonts.OpenType
             _face.Position = ruleOffset;
             int glyphCount = _face.ReadUShort();
             int seqLookupCount = _face.ReadUShort();
-            var input = new ushort[glyphCount - 1];
+            // glyphCount includes the first glyph (already matched via this rule's own Coverage
+            // entry), so Input holds glyphCount - 1 more - a spec-conformant font always has
+            // glyphCount >= 1, but a malformed/corrupt font could claim 0; Math.Max keeps that case a
+            // harmless empty (never-matching) rule instead of an OverflowException from a negative
+            // array length.
+            var input = new ushort[Math.Max(0, glyphCount - 1)];
             for (int i = 0; i < input.Length; i++)
                 input[i] = _face.ReadUShort();
             var records = new GposSequenceLookupRecord[seqLookupCount];
@@ -1245,7 +1251,8 @@ namespace PeachPDF.Fonts.OpenType
                 backtrack[i] = _face.ReadUShort();
 
             int inputGlyphCount = _face.ReadUShort();
-            var input = new ushort[inputGlyphCount - 1];
+            // See ReadSequenceRule's own remarks on the Math.Max guard.
+            var input = new ushort[Math.Max(0, inputGlyphCount - 1)];
             for (int i = 0; i < input.Length; i++)
                 input[i] = _face.ReadUShort();
 
