@@ -55,6 +55,15 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             cid.Elements.SetInteger("/Supplement", 0);
             Elements.SetValue(Keys.CIDSystemInfo, cid);
 
+            // Always Identity, and always written explicitly (not left to the /Identity default) -
+            // required for PDF/A (ISO 19005-2 §6.2.11.3 / ISO 32000-1 Table 117), which does not allow
+            // relying on a key's spec-default value being absent. This is also the semantically correct
+            // value, not just the spec-legal default: OpenTypeFontface.CreateFontSubSet (the only place
+            // this class's embedded font data comes from) never renumbers glyph indices when building a
+            // subset - it keeps every original glyph's slot (zeroing out the ones that go unused), so a
+            // CID written into the content stream always equals its own glyph index in the embedded font.
+            Elements.SetName(Keys.CIDToGIDMap, "/Identity");
+
             FontDescriptor = fontDescriptor;
             // ReSharper disable once DoNotCallOverridableMethodsInConstructor
             Owner._irefTable.Add(fontDescriptor);

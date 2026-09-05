@@ -409,8 +409,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.IO
                 if (bytes.Length != 0)
                 {
                     Write(bytes);
-                    if (_lastCat != CharCat.NewLine)
-                        WriteRaw('\n');
+                    // Unconditional, not "only if the last byte doesn't already look like a newline" -
+                    // stream content is frequently binary (FlateDecode-compressed data in particular),
+                    // where a content BYTE can coincidentally equal 0x0A. Skipping the marker in that
+                    // case leaves nothing but that content byte between the data and "endstream", which
+                    // a strict reader (ISO 19005 §6.1.7.1 - Length shall match the byte count between
+                    // the stream's own EOL and the (uncounted) EOL before endstream) then misattributes
+                    // as the delimiter, not as the last byte of content it actually is - producing a
+                    // Length/actual-byte-count mismatch of exactly one byte. Always writing our own
+                    // marker removes the ambiguity entirely, at the cost of an occasional harmless
+                    // extra blank line when content already ended in one.
+                    WriteRaw('\n');
                 }
             }
             WriteRaw("endstream\n");

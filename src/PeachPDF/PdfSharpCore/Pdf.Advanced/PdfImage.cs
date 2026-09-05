@@ -153,7 +153,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 Elements[PdfStream.Keys.Length] = new PdfInteger(imageBits.Length);
                 Elements[PdfStream.Keys.Filter] = new PdfName("/DCTDecode");
             }
-            if (_image.Interpolate)
+            if (AllowInterpolate)
                 Elements[Keys.Interpolate] = PdfBoolean.True;
             Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
             Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
@@ -348,10 +348,19 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 Elements[Keys.BitsPerComponent] = new PdfInteger(8);
                 // TODO: CMYK
                 Elements[Keys.ColorSpace] = new PdfName("/DeviceRGB");
-                if (_image.Interpolate)
+                if (AllowInterpolate)
                     Elements[Keys.Interpolate] = PdfBoolean.True;
             }
         }
+
+        /// <summary>
+        /// Whether <c>/Interpolate true</c> may be written for this image. Every PDF/A part forbids an
+        /// Image dictionary's <c>Interpolate</c> key from being <c>true</c> (e.g. ISO 19005-2 §6.2.8) -
+        /// omitting the key entirely (equivalent to its spec default of <c>false</c>) is always legal,
+        /// so this simply suppresses it outright whenever PDF/A conformance is requested, regardless of
+        /// what the source image asked for.
+        /// </summary>
+        bool AllowInterpolate => _image.Interpolate && _document.Options.PdfAConformance == PdfAConformance.None;
 
         /// <summary>
         /// Common keys for all streams.

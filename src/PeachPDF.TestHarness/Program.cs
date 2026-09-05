@@ -20,6 +20,52 @@ PdfGenerator generator = new();
 var outputDir = args.Length > 0 ? Path.GetFullPath(args[0]) : Directory.GetCurrentDirectory();
 Directory.CreateDirectory(outputDir);
 
+// Opt-in PDF/A conformance sweep (PDFA_SWEEP=1) - alongside every showcase's normal PDF, also
+// renders the exact same (sourceHtml, renderConfig) pair under PdfAConformance.PdfA2B into a
+// pdfa-sweep/ subfolder, for batch-validating the whole showcase library (not just the dedicated
+// pdf_a_conformance showcase) against a real PDF/A validator. PdfA2B specifically - not 2A or any
+// "1" level - because it needs no document language (many showcases don't set one) and permits
+// transparency (opacity/gradients/masks - which most showcases use freely), so a generation failure
+// here is never an expected/by-design PDF/A-1 rejection; it's always a genuine bug to investigate.
+var pdfASweep = Environment.GetEnvironmentVariable("PDFA_SWEEP") == "1";
+var pdfASweepDir = Path.Combine(outputDir, "pdfa-sweep");
+if (pdfASweep)
+    Directory.CreateDirectory(pdfASweepDir);
+
+// A fixed date (not DateTimeOffset.UtcNow) so re-running the sweep produces byte-stable XMP output
+// across runs, which makes diffing two sweep runs meaningful.
+var pdfASweepCreationDate = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffset creationDate) => new()
+{
+    PixelsPerInch = source.PixelsPerInch,
+    ScaleToPageSize = source.ScaleToPageSize,
+    ShrinkToFit = source.ShrinkToFit,
+    MinContentWidth = source.MinContentWidth,
+    Media = source.Media,
+    PreferredColorScheme = source.PreferredColorScheme,
+    IgnoreAuthorStyleSheets = source.IgnoreAuthorStyleSheets,
+    PageSize = source.PageSize,
+    ManualPageWidth = source.ManualPageWidth,
+    ManualPageHeight = source.ManualPageHeight,
+    PageOrientation = source.PageOrientation,
+    NetworkLoader = source.NetworkLoader,
+    AllowLocalFileAccess = source.AllowLocalFileAccess,
+    DefaultLanguage = source.DefaultLanguage,
+    CompressContentStreams = source.CompressContentStreams,
+    EnableTaggedPdf = source.EnableTaggedPdf,
+    EnableInteractivePdfForms = source.EnableInteractivePdfForms,
+    DownscaleImages = source.DownscaleImages,
+    DownscaleQuality = source.DownscaleQuality,
+    MaximumDownscaleMultiplier = source.MaximumDownscaleMultiplier,
+    MarginTop = source.MarginTop,
+    MarginBottom = source.MarginBottom,
+    MarginLeft = source.MarginLeft,
+    MarginRight = source.MarginRight,
+    PdfAConformance = PdfAConformance.PdfA2B,
+    Metadata = new PdfDocumentMetadata { CreationDate = creationDate },
+};
+
 List<ShowcaseEntry> showcaseManifest = [];
 
 // Every showcase goes through here so the manifest (showcases.json) that drives
@@ -33,6 +79,22 @@ async Task SaveShowcaseAsync(string slug, string category, string cardTitle, str
     File.WriteAllText(Path.Combine(outputDir, $"{slug}.html"), sourceHtml);
     showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, $"{slug}.pdf", $"{slug}.html"));
     Console.WriteLine($"Saved {slug}.pdf + {slug}.html");
+
+    if (pdfASweep)
+    {
+        try
+        {
+            var pdfAConfig = ClonePdfAConfig(renderConfig, pdfASweepCreationDate);
+            var pdfADocument = await generator.GeneratePdf(sourceHtml, pdfAConfig);
+            using var pdfAStream = new MemoryStream();
+            pdfADocument.Save(pdfAStream);
+            File.WriteAllBytes(Path.Combine(pdfASweepDir, $"{slug}.pdf"), pdfAStream.ToArray());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"PDF/A SWEEP GENERATION FAILED for {slug}: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
 }
 
 static string Swatch(string desc, string css) =>
