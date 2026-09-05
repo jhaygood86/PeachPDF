@@ -55,8 +55,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
     }
 
     /// <summary>
-    /// Thrown by <see cref="PdfATransparencyGuard"/> when a document uses a feature that requires a
-    /// PDF transparency group under a PDF/A-1 conformance request. A plain <see cref="InvalidOperationException"/>
+    /// Thrown for any deliberate PDF/A conformance rejection raised deep in the paint pipeline - e.g.
+    /// <see cref="PdfATransparencyGuard"/> (a PDF/A-1-forbidden transparency group) or
+    /// <see cref="Drawing.Pdf.XGraphicsPdfRenderer"/>'s missing-glyph-coverage check (a
+    /// <c>.notdef</c> reference every PDF/A part forbids). A plain <see cref="InvalidOperationException"/>
     /// is the exception type callers should catch (a <c>catch (InvalidOperationException)</c> block
     /// still works polymorphically) - this subclass exists purely so
     /// <see cref="PeachPDF.Html.Core.Paint.FragmentPainter"/>'s generic paint-error wrapping can let it

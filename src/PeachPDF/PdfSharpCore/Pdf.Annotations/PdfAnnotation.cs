@@ -68,6 +68,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Annotations
             Elements.SetName(Keys.Type, "/Annot");
             Elements.SetString(Keys.NM, Guid.NewGuid().ToString("D"));
             Elements.SetDateTime(Keys.M, DateTime.Now);
+
+            // Every PDF/A part (e.g. ISO 19005-2 §6.3.2) requires every non-Popup annotation
+            // dictionary to contain the /F flags key - there is no legal "absent" default for PDF/A,
+            // unlike the base PDF spec's own default of 0. Print is the correct default for every
+            // annotation type this codebase creates (link and form-field widgets): visible, printable,
+            // no restrictions - a caller can still override via the Flags property afterward.
+            Elements.SetInteger(Keys.F, (int)PdfAnnotationFlags.Print);
         }
 
         /// <summary>

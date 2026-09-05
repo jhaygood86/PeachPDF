@@ -25,6 +25,52 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(14, result.PdfDocument.Version);
         }
 
+        [Fact]
+        public async Task EmbeddedFont_AlwaysHasExplicitIdentityCidToGidMap()
+        {
+            // ISO 19005-2 §6.2.11.3 (ISO 32000-1 Table 117): a CIDFontType2 dictionary must contain a
+            // CIDToGIDMap entry - relying on its spec default (Identity, when the key is simply absent)
+            // is not sufficient for PDF/A. Any text at all already goes through the Type0/CID embedded
+            // -font path (PeachPDF always embeds fonts as CID fonts), so this isn't PDF/A-specific
+            // behavior to gate - it's unconditional, checked here under PdfAConformance as the case that
+            // actually matters.
+            var config = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfAConformance = PdfAConformance.PdfA2B,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+            var pdfText = await GetPdfText(SimpleHtml, config);
+
+            Assert.Contains("/CIDFontType2", pdfText);
+            Assert.Matches(new Regex(@"/CIDToGIDMap\s*/Identity"), pdfText);
+        }
+
+        [Fact]
+        public async Task Image_UnderPdfAConformance_NeverGetsInterpolateTrue()
+        {
+            // ISO 19005-2 §6.2.8 (present in every PDF/A part): an Image dictionary's Interpolate key,
+            // if present, must be false - XImage.Interpolate defaults to true for every image, so this
+            // would otherwise fire for any PDF/A document containing a plain <img>.
+            var pngBytes = RasterPngFixture.MakeSolidRgbaPngBytes(4, 4, 255, 0, 0);
+            var html = $"<html><body><img src=\"data:image/png;base64,{Convert.ToBase64String(pngBytes)}\" width=\"4\" height=\"4\" /></body></html>";
+
+            var pdfAConfig = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfAConformance = PdfAConformance.PdfA2B,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+            var pdfAText = await GetPdfText(html, pdfAConfig);
+            Assert.DoesNotContain("/Interpolate true", pdfAText);
+
+            // Confirm the guard is actually scoped to PdfAConformance, not a global change - the same
+            // image without it still gets the interpolation hint.
+            var plainConfig = new PdfGenerateConfig { PageSize = PageSize.A4 };
+            var plainText = await GetPdfText(html, plainConfig);
+            Assert.Contains("/Interpolate true", plainText);
+        }
+
         [Theory]
         [InlineData(PdfAConformance.PdfA2B, 17)]
         [InlineData(PdfAConformance.PdfA2U, 17)]
@@ -399,6 +445,59 @@ namespace PeachPDF.Tests.Integration
             using var ms = new MemoryStream();
             result.Save(ms);
             Assert.True(result.PdfDocument.Pages[0].Elements.ContainsKey("/Group"));
+        }
+
+        [Fact]
+        public async Task LinkAnnotation_AlwaysHasExplicitFFlags_RegardlessOfPdfAConformance()
+        {
+            // ISO 19005 §6.3.2 (present in every PDF/A part): every annotation must have an /F key
+            // with at least the Print flag (4) set. PdfAnnotation.Initialize used to leave /F entirely
+            // unset, relying on the PDF spec's own "absent means 0" default - not sufficient for PDF/A,
+            // which requires the key to be explicitly present. This isn't PDF/A-specific behavior to
+            // gate - PdfAnnotation.Initialize sets it unconditionally - so it's checked here under
+            // PdfAConformance as the case that actually matters, mirroring
+            // EmbeddedFont_AlwaysHasExplicitIdentityCidToGidMap above.
+            var html = "<html><body><a href=\"https://example.com/\">a link</a></body></html>";
+            var config = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfAConformance = PdfAConformance.PdfA2B,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+            var result = await new PdfGenerator().GeneratePdf(html, config);
+
+            var annotations = result.PdfDocument.Pages[0].Annotations;
+            Assert.Equal(1, annotations.Count);
+            var annotation = annotations[0];
+            Assert.True(annotation.Elements.ContainsKey("/F"));
+            Assert.NotEqual(0, annotation.Elements.GetInteger("/F"));
+        }
+
+        [Fact]
+        public async Task MissingGlyph_NoFallbackCoversCharacter_ThrowsPdfAConformanceException()
+        {
+            // ISO 19005-2 §6.2.11.8 (present in every PDF/A part): a text-showing operator must never
+            // reference the .notdef glyph (glyph index 0). A character with no glyph in the font and
+            // no fallback font covering it - e.g. an emoji with no font-family fallback - used to be
+            // shaped straight through to a Tj operator referencing .notdef.
+            var html = "<html><body><p style=\"font-family: 'Source Sans 3';\">\U0001F600</p></body></html>";
+            var config = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfAConformance = PdfAConformance.PdfA2B,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+
+            // Thrown as the internal PdfAConformanceException subclass so FragmentPainter's generic
+            // paint-error wrapping doesn't fold it into an HtmlRenderException - ThrowsAnyAsync checks
+            // assignability, matching how a real caller's "catch (InvalidOperationException)" sees it.
+            await Assert.ThrowsAnyAsync<InvalidOperationException>(
+                () => new PdfGenerator().GeneratePdf(html, config));
+
+            // Confirm the guard is actually scoped to PdfAConformance, not a global change - the same
+            // uncovered character without it still generates successfully (falls back to .notdef).
+            var plainConfig = new PdfGenerateConfig { PageSize = PageSize.A4 };
+            await new PdfGenerator().GeneratePdf(html, plainConfig);
         }
 
         [Fact]

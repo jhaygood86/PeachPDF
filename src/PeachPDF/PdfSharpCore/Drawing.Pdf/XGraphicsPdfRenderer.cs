@@ -518,6 +518,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 if (font.Unicode)
                 {
                     shapedGlyphs = descriptor.Shape(s, features);
+                    RequireNoMissingGlyphsForPdfA(shapedGlyphs, font);
                     StringBuilder sb = new StringBuilder();
                     foreach (ShapedGlyph glyph in shapedGlyphs)
                     {
@@ -624,6 +625,38 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     ? y - strikeoutPosition
                     : y + strikeoutPosition - strikeoutSize;
                 DrawRectangle(null, brush, x, strikeoutRectY, width, strikeoutSize);
+            }
+        }
+
+        /// <summary>
+        /// Throws if <paramref name="glyphs"/> contains a reference to the missing-glyph placeholder
+        /// (glyph index 0, ".notdef") and PDF/A conformance is requested - every PDF/A part forbids a
+        /// text-showing operator from referencing it (e.g. ISO 19005-2 §6.2.11.8), so this is checked
+        /// right where a shaped run is produced, before it ever reaches a Tj. Only the CID/Unicode text
+        /// path calls this - color-font glyphs (COLR/CPAL) are painted as vector fills, never through a
+        /// text-showing operator, so they can't trigger this rule at all.
+        /// </summary>
+        void RequireNoMissingGlyphsForPdfA(IReadOnlyList<ShapedGlyph> glyphs, XFont font)
+        {
+            if (Owner.Options.PdfAConformance == PdfAConformance.None)
+                return;
+
+            foreach (var glyph in glyphs)
+            {
+                if (glyph.GlyphIndex == 0)
+                {
+                    // PdfAConformanceException (not a plain InvalidOperationException) so this specific,
+                    // actionable message reaches the caller unwrapped - see its own remarks on why
+                    // FragmentPainter's generic paint-error catch would otherwise fold it into a vague
+                    // "Exception in box paint" HtmlRenderException.
+                    throw new PdfAConformanceException(
+                        $"The font '{font.Name}' has no glyph for one or more characters in this text, " +
+                        "and no fallback font covers them either. PDF/A forbids a text-showing operator " +
+                        "from referencing the missing-glyph placeholder (.notdef - e.g. ISO 19005-2 " +
+                        "§6.2.11.8). Add a font-family fallback that covers every character in the " +
+                        "document (CSS font-family list, or PdfGenerator.AddFontFromStream), or remove " +
+                        "the uncovered character(s).");
+                }
             }
         }
 
