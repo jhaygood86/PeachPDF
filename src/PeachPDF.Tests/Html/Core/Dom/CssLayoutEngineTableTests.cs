@@ -1526,6 +1526,134 @@ Assert.NotNull(tbody);
         }
 
         [Fact]
+        public async Task TableLayout_WidthCalc_ResolvesAgainstContainingBlockAndDoesNotOverrunIt()
+        {
+            // Issue #898: GetAvailableTableWidth gated on `new CssLength(width).Number > 0`, and
+            // CssLength only understands a bare <number><unit> - it reports Number == 0 for calc(),
+            // so a calc() width fell through to "unspecified" and _widthSpecified was never set. With
+            // _widthSpecified false, DetermineMissingColumnWidths sizes columns from content up to the
+            // *raw* containing-block width - which ignores this table's own 12pt margin-left entirely -
+            // so wrappable content wide enough to want the full container spreads the table out to
+            // (approximately) the full 400pt container width, and combined with the 12pt margin the
+            // table's right edge lands 12pt past the wrapper's own right edge: a real overrun. With the
+            // fix, `calc(100% - 12pt)` resolves to a definite 388pt exactly like it already does for an
+            // ordinary <div>, so the table's right edge lands exactly on the wrapper's right edge instead.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+<div id='wrap' style='width: 400pt'>
+<table id='t' style='margin-left: 12pt; width: calc(100% - 12pt); border-collapse: collapse;'>
+  <tr><td>Some reasonably long wrappable cell content that can reflow across several lines and then some more to be safe</td></tr>
+</table>
+</div>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var wrap = FindById(rootBox, "wrap");
+            var table = FindById(rootBox, "t");
+
+            Assert.NotNull(wrap);
+            Assert.NotNull(table);
+
+            var tableWidth = table!.ActualRight - table.Location.X;
+            _output.WriteLine($"Table width with margin-left:12pt; width:calc(100% - 12pt) in a 400pt wrapper: {tableWidth}, table.ActualRight: {table.ActualRight}, wrap.ClientRight: {wrap!.ClientRight}");
+
+            // calc(100% - 12pt) against the 400pt wrapper resolves to exactly 388pt.
+            Assert.Equal(388, tableWidth, precision: 2);
+            // The table's right edge must not overrun the wrapper's own right edge (a small epsilon
+            // absorbs floating-point layout rounding, not a real allowance for overrun).
+            Assert.True(table.ActualRight <= wrap.ClientRight + 0.01,
+                $"Table right edge {table.ActualRight} overran the wrapper's right edge {wrap.ClientRight}");
+        }
+
+        [Fact]
+        public async Task TableLayout_MaxWidthCalc_ClipsExplicitWidth()
+        {
+            // Sibling to TableLayout_MaxWidthNarrowerThanExplicitWidth_RespectsMaxWidth above, but for
+            // GetMaxTableWidth's identical calc()-blindness bug (issue #898): `new CssLength(maxWidth).Number > 0`
+            // is false for calc(), so a calc() max-width was silently discarded (GetMaxTableWidth
+            // returning the "no max-width" sentinel 9999f) exactly like a missing max-width would be.
+            // The calc() here must contain a percentage (not just absolute units) - an absolute-only
+            // calc() folds to a literal length at cascade time (see CalcIntegrationTests' own remarks
+            // on this), which would never reach GetMaxTableWidth's buggy gate as calc() text at all and
+            // so would pass even without the fix.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        div#wrap { width: 300pt; }
+        table { width: 1000pt; max-width: calc(50% + 50pt); border-collapse: collapse; }
+        td { border: 1px solid black; padding: 4pt; }
+    </style>
+</head>
+<body>
+<div id='wrap'>
+    <table>
+        <tr>
+            <td>Alpha bravo charlie delta echo foxtrot golf</td>
+            <td>Hotel india juliet kilo lima mike november</td>
+            <td>Oscar papa quebec romeo sierra tango uniform</td>
+        </tr>
+    </table>
+</div>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox);
+
+            Assert.NotNull(table);
+            var tableWidth = table!.ActualRight - table.Location.X;
+            _output.WriteLine($"Table width with width:1000pt max-width:calc(50% + 50pt) (of a 300pt parent) and wrappable content: {tableWidth}");
+
+            // Clipped down to the resolved max-width (50% of 300pt + 50pt = 200pt) - nowhere near the
+            // 1000pt explicit width.
+            Assert.Equal(200, tableWidth, precision: 3);
+        }
+
+        [Fact]
+        public async Task TableLayout_WidthZero_IsTreatedAsDefiniteZeroWidth()
+        {
+            // Incidental fix riding along with issue #898: CssLength.Number > 0 also misclassified a
+            // literal "0" as "unspecified" (CssLength reports Number == 0 for a genuine zero too), even
+            // though a computed value of 0 is "other than auto" per CSS 2.1 §17.5.2 and must use the
+            // same used-width algorithm as any other explicit width (the greater of W and the columns'
+            // combined minimum width) rather than the auto/shrink-to-fit algorithm. EnforceMinimumSize
+            // still floors the result at the column's content-minimum, so the width:0 table below does
+            // not literally collapse to zero - but unlike a genuinely auto-width table given the same
+            // content and the same (wide) container, it must not grow past that minimum either.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<body>
+<table id='zero' style='width: 0; border-collapse: collapse;'>
+  <tr><td>Some reasonably long wrappable cell content that can reflow across several lines</td></tr>
+</table>
+<table id='auto' style='border-collapse: collapse;'>
+  <tr><td>Some reasonably long wrappable cell content that can reflow across several lines</td></tr>
+</table>
+</body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var zeroTable = FindById(rootBox, "zero");
+            var autoTable = FindById(rootBox, "auto");
+
+            Assert.NotNull(zeroTable);
+            Assert.NotNull(autoTable);
+
+            var zeroWidth = zeroTable!.ActualRight - zeroTable.Location.X;
+            var autoWidth = autoTable!.ActualRight - autoTable.Location.X;
+            _output.WriteLine($"width:0 table width: {zeroWidth}, width:auto table width: {autoWidth}");
+
+            Assert.True(zeroWidth < autoWidth,
+                $"A width:0 table (width {zeroWidth}) should clamp to its minimum content width, not grow toward its natural content width like the width:auto table did (width {autoWidth}).");
+        }
+
+        [Fact]
         public async Task TableLayout_ExplicitColumnWidthsExceedTableWidth_ShrinksColumnsToFit()
         {
             // Issue #819: CanReduceWidth(int)'s bounds check was inverted (always true for every

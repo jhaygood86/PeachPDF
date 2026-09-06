@@ -5688,9 +5688,7 @@ namespace PeachPDF.Html.Core.Dom
                 ? _tableBox.ContainingBlock.Size.Height
                 : CssLayoutEngine.PageAwareWidthBasis(_tableBox.ContainingBlock, _tableBox.ClientTop);
 
-            CssLength tableBoxLength = new(inlineSizeCss);
-
-            if (!(tableBoxLength.Number > 0)) return containingBlockInlineSize;
+            if (!CssValueParser.IsValidLength(inlineSizeCss)) return containingBlockInlineSize;
 
             _widthSpecified = true;
             return CssValueParser.ParseLength(inlineSizeCss, containingBlockInlineSize, _tableBox);
@@ -5716,8 +5714,7 @@ namespace PeachPDF.Html.Core.Dom
                     - _tableBox.ParentBox.ActualPaddingTop - _tableBox.ParentBox.ActualPaddingBottom - _tableBox.ParentBox.ActualBorderBottomWidth
                 : _tableBox.ParentBox!.AvailableWidth;
 
-            var tblen = new CssLength(maxInlineSizeCss);
-            if (tblen.Number > 0)
+            if (CssValueParser.IsValidLength(maxInlineSizeCss))
             {
                 _widthSpecified = true;
                 return CssValueParser.ParseLength(maxInlineSizeCss, parentAvailableInlineSize, _tableBox);
