@@ -1020,6 +1020,25 @@ namespace PeachPDF.Html.Core
             return new ContainerQuerySizes(byId);
         }
 
+        /// <summary>
+        /// The initial containing block's own width to seed <see cref="Root"/>'s <see cref="CssBox.Size"/>
+        /// with for a layout pass, given <paramref name="fallback"/> — the historical, page-unaware value
+        /// the caller would otherwise use. Per css-page-3 §3, "the edges of the page area on the first
+        /// page establish... the initial containing block" - the width analogue of
+        /// <see cref="Dom.CssLayoutEngine.GetBoxHeight"/>'s existing pin to
+        /// <c>PageGeometry.GetPage(0).BandHeight</c> (issue #201). Only substitutes <paramref name="fallback"/>
+        /// when <see cref="UseVariableInlineMeasure"/> is on AND <see cref="MaxSize"/>'s width isn't itself
+        /// an explicit constraint distinct from the page area — a caller-imposed <see cref="MaxSize"/>
+        /// still wins over page geometry, the same precedence it already has everywhere else it's read.
+        /// <see cref="PdfGenerator"/>'s own normal per-page rendering path sets <see cref="MaxSize"/>'s
+        /// width to exactly <see cref="PageSize"/>'s width, which this recognizes as "no constraint beyond
+        /// the page itself" rather than a real external override.
+        /// </summary>
+        private double IcbWidthSeed(double fallback) =>
+            UseVariableInlineMeasure && (MaxSize.Width <= 0 || Math.Abs(MaxSize.Width - PageSize.Width) < 0.01)
+                ? PageGeometry.GetPage(0).BandWidth
+                : fallback;
+
         private async ValueTask PerformLayoutOnePass(RGraphics g)
         {
             ActualSize = RSize.Empty;
@@ -1056,7 +1075,7 @@ namespace PeachPDF.Html.Core
             ResolveCanvasBackground();
 
             // if width is not restricted we set it to large value to get the actual later
-            Root.Size = new RSize(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width, 0);
+            Root.Size = new RSize(IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : PageSize.Width), 0);
             Root.Location = Location;
 
             await LayoutDocument(g);
@@ -1093,7 +1112,7 @@ namespace PeachPDF.Html.Core
             {
                 // The base seed the "real" pass(es) above used - NOT the current Root.Size.Width, which
                 // GetBoxWidth has already replaced with page 0's own (seam-adjusted) measure.
-                var rootWidth = MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width);
+                var rootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
                 var previous = PageAssignmentSignature();
                 for (var i = 0; i < 3; i++)
                 {
@@ -1138,7 +1157,7 @@ namespace PeachPDF.Html.Core
             // plain list-count check, not a tree walk, so it costs nothing for the common case.
             if (HasFootnotes)
             {
-                var footnoteRootWidth = MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width);
+                var footnoteRootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
                 const int maxFootnotePasses = 6;
 
                 for (var pass = 0; pass < maxFootnotePasses; pass++)
@@ -1174,7 +1193,7 @@ namespace PeachPDF.Html.Core
             // cost class as AnyBoxClonesDecorations/AnyBoxEstablishesSizeContainer above.
             if (DomUtils.AnyBoxHasTargetPageContent(Root))
             {
-                var targetPageRootWidth = MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width);
+                var targetPageRootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
 
                 // Seeded from the state already on hand (the placeholder "1" text every target-counter(_,
                 // page) box currently holds), mirroring UseVariableInlineMeasure's own reflow loop above -
@@ -2677,35 +2696,11 @@ namespace PeachPDF.Html.Core
             if (!UseVariableInlineMeasure)
                 return MarginLeft + PageSize.Width;
 
-            var ppp = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-            var geom = PageGeometry.GetPage(PageIndexOf(y));
-            // This slot's OWN sheet width in layout px - not the document's base configured width, which
-            // a size-overriding rule (no margin override at all) leaves geom.MarginLeftPt/MarginRightPt at
-            // the base value while the sheet itself is genuinely a different width (issue #143's mixed
-            // page-size case). PdfGenerator.SetContent subtracts both point-space margins from the
-            // point-space sheet, and the public wrappers scale PageSize and margins by PixelsPerPoint - this
-            // mirrors that scaling for this slot's own (possibly overridden) sheet width instead.
-            var sheetPx = geom.SheetWidthPt * ppp;
-            var bandWidth = sheetPx - (geom.MarginLeftPt + geom.MarginRightPt) * ppp;
-
-            // Degenerate override (left+right margins consume the whole sheet): the same two-tier fallback
-            // PageGeometryTable.Compute's own band-height clamp uses, over the SLOT'S OWN resolved sheet
-            // (not the document's base sheet - a size-overriding slot's sheet is genuinely a different
-            // width, so reporting the base one would be wrong in the opposite direction: too wide for a
-            // narrow override, too narrow for a wide one). First retry with the base margins on this same
-            // resolved sheet (handles the common case: a margin-only override degenerate on its own but
-            // fine at the base margins, e.g. this method's own DegenerateOverride_MarginsConsumeSheet
-            // fixture); only fall further, to zero margin on the resolved sheet, if even that is still
-            // degenerate (reachable once a per-slot size override can make the sheet arbitrarily small).
-            if (bandWidth < 1.0)
-            {
-                bandWidth = sheetPx - (MarginLeft + MarginRight);
-
-                if (bandWidth < 1.0)
-                    bandWidth = sheetPx;
-            }
-
-            return MarginLeft + bandWidth;
+            // The slot's own resolved band width (including its own degenerate-override fallback) lives on
+            // PageGeometryTable.PageBandGeometry.BandWidth now - content stays anchored at the base
+            // MarginLeft in layout space (the painter's per-page deltaX translate moves it to the page's
+            // own physical left edge later), so this method's own contribution is just that anchoring.
+            return MarginLeft + PageGeometry.GetPage(PageIndexOf(y)).BandWidth;
         }
 
         /// <summary>

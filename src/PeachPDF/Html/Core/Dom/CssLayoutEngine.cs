@@ -1430,22 +1430,34 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether <paramref name="box"/> is a "main column" box for per-page horizontal reflow (issue
-        /// #143): the initial containing block (the synthetic root) or the <c>&lt;html&gt;</c>/
-        /// <c>&lt;body&gt;</c> element.
+        /// Whether <paramref name="box"/> is, on its own, a valid link in an unconstrained per-page-reflow
+        /// chain (issues #143/#200): the synthetic root, or an ordinary in-flow block-level box - not a
+        /// float, not out-of-flow, not a table/table-cell/flex/grid participant (those are Layers H/I/J's
+        /// own concern, tracked as #196-#198) - with an auto width and no <c>max-width</c> clamp. Formerly
+        /// restricted to the root/<c>&lt;html&gt;</c>/<c>&lt;body&gt;</c> element by tag name; any plain,
+        /// unconstrained block-level wrapper now qualifies too, since nothing about spanning the page area
+        /// (CSS Paged Media 3 §5) actually depends on element identity - only on the box genuinely filling
+        /// its own containing block's width with no length/percentage cap at this level.
         /// </summary>
-        private static bool IsMainColumnBox(CssBox box) =>
-            box.IsRoot
-            || string.Equals(box.HtmlTag?.Name, "html", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(box.HtmlTag?.Name, "body", StringComparison.OrdinalIgnoreCase);
+        private static bool IsOrdinaryUnconstrainedBlock(CssBox box)
+        {
+            if (box.IsRoot) return true;
+
+            if (box.DerivedStyle.ActualDisplay is not (Keywords.Block or Keywords.ListItem)) return false;
+            if (!FillsContainingBlockWidth(box)) return false;
+            if (!string.IsNullOrEmpty(box.Width) && box.Width != Keywords.Auto) return false;
+            if (CssValueParser.IsValidLength(box.MaxWidth)) return false;
+
+            return true;
+        }
 
         /// <summary>
         /// Whether <paramref name="box"/> (a candidate containing block) is an <b>unconstrained</b> main
-        /// column: it and every main-column ancestor up to the root are main-column boxes with an
-        /// auto-width, so the chain genuinely spans the page area and a child can safely adopt its own
-        /// page's content width (issue #143). If any level carries an explicit/percentage <c>width</c> the
-        /// chain no longer spans the page area, so per-page reflow is not applied there (an accepted gap -
-        /// see docs / issues #199-#201).
+        /// column: it and every ancestor up to the root are <see cref="IsOrdinaryUnconstrainedBlock"/>, so
+        /// the chain genuinely spans the page area and a child can safely adopt its own page's content
+        /// width (issue #143). If any level carries an explicit/percentage <c>width</c>, a <c>max-width</c>
+        /// clamp, or isn't an ordinary in-flow block at all, the chain no longer provably spans the page
+        /// area, so per-page reflow is not applied there.
         /// </summary>
         /// <remarks>
         /// <c>internal</c> rather than <c>private</c> so <see cref="Fragmentation.FragmentEmitter"/> can
@@ -1458,8 +1470,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             for (var b = box; b is not null; b = b.ParentBox)
             {
-                if (!IsMainColumnBox(b)) return false;
-                if (!string.IsNullOrEmpty(b.Width) && b.Width != Keywords.Auto) return false;
+                if (!IsOrdinaryUnconstrainedBlock(b)) return false;
                 if (b.IsRoot) break;
             }
 
@@ -1496,10 +1507,10 @@ namespace PeachPDF.Html.Core.Dom
         /// §5.1: "recalculating sizes and positions using its own size"). Falls back to
         /// <paramref name="containingBlock"/>'s own <see cref="CssBox.ClientRight"/> wherever per-page
         /// measure does not apply (no <see cref="HtmlContainerInt"/>, <see cref="HtmlContainerInt.UseVariableInlineMeasure"/>
-        /// is off, or the containing block isn't an unconstrained main column - issue #143's own scope,
-        /// deferred further nesting as #199-#201), so callers may invoke it unconditionally. Shared by
-        /// <see cref="GetBoxWidth"/>'s own box-width resolution and <see cref="FloatBox"/>'s displacement
-        /// scan, rather than each re-deriving the same page-area-minus-inset expression independently.
+        /// is off, or the containing block isn't an unconstrained main column), so callers may invoke it
+        /// unconditionally. Shared by <see cref="GetBoxWidth"/>'s own box-width resolution and
+        /// <see cref="FloatBox"/>'s displacement scan, rather than each re-deriving the same
+        /// page-area-minus-inset expression independently.
         /// </summary>
         private static double ContentRightOf(CssBox containingBlock, double blockTop)
         {
@@ -1511,6 +1522,26 @@ namespace PeachPDF.Html.Core.Dom
 
             return containingBlock.ClientRight;
         }
+
+        /// <summary>
+        /// <paramref name="containingBox"/>'s own content width to use as a percentage/<c>min-width</c>/
+        /// <c>max-width</c> basis at document Y <paramref name="blockTop"/> — the explicit-length/
+        /// percentage counterpart of <see cref="ContentRightOf"/> (which answers the same "what's this
+        /// containing block's own page-aware edge" question for the auto-width branch). Reduces to
+        /// <paramref name="containingBox"/>'s ordinary <c>ClientRight - ClientLeft</c> (equivalently,
+        /// its <see cref="CssBox.Size"/>.Width) — the exact same static basis every caller used before
+        /// this existed — wherever per-page measure does not apply, so it never yields a value the
+        /// pre-#199/#200/#201 basis wouldn't have. Where it does apply (an unconstrained main-column
+        /// containing block under per-page horizontal reflow), a percentage/min/max-width sibling of an
+        /// auto-width block now tracks that SAME page-aware measure instead of the single value
+        /// <see cref="CssBox.Size"/> happened to hold from an earlier layout generation (issue #199), and
+        /// — because <see cref="ContentRightOf"/> unconditionally treats the synthetic root as eligible —
+        /// a percentage width resolving against the initial containing block itself now tracks the FIRST
+        /// page's own (possibly <c>:first</c>-overridden) area rather than the document's base configured
+        /// width (issue #201).
+        /// </summary>
+        private static double PageAwareWidthBasis(CssBox containingBox, double blockTop) =>
+            ContentRightOf(containingBox, blockTop) - containingBox.ClientLeft;
 
         /// <summary>
         /// <paramref name="blockBox"/>'s own content-right edge for wrapping the line starting at document
@@ -1614,14 +1645,18 @@ namespace PeachPDF.Html.Core.Dom
                 && !(box.DerivedStyle.ActualDisplay == Keywords.Inline && box.Words.Count == 0))
             {
                 // Absolute boxes resolve a percentage width against their nearest positioned ancestor
-                // (CSS 2.1 §10.1), consistent with GetBoxHeight and the left/top positioning code. Fixed
-                // boxes resolve against the page area (CSS2.1 §10.1: the initial containing block), the
-                // same basis CommitBlockChildOffset already uses for a fixed box's left/top - previously
-                // missed here, so a fixed box's own percentage width fell through to the ordinary DOM
-                // ContainingBlock chain instead.
+                // (CSS 2.1 §10.1), consistent with GetBoxHeight and the left/top positioning code. A
+                // fixed box's containing block is the page area itself (CSS2.1 §10.1: the initial
+                // containing block) - resolved directly against ITS OWN page's content-right edge, the
+                // fixed-position analogue of CommitBlockChildOffset's own left/top basis for a fixed box,
+                // rather than the document's base PageSize.Width (issue #201). An ordinary (or absolute)
+                // box's percentage/explicit-length width resolves against its basis box's own page-aware
+                // content width via PageAwareWidthBasis (issue #199), which falls back to the exact
+                // previous static basis wherever per-page measure doesn't apply.
+                var resolvedBlockTop = blockTop ?? box.Location.Y;
                 var widthBasis = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is { } wfc
-                    ? wfc.PageSize.Width
-                    : PercentageBase(box).Size.Width;
+                    ? wfc.PageContentRightOf(resolvedBlockTop) - wfc.MarginLeft
+                    : PageAwareWidthBasis(PercentageBase(box), resolvedBlockTop);
                 width = CssValueParser.ParseLength(box.Width, widthBasis, box);
             }
 
@@ -1658,17 +1693,19 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            // Apply max-width constraint (before min-width, so min wins on conflict per CSS 2.1 §10.4)
+            // Apply max-width constraint (before min-width, so min wins on conflict per CSS 2.1 §10.4).
+            // Basis is page-aware (issue #199) via PageAwareWidthBasis, same as the explicit-width branch
+            // above.
             if (CssValueParser.IsValidLength(box.MaxWidth))
             {
-                var maxW = CssValueParser.ParseLength(box.MaxWidth, box.ContainingBlock.Size.Width, box);
+                var maxW = CssValueParser.ParseLength(box.MaxWidth, PageAwareWidthBasis(box.ContainingBlock, blockTop ?? box.Location.Y), box);
                 width = Math.Min(width, maxW);
             }
 
             // Apply min-width constraint
             if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
             {
-                var minW = CssValueParser.ParseLength(box.MinWidth, box.ContainingBlock.Size.Width, box);
+                var minW = CssValueParser.ParseLength(box.MinWidth, PageAwareWidthBasis(box.ContainingBlock, blockTop ?? box.Location.Y), box);
                 width = Math.Max(width, minW);
             }
 

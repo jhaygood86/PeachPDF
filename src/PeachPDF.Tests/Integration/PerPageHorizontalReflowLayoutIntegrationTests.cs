@@ -193,16 +193,18 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task NestedBlock_InsideAFixedWidthContainer_KeepsOneMeasureAcrossPages()
         {
-            // #199/#200's existing scope boundary: content whose containing block is NOT the main column
-            // itself (here, a fixed-width div) keeps one measure across a page straddle, exactly as before
-            // this layer - Layer D only reflows a block whose own containing-block chain is an unconstrained
-            // main column (CssLayoutEngine.ContentRightOf/IsUnconstrainedMainColumn), which a non-main-column
-            // containing block breaks regardless of what page a line inside it lands on. A fixed length
-            // (rather than a percentage) keeps the div's own width fully deterministic, independent of
-            // whatever the main-column chain above it resolves to - isolating exactly the property this test
-            // means to guard. Regression guard: this must stay the OLD (non-rewrapping) behavior even after
-            // Layer D, unlike the plain main-column case this file's other straddling-paragraph tests
-            // characterize.
+            // The remaining scope boundary after #200's fix: content whose containing block carries an
+            // explicit (non-auto) width - here, a fixed-width div - still keeps one measure across a page
+            // straddle. #200 widened IsUnconstrainedMainColumn to accept any plain, auto-width block-level
+            // wrapper (not just root/html/body) as a chain link, but an explicit length still disqualifies
+            // that link exactly as it always has: CssLayoutEngine.ContentRightOf/IsUnconstrainedMainColumn
+            // requires EVERY level up to the root to be unconstrained, so a fixed-width div still breaks
+            // the chain regardless of what page a line inside it lands on. A fixed length (rather than a
+            // percentage) keeps the div's own width fully deterministic, independent of whatever the
+            // main-column chain above it resolves to - isolating exactly the property this test means to
+            // guard. Regression guard: this must stay the non-rewrapping behavior, unlike the plain
+            // auto-width nested-div case NestedDivInsideAnotherDiv_NowReflowsPerPage_MatchingIssue200sFix
+            // (StraddlingBlockInlineExtentLayoutIntegrationTests) now characterizes.
             var words = string.Join(" ", Enumerable.Range(0, 900).Select(i => $"word{i}"));
             var container = await BuildLayoutAsync($$"""
                 <!DOCTYPE html><html><head><style>
@@ -237,6 +239,150 @@ namespace PeachPDF.Tests.Integration
             Assert.True(pageZeroWords.Max(w => w.Right) > BaseRightEdge);
             Assert.True(pageOneWords.Max(w => w.Right) > BaseRightEdge,
                 "a paragraph nested inside a non-main-column container keeps its start-page measure across fragments");
+        }
+
+        [Fact]
+        public async Task MaxWidthConstrainedWrapper_StaysUnaffected_UnlikeAPlainAutoWidthWrapper()
+        {
+            // #200's widened IsUnconstrainedMainColumn still excludes a wrapper carrying its own
+            // max-width clamp (CssLayoutEngine.IsOrdinaryUnconstrainedBlock): an auto-width div bearing a
+            // max-width can't be assumed to genuinely span the page area the way a plain unconstrained
+            // wrapper now can (see StraddlingBlockInlineExtentLayoutIntegrationTests's
+            // NestedDivInsideAnotherDiv_NowReflowsPerPage_MatchingIssue200sFix). The max-width (900pt) is
+            // deliberately wider than either page's own content box - what matters is that ANY valid
+            // max-width on the wrapper disqualifies the chain, not that it actually clamps anything here.
+            var words = string.Join(" ", Enumerable.Range(0, 900).Select(i => $"word{i}"));
+            var container = await BuildLayoutAsync($$"""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                #outer { max-width: 900pt; }
+                p { margin: 0; }
+                </style></head><body>
+                <div id='outer'><p id='flow'>{{words}}</p></div>
+                </body></html>
+                """);
+
+            var flow = FindById(container.Root!, "flow")!;
+            Assert.Equal(0, container.PageIndexOf(flow.Location.Y));
+
+            var flowWords = new List<CssRect>();
+            CollectWords(flow, flowWords);
+
+            var pageZeroWords = flowWords.Where(w => w.Width > 0 && container.PageIndexOf(w.Top) == 0).ToList();
+            var pageOneWords = flowWords.Where(w => w.Width > 0 && container.PageIndexOf(w.Top) >= 1).ToList();
+
+            Assert.NotEmpty(pageZeroWords);
+            Assert.NotEmpty(pageOneWords); // the paragraph really does span onto page 2
+
+            Assert.True(pageZeroWords.Max(w => w.Right) > BaseRightEdge);
+            Assert.True(pageOneWords.Max(w => w.Right) > BaseRightEdge,
+                "a max-width-constrained wrapper's descendant keeps its start-page measure across fragments");
+        }
+
+        [Fact]
+        public async Task PercentageWidthBlock_InsideAutoWidthMainColumn_ReflowsToEachPagesOwnMeasure()
+        {
+            // #199: a percentage width now resolves against its containing block's own PAGE-AWARE measure
+            // (CssLayoutEngine.PageAwareWidthBasis) rather than the single Size.Width value that block was
+            // last resolved to. body itself is an unconstrained main-column box, so its own width already
+            // varies per page (issue #143); this div's 50% must track that.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                div { width: 50%; }
+                </style></head><body>
+                <div id='d0'>page zero</div>
+                <div id='d1' style='page-break-before: always'>page one</div>
+                </body></html>
+                """);
+
+            var d0 = FindById(container.Root!, "d0")!;
+            var d1 = FindById(container.Root!, "d1")!;
+
+            Assert.Equal(0, container.PageIndexOf(d0.Location.Y));
+            Assert.Equal(1, container.PageIndexOf(d1.Location.Y));
+
+            // Page 0's body is 562pt wide (612 - 0 - 50), so 50% is 281; page 1's body is the base 512pt
+            // wide (612 - 50 - 50), so 50% is 256.
+            Assert.Equal(281, d0.Size.Width, 0.5);
+            Assert.Equal(256, d1.Size.Width, 0.5);
+        }
+
+        [Fact]
+        public async Task FixedPositionBox_PercentageWidth_ResolvesAgainstItsOwnPagesBand()
+        {
+            // #201: a position:fixed box's containing block is the page area itself (CSS2.1 §10.1); its
+            // percentage width now resolves against THAT page's own content-right edge
+            // (HtmlContainerInt.PageContentRightOf) instead of the document's base PageSize.Width, the
+            // fixed-position analogue of CommitBlockChildOffset's own left/top basis for a fixed box.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                #fixed { position: fixed; width: 50%; height: 20pt; top: 0; }
+                </style></head><body>
+                <div id='fixed'></div>
+                </body></html>
+                """);
+
+            var fixedBox = FindById(container.Root!, "fixed")!;
+
+            // Page 0's own band is 562pt wide (612 - 0 - 50); half of that is 281.
+            Assert.Equal(281, fixedBox.Size.Width, 0.5);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedBox_PercentageWidth_ResolvesAgainstEachPagesOwnMeasure()
+        {
+            // An absolutely-positioned box's percentage width resolves against its containing block (CSS
+            // 2.1 §10.1) - here, nothing else in the document is positioned, so that's the initial
+            // containing block itself, whose own width is now page-aware the same way an ordinary block's
+            // percentage width is (#199/#201), via the same PageAwareWidthBasis helper.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                #abs { position: absolute; width: 50%; height: 20pt; top: 0; }
+                </style></head><body>
+                <div id='abs'></div>
+                </body></html>
+                """);
+
+            var abs = FindById(container.Root!, "abs")!;
+
+            // Page 0's own ICB band is 562pt wide (612 - 0 - 50); half of that is 281.
+            Assert.Equal(281, abs.Size.Width, 0.5);
+        }
+
+        [Fact]
+        public async Task AbsolutelyPositionedBox_LeftAndRightInsets_FillsTheFirstPagesOwnIcbWidth()
+        {
+            // #201: an absolutely-positioned box with auto width and both `left`/`right` set fills the
+            // space between them in its containing block (CSS 2.1 §10.3.7) - here, the initial containing
+            // block itself (nothing else in the document is positioned), whose own width is now pinned to
+            // the FIRST page's own resolved band (css-page-3 §3, HtmlContainerInt.IcbWidthSeed) rather
+            // than the document's base configured width.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                #abs { position: absolute; left: 0; right: 0; height: 20pt; }
+                </style></head><body>
+                <div id='abs'></div>
+                </body></html>
+                """);
+
+            var abs = FindById(container.Root!, "abs")!;
+
+            // Page 0's own band (612 - 0 - 50 = 562), not the base 512 the un-fixed ICB would have used.
+            Assert.Equal(562, abs.Size.Width, 0.5);
         }
 
         [Fact]
@@ -507,9 +653,12 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ConstrainedBody_ExplicitWidth_DoesNotReflow()
         {
-            // body has an explicit width, so the main column no longer spans the page area: per-page
-            // reflow is not applied and a child resolves against body's constrained width instead of the
-            // wide page-0 measure (accepted gap - see issues #199/#201).
+            // body has an explicit (fixed-length) width, so the main column no longer spans the page
+            // area: per-page reflow is not applied and a child resolves against body's constrained width
+            // instead of the wide page-0 measure. This is correct CSS behavior, not a gap - an author's
+            // fixed-length width must not vary by page (unlike a PERCENTAGE width, which #199's fix now
+            // resolves against the containing block's own page-aware measure - see
+            // PercentageWidthBlock_InsideAutoWidthMainColumn_ReflowsToEachPagesOwnMeasure below).
             var container = await BuildLayoutAsync("""
                 <!DOCTYPE html><html><head><style>
                 @page { margin: 60pt 50pt; }

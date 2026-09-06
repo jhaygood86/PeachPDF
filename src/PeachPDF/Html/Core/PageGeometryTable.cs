@@ -12,12 +12,18 @@ namespace PeachPDF.Html.Core
     /// its resolved physical sheet width/height, all in true PDF points (the space the paint loop's
     /// clip/translate and the margin-box renderer use). <see cref="SheetWidthPt"/>/
     /// <see cref="SheetHeightPt"/> are always populated - the base/configured sheet size for a slot no
-    /// <c>@page</c> rule overrides, this slot's own resolved <c>size</c> otherwise.
+    /// <c>@page</c> rule overrides, this slot's own resolved <c>size</c> otherwise. <see cref="BandWidth"/>
+    /// is the horizontal analogue of <see cref="BandHeight"/> - this slot's own content-box width, in
+    /// layout px - so <see cref="Dom.CssLayoutEngine.GetBoxHeight"/>'s existing pin of the initial
+    /// containing block's height to <c>GetPage(0).BandHeight</c> has a width counterpart to pin to (issue
+    /// #201) without duplicating <see cref="HtmlContainerInt.PageContentRightOf"/>'s degenerate-override
+    /// fallback a second time.
     /// </summary>
     internal readonly record struct PageBandGeometry(
         int PageIndex,
         double Top,
         double BandHeight,
+        double BandWidth,
         double MarginLeftPt,
         double MarginTopPt,
         double MarginRightPt,
@@ -265,7 +271,25 @@ namespace PeachPDF.Html.Core
                 }
             }
 
-            return new PageBandGeometry(pageIndex, top, bandHeight, mL, mT, mR, mB, sheetWidthPt, sheetHeightPt);
+            // The horizontal mirror of the bandHeight computation/fallback above - kept in sync with
+            // HtmlContainerInt.PageContentRightOf's own (pre-existing) inline version of this same
+            // arithmetic, which still owns the MarginLeft-relative "content-right edge" framing that
+            // callers outside this table need; this field exists so a caller that only wants the slot's
+            // own WIDTH (not an edge relative to the base left origin) doesn't have to re-derive it.
+            // Uses local fallback margins rather than reassigning mL/mR - a degenerate left/right
+            // override still reports its OWN resolved MarginLeftPt/MarginRightPt (e.g. for margin-box
+            // painting), exactly as before this field existed; only the derived band width falls back.
+            var sheetPxWidth = sheetWidthPt * ppp;
+            var bandWidth = sheetPxWidth - (mL + mR) * ppp;
+            if (bandWidth < 1.0)
+            {
+                bandWidth = sheetPxWidth - (baseLPt + baseRPt) * ppp;
+
+                if (bandWidth < 1.0)
+                    bandWidth = sheetPxWidth;
+            }
+
+            return new PageBandGeometry(pageIndex, top, bandHeight, bandWidth, mL, mT, mR, mB, sheetWidthPt, sheetHeightPt);
         }
     }
 }
