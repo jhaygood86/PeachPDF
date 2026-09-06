@@ -125,6 +125,30 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("/ShadingType", pdfText);
         }
 
+        // ── Bug fix: stops not anchored at the domain edges (0%/100%) ─────
+        //
+        // Mirrors the linear-gradient fix: a gradient's colors must hold solid outside its first/last
+        // stop rather than the interpolation stretching to fill the shading's whole [0,1] /Domain
+        // (CSS Images 4 §3.5.5). See LinearGradientIntegrationTests for the Charts.css motivation.
+
+        [Fact]
+        public async Task TwoStopsNotAtEdges_HoldsSolidColorOutsideStopRange()
+        {
+            var pdfText = await GetPdfText(GradientHtml("background-image: radial-gradient(circle, red 20%, blue 80%);"));
+
+            Assert.Contains("/FunctionType 3", pdfText);
+            Assert.Matches(@"/Bounds\s*\[\s*0\.2\s+0\.8\s*\]", pdfText);
+        }
+
+        [Fact]
+        public async Task TwoStopsAtDefaultEdges_StillUsesThePlainType2Shortcut()
+        {
+            var pdfText = await GetPdfText(GradientHtml("background-image: radial-gradient(red, blue);"));
+
+            Assert.Contains("/FunctionType 2", pdfText);
+            Assert.DoesNotContain("/FunctionType 3", pdfText);
+        }
+
         // ── Alpha / transparency ───────────────────────────────────────────
 
         [Fact]

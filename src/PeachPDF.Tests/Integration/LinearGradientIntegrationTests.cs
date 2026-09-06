@@ -2,6 +2,7 @@ using PeachPDF;
 using PeachPDF.PdfSharpCore;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -129,6 +130,63 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Contains("/ShadingType", pdfText);
             Assert.Contains("/FunctionType", pdfText);
+        }
+
+        // ── Bug fix: stops not anchored at the domain edges (0%/100%) ─────
+        //
+        // A gradient's colors must hold solid outside its first/last stop rather than the
+        // interpolation stretching to fill the shading's whole [0,1] /Domain (CSS Images 4 §3.5.5).
+        // These pin the Charts.css gridline idiom that surfaced the bug: a hairline drawn with two
+        // stops at the *same* small offset (e.g. `color 1px, transparent 1px`) - which, before the
+        // fix, rendered as a smooth solid-to-transparent wash spanning the entire background tile
+        // instead of a crisp line, because the ≤2-stop path ignored stop positions entirely.
+
+        [Fact]
+        public async Task TwoStopsAtSameNonEdgePosition_ProducesHardEdgeAtThatPosition()
+        {
+            // The Charts.css gridline shape itself: both stops at 5%, not 0%/100%.
+            var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(black 5%, transparent 5%);"));
+
+            Assert.Contains("/FunctionType 3", pdfText);
+            Assert.Matches(@"/Bounds\s*\[\s*0\.05\s+0\.05\s*\]", pdfText);
+        }
+
+        [Fact]
+        public async Task TwoStopsNotAtEdges_HoldsSolidColorOutsideStopRange()
+        {
+            // red 20%, blue 80% - solid red from 0-20% and solid blue from 80-100%, per CSS Images 4.
+            // Before the fix this collapsed to a single Type 2 function spanning the whole [0,1]
+            // domain, so red was already fading toward blue starting at 0% instead of 20%.
+            var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(to right, red 20%, blue 80%);"));
+
+            Assert.Contains("/FunctionType 3", pdfText);
+            Assert.Matches(@"/Bounds\s*\[\s*0\.2\s+0\.8\s*\]", pdfText);
+        }
+
+        [Fact]
+        public async Task TwoStopsAtDefaultEdges_StillUsesThePlainType2Shortcut()
+        {
+            // Regression guard for the fast path: a plain 2-color gradient with no explicit stop
+            // positions (implicitly 0%/100%) must keep using the cheap single Type 2 function rather
+            // than the fix growing every gradient into a stitching function.
+            var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(red, blue);"));
+
+            Assert.Contains("/FunctionType 2", pdfText);
+            Assert.DoesNotContain("/FunctionType 3", pdfText);
+        }
+
+        [Fact]
+        public async Task TwoStopsNotAtEdgesWithAlpha_PadsBothColorAndAlphaStitchingFunctions()
+        {
+            // Combines the position bug with a soft mask: BuildStitchingFunction (color) and
+            // BuildAlphaStitchingFunction (alpha) are separate code paths that both needed the fix.
+            var pdfText = await GetPdfText(GradientHtml(
+                "background-image: linear-gradient(to right, rgba(255,0,0,1) 20%, rgba(0,0,255,0.2) 80%);"));
+
+            Assert.Contains("/SMask", pdfText);
+            var boundsMatches = Regex.Matches(pdfText, @"/Bounds\s*\[\s*0\.2\s+0\.8\s*\]");
+            Assert.True(boundsMatches.Count >= 2,
+                $"expected both the color and alpha stitching functions to pad to [0.2 0.8], found {boundsMatches.Count} occurrence(s)");
         }
     }
 }
