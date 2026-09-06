@@ -66,9 +66,21 @@ namespace PeachPDF.Html.Core.Dom
         {
             var htmlContainer = columnsBox.HtmlContainer!;
 
+            // A continuation starts at the fragmentainer it resumed into, not at the container's own top,
+            // which is back on the page this one is continuing from. Computed up front (rather than where
+            // it's otherwise first needed, below) so the container's own width - like any other per-page
+            // horizontal reflow (issue #143) - can be resolved against THIS invocation's own page instead
+            // of always the container's start page: PerformLayout re-enters this method fresh for every
+            // page the container spans (no cross-page state carried other than the fragment tree itself),
+            // so each invocation's own boxTop is exactly that invocation's own page (issue #198).
+            var boxTop = resume is not null && htmlContainer.CurrentFragmentainer is { } resumed
+                ? resumed.ResumeContentTop
+                : columnsBox.ClientTop;
+
             // Full width the container spans (all columns + gaps together) — resolved exactly like any
-            // other block box's width.
-            var containerWidth = await CssLayoutEngine.GetBoxWidth(g, columnsBox);
+            // other block box's width, using this invocation's own page (boxTop) rather than the box's
+            // own (possibly much earlier) Location.Y.
+            var containerWidth = await CssLayoutEngine.GetBoxWidth(g, columnsBox, boxTop);
             columnsBox.ActualRight = columnsBox.Location.X + containerWidth + columnsBox.ActualBoxSizeIncludedWidth;
 
             // A position: running() child (css-gcpm-3) never becomes a column child - it is excluded from
@@ -153,12 +165,6 @@ namespace PeachPDF.Html.Core.Dom
             // happens to be the whole container width, which gets its pagination/break-token/resume
             // handling for free rather than needing a second, separately-tested code path.
             var segments = BuildSegments(children);
-
-            // A continuation starts at the fragmentainer it resumed into, not at the container's own top,
-            // which is back on the page this one is continuing from.
-            var boxTop = resume is not null && htmlContainer.CurrentFragmentainer is { } resumed
-                ? resumed.ResumeContentTop
-                : columnsBox.ClientTop;
 
             var columnLeft = columnsBox.ClientLeft;
             var pitch = columnWidth + gap;

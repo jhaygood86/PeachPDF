@@ -386,6 +386,52 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task MultiColumnContainer_SpanningPagesWithDifferentMargins_EachPageOwnColumnWidth()
+        {
+            // #198: CssLayoutEngineColumns.Layout now resolves the container's own width fresh on every
+            // per-page continuation (boxTop - THIS invocation's own top, since PerformLayout re-enters
+            // this method fresh for every page the container spans) rather than always the box's own
+            // (start-page) Location.Y, so a container spanning a page boundary lays out each page's own
+            // columns at that page's own width/pitch instead of reusing the start page's.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                #mc { columns: 2; column-gap: 0; column-fill: auto; }
+                .item { height: 400pt; break-inside: avoid; margin: 0; }
+                </style></head><body>
+                <div id='mc'>
+                    <div class='item' id='i1'></div>
+                    <div class='item' id='i2'></div>
+                    <div class='item' id='i3'></div>
+                    <div class='item' id='i4'></div>
+                </div>
+                </body></html>
+                """);
+
+            var i1 = FindById(container.Root!, "i1")!;
+            var i2 = FindById(container.Root!, "i2")!;
+            var i3 = FindById(container.Root!, "i3")!;
+            var i4 = FindById(container.Root!, "i4")!;
+
+            // Each page's own 2 columns (672pt tall band, 400pt items) hold exactly one item per column
+            // before the container continues onto the next page's fresh columns.
+            Assert.Equal(0, container.PageIndexOf(i1.Location.Y));
+            Assert.Equal(0, container.PageIndexOf(i2.Location.Y));
+            Assert.Equal(1, container.PageIndexOf(i3.Location.Y));
+            Assert.Equal(1, container.PageIndexOf(i4.Location.Y));
+
+            var page0Pitch = i2.Location.X - i1.Location.X;
+            var page1Pitch = i4.Location.X - i3.Location.X;
+
+            // Page 0's container is 562pt wide (612 - 0 - 50), so each of its 2 (gap:0) columns is 281pt;
+            // page 1's is the base 512pt wide (612 - 50 - 50), so each column is 256pt.
+            Assert.Equal(281, page0Pitch, 0.5);
+            Assert.Equal(256, page1Pitch, 0.5);
+        }
+
+        [Fact]
         public async Task TableCell_TextWrapWidth_UnaffectedByPerPageMeasureOverride()
         {
             // Layer D's per-line rewrap must not reach into a table cell: a cell's own width comes from

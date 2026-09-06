@@ -1,4 +1,4 @@
-# Per-page horizontal reflow is scoped to ordinary block content, not table/flex/multicol containers
+# Per-page horizontal reflow is scoped to ordinary block content, not table/flex containers
 
 **Per-page horizontal reflow (issue #143) is scoped to ordinary in-flow block-level content.** The
 width seam (`CssLayoutEngine.GetBoxWidth`/`LineContentRightOf` → `HtmlContainerInt.PageContentRightOf`,
@@ -13,10 +13,10 @@ claiming all of it, and a float or an absolutely/fixed-positioned box is sized a
 containing block's edge as if it filled the whole of it. Each remaining case is a genuine CSS Paged Media
 3 §5 ("the edges of the page area act as a containing block for the layout that occurs between page
 breaks") deviation, tracked as its own issue: flex ([#196](https://github.com/jhaygood86/PeachPDF/issues/196)),
-tables ([#197](https://github.com/jhaygood86/PeachPDF/issues/197)), multicol
-([#198](https://github.com/jhaygood86/PeachPDF/issues/198)) — the horizontal analogue of the #166
+tables ([#197](https://github.com/jhaygood86/PeachPDF/issues/197)) — the horizontal analogue of the #166
 engine-independence family — each container resolving its own width once against a single stored
-measure regardless of which page it starts on; and named-page (`page: <name>`) L/R and size overrides,
+measure regardless of which page it starts on (multicol closed the same gap - see "No longer a gap"
+below); and named-page (`page: <name>`) L/R and size overrides,
 whose width→height→page-name feedback the bounded reflow loop does not *formally* drive to convergence
 across a run that spans several physical pages under one active name
 ([#202](https://github.com/jhaygood86/PeachPDF/issues/202), narrowed — see below).
@@ -37,8 +37,8 @@ delta-from-the-single-global-value shape (Layer K), using the exact same eligibi
 substituting this slot's own content-right edge) the box's single global width was originally resolved
 with — so a box's own frame and its already-reflowing content always agree on whether they are eligible
 at all. This is the shared fragment-tree contract every later layer that needs a differently-sized
-fragment (tables/flex+grid/multicol) depends on existing first; those remain open under their own tracked
-issues (#196-#198).
+fragment (tables/flex+grid/multicol) depends on existing first; tables/flex remain open under their own
+tracked issues (#196/#197) — multicol's own container-width gap closed via #198, see below.
 
 **Also no longer a gap**: `HtmlContainerInt.UseVariableInlineMeasure` (renamed from
 `UseVariablePageWidth`) now fires on a per-page `size` override with no margin override at all, not just
@@ -80,3 +80,16 @@ width) that bottoms out at the true ICB resolves against the FIRST page's own (p
 `:first`-overridden) area, not the document's base configured width, matching what already applied to
 percentage heights. An explicit fixed-length `width` (unlike a percentage) still never varies by page —
 correctly, since an author's fixed measurement shouldn't.
+
+**Also no longer a gap** (#198): a multi-column container's own width now reflows across the pages it
+spans. `CssLayoutEngineColumns.Layout` resolves `containerWidth` via `CssLayoutEngine.GetBoxWidth` exactly
+as before, but now passes it the invocation's own `boxTop` (the fragmentainer this particular pass is
+filling — already computed, just further down, for its own per-continuation `startSlot` lookup) instead of
+leaving it default to `columnsBox.Location.Y`, the box's fixed start-page position that never changes
+across the several fresh `Layout` invocations one continuing container makes. Since a resumed continuation
+already re-enters this method fully (there is no early-return the way flex's resume path takes — see
+#196), each page's own invocation now derives its own `columnCount`/`columnWidth`/`pitch` from that page's
+own width, rather than every continuation reusing the start page's. Tables (#197) and flex (#196) remain
+open — a table's `GetAvailableTableWidth` bypasses `GetBoxWidth` entirely, and flex's resume path skips
+its own width-computing code path on every continuation, so neither has a comparable single seam to
+correct.
