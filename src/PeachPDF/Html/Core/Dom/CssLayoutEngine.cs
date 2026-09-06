@@ -1540,7 +1540,14 @@ namespace PeachPDF.Html.Core.Dom
         /// page's own (possibly <c>:first</c>-overridden) area rather than the document's base configured
         /// width (issue #201).
         /// </summary>
-        private static double PageAwareWidthBasis(CssBox containingBox, double blockTop) =>
+        /// <remarks>
+        /// <c>internal</c> rather than <c>private</c> so <see cref="CssLayoutEngineTable"/> can resolve
+        /// its own table's width against the same page-aware basis (issue #197) — its own
+        /// <c>GetAvailableTableWidth</c> bypasses <see cref="GetBoxWidth"/> entirely (a table's width has
+        /// its own column-width-driven resolution), so it needs this basis directly rather than through
+        /// that method.
+        /// </remarks>
+        internal static double PageAwareWidthBasis(CssBox containingBox, double blockTop) =>
             ContentRightOf(containingBox, blockTop) - containingBox.ClientLeft;
 
         /// <summary>

@@ -5671,7 +5671,22 @@ namespace PeachPDF.Html.Core.Dom
             // (always-inline) axis rather than a flex container's main axis (which flex-direction can
             // point at either logical axis).
             var inlineSizeCss = _isVertical ? _tableBox.Height : _tableBox.Width;
-            var containingBlockInlineSize = _isVertical ? _tableBox.ContainingBlock.Size.Height : _tableBox.ContainingBlock.Size.Width;
+            // The vertical (physical-Y) axis has no relationship to per-page horizontal reflow - a
+            // vertical table's own pagination is deferred whole (#762), same as GetAvailableTableWidth's
+            // own remarks above. The horizontal axis resolves through the same page-aware basis an
+            // ordinary block's percentage/auto width already does (CssLayoutEngine.PageAwareWidthBasis),
+            // keyed to the table's own starting position (_tableBox.ClientTop) rather than the
+            // containing block's single, page-0-cached Size.Width (issue #197) - deliberately NOT
+            // re-keyed per continuation the way CssLayoutEngineColumns re-derives containerWidth per
+            // page (#198): a table's columns are ONE shared grid spanning every row, unlike multicol's
+            // genuinely independent per-page column runs, and _tableBox.ClientTop already names the
+            // table's fixed starting page on every invocation, resumed or not (see ResumedRowTop's own
+            // remarks on why the table's own Location never moves once a continuation begins) - so
+            // resolving against it here already gives one consistent width for the table's whole
+            // lifetime, correctly reflecting whichever page the table itself starts on.
+            var containingBlockInlineSize = _isVertical
+                ? _tableBox.ContainingBlock.Size.Height
+                : CssLayoutEngine.PageAwareWidthBasis(_tableBox.ContainingBlock, _tableBox.ClientTop);
 
             CssLength tableBoxLength = new(inlineSizeCss);
 
