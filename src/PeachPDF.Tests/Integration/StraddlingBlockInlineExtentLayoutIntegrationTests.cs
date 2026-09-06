@@ -124,12 +124,13 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task NestedDivInsideAnotherDiv_StaysUnaffected_MatchingIssue143sOwnScope()
+        public async Task NestedDivInsideAnotherDiv_NowReflowsPerPage_MatchingIssue200sFix()
         {
-            // IsUnconstrainedMainColumn requires every level up to root to be root/html/body - a div whose
-            // containing block is another (non-main-column) div is out of scope for per-page text rewrap
-            // too (LineContentRightOf falls back to ClientRight the same way), so its own frame must agree
-            // and stay pinned rather than opening a new gap between the two.
+            // IsUnconstrainedMainColumn no longer requires every level up to root to be root/html/body
+            // (issue #200) - a plain, unconstrained (auto-width, no max-width) div whose containing block
+            // is another such div now genuinely spans the page area, so both its own frame (asserted here)
+            // and the text inside it (LineContentRightOf) reflow to each page's own measure, exactly as a
+            // main-column box already did.
             var container = await BuildLayoutAsync("""
                 <!DOCTYPE html><html><head><style>
                 @page { margin: 60pt 50pt; }
@@ -151,7 +152,10 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(page0Fragment);
             Assert.NotNull(page1Fragment);
 
-            Assert.Equal(page0Fragment!.WholeBoxRect.Width, page1Fragment!.WholeBoxRect.Width, 0.5);
+            // Page 0 has no left margin (:first) so it's wider than every later page's ordinary 50pt/50pt
+            // margins - the two must now differ rather than share one measure.
+            Assert.Equal(562, page0Fragment!.WholeBoxRect.Width, 0.5);
+            Assert.Equal(512, page1Fragment!.WholeBoxRect.Width, 0.5);
         }
 
         [Fact]
