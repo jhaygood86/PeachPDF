@@ -1,4 +1,4 @@
-# Per-page horizontal reflow is scoped to ordinary block content, not table/flex containers
+# Per-page horizontal reflow is scoped to ordinary block content, not flex containers
 
 **Per-page horizontal reflow (issue #143) is scoped to ordinary in-flow block-level content.** The
 width seam (`CssLayoutEngine.GetBoxWidth`/`LineContentRightOf` → `HtmlContainerInt.PageContentRightOf`,
@@ -12,11 +12,10 @@ claiming all of it, and a float or an absolutely/fixed-positioned box is sized a
 — each keeps its one already-correct, page-independent measure unchanged rather than being fed its
 containing block's edge as if it filled the whole of it. Each remaining case is a genuine CSS Paged Media
 3 §5 ("the edges of the page area act as a containing block for the layout that occurs between page
-breaks") deviation, tracked as its own issue: flex ([#196](https://github.com/jhaygood86/PeachPDF/issues/196)),
-tables ([#197](https://github.com/jhaygood86/PeachPDF/issues/197)) — the horizontal analogue of the #166
-engine-independence family — each container resolving its own width once against a single stored
-measure regardless of which page it starts on (multicol closed the same gap - see "No longer a gap"
-below); and named-page (`page: <name>`) L/R and size overrides,
+breaks") deviation, tracked as its own issue: flex ([#196](https://github.com/jhaygood86/PeachPDF/issues/196))
+— the horizontal analogue of the #166 engine-independence family, its own resume path skipping width
+computation entirely on every continuation (tables and multicol closed the same family of gap - see
+"No longer a gap" below); and named-page (`page: <name>`) L/R and size overrides,
 whose width→height→page-name feedback the bounded reflow loop does not *formally* drive to convergence
 across a run that spans several physical pages under one active name
 ([#202](https://github.com/jhaygood86/PeachPDF/issues/202), narrowed — see below).
@@ -37,8 +36,8 @@ delta-from-the-single-global-value shape (Layer K), using the exact same eligibi
 substituting this slot's own content-right edge) the box's single global width was originally resolved
 with — so a box's own frame and its already-reflowing content always agree on whether they are eligible
 at all. This is the shared fragment-tree contract every later layer that needs a differently-sized
-fragment (tables/flex+grid/multicol) depends on existing first; tables/flex remain open under their own
-tracked issues (#196/#197) — multicol's own container-width gap closed via #198, see below.
+fragment (tables/flex+grid/multicol) depends on existing first; flex remains open under its own tracked
+issue (#196) — tables' and multicol's own container-width gaps closed via #197/#198, see below.
 
 **Also no longer a gap**: `HtmlContainerInt.UseVariableInlineMeasure` (renamed from
 `UseVariablePageWidth`) now fires on a per-page `size` override with no margin override at all, not just
@@ -89,7 +88,20 @@ leaving it default to `columnsBox.Location.Y`, the box's fixed start-page positi
 across the several fresh `Layout` invocations one continuing container makes. Since a resumed continuation
 already re-enters this method fully (there is no early-return the way flex's resume path takes — see
 #196), each page's own invocation now derives its own `columnCount`/`columnWidth`/`pitch` from that page's
-own width, rather than every continuation reusing the start page's. Tables (#197) and flex (#196) remain
-open — a table's `GetAvailableTableWidth` bypasses `GetBoxWidth` entirely, and flex's resume path skips
-its own width-computing code path on every continuation, so neither has a comparable single seam to
-correct.
+own width, rather than every continuation reusing the start page's. Flex (#196) remains open — its resume
+path skips its own width-computing code path entirely on every continuation, so it has no comparable
+single seam to correct.
+
+**Also no longer a gap** (#197): a table's own width now resolves against whichever page the table
+itself starts on, rather than its containing block's single, page-0-cached `Size.Width`.
+`CssLayoutEngineTable.GetAvailableTableWidth` resolves the horizontal (non-`_isVertical`) case through
+`CssLayoutEngine.PageAwareWidthBasis`, keyed to `_tableBox.ClientTop` — the table's own starting position,
+which (unlike multicol's independent per-page column runs) stays fixed across the table's whole lifetime
+even once it starts continuing across further pages (`ResumedRowTop`'s own remarks explain why a
+continuation's rows are placed relative to that same fixed position). This is deliberately **not** the
+same shape as #198's fix: a table's columns are one shared grid spanning every row, so - unlike
+multicol - varying the resolved width *per continuation* would misalign a row's own cells against a
+sibling row's on a different page of the same table. The fix is narrower and structurally simpler than
+#198's: resolve once, correctly, against wherever the table begins, and never re-resolve for the rest of
+its lifetime — exactly how an ordinary (non-text) block's own width already worked before and after
+#199-#201.

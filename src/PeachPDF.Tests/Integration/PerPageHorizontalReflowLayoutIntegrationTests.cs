@@ -482,6 +482,50 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Table_StartingOnALaterDifferentlyMarginedPage_UsesThatPagesOwnMeasure()
+        {
+            // #197: a table's own width/column-widths are ONE value for the whole table (its columns
+            // are a single shared grid across every row, unlike multicol's genuinely independent
+            // per-page column runs - #198), so the fix here is not "vary per page the table spans" but
+            // "resolve against whichever page the table itself STARTS on" - which the old
+            // `_tableBox.ContainingBlock.Size.Width` got wrong whenever that differs from the page the
+            // table's containing block (body, which always itself starts on page 0) was measured
+            // against. Forcing the table onto page 1 (page-break-before) while body/page 0 uses the
+            // wider :first override isolates exactly that: body.Size.Width is fixed at page 0's 562pt,
+            // but the table itself lives on page 1, whose own measure is the base 512pt.
+            // CssLayoutEngineTable.GetAvailableTableWidth now resolves through
+            // CssLayoutEngine.PageAwareWidthBasis at the table's own starting page (InlineSizeBlockTop)
+            // instead of reading body's stale, page-0-cached Size.Width.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin-left: 0; }
+                body { margin: 0; }
+                p { margin: 0; }
+                table { table-layout: fixed; width: 100%; border-spacing: 0; border-collapse: collapse; page-break-before: always; }
+                td { padding: 0; margin: 0; }
+                </style></head><body>
+                <p>page zero filler</p>
+                <table>
+                    <tr><td id='c1'></td><td id='c2'></td></tr>
+                </table>
+                </body></html>
+                """);
+
+            var c1 = FindById(container.Root!, "c1")!;
+            var c2 = FindById(container.Root!, "c2")!;
+
+            Assert.Equal(1, container.PageIndexOf(c1.Location.Y)); // forced onto page 1 by page-break-before
+
+            var columnWidth = c2.Location.X - c1.Location.X;
+
+            // Page 1 is the base 512pt wide (612 - 50 - 50), so each of the table's 2 evenly-split
+            // columns is 256pt - NOT page 0's wider 281pt (562 / 2), which body's own cached Size.Width
+            // would incorrectly report for a table that doesn't actually live on page 0.
+            Assert.Equal(256, columnWidth, 0.5);
+        }
+
+        [Fact]
         public async Task BodyMargin_RightInsetRespected_ContentDoesNotOverrunBodyMargin()
         {
             // The containing block (body) carries a non-zero margin, so a reflowed main-column paragraph
