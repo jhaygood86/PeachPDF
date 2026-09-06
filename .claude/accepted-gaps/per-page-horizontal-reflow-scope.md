@@ -51,12 +51,19 @@ page's own content from re-wrapping at all — a box that opens a named page is 
 geometry — is fixed: `CssBox._measureResolvedAgainst` records the measure actually used at resolve time,
 and `InlineSizeCameFromAnotherPagesMeasure` compares a fresh lookup against *that* (not a second fresh
 lookup, which agreed with the first because both ran after the registration that invalidated the slot) to
-catch and correct it within the same pass. What #202 still names and this does not close: a named-page
-run that spans *several physical pages* under one continuously-active name has a genuine
-width→height→page-name fixpoint (the content width affects box heights, which affects which page-number
-boundary falls where, which can affect which name is active at that boundary) that the bounded reflow
-loop does not *formally* prove converges — only empirically observed, on this repo's own fixtures, to
-settle on the loop's first iteration once the two fixes above are in place.
+catch and correct it within the same pass. `PageAssignmentSignature`'s own fixpoint comparison closes a
+further blind spot: it now pairs each box's page index with that page's own active name
+(`PageGeometryTable.PageBandGeometry.ActiveName`), so two passes that agree on numeric page index but
+disagree on which named-page rule is active there (because a width change shifted a name-transition
+boundary onto a different physical page) are correctly told apart rather than wrongly accepted as
+converged. What #202 still names and none of this closes: a named-page run that spans *several physical
+pages* under one continuously-active name has a genuine width→height→page-name fixpoint (the content
+width affects box heights, which affects which page-number boundary falls where, which can affect which
+name is active at that boundary) that the bounded reflow loop does not *formally* prove converges — only
+empirically observed, on this repo's own fixtures, to settle on the loop's first iteration once all three
+fixes above are in place. See
+[named-page-run-convergence-loop-is-bounded-not-guaranteed.md](named-page-run-convergence-loop-is-bounded-not-guaranteed.md)
+for the accepted, narrowed remainder.
 
 **Also no longer a gap** (#199, #200, #201): three related restrictions on which boxes participate in
 per-page reflow at all have closed together, via one generalized eligibility rule.

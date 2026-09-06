@@ -2183,24 +2183,31 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// A snapshot of every box's pagination-slot assignment (<see cref="PageIndexOf"/> of its
-        /// laid-out top) in a fixed tree-walk order, used by <see cref="PerformLayout"/>'s per-page
-        /// horizontal-reflow loop to detect a fixpoint: once a re-pass leaves every box on the same page
-        /// it was on before, the per-page widths it resolved against are self-consistent and the loop
-        /// stops. Rebuilt from scratch each call — the loop runs at most a few iterations, and only for
-        /// the rare document that carries a per-page left/right <c>@page</c> margin override.
+        /// A snapshot of every box's pagination-slot assignment — <see cref="PageIndexOf"/> of its
+        /// laid-out top, paired with that slot's own active named page (<see cref="PageBandGeometry.ActiveName"/>)
+        /// — in a fixed tree-walk order, used by <see cref="PerformLayout"/>'s per-page horizontal-reflow
+        /// loop to detect a fixpoint: once a re-pass leaves every box on the same page (AND that page
+        /// still carries the same active name) it was on before, the per-page widths it resolved against
+        /// are self-consistent and the loop stops. The name is paired with the index, not just checked
+        /// alongside it, so two passes that agree on numeric page index but disagree on which named-page
+        /// rule is active there (issue #202: a named run whose own width→height feedback shifts which
+        /// physical page a later name-transition boundary falls on) are correctly told apart rather than
+        /// wrongly accepted as converged. Rebuilt from scratch each call — the loop runs at most a few
+        /// iterations, and only for the rare document that carries a per-page left/right <c>@page</c>
+        /// margin override.
         /// </summary>
-        private List<int> PageAssignmentSignature()
+        private List<(int PageIndex, string? ActiveName)> PageAssignmentSignature()
         {
-            List<int> signature = [];
+            List<(int, string?)> signature = [];
             if (Root is not null)
                 CollectPageAssignments(Root, signature);
             return signature;
         }
 
-        private void CollectPageAssignments(CssBox box, List<int> signature)
+        private void CollectPageAssignments(CssBox box, List<(int PageIndex, string? ActiveName)> signature)
         {
-            signature.Add(PageIndexOf(box.Location.Y));
+            var pageIndex = PageIndexOf(box.Location.Y);
+            signature.Add((pageIndex, PageGeometry.GetPage(pageIndex).ActiveName));
             foreach (var childBox in box.Boxes)
                 CollectPageAssignments(childBox, signature);
         }

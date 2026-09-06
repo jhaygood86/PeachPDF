@@ -840,6 +840,65 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(BaseRightEdge, container.PageContentRightOf(p.Location.Y), 0.5);
         }
 
+        [Fact]
+        public async Task NamedPageRun_SpanningThreePhysicalPages_EachPageOwnMeasureConverges()
+        {
+            // #202's remaining narrowed scope: a named page whose L/R margin override spans SEVERAL
+            // physical pages under one continuously-active name. Every physical page the run crosses
+            // must get that name's own measure - not silently fall back to a stale one - and the bounded
+            // reflow loop's own fixpoint detection (HtmlContainerInt.PageAssignmentSignature, now pairing
+            // each box's numeric page index with that page's own active name) must not mistake two
+            // different pages sharing the same name for "already converged" before anything has actually
+            // settled.
+            var words = string.Join(" ", Enumerable.Range(0, 3000).Select(i => $"word{i}"));
+            var container = await BuildLayoutAsync($$"""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page wide { margin: 60pt 10pt; }
+                body { margin: 0; }
+                p { margin: 0; }
+                </style></head><body>
+                <p id='run' style='page: wide'>{{words}}</p>
+                </body></html>
+                """);
+
+            var run = FindById(container.Root!, "run")!;
+            var runWords = new List<CssRect>();
+            CollectWords(run, runWords);
+
+            var pagesSpanned = runWords.Where(w => w.Width > 0)
+                .Select(w => container.PageIndexOf(w.Top)).Distinct().OrderBy(p => p).ToList();
+
+            Assert.True(pagesSpanned.Count >= 3,
+                $"expected the named-page run to span at least 3 physical pages, got {pagesSpanned.Count}");
+
+            foreach (var pageIndex in pagesSpanned)
+            {
+                // Every physical page the run crosses is still attributed to the SAME active name -
+                // the name never actually changes mid-run, only which physical page is showing it.
+                Assert.Equal("wide", container.PageGeometry.GetPage(pageIndex).ActiveName);
+
+                // A wrapped line's last word naturally lands a little short of the measure it wrapped
+                // against (whatever slack that word left), so the page's own edge is a ceiling, not an
+                // exact target - the same relaxed shape this file's own straddling-paragraph tests use
+                // elsewhere. What matters is that it never OVERRUNS this page's own (wide) measure, and
+                // that it lands meaningfully past the base measure rather than the stale one.
+                var pageContentRight = container.PageContentRightOf(container.PageTopOf(pageIndex));
+                var pageWords = runWords.Where(w => w.Width > 0 && container.PageIndexOf(w.Top) == pageIndex).ToList();
+                var wrapRight = pageWords.Max(w => w.Right);
+
+                Assert.True(wrapRight <= pageContentRight + 0.5,
+                    $"page {pageIndex}: wrapped right edge {wrapRight} overran its own measure {pageContentRight}");
+                Assert.True(wrapRight > BaseRightEdge,
+                    $"page {pageIndex}: wrapped right edge {wrapRight} did not reflect the wide named page's measure");
+            }
+
+            // The empirically-observed bound this repo's own fixtures settle on (issue #202's remaining,
+            // accepted-but-monitored scope, mirrored from WidthFromTheSpaceNotTheLocationTests) - a
+            // genuine further re-pass this fixture needed would show up here as a larger count.
+            Assert.Equal(3, container.LayoutGeneration);
+        }
+
         [Theory]
         [InlineData(1.0)]
         [InlineData(1.5)]
