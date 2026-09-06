@@ -17,7 +17,9 @@ namespace PeachPDF.Html.Core
     /// layout px - so <see cref="Dom.CssLayoutEngine.GetBoxHeight"/>'s existing pin of the initial
     /// containing block's height to <c>GetPage(0).BandHeight</c> has a width counterpart to pin to (issue
     /// #201) without duplicating <see cref="HtmlContainerInt.PageContentRightOf"/>'s degenerate-override
-    /// fallback a second time.
+    /// fallback a second time. <see cref="ActiveName"/> is the named page active at this slot's own
+    /// start (<c>null</c> for the un-named default) - exposed so <see cref="HtmlContainerInt.PageAssignmentSignature"/>
+    /// can tell two slots with the same numeric index but different active geometry apart (issue #202).
     /// </summary>
     internal readonly record struct PageBandGeometry(
         int PageIndex,
@@ -29,7 +31,8 @@ namespace PeachPDF.Html.Core
         double MarginRightPt,
         double MarginBottomPt,
         double SheetWidthPt,
-        double SheetHeightPt);
+        double SheetHeightPt,
+        string? ActiveName);
 
     /// <summary>
     /// The per-page geometry table behind CSS Paged Media's page-box model: when per-page
@@ -41,10 +44,18 @@ namespace PeachPDF.Html.Core
     /// name always forces a break onto a fresh page (<c>CssBox.PerformLayoutImp</c>), with the
     /// registration snapped to that page's slot top (<c>CssBox.NamedPageRegistrationY</c>) and made
     /// BEFORE the named box's children lay out, that name is fully determined by content laid out
-    /// before the slot, so no fixpoint relayout is ever needed. A
+    /// before the slot for a SINGLE pass. A
     /// named-page registration only invalidates cached slots at/after its own Y
     /// (<see cref="InvalidateFrom"/>); boxes that consumed those entries are inside those slots and
-    /// lay out at/after the registering box.
+    /// lay out at/after the registering box. What this does NOT rule out on its own: a named page whose
+    /// L/R margin or <c>size</c> override spans several physical pages has a genuine
+    /// width→height→page-name feedback (content width affects box height, which affects which page a
+    /// later boundary falls on, which can affect which name is active there) that
+    /// <see cref="HtmlContainerInt.PerformLayout"/>'s own bounded reflow loop, not this table, is
+    /// responsible for driving to a fixpoint across MULTIPLE passes - see
+    /// <see cref="HtmlContainerInt.PageAssignmentSignature"/> and
+    /// <c>.claude/accepted-gaps/named-page-run-convergence-loop-is-bounded-not-guaranteed.md</c> (issue
+    /// #202).
     /// All values scale per the issue-#113 discipline: margins resolve in true points, then scale by
     /// <c>PixelsPerPoint</c> exactly once into layout space.
     /// </summary>
@@ -289,7 +300,7 @@ namespace PeachPDF.Html.Core
                     bandWidth = sheetPxWidth;
             }
 
-            return new PageBandGeometry(pageIndex, top, bandHeight, bandWidth, mL, mT, mR, mB, sheetWidthPt, sheetHeightPt);
+            return new PageBandGeometry(pageIndex, top, bandHeight, bandWidth, mL, mT, mR, mB, sheetWidthPt, sheetHeightPt, activeName);
         }
     }
 }
