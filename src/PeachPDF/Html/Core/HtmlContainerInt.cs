@@ -2175,6 +2175,17 @@ namespace PeachPDF.Html.Core
             if (includeStackingHoistCandidates && !isRoot && DomUtils.NeedsStackingHoist(box))
                 hasStackingHoistCandidates = true;
 
+            // A repeating <thead>/<tfoot>'s proxy stands in for its source row group, detached from the
+            // live tree by CssLayoutEngineTable.RemoveHeaderFooterFromTree - so a float, an out-of-flow
+            // box, or a stacking-context box that exists only inside a repeated header/footer is invisible
+            // to the ordinary Boxes walk below. FragmentEmitter.ChildrenOf unwraps the same proxy the same
+            // way for fragment-building; this is that pattern's paint/layout-flags counterpart.
+            if (box is CssProxyBox proxy)
+            {
+                ComputeFlowFlags(proxy.SourceBox, false, includeStackingHoistCandidates,
+                    ref hasFloated, ref hasOutOfFlow, ref hasStackingHoistCandidates);
+            }
+
             foreach (var childBox in box.Boxes)
             {
                 if (hasFloated && hasOutOfFlow && (!includeStackingHoistCandidates || hasStackingHoistCandidates))

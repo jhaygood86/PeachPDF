@@ -108,5 +108,68 @@ namespace PeachPDF.Tests.Integration
             string.Join("|", LayoutHarness.Descendants(root).Select(b =>
                 $"{b.Location.X:F3},{b.Location.Y:F3},{b.ActualRight:F3},{b.ActualBottom:F3}," +
                 string.Join(";", b.Words.Select(w => $"{w.Left:F3},{w.Top:F3}"))));
+
+        /// <summary>
+        /// A stacking-context box (<c>position:relative;z-index:0</c>) reached only through a repeated
+        /// <c>&lt;thead&gt;</c>'s detached source subtree, with no other stacking-context box anywhere
+        /// else in the document. <c>HtmlContainerInt.HasStackingHoistCandidates</c> is a single
+        /// document-wide flag computed once by walking <c>CssBox.Boxes</c> from the root - a walk that
+        /// cannot see into a <c>CssProxyBox</c>'s <c>SourceBox</c>, since the repeating row group is
+        /// detached from the live tree (<c>CssLayoutEngineTable.RemoveHeaderFooterFromTree</c>) and is
+        /// reachable only through the proxy standing in for it on each page. When this box is the
+        /// <i>only</i> stacking-hoist candidate in the whole document, the flag comes out false, and
+        /// <c>StackingOrder.Flatten</c>'s hoisting search - gated on that same flag - never runs at all:
+        /// the box's own plain-wrapper ancestor already skips it on the assumption some enclosing
+        /// search will paint it instead, so it is not merely mis-clipped or mis-ordered, it is never
+        /// painted anywhere.
+        /// </summary>
+        private static string StackingContextInRepeatedHeaderTable() => LayoutHarness.Wrap(
+            "<table style='width:300pt;border-collapse:collapse;font:10pt Arial'>" +
+            "<thead><tr><th style='padding:0;text-align:left'>" +
+            "<div style='overflow:hidden;height:14pt'>" +
+            "<div style='position:relative;z-index:0'><span>HEADERMARKER</span></div>" +
+            "</div></th></tr></thead><tbody>" +
+            string.Join("", Enumerable.Range(1, 30).Select(i =>
+                $"<tr><td style='height:14pt;padding:0'>Row {i}</td></tr>")) +
+            "</tbody></table>");
+
+        [Fact]
+        public async Task StackingContextOnlyReachableThroughARepeatedHeader_IsPaintedOnEveryPage()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(StackingContextInRepeatedHeaderTable(),
+                pageHeight: PageHeight, margin: Margin);
+
+            var pages = container.FragmentTree!.Fragmentainers.Count;
+            Assert.True(pages >= 3, $"fixture must span several pages, got {pages}");
+
+            for (var page = 0; page < pages; page++)
+            {
+                var recording = new TestRecordingGraphics();
+                FragmentPaintHarness.PaintPage(container, recording, page);
+
+                Assert.Contains(recording.DrawStringCalls, w => w.Text.Contains("HEADERMARKER"));
+            }
+        }
+
+        /// <summary>
+        /// The same shape without a table at all - the minimal case <c>HasStackingHoistCandidates</c>
+        /// has to get right regardless of where the stacking-context box sits, kept alongside the
+        /// table-repeated case above so the two can be compared directly.
+        /// </summary>
+        [Fact]
+        public async Task StackingContextInsideAPlainOverflowClip_IsPainted()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div style='overflow:hidden;height:14pt'>" +
+                "<div style='position:relative;z-index:0'><span>PLAINMARKER</span></div>" +
+                "</div>");
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var recording = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, recording, page: 0);
+
+            Assert.Contains(recording.DrawStringCalls, w => w.Text.Contains("PLAINMARKER"));
+        }
     }
 }
