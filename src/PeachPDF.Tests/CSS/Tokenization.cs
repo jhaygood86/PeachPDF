@@ -156,6 +156,47 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("\n", token.Data);
         }
 
+        // A lone trailing '\r' (nothing after it) is the one case where TextSource's cursor position,
+        // not just the returned token's text, can go wrong: NormalizeForward peeks one more character to
+        // rule out a following '\n', and must land exactly on the true end of input when there is none.
+        // A prior version of the string-backed TextSource fast path left the cursor one short there,
+        // which made this second Get() call re-read the same '\r' as a whole new Whitespace token
+        // instead of reaching EndOfFile - an infinite loop for any caller (e.g. CssValueParser.
+        // GetCssTokens's `do { ... } while (token.Type != TokenType.EndOfFile)`) that loops to EndOfFile.
+        [Fact]
+        public void LexerOnlyCarriageReturn_PositionsAtTrueEndOfInput()
+        {
+            var tokenizer = new Lexer(new TextSource("\r"));
+
+            var first = tokenizer.Get();
+            Assert.Equal(TokenType.Whitespace, first.Type);
+            Assert.Equal("\n", first.Data);
+
+            Assert.Equal(TokenType.EndOfFile, tokenizer.Get().Type);
+        }
+
+        [Fact]
+        public void GetCssTokens_TrailingLoneCarriageReturn_DoesNotHangAndProducesNoTokens()
+        {
+            var tokens = PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens("foo\r");
+
+            Assert.Single(tokens);
+            Assert.Equal(TokenType.Ident, tokens[0].Type);
+            Assert.Equal("foo", tokens[0].Data);
+        }
+
+        [Fact]
+        public void GetCssTokens_DisposesTheUnderlyingLexerAndTextSource()
+        {
+            // GetCssTokens `using`s its Lexer (issue #910) - this must not throw or leave the pooled
+            // scratch StringBuilder in a bad state across repeated calls.
+            for (var i = 0; i < 3; i++)
+            {
+                var tokens = PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens("12px solid red");
+                Assert.NotEmpty(tokens);
+            }
+        }
+
         [Fact]
         public void LexerCarriageReturnLineFeed()
         {
