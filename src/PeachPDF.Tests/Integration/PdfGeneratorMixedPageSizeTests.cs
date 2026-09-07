@@ -58,6 +58,41 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FirstPageSizeOverride_WithNoNamedPage_ProducesADifferentlySizedFirstPdfPage()
+        {
+            // Issue #144: a `size` override on a selector-carrying rule other than a named page - here
+            // `:first`, with no `page:`-activated name anywhere in the document - must still reach the
+            // generated PdfPage's own Width/Height, not just internal layout geometry (already covered
+            // at the layout level by StraddlingDiv_MixedPageSizeDocument_ResizesToEachPagesOwnMeasure).
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { size: 800pt 500pt; margin: 20pt; }
+                body, p { margin: 0; }
+                </style></head><body>
+                <p>page one, first page</p>
+                <p style='page-break-before: always'>page two, base size</p>
+                </body></html>
+                """;
+
+            var generator = new PdfGenerator();
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4 };
+            var doc = await generator.GeneratePdf(html, config);
+
+            Assert.Equal(2, doc.PageCount);
+
+            var a4 = PageSizeConverter.ToSize(PageSize.A4);
+
+            // Page 0: the `:first` rule's own explicit size - genuinely different physical dimensions.
+            Assert.Equal(800, doc.PdfDocument.Pages[0].Width.Point, 1);
+            Assert.Equal(500, doc.PdfDocument.Pages[0].Height.Point, 1);
+
+            // Page 1: no `:first`/named rule applies - back to the base configured A4 size.
+            Assert.Equal(a4.Width, doc.PdfDocument.Pages[1].Width.Point, 1);
+            Assert.Equal(a4.Height, doc.PdfDocument.Pages[1].Height.Point, 1);
+        }
+
+        [Fact]
         public async Task UniformDocument_EveryPageSharesTheSameConfiguredSize()
         {
             // Regression guard: a document with no @page size overrides gets byte-identical page
