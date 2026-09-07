@@ -2294,36 +2294,26 @@ namespace PeachPDF.Html.Core.Dom
 
             // Finalize what was captured at entry, now that this box's content has actually been placed
             // and coordinates.CurrentY reflects where it landed - mirrors CssBox.PerformLayoutImp's own
-            // late-stage Y-correction/named-page registration (done there once Location is final), which
-            // a plain inline box never gets a Location for in the first place. Gated on opensHere for the
-            // same reason as the entry-side guard in PrepareFlowBoxEntry: a pass merely resuming this
-            // box's already-placed content into a later fragmentainer must not re-stamp its
-            // NamedStrings/named-page Y to wherever *this* pass's cursor happens to sit (typically the
-            // resumed fragmentainer's own top, since the walk hasn't advanced past already-placed words
-            // yet) - that both discards the box's true position from when it actually opened and, for
-            // named-page, would corrupt ActivePageName for content after it.
-            if (opensHere && box != blockBox)
+            // late-stage Y-correction (done there once Location is final), which a plain inline box
+            // never gets a Location for in the first place. Gated on opensHere for the same reason as
+            // the entry-side guard in PrepareFlowBoxEntry: a pass merely resuming this box's
+            // already-placed content into a later fragmentainer must not re-stamp its NamedStrings' Y
+            // to wherever *this* pass's cursor happens to sit (typically the resumed fragmentainer's own
+            // top, since the walk hasn't advanced past already-placed words yet) - that would discard
+            // the box's true position from when it actually opened.
+            //
+            // `page` is deliberately NOT registered for an inline box here (issue #149): per css-page-3
+            // §7.2, `page` only applies to boxes that create class-A break points, which are block-level
+            // by definition - an inline box is not one, so registering it was already spec-marginal, and
+            // doing so at its own (unsnapped, mid-line) Y made it a real source of corruption on its own
+            // (see .claude/recent-fixes/2026-08-02-inline-string-set-and-named-page-corruption-across-reflow.md,
+            // whose unregister-before-register/opensHere fixes protected this dead-end registration
+            // along with the still-needed NamedStrings one above).
+            if (opensHere && box != blockBox && box.NamedStrings.Count > 0)
             {
-                if (box.NamedStrings.Count > 0)
+                foreach (var namedString in box.NamedStrings.Values)
                 {
-                    foreach (var namedString in box.NamedStrings.Values)
-                    {
-                        namedString.Y = coordinates.CurrentY;
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(box.PageName) && box.PageName != "auto")
-                {
-                    // Same re-entry hazard as the string-set guard in PrepareFlowBoxEntry: without
-                    // withdrawing a stale registration first, a re-banding re-layout or column-fill retry
-                    // leaves an orphaned NamedPageElement behind, corrupting ActivePageName for whatever
-                    // comes after it.
-                    if (box.RegisteredNamedPageElement is { } stalePageElement)
-                    {
-                        box.HtmlContainer?.UnregisterNamedPageElement(stalePageElement);
-                    }
-
-                    box.RegisteredNamedPageElement = box.HtmlContainer?.RegisterNamedPageElement(box.PageName, coordinates.CurrentY);
+                    namedString.Y = coordinates.CurrentY;
                 }
             }
 
@@ -2352,8 +2342,11 @@ namespace PeachPDF.Html.Core.Dom
             b.FirstHostingLineBox = coordinates.Line;
             b.LastHostingLineBox = coordinates.Line;
 
-            // Unlike a plain inline box, b.Location is already final here, so string-set/named-page can
-            // be applied and finalized together rather than split across entry/exit like plain inlines.
+            // Unlike a plain inline box, b.Location is already final here, so string-set can be applied
+            // and finalized in one step rather than split across entry/exit like plain inlines. `page`
+            // is deliberately NOT registered for an inline-flex box (issue #149) - see the plain-inline
+            // exit path above (FlowBox) for why: an inline-level box never creates a class-A break point,
+            // so `page` doesn't apply to it per css-page-3 §7.2.
             if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != Keywords.None)
             {
                 if (b.NamedStrings.Count > 0)
@@ -2367,16 +2360,6 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     namedString.Y = b.Location.Y;
                 }
-            }
-
-            if (!string.IsNullOrEmpty(b.PageName) && b.PageName != "auto")
-            {
-                if (b.RegisteredNamedPageElement is { } staleFlexPageElement)
-                {
-                    b.HtmlContainer?.UnregisterNamedPageElement(staleFlexPageElement);
-                }
-
-                b.RegisteredNamedPageElement = b.HtmlContainer?.RegisterNamedPageElement(b.PageName, b.Location.Y);
             }
 
             await CssLayoutEngineFlex.PerformLayout(g, b);

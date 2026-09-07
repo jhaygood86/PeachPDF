@@ -3212,8 +3212,14 @@ namespace PeachPDF.Html.Core.Dom
                     pageBreakOffset = PullKeepWithNextRun(container, cursor.CurrentY, pageBreakOffset,
                         slot, availableHeight, estimatedBodyHeight);
 
-                    _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
-                    foreach (var caption in _topCaptions) caption.OffsetTop(pageBreakOffset);
+                    // Routes through OffsetTop rather than a direct Location assignment (issue #149) so
+                    // RegisteredNamedPageElement re-syncs immediately, before the row loop below
+                    // paginates against this table's named-page geometry - a direct Location write left
+                    // that re-sync to PerformLayoutEpilogue's tail, after rows had already fragmented
+                    // against the pre-relocation bands. Captions are _tableBox's own DOM children
+                    // (AssignBoxKinds's `foreach (var box in _tableBox.Boxes)` walk), so OffsetTop's own
+                    // recursion into Boxes already moves them - no separate per-caption loop needed here.
+                    _tableBox.OffsetTop(pageBreakOffset);
                     startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + StartYSpacing(), 0);
                     // startY is a fresh restart point at the table's own content-top edge on the new
                     // page, not an arbitrary interior coordinate - the same "top edge flush on a
@@ -3253,9 +3259,13 @@ namespace PeachPDF.Html.Core.Dom
                     pageBreakOffset = PullKeepWithNextRun(container, startY, pageBreakOffset,
                         slot, availableHeight, _headerHeight + firstRowHeight);
 
-                    _tableBox.Location = _tableBox.Location with { Y = _tableBox.Location.Y + pageBreakOffset };
+                    // Routes through OffsetTop rather than a direct Location assignment (issue #149) -
+                    // see the identical rationale on the headerless pre-check above. _headerBox is
+                    // detached (ParentBox set null before this runs) so _tableBox's own recursion into
+                    // Boxes can't reach it - it keeps its own explicit OffsetTop call; captions, as
+                    // _tableBox's own DOM children, are already covered by that recursion.
+                    _tableBox.OffsetTop(pageBreakOffset);
                     _headerBox.OffsetTop(pageBreakOffset);
-                    foreach (var caption in _topCaptions) caption.OffsetTop(pageBreakOffset);
 
                     startY = Math.Max(_tableBox.ClientTop + _topCaptionsHeight + StartYSpacing(), 0);
                     // startY is a fresh restart point at the table's own content-top edge on the new

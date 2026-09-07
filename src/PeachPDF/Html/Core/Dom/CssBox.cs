@@ -5772,11 +5772,14 @@ namespace PeachPDF.Html.Core.Dom
             // (see the early registration above the layout-engine dispatch); everything else (e.g. a
             // box that never entered the block branch) registers here, after every branch above that
             // can still move this box's own Location. For an already-registered box this is a re-sync
-            // for movers that bypass OffsetTop (CssLayoutEngineTable's whole-table pre-check assigns
-            // Location directly). A *later* reposition by an ancestor's layout engine after this
-            // box's own PerformLayoutImp has returned (e.g. CssLayoutEngineColumns re-banding a
-            // column child via OffsetTop) is handled by retaining the registered element on
-            // RegisteredNamedPageElement, which OffsetTop keeps in sync.
+            // safety net for any remaining mover that bypasses OffsetTop - CssLayoutEngineTable's
+            // whole-table pre-check now routes through OffsetTop itself (issue #149), so this branch is
+            // a no-op for that specific case (RegisteredNamedPageElement.Y already matches), but stays
+            // in place for whatever else might still move a box's Location directly in the future. A
+            // *later* reposition by an ancestor's layout engine after this box's own PerformLayoutImp
+            // has returned (e.g. CssLayoutEngineColumns re-banding a column child via OffsetTop) is
+            // handled by retaining the registered element on RegisteredNamedPageElement, which OffsetTop
+            // keeps in sync.
             // Reuse the shouldRegisterPage boolean computed near the top of this method - it must NOT
             // be re-derived here: the early registration above mutates HtmlContainer.ActivePageName,
             // so a fresh UsedPageName != ActivePageName comparison would now read false for an
