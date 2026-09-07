@@ -312,6 +312,71 @@ namespace PeachPDF.Tests.Integration
             Assert.All(laterPageWords, w => Assert.Equal(p.ClientLeft, w.Left, 2));
         }
 
+        [Fact]
+        public async Task Slice_SpanWhoseOwnFirstWordWrapsOntoALine_KeepsItsRectangleInsideTheBlock()
+        {
+            // The plain, single-page shape of the same wrap-branch code Slice_BreakFallingAtAnInlinesFirstWord_PadsItOnce
+            // exercises for a resumed pass - no pagination at all here, just an ordinary overflow wrap.
+            // BubbleRectangles used to compensate by subtracting the span's full leading set (margin +
+            // border + padding) from a rectangle already sitting at the block's content edge, landing it
+            // outside the block entirely (#342). It no longer needs to: FirstHostingLineBox is corrected
+            // at the wrap itself, so CssLineBox.UpdateRectangle's own subtraction never fires for this
+            // (non-opening) line in the first place.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<p id='p' style='margin:0;width:70pt;font:10pt Arial'>" +
+                "<span id='s' style='padding-left:20pt'>Wordzero VeryLongWordThatWraps</span></p>"));
+
+            var p = LayoutHarness.FindById(root, "p")!;
+            var s = LayoutHarness.FindById(root, "s")!;
+
+            Assert.True(s.Rectangles.Count >= 2, $"fixture must wrap the span's own content onto a second line, got {s.Rectangles.Count} rectangle(s)");
+
+            var continuation = s.Rectangles.Values.OrderBy(r => r.Y).Last();
+
+            Assert.True(continuation.Left >= p.ClientLeft,
+                $"continuation line's rectangle (left={continuation.Left:F1}) starts before the block's own content edge ({p.ClientLeft:F1})");
+        }
+
+        [Fact]
+        public async Task Slice_SpanHeldByAnAnonymousRun_FirstWordWrapsOntoALine_KeepsItsRectangleInsideTheBlock()
+        {
+            // The shape Slice_SpanWhoseOwnFirstWordWrapsOntoALine covers has the span hold its own single
+            // text run directly (self-iteration in FlowBox: b == box). Here the span's word instead lives
+            // in a separate anonymous run box (b != box, the span's own Boxes[0]) - correcting
+            // FirstHostingLineBox alone is not enough for this shape, since only the wrapping box's own
+            // leading spacing (zero, for a bare anonymous run) was being reserved on the cursor; the
+            // span's real 20pt padding was never added at all, so the rectangle still landed outside the
+            // block after the FirstHostingLineBox-only fix.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<p id='p' style='margin:0;width:25pt;font:10pt Arial'>" +
+                "<span id='s' style='padding-left:20pt'>Wordzero VeryLongWordThatWraps</span></p>"));
+
+            var p = LayoutHarness.FindById(root, "p")!;
+            var s = LayoutHarness.FindById(root, "s")!;
+
+            Assert.True(s.Rectangles.Count >= 1, "fixture must place the span's content somewhere");
+            Assert.All(s.Rectangles.Values, rect => Assert.True(rect.Left >= p.ClientLeft,
+                $"rectangle left ({rect.Left:F1}) starts before the block's own content edge ({p.ClientLeft:F1})"));
+        }
+
+        [Fact]
+        public async Task Slice_SpanAsAWholeWrapsAfterPrecedingText_KeepsItsRectangleInsideTheBlock()
+        {
+            // A further variant of the same gap: the span isn't the line's first content at all - plain
+            // text precedes it - so the whole span (its one anonymous run) wraps onto a new line as a
+            // unit, rather than the span itself opening a line and then immediately overflowing.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<p id='p' style='margin:0;width:100pt;font:10pt Arial'>Filler words here now " +
+                "<span id='s' style='padding-left:20pt'>Spantext</span></p>"));
+
+            var p = LayoutHarness.FindById(root, "p")!;
+            var s = LayoutHarness.FindById(root, "s")!;
+
+            Assert.True(s.Rectangles.Count >= 1, "fixture must place the span's content somewhere");
+            Assert.All(s.Rectangles.Values, rect => Assert.True(rect.Left >= p.ClientLeft,
+                $"rectangle left ({rect.Left:F1}) starts before the block's own content edge ({p.ClientLeft:F1})"));
+        }
+
         // ── clone (the control) ──────────────────────────────────────────────────────────────────────
 
         [Fact]
@@ -335,6 +400,41 @@ namespace PeachPDF.Tests.Integration
 
             Assert.All(span.Rectangles.Values,
                 r => Assert.Equal(p.ClientLeft + MarginLeftOf(span), r.Left, 2));
+        }
+
+        [Fact]
+        public async Task Clone_InlineBlockCrossingSeveralPageBreaks_ReopensItsTopInsetOnEveryPage()
+        {
+            // An inline-block's own top border/padding is applied by shifting the words it flows,
+            // gated (by default, box-decoration-break: slice) to the pass that opens it - a straddling
+            // box's later pages correctly get none. Under clone (css-break-3 §6.2) every fragment
+            // re-opens with its own top border/padding instead, which used to never happen at all for a
+            // continuation page (#343).
+            const int topInset = 8; // 3pt border-top + 5pt padding-top
+            var html = LayoutHarness.Wrap(
+                "<p id='p' style='margin:0;line-height:22pt;font-size:10pt'>" +
+                "<span id='ib' style='display:inline-block;box-decoration-break:clone;" +
+                "padding:5pt 0;border-top:3pt solid #000;border-bottom:3pt solid #000'>" +
+                string.Join("<br>", Enumerable.Range(0, 20).Select(i => $"Line{i}")) +
+                "</span></p>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            AssertPaginated(container);
+
+            var ib = LayoutHarness.FindById(root, "ib")!;
+            var byPage = AllWords(ib).Where(w => !w.IsLineBreak)
+                .GroupBy(w => container.PageIndexOf(w.Top))
+                .OrderBy(g => g.Key)
+                .ToList();
+
+            Assert.True(byPage.Count > 1, $"fixture must straddle several pages, got {byPage.Count}");
+
+            foreach (var page in byPage)
+            {
+                var expectedTop = container.PageTopOf(page.Key) + topInset;
+                Assert.Equal(expectedTop, page.Min(w => w.Top), 2);
+            }
         }
 
         [Fact]
