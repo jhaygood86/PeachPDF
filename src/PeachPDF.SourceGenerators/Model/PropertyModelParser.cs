@@ -323,6 +323,7 @@ namespace PeachPDF.SourceGenerators.Model
                     "color" => DataTypeSpec.Simple(DataTypeKind.Color),
                     "current-color" => DataTypeSpec.Simple(DataTypeKind.CurrentColor),
                     "transform" => DataTypeSpec.Simple(DataTypeKind.Transform),
+                    "ratio" => DataTypeSpec.Simple(DataTypeKind.Ratio),
                     "keyword" => DataTypeSpec.Simple(DataTypeKind.Keyword),
                     "integer" => DataTypeSpec.Simple(DataTypeKind.Integer),
                     "number" => DataTypeSpec.Simple(DataTypeKind.Number),
@@ -356,9 +357,50 @@ namespace PeachPDF.SourceGenerators.Model
                         json.TryGetProperty("converter", out var converterValue);
                         json.TryGetProperty("resultType", out var resultTypeValue);
                         json.TryGetProperty("typedValueType", out var typedValueTypeValue);
+                        var parsedConverter = converterValue?.StringValue;
+                        var parsedResultType = resultTypeValue?.StringValue;
+                        if (parsedConverter is null || parsedResultType is null)
+                        {
+                            diagnostics.Add(Error(DiagnosticCode.ParsedMissingConverterOrResultType,
+                                $"\"{name}\" declares a \"parsed\" cssDataType but is missing converter and/or resultType.", json));
+                        }
                         return new DataTypeSpec(DataTypeKind.Parsed,
-                            converter: converterValue.StringValue, resultType: resultTypeValue.StringValue,
-                            typedValueType: typedValueTypeValue.StringValue);
+                            converter: parsedConverter, resultType: parsedResultType,
+                            typedValueType: typedValueTypeValue?.StringValue);
+
+                    case "length-list":
+                        int? llMin = json.TryGetProperty("min", out var llMinValue) && llMinValue.Kind == JsonValueKind.Number ? (int)llMinValue.NumberValue : (int?)null;
+                        int? llMax = json.TryGetProperty("max", out var llMaxValue) && llMaxValue.Kind == JsonValueKind.Number ? (int)llMaxValue.NumberValue : (int?)null;
+                        var llAllowPercentage = !json.TryGetProperty("allowPercentage", out var llApValue) || llApValue.Kind != JsonValueKind.False;
+                        return new DataTypeSpec(DataTypeKind.LengthList, minCount: llMin ?? 1, maxCount: llMax ?? 2, allowPercentage: llAllowPercentage);
+
+                    case "keyword-list":
+                        json.TryGetProperty("keywordMap", out var klKeywordMapValue);
+                        int? klMaxPerSegment = json.TryGetProperty("maxPerSegment", out var klMaxValue) && klMaxValue.Kind == JsonValueKind.Number ? (int)klMaxValue.NumberValue : (int?)null;
+                        IReadOnlyList<string>? klAliases = json.TryGetProperty("aliasKeywords", out var klAliasesJson) && klAliasesJson.IsArray
+                            ? klAliasesJson.ArrayItems.Select(v => v.StringValue ?? "").ToList()
+                            : null;
+                        var klKeywordMap = klKeywordMapValue?.StringValue;
+                        if (klKeywordMap is null)
+                        {
+                            diagnostics.Add(Error(DiagnosticCode.JsonMalformed,
+                                $"\"{name}\" declares a \"keyword-list\" cssDataType but no \"keywordMap\".", json));
+                        }
+                        return new DataTypeSpec(DataTypeKind.KeywordList, keywordMap: klKeywordMap,
+                            maxPerSegment: klMaxPerSegment ?? 1, aliasKeywords: klAliases);
+
+                    case "cssom-grammar":
+                        json.TryGetProperty("member", out var cssOmGrammarMemberValue);
+                        var cssOmGrammarMember = cssOmGrammarMemberValue?.StringValue;
+                        if (cssOmGrammarMember is null)
+                        {
+                            diagnostics.Add(Error(DiagnosticCode.CssOmGrammarMissingMember,
+                                $"\"{name}\" declares a \"cssom-grammar\" data type but no \"member\".", json));
+                        }
+                        var acceptsNoneLiteral = json.TryGetProperty("acceptsNoneLiteral", out var acceptsNoneLiteralValue) &&
+                                                  acceptsNoneLiteralValue.Kind == JsonValueKind.True;
+                        return new DataTypeSpec(DataTypeKind.CssOmGrammar, converter: cssOmGrammarMember,
+                            acceptsNoneLiteral: acceptsNoneLiteral);
 
                     case "enum-keyword":
                         json.TryGetProperty("enumType", out var enumTypeValue);

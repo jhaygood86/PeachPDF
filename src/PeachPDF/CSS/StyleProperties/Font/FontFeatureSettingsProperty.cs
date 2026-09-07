@@ -14,8 +14,13 @@ namespace PeachPDF.CSS
         private static readonly IValueConverter FeatureTagValueConverter =
             WithOrder(StringConverter.Required(), FontFeatureTagListGrammar.FeatureValueConverter.Option());
 
-        private static readonly IValueConverter StyleConverter =
-            FeatureTagValueConverter.FromList().Or(Keywords.Normal).OrDefault();
+        // Exposed for css-properties.json's "cssom-grammar" validator (ValidatorExpressionBuilder),
+        // which calls this same real grammar directly instead of the full cssom PropertyFactory/
+        // StylesheetParser round trip - see CLAUDE.md's "one parser" rule.
+        internal static readonly IValueConverter ValueGrammar =
+            FeatureTagValueConverter.FromList().Or(Keywords.Normal);
+
+        private static readonly IValueConverter StyleConverter = ValueGrammar.OrDefault();
 
         internal FontFeatureSettingsProperty()
             : base(PropertyNames.FontFeatureSettings, PropertyFlags.Inherited)

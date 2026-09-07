@@ -15,6 +15,7 @@ namespace PeachPDF.SourceGenerators.Tests
                     public string BorderBottomWidth { get; set; } = "";
                     public string Transform { get; set; } = "";
                     public int NoSetter { get; } = 0;
+                    public object? SomeThing { get; set; }
                 }
             }
 

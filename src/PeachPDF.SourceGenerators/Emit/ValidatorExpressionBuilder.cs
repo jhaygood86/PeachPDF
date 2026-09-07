@@ -35,9 +35,13 @@ namespace PeachPDF.SourceGenerators.Emit
             DataTypeKind.Color => "parser.IsColorValid(value)",
             DataTypeKind.CurrentColor => "value.Equals(\"currentcolor\", global::System.StringComparison.OrdinalIgnoreCase)",
             DataTypeKind.Transform => "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidTransformValue(value)",
+            DataTypeKind.Ratio => "global::PeachPDF.CSS.AspectRatioGrammar.TryParseFast(value, out _, out _)",
+            DataTypeKind.LengthList => BuildLengthListClause(dt),
+            DataTypeKind.KeywordList => BuildKeywordListClause(dt),
             DataTypeKind.Keyword => BuildKeywordClause(supportedValues, keywordComparison),
             DataTypeKind.Integer => BuildIntegerClause(dt),
             DataTypeKind.Number => "double.TryParse(value, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)",
+            DataTypeKind.CssOmGrammar => BuildCssOmGrammarClause(dt),
             DataTypeKind.EnumKeyword => $"{dt.KeywordMap}.ContainsKey(value)",
             DataTypeKind.KeywordOrValue => BuildKeywordOrValueClause(entry, dt),
             DataTypeKind.SvgPaint => "global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.Adapter, ctx.ContextColor, out _)",
@@ -69,6 +73,37 @@ namespace PeachPDF.SourceGenerators.Emit
             var name = Escape(entry.Name);
             return $"global::PeachPDF.CSS.PropertyFactory.Instance.Create(\"{name}\") is not {{ }} knownProperty || " +
                    "(global::PeachPDF.CSS.StylesheetParser.Default.ParseValue(value) is { } tokenValue && knownProperty.TrySetValue(tokenValue))";
+        }
+
+        /// <summary>
+        /// <see cref="DataTypeKind.CssOmGrammar"/>: <see cref="DataTypeSpec.Converter"/> names a fully
+        /// invokable member — either a static <c>TryParse(IReadOnlyList&lt;Token&gt;)</c>-shaped method
+        /// (e.g. <c>PeachPDF.CSS.BasicShapeGrammar.TryParse</c>) or an <c>IValueConverter</c> field's
+        /// <c>.Convert</c> included in the string itself (e.g.
+        /// <c>PeachPDF.CSS.Converters.MultipleImageSourceConverter.Convert</c>) — so the generator emits
+        /// one uniform call shape without needing to resolve which kind it is via the compilation's
+        /// symbol table. <c>GetCssTokens</c> returns a <c>List&lt;Token&gt;</c>, which satisfies both a
+        /// <c>TryParse(IReadOnlyList&lt;Token&gt;)</c> parameter and an <c>IValueConverter.Convert(IEnumerable
+        /// &lt;Token&gt;)</c> parameter directly, with no wrapping.
+        /// </summary>
+        private static string BuildCssOmGrammarClause(DataTypeSpec dt)
+        {
+            var call = $"global::{dt.Converter}(global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens(value, inValueContext: true, preserveWhitespace: true)) is not null";
+            return dt.AcceptsNoneLiteral
+                ? $"value.Equals(\"none\", global::System.StringComparison.OrdinalIgnoreCase) || {call}"
+                : call;
+        }
+
+        private static string BuildLengthListClause(DataTypeSpec dt) =>
+            $"global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLengthList(value, {dt.MinCount ?? 1}, {dt.MaxCount ?? 2}, {(dt.AllowPercentage ? "true" : "false")})";
+
+        private static string BuildKeywordListClause(DataTypeSpec dt)
+        {
+            var max = dt.MaxPerSegment ?? 1;
+            var aliasesArg = dt.AliasKeywords is { Count: > 0 }
+                ? "new[] { " + string.Join(", ", dt.AliasKeywords.Select(a => $"\"{Escape(a)}\"")) + " }"
+                : "null";
+            return $"global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidCommaKeywordList(value, {dt.KeywordMap}, {max}, {aliasesArg})";
         }
 
         private static string BuildKeywordClause(IReadOnlyList<string>? supportedValues, KeywordComparison keywordComparison)

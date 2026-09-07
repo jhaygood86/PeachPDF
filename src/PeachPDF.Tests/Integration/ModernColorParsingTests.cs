@@ -280,5 +280,65 @@ namespace PeachPDF.Tests.Integration
             Assert.NotNull(p);
             Assert.NotEqual("rgb(0, 0, 0)", p!.Color);
         }
+
+        // ── named-color fast path (CssValueParser.GetColorByName consulting Colors.NamedColors
+        // directly instead of tokenizing) ──
+
+        [Theory]
+        [InlineData("black", 0, 0, 0, 255)]
+        [InlineData("cornflowerblue", 100, 149, 237, 255)]
+        [InlineData("transparent", 0, 0, 0, 0)] // alpha 0 is transparent's own correct value, not a miss
+        public void NamedColor_FastPath_ResolvesCorrectly(string value, int r, int g, int b, int a)
+        {
+            var c = Parse(value);
+            Assert.Equal(r, c.R);
+            Assert.Equal(g, c.G);
+            Assert.Equal(b, c.B);
+            Assert.Equal(a, c.A);
+        }
+
+        [Theory]
+        [InlineData("BLACK")]
+        [InlineData("Coral")]
+        [InlineData("TRANSPARENT")]
+        public void NamedColor_FastPath_IsCaseInsensitive(string value)
+        {
+            var upperOrMixed = Parse(value);
+            var lower = Parse(value.ToLowerInvariant());
+            Assert.Equal(lower.R, upperOrMixed.R);
+            Assert.Equal(lower.G, upperOrMixed.G);
+            Assert.Equal(lower.B, upperOrMixed.B);
+            Assert.Equal(lower.A, upperOrMixed.A);
+        }
+
+        [Fact]
+        public void ColorFunction_StillRoutesThroughTokenizer_NotFastPath()
+        {
+            // Contains '(' - the fast path's guard must exclude this and fall through unchanged.
+            var c = Parse("hsl(120, 100%, 50%)");
+            Assert.Equal(0, c.R);
+            Assert.Equal(255, c.G);
+            Assert.Equal(0, c.B);
+        }
+
+        [Fact]
+        public void NamedColor_InvalidIdentifier_StillRejected()
+        {
+            var adapter = new PdfSharpAdapter();
+            var parser = new CssValueParser(adapter);
+            Assert.False(parser.IsColorValid("notacolor"));
+        }
+
+        [Fact]
+        public void CurrentColor_UnaffectedByFastPath()
+        {
+            // "currentcolor" is not in Colors.NamedColors and isn't resolved by ToResolvedColor either
+            // (it's a separate "current-color" cssDataType handled elsewhere in the union for the real
+            // "color" property) - the fast path's dictionary miss must fall through to the existing
+            // tokenizer route unchanged, which also returns false here, both before and after this change.
+            var adapter = new PdfSharpAdapter();
+            var parser = new CssValueParser(adapter);
+            Assert.False(parser.IsColorValid("currentcolor"));
+        }
     }
 }

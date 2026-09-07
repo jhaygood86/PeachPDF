@@ -123,7 +123,7 @@ namespace PeachPDF.Html.Core.Parse
 
         /// <summary>
         /// Memoizes <see cref="IsValidLength"/> by its input string - a pure function of that string
-        /// alone (<see cref="GetCssTokens(string, bool)"/> always runs with <c>inValueContext: false</c>
+        /// alone (<see cref="GetCssTokens(string, bool, bool)"/> always runs with <c>inValueContext: false</c>
         /// here, and neither it nor <see cref="ValueExtensions.ToDistance"/> reads anything else). A
         /// document's boxes overwhelmingly repeat the same handful of literal length strings (e.g.
         /// "0px", "auto"), and every caller in the layout engines (<c>ApplyHeight</c>/<c>GetBoxHeight</c>/
@@ -794,7 +794,7 @@ namespace PeachPDF.Html.Core.Parse
             return result;
         }
 
-        public static List<Token> GetCssTokens(string propValue, bool inValueContext = false)
+        public static List<Token> GetCssTokens(string propValue, bool inValueContext = false, bool preserveWhitespace = false)
         {
             // In a value context '#rrggbb' lexes to a single Color token; otherwise a letter-leading hex is a
             // Hash token and a digit-leading hex is '#' + number. Callers that hand the tokens to the Layer-A
@@ -809,7 +809,14 @@ namespace PeachPDF.Html.Core.Parse
             {
                 token = lexer.Get();
 
-                if (token.Type != TokenType.EndOfFile && token.Type != TokenType.Whitespace)
+                // ValueExtensions.ToItems() (behind Many()/FromList()/OneOrMoreValueConverter - the real
+                // Layer A grammar composition several "cssom-grammar" validators call into, see
+                // ValidatorExpressionBuilder.BuildCssOmGrammarClause) splits items on Whitespace tokens, and
+                // gradient direction syntax ("to right", "to top left") also reads whitespace-separated
+                // words - so a caller feeding tokens to one of those must preserve whitespace, unlike every
+                // other existing GetCssTokens caller (a single length/color/keyword check), which wants it
+                // stripped exactly as before.
+                if (token.Type != TokenType.EndOfFile && (preserveWhitespace || token.Type != TokenType.Whitespace))
                 {
                     tokens.Add(token);
                 }
@@ -1784,6 +1791,70 @@ namespace PeachPDF.Html.Core.Parse
             if (start < value.Length) yield return value.Substring(start);
         }
 
+        /// <summary>
+        /// Validates a <c>&amp;lt;length-percentage&amp;gt;{min,max}</c> value (border-*-radius) — or, with
+        /// <paramref name="allowPercentage"/> false, a <c>&amp;lt;length&amp;gt;{min,max}</c> value
+        /// (border-spacing) — without the CSS-OM tokenizer/Property round trip: splits on top-level
+        /// whitespace (<see cref="SplitTopLevelWhitespace"/>) and validates each component with the same
+        /// <see cref="IsValidLength"/> a plain "length" declaration uses (memoized by input string, and
+        /// itself really "length-or-percentage" via <c>ToDistance</c>, so a bare "50%" component already
+        /// passes when <paramref name="allowPercentage"/> is true with no extra handling here).
+        /// <paramref name="allowPercentage"/> false only rejects a component ending in a literal '%' — a
+        /// calc()-wrapped percentage (e.g. "calc(50% + 10px)") still passes via <see cref="IsValidLength"/>'s
+        /// own calc-family shortcut, which doesn't check the calc's result category. Pre-existing,
+        /// already-accepted looseness (the same "length" DataTypeKind every other property already has),
+        /// not introduced here — see <c>KeywordOrValueGrammar</c>'s own note on the same shortcut.
+        /// </summary>
+        public static bool IsValidLengthList(string value, int min, int max, bool allowPercentage)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+
+            var count = 0;
+            foreach (var component in SplitTopLevelWhitespace(value))
+            {
+                count++;
+                if (count > max) return false;
+                if (!allowPercentage && component.EndsWith('%')) return false;
+                if (!IsValidLength(component)) return false;
+            }
+
+            return count >= min;
+        }
+
+        /// <summary>
+        /// Validates a comma-separated list (CSS <c>&amp;lt;foo&amp;gt;#</c>), each segment 1..
+        /// <paramref name="maxPerSegment"/> space-separated keywords found in <paramref name="keywordMap"/>'s
+        /// keys, or a literal match against <paramref name="aliasKeywords"/> standing in for a whole segment
+        /// (background-repeat's repeat-x/repeat-y). Splits via <see cref="SplitTopLevelCommas"/>/
+        /// <see cref="SplitTopLevelWhitespace"/> instead of the CSS-OM tokenizer, and reuses the same Map.*
+        /// dictionary the real Layer A property already validates against (CLAUDE.md's "one parser" rule)
+        /// rather than a second, JSON-authored keyword list.
+        /// </summary>
+        public static bool IsValidCommaKeywordList<TValue>(string value, IReadOnlyDictionary<string, TValue> keywordMap,
+            int maxPerSegment = 1, IReadOnlyCollection<string>? aliasKeywords = null)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+
+            foreach (var rawSegment in SplitTopLevelCommas(value))
+            {
+                var segment = rawSegment.Trim();
+                if (segment.Length == 0) return false;
+
+                if (aliasKeywords is not null && aliasKeywords.Any(a => segment.Equals(a, StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var wordCount = 0;
+                foreach (var word in SplitTopLevelWhitespace(segment))
+                {
+                    wordCount++;
+                    if (wordCount > maxPerSegment || !keywordMap.ContainsKey(word)) return false;
+                }
+                if (wordCount == 0) return false;
+            }
+
+            return true;
+        }
+
         private static double? TryParseConicAngle(List<Token> item)
         {
             var angle = item.ToAngle();
@@ -2066,6 +2137,21 @@ namespace PeachPDF.Html.Core.Parse
         private bool GetColorByName(string str, int idx, int length, out RColor color)
         {
             var substring = str.Substring(idx, length);
+
+            // Fast path: the overwhelming majority of "by name" values are a bare identifier (a named
+            // color like "black"/"transparent"), not a CSS Color 4 function (hsl()/lab()/color-mix()/...)
+            // or an escaped identifier (`\62 lack`) - skip GetCssTokens/ToResolvedColor's Lexer/
+            // TextSource/StylesheetComposer allocation entirely and consult the CSS-OM's own
+            // Colors.NamedColors table directly (via Colors.GetColor) - the exact same table
+            // Color.FromName/ToColor already resolve a plain Ident token against, not a second,
+            // independently maintained list. A miss (a function, an escape sequence, "currentcolor", or
+            // genuine garbage) falls through unchanged to the tokenizer path below, so this can only ever
+            // be an early exit to the same true answer, never a source of divergence from it.
+            if (substring.IndexOf('(') < 0 && substring.IndexOf('\\') < 0 && Colors.GetColor(substring) is { } named)
+            {
+                color = RColor.FromArgb(named.A, named.R, named.G, named.B);
+                return true;
+            }
 
             // Tokenization and grammar parsing are the CSS-OM's job: ToResolvedColor resolves named
             // colors, hex, and every color function (rgb/hsl/hwb/gray/lab/oklab/lch/oklch/color-mix) to a

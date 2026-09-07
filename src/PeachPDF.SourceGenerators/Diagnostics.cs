@@ -57,6 +57,12 @@ namespace PeachPDF.SourceGenerators
         public static readonly DiagnosticDescriptor PropertyPathAreaConflict =
             D("PPG015", "html.propertyPath reused across different html.area values", DiagnosticSeverity.Error);
 
+        public static readonly DiagnosticDescriptor CssOmGrammarMissingMember =
+            D("PPG016", "\"cssom-grammar\" data type requires member", DiagnosticSeverity.Error);
+
+        public static readonly DiagnosticDescriptor ParsedMissingConverterOrResultType =
+            D("PPG017", "\"parsed\" data type requires converter and resultType", DiagnosticSeverity.Error);
+
         public static DiagnosticDescriptor For(DiagnosticCode code) => code switch
         {
             DiagnosticCode.JsonMalformed => JsonMalformed,
@@ -73,6 +79,8 @@ namespace PeachPDF.SourceGenerators
             DiagnosticCode.UnknownArea => UnknownArea,
             DiagnosticCode.InvalidLogicalEntry => InvalidLogicalEntry,
             DiagnosticCode.PropertyPathAreaConflict => PropertyPathAreaConflict,
+            DiagnosticCode.CssOmGrammarMissingMember => CssOmGrammarMissingMember,
+            DiagnosticCode.ParsedMissingConverterOrResultType => ParsedMissingConverterOrResultType,
             _ => JsonMalformed,
         };
     }

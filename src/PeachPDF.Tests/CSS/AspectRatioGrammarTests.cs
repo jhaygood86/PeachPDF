@@ -138,5 +138,46 @@ namespace PeachPDF.Tests.CSS
         {
             Assert.False(TryParseRatio(value, out _));
         }
+
+        // ─── TryParseFast: span-based sibling for css-properties.json's "ratio" cssDataType
+        // (ValidatorExpressionBuilder) — must agree with the token-based TryParse on every input, since
+        // both are meant to answer the exact same [ auto || <ratio> ] grammar question. ───
+
+        [Theory]
+        [InlineData("2")]
+        [InlineData("16 / 9")]
+        [InlineData("16/9")]
+        [InlineData("1.5")]
+        [InlineData("3 / 2")]
+        [InlineData("auto 21 / 9")]
+        [InlineData("21 / 9 auto")]
+        [InlineData("auto")]
+        [InlineData("1 / 0")]
+        [InlineData("0")]
+        [InlineData("0 / 5")]
+        [InlineData("")]
+        [InlineData("banana")]
+        [InlineData("2 3")]
+        [InlineData("16 /")]
+        [InlineData("/ 9")]
+        [InlineData("-2")]
+        [InlineData("2 / -3")]
+        [InlineData("auto auto")]
+        [InlineData("2px")]
+        [InlineData("AUTO")]
+        [InlineData("Auto 16 / 9")]
+        [InlineData("  16 / 9  ")]
+        public void TryParseFast_AgreesWithTokenBasedTryParse(string value)
+        {
+            var tokenResult = AspectRatioGrammar.TryParse(CssValueParser.GetCssTokens(value), out var tokenRatio, out var tokenHasAuto);
+            var fastResult = AspectRatioGrammar.TryParseFast(value, out var fastRatio, out var fastHasAuto);
+
+            Assert.Equal(tokenResult, fastResult);
+            if (tokenResult)
+            {
+                Assert.Equal(tokenRatio, fastRatio);
+                Assert.Equal(tokenHasAuto, fastHasAuto);
+            }
+        }
     }
 }

@@ -90,6 +90,21 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task SetPropertyValue_GridTemplateColumns_InvalidTrackList_IsRejected()
+        {
+            // Regression test for the "GridTemplateValueConverter.FromCssText never returns null" trap:
+            // FromCssText fails open (treats garbage as "no explicit tracks", same shape as "none") for
+            // trusted cascade callers, so Validate_ must go through the genuinely-fallible
+            // TryParseForRegistry instead - otherwise this would validate-and-overwrite instead of
+            // leaving the prior value alone.
+            var (box, parser) = await FindDivBoxAndParser("grid-template-columns: 100pt;");
+
+            CssUtils.SetPropertyValue(parser, box, "grid-template-columns", "potato");
+
+            Assert.Equal("100pt", box.GridTemplateColumns.ToString());
+        }
+
+        [Fact]
         public async Task SetPropertyValue_GridTemplateColumns_VarValue_StaysUnresolved()
         {
             // The string setter's var() guard: a value still containing var() must NOT be parsed into a
@@ -557,6 +572,44 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal(value, CssUtils.GetPropertyValue(box, getName));
         }
 
+        // page-break-after/-before/-inside implement the older, narrower CSS2.1 §13.3.1 page-break-*
+        // grammar (auto/always/avoid/left/right, and just auto/avoid for -inside) even though their
+        // break-after/-before/-inside alias targets accept the full, broader css-break-3 keyword set
+        // (avoid-column, avoid-page, page, recto, verso, column, region) - a value only the alias target
+        // accepts must be rejected on the legacy spelling.
+        [Theory]
+        [InlineData("page-break-after", "left", "avoid-column")]
+        [InlineData("page-break-after", "left", "avoid-page")]
+        [InlineData("page-break-before", "left", "avoid-column")]
+        [InlineData("page-break-inside", "avoid", "avoid-column")]
+        [InlineData("page-break-inside", "avoid", "always")]
+        public async Task SetPropertyValue_PageBreakAlias_RejectsBreakTargetOnlyKeyword(string setName, string seedValue, string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser($"{setName}: {seedValue};");
+
+            CssUtils.SetPropertyValue(parser, box, setName, value);
+
+            Assert.Equal(seedValue, CssUtils.GetPropertyValue(box, setName));
+        }
+
+        // The real PageBreakAfterProperty/PageBreakInsideProperty converters compare case-insensitively
+        // (Map.PageBreakModes/Map.PageBreakInsideModes use StringComparer.OrdinalIgnoreCase), so the
+        // legacy alias's cssDataType must accept non-canonical casing too.
+        [Theory]
+        [InlineData("page-break-after", "AVOID")]
+        [InlineData("page-break-before", "Left")]
+        [InlineData("page-break-inside", "AVOID")]
+        public async Task SetPropertyValue_PageBreakAlias_AcceptsNonCanonicalCase(string setName, string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, setName, value);
+
+            var stored = CssUtils.GetPropertyValue(box, setName);
+            Assert.NotNull(stored);
+            Assert.Equal(value.ToLowerInvariant(), stored.ToLowerInvariant());
+        }
+
         // The legacy aliases need their own entries in the known-name list and the initial-value store, or
         // "initial"/"unset"/"revert" silently no-op on the legacy spelling while working on the modern one.
         [Theory]
@@ -973,6 +1026,130 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         // --- Helpers ---
+
+        // ─── Phase 4 (issue #909): length-list / ratio / keyword-list cssDataTypes, span-based
+        // validators with no CSS-OM tokenizer round trip. ───
+
+        [Theory]
+        [InlineData("10px")]
+        [InlineData("10px 20px")]
+        [InlineData("10%  5px")]
+        public async Task SetPropertyValue_BorderRadius_ValidLengthPercentageList_IsAccepted(string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "border-top-left-radius", value);
+
+            Assert.Equal(value, CssUtils.GetPropertyValue(box, "border-top-left-radius"));
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_BorderTopLeftRadius_ThreeComponents_IsRejected()
+        {
+            var (box, parser) = await FindDivBoxAndParser("border-top-left-radius: 5px;");
+
+            CssUtils.SetPropertyValue(parser, box, "border-top-left-radius", "10px 20px 30px");
+
+            Assert.Equal("5px", CssUtils.GetPropertyValue(box, "border-top-left-radius"));
+        }
+
+        [Theory]
+        [InlineData("5pt")]
+        [InlineData("5pt 10pt")]
+        public async Task SetPropertyValue_BorderSpacing_ValidLengthOnly_IsAccepted(string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "border-spacing", value);
+
+            Assert.Equal(value, CssUtils.GetPropertyValue(box, "border-spacing"));
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_BorderSpacing_Percentage_IsRejected()
+        {
+            var (box, parser) = await FindDivBoxAndParser("border-spacing: 5pt;");
+
+            CssUtils.SetPropertyValue(parser, box, "border-spacing", "10%");
+
+            Assert.Equal("5pt", CssUtils.GetPropertyValue(box, "border-spacing"));
+        }
+
+        [Theory]
+        [InlineData("auto")]
+        [InlineData("16/9")]
+        [InlineData("16 / 9")]
+        [InlineData("auto 16/9")]
+        [InlineData("16/9 auto")]
+        public async Task SetPropertyValue_AspectRatio_ValidValues_AreAccepted(string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "aspect-ratio", value);
+
+            Assert.Equal(value, CssUtils.GetPropertyValue(box, "aspect-ratio"));
+        }
+
+        [Theory]
+        [InlineData("auto auto")]
+        [InlineData("16/9/3")]
+        [InlineData("-1/2")]
+        public async Task SetPropertyValue_AspectRatio_InvalidValues_AreRejected(string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("aspect-ratio: 2;");
+
+            CssUtils.SetPropertyValue(parser, box, "aspect-ratio", value);
+
+            Assert.Equal("2", CssUtils.GetPropertyValue(box, "aspect-ratio"));
+        }
+
+        [Theory]
+        [InlineData("background-origin", "padding-box")]
+        [InlineData("background-origin", "border-box, content-box")]
+        [InlineData("background-clip", "border-box")]
+        public async Task SetPropertyValue_BackgroundOriginOrClip_ValidValues_AreAccepted(string propertyName, string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, propertyName, value);
+
+            Assert.Equal(value, CssUtils.GetPropertyValue(box, propertyName));
+        }
+
+        [Theory]
+        [InlineData("padding-box,")]
+        [InlineData("pad-box")]
+        public async Task SetPropertyValue_BackgroundOrigin_InvalidValues_AreRejected(string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("background-origin: content-box;");
+
+            CssUtils.SetPropertyValue(parser, box, "background-origin", value);
+
+            Assert.Equal("content-box", CssUtils.GetPropertyValue(box, "background-origin"));
+        }
+
+        [Theory]
+        [InlineData("repeat-x")]
+        [InlineData("repeat space")]
+        [InlineData("repeat-x, no-repeat")]
+        public async Task SetPropertyValue_BackgroundRepeat_ValidValues_AreAccepted(string value)
+        {
+            var (box, parser) = await FindDivBoxAndParser("");
+
+            CssUtils.SetPropertyValue(parser, box, "background-repeat", value);
+
+            Assert.Equal(value, CssUtils.GetPropertyValue(box, "background-repeat"));
+        }
+
+        [Fact]
+        public async Task SetPropertyValue_BackgroundRepeat_ThreeKeywordsInOneSegment_IsRejected()
+        {
+            var (box, parser) = await FindDivBoxAndParser("background-repeat: repeat;");
+
+            CssUtils.SetPropertyValue(parser, box, "background-repeat", "repeat space round");
+
+            Assert.Equal("repeat", CssUtils.GetPropertyValue(box, "background-repeat"));
+        }
 
         private static Task<CssBox> FindDivBox(string css) => FindDivBoxFromHtml(BuildHtml(css));
 

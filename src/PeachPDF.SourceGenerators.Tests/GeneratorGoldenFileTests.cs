@@ -105,6 +105,152 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_A_Direct_Grammar_Call_For_The_CssOmGrammar_DataType()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "clip-path", "inherited": false, "initialValue": "none",
+                      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BasicShapeGrammar.TryParse" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_ClipPath(CssValueParser parser, string value) => " +
+                "global::PeachPDF.CSS.BasicShapeGrammar.TryParse(global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens(value, inValueContext: true, preserveWhitespace: true)) is not null;",
+                generated);
+            // Validator-only: storage stays the plain default assignment, no dedicated Set_ override.
+            Assert.Contains("box.Transform = value;", generated);
+        }
+
+        [Fact]
+        public void Emits_A_Shared_Single_Parse_For_The_Parsed_DataType()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "some-thing", "inherited": false, "initialValue": "none",
+                      "cssDataType": { "type": "parsed", "converter": "SomeConverter.TryParse", "resultType": "SomeResult" },
+                      "html": { "propertyPath": "SomeThing", "csharpDataType": "object", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains("private static bool Validate_SomeThing(CssValueParser parser, string value) => SomeConverter.TryParse(value) is not null;", generated);
+            Assert.Contains("var parsed = SomeConverter.TryParse(value);", generated);
+            Assert.Contains("box.SomeThing = parsed;", generated);
+            // The whole point: Set_ must NOT call Validate_ (that would parse twice).
+            Assert.DoesNotContain("if (!Validate_SomeThing(parser, value)) return false;", generated);
+        }
+
+        [Fact]
+        public void Emits_LengthList_Validation_With_Bounds_And_AllowPercentage()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "border-spacing", "inherited": true, "initialValue": "0",
+                      "cssDataType": { "type": "length-list", "min": 1, "max": 2, "allowPercentage": false },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_BorderSpacing(CssValueParser parser, string value) => " +
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLengthList(value, 1, 2, false);",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_Ratio_Validation_Via_AspectRatioGrammar()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "aspect-ratio", "inherited": false, "initialValue": "auto", "cssDataType": "ratio",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_AspectRatio(CssValueParser parser, string value) => " +
+                "global::PeachPDF.CSS.AspectRatioGrammar.TryParseFast(value, out _, out _);",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_KeywordList_Validation_With_MaxPerSegment_And_Aliases()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "background-repeat", "inherited": false, "initialValue": "repeat",
+                      "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BackgroundRepeats", "maxPerSegment": 2, "aliasKeywords": ["repeat-x", "repeat-y"] },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_BackgroundRepeat(CssValueParser parser, string value) => " +
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidCommaKeywordList(value, Map.BackgroundRepeats, 2, new[] { \"repeat-x\", \"repeat-y\" });",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_KeywordList_Validation_With_No_Aliases()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "background-origin", "inherited": false, "initialValue": "padding-box",
+                      "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BoxModels" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_BackgroundOrigin(CssValueParser parser, string value) => " +
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidCommaKeywordList(value, Map.BoxModels, 1, null);",
+                generated);
+        }
+
+        [Fact]
         public void Emits_Min_And_Max_Bounds_For_A_Standalone_Integer_DataType()
         {
             var json = """

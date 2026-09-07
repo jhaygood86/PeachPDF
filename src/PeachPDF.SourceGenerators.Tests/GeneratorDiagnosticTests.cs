@@ -78,6 +78,23 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void PPG016_Fires_When_CssOmGrammar_Type_Has_No_Member()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": "none", "cssDataType": { "type": "cssom-grammar" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG016", IdsOf(result));
+        }
+
+        [Fact]
         public void PPG005_Fires_When_Binding_Has_No_PropertyPath_And_No_CustomSetter()
         {
             var json = """
@@ -643,8 +660,10 @@ namespace PeachPDF.SourceGenerators.Tests
         [Fact]
         public void Parsed_DataType_Parses_Without_Diagnostics()
         {
-            // Schema-reserved shape with no current entry using it (no binding, so no codegen is
-            // attempted) - this only proves ParseSingleDataType reads its converter/resultType/typedValueType fields.
+            // No html binding on this entry, so EmitHtmlEntryMethods (and therefore the dedicated Parsed
+            // codegen it dispatches to - see GeneratorGoldenFileTests.Emits_A_Shared_Single_Parse_For_The_
+            // Parsed_DataType for that) never runs - this only proves ParseSingleDataType reads its
+            // converter/resultType/typedValueType fields without raising PPG017.
             var json = """
                 {
                   "properties": [
@@ -658,6 +677,22 @@ namespace PeachPDF.SourceGenerators.Tests
             var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
 
             Assert.Empty(result.Diagnostics);
+        }
+
+        [Fact]
+        public void PPG017_Fires_When_Parsed_Type_Has_No_Converter_Or_ResultType()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": null, "cssDataType": { "type": "parsed" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Contains("PPG017", IdsOf(result));
         }
 
         [Fact]

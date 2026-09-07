@@ -93,10 +93,10 @@
         {
           "type": "string",
           "enum": [
-            "cssom", "unsupported", "length", "color", "current-color", "transform", "keyword", "integer", "number",
+            "cssom", "unsupported", "length", "color", "current-color", "transform", "keyword", "integer", "number", "ratio",
             "svg-paint", "svg-opacity", "svg-length", "svg-length-list", "svg-transform", "svg-reference"
           ],
-          "description": "'cssom' means 'no dedicated grammar modeled here' — HTML validation delegates to the real CSS-OM property for the same name (PropertyFactory + StylesheetParser), so it still only accepts what that property's own grammar accepts. Unless a property genuinely accepts unconstrained text, prefer a specific data type (keyword/length/integer/...) over 'cssom' so the accepted grammar is visible in this file rather than only in the CSS-OM."
+          "description": "'cssom' means 'no dedicated grammar modeled here' — HTML validation delegates to the real CSS-OM property for the same name (PropertyFactory + StylesheetParser), so it still only accepts what that property's own grammar accepts. Unless a property genuinely accepts unconstrained text, prefer a specific data type (keyword/length/integer/...) over 'cssom' so the accepted grammar is visible in this file rather than only in the CSS-OM. 'ratio' is [ auto || <ratio> ] (aspect-ratio), validated span-based via AspectRatioGrammar.TryParseFast with no tokenizer at all."
         },
         {
           "type": "object",
@@ -109,6 +109,28 @@
         },
         {
           "type": "object",
+          "required": ["type"],
+          "description": "<length-percentage>{min,max} (border-*-radius) or <length>{min,max} (border-spacing, allowPercentage:false) — validated by CssValueParser.IsValidLengthList by splitting on top-level whitespace (CssValueParser.SplitTopLevelWhitespace) and re-checking each component with the same IsValidLength already used for a plain 'length' declaration, instead of the full CSS-OM tokenizer round trip.",
+          "properties": {
+            "type": { "const": "length-list" },
+            "min": { "type": "integer", "default": 1, "description": "Minimum component count." },
+            "max": { "type": "integer", "default": 2, "description": "Maximum component count." },
+            "allowPercentage": { "type": "boolean", "default": true, "description": "false for border-spacing's <length>{1,2} — percentages are not allowed there." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "keywordMap"],
+          "description": "A comma-separated list (CSS <foo># multiplier), each segment 1..maxPerSegment space-separated keywords drawn from keywordMap's own keys (reusing the existing Map.* dictionary instead of a second, JSON-authored keyword list — CLAUDE.md's 'one parser' rule), OR a literal match against aliasKeywords (e.g. background-repeat's repeat-x/repeat-y, each standing in for a full two-keyword segment). Split via CssValueParser.SplitTopLevelCommas/SplitTopLevelWhitespace rather than the CSS-OM tokenizer.",
+          "properties": {
+            "type": { "const": "keyword-list" },
+            "keywordMap": { "type": "string", "description": "Same meaning as enum-keyword's keywordMap — an existing Map.* dictionary name." },
+            "maxPerSegment": { "type": "integer", "default": 1, "description": "background-repeat's <repeat-style> allows up to 2 keywords per comma-separated layer." },
+            "aliasKeywords": { "type": "array", "items": { "type": "string" }, "description": "Single-token aliases accepted as a whole segment in place of the maxPerSegment expansion (background-repeat's repeat-x/repeat-y)." }
+          }
+        },
+        {
+          "type": "object",
           "required": ["type", "converter"],
           "description": "Delegates validation+conversion to an existing shared converter (e.g. GridTemplateValueConverter.FromCssText) instead of re-deriving grammar this codebase already parses elsewhere — see CLAUDE.md's 'one parser' rule.",
           "properties": {
@@ -116,6 +138,16 @@
             "converter": { "type": "string" },
             "resultType": { "type": "string" },
             "typedValueType": { "type": "string", "description": "For a property that also needs a typed (IPropertyValue) fast path, e.g. grid-template-columns." }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "member"],
+          "description": "Calls a specific, already-existing Layer A grammar directly against CssValueParser.GetCssTokens(value, inValueContext: true), instead of 'cssom''s full PropertyFactory.Create + StylesheetParser.ParseValue + TrySetValue round trip — see CLAUDE.md's 'one parser' rule and the accepted-gaps/recent-fixes notes on issue #909. Validator-only: the property still stores the raw string via the normal default assignment, so this does not need a 'resultType' the way 'parsed' does.",
+          "properties": {
+            "type": { "const": "cssom-grammar" },
+            "member": { "type": "string", "description": "Fully-qualified, directly invokable as member(tokens) — either a static TryParse(IReadOnlyList<Token>)-shaped method (e.g. \"PeachPDF.CSS.BasicShapeGrammar.TryParse\") or an IValueConverter field with \".Convert\" included in the string itself (e.g. \"PeachPDF.CSS.Converters.MultipleImageSourceConverter.Convert\"). Not symbol-validated against the compilation (unlike propertyPath/csharpDataType's PPG010/PPG011) — same authoring convention as enum-keyword's keywordMap." },
+            "acceptsNoneLiteral": { "type": "boolean", "default": false, "description": "Set true when member returns null for the literal \"none\" the same as it does for a genuinely invalid value (e.g. BasicShapeGrammar.TryParse, whose own doc comment states this explicitly, since a null result can't otherwise distinguish \"no shape\" from \"invalid\") — the validator then accepts \"none\" as a separate case rather than incorrectly rejecting it. Not needed for a member that is already none-aware on its own (e.g. BoxShadowGrammar.TryParse returns an empty list, not null, for \"none\")." }
           }
         },
         {
