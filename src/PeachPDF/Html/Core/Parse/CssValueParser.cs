@@ -1173,6 +1173,39 @@ namespace PeachPDF.Html.Core.Parse
             return sawFunction;
         }
 
+        /// <summary>
+        /// Validates a <c>page</c> (page-name) value: <c>auto | &amp;lt;custom-ident&amp;gt;</c> (CSS Paged
+        /// Media 3 §4.2). <c>page</c> has no real <c>PropertyFactory</c> registration at all, so its
+        /// former "cssom" clause was unconditionally true (an unregistered name short-circuits that
+        /// clause's left-hand check without ever tokenizing) - a real, deliberate narrowing from "accept
+        /// any string" to "accept auto or a syntactically valid identifier". Does not implement every
+        /// wrinkle of CSS Syntax Level 3's ident-token grammar (escapes, non-ASCII identifiers) - a
+        /// reasonable approximation for author-chosen page names, matching the level of fidelity
+        /// <c>ContainerNameProperty.ToContainerNameList</c> already uses for a similar bare-identifier
+        /// shape elsewhere in this codebase.
+        /// </summary>
+        public static bool IsValidPageName(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return false;
+            if (value.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)) return true;
+
+            var i = 0;
+            if (value[0] == '-')
+            {
+                i = 1;
+                if (value.Length == 1) return false; // a bare "-" is not a valid custom-ident
+            }
+
+            if (!(char.IsLetter(value[i]) || value[i] == '_')) return false;
+
+            for (i++; i < value.Length; i++)
+            {
+                if (!(char.IsLetterOrDigit(value[i]) || value[i] is '-' or '_')) return false;
+            }
+
+            return true;
+        }
+
         private static string SingleTokenText(List<Token> group) =>
             group.Count > 0 ? group[0].ToValue() : "0";
 

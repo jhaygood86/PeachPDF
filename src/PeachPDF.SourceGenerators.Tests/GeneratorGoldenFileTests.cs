@@ -12,7 +12,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "cssom",
+                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "length",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -25,8 +25,7 @@ namespace PeachPDF.SourceGenerators.Tests
 
             Assert.Contains(
                 "private static bool Validate_Transform(CssValueParser parser, string value) => " +
-                "global::PeachPDF.CSS.PropertyFactory.Instance.Create(\"transform\") is not { } knownProperty || " +
-                "(global::PeachPDF.CSS.StylesheetParser.Default.ParseValue(value) is { } tokenValue && knownProperty.TrySetValue(tokenValue));",
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength(value);",
                 generated);
             Assert.Contains("private static bool Supports_Transform(CssValueParser parser, string value) => Validate_Transform(parser, value);", generated);
             Assert.Contains("box.Transform = value;", generated);
@@ -41,7 +40,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "cssom",
+                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "length",
                       "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
                   ]
                 }
@@ -561,7 +560,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "direction", "inherited": true, "initialValue": "ltr", "cssDataType": "cssom",
+                    { "name": "direction", "inherited": true, "initialValue": "ltr", "cssDataType": "length",
                       "svg": { "propertyPath": null, "inheritedFrom": "Direction", "invalidBehavior": "inherit", "applyIn": "manual" } }
                   ]
                 }
@@ -625,7 +624,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "text-align", "inherited": true, "initialValue": "start", "cssDataType": "cssom",
+                    { "name": "text-align", "inherited": true, "initialValue": "start", "cssDataType": "length",
                       "html": { "propertyPath": "TextAlign", "csharpDataType": "string", "area": "TextArea" } }
                   ]
                 }
@@ -669,16 +668,19 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
-        public void Emits_ComputedStyleAreas_FromValue_Default_For_A_CssOm_Delegated_CssProperty()
+        public void Emits_ComputedStyleAreas_FromValue_Default_For_A_CustomSetter_Delegated_CssProperty()
         {
-            // grid-template-columns/-rows' shape: csharpDataType is CssProperty<T> but cssDataType is
-            // "cssom" (grammar validation and real parsing are delegated to the CSS-OM/customSetter, not
-            // a generator-known FromCssText path) - the initial keyword has no corresponding parsed T, so
-            // only the raw text is set and the parsed half stays a literal null.
+            // A property whose csharpDataType is CssProperty<T> but which relies on a customSetter (real
+            // parsing delegated there, not a generator-known FromCssText path) - the initial keyword has
+            // no corresponding parsed T, so only the raw text is set and the parsed half stays a literal
+            // null. This is grid-template-columns/-rows' actual pre-"parsed"-cssDataType shape, kept here
+            // as a golden test for AreasEmitter's own fallback even though that specific property has
+            // since moved to a real "parsed" cssDataType with its own dedicated codegen (see
+            // Emits_A_Shared_Single_Parse_For_The_Parsed_DataType).
             var json = """
                 {
                   "properties": [
-                    { "name": "grid-template-columns", "inherited": false, "initialValue": "none", "cssDataType": "cssom",
+                    { "name": "grid-template-columns", "inherited": false, "initialValue": "none", "cssDataType": "length",
                       "html": { "propertyPath": "GridTemplateColumns", "csharpDataType": "CssProperty<GridTemplate>", "area": "GridArea",
                         "customSetter": "{box}.GridTemplateColumns = GridTemplateValueConverter.FromCssText({value});" } }
                   ]
@@ -706,7 +708,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "list-style-image", "inherited": true, "initialValue": null, "cssDataType": "cssom",
+                    { "name": "list-style-image", "inherited": true, "initialValue": null, "cssDataType": "length",
                       "html": { "propertyPath": "ListStyleImage", "csharpDataType": "CssImage?", "area": "ListArea",
                         "customSetter": "{box}.ListStyleImage = CssImageParser.FromCssText({value});" } }
                   ]
@@ -730,9 +732,9 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "break-after", "inherited": false, "initialValue": "auto", "cssDataType": "cssom",
+                    { "name": "break-after", "inherited": false, "initialValue": "auto", "cssDataType": "length",
                       "html": { "propertyPath": "BreakAfter", "csharpDataType": "string", "area": "BreakArea" } },
-                    { "name": "page-break-after", "inherited": false, "initialValue": "auto", "aliasOf": "break-after", "cssDataType": "cssom",
+                    { "name": "page-break-after", "inherited": false, "initialValue": "auto", "aliasOf": "break-after", "cssDataType": "length",
                       "html": { "propertyPath": "BreakAfter", "csharpDataType": "string", "area": "BreakArea" } }
                   ]
                 }
@@ -767,7 +769,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "text-align", "inherited": true, "initialValue": "start", "cssDataType": "cssom",
+                    { "name": "text-align", "inherited": true, "initialValue": "start", "cssDataType": "length",
                       "html": { "propertyPath": "TextAlign", "csharpDataType": "string", "area": "TextArea" } }
                   ]
                 }
@@ -950,7 +952,7 @@ namespace PeachPDF.SourceGenerators.Tests
             var json = """
                 {
                   "properties": [
-                    { "name": "text-indent", "inherited": true, "initialValue": "0", "cssDataType": "cssom",
+                    { "name": "text-indent", "inherited": true, "initialValue": "0", "cssDataType": "length",
                       "html": { "propertyPath": "TextIndent", "csharpDataType": "string", "area": "TextArea",
                         "valueComputation": "text-indent" } }
                   ]

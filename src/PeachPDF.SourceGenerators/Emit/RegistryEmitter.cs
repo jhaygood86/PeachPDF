@@ -468,7 +468,6 @@ namespace PeachPDF.SourceGenerators.Emit
                 DataTypeKind.SvgLengthList =>
                     "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal);\n" +
                     $"if (parsed is null) return false;\nelement.{svg.PropertyPath} = parsed;\nreturn true;",
-                DataTypeKind.CssOm => $"element.{svg.PropertyPath} = value;\nreturn true;",
                 _ => throw new NotSupportedException(
                     $"DataTypeKind.{kind} has no default SVG setter and \"{entry.Name}\" declares no customSetter."),
             };

@@ -96,12 +96,12 @@
     },
     {
       "name": "font-family",
-      "comment": "Multi-field write: the resolved family (FontFamily) and the raw authored list (FontFamilyList) both come from one declaration. The initial value is UA/platform-defined (DefaultFontResolver.DefaultFont is computed per-platform at runtime), hence an {expression} rather than a string literal.",
+      "comment": "Multi-field write: the resolved family (FontFamily) and the raw authored list (FontFamilyList) both come from one declaration. The initial value is UA/platform-defined (DefaultFontResolver.DefaultFont is computed per-platform at runtime), hence an {expression} rather than a string literal. cssDataType 'cssom-grammar' calls the already-public Converters.FontFamiliesConverter.Convert directly instead of the full cssom round trip.",
       "inherited": true,
       "initialValue": {
         "expression": "DefaultFontResolver.DefaultFont"
       },
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.FontFamiliesConverter.Convert" },
       "html": {
         "propertyPath": "FontFamily",
         "csharpDataType": "string?",
@@ -622,9 +622,10 @@
     },
     {
       "name": "transform-origin",
+      "comment": "cssDataType 'cssom-grammar' calls TransformOriginProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "50% 50% 0",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.TransformOriginProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "TransformOrigin",
         "invalidates": "InvalidateTransform",
@@ -763,9 +764,10 @@
     },
     {
       "name": "page",
+      "comment": "page-name (CSS Paged Media 3 §4.2: auto | <custom-ident>), validated span-based via CssValueParser.IsValidPageName (cssDataType 'custom-ident-or-auto'). This property has no real PropertyFactory registration at all, so its former 'cssom' clause was unconditionally true (an unregistered name short-circuits without ever tokenizing) - this is a deliberate, real narrowing from 'accept any string' to the actual spec grammar, not a pure perf change; see the counter-set migration note for the same 'unregistered name defaults to accept-anything' shape this property used to have.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "cssom",
+      "cssDataType": "custom-ident-or-auto",
       "html": {
         "propertyPath": "PageName",
         "csharpDataType": "string",
@@ -870,10 +872,10 @@
     },
     {
       "name": "-peachpdf-bookmark-target",
-      "comment": "NOT a css-content-3 property - css-content-3 defines only bookmark-level/-label/-state (verified against the spec source directly; an earlier draft of this issue assumed bookmark-target was part of the same spec and it is not). This is Prince's own extension (prince-bookmark-target, self | url() | attr(), default self) - PeachPDF's own documented spelling follows the -peachpdf-pdf-tag-type precedent for a PDF-output feature with no real spec-track name, rather than the unprefixed spelling Prince itself uses. See BookmarkOutlineBuilder.ResolveTargetValue for self/url()/attr() resolution and the in-document-fragment-vs-external-URL split.",
+      "comment": "NOT a css-content-3 property - css-content-3 defines only bookmark-level/-label/-state (verified against the spec source directly; an earlier draft of this issue assumed bookmark-target was part of the same spec and it is not). This is Prince's own extension (prince-bookmark-target, self | url() | attr(), default self) - PeachPDF's own documented spelling follows the -peachpdf-pdf-tag-type precedent for a PDF-output feature with no real spec-track name, rather than the unprefixed spelling Prince itself uses. See BookmarkOutlineBuilder.ResolveTargetValue for self/url()/attr() resolution and the in-document-fragment-vs-external-URL split. cssDataType 'cssom-grammar' calls the already-public Converters.BookmarkTargetConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "self",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkTargetConverter.Convert" },
       "html": {
         "propertyPath": "BookmarkTarget",
         "csharpDataType": "string",
@@ -882,10 +884,10 @@
     },
     {
       "name": "-prince-bookmark-level",
-      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-level spelling (Prince documents both an unprefixed and a -prince- prefixed form for all four bookmark-* properties) - translates to the real spec property bookmark-level at parse time. Not documented in docs/, same pattern as the other PDF-output extensions' Prince/prefixed compat shims.",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-level spelling (Prince documents both an unprefixed and a -prince- prefixed form for all four bookmark-* properties) - translates to the real spec property bookmark-level at parse time. Not documented in docs/, same pattern as the other PDF-output extensions' Prince/prefixed compat shims. cssDataType 'cssom-grammar' calls the same Converters.BookmarkLevelConverter.Convert bookmark-level's own real grammar uses.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkLevelConverter.Convert" },
       "aliasOf": "bookmark-level",
       "html": {
         "propertyPath": "BookmarkLevel",
@@ -895,10 +897,10 @@
     },
     {
       "name": "-prince-bookmark-label",
-      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-label spelling - translates to the real spec property bookmark-label at parse time.",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-label spelling - translates to the real spec property bookmark-label at parse time. cssDataType 'cssom-grammar' calls the same Converters.BookmarkLabelConverter.Convert bookmark-label's own real grammar uses.",
       "inherited": false,
       "initialValue": "content(text)",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkLabelConverter.Convert" },
       "aliasOf": "bookmark-label",
       "html": {
         "propertyPath": "BookmarkLabel",
@@ -908,10 +910,10 @@
     },
     {
       "name": "-prince-bookmark-state",
-      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-state spelling - translates to the real spec property bookmark-state at parse time.",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-state spelling - translates to the real spec property bookmark-state at parse time. cssDataType 'cssom-grammar' calls the same Converters.BookmarkStateConverter.Convert bookmark-state's own real grammar uses.",
       "inherited": false,
       "initialValue": "open",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkStateConverter.Convert" },
       "aliasOf": "bookmark-state",
       "html": {
         "propertyPath": "BookmarkState",
@@ -921,10 +923,10 @@
     },
     {
       "name": "-prince-bookmark-target",
-      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-target spelling - translates to -peachpdf-bookmark-target (a PeachPDF extension, not a real spec property - see that entry) at parse time.",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-target spelling - translates to -peachpdf-bookmark-target (a PeachPDF extension, not a real spec property - see that entry) at parse time. cssDataType 'cssom-grammar' calls the same Converters.BookmarkTargetConverter.Convert PrinceBookmarkTargetProperty's own real grammar uses.",
       "inherited": false,
       "initialValue": "self",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkTargetConverter.Convert" },
       "aliasOf": "-peachpdf-bookmark-target",
       "html": {
         "propertyPath": "BookmarkTarget",
@@ -934,10 +936,10 @@
     },
     {
       "name": "bookmark-target",
-      "comment": "Hidden, undocumented compat alias for Prince's own bookmark-target spelling (Prince's convenience alias for its prince-bookmark-target extension) - translates to -peachpdf-bookmark-target at parse time. The one place in this file an unprefixed name is NOT a real spec property: css-content-3 defines no bookmark-target at all (see -peachpdf-bookmark-target's own comment).",
+      "comment": "Hidden, undocumented compat alias for Prince's own bookmark-target spelling (Prince's convenience alias for its prince-bookmark-target extension) - translates to -peachpdf-bookmark-target at parse time. The one place in this file an unprefixed name is NOT a real spec property: css-content-3 defines no bookmark-target at all (see -peachpdf-bookmark-target's own comment). cssDataType 'cssom-grammar' calls the same Converters.BookmarkTargetConverter.Convert BookmarkTargetAliasProperty's own real grammar uses.",
       "inherited": false,
       "initialValue": "self",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.BookmarkTargetConverter.Convert" },
       "aliasOf": "-peachpdf-bookmark-target",
       "html": {
         "propertyPath": "BookmarkTarget",
@@ -1827,9 +1829,10 @@
     },
     {
       "name": "text-indent",
+      "comment": "cssDataType 'cssom-grammar' calls TextIndentValueConverter.Instance.Convert directly (the same shared TextIndentGrammar the real converter uses) instead of the full cssom round trip.",
       "inherited": true,
       "initialValue": "0",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.TextIndentValueConverter.Instance.Convert" },
       "html": {
         "propertyPath": "TextIndent",
         "csharpDataType": "string",
@@ -2079,10 +2082,10 @@
     },
     {
       "name": "hyphenate-character",
-      "comment": "CSS Text 4 §6.3.1: auto | <string>. cssDataType 'cssom' delegates grammar validation to the CSS-OM's own HyphenateCharacterProperty; layout resolves the raw stored text (list-style-type's own <string>-storage convention - still carries its quotes) to the actual glyph, defaulting auto to '-' (see docs/html-css-support.md and the accepted-gaps note on script-appropriate auto selection).",
+      "comment": "CSS Text 4 §6.3.1: auto | <string>. cssDataType 'cssom-grammar' calls the already-public Converters.HyphenateCharacterConverter.Convert directly instead of the full cssom round trip; layout resolves the raw stored text (list-style-type's own <string>-storage convention - still carries its quotes) to the actual glyph, defaulting auto to '-' (see docs/html-css-support.md and the accepted-gaps note on script-appropriate auto selection).",
       "inherited": true,
       "initialValue": "auto",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.HyphenateCharacterConverter.Convert" },
       "html": {
         "propertyPath": "HyphenateCharacter",
         "csharpDataType": "string",
@@ -2153,10 +2156,10 @@
     },
     {
       "name": "-prince-hyphenate-character",
-      "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-character spelling (Prince also documents an unprefixed \"hyphenate-character\" that is spelled identically to the real CSS Text 4 property, so needs no separate alias entry of its own) - translates to hyphenate-character at parse time. Not documented in docs/.",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-character spelling (Prince also documents an unprefixed \"hyphenate-character\" that is spelled identically to the real CSS Text 4 property, so needs no separate alias entry of its own) - translates to hyphenate-character at parse time. Not documented in docs/. cssDataType 'cssom-grammar' calls the same Converters.HyphenateCharacterConverter.Convert hyphenate-character's own real grammar uses.",
       "inherited": true,
       "initialValue": "auto",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.HyphenateCharacterConverter.Convert" },
       "aliasOf": "hyphenate-character",
       "html": {
         "propertyPath": "HyphenateCharacter",
@@ -2466,9 +2469,10 @@
     },
     {
       "name": "font-palette",
+      "comment": "cssDataType 'cssom-grammar' calls FontPaletteValueConverter.Instance.Convert directly (the real grammar) instead of the full cssom round trip.",
       "inherited": true,
       "initialValue": "normal",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FontPaletteValueConverter.Instance.Convert" },
       "html": {
         "propertyPath": "FontPalette",
         "invalidates": "InvalidateFontPalette",
@@ -2494,10 +2498,10 @@
     },
     {
       "name": "list-style-type",
-      "comment": "cssDataType 'cssom' delegates grammar validation to the CSS-OM's own ListStyleTypeProperty (Converters.ListStyleConverter / Map.ListStyles) - the full predefined-counter-style keyword set plus a literal <string> marker - rather than re-deriving a second, independently-maintained keyword list here (this repo's 'one parser' rule). CssCounterEngine/CommonUtils.ConvertToAlphaNumber and CssBoxMarker.ResolveDefaultContent are the downstream consumers that turn a stored keyword or quoted-string value into an actual marker.",
+      "comment": "cssDataType 'cssom-grammar' calls the already-public Converters.ListStyleConverter.Convert directly (Map.ListStyles - the full predefined-counter-style keyword set - plus a literal <string> marker) rather than re-deriving a second, independently-maintained keyword list here (this repo's 'one parser' rule), instead of the full cssom round trip. CssCounterEngine/CommonUtils.ConvertToAlphaNumber and CssBoxMarker.ResolveDefaultContent are the downstream consumers that turn a stored keyword or quoted-string value into an actual marker.",
       "inherited": true,
       "initialValue": "disc",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.ListStyleConverter.Convert" },
       "html": {
         "propertyPath": "ListStyleType",
         "csharpDataType": "string",
@@ -2747,9 +2751,10 @@
     },
     {
       "name": "grid-template-areas",
+      "comment": "cssDataType 'cssom-grammar' calls GridTemplateAreasGrammar.TryParse directly (the same grammar GridTemplateAreasValueConverter's real grammar uses) instead of the full cssom round trip. acceptsNoneLiteral: true because TryParse returns null for the literal 'none' the same as for an invalid value (its own doc comment states this explicitly), so the validator must accept it separately.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.GridTemplateAreasGrammar.TryParse", "acceptsNoneLiteral": true },
       "html": {
         "propertyPath": "GridTemplateAreas",
         "csharpDataType": "string",
@@ -2782,9 +2787,10 @@
     },
     {
       "name": "grid-auto-flow",
+      "comment": "[ row | column ] || dense. cssDataType 'cssom-grammar' calls the real GridAutoFlowValueConverter.Instance.Convert directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "row",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.GridAutoFlowValueConverter.Instance.Convert" },
       "html": {
         "propertyPath": "GridAutoFlow",
         "csharpDataType": "string",
@@ -2828,9 +2834,10 @@
     },
     {
       "name": "grid-column-start",
+      "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.GridLineConverter.Convert" },
       "html": {
         "propertyPath": "GridColumnStart",
         "csharpDataType": "string",
@@ -2839,9 +2846,10 @@
     },
     {
       "name": "grid-column-end",
+      "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.GridLineConverter.Convert" },
       "html": {
         "propertyPath": "GridColumnEnd",
         "csharpDataType": "string",
@@ -2850,9 +2858,10 @@
     },
     {
       "name": "grid-row-start",
+      "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.GridLineConverter.Convert" },
       "html": {
         "propertyPath": "GridRowStart",
         "csharpDataType": "string",
@@ -2861,9 +2870,10 @@
     },
     {
       "name": "grid-row-end",
+      "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
       "initialValue": "auto",
-      "cssDataType": "cssom",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.GridLineConverter.Convert" },
       "html": {
         "propertyPath": "GridRowEnd",
         "csharpDataType": "string",

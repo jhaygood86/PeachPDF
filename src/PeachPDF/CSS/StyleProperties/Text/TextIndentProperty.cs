@@ -7,7 +7,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class TextIndentProperty : Property
     {
-        private static readonly IValueConverter StyleConverter = new TextIndentValueConverter().OrDefault();
+        private static readonly IValueConverter StyleConverter = TextIndentValueConverter.Instance.OrDefault();
 
         internal TextIndentProperty()
             : base(PropertyNames.TextIndent, PropertyFlags.Inherited | PropertyFlags.Animatable)

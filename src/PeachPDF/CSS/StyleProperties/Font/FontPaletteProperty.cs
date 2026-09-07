@@ -8,7 +8,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class FontPaletteProperty : Property
     {
-        private static readonly IValueConverter StyleConverter = new FontPaletteValueConverter().OrDefault();
+        private static readonly IValueConverter StyleConverter = FontPaletteValueConverter.Instance.OrDefault();
 
         internal FontPaletteProperty()
             : base(PropertyNames.FontPalette, PropertyFlags.Inherited)

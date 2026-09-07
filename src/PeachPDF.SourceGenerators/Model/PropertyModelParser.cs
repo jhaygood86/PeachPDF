@@ -317,7 +317,6 @@ namespace PeachPDF.SourceGenerators.Model
             {
                 return json.StringValue switch
                 {
-                    "cssom" => DataTypeSpec.Simple(DataTypeKind.CssOm),
                     "unsupported" => DataTypeSpec.Simple(DataTypeKind.Unsupported),
                     "length" => DataTypeSpec.Simple(DataTypeKind.Length),
                     "color" => DataTypeSpec.Simple(DataTypeKind.Color),
@@ -325,6 +324,7 @@ namespace PeachPDF.SourceGenerators.Model
                     "transform" => DataTypeSpec.Simple(DataTypeKind.Transform),
                     "ratio" => DataTypeSpec.Simple(DataTypeKind.Ratio),
                     "transform-list" => DataTypeSpec.Simple(DataTypeKind.TransformList),
+                    "custom-ident-or-auto" => DataTypeSpec.Simple(DataTypeKind.CustomIdentOrAuto),
                     "keyword" => DataTypeSpec.Simple(DataTypeKind.Keyword),
                     "integer" => DataTypeSpec.Simple(DataTypeKind.Integer),
                     "number" => DataTypeSpec.Simple(DataTypeKind.Number),
