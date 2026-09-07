@@ -1814,6 +1814,410 @@ Assert.NotNull(tbody);
             Assert.Equal(60, c3.Location.X - table.Location.X, precision: 1);
         }
 
+        [Fact]
+        public async Task TableLayout_AllColumnsExplicitlyWidthed_SpreadsSurplusProportionally()
+        {
+            // Automatic layout's own "every column already stated a width via <col>, but together they
+            // fall short of the table's own width" surplus clause (DetermineMissingColumnWidths' final
+            // else branch) - the same proportional-spread rule table-layout: fixed reuses via the shared
+            // SpreadSurplusProportionally helper.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <colgroup><col style='width: 60px'><col style='width: 60px'></colgroup>
+  <tbody><tr><td id='q1'>A</td><td id='q2'>B</td></tr></tbody>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            // Both <col>s start at 60px * 0.75 = 45pt (90pt total); the 210pt surplus splits evenly
+            // between them since they started equal, landing both at 150pt.
+            Assert.Equal(150, Width(FindById(rootBox, "q1")!), precision: 1);
+            Assert.Equal(150, Width(FindById(rootBox, "q2")!), precision: 1);
+        }
+
+        #endregion
+
+        #region Fixed Table Layout (table-layout: fixed) Tests
+
+        // Every fixture below zeroes border-spacing/border and gives the table an explicit width, so
+        // GetAvailableCellWidth() equals the stated width exactly and expected column widths are exact
+        // numbers rather than off by the UA-default border-spacing.
+
+        [Fact]
+        public async Task FixedLayout_DividesWidthEqually_AndWrapsLongContent()
+        {
+            // The GitHub issue's own repro: a three-column table with one much longer cell should end
+            // up with three EQUAL columns under table-layout: fixed (with the long cell's text wrapping
+            // inside its column), not one swollen column the way table-layout: auto would produce. Both
+            // tables below hold identical markup so the comparison is self-checking.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    body { margin: 0 }
+    table { width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0; font-size: 10pt }
+    td { padding: 0; border: 0 }
+    #tFixed { table-layout: fixed }
+    #tAuto { table-layout: auto }
+</style></head>
+<body>
+<table id='tFixed'>
+  <tr><td id='a1'>A</td><td id='a2'>Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua</td><td id='a3'>C</td></tr>
+</table>
+<table id='tAuto'>
+  <tr><td id='b1'>A</td><td id='b2'>Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua</td><td id='b3'>C</td></tr>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var a1 = FindById(rootBox, "a1")!;
+            var a2 = FindById(rootBox, "a2")!;
+            var a3 = FindById(rootBox, "a3")!;
+            var b2 = FindById(rootBox, "b2")!;
+
+            _output.WriteLine($"fixed: a1={Width(a1)}, a2={Width(a2)}, a3={Width(a3)}; auto: b2={Width(b2)}");
+
+            // Fixed: no <col>/no cell widths -> all three columns are unset -> equal split of 300pt.
+            Assert.Equal(100, Width(a1), precision: 1);
+            Assert.Equal(100, Width(a2), precision: 1);
+            Assert.Equal(100, Width(a3), precision: 1);
+
+            // Auto: the long cell's content pulls its column far wider than fixed's flat 100pt split -
+            // proving fixed genuinely ignored the content that auto used to size the column.
+            Assert.True(Width(b2) > Width(a2) + 30,
+                $"Auto layout's content column ({Width(b2)}) should be substantially wider than fixed's equal-split column ({Width(a2)})");
+
+            // The long text had to wrap into more than one line inside its 100pt-wide fixed column.
+            Assert.True(Height(a2) > 20, $"Fixed column's long content should wrap onto multiple lines, but row height was only {Height(a2)}");
+        }
+
+        [Fact]
+        public async Task FixedLayout_ColElementWidths_Honored_RemainderGoesToTheUnsetColumn()
+        {
+            // <col> width is fixed layout's first (and highest) priority: a px column and a percentage
+            // column both get their stated widths, and the third <col> - which states a width in an
+            // unsupported unit (pt), the same pre-existing px/unitless/% -only grammar auto layout's
+            // <col> reading already has - is treated as unset and takes the true remainder.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { table-layout: fixed; width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <colgroup><col style='width: 160px'><col style='width: 40%'><col style='width: 999pt'></colgroup>
+  <tbody><tr><td id='c1'>A</td><td id='c2'>B</td><td id='c3'>C</td></tr></tbody>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var c1 = FindById(rootBox, "c1")!;
+            var c2 = FindById(rootBox, "c2")!;
+            var c3 = FindById(rootBox, "c3")!;
+
+            // 160px * 0.75 = 120pt; 40% of 300pt = 120pt; remainder = 300 - 120 - 120 = 60pt.
+            Assert.Equal(120, c1.ActualRight - c1.Location.X, precision: 1);
+            Assert.Equal(120, c2.ActualRight - c2.Location.X, precision: 1);
+            Assert.Equal(60, c3.ActualRight - c3.Location.X, precision: 1);
+        }
+
+        [Fact]
+        public async Task FixedLayout_UsesFirstRowCellWidthOnly_IgnoringLaterRows()
+        {
+            // The defining regression proof: under fixed layout, only the FIRST row's own cell width
+            // may set a column's width. Today's automatic-layout code (CalculateColumnWidths' own
+            // cell-width scan) deliberately looks at every row and takes the max, so this is the one
+            // scenario where fixed layout is not simply a subset of what auto already computes - it
+            // fails here unless the fixed-only path is genuinely wired in.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { table-layout: fixed; width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <tbody>
+    <tr><td id='r1c1'>a</td><td id='r1c2' style='width: 150pt'>b</td><td id='r1c3'>c</td></tr>
+    <tr><td id='r2c1'>d</td><td id='r2c2' style='width: 250pt'>e</td><td id='r2c3'>f</td></tr>
+  </tbody>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var r1c2 = FindById(rootBox, "r1c2")!;
+            var r2c2 = FindById(rootBox, "r2c2")!;
+            var r1c1 = FindById(rootBox, "r1c1")!;
+            var r1c3 = FindById(rootBox, "r1c3")!;
+
+            _output.WriteLine($"r1c2={Width(r1c2)}, r2c2={Width(r2c2)}, r1c1={Width(r1c1)}, r1c3={Width(r1c3)}");
+
+            // The middle column takes the first row's 150pt - the second row's 250pt is ignored entirely.
+            Assert.Equal(150, Width(r1c2), precision: 1);
+            Assert.Equal(150, Width(r2c2), precision: 1);
+            Assert.NotEqual(250, Width(r2c2), 1);
+
+            // Remaining 150pt (300 - 150) splits evenly over the two unset columns: 75pt each.
+            Assert.Equal(75, Width(r1c1), precision: 1);
+            Assert.Equal(75, Width(r1c3), precision: 1);
+        }
+
+        [Fact]
+        public async Task FixedLayout_WidthAuto_FallsBackToAutomaticLayout()
+        {
+            // Per CSS 2.1 §17.5.2.1 as implemented by real browsers (confirmed via MDN): table-layout:
+            // fixed has NO EFFECT when the table's own width is auto - the table falls back to the
+            // automatic, content-based algorithm instead of dividing space evenly.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    body { width: 400pt; margin: 0 }
+    table { table-layout: fixed; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <tr><td id='d1'>A</td><td id='d2'>Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua</td><td id='d3'>C</td></tr>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var d1 = FindById(rootBox, "d1")!;
+            var d2 = FindById(rootBox, "d2")!;
+            var d3 = FindById(rootBox, "d3")!;
+
+            _output.WriteLine($"d1={Width(d1)}, d2={Width(d2)}, d3={Width(d3)}");
+
+            // If fixed layout had (incorrectly) engaged despite width:auto, all three columns would be
+            // equal (400/3 = 133.33 each). Instead, content should drive the split: the long cell's
+            // column is clearly wider than the two short, near-identical single-letter columns.
+            Assert.True(Width(d2) > Width(d1) + 30, "Content should still drive column width under width:auto, proving fixed had no effect");
+            Assert.True(Math.Abs(Width(d1) - Width(d3)) < 10, "The two single-letter columns should end up similarly narrow");
+        }
+
+        [Fact]
+        public async Task FixedLayout_FirstRowColspanWidth_DividedOverSpannedColumns()
+        {
+            // "If the cell spans more than one column, the width is divided over the columns."
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { table-layout: fixed; width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <tbody>
+    <tr><td id='e1' colspan='2' style='width: 200pt'>Spanning</td><td id='e2'>Third</td></tr>
+    <tr><td id='e3'>x</td><td id='e4'>y</td><td id='e5'>z</td></tr>
+  </tbody>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var e1 = FindById(rootBox, "e1")!;
+            var e2 = FindById(rootBox, "e2")!;
+            var e3 = FindById(rootBox, "e3")!;
+            var e4 = FindById(rootBox, "e4")!;
+            var e5 = FindById(rootBox, "e5")!;
+
+
+            // The 200pt spans two columns -> 100pt each; the third (unset) column takes the 100pt remainder.
+            Assert.Equal(100, Width(e3), precision: 1);
+            Assert.Equal(100, Width(e4), precision: 1);
+            Assert.Equal(100, Width(e5), precision: 1);
+            Assert.Equal(200, Width(e1), precision: 1); // sums both spanned columns, no interior spacing
+            Assert.Equal(100, Width(e2), precision: 1);
+        }
+
+        [Fact]
+        public async Task FixedLayout_ColElementWithFirstRowColspan_NoDoubleCounting()
+        {
+            // A <col> width on one of a colspan cell's spanned columns must win outright for that
+            // column (step 1 beats step 2), and the colspan cell's own width must still divide by its
+            // full span - not by however many of those columns happen to still be unset.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { table-layout: fixed; width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <colgroup><col style='width: 200px'><col><col></colgroup>
+  <tbody>
+    <tr><td id='f1' colspan='2' style='width: 200pt'>Spanning</td><td id='f2'>Third</td></tr>
+    <tr><td id='f3'>x</td><td id='f4'>y</td><td id='f5'>z</td></tr>
+  </tbody>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var f3 = FindById(rootBox, "f3")!;
+            var f4 = FindById(rootBox, "f4")!;
+            var f5 = FindById(rootBox, "f5")!;
+
+
+            // col0: 200px * 0.75 = 150pt (the <col> wins outright over the colspan cell's own share).
+            // col1: unset by <col>, so it takes the colspan cell's full share (200pt / 2 = 100pt).
+            // col2: remainder = 300 - 150 - 100 = 50pt.
+            Assert.Equal(150, Width(f3), precision: 1);
+            Assert.Equal(100, Width(f4), precision: 1);
+            Assert.Equal(50, Width(f5), precision: 1);
+        }
+
+        [Fact]
+        public async Task FixedLayout_MaxWidthClampsAvailableSpace()
+        {
+            // The table's own max-width is a cheap, declarative clamp on the space fixed layout divides -
+            // no cell content is measured, so it's still honored even though EnforceMaximumSize's
+            // content-based clipping never runs under fixed layout.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { table-layout: fixed; width: 500pt; max-width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <tbody><tr><td id='m1'>A</td><td id='m2'>B</td><td id='m3'>C</td></tr></tbody>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            // Divided against the 300pt max-width, not the 500pt width: 100pt each, not 166.67pt.
+            Assert.Equal(100, Width(FindById(rootBox, "m1")!), precision: 1);
+            Assert.Equal(100, Width(FindById(rootBox, "m2")!), precision: 1);
+            Assert.Equal(100, Width(FindById(rootBox, "m3")!), precision: 1);
+        }
+
+        [Fact]
+        public async Task FixedLayout_MaxWidthJustBelowUnsetSentinel_StillClamps()
+        {
+            // Regression test: the clamp's own "is max-width actually set" check must use the same
+            // threshold GetMaxTableWidth's 9999f "unset" sentinel is guarded against everywhere else in
+            // this file (EnforceMaximumSize's own "< 90999" check) - a narrower threshold would silently
+            // skip the clamp for any real max-width sitting between it and the sentinel.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { table-layout: fixed; width: 30000pt; max-width: 9300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <tbody><tr><td id='p1'>A</td><td id='p2'>B</td><td id='p3'>C</td></tr></tbody>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            // Divided against the 9300pt max-width, not the 30000pt width: 3100pt each, not 10000pt.
+            Assert.Equal(3100, Width(FindById(rootBox, "p1")!), precision: 1);
+            Assert.Equal(3100, Width(FindById(rootBox, "p2")!), precision: 1);
+            Assert.Equal(3100, Width(FindById(rootBox, "p3")!), precision: 1);
+        }
+
+        [Fact]
+        public async Task FixedLayout_AllColumnsSpecified_SurplusDistributedProportionally()
+        {
+            // "If the table is wider than the columns, the extra space should be distributed over the
+            // columns" - every column already has a <col> width (so none is "unset"), and together they
+            // fall short of the table's own 300pt, so the 150pt surplus spreads proportionally.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { table-layout: fixed; width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <colgroup><col style='width: 25%'><col style='width: 25%'></colgroup>
+  <tbody><tr><td id='n1'>A</td><td id='n2'>B</td></tr></tbody>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            // Both <col>s start at 25% of 300pt = 75pt (150pt total); the 150pt surplus splits evenly
+            // between them since they started equal, landing both at 150pt.
+            Assert.Equal(150, Width(FindById(rootBox, "n1")!), precision: 1);
+            Assert.Equal(150, Width(FindById(rootBox, "n2")!), precision: 1);
+        }
+
+        [Fact]
+        public async Task FixedLayout_CollapsedColumn_TakesNoSpaceAfterEqualDivision()
+        {
+            // visibility: collapse (CSS 2.1 §17.6.1) is orthogonal to table-layout - CollapseColumnWidths
+            // must still run, and last, after the new fixed-layout division.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { table-layout: fixed; width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+</style></head>
+<body>
+<table>
+  <colgroup><col><col style='visibility: collapse'><col></colgroup>
+  <tbody><tr><td id='g1'>A</td><td id='g2'>B</td><td id='g3'>C</td></tr></tbody>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            var g1 = FindById(rootBox, "g1")!;
+            var g2 = FindById(rootBox, "g2")!;
+            var g3 = FindById(rootBox, "g3")!;
+
+            var tableWidth = table.ActualRight - table.Location.X;
+            _output.WriteLine($"table={tableWidth}, g1={Width(g1)}, g2={Width(g2)}, g3={Width(g3)}");
+
+            // Division ran over all three columns (100pt each) before the collapsed one was zeroed.
+            Assert.Equal(100, Width(g1), precision: 1);
+            Assert.Equal(0, Width(g2), precision: 1);
+            Assert.Equal(100, Width(g3), precision: 1);
+            // The neighbor closes the gap - no residual border-spacing for the collapsed column.
+            Assert.Equal(g1.ActualRight, g3.Location.X, precision: 1);
+            // The table narrows by exactly the collapsed column's share rather than redistributing it.
+            Assert.Equal(200, tableWidth, precision: 1);
+        }
+
+        [Fact]
+        public async Task FixedLayout_ExplicitAutoValue_MatchesDefaultAutoLayout()
+        {
+            // Guards the new registry entry's initialValue: "auto" - an explicit table-layout: auto
+            // must produce identical column widths to the property being entirely absent.
+            var html = @"
+<!DOCTYPE html>
+<html><head><style>
+    table { width: 300pt; border-collapse: separate; border-spacing: 0; border: 0; margin: 0 }
+    td { padding: 0; border: 0 }
+    #tExplicit { table-layout: auto }
+</style></head>
+<body>
+<table id='tExplicit'>
+  <tr><td id='h1'>Wide content column</td><td id='h2'>B</td><td id='h3'>C</td></tr>
+</table>
+<table id='tDefault'>
+  <tr><td id='i1'>Wide content column</td><td id='i2'>B</td><td id='i3'>C</td></tr>
+</table>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+
+            Assert.Equal(Width(FindById(rootBox, "i1")!), Width(FindById(rootBox, "h1")!), precision: 1);
+            Assert.Equal(Width(FindById(rootBox, "i2")!), Width(FindById(rootBox, "h2")!), precision: 1);
+            Assert.Equal(Width(FindById(rootBox, "i3")!), Width(FindById(rootBox, "h3")!), precision: 1);
+        }
+
         #endregion
 
         #region Border-collapse Tests
@@ -2308,6 +2712,10 @@ using var graphics = new GraphicsAdapter(adapter, measure, 1.0);
       Assert.NotNull(container.Root);
             return (container.Root!, container);
         }
+
+        /// <summary>A box's own rendered width/height, per the file's existing width/height assertion convention.</summary>
+        private static double Width(CssBox b) => b.ActualRight - b.Location.X;
+        private static double Height(CssBox b) => b.ActualBottom - b.Location.Y;
 
   private static CssBox? FindTableBox(CssBox box)
      {

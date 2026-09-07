@@ -66,6 +66,17 @@ namespace PeachPDF.Html.Core.Dom
         private readonly bool _isVertical;
         private readonly bool _rowAxisStartIsAtMax;
 
+        /// <summary>
+        /// Whether this table actually runs CSS 2.1 <see href="https://www.w3.org/TR/CSS21/tables.html#fixed-table-layout">§17.5.2.1</see>'s
+        /// fixed layout algorithm. Requires both <c>table-layout: fixed</c> AND a specified (non-auto)
+        /// table width - per MDN/real browser behavior, <c>table-layout: fixed</c> with <c>width: auto</c>
+        /// has no effect and falls back to automatic layout, since resolving an auto width without
+        /// measuring content is the whole point of "fixed" and there is nothing content-independent to
+        /// distribute otherwise. Cached once, like <see cref="_isVertical"/>, so every step of the width
+        /// pipeline (and any resumed/continuation pass) agrees.
+        /// </summary>
+        private readonly bool _isFixedLayout;
+
         // The four logical table edges' resolved physical Border sides, computed once from the same
         // writing-mode LogicalPropertyResolver call _isVertical/_rowAxisStartIsAtMax already derive from
         // - reused by ApplyCollapsedUsedBorderWidths and threaded into CollapsedBorderModel so neither
@@ -337,6 +348,8 @@ namespace PeachPDF.Html.Core.Dom
             var writingMode = tableBox.WritingMode.Value;
             _isVertical = writingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
             _rowAxisStartIsAtMax = LogicalPropertyResolver.BlockStart(writingMode) is PhysicalSide.Right or PhysicalSide.Bottom;
+            _isFixedLayout = tableBox.TableLayout == Keywords.Fixed
+                && CssValueParser.IsValidLength(_isVertical ? tableBox.Height : tableBox.Width);
 
             _blockStartBorder = ToBorder(LogicalPropertyResolver.BlockStart(writingMode));
             _blockEndBorder = ToBorder(LogicalPropertyResolver.BlockEnd(writingMode));
@@ -513,16 +526,30 @@ namespace PeachPDF.Html.Core.Dom
             // read the table's own used border widths; cell content insets read each cell's own).
             ApplyCollapsedUsedBorderWidths();
 
-            // Determine ColumnWidths
-            var availCellSpace = CalculateColumnWidths();
+            // Determine ColumnWidths. CSS 2.1 §17.5.2 defines two algorithms, and they share no steps:
+            // the automatic one below measures every cell's intrinsic content
+            // (GetColumnsMinMaxWidthByContent) and then negotiates against it, while §17.5.2.1's fixed
+            // one is defined to be independent of cell content entirely - "the user agent can begin to
+            // lay out the table once the entire first row has been received. Cells in subsequent rows
+            // do not affect column widths." So this is a fork, not a flag threaded through the auto
+            // steps: EnforceMaximumSize/EnforceMinimumSize and everything they call are content
+            // negotiation with nothing to negotiate under fixed layout.
+            if (_isFixedLayout)
+            {
+                CalculateFixedColumnWidths();
+            }
+            else
+            {
+                var availCellSpace = CalculateColumnWidths();
 
-            DetermineMissingColumnWidths(availCellSpace);
+                DetermineMissingColumnWidths(availCellSpace);
 
-            // Check for minimum sizes (increment widths if necessary)
-            EnforceMaximumSize();
+                // Check for minimum sizes (increment widths if necessary)
+                EnforceMaximumSize();
 
-            // While table width is larger than it should, and width is reducible
-            EnforceMinimumSize();
+                // While table width is larger than it should, and width is reducible
+                EnforceMinimumSize();
+            }
 
             // A collapsed <col>/<colgroup> (CSS 2.1 §17.6.1) must not compete for space with the
             // rest of the table, so this runs last - after every other step that could size a
@@ -1731,6 +1758,45 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The width column <paramref name="columnIndex"/>'s own <c>&lt;col&gt;</c>/<c>&lt;colgroup&gt;</c>
+        /// box states, if it states one - CSS 2.1 §17.5.2.1's first (and §17.5.2.2's own) column-width
+        /// source, identical for both algorithms so it lives in one place rather than two.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately preserves the exact grammar the auto path has always accepted here: a percentage
+        /// (resolved against <paramref name="availCellSpace"/>), or a px/unitless value converted through
+        /// <see cref="Length.PointsPerPx"/>. An absolute unit (<c>pt</c>, <c>em</c>, ...) on a
+        /// <c>&lt;col&gt;</c> is not read - a pre-existing limitation of automatic layout that fixed layout
+        /// inherits rather than diverges from; widening it would change auto tables' output too and
+        /// belongs in its own change. A cell's own <c>width</c> is unaffected - that path goes through
+        /// <see cref="CssValueParser.ParseLength(string, double, CssBox)"/> and accepts every length unit.
+        /// </remarks>
+        private bool TryGetColumnElementWidth(int columnIndex, double availCellSpace, out double width)
+        {
+            width = 0;
+            if (columnIndex >= _columns.Count) return false;
+
+            var columnInlineSize = CellInlineSize(_columns[columnIndex]);
+            CssLength len = new(columnInlineSize);
+
+            if (!(len.Number > 0)) return false;
+
+            if (len.IsPercentage)
+            {
+                width = CssValueParser.ParseNumber(columnInlineSize, availCellSpace);
+                return true;
+            }
+
+            if (len.Unit is CssUnit.Pixels or CssUnit.None)
+            {
+                width = len.Number * Length.PointsPerPx;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Determine ColumnWidths, once <see cref="_columnCount"/> is already known.
         /// </summary>
         /// <returns></returns>
@@ -1747,23 +1813,8 @@ namespace PeachPDF.Html.Core.Dom
             {
                 // Fill ColumnWidths array by scanning column widths
                 for (var i = 0; i < _columns.Count; i++)
-                {
-                    var columnInlineSize = CellInlineSize(_columns[i]);
-                    CssLength len = new(columnInlineSize); //Get specified width
-
-                    if (!(len.Number > 0)) continue; //If some width specified
-
-                    if (len.IsPercentage) //Get width as a percentage
-                    {
-                        _columnWidths[i] = CssValueParser.ParseNumber(columnInlineSize, availCellSpace);
-                    }
-                    else if (len.Unit is CssUnit.Pixels or CssUnit.None)
-                    {
-                        // px (and unitless HTML width attributes, which map to CSS px) convert to
-                        // layout points via the shared spec-correct factor.
-                        _columnWidths[i] = len.Number * Length.PointsPerPx;
-                    }
-                }
+                    if (TryGetColumnElementWidth(i, availCellSpace, out var columnWidth))
+                        _columnWidths[i] = columnWidth;
             }
             else
             {
@@ -1795,7 +1846,137 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// 
+        /// CSS 2.1 <see href="https://www.w3.org/TR/CSS21/tables.html#fixed-table-layout">§17.5.2.1</see>'s
+        /// <i>fixed</i> table layout algorithm - <see cref="CalculateColumnWidths"/>/
+        /// <see cref="DetermineMissingColumnWidths"/>/<see cref="EnforceMaximumSize"/>/
+        /// <see cref="EnforceMinimumSize"/>'s whole content-negotiating pipeline replaced by three
+        /// content-independent steps. The defining property, and the reason none of those may run here,
+        /// is the spec's own: "the user agent can begin to lay out the table once the entire first row
+        /// has been received. Cells in subsequent rows do not affect column widths." Anything that
+        /// consults a cell's own intrinsic content size - i.e. <see cref="GetColumnsMinMaxWidthByContent"/>
+        /// and <see cref="GetColumnMinWidths"/>, and so every method built on them - contradicts that by
+        /// construction, and is never called from here.
+        /// </summary>
+        /// <remarks>
+        /// Only reached when <see cref="_isFixedLayout"/> is true, which already guarantees the table's
+        /// own width is a specified (non-auto) length - <see cref="GetAvailableTableWidth"/> below is
+        /// therefore never falling back to the containing block's own width the way it does for an
+        /// auto-width table (a percentage width still resolves against the containing block, same as
+        /// always, but that's an ordinary percentage resolution, not the auto-width fallback).
+        /// </remarks>
+        private void CalculateFixedColumnWidths()
+        {
+            _columnWidths = new double[_columnCount];
+            for (var i = 0; i < _columnWidths.Length; i++)
+                _columnWidths[i] = double.NaN;
+
+            // Computed once and reused for both candidate table widths below (CellSpaceFor's own
+            // SumHorizontalSpacing() call is an O(_columnCount) walk of every vertical grid line, and
+            // doesn't depend on which candidate width it's converting).
+            var spacingAndBorders = SumHorizontalSpacing() + TableInlineBorderStart + TableInlineBorderEnd;
+            var availCellSpace = GetAvailableTableWidth() - spacingAndBorders;
+
+            // The table's own max-width is a cheap, declarative clamp on the space available to
+            // divide - no cell is measured, so unlike EnforceMaximumSize's content-based
+            // clipping/shrinking it's still valid under fixed layout. It clamps the *division basis*,
+            // not a column width a <col>/first-row cell already stated (see step 3's "greater of" note).
+            // Same "is max-width actually set" threshold EnforceMaximumSize uses against
+            // GetMaxTableWidth's own 9999f "unset" sentinel (line ~2130) - a lower threshold here would
+            // silently skip the clamp for any genuinely-specified max-width just below it.
+            var maxTableWidth = GetMaxTableWidth();
+            if (maxTableWidth < 90999)
+                availCellSpace = Math.Min(availCellSpace, maxTableWidth - spacingAndBorders);
+
+            // Step 1: "a column element with a value other than 'auto' for the 'width' property sets
+            // the width for that column."
+            for (var i = 0; i < _columnWidths.Length; i++)
+                if (TryGetColumnElementWidth(i, availCellSpace, out var columnWidth))
+                    _columnWidths[i] = columnWidth;
+
+            // Step 2: "otherwise, a cell in the first row with a value other than 'auto' for the
+            // 'width' property determines the width for that column. If the cell spans more than one
+            // column, the width is divided over the columns." _allRows is already header rows then
+            // body rows then footer rows (AssignBoxKinds), so _allRows[0] is genuinely the table's
+            // first rendered row - no other row is ever consulted here, unlike CalculateColumnWidths'
+            // own (auto-only) cell-width scan above, which deliberately looks at every row. No entry in
+            // _allRows[0].Boxes is ever a CssSpacingBox placeholder - InsertSpacingBoxesForSpan only
+            // ever inserts one into a row strictly after the row that opens its span, and never into a
+            // header row at all - so the ActualDisplay check alone is enough to skip non-cell boxes.
+            if (_allRows.Count > 0)
+            {
+                foreach (var cell in _allRows[0].Boxes)
+                {
+                    if (cell.DerivedStyle.ActualDisplay != Keywords.TableCell) continue;
+
+                    var cellInlineSize = CellInlineSize(cell);
+                    if (!CssValueParser.IsValidLength(cellInlineSize)) continue;
+
+                    var len = CssValueParser.ParseLength(cellInlineSize, availCellSpace, cell);
+                    if (!(len > 0)) continue;
+
+                    var colspan = GetColSpan(cell);
+                    var col = GetCellRealColumnIndex(cell);
+                    var share = len / colspan;
+
+                    for (var j = col; j < col + colspan && j < _columnWidths.Length; j++)
+                        if (double.IsNaN(_columnWidths[j])) // step 1 (<col>) wins outright
+                            _columnWidths[j] = share;
+                }
+            }
+
+            // Step 3: "any remaining columns equally divide the remaining horizontal table space
+            // (minus borders or cell spacing)." No content is measured, in this step or any other.
+            var unsetColumns = 0;
+            double occupiedSpace = 0;
+            foreach (var columnWidth in _columnWidths)
+            {
+                if (double.IsNaN(columnWidth)) unsetColumns++;
+                else occupiedSpace += columnWidth;
+            }
+
+            if (unsetColumns > 0)
+            {
+                // Clamped at zero rather than allowed to go negative when the stated widths already
+                // exceed the table's own space - §17.5.2.1 resolves that over-constraint in the
+                // table's favour ("the greater of" its own width and the column sum, i.e. the table
+                // overflows), which GetWidthSum produces for free by summing _columnWidths; a
+                // negative share would instead under-report the table's width and send later cells'
+                // positions backwards.
+                var share = Math.Max(0, availCellSpace - occupiedSpace) / unsetColumns;
+
+                for (var i = 0; i < _columnWidths.Length; i++)
+                    if (double.IsNaN(_columnWidths[i]))
+                        _columnWidths[i] = share;
+            }
+            else if (occupiedSpace > 0 && availCellSpace > occupiedSpace)
+            {
+                // Every column already stated a width and they don't fill the table's own width:
+                // "If the table is wider than the columns, the extra space should be distributed
+                // over the columns." Spread proportionally, mirroring DetermineMissingColumnWidths'
+                // own all-columns-specified clause so the two algorithms agree on what
+                // "distributed" means.
+                SpreadSurplusProportionally(availCellSpace, occupiedSpace);
+            }
+        }
+
+        /// <summary>
+        /// Grows every column in <see cref="_columnWidths"/> by a share of <paramref name="availCellSpace"/>
+        /// minus <paramref name="occupiedSpace"/> proportional to its own current width - the "every
+        /// column already has a width, but they don't fill the table" surplus-distribution rule both
+        /// <see cref="DetermineMissingColumnWidths"/> and <see cref="CalculateFixedColumnWidths"/> apply
+        /// once none of their own columns are left unset. Shared so the two algorithms can't drift apart
+        /// on what "distributed proportionally" means. Caller guarantees <paramref name="occupiedSpace"/>
+        /// is positive (every column already has a real width to be proportional to).
+        /// </summary>
+        private void SpreadSurplusProportionally(double availCellSpace, double occupiedSpace)
+        {
+            var surplus = availCellSpace - occupiedSpace;
+            for (var i = 0; i < _columnWidths!.Length; i++)
+                _columnWidths[i] += surplus * (_columnWidths[i] / occupiedSpace);
+        }
+
+        /// <summary>
+        ///
         /// </summary>
         /// <param name="availCellSpace"></param>
         private void DetermineMissingColumnWidths(double availCellSpace)
@@ -1876,8 +2057,7 @@ namespace PeachPDF.Html.Core.Dom
                     else
                     {
                         // spread extra width between all columns with respect to relative sizes
-                        for (var i = 0; i < _columnWidths.Length; i++)
-                            _columnWidths[i] += (availCellSpace - occupiedSpace) * (_columnWidths[i] / occupiedSpace);
+                        SpreadSurplusProportionally(availCellSpace, occupiedSpace);
                     }
                 }
             }
@@ -5958,10 +6138,17 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// It takes away the cell-spacing from <see cref="GetAvailableTableWidth"/>
         /// </remarks>
-        private double GetAvailableCellWidth()
-        {
-            return GetAvailableTableWidth() - SumHorizontalSpacing() - TableInlineBorderStart - TableInlineBorderEnd;
-        }
+        private double GetAvailableCellWidth() => CellSpaceFor(GetAvailableTableWidth());
+
+        /// <summary>
+        /// The room left for column content once <paramref name="tableInlineSize"/> has paid for the
+        /// table's own border-spacing slots and its own two column-axis borders. Split out of
+        /// <see cref="GetAvailableCellWidth"/> so a candidate table width other than
+        /// <see cref="GetAvailableTableWidth"/>'s own (<see cref="CalculateFixedColumnWidths"/>'s
+        /// <c>max-width</c> clamp) converts through the same arithmetic instead of a second copy of it.
+        /// </summary>
+        private double CellSpaceFor(double tableInlineSize) =>
+            tableInlineSize - SumHorizontalSpacing() - TableInlineBorderStart - TableInlineBorderEnd;
 
         /// <summary>
         /// Gets the current sum of column widths
