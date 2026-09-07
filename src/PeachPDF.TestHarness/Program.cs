@@ -8612,6 +8612,81 @@ await SaveShowcaseAsync("table_caption", "Layout", "Table Captions (caption-side
     + "<table>'s own border/background wrapping the row grid only.",
     tableCaptionHtml, pdfConfig);
 
+// --- table-layout showcase (issue #918) ---
+//
+// table-layout was previously parsed but never wired into CssLayoutEngineTable, so a table declared
+// table-layout: fixed rendered identically to table-layout: auto. This shows the two CSS 2.1 §17.5.2
+// algorithms on byte-identical markup and data: automatic (§17.5.2.2, content-driven - the widest
+// cell wins its column) versus fixed (§17.5.2.1 - <col>/first-row widths, then an equal split, with
+// cell content never measured). The third table shows the <col>/first-row priority order and a
+// colspan width being divided over its spanned columns.
+var tableLayoutHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9.5pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10.5pt; margin: 1.1em 0 0.35em; break-after: avoid }
+    p.intro { color: #6b7280; font-size: 9pt; margin: 0 0 0.8em; max-width: 44em }
+    p.note { color: #6b7280; font-size: 8pt; margin: 0.25em 0 0 }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 0.2em }
+    th, td { border: 0.75pt solid #94a3b8; padding: 4pt 6pt; text-align: left; vertical-align: top }
+    th { background: #f1f5f9; font-weight: 600 }
+    table.fixed { table-layout: fixed }
+    table.auto { table-layout: auto }
+    #priority col.narrow { width: 15% }
+    </style></head><body>
+
+    <h1>table-layout: Choosing the Column-Width Algorithm</h1>
+    <p class="intro">CSS 2.1 &sect;17.5.2 defines two ways to size a table's columns.
+    <code>auto</code> (&sect;17.5.2.2) measures every cell in every row and lets the widest content
+    win its column. <code>fixed</code> (&sect;17.5.2.1) never looks at cell content at all: a column
+    takes its width from a <code>&lt;col&gt;</code> element, failing that from that column's cell in
+    the <em>first row</em>, and every column left over splits the remaining space equally. Both
+    tables below hold exactly the same markup and the same text.</p>
+
+    <h2>1 &mdash; table-layout: auto (the default)</h2>
+    <table class="auto">
+    <tr><th>Item</th><th>Description</th><th>Status</th></tr>
+    <tr><td>SKU-1</td><td>A deliberately long description that pulls its own column wide, squeezing
+    everything beside it - the column is sized from this cell's content.</td><td>OK</td></tr>
+    <tr><td>SKU-2</td><td>Short</td><td>OK</td></tr>
+    </table>
+    <p class="note">The middle column swelled to fit its longest cell; the outer two were squeezed
+    down to roughly their own content width.</p>
+
+    <h2>2 &mdash; table-layout: fixed</h2>
+    <table class="fixed">
+    <tr><th>Item</th><th>Description</th><th>Status</th></tr>
+    <tr><td>SKU-1</td><td>A deliberately long description that pulls its own column wide, squeezing
+    everything beside it - the column is sized from this cell's content.</td><td>OK</td></tr>
+    <tr><td>SKU-2</td><td>Short</td><td>OK</td></tr>
+    </table>
+    <p class="note">Same markup, same text: no cell was measured, so all three columns are exactly
+    one third of the table each and the long description simply wraps inside its own column.</p>
+
+    <h2>3 &mdash; fixed with &lt;col&gt; and first-row widths</h2>
+    <table class="fixed" id="priority">
+    <colgroup><col class="narrow"><col><col><col></colgroup>
+    <tr><th>#</th><th colspan="2" style="width: 50%">Spanned header (50%, split over two columns)</th><th>Rest</th></tr>
+    <tr><td>1</td><td>25%</td><td>25%</td><td>remainder</td></tr>
+    <tr><td>2</td><td>ignored width: 90%</td><td style="width: 90%">ignored</td><td>&mdash;</td></tr>
+    </table>
+    <p class="note">Column 1 takes its 15% from the <code>&lt;col&gt;</code>. The first row's
+    <code>colspan="2"</code> header states 50%, divided evenly over the two columns it spans (25%
+    each). The last column takes the 35% remainder (100% - 15% - 25% - 25%). The second row's 90%
+    is ignored entirely - under fixed layout no row after the first can change a column's width.</p>
+
+    </body></html>
+    """;
+await SaveShowcaseAsync("table_layout_fixed", "Layout", "Fixed vs Automatic Table Layout (table-layout)",
+    "CSS 2.1 §17.5.2's two column-width algorithms on identical markup: auto measures every cell and "
+    + "lets the widest content win its column, while fixed sizes columns from <col> elements and the "
+    + "first row alone - never measuring cell content - and splits the remaining space equally, so long "
+    + "text wraps inside its column instead of widening it. Also shows fixed layout's priority order "
+    + "(<col> beats a first-row cell), a colspan width divided over its spanned columns, and a later "
+    + "row's width being correctly ignored.",
+    tableLayoutHtml, pdfConfig);
+
 // --- collapsed border conflict resolution showcase (issue #735) ---
 //
 // border-collapse: collapse previously overlapped adjacent rows/columns by a flat, hardcoded 1pt

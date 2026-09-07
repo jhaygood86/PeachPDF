@@ -783,6 +783,7 @@ Limitations:
 |----------|--------------|-------|
 | `empty-cells` | [empty-cells](https://developer.mozilla.org/en-US/docs/Web/CSS/empty-cells) | `show`, `hide` |
 | `caption-side` | [caption-side](https://developer.mozilla.org/en-US/docs/Web/CSS/caption-side) | `top` (default), `bottom` — a `table-caption` box is stacked above or below the table's row grid and stretched to the table's own content width, outside the `<table>` element's own border/background per [CSS 2.1 §17.4](https://www.w3.org/TR/CSS21/tables.html#caption-position) |
+| `table-layout` | [table-layout](https://developer.mozilla.org/en-US/docs/Web/CSS/table-layout) | `auto` (default) and `fixed`. `fixed` sizes each column from its `<col>`/`<colgroup>` element if one states a width, otherwise from that column's cell **in the first row only** (divided evenly across a `colspan`) — no cell content is ever measured and no row after the first affects a column's width, so overflowing text wraps (or is clipped) inside its column rather than widening it. Any remaining columns split the leftover space evenly. Requires the table's own `width` to be a specified (non-`auto`) length — with `width: auto`, `fixed` has no effect and the table uses the automatic, content-based algorithm instead, matching real browsers. `max-width` on the table still clamps the space being divided; a `<col>` width is read from `px`, unitless, or `%` values only (the same limitation `auto` layout already has for `<col>`) |
 
 ### Generated Content
 
