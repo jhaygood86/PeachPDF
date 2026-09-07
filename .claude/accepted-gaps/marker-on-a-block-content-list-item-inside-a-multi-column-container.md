@@ -39,3 +39,40 @@ sweep on the build before it reports every one of these markers missing outright
 producing no fragment at all — so this is a residual of a strictly improved state, not a regression.
 Closing it means settling how the columns engine fragments a block-level list item, which is a larger
 change than the marker rule.
+
+**A second attempt (2026-09-07) found the actual mechanism, and it is not the column-rejection arms.**
+The plan for this attempt was "take the marker back wherever `CssBox.LayoutBlockChildren`'s own
+column-rejection arms (§3.1 forced/avoid-column-break, column-overflow, column-span:all, the orphans
+retry) push an already-placed child to the next column wholesale" — mirroring
+`TakeBackTheMarkerOfAnItemThisPassKeptNothingOf`'s shape but unconditional, since the whole subtree
+moves. Implemented at all four arms and measured against the same 162-combination sweep: **the late/bad
+counts (21 late, 14 bad on the current build's own parameter grid) were bit-for-bit identical with and
+without the fix.** The four arms are real, but every one of them hands the rejected child a fresh
+`BlockBreakToken` with `ChildToken: null` — and `MarkerBelongsToTheFragmentainerBeingFilled` already
+treats a `null` resume as "reposition it" unconditionally, regardless of whether `AwaitPlacement` was
+ever called. The take-back is not wrong, but it is inert: nothing in the sweep ever needed it.
+
+**The real mechanism, traced from one sweep failure (`li5`, `column-count:2;column-fill:auto`, 8 items,
+2 `<p>` children, page height 120):** the item's *marker word* and the item's own final `Location` came
+back pointing at two different columns entirely — `Location.X` at the column the item's content actually
+settled in, the marker's own word rect still at the column an *earlier, abandoned* attempt had placed it
+in. The seam is `CssBox.ResumeInTheNextFragmentainer` (`CssBox.cs`, called from `DriveBlockChildPass`
+whenever a box resumes with a non-null token): its own doc comment states the design plainly — "**only
+this box moves, not its subtree**... its already-placed descendants belong to the fragmentainer being
+left and keep the geometry that one's own fragment was built from." That is correct for ordinary content
+(a `<p>`'s first half genuinely does stay in the fragmentainer it was placed in), but the *marker* is not
+"content behind in the fragmentainer being left" the way a placed line is — it names a position derived
+from the item's own border box, and `ResumeInTheNextFragmentainer` moves that border box (`Location`)
+without moving the one child (the marker) whose position is supposed to describe it. Compounding this:
+the failing items' own fragments (both, in `li5`'s case) ended up on a pagination slot neither of the two
+logged `LayoutPassContents` visits ever named, meaning at least one further whole-container relayout
+attempt is involved that a simple per-visit trace does not capture — consistent with the file's own
+"settling how the columns engine fragments a block-level list item" framing above, not a narrow gap in
+one method.
+
+**Status: still open, scope confirmed larger than a marker-only fix.** A real fix needs
+`ResumeInTheNextFragmentainer` (or whatever relays the item across that further whole-container retry)
+to either move the marker's word along with the box, or explicitly take it back so a later pass
+repositions it — and the second, currently-untraced relayout path needs identifying before either change
+can be verified against the sweep. Left as this file's own open gap rather than shipped as a fix that
+measurably does nothing.

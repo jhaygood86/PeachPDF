@@ -2045,8 +2045,10 @@ namespace PeachPDF.Html.Core
             (double Top, double Bottom) band,
             (double Left, double Right) inline,
             BoxGeometrySnapshot geometry,
-            IReadOnlySet<CssBox> continuing) =>
-            _emitter?.RecordNestedFragmentainer(contextRoot, slot, band, inline, geometry, continuing);
+            IReadOnlySet<CssBox> continuing,
+            FragmentainerContext self,
+            FragmentainerContext? parentContext) =>
+            _emitter?.RecordNestedFragmentainer(contextRoot, slot, band, inline, geometry, continuing, self, parentContext);
 
         /// <summary>
         /// Discards what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> — or, with no

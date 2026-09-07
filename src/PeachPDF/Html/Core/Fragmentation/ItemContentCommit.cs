@@ -81,6 +81,15 @@ namespace PeachPDF.Html.Core.Fragmentation
                 box.Height = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingHeight - box.ActualBoxSizeIncludedHeight), box);
 
                 box.RectanglesReset();
+
+                // A forced break (break-before/break-after) on this item, or anywhere in its own
+                // subtree, may already have been "taken" by the measurement pass that sized this item
+                // before this, its real and final layout, ever ran - CssBox.PlacedByForcedBreak is a
+                // one-shot latch with no notion of "that was only a measurement" (#395). Without this,
+                // the break is silently never seen again: the multi-column engine's own equivalent
+                // transition (CssBox.ResetForRefill) already has to clear the same latch for exactly
+                // this reason.
+                box.AllowDescendantForcedBreaksToBeRetaken();
             }
             else
             {

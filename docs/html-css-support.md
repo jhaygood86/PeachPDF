@@ -598,7 +598,7 @@ A multi-column container whose content is only text, with no block-level child o
 
 - A decoration defined over the *whole* box — a `border-radius`, a gradient or image background layer, a `box-shadow` — is measured against the whole box under `slice`, so a rounded, gradient-filled box divided between two columns rounds only at its true ends and its gradient runs on from one column into the next. See [Decorations at a break](#decorations-at-a-break).
 
-One limitation at a column boundary specifically: a multi-column container nested inside another one splits its children at the outer level only.
+A multi-column container nested inside another one splits its own children per inner column, independently in each outer column it is filled in.
 
 | Property | MDN Reference | Notes |
 |----------|--------------|-------|
