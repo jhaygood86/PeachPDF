@@ -77,6 +77,11 @@ namespace PeachPDF.Tests.TestSupport
         /// <summary>Every word string passed to DrawString during this paint pass, with the Y it was drawn at.</summary>
         public List<(string Text, double Y)> DrawnStrings { get; } = [];
 
+        /// <summary>Every destination rect passed to <see cref="DrawImage(RImage, RRect, RRect)"/>/
+        /// <see cref="DrawImage(RImage, RRect)"/>, in order - e.g. to confirm a
+        /// <c>background-attachment: fixed</c> layer's positioning area actually reached the image draw.</summary>
+        public List<RRect> DrawnImageRects { get; } = [];
+
         /// <summary>
         /// Settable so a test can exercise a non-default <c>PixelsPerPoint</c> (issue #814) without a
         /// full <c>GraphicsAdapter</c>/PDF stack - defaults to the base <see cref="RGraphics.PixelsPerPoint"/>
@@ -198,8 +203,8 @@ namespace PeachPDF.Tests.TestSupport
         public override void DrawRectangle(RBrush brush, double x, double y, double width, double height) =>
             Log.Add(new PaintOp(PaintOpKind.FillRect, new RRect(x, y, width, height)));
 
-        public override void DrawImage(RImage image, RRect destRect, RRect srcRect) { }
-        public override void DrawImage(RImage image, RRect destRect) { }
+        public override void DrawImage(RImage image, RRect destRect, RRect srcRect) => DrawnImageRects.Add(destRect);
+        public override void DrawImage(RImage image, RRect destRect) => DrawnImageRects.Add(destRect);
         public override void DrawPath(RPen pen, RGraphicsPath path)
         {
             if (path is not RecordingGraphicsPath recordingPath) return;

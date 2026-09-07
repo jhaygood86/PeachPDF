@@ -2519,12 +2519,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// (whose resolution doesn't depend on the basis at all) always yields a zero delta - the
         /// existing per-page paint-time margin translate already positions those correctly, and this is
         /// purely the correction a percentage offset needs on top of it. Zero whenever the document has
-        /// no <c>@page size</c> overrides at all (<see cref="PageGeometryTable.HasSizeOverrides"/>), so
-        /// this never even runs for the overwhelming majority of documents.
+        /// no <c>@page size</c> override AND no vertical/horizontal margin override at all (issue #146 -
+        /// a margin-only override, e.g. plain <c>@page :first { margin: 0 }</c>, changes this exact same
+        /// content-area basis just as a <c>size</c> override does, so it must not be excluded from this
+        /// gate), so this never even runs for the overwhelming majority of documents.
         /// </summary>
         private (double Dx, double Dy) ComputeFixedPageOffset(CssBox box, Slot slot)
         {
-            if (!container.PageGeometry.HasSizeOverrides) return (0, 0);
+            var geometry = container.PageGeometry;
+            if (!geometry.HasSizeOverrides && !geometry.HasVerticalMarginOverrides && !geometry.HasHorizontalMarginOverrides)
+                return (0, 0);
 
             var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             var geom = slot.Geometry;
@@ -2546,13 +2550,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// or <c>auto</c>, always yields a zero delta for that dimension, since the box's own content isn't
         /// re-measured per slot (see <see cref="Draft.FixedSizeDeltaWidth"/>'s own remarks on why: doing so
         /// would require re-flowing the box's content, which css-position-3 explicitly does not require of
-        /// a fixed box). Zero whenever the document has no <c>@page size</c> overrides at all
-        /// (<see cref="PageGeometryTable.HasSizeOverrides"/>), so this never even runs for the overwhelming
-        /// majority of documents.
+        /// a fixed box). Zero whenever the document has no <c>@page size</c> override AND no vertical/
+        /// horizontal margin override at all (issue #146 - same reasoning as <see cref="ComputeFixedPageOffset"/>'s
+        /// own gate: a margin-only override changes this same content-area basis a percentage width/height
+        /// resolves against), so this never even runs for the overwhelming majority of documents.
         /// </summary>
         private (double DeltaWidth, double DeltaHeight) ComputeFixedSizeOverride(CssBox box, Slot slot)
         {
-            if (!container.PageGeometry.HasSizeOverrides) return (0, 0);
+            var geometry = container.PageGeometry;
+            if (!geometry.HasSizeOverrides && !geometry.HasVerticalMarginOverrides && !geometry.HasHorizontalMarginOverrides)
+                return (0, 0);
 
             // Mirrors CssLayoutEngine.GetBoxWidth's own percentage-width gate exactly (a fixed box always
             // computes to display:block per CSS2.1 §9.7, so GetBoxWidth's inline-with-no-words exclusion
