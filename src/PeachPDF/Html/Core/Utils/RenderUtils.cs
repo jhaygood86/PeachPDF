@@ -66,33 +66,34 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Pushes <paramref name="overflowBox"/>'s own clip (padding-edge rect, per CSS spec, plus its
-        /// rounded-corner curve if it has a <c>border-radius</c>) if it has <c>overflow: hidden</c>,
-        /// mapped into the coordinate space of the fragment being painted by subtracting its
-        /// <paramref name="originY"/> (zero for a fixed fragment, which does not move with the page).
+        /// Pushes <paramref name="ancestor"/>'s own clip (padding-edge rect, per CSS spec, plus its
+        /// rounded-corner curve if it has a <c>border-radius</c>) if it has <c>overflow: hidden</c>.
+        /// Resolved from the ancestor's own fragment rectangle - already in the fragment-local space of
+        /// the participant being painted, since both come from the same page's fragment tree - rather
+        /// than the live box's <see cref="CssBox.Bounds"/>, so this is correct for a box shown at more
+        /// than one place at once (a hoisted participant inside a repeated table header), where the
+        /// live box only ever carries whichever page positioned it last.
         /// </summary>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        private static int TryPushOverflowClip(RGraphics g, CssBox overflowBox, double originY)
+        private static int TryPushOverflowClip(RGraphics g, BoxFragment ancestor)
         {
+            var overflowBox = ancestor.Box;
             if (overflowBox.Overflow.Value != Overflow.Hidden) return 0;
 
             var prevClip = g.GetClip();
-            var paddingRect = PaddingEdgeOf(overflowBox, overflowBox.Bounds);
+            var paddingRect = PaddingEdgeOf(overflowBox, ancestor.Rect);
 
             var rect = paddingRect;
-            rect.Offset(0, -originY);
             rect.Intersect(prevClip);
             g.PushClip(rect);
             var pushed = 1;
 
             if (overflowBox.IsRounded)
             {
-                var curveRect = paddingRect;
-                curveRect.Offset(0, -originY);
-                var radii = overflowBox.ComputeInnerRadii(overflowBox.Bounds, paddingRect,
+                var radii = overflowBox.ComputeInnerRadii(ancestor.Rect, paddingRect,
                     overflowBox.ActualBorderLeftWidth, overflowBox.ActualBorderTopWidth,
                     overflowBox.ActualBorderRightWidth, overflowBox.ActualBorderBottomWidth);
-                pushed += PushRoundedClipIfRounded(g, curveRect, radii);
+                pushed += PushRoundedClipIfRounded(g, paddingRect, radii);
             }
 
             return pushed;
@@ -134,30 +135,27 @@ namespace PeachPDF.Html.Core.Utils
             borderBox.Bottom - box.ActualBorderBottomWidth);
 
         /// <summary>
-        /// Pushes the <c>overflow: hidden</c> clip of every box in <paramref name="ancestors"/> that has
-        /// one, in order. Used when painting a box that <see cref="Paint.StackingOrder.Flatten"/>
+        /// Pushes the <c>overflow: hidden</c> clip of every fragment in <paramref name="ancestors"/> that
+        /// has one, in order. Used when painting a box that <see cref="Paint.StackingOrder.Flatten"/>
         /// hoisted past one or more plain ancestor boxes for stacking-context z-order purposes - since it
         /// paints via the claiming stacking context's own paint loop rather than those ancestors' own
         /// (nested) paint calls, their overflow clipping isn't already active on the graphics
         /// clip stack the way it would be for normally-painted content, and must be applied explicitly
-        /// here instead. <paramref name="ancestors"/> is the exact, already-known chain of DOM ancestors
-        /// between the claiming stacking context and the box being painted (see
+        /// here instead. <paramref name="ancestors"/> is the exact, already-known chain of ancestor
+        /// fragments between the claiming stacking context and the box being painted (see
         /// <see cref="Paint.StackingOrder.StackingParticipant"/>), so no walk is needed; each ancestor is
-        /// checked directly.
+        /// checked directly. Each ancestor's rectangle comes from its own fragment rather than its live
+        /// box, so this is correct even for a box shown at more than one place at once - a hoisted
+        /// participant inside a repeated table header - whose live box only ever carries whichever page
+        /// positioned it last (#345).
         /// </summary>
-        /// <remarks>
-        /// This one still reads the live boxes, because the chain is discovered during the paint walk
-        /// and so is not available to the builder. That is only wrong for a box shown at several places
-        /// at once — a hoisted stacking participant inside a repeated table header — which is exotic
-        /// enough that no fixture in the suite reaches it.
-        /// </remarks>
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
-        public static int PushAncestorOverflowClips(RGraphics g, IReadOnlyList<CssBox> ancestors, double originY)
+        public static int PushAncestorOverflowClips(RGraphics g, IReadOnlyList<BoxFragment> ancestors)
         {
             var pushed = 0;
             foreach (var ancestor in ancestors)
             {
-                pushed += TryPushOverflowClip(g, ancestor, originY);
+                pushed += TryPushOverflowClip(g, ancestor);
             }
             return pushed;
         }

@@ -22,15 +22,18 @@ namespace PeachPDF.Html.Core.Paint
     /// </remarks>
     internal static class StackingOrder
     {
-        // One box to paint as part of a stacking context's own layer ordering, plus the chain of DOM
-        // ancestor boxes (outer to inner, between the claiming stacking context and Box itself) that
-        // Box was hoisted past. Empty for a direct plain child - it paints via ordinary nested
+        // One box to paint as part of a stacking context's own layer ordering, plus the chain of
+        // ancestor fragments (outer to inner, between the claiming stacking context and Box itself)
+        // that Box was hoisted past. Empty for a direct plain child - it paints via ordinary nested
         // recursion, so its ancestors' own overflow clipping is already correctly active on the
         // graphics clip stack from their own (still-running) paint calls. Non-empty for a hoisted
         // participant - it paints via the claiming stacking context's own paint loop instead, bypassing
         // those ancestors' paint calls entirely, so their overflow clipping must be reapplied
-        // explicitly (see RenderUtils.PushAncestorOverflowClips) around its own paint call.
-        internal readonly record struct StackingParticipant(BoxFragment Fragment, IReadOnlyList<CssBox> ClipAncestors)
+        // explicitly (see RenderUtils.PushAncestorOverflowClips) around its own paint call. Carrying
+        // the ancestors' own fragments, rather than their live boxes, is what makes this correct for a
+        // box shown at more than one place at once - a hoisted participant inside a repeated table
+        // header - since a live CssBox only ever carries whichever page positioned it last (#345).
+        internal readonly record struct StackingParticipant(BoxFragment Fragment, IReadOnlyList<BoxFragment> ClipAncestors)
         {
             /// <summary>The box whose style and stacking role decide where this participant paints.</summary>
             internal CssBox Box => Fragment.Box;
@@ -132,15 +135,16 @@ namespace PeachPDF.Html.Core.Paint
         //   outer search claiming them too, which would both double-paint them and order them relative
         //   to the wrong (too-distant) box's siblings.
         //
-        // `ancestorPath` accumulates every DOM ancestor walked through along the way (both plain
-        // pass-through wrappers and hoisted-but-not-yet-fully-resolved boxes like a merely-positioned
-        // box) - each yielded participant snapshots it as its ClipAncestors, so the caller can re-apply
-        // those ancestors' own overflow clipping (which it never picks up naturally, having been hoisted
-        // past their own paint calls). Mutating one shared list via add-before-recurse/remove-after is
-        // safe here: the whole sequence is drained eagerly and synchronously by Flatten's caller before
-        // anything else touches it.
+        // `ancestorPath` accumulates the fragment of every ancestor walked through along the way (both
+        // plain pass-through wrappers and hoisted-but-not-yet-fully-resolved boxes like a
+        // merely-positioned box) - each yielded participant snapshots it as its ClipAncestors, so the
+        // caller can re-apply those ancestors' own overflow clipping (which it never picks up
+        // naturally, having been hoisted past their own paint calls) resolved against the exact
+        // instance of each ancestor this walk actually went through, not just its live box. Mutating
+        // one shared list via add-before-recurse/remove-after is safe here: the whole sequence is
+        // drained eagerly and synchronously by Flatten's caller before anything else touches it.
         private static IEnumerable<StackingParticipant> SearchForHoistableDescendants(
-            BoxFragment fragment, List<CssBox> ancestorPath, bool claimFloatsHere = true)
+            BoxFragment fragment, List<BoxFragment> ancestorPath, bool claimFloatsHere = true)
         {
             foreach (var childFragment in fragment.Children)
             {
@@ -163,7 +167,7 @@ namespace PeachPDF.Html.Core.Paint
                 // only genuine stacking contexts still need to keep escaping past it.
                 var claimBeyond = !isLocalOrderingScope && claimFloatsHere;
 
-                ancestorPath.Add(childBox);
+                ancestorPath.Add(childFragment);
                 foreach (var descendant in SearchForHoistableDescendants(childFragment, ancestorPath, claimBeyond))
                 {
                     yield return descendant;
