@@ -39,11 +39,11 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal(expectedValue, value, 6);
         }
 
-        // The real Lexer's NumberRest/NumberFraction never reach their own exponent-handling code
-        // (NumberExponential/SciNotation): any 'e'/'E' right after the digits is claimed by the
-        // unit-starting branch first (CharExtensions.IsNameStart treats 'e'/'E' like any other
-        // identifier-start letter), so this deliberately does NOT consume an exponent - matching that
-        // real (if not CSS-Syntax-3-conformant) behavior exactly rather than the spec's own grammar.
+        // The real Lexer's NumberRest/NumberFraction now correctly consume a trailing exponent
+        // (issue #921), but this fast path deliberately still doesn't: TryClassifyLengthFast's
+        // "is the remainder all letters" check already rejects any exponent shape (a digit follows
+        // the 'e'/'E') and falls through to Inconclusive - the real tokenizer - so duplicating
+        // exponent-consumption here would add complexity with no classification ever reaching it.
         [Theory]
         [InlineData("1e2", 1, 1d)]
         [InlineData("1E2", 1, 1d)]
