@@ -417,7 +417,8 @@ namespace PeachPDF.Html.Core.Parse
             // through, since css-properties.json stores them as raw strings, not typed Length values.
             var result = ParseLength(length, hundredPercent, box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, null, false,
                 containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt,
-                containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, pixelsPerPoint);
+                containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, pixelsPerPoint,
+                out var needsPixelsPerPointCatchUp);
 
             if (IsCalcFunction(length))
             {
@@ -429,10 +430,17 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             // Same absolute-length catch-up as the typed Length overload above (issue #814), now extended
-            // to em/rem/ex/ch (issue #826) - re-parse just far enough to classify the unit (a bare,
-            // already-folded absolute or font-relative length, e.g. from a fully-absolute calc() that
-            // Layer A's CalcSerializer already reduced to literal text before it ever reaches the
-            // IsCalcFunction check above).
+            // to em/rem/ex/ch (issue #826). The call above already classified `length`'s own unit (via
+            // GetUnit) whenever `length` actually has one written into it - reuse that answer instead of
+            // re-parsing the same string a second time through Length.TryParse/StylesheetUnit. Only when
+            // GetUnit couldn't find a unit written into `length` itself (needsPixelsPerPointCatchUp is
+            // null - defaultUnit was null at the call site above, so a "no unit" answer there always means
+            // genuinely unitless) does this fall back to the original re-parse, unchanged.
+            if (needsPixelsPerPointCatchUp is { } catchUp)
+            {
+                return catchUp ? result * pixelsPerPoint : result;
+            }
+
             return Length.TryParse(length, out var parsed) && parsed.NeedsPixelsPerPointCatchUp
                 ? result * pixelsPerPoint
                 : result;
@@ -472,10 +480,36 @@ namespace PeachPDF.Html.Core.Parse
             double? containerWidthPt = null, double? containerHeightPt = null,
             double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
             double pixelsPerPoint = 1.0)
+            => ParseLength(length, hundredPercent, emFactor, remFactor, defaultUnit, returnPoints,
+                containerInlineSizePt, containerBlockSizePt, viewportWidthPt, viewportHeightPt,
+                containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt, pixelsPerPoint,
+                out _);
+
+        /// <summary>
+        /// Same as the public overload above, plus <paramref name="needsPixelsPerPointCatchUp"/>: whether
+        /// <paramref name="length"/>'s own unit (not <paramref name="defaultUnit"/>) needs the
+        /// <c>PixelsPerPoint</c> catch-up multiply (see <see cref="Length.NeedsPixelsPerPointCatchUp"/>) -
+        /// <see langword="null"/> when <paramref name="length"/> didn't have a unit written into it
+        /// (<c>GetUnit</c>'s <c>hasUnit</c> came back <see langword="false"/>), since then there is no
+        /// answer to give without knowing what the caller's own fallback parse of <paramref name="length"/>
+        /// would say. Exists so <c>ParseLength(string, double, CssBox)</c> can reuse the unit this call
+        /// already classified instead of re-parsing <paramref name="length"/> a second time through
+        /// <see cref="Length.TryParse"/>/<c>StylesheetUnit</c> just to answer the same question.
+        /// </summary>
+        private static double ParseLength(string length, double hundredPercent, double emFactor, double remFactor, string? defaultUnit, bool returnPoints,
+            double? containerInlineSizePt, double? containerBlockSizePt,
+            double? viewportWidthPt, double? viewportHeightPt,
+            double? containerWidthPt, double? containerHeightPt,
+            double? viewportInlineSizePt, double? viewportBlockSizePt,
+            double pixelsPerPoint,
+            out bool? needsPixelsPerPointCatchUp)
         {
             //Return zero if no length specified, zero specified
             if (string.IsNullOrEmpty(length) || length == "0")
+            {
+                needsPixelsPerPointCatchUp = null;
                 return 0f;
+            }
 
             if (TryGetCalcFunction(length, out var calcFunction))
             {
@@ -489,6 +523,7 @@ namespace PeachPDF.Html.Core.Parse
                     pixelsPerPoint);
                 var pixels = node is not null ? CalcEvaluator.Evaluate(node, context) : null;
 
+                needsPixelsPerPointCatchUp = null;
                 return pixels ?? 0d;
             }
 
@@ -498,14 +533,18 @@ namespace PeachPDF.Html.Core.Parse
             //Number of the length
             var number = hasUnit ? numberValue : ParseNumber(length, hundredPercent);
 
+            var lengthUnit = unit is not null ? Length.GetUnit(unit) : Length.Unit.None;
+
+            needsPixelsPerPointCatchUp = hasUnit
+                ? new Length(0f, lengthUnit).NeedsPixelsPerPointCatchUp
+                : null;
+
             // A bare point value returns the raw point number directly rather than round-tripping
             // through pixel space, avoiding a redundant px->pt->px floating-point conversion.
             if (returnPoints && unit == UnitNames.Pt)
             {
                 return number!.Value;
             }
-
-            var lengthUnit = unit is not null ? Length.GetUnit(unit) : Length.Unit.None;
 
             return new Length((float)number!.Value, lengthUnit).ToPixels(emFactor, remFactor, hundredPercent, containerInlineSizePt, containerBlockSizePt,
                 viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt);
@@ -516,6 +555,18 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private static (string? unit, double? value) GetUnit(string length, string? defaultUnit, out bool hasUnit)
         {
+            switch (TryClassifyLengthFast(length, out var fastUnit, out var fastValue))
+            {
+                case FastLengthKind.Dimension:
+                    hasUnit = true;
+                    return (fastUnit, fastValue);
+                case FastLengthKind.PlainNumber:
+                    hasUnit = false;
+                    return (defaultUnit, null);
+            }
+
+            // Inconclusive - fall through to the real tokenizer unchanged, exactly as before this fast
+            // path existed.
             var tokens = GetCssTokens(length);
 
             if (tokens is [UnitToken unitToken])
@@ -526,6 +577,58 @@ namespace PeachPDF.Html.Core.Parse
 
             hasUnit = false;
             return (defaultUnit, null);
+        }
+
+        // internal rather than private: a black-box test of ParseLength's final numeric output cannot
+        // tell "classified correctly via the fast path" apart from "always fell through to Inconclusive,
+        // fast path is dead weight" - both look identical from the outside, since GetUnit's fallback is
+        // the same real tokenizer this used to run unconditionally. Direct access lets tests assert this
+        // method actually fires (returns non-Inconclusive) for the common cases, not merely that GetUnit
+        // still gets the right answer regardless.
+        internal enum FastLengthKind { Dimension, PlainNumber, Inconclusive }
+
+        /// <summary>
+        /// An allocation-free classification of the single most common length shapes - a bare number, a
+        /// number+unit dimension, or a number+percentage - built directly on <see cref="NumberSyntax"/>,
+        /// without constructing a <see cref="Lexer"/>/<see cref="TextSource"/>/<see cref="Token"/> object
+        /// graph. Returns <see cref="FastLengthKind.Inconclusive"/> for anything it isn't confident about
+        /// (embedded whitespace, an escape sequence, a unit the real tokenizer wouldn't accept whole, a
+        /// second token after the number) so <see cref="GetUnit"/> can fall through to the real, full
+        /// <see cref="GetCssTokens"/> tokenizer path unchanged for those - the tokenizer stays the one
+        /// authority for anything this shortcut doesn't recognize.
+        /// </summary>
+        internal static FastLengthKind TryClassifyLengthFast(string length, out string? unit, out double value)
+        {
+            unit = null;
+
+            if (!NumberSyntax.TryConsumeNumber(length, out var numberLength, out value))
+                return FastLengthKind.Inconclusive;
+
+            var rest = length.AsSpan(numberLength);
+
+            if (rest.IsEmpty) return FastLengthKind.PlainNumber;
+
+            if (rest is "%")
+            {
+                unit = UnitNames.Percent;
+                return FastLengthKind.Dimension;
+            }
+
+            // Lexer.Dimension() only ever extends a unit through ASCII letters (CharExtensions.IsLetter)
+            // or an escape sequence - never digits, underscore, '-', or further non-ASCII characters,
+            // even though the *first* unit character it accepts is any CSS ident-start char
+            // (IsNameStart, which does include those - see NumberSyntax's remarks for why 'e'/'E' is
+            // ordinary in this respect, not exponent syntax). Every real-world CSS unit ("px", "em",
+            // "vh", ...) is already pure ASCII letters, so restricting this fast path to that shape and
+            // deferring anything else to the real tokenizer costs nothing observable while staying
+            // exactly faithful to what Dimension() actually does.
+            foreach (var c in rest)
+            {
+                if (!c.IsLetter()) return FastLengthKind.Inconclusive;
+            }
+
+            unit = rest.ToString();
+            return FastLengthKind.Dimension;
         }
 
         /// <summary>
@@ -696,7 +799,7 @@ namespace PeachPDF.Html.Core.Parse
             // In a value context '#rrggbb' lexes to a single Color token; otherwise a letter-leading hex is a
             // Hash token and a digit-leading hex is '#' + number. Callers that hand the tokens to the Layer-A
             // color/gradient grammar (which reads Color tokens) must set inValueContext so hex stops resolve.
-            var lexer = new Lexer(propValue) { IsInValue = inValueContext };
+            using var lexer = new Lexer(propValue) { IsInValue = inValueContext };
 
             List<Token> tokens = [];
 

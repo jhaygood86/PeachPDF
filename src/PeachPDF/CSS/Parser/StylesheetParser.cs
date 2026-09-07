@@ -76,7 +76,7 @@ namespace PeachPDF.CSS
 
         public ISelector ParseSelector(string selectorText)
         {
-            var tokenizer = CreateTokenizer(selectorText);
+            using var tokenizer = CreateTokenizer(selectorText);
             var token = tokenizer.Get();
             var creator = GetSelectorCreator();
             while (token.Type != TokenType.EndOfFile)
@@ -106,6 +106,12 @@ namespace PeachPDF.CSS
 
         internal Stylesheet Parse(TextSource source)
         {
+            // Deliberately not `using` here: `source` is the caller's, not this method's, and every
+            // rule/statement CreateRules produces stashes it (via StylesheetComposer.CreateView ->
+            // StylesheetText) for a *lazy* `.Text` read after this method returns. Disposing the Lexer
+            // would dispose `source` too (LexerBase.Dispose walks Source), which is harmless for a
+            // string-backed source (its Dispose is a no-op) but corrupts a stream-backed one (Parse(Stream)
+            // -> `_content` goes null) for every StylesheetText read made afterward.
             var sheet = new Stylesheet(this);
             var tokenizer = new Lexer(source);
             var start = tokenizer.GetCurrentPosition();
@@ -139,7 +145,7 @@ namespace PeachPDF.CSS
 
         internal TokenValue ParseValue(string valueText)
         {
-            var tokenizer = CreateTokenizer(valueText);
+            using var tokenizer = CreateTokenizer(valueText);
             var token = default(Token);
             var builder = new StylesheetComposer(tokenizer, this);
             var value = builder.CreateValue(ref token);
@@ -183,14 +189,14 @@ namespace PeachPDF.CSS
 
         internal void AppendDeclarations(StyleDeclaration style, string declarations)
         {
-            var tokenizer = CreateTokenizer(declarations);
+            using var tokenizer = CreateTokenizer(declarations);
             var builder = new StylesheetComposer(tokenizer, this);
             builder.FillDeclarations(style);
         }
 
         private T Parse<T>(string source, Func<StylesheetComposer, Token, T> create)
         {
-            var tokenizer = CreateTokenizer(source);
+            using var tokenizer = CreateTokenizer(source);
             var token = tokenizer.Get();
             var builder = new StylesheetComposer(tokenizer, this);
             var rule = create(builder, token);
@@ -199,7 +205,7 @@ namespace PeachPDF.CSS
 
         private T Parse<T>(string source, Func<StylesheetComposer, Token, Tuple<T, Token>> create)
         {
-            var tokenizer = CreateTokenizer(source);
+            using var tokenizer = CreateTokenizer(source);
             var token = tokenizer.Get();
             var builder = new StylesheetComposer(tokenizer, this);
             var pair = create(builder, token);
