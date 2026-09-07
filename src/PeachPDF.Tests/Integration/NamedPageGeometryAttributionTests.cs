@@ -208,6 +208,75 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task NamedPageTransition_MidTable_ForcesABreakBetweenRows()
+        {
+            // Issue #166: a table row's own used `page` name transition must force a break before it,
+            // exactly like an equivalent block-level sibling already does - CssLayoutEngineTable
+            // positions rows directly, bypassing the block-flow path that check normally lives on
+            // (CssBox.PerformLayoutImp's pageNameChanged). Before this fix, both rows landed on the
+            // same (default) page, and "wide"'s own margin:0 band never took effect for row two.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page wide { margin: 0; }
+                body, table, tr, td { margin: 0; }
+                </style></head><body>
+                <table>
+                <tr id='r1'><td>row one</td></tr>
+                <tr id='r2' style='page: wide'><td>row two</td></tr>
+                </table>
+                </body></html>
+                """);
+
+            var r1 = FindById(container.Root!, "r1");
+            var r2 = FindById(container.Root!, "r2");
+            Assert.NotNull(r1);
+            Assert.NotNull(r2);
+
+            Assert.Equal(0, container.PageIndexOf(r1!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+            Assert.Equal(1, container.PageIndexOf(r2!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+            Assert.Equal(BaseBand, container.PageBandHeightOf(0));
+            Assert.Equal(SheetH, container.PageBandHeightOf(1));
+
+            var registered = Assert.Single(container.NamedPageElements, e => e.Name == "wide");
+            Assert.Equal(container.PageTopOf(1), registered.Y, 1);
+        }
+
+        [Fact]
+        public async Task ReversionAfterNamedPage_TableInsideTheSection_StillReverts()
+        {
+            // Issue #166's "leaks past the table's own subtree" symptom (see
+            // .claude/accepted-gaps/named-page-reversion-outside-block-flow.md): a plain block sibling
+            // AFTER a named-page section that merely CONTAINS a table anywhere in its descendants - not
+            // the reverting box itself - must still revert to the default page, exactly like
+            // ReversionAfterNamedPage_RestoresDefaultBand_DoesNotLeakMargins above (which uses a table-free
+            // section). Before the fix, the table's own registration wasn't withdrawn when its containing
+            // section's content finished, leaking "wide" onto whatever ordinary block-flow content came
+            // next even though that content never touches the table engine itself.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page wide { margin: 0; }
+                body, table, tr, td, div { margin: 0; }
+                </style></head><body>
+                <div id='d1'>default one</div>
+                <div id='section' style='page: wide'>
+                <table><tr><td>single cell</td></tr></table>
+                </div>
+                <div id='after'>default again</div>
+                </body></html>
+                """);
+
+            var after = FindById(container.Root!, "after");
+            Assert.NotNull(after);
+
+            Assert.Equal(BaseBand, container.PageBandHeightOf(0));   // default page
+            Assert.Equal(SheetH, container.PageBandHeightOf(1));     // wide page (margin: 0)
+            Assert.Equal(BaseBand, container.PageBandHeightOf(2));   // reverted - base band restored
+            Assert.Equal(2, container.PageIndexOf(after!.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+        }
+
+        [Fact]
         public async Task ReversionAfterNamedPage_RestoresDefaultMarginBox_DoesNotLeakSuppression()
         {
             // Second symptom from issue #126: a named page that suppresses a margin box

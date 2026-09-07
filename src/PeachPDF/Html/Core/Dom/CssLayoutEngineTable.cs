@@ -3387,6 +3387,17 @@ namespace PeachPDF.Html.Core.Dom
                     && (ForcedBreakFallsBeforeRow(i)
                         || WillCrossPageBoundary(container, cursor.CurrentY + estimatedRowHeight, availableHeight, slot, pageHeight)))
                 {
+                    // If this break is a used-name transition (issue #166), the row's own name must be
+                    // registered at the target slot's top BEFORE TakeBreakBeforeRow queries that slot's
+                    // geometry (cursor.MoveToSlot -> container.PageTopOf/PageBandHeightOf) - mirroring
+                    // the block-flow rule (CssBox.CommitBlockChildOffset's own remarks: "register the
+                    // used page name BEFORE any child lays out") that a named page's own band must be
+                    // resolvable from the moment anything asks about it. The row's own later
+                    // prologue/epilogue registration (PerformLayoutImp's tail, the only registration path
+                    // a table-engine-positioned row reaches) re-syncs against this rather than
+                    // duplicating it, exactly as it already does for CssLayoutEngineTable's whole-table
+                    // relocation pre-check (#149).
+                    PreRegisterPageNameTransition(container, row, slot + 1);
                     slot = await TakeBreakBeforeRow(g, container, cursor, slot);
                 }
 
@@ -4256,8 +4267,80 @@ namespace PeachPDF.Html.Core.Dom
             var before = BreakPropagation.AnchorForBreakBefore(_bodyRows[index]);
             var after = BreakPropagation.AnchorForBreakAfter(_bodyRows[index - 1]);
 
-            return BreakPropagation.ForcedBreakBeforeAt(before, FragmentationContext.Page) is not null
-                   || BreakPropagation.ForcedBreakAfterAt(after, FragmentationContext.Page) is not null;
+            if (BreakPropagation.ForcedBreakBeforeAt(before, FragmentationContext.Page) is not null
+                || BreakPropagation.ForcedBreakAfterAt(after, FragmentationContext.Page) is not null)
+            {
+                return true;
+            }
+
+            // Issue #166: a used `page` name transition forces a break here too, mirroring
+            // CssBox.PerformLayoutImp's own pageNameChanged check for ordinary block flow
+            // (css-page-3 §3's used-value transition rule). The table engine positions rows directly
+            // rather than through that block-flow path, so named-page activation/reversion among rows
+            // was previously silently ignored - a `page`-carrying row (or one reverting away from an
+            // outer one) never actually began a fresh page the way an equivalent block-level sibling
+            // would. Once this forces the break, the row's own (unmodified) PerformLayoutPrologue -
+            // which every row already goes through regardless of which engine positions it - registers
+            // its used name and updates HtmlContainer.ActivePageName exactly as it would for a plain
+            // block box; this only supplies the missing relocation decision, not a second registration
+            // mechanism.
+            if (_tableBox.HtmlContainer is { } container
+                && ProspectiveUsedPageNameFor(_bodyRows[index]) != container.ActivePageName)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The `page` name row <paramref name="row"/> would use per css-page-3 §3's used-value rule
+        /// (its own explicit, non-"auto" <c>PageName</c>, or else the nearest ancestor's), computed
+        /// without relying on <c>CssBox.UsedPageName</c> - which for <paramref name="row"/> itself is
+        /// not populated yet at the point <see cref="ForcedBreakFallsBeforeRow"/> needs this (a row's
+        /// own prologue, where that property is set, only runs once <see cref="LayoutBodyRows"/> lays it
+        /// out - after this break decision). Grounds the walk at <see cref="_tableBox"/>'s own
+        /// <c>UsedPageName</c> rather than continuing through it, since the table itself is an ordinary
+        /// block-flow box whose prologue has already run by this point (unlike an intermediate row
+        /// group, e.g. a <c>&lt;tbody&gt;</c>, which - like a row - is positioned directly by this engine
+        /// and so cannot be relied on to have one either).
+        /// </summary>
+        private string ProspectiveUsedPageNameFor(CssBox row)
+        {
+            var candidate = row;
+            while (candidate != null && candidate != _tableBox)
+            {
+                if (!string.IsNullOrEmpty(candidate.PageName) && candidate.PageName != Keywords.Auto)
+                    return candidate.PageName;
+
+                candidate = candidate.ParentBox;
+            }
+
+            return _tableBox.UsedPageName;
+        }
+
+        /// <summary>
+        /// Registers <paramref name="row"/>'s prospective used page name at <paramref name="targetSlot"/>'s
+        /// own top, if it's actually a transition away from the currently active name - a no-op
+        /// otherwise (the break instead came from <c>WillCrossPageBoundary</c>'s own space estimate,
+        /// not a name change). Withdraws any earlier registration first, the same re-entry guard every
+        /// other registration site in this codebase uses. Setting <c>row.RegisteredNamedPageElement</c>
+        /// here (rather than only calling <c>RegisterNamedPageElement</c> and discarding the result)
+        /// is what makes the row's own later prologue/epilogue registration re-sync against this entry
+        /// instead of adding a second one - see <see cref="ForcedBreakFallsBeforeRow"/>'s own remarks
+        /// for why this needs to happen before the break is taken at all.
+        /// </summary>
+        private void PreRegisterPageNameTransition(HtmlContainerInt container, CssBox row, int targetSlot)
+        {
+            var prospectiveName = ProspectiveUsedPageNameFor(row);
+            if (prospectiveName == container.ActivePageName) return;
+
+            if (row.RegisteredNamedPageElement is { } stale)
+            {
+                container.UnregisterNamedPageElement(stale);
+            }
+
+            row.RegisteredNamedPageElement = container.RegisterNamedPageElement(prospectiveName, container.PageTopOf(targetSlot));
         }
 
         /// <summary>
@@ -4891,6 +4974,19 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="cursor">where the row loop has got to; read and advanced</param>
         private async ValueTask LayoutBodyRow(RGraphics g, CssBox row, double startX, TableRowCursor cursor)
         {
+            // Issue #166's "leaks past the table's own subtree" symptom: a <tr> is never itself given a
+            // PerformLayout/PerformLayoutPrologue call (only its cells are, in the loop below) - only
+            // this engine ever positions a row, so nothing else ever sets its UsedPageName either, and
+            // it stays at CssBox's own compile-time default (empty) forever. A cell then inherits from
+            // its row (ParentBox?.UsedPageName) exactly as PerformLayoutPrologue's own inheritance rule
+            // says it should, correctly per that rule but WRONGLY in outcome: it inherits the row's
+            // never-set empty name instead of the table's real one, computes a spurious pageNameChanged,
+            // and registers a bogus reversion mid-table - which is what corrupted ActivePageName for
+            // whatever ordinary block-flow content came after the table. Setting it here, from the same
+            // ancestor-chain walk ForcedBreakFallsBeforeRow's own break decision already uses, gives
+            // every cell the correct value to inherit before any of them lay out.
+            row.UsedPageName = ProspectiveUsedPageNameFor(row);
+
             var currentY = cursor.CurrentY;
             var rowIndex = cursor.RowIndex;
             var rowSpannedBoxes = cursor.RowSpannedBoxes;
