@@ -1,5 +1,27 @@
-# Named-page activation and reversion outside normal block flow
+# Named-page activation and reversion outside normal block flow (flex/multicol only)
 
-Named-page (`page: <name>`) activation and **reversion** are honored only for normal block-flow content. The used value of `page` is now tree-based (CSS Paged Media Level 3 §3) and reverts for content leaving a named subtree — fixed for the block-flow forced-break path in `CssBox.PerformLayoutImp` (issue #126), but *not* for children positioned independently by `CssLayoutEngineFlex`/`CssLayoutEngineTable`/`CssLayoutEngineColumns`, which don't route through that path (same engine-independence family as the CSS Fragmentation §5.2 margin-truncation gap, see [Margins adjoining an unforced break](margin-truncation-remaining-gaps.md)). A `page` change/reversion among flex items, table cells, or multicol children may not begin/revert on a fresh page. Filed as [issue #166](https://github.com/jhaygood86/PeachPDF/issues/166). See `NamedPageLayoutIntegrationTests`/`NamedPageGeometryAttributionTests` for the fixed block-flow behavior (used-value reversion, band restoration, margin-box suppression no longer leaking).
+Tracked as [issue #902](https://github.com/jhaygood86/PeachPDF/issues/902), narrowed from #166 (closed -
+the table case is fixed).
 
-**Confirmed to leak past the table's own subtree, not just within it** (found building the mixed-page-orientation showcase): a plain block sibling *after* a named-page section that merely *contains* a `<table>` (anywhere in its descendants, not the reverting box itself) also fails to revert — the table's own registration apparently isn't withdrawn when its containing section's content finishes, so the name stays active for whatever ordinary block-flow content comes next, even though that later content never touches the table engine itself. Reproduced with a single-cell table; unrelated to page-break placement, fixed-position content, or the number of block-level siblings inside the named section. Same tracked issue (#166) — this is the same underlying mechanism (the table engine's own registration bypassing the withdraw-on-exit path `CssBox.PerformLayoutImp`'s forced-break path already has), just a wider-reaching symptom of it than "content is still open." Until closed, avoid a `<table>` as the last piece of content in a named-page section that a later section needs to revert away from.
+Named-page (`page: <name>`) activation and **reversion** are honored only for normal block-flow content
+and, since issue #166's table fix, for table rows/cells too. The used value of `page` is tree-based (CSS
+Paged Media Level 3 §3) and reverts for content leaving a named subtree — fixed for the block-flow
+forced-break path in `CssBox.PerformLayoutImp` (issue #126) and for `CssLayoutEngineTable` (issue #166:
+`CssLayoutEngineTable.ForcedBreakFallsBeforeRow` now forces a break on a row's own used-name transition,
+and `LayoutBodyRow` now sets each row's `UsedPageName` from its own ancestor chain before any cell lays
+out — a `<tr>` is never itself given a `PerformLayoutPrologue` call the way an ordinary block box is, so
+without this a cell inheriting from its row's never-set `UsedPageName` registered a spurious reversion
+mid-table, corrupting `ActivePageName` for whatever ordinary content followed the table even when that
+content never touched the table engine at all) — but *not* for children positioned independently by
+`CssLayoutEngineFlex`/`CssLayoutEngineColumns`, which don't route through either fixed path (same
+engine-independence family as the CSS Fragmentation §5.2 margin-truncation gap, see
+[Margins adjoining an unforced break](margin-truncation-remaining-gaps.md)). A `page` change/reversion
+among flex items or multicol children may not begin/revert on a fresh page, and — mirroring the table
+symptom above before its fix — a flex/multicol container's own registration bypassing the correct
+inheritance/withdraw path could plausibly leak a name past its own subtree the same way. No equivalent
+per-child break hook exists in either engine at all yet (`CssLayoutEngineFlex`'s
+`RelocateLinesAcrossFragmentainers` only handles `break-inside`/monolithic content), so closing this
+needs new plumbing built from scratch in each, not a small extension of an existing hook the way the
+table fix was. See `NamedPageLayoutIntegrationTests`/`NamedPageGeometryAttributionTests` for the fixed
+block-flow and table behavior (used-value reversion, band restoration, margin-box suppression no longer
+leaking, mid-table name transitions, and reversion past a table's own subtree).
