@@ -35,9 +35,15 @@ namespace PeachPDF.Html.Core.Parse
         #region Fields and Consts
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         private readonly RAdapter _adapter;
+
+        /// <summary>
+        /// Caches parsed inline <c>style=""</c> rules by their raw attribute text, since machine-generated
+        /// markup often repeats the same attribute text across many elements.
+        /// </summary>
+        private readonly Dictionary<string, StyleRule> _inlineStyleRuleCache = new();
 
         #endregion
 
@@ -50,6 +56,23 @@ namespace PeachPDF.Html.Core.Parse
             ArgumentNullException.ThrowIfNull(adapter, "global");
 
             _adapter = adapter;
+        }
+
+        /// <summary>
+        /// Get the parsed <see cref="StyleRule"/> for an inline <c>style=""</c> attribute's text, parsing
+        /// and caching it on first use so identical attribute text across boxes is only parsed once.
+        /// </summary>
+        internal StyleRule GetOrParseInlineStyleRule(string styleAttributeText)
+        {
+            if (_inlineStyleRuleCache.TryGetValue(styleAttributeText, out var cached))
+            {
+                return cached;
+            }
+
+            var rule = new StyleRule(StylesheetParser.Default);
+            StylesheetParser.Default.AppendDeclarations(rule.Style, styleAttributeText);
+            _inlineStyleRuleCache[styleAttributeText] = rule;
+            return rule;
         }
 
         /// <summary>
