@@ -8,20 +8,19 @@ namespace PeachPDF.CSS
     /// <summary>
     /// A pure, allocation-free model of the &lt;number&gt; grammar this codebase's real <see cref="Lexer"/>
     /// actually implements via <c>NumberStart</c>/<c>NumberRest</c>/<c>NumberFraction</c> - deliberately
-    /// <em>not</em> the CSS Syntax Level 3 §4.3.13 grammar those methods are named after.
+    /// <em>not</em> the full CSS Syntax Level 3 §4.3.13 grammar those methods are named after, since it
+    /// leaves out the optional exponent (see remarks).
     /// </summary>
     /// <remarks>
-    /// <see cref="Lexer"/>'s numeric-token state machine never actually reaches its own exponent-handling
-    /// code (<c>NumberExponential</c>/<c>SciNotation</c>): <c>NumberRest</c>/<c>NumberFraction</c>'s main
-    /// loop treats <em>any</em> <see cref="CharExtensions.IsNameStart"/> character - which includes 'e'/'E',
-    /// indistinguishable from any other unit-starting letter - as the start of a unit-ident token
-    /// <em>before</em> the switch statement housing the 'e'/'E' exponent cases is ever reached. So e.g.
-    /// <c>"1e2"</c> tokenizes today as two tokens (a Dimension token "1e" followed by a separate Number
-    /// token "2"), never as the single scientific-notation Number(100) CSS Syntax 3 describes. This is a
-    /// pre-existing, real spec-compliance gap, unrelated to this method's purpose - it is modeled here
-    /// exactly as-is (no exponent consumption) so this faster path always agrees with what callers
-    /// already get from <c>CssValueParser.GetUnit</c>'s full-tokenizer path today, rather than "fixing"
-    /// the number grammar as an incidental side effect.
+    /// <see cref="Lexer"/>'s numeric-token state machine does correctly consume a trailing exponent
+    /// ('e'/'E', optional sign, digits) via <c>NumberExponential</c>/<c>SciNotation</c> (issue #921).
+    /// This fast path deliberately still doesn't: <c>CssValueParser.TryClassifyLengthFast</c>'s own
+    /// post-number "is the remainder all letters" check already rejects any exponent shape (a digit
+    /// follows the 'e'/'E', which isn't a letter) and falls through to its <c>Inconclusive</c> result -
+    /// the real, full tokenizer - so duplicating exponent-consumption here would add complexity with no
+    /// classification ever reaching it. Every exponent-bearing input was, and remains, classified
+    /// <c>Inconclusive</c> before and after the Lexer fix; only the real tokenizer's own answer for
+    /// those inputs changed.
     /// </remarks>
     internal static class NumberSyntax
     {

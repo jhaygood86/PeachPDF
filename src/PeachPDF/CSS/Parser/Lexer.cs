@@ -615,21 +615,18 @@ namespace PeachPDF.CSS
                 {
                     StringBuffer.Append(current);
                 }
-                else if (current.IsNameStart())
+                else if (current == 'e' || current == 'E')
                 {
-                    var number = FlushBuffer();
-                    StringBuffer.Append(current);
-                    return Dimension(number);
-                }
-                else if (IsValidEscape(current))
-                {
-                    current = GetNext();
-                    var number = FlushBuffer();
-                    StringBuffer.Append(ConsumeEscape(current));
-                    return Dimension(number);
+                    // Defer to the switch below: NumberExponential already re-derives (and correctly
+                    // falls back to Dimension for) the same "digit, or sign then digit" decision, so
+                    // there is nothing to disambiguate here - just stop claiming 'e'/'E' as a unit
+                    // start before that dedicated exponent handling ever gets a chance to run.
+                    break;
                 }
                 else
                 {
+                    var dimension = TryStartDimension(current);
+                    if (dimension is not null) return dimension;
                     break;
                 }
 
@@ -648,16 +645,13 @@ namespace PeachPDF.CSS
 
                     Back();
                     return NewNumber(FlushBuffer());
-                case '%':
-                    return NewPercentage(FlushBuffer());
                 case 'e':
                 case 'E':
                     return NumberExponential(current);
+                case '%':
                 case Symbols.Minus:
-                    return NumberDash();
                 default:
-                    Back();
-                    return NewNumber(FlushBuffer());
+                    return FinishNumberOrPercentage(current);
             }
         }
 
@@ -670,21 +664,14 @@ namespace PeachPDF.CSS
                 {
                     StringBuffer.Append(current);
                 }
-                else if (current.IsNameStart())
+                else if (current == 'e' || current == 'E')
                 {
-                    var number = FlushBuffer();
-                    StringBuffer.Append(current);
-                    return Dimension(number);
-                }
-                else if (IsValidEscape(current))
-                {
-                    current = GetNext();
-                    var number = FlushBuffer();
-                    StringBuffer.Append(ConsumeEscape(current));
-                    return Dimension(number);
+                    break;
                 }
                 else
                 {
+                    var dimension = TryStartDimension(current);
+                    if (dimension is not null) return dimension;
                     break;
                 }
 
@@ -697,13 +684,61 @@ namespace PeachPDF.CSS
                 case 'E':
                     return NumberExponential(current);
                 case '%':
-                    return NewPercentage(FlushBuffer());
                 case Symbols.Minus:
-                    return NumberDash();
                 default:
-                    Back();
-                    return NewNumber(FlushBuffer());
+                    return FinishNumberOrPercentage(current);
             }
+        }
+
+        /// <summary>
+        /// Shared by <see cref="NumberRest"/>/<see cref="NumberFraction"/>/<see cref="SciNotation"/>'s
+        /// digit-scanning loops: once a number's digits stop, checks whether <paramref name="current"/>
+        /// starts a unit (a name-start character, or a valid escape) and if so flushes the accumulated
+        /// digits as the number and hands off to <see cref="Dimension"/> to consume it. Returns
+        /// <see langword="null"/> when <paramref name="current"/> doesn't start a unit, leaving the
+        /// caller's loop position and <see cref="LexerBase.StringBuffer"/> untouched so the caller can
+        /// break out and dispatch on <paramref name="current"/> itself.
+        /// </summary>
+        private Token TryStartDimension(char current)
+        {
+            if (current.IsNameStart())
+            {
+                var number = FlushBuffer();
+                StringBuffer.Append(current);
+                return Dimension(number);
+            }
+
+            if (IsValidEscape(current))
+            {
+                current = GetNext();
+                var number = FlushBuffer();
+                StringBuffer.Append(ConsumeEscape(current));
+                return Dimension(number);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Shared terminal dispatch for <see cref="NumberRest"/>/<see cref="NumberFraction"/>/
+        /// <see cref="SciNotation"/>: once a number is known to be neither a fraction continuation nor
+        /// an exponent nor a unit-starting dimension, decides between a percentage, a dash-led dimension
+        /// (<see cref="NumberDash"/>), or a plain number.
+        /// </summary>
+        private Token FinishNumberOrPercentage(char current)
+        {
+            if (current == '%')
+            {
+                return NewPercentage(FlushBuffer());
+            }
+
+            if (current == Symbols.Minus)
+            {
+                return NumberDash();
+            }
+
+            Back();
+            return NewNumber(FlushBuffer());
         }
 
         private Token Dimension(string number)
@@ -730,19 +765,24 @@ namespace PeachPDF.CSS
 
         private Token SciNotation()
         {
+            var current = GetNext();
             while (true)
             {
-                var current = GetNext();
                 if (current.IsDigit())
                 {
                     StringBuffer.Append(current);
                 }
                 else
                 {
-                    Back();
-                    return NewNumber(FlushBuffer());
+                    var dimension = TryStartDimension(current);
+                    if (dimension is not null) return dimension;
+                    break;
                 }
+
+                current = GetNext();
             }
+
+            return FinishNumberOrPercentage(current);
         }
 
         private Token UrlStart(string functionName)

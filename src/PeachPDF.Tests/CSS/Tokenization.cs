@@ -214,6 +214,123 @@ namespace PeachPDF.Tests.CSS
             var token = tokenizer.Get();
             Assert.Equal("\n", token.Data);
         }
+
+        // Issue #921: CSS Syntax Level 3 §4.3.13 treats an exponent ('e'/'E', optional sign, digits)
+        // as part of a <number>, so "1e2" is the single number 100 - not a Dimension("1", "e")
+        // followed by a separate Number("2"). NumberRest/NumberFraction's scanning loop used to claim
+        // any 'e'/'E' for the general unit-start branch before the exponent-handling switch case
+        // could ever run.
+        [Theory]
+        [InlineData("1e2", 100d)]
+        [InlineData("1E2", 100d)]
+        [InlineData("1e+2", 100d)]
+        [InlineData("1e-2", 0.01d)]
+        [InlineData("1.5e2", 150d)]
+        public void LexerScientificNotation_TokenizesAsSingleNumber(string teststring, double expected)
+        {
+            var tokenizer = new Lexer(new TextSource(teststring));
+            var token = tokenizer.Get();
+
+            Assert.Equal(TokenType.Number, token.Type);
+            Assert.Equal(expected, ((NumberToken)token).Value, 5);
+            Assert.Equal(TokenType.EndOfFile, tokenizer.Get().Type);
+        }
+
+        // "1em" is an ordinary dimension - unaffected by the exponent fix since 'm' never starts an
+        // exponent. "1e" has no digit after the 'e', so per spec it stays a dimension with unit "e"
+        // rather than becoming (invalid) scientific notation.
+        [Theory]
+        [InlineData("1em", "em")]
+        [InlineData("1e", "e")]
+        public void LexerScientificNotation_NoExponentDigit_StaysADimension(string teststring, string expectedUnit)
+        {
+            var tokenizer = new Lexer(new TextSource(teststring));
+            var token = tokenizer.Get();
+
+            Assert.Equal(TokenType.Dimension, token.Type);
+            var unitToken = (UnitToken)token;
+            Assert.Equal(1d, unitToken.Value, 5);
+            Assert.Equal(expectedUnit, unitToken.Unit);
+            Assert.Equal(TokenType.EndOfFile, tokenizer.Get().Type);
+        }
+
+        [Fact]
+        public void LexerScientificNotation_SignWithNoDigit_StaysADimensionPlusLeftoverSign()
+        {
+            var tokenizer = new Lexer(new TextSource("1e+"));
+
+            var first = tokenizer.Get();
+            Assert.Equal(TokenType.Dimension, first.Type);
+            var unitToken = (UnitToken)first;
+            Assert.Equal(1d, unitToken.Value, 5);
+            Assert.Equal("e", unitToken.Unit);
+
+            var second = tokenizer.Get();
+            Assert.Equal(TokenType.Delim, second.Type);
+            Assert.Equal("+", second.Data);
+        }
+
+        // Exercises the SciNotation() fix: once the exponent digits are consumed, whatever follows
+        // still needs the same dimension/percentage/number disambiguation the non-exponent paths
+        // apply - SciNotation used to unconditionally return a plain number, which would have
+        // silently split "1e2px" into Number("1e2") + a stray "px" ident token.
+        [Fact]
+        public void LexerScientificNotation_FollowedByUnit_TokenizesAsSingleDimension()
+        {
+            var tokenizer = new Lexer(new TextSource("1e2px"));
+            var token = tokenizer.Get();
+
+            Assert.Equal(TokenType.Dimension, token.Type);
+            var unitToken = (UnitToken)token;
+            Assert.Equal(100d, unitToken.Value, 5);
+            Assert.Equal("px", unitToken.Unit);
+            Assert.Equal(TokenType.EndOfFile, tokenizer.Get().Type);
+        }
+
+        // Exercises SciNotation()'s dash-led-unit branch (NumberDash): a unit may start with '-' after
+        // digits, exactly like the non-exponent case "1-foo" already does - this must behave the same
+        // regardless of whether the digits that precede it came from a plain integer or an exponent.
+        [Fact]
+        public void LexerScientificNotation_FollowedByDashLedUnit_TokenizesAsSingleDimension()
+        {
+            var tokenizer = new Lexer(new TextSource("1e2-foo"));
+            var token = tokenizer.Get();
+
+            Assert.Equal(TokenType.Dimension, token.Type);
+            var unitToken = (UnitToken)token;
+            Assert.Equal(100d, unitToken.Value, 5);
+            Assert.Equal("-foo", unitToken.Unit);
+            Assert.Equal(TokenType.EndOfFile, tokenizer.Get().Type);
+        }
+
+        // Exercises SciNotation()'s escape-sequence branch: a unit starting right after the exponent
+        // digits with an escape ("\70 " = hex 0x70 = 'p') rather than a plain letter, mirroring the
+        // escape handling NumberRest/NumberFraction already have for the non-exponent case.
+        [Fact]
+        public void LexerScientificNotation_FollowedByEscapedUnitStart_TokenizesAsSingleDimension()
+        {
+            var tokenizer = new Lexer(new TextSource("1e2\\70 x"));
+            var token = tokenizer.Get();
+
+            Assert.Equal(TokenType.Dimension, token.Type);
+            var unitToken = (UnitToken)token;
+            Assert.Equal(100d, unitToken.Value, 5);
+            Assert.Equal("px", unitToken.Unit);
+            Assert.Equal(TokenType.EndOfFile, tokenizer.Get().Type);
+        }
+
+        [Fact]
+        public void LexerScientificNotation_FollowedByPercent_TokenizesAsSinglePercentage()
+        {
+            var tokenizer = new Lexer(new TextSource("1e2%"));
+            var token = tokenizer.Get();
+
+            Assert.Equal(TokenType.Percentage, token.Type);
+            var unitToken = (UnitToken)token;
+            Assert.Equal(100d, unitToken.Value, 5);
+            Assert.Equal("%", unitToken.Unit);
+            Assert.Equal(TokenType.EndOfFile, tokenizer.Get().Type);
+        }
     }
 }
 

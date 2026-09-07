@@ -71,10 +71,11 @@ namespace PeachPDF.Tests.Html.Core.Parse
                                         // this is actually two tokens (Dimension "10px" + Number "2")
         [InlineData("1e2")]            // "e" (a letter) looks unit-like, but "2" right after it isn't a
                                         // letter, so the all-letters unit check rejects the whole "e2" -
-                                        // the real tokenizer's own answer here is also two tokens (see
-                                        // NumberSyntax's remarks: 'e' claims the unit branch, not exponent
-                                        // syntax, then Dimension() stops at the first non-letter, '2')
-        [InlineData("1e+")]            // 'e' claims the unit branch, then a bare trailing '+' left over
+                                        // the real tokenizer now correctly reads this as a single
+                                        // scientific-notation Number(100) token (issue #921), which still
+                                        // isn't a UnitToken, so this stays Inconclusive either way
+        [InlineData("1e+")]            // no digit follows the sign, so this isn't an exponent - 'e'
+                                        // claims the unit branch, then a bare trailing '+' left over
         [InlineData("10-foo")]         // NumberDash: a unit may start with '-' after digits
         public void TryClassifyLengthFast_AmbiguousShapes_ClassifiesAsInconclusive(string input)
         {
