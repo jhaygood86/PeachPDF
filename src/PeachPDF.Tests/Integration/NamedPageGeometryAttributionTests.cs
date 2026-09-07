@@ -117,14 +117,17 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task TableRelocatedByPreCheck_TailResyncMovesRegistrationToNewPage()
         {
-            // CssLayoutEngineTable's whole-table pre-check assigns the table's Location directly
-            // (bypassing OffsetTop's MoveNamedPageElement sync), so the tail of
-            // CssBox.PerformLayoutImp must re-sync the early registration to the slot the table
-            // actually ended up on. Every element here carries the same explicit `page: tbl`, so the
-            // table itself doesn't force a break (its used name equals the already-active one, which
-            // would otherwise land it at a slot top and mask the move) while still registering (a box
-            // with its own explicit name always registers, so the relocated table has an entry to
-            // re-sync). The leading 660pt named div pushes the table's top near the slot-0 boundary.
+            // Issue #149: CssLayoutEngineTable's whole-table pre-check now routes the relocation through
+            // CssBox.OffsetTop (instead of assigning the table's Location directly), so the early
+            // registration re-syncs to the table's new slot immediately - before the row loop below
+            // paginates against this table's own named-page geometry, rather than only afterward at
+            // CssBox.PerformLayoutImp's tail (which stays as a no-op safety net here, since the
+            // registration already matches by the time it runs). Every element here carries the same
+            // explicit `page: tbl`, so the table itself doesn't force a break (its used name equals the
+            // already-active one, which would otherwise land it at a slot top and mask the move) while
+            // still registering (a box with its own explicit name always registers, so the relocated
+            // table has an entry to re-sync). The leading 660pt named div pushes the table's top near
+            // the slot-0 boundary.
             var container = await BuildLayoutAsync("""
                 <!DOCTYPE html><html><head><style>
                 @page { margin: 60pt 50pt; }

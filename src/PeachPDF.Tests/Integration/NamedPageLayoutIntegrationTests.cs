@@ -92,35 +92,34 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task NamedPageElement_InlineElement_Registers()
+        public async Task NamedPageElement_InlineElement_DoesNotRegister()
         {
-            // Regression coverage for the inline-element gap shared with string-set: an inline element
-            // inside a text-flow container (ContainsInlinesOnly, laid out via CssLayoutEngine.FlowBox)
-            // never got its own PerformLayoutImp call, so RegisterNamedPageElement never ran for it -
-            // previously this would have registered zero NamedPageElements, failing Assert.Single below.
+            // Issue #149: `page` is a class-A-break-point property (css-page-3 §7.2), and an inline-level
+            // box never creates one, so an inline element's own `page` declaration is now a no-op -
+            // registration only ever happens at the nearest block-level ancestor (here, <p>#para itself
+            // carries no `page`, so nothing registers at all). Previously this registered an entry at the
+            // <b>'s own (unsnapped, mid-line) Y, a real source of corruption (see
+            // .claude/recent-fixes/2026-08-02-inline-string-set-and-named-page-corruption-across-reflow.md).
             var html = Wrap("""<p id="para"><b id="chapter" style="page:chapter">Chapter 2</b> starts here.</p>""");
 
-            var (root, container) = await BuildAndLayout(html);
-            var paraBox = FindById(root, "para")!;
+            var (_, container) = await BuildAndLayout(html);
 
-            var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
-            // <b> is the paragraph's first inline content on its first line, so it should land at the
-            // same Y as the paragraph's own top (no padding/border in this fixture).
-            Assert.Equal(paraBox.Location.Y, registered.Y, 1);
+            Assert.DoesNotContain(container.NamedPageElements, e => e.Name == "chapter");
         }
 
         [Fact]
-        public async Task NamedPageElement_InlineElement_RegistersActualLocationY_NotZero()
+        public async Task NamedPageElement_InlineElement_StillDoesNotRegister_EvenWellIntoTheFlow()
         {
+            // Companion to the no-registration test above with a non-trivial Y (well past a filler div),
+            // confirming the no-op holds regardless of where in the flow the inline element lands.
             var html = Wrap("""
                 <div style="height:500px"></div>
                 <p><b id="chapter" style="page:chapter">Chapter 3</b> starts here.</p>
                 """);
 
-            var (root, container) = await BuildAndLayout(html);
+            var (_, container) = await BuildAndLayout(html);
 
-            var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
-            Assert.True(registered.Y > 100, $"expected a Y well past the filler div, got {registered.Y}");
+            Assert.DoesNotContain(container.NamedPageElements, e => e.Name == "chapter");
         }
 
         [Fact]
@@ -142,19 +141,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task NamedPageElement_InlineFlexElement_Registers()
+        public async Task NamedPageElement_InlineFlexElement_DoesNotRegister()
         {
-            // display:inline-flex inside a text-flow container is treated as an atomic inline element
-            // (CssLayoutEngine.FlowBox's dedicated InlineFlex branch), a separate code path from the
-            // plain-inline case above - it finalizes its own Location eagerly rather than deferring to
-            // FlowBox's generic "box != blockBox" late correction, so needs its own regression coverage.
+            // Issue #149: display:inline-flex inside a text-flow container is treated as an atomic
+            // inline element (CssLayoutEngine.FlowBox's dedicated InlineFlex branch) - still inline-level
+            // per css-page-3 §7.2, so its own `page` declaration is a no-op too, the same as the
+            // plain-inline case above.
             var html = Wrap("""<p id="para"><span id="chapter" style="display:inline-flex; page:chapter">Chapter 2</span> starts here.</p>""");
 
-            var (root, container) = await BuildAndLayout(html);
-            var chapterBox = FindById(root, "chapter")!;
+            var (_, container) = await BuildAndLayout(html);
 
-            var registered = Assert.Single(container.NamedPageElements, e => e.Name == "chapter");
-            Assert.Equal(chapterBox.Location.Y, registered.Y, 1);
+            Assert.DoesNotContain(container.NamedPageElements, e => e.Name == "chapter");
         }
 
         [Fact]
