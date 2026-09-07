@@ -723,9 +723,10 @@ namespace PeachPDF.Html.Core.Parse
             if (box.HtmlTag != null && box.HtmlTag.HasAttribute("style"))
             {
                 var styleAttributeText = box.HtmlTag.TryGetAttribute("style")!;
-                var rule = new StyleRule(StylesheetParser.Default);
-                StylesheetParser.Default.AppendDeclarations(rule.Style, styleAttributeText);
-                inlineRule = rule;
+                // Machine-generated markup often repeats the same style="..." text across many
+                // elements (e.g. every cell in a table), so the parsed rule is cached by its raw
+                // attribute text on valueParser rather than re-tokenized per box.
+                inlineRule = valueParser.GetOrParseInlineStyleRule(styleAttributeText);
             }
 
             // The relatively expensive property/custom-property snapshots below are only ever read
