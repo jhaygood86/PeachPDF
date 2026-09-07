@@ -389,6 +389,13 @@ namespace PeachPDF.Html.Core
         /// position happens to straddle a page boundary would end the measurement pass with a break
         /// token recorded against coordinates that have nothing to do with where the item actually
         /// ends up, and that pass is never resumed - permanently desyncing the word from its own box.
+        /// <para>
+        /// Also set, for a different reason, around a monolithic subtree's own children
+        /// (<see cref="Dom.CssBox.LayoutContents"/>, #350): css-break-3 §2 forbids breaking such content
+        /// at all, so a forced break inside it must not take effect either. <see cref="Dom.CssBox.ForcedBreakTopFor"/>
+        /// reads this flag (rather than <see cref="IsFragmenting"/>, which is equally false once a pass
+        /// has simply finished with none running at all) to tell "inside a suppressed subtree" from that.
+        /// </para>
         /// </summary>
         internal bool SuppressWordPageBreaks { get; set; }
 

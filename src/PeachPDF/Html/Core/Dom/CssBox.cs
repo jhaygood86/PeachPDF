@@ -3224,60 +3224,109 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    //If there's just inline boxes, create LineBoxes
-                    if (DomUtils.ContainsInlinesOnly(this))
+                    // css-break-3 §2: monolithic content (here, a scroll container - a replaced element
+                    // has no children to reach this dispatch at all) may not be broken. Detaching the
+                    // fragmentainer for the duration of its own children's layout means nothing inside can
+                    // record a page break at all, so its content lays out as one continuous run whose
+                    // natural height may exceed a single fragmentainer - exactly like any other tall
+                    // content already does (a 620pt block, a tall <img>), each fragmentainer's own paint
+                    // clip showing its own slice, with no new mechanism needed (#350). Also sets
+                    // SuppressWordPageBreaks (otherwise a flex/grid-measurement-only flag): CurrentFragmentainer
+                    // being null means two different things - "inside a suppressed subtree" and "no pass is
+                    // running at all, layout has simply finished" - and ForcedBreakTopFor (below) needs to
+                    // tell them apart, since a forced break inside this subtree must not take effect either
+                    // (honoring one would itself be a form of splitting monolithic content). Applied
+                    // unconditionally rather than only when the content won't fit anywhere: it changes
+                    // nothing when the content does fit (nothing would have taken a break either way), and
+                    // the epilogue's own relocate-whole-box mover still moves an unbroken,
+                    // too-tall-for-here-but-fits-on-the-next-page box exactly as before.
+                    //
+                    // Excludes a box that will actually dispatch to the multi-column engine below (not
+                    // every EstablishesMultiColumnContext box - one holding only inline content takes the
+                    // ContainsInlinesOnly branch above instead, same as any other inlines-only box, and
+                    // must still be suppressed): a column is a real fragmentainer in its own right and
+                    // drives its own (nested) fragmentation regardless of this box's own monolithic status.
+                    //
+                    // Excludes table-cell/table-caption: td/th get overflow:hidden from the UA stylesheet
+                    // (CssDefaults.cs), making every cell "monolithic" by IsScrollContainer's own overflow
+                    // test - but a cell's own fragmentation across pages is CssLayoutEngineTable's
+                    // long-standing, well-tested feature, unrelated to this box's own overflow value, and
+                    // both display types are always positioned by that engine (PositionAssignedByEngine)
+                    // rather than by this generic dispatch's own frame.
+                    var dispatchesToColumnsEngine = EstablishesMultiColumnContext && Boxes.Count > 0 && !DomUtils.ContainsInlinesOnly(this);
+                    var suppressMonolithicBreaking = MonolithicContent.IsMonolithic(this)
+                        && !dispatchesToColumnsEngine
+                        && DerivedStyle.ActualDisplay is not (Keywords.TableCell or Keywords.TableCaption);
+                    var suppressingContainer = suppressMonolithicBreaking ? HtmlContainer : null;
+                    var suppressedFragmentainer = suppressingContainer?.DetachFragmentainer();
+                    var previousSuppressWordPageBreaks = suppressingContainer?.SuppressWordPageBreaks ?? false;
+                    if (suppressingContainer is not null) suppressingContainer.SuppressWordPageBreaks = true;
+
+                    try
                     {
-                        if (resume is null) ActualBottom = Location.Y;
-
-                        //This will automatically set the bottom of this block
-                        var stopped = await CssLayoutEngine.CreateLineBoxes(g, this, resume as InlineBreakToken);
-
-                        if (stopped is not null)
+                        //If there's just inline boxes, create LineBoxes
+                        if (DomUtils.ContainsInlinesOnly(this))
                         {
-                            // This block's remaining lines belong to the next fragmentainer.
-                            PendingBreakToken = stopped;
-                            return;
-                        }
+                            if (resume is null) ActualBottom = Location.Y;
+
+                            //This will automatically set the bottom of this block
+                            var stopped = await CssLayoutEngine.CreateLineBoxes(g, this, resume as InlineBreakToken);
+
+                            if (stopped is not null)
+                            {
+                                // This block's remaining lines belong to the next fragmentainer.
+                                PendingBreakToken = stopped;
+                                return;
+                            }
 
 #if DEBUG
-                        foreach (var lineBox in LineBoxes)
-                        {
-                            Console.WriteLine($"layout linebox: {lineBox} [h: {lineBox.LineBottom}]");
-                        }
+                            foreach (var lineBox in LineBoxes)
+                            {
+                                Console.WriteLine($"layout linebox: {lineBox} [h: {lineBox.LineBottom}]");
+                            }
 #endif
 
-                    }
-                    else if (EstablishesMultiColumnContext && Boxes.Count > 0)
-                    {
-                        // Not monolithic any more: a column is a fragmentainer, and this engine drives its
-                        // own. It is handed the resumption record so a container continuing on a later page
-                        // picks up where its last column stopped instead of starting over.
-                        await CssLayoutEngineColumns.PerformLayout(g, this, resume);
-
-                        if (PendingBreakToken is not null) return;
-                    }
-                    else if (WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr && Boxes.Count > 0)
-                    {
-                        // A vertical-writing-mode box with block-level children (issue #760) - the box-level
-                        // counterpart of CreateVerticalLineBoxes's own word-level column stacking above. Each
-                        // child runs its own, independent LayoutContents dispatch driven by its own
-                        // WritingMode.Value - unaffected by this box's own stacking axis, which is what lets
-                        // an orthogonal-flow child (a different writing-mode than this box) "just work" with
-                        // no special case here - and is then stacked, as one atomic already-laid-out unit,
-                        // along this box's own block axis. See MonolithicContent.IsUnresumableOrthogonalFlow
-                        // for why this box, like the inlines-only case above, is treated as indivisible by
-                        // its parent's own fragmentation.
-                        await LayoutVerticalBlockChildren(g);
-                    }
-                    else if (Boxes.Count > 0)
-                    {
-                        if (await LayoutBlockChildren(g, resume)) return;
-
-                        ActualRight = CalculateActualRight();
-
-                        if (Boxes.Any(b => !b.IsExcludedFromFlow))
+                        }
+                        else if (EstablishesMultiColumnContext && Boxes.Count > 0)
                         {
-                            ActualBottom = MarginBottomCollapse();
+                            // Not monolithic any more: a column is a fragmentainer, and this engine drives its
+                            // own. It is handed the resumption record so a container continuing on a later page
+                            // picks up where its last column stopped instead of starting over.
+                            await CssLayoutEngineColumns.PerformLayout(g, this, resume);
+
+                            if (PendingBreakToken is not null) return;
+                        }
+                        else if (WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr && Boxes.Count > 0)
+                        {
+                            // A vertical-writing-mode box with block-level children (issue #760) - the box-level
+                            // counterpart of CreateVerticalLineBoxes's own word-level column stacking above. Each
+                            // child runs its own, independent LayoutContents dispatch driven by its own
+                            // WritingMode.Value - unaffected by this box's own stacking axis, which is what lets
+                            // an orthogonal-flow child (a different writing-mode than this box) "just work" with
+                            // no special case here - and is then stacked, as one atomic already-laid-out unit,
+                            // along this box's own block axis. See MonolithicContent.IsUnresumableOrthogonalFlow
+                            // for why this box, like the inlines-only case above, is treated as indivisible by
+                            // its parent's own fragmentation.
+                            await LayoutVerticalBlockChildren(g);
+                        }
+                        else if (Boxes.Count > 0)
+                        {
+                            if (await LayoutBlockChildren(g, resume)) return;
+
+                            ActualRight = CalculateActualRight();
+
+                            if (Boxes.Any(b => !b.IsExcludedFromFlow))
+                            {
+                                ActualBottom = MarginBottomCollapse();
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (suppressingContainer is not null)
+                        {
+                            suppressingContainer.RestoreFragmentainer(suppressedFragmentainer);
+                            suppressingContainer.SuppressWordPageBreaks = previousSuppressWordPageBreaks;
                         }
                     }
                 }
@@ -4873,6 +4922,18 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (!child._isForcedBreak || child.HtmlContainer is not { } container) return null;
 
+            // A measurement pass at a provisional position (flex/grid item sizing), or a monolithic
+            // subtree whose own breaking css-break-3 §2 forbids (#350: CssBox.LayoutContents suppresses
+            // both this and CurrentFragmentainer for such a subtree) - either way, nothing here should act
+            // on a break. Reading the flag those callers already set (rather than IsFragmenting, which is
+            // equally false once layout has simply finished and no pass is running at all - a shape
+            // ForcedBreakTargetIsTheFramesTests deliberately exercises by asking post-layout, exactly to
+            // pin that the target is re-derived rather than latched) is what tells the two apart. Declining
+            // here, rather than computing a target nothing will act on, is also what keeps a measurement
+            // pass from spending this child's one-shot PlacedByForcedBreak latch before the real fill ever
+            // sees it.
+            if (container.SuppressWordPageBreaks) return null;
+
             // The break falls between this box and whatever precedes it in the flow. For a container's
             // *first* in-flow child that is not a sibling of its own: §3.1's break point before it is the
             // same break point as the one before its container, so the predecessor to resolve the target
@@ -5646,11 +5707,13 @@ namespace PeachPDF.Html.Core.Dom
                 var constraint = BlockConstraint.For(this);
 
                 // The two arms part company on a box that fits in no fragmentainer. An unsatisfiable
-                // `avoid` is relaxed and the box still moves, maximizing what lands on one page (§4.3);
-                // a monolithic box is left exactly where it is, because §2 would have it overflow and
-                // overflowing discards every fragmentainer past the first - so PeachPDF keeps fragmenting
-                // it instead (#350). The question is asked of the *destination* band, which per-page
-                // @page margins can size differently from the current one and from PageSize.Height.
+                // `avoid` is relaxed and the box still moves, maximizing what lands on one page (§4.3); a
+                // monolithic box is left exactly where it is instead, because there is nowhere to move it
+                // to - §2 has it overflow in place, which for a scroll container's own children is what
+                // LayoutContents' own fragmentainer-detach around this box's content already arranged
+                // (#350) before this mover ever runs; this arm just declines to also try relocating the
+                // box itself. The question is asked of the *destination* band, which per-page @page
+                // margins can size differently from the current one and from PageSize.Height.
                 if (constraint.Straddles(ActualBottom - Location.Y)
                     && (avoidsBreak || FitsInFragmentainer(constraint.AtNextSlot()))
                     && TakeEarlyBreak(EarlyBreak.Discover(

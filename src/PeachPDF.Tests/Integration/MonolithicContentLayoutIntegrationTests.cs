@@ -313,6 +313,90 @@ namespace PeachPDF.Tests.Integration
             Assert.All(fragments, f => Assert.False(f.IsMonolithic));
         }
 
+        // css-break-3 §2: a scroll container taller than any single fragmentainer cannot be moved whole
+        // anywhere (there is nowhere it fits), so it must overflow instead of being sliced (#350) - a
+        // forced break inside it is one form of slicing, so it must not take effect there either.
+        [Fact]
+        public async Task ScrollContainerTallerThanAnyPage_IgnoresAForcedBreakInsideIt_AndSpansSeveralPagesInstead()
+        {
+            const int linesEachSide = 10;
+            var html = LayoutHarness.Wrap(
+                "<div id='card' style='overflow:hidden;margin:0;line-height:22pt;font-size:10pt'>" +
+                string.Join("<br>", Enumerable.Range(0, linesEachSide).Select(i => $"Before{i}")) +
+                "<p id='afterBreak' style='break-before:page;margin:0'>After</p>" +
+                string.Join("<br>", Enumerable.Range(0, linesEachSide).Select(i => $"After{i}")) +
+                "</div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var card = LayoutHarness.FindById(root, "card")!;
+            var afterBreak = LayoutHarness.FindById(root, "afterBreak")!;
+
+            // The card must genuinely be too tall for any one page, or this isn't exercising #350 at all.
+            Assert.True(card.ActualBottom - card.Location.Y > PageHeight - 2 * Margin,
+                "fixture must be taller than a single page's own band");
+
+            // No blank page/gap from an honored forced break: "After" starts immediately where the
+            // preceding line content naturally ends, not at the top of a fresh page.
+            Assert.Equal(card.Location.Y + linesEachSide * 22, afterBreak.Location.Y, 2);
+
+            // ...and the card really does span more than one page as a result.
+            var top = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+            var bottom = container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
+            Assert.True(bottom > top, "fixture must actually span more than one page");
+        }
+
+        // The control: table cells get overflow:hidden from the UA stylesheet too, but a cell's own
+        // fragmentation across pages is CssLayoutEngineTable's own long-standing feature and must not be
+        // suppressed by the scroll-container rule above.
+        [Fact]
+        public async Task TableCellTallerThanAnyPage_StillFragmentsNormally_NotTreatedAsMonolithic()
+        {
+            const int lines = 20;
+            var html = LayoutHarness.Wrap(
+                "<table style='width:100%'><tr><td id='cell' style='line-height:22pt;font-size:10pt'>" +
+                string.Join("<br>", Enumerable.Range(0, lines).Select(i => $"Line{i}")) +
+                "</td></tr></table>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var cell = LayoutHarness.FindById(root, "cell")!;
+            var top = container.PageIndexOf(cell.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+            var bottom = container.PageIndexOf(cell.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
+
+            Assert.True(bottom > top, "fixture must span more than one page, fragmenting normally");
+            Assert.True(container.FragmentainerPasses > 1,
+                $"a cell straddling pages must still resume across real passes, got {container.FragmentainerPasses}");
+        }
+
+        // A monolithic box holding only inline content dispatches to CreateLineBoxes (ContainsInlinesOnly
+        // is checked before EstablishesMultiColumnContext in CssBox.LayoutContents), never reaching
+        // CssLayoutEngineColumns at all - so excluding every multi-column box from suppression, rather
+        // than only one that will actually dispatch to that engine, wrongly left this shape unsuppressed.
+        [Fact]
+        public async Task ScrollContainerEstablishingColumnsButHoldingOnlyInlineContent_IsStillSuppressed()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div id='card' style='overflow:hidden;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
+                string.Join("<br>", Enumerable.Range(0, 30).Select(i => $"Line{i}")) +
+                "</div>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var card = LayoutHarness.FindById(root, "card")!;
+            Assert.True(card.EstablishesMultiColumnContext, "fixture must establish a multi-column context");
+
+            // A single, unbroken pass - the same signature genuinely monolithic content gets - rather than
+            // the several real per-fragmentainer passes ordinary (suppressed-or-not) inline content would
+            // otherwise resume across.
+            Assert.Equal(1, container.FragmentainerPasses);
+            Assert.Equal(card.Location.Y + 30 * 22, card.ActualBottom, 2);
+
+            var top = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
+            var bottom = container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
+            Assert.True(bottom > top, "fixture must actually span more than one page");
+        }
+
         // ── helpers ───────────────────────────────────────────────────────────
 
         /// <summary>
