@@ -1086,6 +1086,70 @@ namespace PeachPDF.Tests.Html.Core.Fragments
                 $"decoration {line.Rect.Bottom} must cover its content {words.Max(w => w.Rect.Bottom)}");
         }
 
+        // ─── A box's own nested captures are told apart by which outer column filled them (#369) ──
+
+        /// <summary>
+        /// A multi-column container nested inside another one is filled once per <i>outer</i> column, and
+        /// each of those fills records its own nested captures for its own children under the very same
+        /// <c>(CssBox, Slot)</c> key in <c>FragmentEmitter._nested</c> as every other outer column's fill of
+        /// it. Before the fix, <c>ChildrenOf</c>'s one-level-only consult (<c>nested is null</c>) never
+        /// looked at the inner container's own captures once already inside an outer one, so the inner
+        /// paragraph's per-line rectangles were read from <c>BoxGeometrySnapshot</c>'s ordinary recursive
+        /// capture instead - which is deep enough to keep every line's content and position correct (no word
+        /// is lost or claimed twice either before or after this fix), but flattens the paragraph's own two
+        /// inner columns into a single fragment whose bounds run from the inner container's left edge only,
+        /// discarding the inline offset its own second column placed lines at. The paragraph's fragments
+        /// must therefore show as many distinct inline positions as it has (outer column × inner column)
+        /// combinations, not merely as many as the outer container alone has columns for.
+        /// </summary>
+        [Fact]
+        public async Task InnerMulticolSpanningSeveralOuterColumns_SplitsPerInnerColumnNotJustPerOuterOne()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                NestedMulticol(wordCount: 800), pageWidth: 400, pageHeight: 150, margin: 0);
+
+            var inner = LayoutHarness.FindById(root, "inner")!;
+            var fragments = FragmentsOf(container.FragmentTree!, "p");
+
+            Assert.True(fragments.Count > 1, $"expected the paragraph to split across fragments, got {fragments.Count}");
+
+            // No word is lost or claimed twice - true with or without the fix, since BoxGeometrySnapshot's
+            // capture is recursive and this is not what #369 breaks. Pinned anyway as the safety net a
+            // fragment-count/position fix like this one could plausibly regress.
+            var words = fragments.SelectMany(Flatten).SelectMany(f => f.Words).Select(w => w.Word).ToList();
+            Assert.Equal(800, words.Count);
+            Assert.Equal(words.Count, words.Distinct().Count());
+
+            // The inner container itself must actually have spanned more than one outer column for this
+            // test to exercise the bug at all - otherwise there is only one capture to begin with and the
+            // fix has nothing to do.
+            var innerFragments = FragmentsOf(container.FragmentTree!, "inner");
+            var distinctOuterX = innerFragments.Select(f => System.Math.Round(f.Rect.X, 1)).Distinct().Count();
+            Assert.True(distinctOuterX > 1,
+                $"expected the inner container to occupy more than one outer column's worth of X positions, got {distinctOuterX}");
+            Assert.True(inner.Boxes.Count > 0);
+
+            // The fix's own signature: the paragraph (inner's child) must show MORE distinct inline
+            // positions than the inner container's own outer-level split alone accounts for - the extra
+            // ones are its own two inner columns, told apart per outer column only once ChildrenOf consults
+            // the inner container's own captures instead of falling back to the flat, merged read.
+            var distinctParagraphX = fragments.Select(f => System.Math.Round(f.Rect.X, 1)).Distinct().Count();
+            Assert.True(distinctParagraphX > distinctOuterX,
+                $"expected the paragraph to split per inner column too, got {distinctParagraphX} distinct " +
+                $"positions against the container's own {distinctOuterX}");
+        }
+
+        /// <summary>
+        /// An outer 2-column container narrow enough that its own nested 2-column child cannot finish
+        /// inside one outer column, forcing that child to be filled again - under a different outer column -
+        /// for the same page.
+        /// </summary>
+        private static string NestedMulticol(int wordCount) => LayoutHarness.Wrap(
+            "<div id='outer' style='columns:2; column-gap:20pt; column-fill:auto;'>" +
+            "<div id='inner' style='columns:2; column-gap:10pt; column-fill:auto; font:10pt Arial; line-height:12pt; margin:0'>" +
+            $"<p id='p' style='margin:0'>{Words(wordCount)}</p>" +
+            "</div></div>");
+
         // ─── §6.2's block-axis edges ───────────────────────────────────────────────
 
         /// <summary>

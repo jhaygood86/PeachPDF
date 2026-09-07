@@ -623,7 +623,9 @@ namespace PeachPDF.Html.Core.Dom
                         (boxTop, Math.Max(boxTop + target, columnBottom)),
                         (columnInlineLeft, columnInlineLeft + columnWidth),
                         BoxGeometrySnapshot.Capture(ChildrenIn(children, columnStart, placedBelow), beyond),
-                        ContinuingPast(columnsBox.PendingBreakToken));
+                        ContinuingPast(columnsBox.PendingBreakToken),
+                        column,
+                        previousContext);
                 }
                 finally
                 {

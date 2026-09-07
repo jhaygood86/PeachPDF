@@ -343,6 +343,53 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
         }
 
+        // ─── A forced break below an item's own child, not the item itself (#395) ──
+
+        // The item's own measurement pass (CssLayoutEngineFlex.MeasureItem) runs a real layout of the
+        // item's content to size it, which can set CssBox.PlacedByForcedBreak on the break's target
+        // before the item's real, final commit layout (ItemContentCommit.CommitLayout) ever runs - a
+        // one-shot latch with no notion of "that was only a measurement", so without resetting it the
+        // break is silently spent and never seen again.
+        [Fact]
+        public async Task Flex_ForcedBreakBelowTheItemsOwnChild_TakesEffect()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='display:flex'>" +
+                    "<div id='item' style='flex:1;margin:0;line-height:22pt;font-size:10pt'>" +
+                    "<p id='para1' style='margin:0'>Para1</p>" +
+                    "<p id='para2' style='margin:0;break-before:page'>Para2</p>" +
+                    "</div></div>"),
+                pageHeight: PageHeight, margin: 20);
+
+            var para1 = LayoutHarness.FindById(root, "para1")!;
+            var para2 = LayoutHarness.FindById(root, "para2")!;
+
+            Assert.Equal(0, container.PageIndexOf(para1.Location.Y));
+            Assert.Equal(1, container.PageIndexOf(para2.Location.Y));
+            Assert.Equal(container.PageTopOf(1), para2.Location.Y, 2);
+        }
+
+        [Fact]
+        public async Task Grid_ForcedBreakBelowTheItemsOwnChild_TakesEffect()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='display:grid'>" +
+                    "<div id='item' style='margin:0;line-height:22pt;font-size:10pt'>" +
+                    "<p id='para1' style='margin:0'>Para1</p>" +
+                    "<p id='para2' style='margin:0;break-before:page'>Para2</p>" +
+                    "</div></div>"),
+                pageHeight: PageHeight, margin: 20);
+
+            var para1 = LayoutHarness.FindById(root, "para1")!;
+            var para2 = LayoutHarness.FindById(root, "para2")!;
+
+            Assert.Equal(0, container.PageIndexOf(para1.Location.Y));
+            Assert.Equal(1, container.PageIndexOf(para2.Location.Y));
+            Assert.Equal(container.PageTopOf(1), para2.Location.Y, 2);
+        }
+
         // ─── Grid ─────────────────────────────────────────────────────────────────
 
         [Theory]

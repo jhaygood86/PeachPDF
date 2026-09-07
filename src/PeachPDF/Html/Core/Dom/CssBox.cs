@@ -1982,9 +1982,15 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <remarks>
         /// The recursive half of <see cref="ResetForRefill"/> - see its remarks for why this is narrower
-        /// than a full prologue reset and why that is safe.
+        /// than a full prologue reset and why that is safe. <c>internal</c> rather than <c>private</c> so
+        /// <see cref="Fragmentation.ItemContentCommit.CommitLayout"/> can call it directly on a flex/grid
+        /// item transitioning from measurement to its real, final layout (#395): unlike the columns
+        /// engine's own refill (which calls this once per direct child, from the container), an item's
+        /// measurement pass can spend the flag on the item box itself, which is the one case
+        /// <see cref="ResetForRefill"/> - called on a container, only ever recursing into its own
+        /// children - cannot reach.
         /// </remarks>
-        private void AllowDescendantForcedBreaksToBeRetaken()
+        internal void AllowDescendantForcedBreaksToBeRetaken()
         {
             PlacedByForcedBreak = false;
 

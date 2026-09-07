@@ -83,8 +83,19 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <see cref="Instance"/> names which of a slot's nested fragmentainers the fragment belongs to, 0
         /// for the page itself. Two columns of one page are two fragmentainers of the same slot, so a box
         /// appearing in both produces two fragments that a (box, slot) pair alone could not tell apart.
+        /// <see cref="EnclosingContext"/> extends this one level of disambiguation to arbitrary nesting
+        /// depth: <see cref="Instance"/> alone restarts at 1 on every call to <see cref="ChildrenOf"/>, so
+        /// a box nested one level deep - re-filled once per <i>outer</i> column - hands out the same
+        /// <c>Instance</c> numbers under every outer column it is filled in, and without this field two
+        /// simultaneous, unrelated fragments (one per outer column, both instance 1) would collide on the
+        /// same key and have their decoration rectangles merged in <see cref="_rectangles"/>. It is the
+        /// enclosing capture's own <see cref="NestedFragmentainer.Self"/> that was active when this
+        /// fragment's own <c>Instance</c> was assigned - null wherever <see cref="Instance"/> alone is
+        /// already unique (the page level, and the degenerate page-grid-resumption keys that never carry
+        /// an owner or a real instance either).
         /// </remarks>
-        private readonly record struct FragmentKey(CssBox Box, CssProxyBox? Owner, int Instance);
+        private readonly record struct FragmentKey(
+            CssBox Box, CssProxyBox? Owner, int Instance, FragmentainerContext? EnclosingContext = null);
 
         /// <summary>
         /// One emitted pagination slot: its index and the document-space band layout paginated against.
@@ -168,11 +179,23 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// column and one that ends there have the same block extent, so nothing downstream can tell them
         /// apart.
         /// </remarks>
+        /// <remarks>
+        /// <see cref="Self"/> is the fragmentainer context this capture was itself filled under — the
+        /// specific column instance <see cref="CssLayoutEngineColumns.FillColumns"/> entered to produce it.
+        /// <see cref="ParentContext"/> is whatever was active immediately before <see cref="Self"/> was
+        /// entered — null for a capture recorded at the page level. Two different fills of the same
+        /// <i>inner</i> multi-column container, one per <i>outer</i> column, are otherwise indistinguishable:
+        /// both land under the same <c>(CssBox, Slot)</c> key in <see cref="_nested"/>, and a deeper
+        /// capture's own <see cref="ParentContext"/> is what lets <see cref="ChildrenOf"/> tell which outer
+        /// column's fill it belongs to, by comparing it against the outer capture's own <see cref="Self"/>.
+        /// </remarks>
         private readonly record struct NestedFragmentainer(
             FragmentRegion Region,
             BoxGeometrySnapshot Geometry,
             IReadOnlySet<CssBox> Continuing,
-            IReadOnlySet<CssBox> ContinuedFrom);
+            IReadOnlySet<CssBox> ContinuedFrom,
+            FragmentainerContext Self,
+            FragmentainerContext? ParentContext);
 
         /// <summary>
         /// A fragment before its first/last flags are known — which cannot be until every slot has been
@@ -592,13 +615,23 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// which it can be recorded — content continuing into the next one is laid out again there.
         /// </param>
         /// <param name="continuing">the boxes that carry on into the next fragmentainer</param>
+        /// <param name="self">
+        /// the fragmentainer context this fill was entered under — see
+        /// <see cref="NestedFragmentainer"/>'s own remarks.
+        /// </param>
+        /// <param name="parentContext">
+        /// the fragmentainer that was active immediately before <paramref name="self"/> was entered, or null
+        /// at the page level — see <see cref="NestedFragmentainer"/>'s own remarks.
+        /// </param>
         internal void RecordNestedFragmentainer(
             CssBox contextRoot,
             int slot,
             (double Top, double Bottom) band,
             (double Left, double Right) inline,
             BoxGeometrySnapshot geometry,
-            IReadOnlySet<CssBox> continuing)
+            IReadOnlySet<CssBox> continuing,
+            FragmentainerContext self,
+            FragmentainerContext? parentContext)
         {
             if (!_nested.TryGetValue((contextRoot, slot), out var fragmentainers))
             {
@@ -609,7 +642,9 @@ namespace PeachPDF.Html.Core.Fragmentation
                 new FragmentRegion(band.Top, band.Bottom, inline.Left, inline.Right),
                 geometry,
                 continuing,
-                fragmentainers.Count > 0 ? fragmentainers[^1].Continuing : NoBoxes));
+                fragmentainers.Count > 0 ? fragmentainers[^1].Continuing : NoBoxes,
+                self,
+                parentContext));
 
             // Which children this container yields, how many times, and against which geometry, are all
             // decided by the set of fragmentainers recorded for it - so an earlier "emitted nothing
@@ -1891,7 +1926,8 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             subtreePrunable &= contiguous;
 
-            var draft = new Draft(new FragmentKey(box, owner, instance), box, slot, region, snapshot, originY);
+            var draft = new Draft(
+                new FragmentKey(box, owner, instance, nested?.Self), box, slot, region, snapshot, originY);
 
             draft.Lines.AddRange(lines);
             draft.Words.AddRange(words);
@@ -2046,11 +2082,14 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// which the box's own single <c>Location</c> cannot express and the captures can.
         /// </para>
         /// <para>
-        /// Nested contexts are consulted at one level only — a container already inside a nested
-        /// fragmentainer reads through the enclosing capture instead, so a multi-column container inside
-        /// another one splits at the outer level alone. The reason is that a box's captures are keyed by
-        /// pagination slot, and the inner container's columns are re-filled once per <i>outer</i> column, so
-        /// two outer columns' worth of inner captures would be indistinguishable from each other.
+        /// A box already inside a nested fragmentainer can still own its own nested captures — a
+        /// multi-column container nested inside another one — and <see cref="NestedFragmentainer.ParentContext"/>
+        /// is what tells them apart: a box's inner columns are re-filled once per <i>outer</i> column, so all
+        /// of them land under the same <c>(CssBox, Slot)</c> key in <see cref="_nested"/>, and only the
+        /// enclosing capture's own <see cref="NestedFragmentainer.Self"/> — compared against each candidate's
+        /// <see cref="NestedFragmentainer.ParentContext"/> — says which outer column's fill a given inner
+        /// capture belongs to. At the page level (<paramref name="nested"/> null) there is only one outer
+        /// instance to begin with, so every capture recorded for the box is its own, unfiltered.
         /// </para>
         /// </remarks>
         private IEnumerable<(CssBox Box, CssProxyBox? Owner, BoxGeometrySnapshot? Snapshot,
@@ -2072,32 +2111,40 @@ namespace PeachPDF.Html.Core.Fragmentation
             if (box is CssSpacingBox spacing)
                 yield return (spacing.ExtendedBox, owner, snapshot, nested, instance);
 
-            if (nested is null
-                && _nested.TryGetValue((box, slot.Index), out var fragmentainers)
-                && fragmentainers.Count > 0)
+            if (_nested.TryGetValue((box, slot.Index), out var allCaptures) && allCaptures.Count > 0)
             {
-                for (var i = 0; i < fragmentainers.Count; i++)
-                {
-                    var fragmentainer = fragmentainers[i];
+                // At the page level every capture recorded for this box is its own. Nested one level
+                // deeper, only the captures recorded while the enclosing capture's own column was the one
+                // being filled belong to it - see this method's own remarks.
+                var fragmentainers = nested is null
+                    ? allCaptures
+                    : allCaptures.FindAll(f => ReferenceEquals(f.ParentContext, nested.Value.Self));
 
+                if (fragmentainers.Count > 0)
+                {
+                    for (var i = 0; i < fragmentainers.Count; i++)
+                    {
+                        var fragmentainer = fragmentainers[i];
+
+                        foreach (var childBox in box.Boxes)
+                        {
+                            if (fragmentainer.Geometry.Holds(childBox))
+                                yield return (childBox, owner, fragmentainer.Geometry, fragmentainer, i + 1);
+                        }
+                    }
+
+                    // A child no fragmentainer holds was not placed into one — an out-of-flow child, which
+                    // css-multicol resolves against the container rather than a column, and which the columns
+                    // engine lays out once at the end. It is read live and belongs to the page, exactly as it
+                    // did before nested fragmentainers existed.
                     foreach (var childBox in box.Boxes)
                     {
-                        if (fragmentainer.Geometry.Holds(childBox))
-                            yield return (childBox, owner, fragmentainer.Geometry, fragmentainer, i + 1);
+                        if (!HeldByAny(fragmentainers, childBox))
+                            yield return (childBox, owner, snapshot, null, instance);
                     }
-                }
 
-                // A child no fragmentainer holds was not placed into one — an out-of-flow child, which
-                // css-multicol resolves against the container rather than a column, and which the columns
-                // engine lays out once at the end. It is read live and belongs to the page, exactly as it
-                // did before nested fragmentainers existed.
-                foreach (var childBox in box.Boxes)
-                {
-                    if (!HeldByAny(fragmentainers, childBox))
-                        yield return (childBox, owner, snapshot, null, instance);
+                    yield break;
                 }
-
-                yield break;
             }
 
             foreach (var childBox in box.Boxes)
