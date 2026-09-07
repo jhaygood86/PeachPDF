@@ -884,6 +884,11 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         private static void ResolveFirstLineStyle(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null)
         {
+            // Cheap document-level check first: on the overwhelming majority of documents (no
+            // ::first-line rule anywhere), this skips both candidate-gathering passes below entirely
+            // instead of paying for two full selector walks just to learn the answer is "no rules".
+            if (!cssData.HasFirstLineRules) return;
+
             var firstLineUaRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: true, containerSizes).ToList();
             var firstLineAuthorRules = cssData.GetFirstLineStyleRules(media, box, userAgentOnly: false, containerSizes).ToList();
 

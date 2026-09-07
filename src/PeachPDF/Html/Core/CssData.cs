@@ -97,6 +97,20 @@ namespace PeachPDF.Html.Core
         /// <summary>True when the document declares any <c>@layer</c> cascade layer.</summary>
         internal bool HasCascadeLayers { get; private set; }
 
+        /// <summary>
+        /// True when the document declares any rule whose selector could possibly match via
+        /// <see cref="MatchesAsFirstLineSelector"/> - i.e. a deliberate superset computed once, up
+        /// front, by <see cref="CouldMatchAsFirstLineSelector"/> (same selector-shape switch, minus the
+        /// per-box <see cref="DoesSelectorMatch(ISelector, ICssDomNode?)"/> conjunct
+        /// <see cref="MatchesAsFirstLineSelector"/> applies in its <see cref="CompoundSelector"/> case).
+        /// False here proves no box can have any <c>::first-line</c> rules, so
+        /// <see cref="GetFirstLineStyleRules"/> would always return empty; true does not prove the
+        /// converse. See <c>DomParser.ResolveFirstLineStyle</c>, which uses this to skip its two
+        /// candidate-gathering passes entirely on the (overwhelmingly common) documents with no
+        /// <c>::first-line</c> rule at all.
+        /// </summary>
+        internal bool HasFirstLineRules { get; private set; }
+
         private int RankOf(string? layerName) =>
             layerName is not null && _layerRanks!.TryGetValue(layerName, out var rank) ? rank : UnlayeredRank;
 
@@ -111,14 +125,16 @@ namespace PeachPDF.Html.Core
             var keys = new List<(SelectorBucketKind Kind, string Key)>();
             var layerRegistry = new LayerRegistry();
             var order = 0;
+            var hasFirstLineRules = false;
 
             foreach (var stylesheet in Stylesheets)
             {
-                IndexRules(stylesheet.Rules, stylesheet.IsUserAgent, null, null, null, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                IndexRules(stylesheet.Rules, stylesheet.IsUserAgent, null, null, null, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
             }
 
             _layerRanks = layerRegistry.ComputeRanks();
             HasCascadeLayers = _layerRanks.Count > 0;
+            HasFirstLineRules = hasFirstLineRules;
             _tagIndex = tagIndex;
             _classIndex = classIndex;
             _idIndex = idIndex;
@@ -237,7 +253,8 @@ namespace PeachPDF.Html.Core
             List<IndexedRule> universal,
             List<(SelectorBucketKind Kind, string Key)> keys,
             LayerRegistry layerRegistry,
-            ref int order)
+            ref int order,
+            ref bool hasFirstLineRules)
         {
             foreach (var rule in rules)
             {
@@ -245,6 +262,9 @@ namespace PeachPDF.Html.Core
                 {
                     case IStyleRule styleRule:
                         var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, enclosingContainers, currentLayer);
+
+                        if (!hasFirstLineRules && CouldMatchAsFirstLineSelector(styleRule.Selector))
+                            hasFirstLineRules = true;
 
                         keys.Clear();
                         CollectIndexKeys(styleRule.Selector, keys);
@@ -276,14 +296,14 @@ namespace PeachPDF.Html.Core
                         // media/@layer context and right after the parent in document order (so it wins
                         // ties by source order, matching its textual position after the parent).
                         if (styleRule.NestedRules.Count > 0)
-                            IndexRules(styleRule.NestedRules, isUserAgent, enclosingMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                            IndexRules(styleRule.NestedRules, isUserAgent, enclosingMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
                         break;
 
                     case IMediaRule mediaRule:
                         var nestedMedia = enclosingMedia is null
                             ? [mediaRule.Media]
                             : (MediaList[])[.. enclosingMedia, mediaRule.Media];
-                        IndexRules(mediaRule.Rules, isUserAgent, nestedMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                        IndexRules(mediaRule.Rules, isUserAgent, nestedMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
                         break;
 
                     // @layer statement (`@layer a, b, c;`) only declares layer order — register each
@@ -301,7 +321,7 @@ namespace PeachPDF.Html.Core
                             : QualifyLayer(currentLayer, layerRule.Name);
                         if (!string.IsNullOrEmpty(layerRule.Name))
                             layerRegistry.Register(qualified);
-                        IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, enclosingContainers, qualified, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                        IndexRules(layerRule.Rules, isUserAgent, enclosingMedia, enclosingContainers, qualified, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
                         break;
 
                     // @supports: the condition is invariant (IConditionFunction.Check() takes no
@@ -314,7 +334,7 @@ namespace PeachPDF.Html.Core
                     // up, just decided by the real condition now instead of unconditionally.
                     case ISupportsRule supportsRule:
                         if (supportsRule.Condition.Check())
-                            IndexRules(supportsRule.Rules, isUserAgent, enclosingMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                            IndexRules(supportsRule.Rules, isUserAgent, enclosingMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
                         break;
 
                     // @container: truthiness depends on the nearest matched element's own container
@@ -334,7 +354,7 @@ namespace PeachPDF.Html.Core
                         var nestedContainers = enclosingContainers is null
                             ? [condition]
                             : (ContainerCondition[])[.. enclosingContainers, condition];
-                        IndexRules(containerRule.Rules, isUserAgent, enclosingMedia, nestedContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order);
+                        IndexRules(containerRule.Rules, isUserAgent, enclosingMedia, nestedContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
                         break;
                 }
             }
@@ -791,6 +811,24 @@ namespace PeachPDF.Html.Core
                     return false;
             }
         }
+
+        /// <summary>
+        /// A document-level, box-independent superset of <see cref="MatchesAsFirstLineSelector"/>: same
+        /// selector-shape switch, but the <see cref="CompoundSelector"/> case omits the per-box
+        /// <c>compound.Where(...).All(s => DoesSelectorMatch(s, box))</c> conjunct, since no box exists
+        /// yet when this runs (once, in <see cref="EnsureIndex"/>). Can therefore return true for a
+        /// selector that ends up matching no box, but can never return false for one that would have
+        /// matched some box - so a false result from every rule in the document proves
+        /// <see cref="HasFirstLineRules"/> can safely stay false, and <see cref="GetFirstLineStyleRules"/>
+        /// would always return empty.
+        /// </summary>
+        private static bool CouldMatchAsFirstLineSelector(ISelector selector) => selector switch
+        {
+            ListSelector list => list.Any(CouldMatchAsFirstLineSelector),
+            ComplexSelector complex => complex.LastOrDefault().Selector is { } last && HasFirstLineSubject(last),
+            CompoundSelector compound => HasFirstLineSubject(compound),
+            _ => false
+        };
 
         private static bool HasFirstLineSubject(ISelector selector) => selector switch
         {
