@@ -36,6 +36,7 @@ namespace PeachPDF.SourceGenerators.Emit
             DataTypeKind.CurrentColor => "value.Equals(\"currentcolor\", global::System.StringComparison.OrdinalIgnoreCase)",
             DataTypeKind.Transform => "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidTransformValue(value)",
             DataTypeKind.Ratio => "global::PeachPDF.CSS.AspectRatioGrammar.TryParseFast(value, out _, out _)",
+            DataTypeKind.TransformList => "global::PeachPDF.Html.Core.Parse.CssValueParser.IsSyntacticallyValidTransformList(value)",
             DataTypeKind.LengthList => BuildLengthListClause(dt),
             DataTypeKind.KeywordList => BuildKeywordListClause(dt),
             DataTypeKind.Keyword => BuildKeywordClause(supportedValues, keywordComparison),

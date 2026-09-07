@@ -36,6 +36,10 @@ namespace PeachPDF.SourceGenerators.Model
         /// <summary>A comma-separated list of keyword segments — span-based, via
         /// CssValueParser.IsValidCommaKeywordList. No tokenizer at all.</summary>
         KeywordList,
+        /// <summary>The real "transform" property's permissive &lt;transform-list&gt; grammar — span-based,
+        /// via CssValueParser.IsSyntacticallyValidTransformList. Distinct from the existing stricter
+        /// <see cref="Transform"/> kind (paint-support-only, used for supportsDataType/@supports).</summary>
+        TransformList,
         EnumKeyword,
         KeywordOrValue,
         SvgPaint,

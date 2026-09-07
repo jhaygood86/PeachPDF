@@ -82,6 +82,35 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_The_Permissive_Syntactic_Check_For_The_TransformList_DataType()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "transform", "inherited": false, "initialValue": "none", "cssDataType": "transform-list",
+                      "supportsDataType": "transform",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_Transform(CssValueParser parser, string value) => " +
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsSyntacticallyValidTransformList(value);",
+                generated);
+            // supportsDataType keeps the existing, stricter "transform" kind untouched.
+            Assert.Contains(
+                "private static bool Supports_Transform(CssValueParser parser, string value) => " +
+                "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidTransformValue(value);",
+                generated);
+        }
+
+        [Fact]
         public void Emits_The_Real_Transform_Function_Grammar_For_The_Transform_DataType()
         {
             var json = """

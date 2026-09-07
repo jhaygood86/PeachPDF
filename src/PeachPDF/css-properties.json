@@ -24,10 +24,10 @@
     },
     {
       "name": "transform",
-      "comment": "cssDataType 'cssom' keeps real dispatch exactly as permissive as before (matching actual CSS transform-list semantics: a value with one unimplemented function, e.g. perspective(), is still syntactically valid and its implemented functions still apply - see TransformIntegrationTests.Perspective_IsUnsupported_TreatedAsIdentity). supportsDataType 'transform' is the stricter, @supports-only grammar (CssValueParser.IsValidTransformValue): the real set of transform functions BuildFunctionMatrix implements at paint time. perspective() parses as valid CSS but is silently dropped at paint time, so it must not report as @supports-true even though it's still accepted and stored by real dispatch.",
+      "comment": "cssDataType 'transform-list' is a span-based (no tokenizer) permissive syntactic check (CssValueParser.IsSyntacticallyValidTransformList) matching the exact accept/reject set of the real Converters.TransformConverter.Many() grammar today - matching actual CSS transform-list semantics: a value with one unimplemented function, e.g. perspective(), is still syntactically valid and its implemented functions still apply (see TransformIntegrationTests.Perspective_IsUnsupported_TreatedAsIdentity). It does not validate each function's own argument grammar - an argument-shape mismatch inside a recognized function is already caught defensively by BuildFunctionMatrix at paint time, treated as a no-op rather than throwing. supportsDataType 'transform' is the stricter, @supports-only grammar (CssValueParser.IsValidTransformValue): the real set of transform functions BuildFunctionMatrix implements at paint time. perspective() parses as valid CSS but is silently dropped at paint time, so it must not report as @supports-true even though it's still accepted and stored by real dispatch.",
       "inherited": false,
       "initialValue": "none",
-      "cssDataType": "cssom",
+      "cssDataType": "transform-list",
       "supportsDataType": "transform",
       "html": {
         "propertyPath": "Transform",

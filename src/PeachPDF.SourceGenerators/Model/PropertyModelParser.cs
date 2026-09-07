@@ -324,6 +324,7 @@ namespace PeachPDF.SourceGenerators.Model
                     "current-color" => DataTypeSpec.Simple(DataTypeKind.CurrentColor),
                     "transform" => DataTypeSpec.Simple(DataTypeKind.Transform),
                     "ratio" => DataTypeSpec.Simple(DataTypeKind.Ratio),
+                    "transform-list" => DataTypeSpec.Simple(DataTypeKind.TransformList),
                     "keyword" => DataTypeSpec.Simple(DataTypeKind.Keyword),
                     "integer" => DataTypeSpec.Simple(DataTypeKind.Integer),
                     "number" => DataTypeSpec.Simple(DataTypeKind.Number),

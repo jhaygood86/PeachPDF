@@ -1098,6 +1098,81 @@ namespace PeachPDF.Html.Core.Parse
             return tokens.Count > 0 && tokens.All(t => t is FunctionToken ft && IsRecognizedTransformFunctionName(ft.Data));
         }
 
+        /// <summary>
+        /// Syntactically-permissive transform-list check for real dispatch (cssDataType "transform-list"),
+        /// matching the exact accept/reject set of the real <c>Converters.TransformConverter.Many()</c>
+        /// grammar today (matrix/matrix3d, translate family, scale family, rotate family, skew family,
+        /// and - unlike <see cref="IsRecognizedTransformFunctionName"/>'s paint-support-only list -
+        /// <c>perspective</c>, which is a real, if paint-unimplemented, member of that grammar) via manual
+        /// char scanning instead of a List&lt;Token&gt; walk. See the accepted-gap file on why real
+        /// dispatch must accept an unimplemented-at-paint-time function (perspective()) mixed with
+        /// implemented ones - <c>BuildFunctionMatrix</c> already treats an unrecognized function as
+        /// contributing identity rather than failing the whole value.
+        /// </summary>
+        /// <remarks>
+        /// Does NOT validate each function's own argument grammar (that's the deliberate "permissive"
+        /// part) - an argument-shape mismatch inside a recognized function is caught defensively by
+        /// <see cref="BuildFunctionMatrix"/> at paint time instead, which already treats it as a no-op
+        /// rather than throwing, so being permissive about argument shape here doesn't newly break
+        /// anything paint wasn't already tolerating. Concretely: "translate()" (missing its required
+        /// argument) is accepted here but rejected by the real per-function grammar
+        /// (TranslateTransformConverter's LengthOrPercentConverter.Required()) - safe because
+        /// BuildFunctionMatrix's LengthArg/AngleArg helpers already default a missing argument to 0,
+        /// rendering it as an identity transform. See
+        /// CssValueParserIsSyntacticallyValidTransformListTests.ArgumentShapeMismatch_IsAcceptedByDesign_UnlikeTheRealGrammar
+        /// for this documented as an explicit, deliberate divergence rather than a silent one.
+        /// </remarks>
+        /// <remarks>
+        /// No separator is required between two functions ("translate(10px)scale(2)" is accepted, not
+        /// just "translate(10px) scale(2)") - verified empirically against the real declaration parser,
+        /// which accepts both, because <c>ValueExtensions.ToItems()</c> (behind <c>.Many()</c>) treats
+        /// every <c>FunctionToken</c> as its own item boundary regardless of literal whitespace. Genuine
+        /// junk between functions (e.g. "translate(10px)!scale(2)") is still rejected: the next
+        /// identifier scan simply fails to consume any characters at that position.
+        /// </remarks>
+        public static bool IsSyntacticallyValidTransformList(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var s = value.Trim();
+            if (string.Equals(s, Keywords.None, StringComparison.OrdinalIgnoreCase)) return true;
+
+            var i = 0;
+            var sawFunction = false;
+            while (i < s.Length)
+            {
+                while (i < s.Length && char.IsWhiteSpace(s[i])) i++;
+                if (i >= s.Length) break;
+
+                var identStart = i;
+                while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] is '-' or '_')) i++;
+                if (i == identStart || i >= s.Length || s[i] != '(') return false;
+                if (!IsRecognizedTransformFunctionName(s.Substring(identStart, i - identStart)) &&
+                    !Named(s.Substring(identStart, i - identStart), FunctionNames.Perspective))
+                {
+                    return false;
+                }
+
+                i++; // consume '('
+                var depth = 1;
+                while (i < s.Length && depth > 0)
+                {
+                    if (s[i] == '(') depth++;
+                    else if (s[i] == ')') depth--;
+                    else if (char.IsControl(s[i])) return false;
+                    i++;
+                }
+                // Reaching end-of-string with depth still > 0 (an unclosed function) is NOT rejected:
+                // CSS Syntax Level 3's tokenizer error recovery closes an unterminated function at EOF,
+                // so "translate(10px" (missing the final ')') is real, already-accepted input today -
+                // verified against the real cssom round trip (AgreesWithRealCssOmRoundTrip). The loop
+                // above already stops exactly at EOF in that case, so there's nothing further to check.
+
+                sawFunction = true;
+            }
+
+            return sawFunction;
+        }
+
         private static string SingleTokenText(List<Token> group) =>
             group.Count > 0 ? group[0].ToValue() : "0";
 
