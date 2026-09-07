@@ -1,5 +1,10 @@
 using PeachPDF;
+using PeachPDF.Adapters;
+using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core;
 using PeachPDF.PdfSharpCore;
+using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -45,6 +50,67 @@ namespace PeachPDF.Tests.Integration
             var matrixAtMargin20 = await GetImageCmMatrix(marginTop: 20, attachment: "scroll");
 
             Assert.NotEqual(matrixAtMargin50, matrixAtMargin20);
+        }
+
+        [Fact]
+        public async Task FixedAttachment_ViewportReflectsThePerSlotPageClipOverride_NotTheBasePageBoxRect()
+        {
+            // Issue #146: FragmentPainter.PaintBackground's viewportRect (the positioning area a
+            // background-attachment:fixed layer resolves its position against) must prefer
+            // HtmlContainerInt.PageClipOverride - the per-slot window PdfGenerator.AddPdfPages sets
+            // before painting each page, already used the same way by FragmentPainter's own PushClip
+            // and PdfGenerator.HandleLinks - over the single, page-independent PageBoxRect. Isolated at
+            // the RGraphics boundary (RecordingGraphics.DrawnImageRects), not by parsing PDF content
+            // streams: PageClipOverride is set directly, sidestepping PdfGenerator.AddPdfPages' own
+            // per-page paint-time translate entirely, since that translate is a separate, orthogonal
+            // mechanism (correcting WHERE the whole page's content lands physically) from this ("what
+            // rect does a percentage position resolve against").
+            // No PageClipOverride: falls back to the base PageBoxRect - here (0, 0, 500, 500), since
+            // MarginLeft/Top/Right are all 0 and PageSize is 500x500. "100% 100%" with a 10x10 image
+            // lands its top-left corner at the far corner minus the image size: (490, 490).
+            var withoutOverride = await PaintFixedBackground(pageClipOverride: null);
+            Assert.Single(withoutOverride.DrawnImageRects);
+            Assert.Equal(490, withoutOverride.DrawnImageRects[0].X, 0.01);
+            Assert.Equal(490, withoutOverride.DrawnImageRects[0].Y, 0.01);
+
+            // A per-slot override - same origin as the div's own content (PageClipOverride is also the
+            // page's content clip, so shifting the origin away would clip the div itself out entirely),
+            // but a genuinely smaller window, as a `:first`/margin-overridden page's own content band
+            // could be - must be what "100% 100%" resolves against instead: (0, 0, 200, 200) puts the
+            // far corner at (200, 200), so the image's top-left lands at (190, 190).
+            var withOverride = await PaintFixedBackground(pageClipOverride: new RRect(0, 0, 200, 200));
+            Assert.Single(withOverride.DrawnImageRects);
+            Assert.Equal(190, withOverride.DrawnImageRects[0].X, 0.01);
+            Assert.Equal(190, withOverride.DrawnImageRects[0].Y, 0.01);
+        }
+
+        private static async Task<RecordingGraphics> PaintFixedBackground(RRect? pageClipOverride)
+        {
+            var html = "<!DOCTYPE html><html><body>"
+                + "<div id='bg' style=\"width:20pt;height:20pt;"
+                + "background-image:url(" + PngDataUri + ");background-repeat:no-repeat;"
+                + "background-attachment:fixed;background-position:100% 100%;background-size:10pt 10pt;\">"
+                + "</div></body></html>";
+
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var container = new HtmlContainerInt(adapter);
+            await container.SetHtml(html, null);
+
+            container.PageSize = new RSize(500, 500);
+            container.Location = new RPoint(0, 0);
+            container.MaxSize = new RSize(500, 0);
+
+            var measure = XGraphics.CreateMeasureContext(new XSize(500, 500), XGraphicsUnit.Point, XPageDirection.Downwards);
+            using (var measureGraphics = new GraphicsAdapter(adapter, measure, 1.0))
+            {
+                await container.PerformLayout(measureGraphics);
+            }
+
+            container.PageClipOverride = pageClipOverride;
+
+            var recorder = new RecordingGraphics(adapter);
+            FragmentPaintHarness.PaintPage(container, recorder);
+            return recorder;
         }
 
         [Fact]

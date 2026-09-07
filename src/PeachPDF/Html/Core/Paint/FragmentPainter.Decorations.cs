@@ -91,7 +91,11 @@ namespace PeachPDF.Html.Core.Paint
             // not once for the whole box.
             var originLayers = BackgroundLayerResolver.SplitLayers(box.BackgroundOrigin);
             var clipLayers   = BackgroundLayerResolver.SplitLayers(box.BackgroundClip);
-            var viewportRect = box.HtmlContainer!.PageBoxRect;
+            // background-attachment:fixed's positioning area is this page's own window, not the base
+            // page box - PageClipOverride is set per-slot by PdfGenerator.AddPdfPages (the same override
+            // FragmentPainter's own PushClip and PdfGenerator.HandleLinks already prefer over PageBoxRect)
+            // and reflects a `@page :first`/named/margin-overridden page's own area; issue #146.
+            var viewportRect = box.HtmlContainer!.PageClipOverride ?? box.HtmlContainer!.PageBoxRect;
 
             var actualBackgroundColor = firstLineStyle?.ActualBackgroundColor ?? box.ActualBackgroundColor;
             RBrush? solidBrush = RenderUtils.IsColorVisible(actualBackgroundColor)

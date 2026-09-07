@@ -5428,9 +5428,15 @@ namespace PeachPDF.Html.Core.Dom
                     // one's own fixed black bar. Percentages resolve against the page/viewport size
                     // (CSS2.1 §10.1: the initial containing block), not ScrollOffset (a scroll
                     // position, not a size) - not exercised by this fixture (uses em, not %) but
-                    // wrong regardless.
-                    var left = child.ActualMarginLeft + ResolveOffsetOrZero(child.Left, child.HtmlContainer!.PageSize.Width, child);
-                    var top = child.ActualMarginTop + ResolveOffsetOrZero(child.Top, child.HtmlContainer!.PageSize.Height, child);
+                    // wrong regardless. Pinned to page 1's own resolved band (PageGeometry.GetPage(0)),
+                    // not the document's base configured PageSize - the same "always page 1" ICB
+                    // convention GetBoxHeight's own ICB branch already follows, since a `@page :first`
+                    // margin/size override changes what this canonical resolution should be relative to
+                    // (issue #146); FragmentEmitter.ComputeFixedPageOffset corrects the delta for every
+                    // LATER page relative to whatever this establishes here.
+                    var pageZero = child.HtmlContainer!.PageGeometry.GetPage(0);
+                    var left = child.ActualMarginLeft + ResolveOffsetOrZero(child.Left, pageZero.BandWidth, child);
+                    var top = child.ActualMarginTop + ResolveOffsetOrZero(child.Top, pageZero.BandHeight, child);
                     child.Location = new RPoint(left, top);
                 }
             }

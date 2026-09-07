@@ -1763,11 +1763,16 @@ namespace PeachPDF.Html.Core.Dom
             // absolute; height: 100% }` fills its position:relative tbody even though its parent <tr> is
             // static and zero-height.) A fixed box resolves against the page area instead (CSS2.1 §10.1:
             // the initial containing block, the same basis CommitBlockChildOffset already uses for a fixed
-            // box's left/top) - always definite, since the page always has a real height.
+            // box's left/top) - always definite, since the page always has a real height. Like the true
+            // ICB itself (this method's own box == box.ContainingBlock branch above), this is pinned to
+            // page 1's own resolved band, not the document's base configured PageSize - a `@page :first`
+            // margin/size override changes what a fixed box's own canonical height resolves against (issue
+            // #146); FragmentEmitter.ComputeFixedSizeOverride corrects the delta for every LATER page
+            // relative to whatever this establishes here.
             var heightCb = PercentageBase(box);
             var isFixedToPage = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null;
             var heightBasisIsCalculated = isFixedToPage || heightCb.IsHeightCalculated;
-            var heightBasis = isFixedToPage ? box.HtmlContainer!.PageSize.Height : heightCb.Size.Height;
+            var heightBasis = isFixedToPage ? box.HtmlContainer!.PageGeometry.GetPage(0).BandHeight : heightCb.Size.Height;
 
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
             // content - content taller than it overflows past ActualBottom (clipped or not per

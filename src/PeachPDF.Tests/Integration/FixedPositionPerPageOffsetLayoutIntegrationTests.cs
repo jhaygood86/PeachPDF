@@ -99,6 +99,47 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FixedPercentOffset_ResolvesToEachPagesOwnArea_OnAMarginOnlyOverrideDocument()
+        {
+            // Issue #146: a margin-only override (no `size` override anywhere in the document) must
+            // also drive ComputeFixedPageOffset - its gate previously only checked HasSizeOverrides,
+            // so a plain `@page :first { margin: 0 }` document (no named page, no size override at
+            // all) wrongly left every page sharing page 0's single global offset.
+            var container = await BuildLayoutAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 60pt 50pt; }
+                @page :first { margin: 0; }
+                body, div, p { margin: 0; }
+                .fixedBox { position: fixed; left: 50%; top: 50%; width: 10pt; height: 10pt; }
+                </style></head><body>
+                <div class="fixedBox" id="fixed"></div>
+                <p>page zero</p>
+                <p style="page-break-before: always">page one</p>
+                </body></html>
+                """);
+
+            var fixedBox = FindById(container.Root!, "fixed")!;
+            var tree = container.FragmentTree!;
+            Assert.Equal(2, tree.Fragmentainers.Count);
+
+            var page0Fragment = FindBoxFragment(tree.Fragmentainers[0].Root, fixedBox);
+            var page1Fragment = FindBoxFragment(tree.Fragmentainers[1].Root, fixedBox);
+            Assert.NotNull(page0Fragment);
+            Assert.NotNull(page1Fragment);
+
+            // Page 0 (`:first`, margin 0, full 612x792 sheet as its own content area): 50% => (306, 396).
+            Assert.Equal(SheetW / 2, page0Fragment!.WholeBoxRect.X, 0.5);
+            Assert.Equal(SheetH / 2, page0Fragment.WholeBoxRect.Y, 0.5);
+
+            // Page 1 (base margins, 512x672 content area): 50% => (256, 336) - genuinely different.
+            Assert.Equal(BaseContentWidth / 2, page1Fragment!.WholeBoxRect.X, 0.5);
+            Assert.Equal(BaseContentHeight / 2, page1Fragment.WholeBoxRect.Y, 0.5);
+
+            Assert.NotEqual(page0Fragment.WholeBoxRect.X, page1Fragment.WholeBoxRect.X);
+            Assert.NotEqual(page0Fragment.WholeBoxRect.Y, page1Fragment.WholeBoxRect.Y);
+        }
+
+        [Fact]
         public async Task FixedPercentOffset_NoSizeOverridesInDocument_StaysIdenticalAcrossPages()
         {
             // Regression guard: HasSizeOverrides is false for a uniform document, so
