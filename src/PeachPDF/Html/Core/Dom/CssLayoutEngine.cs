@@ -2216,6 +2216,21 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 CssNamedStringEngine.ApplyStringSet(box);
+
+                // ApplyStringSet seeds each NamedString.Y from box.Location.Y, which is meaningless for
+                // a plain inline box (only its words get a position; the box itself never does) - it
+                // stays at whatever default the box happened to carry, corrupting the page attribution
+                // MarginBoxRenderer.ResolveNamedString relies on. coordinates.CurrentY, read here at the
+                // exact moment this box opens, is always correct regardless of how far its content later
+                // continues - unlike the exit-side correction below (FinalizeFlowBoxExit), which a break
+                // inside this box's own content (on this pass or the one that finally completes it, since
+                // an in-progress ancestor's own FlowBox call returns before reaching its exit bookkeeping
+                // whenever a break occurs anywhere in its recursion - #341) can skip forever, leaving this
+                // the only assignment a straddling box is guaranteed to get.
+                foreach (var namedString in box.NamedStrings.Values)
+                {
+                    namedString.Y = coordinates.CurrentY;
+                }
             }
 
             return opensHere;
@@ -2447,11 +2462,19 @@ namespace PeachPDF.Html.Core.Dom
                 // assumed, since a display:inline-block box acquiring direct words in the future would
                 // silently double the shift here rather than fail loudly. Only on the pass that opens b's
                 // own content (childOpensHere): a continuation must not re-push a box's later lines down
-                // by a padding it already paid on an earlier fragmentainer.
+                // by a padding it already paid on an earlier fragmentainer - unless it re-opens with its
+                // own top border/padding on every fragment by declaration (box-decoration-break: clone,
+                // css-break-3 §6.2), in which case a pass continuing b's own straddling content applies
+                // it again too (#343). A pass that walks through a b already fully finished earlier takes
+                // this same branch but places nothing new (every word ordinal is skipped below), so
+                // coordinates.Line never changes and the "undo" after this dispatch cancels the shift
+                // with no effect - safe to pre-shift unconditionally for clone rather than having to tell
+                // "still straddling" apart from "already done" up front.
                 var appliesAtomicInset = b.DerivedStyle.ActualDisplay is Keywords.InlineBlock && !ReferenceEquals(b, box);
+                var clonesAtomicDecorations = appliesAtomicInset && b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone;
                 var atomicTopInset = appliesAtomicInset ? b.ActualBorderTopWidth + b.ActualPaddingTop : 0;
                 var atomicBottomInset = appliesAtomicInset ? b.ActualBorderBottomWidth + b.ActualPaddingBottom : 0;
-                var preShiftedForAtomicInset = childOpensHere && atomicTopInset > 0;
+                var preShiftedForAtomicInset = atomicTopInset > 0 && (childOpensHere || clonesAtomicDecorations);
                 var lineBeforeChild = coordinates.Line;
 
                 if (preShiftedForAtomicInset)
@@ -2679,6 +2702,54 @@ namespace PeachPDF.Html.Core.Dom
                                 if (clonesDecorations)
                                     coordinates.CurrentX += DomUtils.ClonedInlineStart(b.ParentBox, blockBox);
                             }
+
+                            // b's own first word wrapped onto this new line, so box - the box whose own
+                            // recursive FlowBox call this is, which stamped its FirstHostingLineBox at
+                            // entry, before any of this was known - does not really start on the line it
+                            // was entered on when b is what its content genuinely begins with: either b
+                            // IS box (self-iteration - a leaf holding its own words directly), or b is
+                            // box's own first child (its words are read here without a nested FlowBox
+                            // call, see the self-iteration remark above). The same then cascades up
+                            // through every further inline ancestor that is, in turn, its own parent's
+                            // first child. CssLineBox.UpdateRectangle's own leading-spacing subtraction
+                            // walks this same inline-ancestor chain checking this field, so correcting it
+                            // at the source is what lets that subtraction fire correctly on its own,
+                            // without BubbleRectangles compensating for its absence afterward (#342).
+                            //
+                            // b == box (self-iteration) already got its own leading spacing added above,
+                            // via `leftSpacing`, computed for b. When b != box, b's own leading spacing
+                            // is real and already reserved the same way - but box's own (and every
+                            // cascaded ancestor's) is not: FlowBox's normal "childOpensHere" path adds an
+                            // ancestor's leading spacing only when that ancestor's own per-child dispatch
+                            // runs, which this wrap pre-empted by placing b's word without ever reaching
+                            // it. Adding it here, for exactly the ancestors this cascade corrects, is what
+                            // keeps the word position itself (not just the rectangle) agreeing with the
+                            // corrected FirstHostingLineBox.
+                            if (word.Equals(b.FirstWord) && (ReferenceEquals(b, box) || IsFirstChildOfItsParent(b)))
+                            {
+                                for (var ancestor = box; ancestor is { IsInline: true }; ancestor = ancestor.ParentBox)
+                                {
+                                    if (!ReferenceEquals(ancestor, b))
+                                    {
+                                        coordinates.CurrentX += ancestor.Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)
+                                            ? ancestor.ActualMarginLeft + ancestor.ActualBorderLeftWidth + ancestor.ActualPaddingLeft
+                                            : 0;
+                                    }
+
+                                    ancestor.FirstHostingLineBox = coordinates.Line;
+
+                                    // Same correction as PrepareFlowBoxEntry's own entry-side stamp
+                                    // (#341) for a string-set ancestor whose recorded Y was seeded before
+                                    // this wrap was known about - a page attribution this ancestor's
+                                    // opening line, not the seed line PrepareFlowBoxEntry stamped it with.
+                                    foreach (var namedString in ancestor.NamedStrings.Values)
+                                    {
+                                        namedString.Y = coordinates.CurrentY;
+                                    }
+
+                                    if (!IsFirstChildOfItsParent(ancestor)) break;
+                                }
+                            }
                             else if (clonesDecorations)
                             {
                                 // The break fell inside b: every cloning box it is part of, itself included,
@@ -2812,7 +2883,14 @@ namespace PeachPDF.Html.Core.Dom
                         word.Top += box.ActualMarginTop;
                     }
 
-                    if (coordinates.Break is not null) return;
+                    if (coordinates.Break is not null)
+                    {
+                        // Under clone this pass's own portion of b closes here with its own bottom
+                        // border/padding (css-break-3 §6.2), same as the true-final-pass case below -
+                        // the break just means it isn't that pass (#343).
+                        if (clonesAtomicDecorations) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
+                        return;
+                    }
 
                     // A box holding its words directly (e.g. a ::before/::after pseudo-element,
                     // whose generated text lives on the box itself rather than an anonymous
@@ -2848,7 +2926,15 @@ namespace PeachPDF.Html.Core.Dom
                 else
                 {
                     await FlowBox(g, blockBox, b, lineSpacing, lineStartX, coordinates, childClonedResumeStart);
-                    if (coordinates.Break is not null) return;
+
+                    if (coordinates.Break is not null)
+                    {
+                        // Same as the branch above: under clone this pass's own portion of b closes here
+                        // with its own bottom border/padding, same as the true-final-pass case below - the
+                        // break just means it isn't that pass (#343).
+                        if (clonesAtomicDecorations) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
+                        return;
+                    }
 
                     // Same as the branch above: an inset applies to the words this pass placed, and a
                     // box it placed none for has already had it.
@@ -3221,6 +3307,16 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Whether <paramref name="box"/> is the first of <see cref="CssBox.Boxes"/> on its own parent -
+        /// i.e. its parent's content genuinely begins with it. Shared by the wrap branch in
+        /// <see cref="FlowBox"/> (which corrects an inline ancestor chain's stale
+        /// <see cref="CssBox.FirstHostingLineBox"/> when this box's own first word wraps to a new line)
+        /// and, historically, <see cref="BubbleRectangles"/>'s own compensation for the same case.
+        /// </summary>
+        private static bool IsFirstChildOfItsParent(CssBox box) =>
+            box.ParentBox is { } parent && parent.Boxes.Count > 0 && ReferenceEquals(parent.Boxes[0], box);
+
+        /// <summary>
         /// Recursively creates the rectangles of the blockBox, by bubbling from deep to outside the boxes
         /// in the rectangle structure
         /// </summary>
@@ -3235,23 +3331,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 foreach (var word in words)
                 {
-                    // handle if line is wrapped for the first text element where parent has left margin\padding
-                    //
-                    // This exists for the one case FirstHostingLineBox cannot express: a parent entered
-                    // on one line whose first word wraps to the next, so the leading spacing was applied
-                    // on a line the parent does not really start on. Not when the parent genuinely opens
-                    // on this line - there the spacing is real, it was applied to the words, and
-                    // UpdateRectangle takes it off the rectangle itself. Doing both takes it off twice,
-                    // which is what a resumed pass hit: its opening line is never LineBoxes[0], since
-                    // earlier fragmentainers' lines are kept.
-                    var left = word.Left;
-
-                    if (box == box.ParentBox!.Boxes[0] && word == box.Words[0] && word == line.Words[0] && line != line.OwnerBox.LineBoxes[0] && !word.IsLineBreak
-                        && !ReferenceEquals(box.ParentBox.FirstHostingLineBox, line))
-                        left -= box.ParentBox.ActualMarginLeft + box.ParentBox.ActualBorderLeftWidth + box.ParentBox.ActualPaddingLeft;
-
-
-                    x = Math.Min(x, left);
+                    x = Math.Min(x, word.Left);
                     r = Math.Max(r, word.Right);
                     y = Math.Min(y, word.Top);
                     b = Math.Max(b, word.Bottom);

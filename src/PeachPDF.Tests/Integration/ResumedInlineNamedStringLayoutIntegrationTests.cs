@@ -43,6 +43,68 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(trueY, namedString.Y, 1);
         }
 
+        [Fact]
+        public async Task NamedString_InlineTargetStraddlingAPageBreak_KeepsItsOwnOpeningPosition()
+        {
+            // Unlike the fixture above, "term" itself is long enough to straddle the break its own
+            // content falls across - CssLayoutEngine.FlowBox's recursive call for "term" hits the break
+            // and returns before reaching its own FinalizeFlowBoxExit, on every pass that touches it, so
+            // nothing after ApplyStringSet's own (otherwise wrong, box.Location.Y-seeded) registration
+            // ever corrects it unless the fix records the box's real opening position up front (#341).
+            var html = LayoutHarness.Wrap(
+                "<p id='p' style='margin:0;line-height:22pt;font-size:10pt'>" +
+                "<span id='term' style='string-set: entry content(text)'>" +
+                string.Join("<br>", Enumerable.Range(0, 20).Select(i => $"Line{i}")) +
+                "</span></p>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 200, margin: 20);
+
+            Assert.True(container.FragmentainerPasses > 1,
+                $"fixture must paginate, but layout took {container.FragmentainerPasses} pass(es)");
+
+            var term = LayoutHarness.FindById(root, "term")!;
+            var words = AllWords(term).ToList();
+            var openingY = words.Min(w => w.Top);
+            var closingY = words.Max(w => w.Top);
+
+            // The fixture must actually straddle a break, or the assertion below is vacuous.
+            Assert.NotEqual(container.PageIndexOf(openingY), container.PageIndexOf(closingY));
+
+            var namedString = Assert.Single(container.NamedStrings, ns => ns.Name == "entry");
+            Assert.Equal(container.PageIndexOf(openingY), container.PageIndexOf(namedString.Y));
+            Assert.Equal(openingY, namedString.Y, 1);
+        }
+
+        [Fact]
+        public async Task NamedString_InlineTargetWhoseOwnFirstWordOverflowsOntoALine_KeepsThatLinesPageAttribution()
+        {
+            // No pagination needed to reach this: "term" opens PrepareFlowBoxEntry with the seed line's
+            // own Y (stamped before any of its content is known), but its own first word then overflows
+            // onto a second line - the same wrap FlowBox's own FirstHostingLineBox correction handles
+            // (#342) needs the mirror correction for a string-set box's NamedStrings.Y too, or it is left
+            // naming the line "term" was entered on rather than one its content actually starts on. Only
+            // the page attribution is pinned here (not the exact line): FinalizeFlowBoxExit's own,
+            // separate exit-side update (unaffected by this fix) still re-stamps Y from wherever "term"'s
+            // flow ends up by the time it fully closes, which is a different, pre-existing imprecision
+            // that happens not to matter while every line involved shares one page.
+            var html = LayoutHarness.Wrap(
+                "<p id='p' style='margin:0;width:25pt;font:10pt Arial'>" +
+                "<span id='term' style='string-set: entry content(text)'>Wordzero VeryLongWordThatWraps</span></p>");
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
+
+            var term = LayoutHarness.FindById(root, "term")!;
+            var words = AllWords(term).ToList();
+
+            // The fixture must actually wrap the span's own content onto more than one line, or the
+            // assertion below is vacuous.
+            Assert.True(words.Select(w => w.Top).Distinct().Count() > 1,
+                "fixture must wrap the span's own content onto more than one line");
+
+            var namedString = Assert.Single(container.NamedStrings, ns => ns.Name == "entry");
+            Assert.Equal(0, container.PageIndexOf(namedString.Y));
+        }
+
         // 200 short words, comfortably enough to push this paragraph across a page break at PageHeight.
         private static readonly string Filler = string.Join(" ", Enumerable.Repeat("word", 200));
 
