@@ -612,7 +612,7 @@ namespace PeachPDF.Html.Core.Paint
         private void PaintStackingParticipant(RGraphics g, StackingOrder.StackingParticipant participant)
         {
             var fragment = participant.Fragment;
-            var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.ClipAncestors, fragment.OriginY);
+            var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.ClipAncestors);
 
             PaintFragment(g, fragment);
 
