@@ -12,6 +12,13 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class GridAutoFlowValueConverter : IValueConverter
     {
+        // Exposed for css-properties.json's "cssom-grammar" validator (ValidatorExpressionBuilder),
+        // which calls this same real grammar directly instead of the full cssom PropertyFactory/
+        // StylesheetParser round trip - see CLAUDE.md's "one parser" rule. This class has no separate
+        // shared grammar type to point at (unlike GridTemplateAreasGrammar), so the converter itself is
+        // the grammar; this is just a cached instance to call .Convert on.
+        internal static readonly IValueConverter Instance = new GridAutoFlowValueConverter();
+
         public IPropertyValue Convert(IEnumerable<Token> value)
         {
             var tokens = value.ToArray();

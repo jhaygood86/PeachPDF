@@ -47,7 +47,22 @@ namespace PeachPDF.CSS
         /// into a bogus template); otherwise the track list is parsed by the same <see cref="GridTrackListGrammar"/>
         /// the converter uses — keeping all <see cref="CssProperty{T}"/> construction in the CSS-OM layer.
         /// </summary>
-        internal static CssProperty<GridTemplate> FromCssText(string value)
+        internal static CssProperty<GridTemplate> FromCssText(string value) =>
+            TryParseForRegistry(value) ?? CssProperty<GridTemplate>.FromValue(value, null);
+
+        /// <summary>
+        /// Strict counterpart to <see cref="FromCssText"/> for css-properties.json's grid-template-columns/
+        /// -rows "parsed" cssDataType (ValidatorExpressionBuilder/RegistryEmitter's generated Validate_/Set_
+        /// pair) — returns null for a value that is not <c>none</c>, a CSS-wide keyword, an unresolved
+        /// <c>var()</c>, or a syntactically valid <c>&lt;track-list&gt;</c>, instead of <see cref="FromCssText"/>'s
+        /// fail-open "treat as no explicit tracks" behavior, so an actually-invalid declaration is correctly
+        /// dropped by the cascade (matching what the real GridTemplateColumnsProperty.Convert already does)
+        /// rather than silently accepted. Both this and <see cref="FromCssText"/> share the one Tokenize/
+        /// GridTrackListGrammar.TryParse call below — the generated Set_ calls this once and reuses the
+        /// result directly, instead of the former cssom-clause parse followed by a second, independent
+        /// FromCssText parse.
+        /// </summary>
+        internal static CssProperty<GridTemplate> TryParseForRegistry(string value)
         {
             if (CssGlobalKeywords.TryParse(value, out var keyword))
                 return CssProperty<GridTemplate>.Global(keyword);
@@ -65,8 +80,9 @@ namespace PeachPDF.CSS
             // produces the identical CssProperty the tokenized path did, just without tokenizing at all.
             if (value.AsSpan().Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase))
                 return CssProperty<GridTemplate>.FromValue(value, null);
+
             var template = GridTrackListGrammar.TryParse(Tokenize(value));
-            return CssProperty<GridTemplate>.FromValue(value, template);
+            return template is null ? null : CssProperty<GridTemplate>.FromValue(value, template);
         }
 
         /// <summary>Tokenizes an authored value string with the CSS-OM <see cref="Lexer"/> (whitespace/EOF

@@ -95,6 +95,15 @@ namespace PeachPDF.SourceGenerators.Emit
                 return;
             }
 
+            // A "parsed" data type with no customSetter shares ONE converter call between Validate_ and
+            // Set_ instead of Validate_-then-reparse (see grid-template-columns/-rows and CLAUDE.md's "one
+            // parser" rule, issue #909) — unlike every other data type below, Set_ does NOT call Validate_.
+            if (html.CustomSetter is null && entry.CssDataTypes.Count == 1 && entry.CssDataTypes[0].Kind == DataTypeKind.Parsed)
+            {
+                EmitParsedEntryMethods(sb, entry, id, html, entry.CssDataTypes[0]);
+                return;
+            }
+
             var validatorExpr = html.CustomValidator is not null
                 ? Substitute(html.CustomValidator, value: "value", parser: "parser")
                 : ValidatorExpressionBuilder.BuildHtml(entry);
@@ -116,6 +125,52 @@ namespace PeachPDF.SourceGenerators.Emit
             sb.AppendLine("        {");
             sb.AppendLine($"            if (!Validate_{id}(parser, value)) return false;");
             sb.AppendLine($"            {BuildHtmlAssignment(entry)}");
+            sb.AppendLine("            return true;");
+            sb.AppendLine("        }");
+
+            if (html.HasGetter)
+            {
+                var getterExpr = html.GetterExpression is not null
+                    ? Substitute(html.GetterExpression, box: "box")
+                    : $"box.{html.PropertyPath}";
+                sb.AppendLine($"        private static string? Get_{id}(CssBox box) => {getterExpr};");
+            }
+        }
+
+        /// <summary>
+        /// Codegen for a "parsed" data type with no customSetter (see the dispatch in
+        /// <see cref="EmitHtmlEntryMethods"/>): <see cref="DataTypeSpec.Converter"/> names a
+        /// string-to-typed-result factory (e.g. <c>GridTemplateValueConverter.TryParseForRegistry</c>)
+        /// that is genuinely fallible (returns null for an invalid value, unlike a "fail open" factory
+        /// like <c>FromCssText</c> would). <c>Set_</c> calls it exactly once and stores the result
+        /// directly — it does not call <c>Validate_</c> first the way every other data type's <c>Set_</c>
+        /// does, since that would mean parsing the value twice.
+        /// </summary>
+        private static void EmitParsedEntryMethods(StringBuilder sb, PropertyEntry entry, string id, HtmlBinding html, DataTypeSpec dt)
+        {
+            if (dt.Converter is null || dt.ResultType is null)
+                throw new InvalidOperationException(
+                    $"\"{entry.Name}\" declares a \"parsed\" cssDataType with no customSetter, but is missing converter/resultType — " +
+                    "PPG017 should have already reported this.");
+
+            sb.AppendLine($"        private static bool Validate_{id}(CssValueParser parser, string value) => {dt.Converter}(value) is not null;");
+
+            if (entry.SupportsCssDataTypes is not null)
+            {
+                var supportsExpr = ValidatorExpressionBuilder.BuildHtml(entry, entry.SupportsCssDataTypes,
+                    entry.SupportsSupportedValues ?? entry.SupportedValues, entry.SupportsKeywordComparison ?? entry.KeywordComparison);
+                sb.AppendLine($"        private static bool Supports_{id}(CssValueParser parser, string value) => {supportsExpr};");
+            }
+            else
+            {
+                sb.AppendLine($"        private static bool Supports_{id}(CssValueParser parser, string value) => Validate_{id}(parser, value);");
+            }
+
+            sb.AppendLine($"        private static bool Set_{id}(CssValueParser parser, CssBox box, string value)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            var parsed = {dt.Converter}(value);");
+            sb.AppendLine("            if (parsed is null) return false;");
+            sb.AppendLine($"            box.{html.PropertyPath} = parsed;");
             sb.AppendLine("            return true;");
             sb.AppendLine("        }");
 
@@ -413,7 +468,6 @@ namespace PeachPDF.SourceGenerators.Emit
                 DataTypeKind.SvgLengthList =>
                     "var parsed = global::PeachPDF.Svg.SvgValueParsers.ParseDashArray(value, ctx.ViewportDiagonal);\n" +
                     $"if (parsed is null) return false;\nelement.{svg.PropertyPath} = parsed;\nreturn true;",
-                DataTypeKind.CssOm => $"element.{svg.PropertyPath} = value;\nreturn true;",
                 _ => throw new NotSupportedException(
                     $"DataTypeKind.{kind} has no default SVG setter and \"{entry.Name}\" declares no customSetter."),
             };

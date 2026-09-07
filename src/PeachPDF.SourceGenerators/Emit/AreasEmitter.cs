@@ -108,9 +108,10 @@ namespace PeachPDF.SourceGenerators.Emit
             if (html.CsharpDataType == "string") return initialValueExpr;
 
             // A CssProperty<T> not covered by the enum-keyword/keyword-or-value branches above (e.g.
-            // grid-template-columns/-rows, whose cssDataType is "cssom" - grammar validation and real
-            // parsing are delegated to the CSS-OM/customSetter, not a generator-known FromCssText path).
-            // Its initial keyword ("none") has no corresponding parsed T, so - matching the hand-written
+            // grid-template-columns/-rows, whose cssDataType is "parsed" - RegistryEmitter's own
+            // dedicated Parsed codegen shares one real converter call between Validate_/Set_, but this
+            // emitter has no equivalent smarter default and doesn't need one: the initial keyword
+            // ("none") has no corresponding parsed T either way, so - matching the hand-written
             // precedent this mirrors - the parsed half stays a literal null; only the raw text is set.
             if (html.CsharpDataType is { } csharpType &&
                 csharpType.StartsWith("CssProperty<", StringComparison.Ordinal) &&

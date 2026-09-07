@@ -18,26 +18,31 @@ namespace PeachPDF.SourceGenerators.Emit
             BuildHtml(entry, entry.CssDataTypes, entry.SupportedValues, entry.KeywordComparison);
 
         public static string BuildSvg(PropertyEntry entry) =>
-            string.Join(" || ", entry.CssDataTypes.Select(dt => BuildClause(entry, dt, isSvg: true, entry.SupportedValues, entry.KeywordComparison)));
+            string.Join(" || ", entry.CssDataTypes.Select(dt => BuildClause(entry, dt, entry.SupportedValues, entry.KeywordComparison)));
 
         /// <summary>Entry point for a Supports_* override (<see cref="PropertyEntry.SupportsCssDataTypes"/>) — the same
         /// clause logic against an explicit data-type/keyword list instead of the entry's base grammar.</summary>
         public static string BuildHtml(PropertyEntry entry, IReadOnlyList<DataTypeSpec> dataTypes,
             IReadOnlyList<string>? supportedValues, KeywordComparison keywordComparison) =>
-            string.Join(" || ", dataTypes.Select(dt => BuildClause(entry, dt, isSvg: false, supportedValues, keywordComparison)));
+            string.Join(" || ", dataTypes.Select(dt => BuildClause(entry, dt, supportedValues, keywordComparison)));
 
-        private static string BuildClause(PropertyEntry entry, DataTypeSpec dt, bool isSvg,
+        private static string BuildClause(PropertyEntry entry, DataTypeSpec dt,
             IReadOnlyList<string>? supportedValues, KeywordComparison keywordComparison) => dt.Kind switch
         {
-            DataTypeKind.CssOm => BuildCssOmClause(entry, isSvg),
             DataTypeKind.Unsupported => "false",
             DataTypeKind.Length => "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLength(value)",
             DataTypeKind.Color => "parser.IsColorValid(value)",
             DataTypeKind.CurrentColor => "value.Equals(\"currentcolor\", global::System.StringComparison.OrdinalIgnoreCase)",
             DataTypeKind.Transform => "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidTransformValue(value)",
+            DataTypeKind.Ratio => "global::PeachPDF.CSS.AspectRatioGrammar.TryParseFast(value, out _, out _)",
+            DataTypeKind.TransformList => "global::PeachPDF.Html.Core.Parse.CssValueParser.IsSyntacticallyValidTransformList(value)",
+            DataTypeKind.CustomIdentOrAuto => "global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidPageName(value)",
+            DataTypeKind.LengthList => BuildLengthListClause(dt),
+            DataTypeKind.KeywordList => BuildKeywordListClause(dt),
             DataTypeKind.Keyword => BuildKeywordClause(supportedValues, keywordComparison),
             DataTypeKind.Integer => BuildIntegerClause(dt),
             DataTypeKind.Number => "double.TryParse(value, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)",
+            DataTypeKind.CssOmGrammar => BuildCssOmGrammarClause(dt),
             DataTypeKind.EnumKeyword => $"{dt.KeywordMap}.ContainsKey(value)",
             DataTypeKind.KeywordOrValue => BuildKeywordOrValueClause(entry, dt),
             DataTypeKind.SvgPaint => "global::PeachPDF.Svg.SvgValueParsers.TryParsePaint(value, ctx.Adapter, ctx.ContextColor, out _)",
@@ -50,25 +55,34 @@ namespace PeachPDF.SourceGenerators.Emit
         };
 
         /// <summary>
-        /// "cssom" means "no dedicated grammar modeled here — ask the real CSS-OM property for this
-        /// name instead," not "accept anything": <c>PropertyFactory.Instance.Create(name)</c> gives the
-        /// same <c>Property</c> subclass Layer A's own stylesheet parser would construct for this
-        /// declaration, and <c>StylesheetParser.Default.ParseValue</c> tokenizes <c>value</c> exactly as
-        /// stylesheet parsing does, so <c>TrySetValue</c> runs that property's genuine grammar. If Layer A
-        /// has no property under this name at all (a PeachPDF-only extension like
-        /// <c>-peachpdf-pdf-tag-type</c>, never registered in <c>PropertyFactory</c>), there is no CSS-OM
-        /// grammar to defer to, so the property's own registration in this file (the caller already found
-        /// it by name before reaching here) is the only fact available and the clause accepts. On the SVG
-        /// side there is no CSS-OM equivalent to delegate to at all — every current "cssom" entry with an
-        /// svg binding (e.g. opacity) overrides this with its own customValidator.
+        /// <see cref="DataTypeKind.CssOmGrammar"/>: <see cref="DataTypeSpec.Converter"/> names a fully
+        /// invokable member — either a static <c>TryParse(IReadOnlyList&lt;Token&gt;)</c>-shaped method
+        /// (e.g. <c>PeachPDF.CSS.BasicShapeGrammar.TryParse</c>) or an <c>IValueConverter</c> field's
+        /// <c>.Convert</c> included in the string itself (e.g.
+        /// <c>PeachPDF.CSS.Converters.MultipleImageSourceConverter.Convert</c>) — so the generator emits
+        /// one uniform call shape without needing to resolve which kind it is via the compilation's
+        /// symbol table. <c>GetCssTokens</c> returns a <c>List&lt;Token&gt;</c>, which satisfies both a
+        /// <c>TryParse(IReadOnlyList&lt;Token&gt;)</c> parameter and an <c>IValueConverter.Convert(IEnumerable
+        /// &lt;Token&gt;)</c> parameter directly, with no wrapping.
         /// </summary>
-        private static string BuildCssOmClause(PropertyEntry entry, bool isSvg)
+        private static string BuildCssOmGrammarClause(DataTypeSpec dt)
         {
-            if (isSvg) return "true";
+            var call = $"global::{dt.Converter}(global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens(value, inValueContext: true, preserveWhitespace: true)) is not null";
+            return dt.AcceptsNoneLiteral
+                ? $"value.Equals(\"none\", global::System.StringComparison.OrdinalIgnoreCase) || {call}"
+                : call;
+        }
 
-            var name = Escape(entry.Name);
-            return $"global::PeachPDF.CSS.PropertyFactory.Instance.Create(\"{name}\") is not {{ }} knownProperty || " +
-                   "(global::PeachPDF.CSS.StylesheetParser.Default.ParseValue(value) is { } tokenValue && knownProperty.TrySetValue(tokenValue))";
+        private static string BuildLengthListClause(DataTypeSpec dt) =>
+            $"global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidLengthList(value, {dt.MinCount ?? 1}, {dt.MaxCount ?? 2}, {(dt.AllowPercentage ? "true" : "false")})";
+
+        private static string BuildKeywordListClause(DataTypeSpec dt)
+        {
+            var max = dt.MaxPerSegment ?? 1;
+            var aliasesArg = dt.AliasKeywords is { Count: > 0 }
+                ? "new[] { " + string.Join(", ", dt.AliasKeywords.Select(a => $"\"{Escape(a)}\"")) + " }"
+                : "null";
+            return $"global::PeachPDF.Html.Core.Parse.CssValueParser.IsValidCommaKeywordList(value, {dt.KeywordMap}, {max}, {aliasesArg})";
         }
 
         private static string BuildKeywordClause(IReadOnlyList<string>? supportedValues, KeywordComparison keywordComparison)

@@ -25,5 +25,7 @@ namespace PeachPDF.SourceGenerators.Model
         UnknownPropertyNameConstant = 13, // PPG013 (not implemented in this pass — reserved)
         InvalidLogicalEntry = 14,    // PPG014
         PropertyPathAreaConflict = 15, // PPG015
+        CssOmGrammarMissingMember = 16, // PPG016
+        ParsedMissingConverterOrResultType = 17, // PPG017
     }
 }

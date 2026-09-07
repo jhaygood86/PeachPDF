@@ -14,6 +14,11 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class TextIndentValueConverter : IValueConverter
     {
+        // Exposed for css-properties.json's "cssom-grammar" validator (ValidatorExpressionBuilder),
+        // which calls this same real grammar directly instead of the full cssom PropertyFactory/
+        // StylesheetParser round trip - see CLAUDE.md's "one parser" rule.
+        internal static readonly IValueConverter Instance = new TextIndentValueConverter();
+
         public IPropertyValue Convert(IEnumerable<Token> value)
         {
             var tokens = value.ToArray();

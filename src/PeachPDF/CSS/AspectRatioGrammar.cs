@@ -1,6 +1,8 @@
 #nullable disable
 
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 namespace PeachPDF.CSS
@@ -92,6 +94,83 @@ namespace PeachPDF.CSS
             // A zero term degenerates to "no preferred aspect ratio".
             ratio = width <= 0 || height <= 0 ? null : width / height;
             return true;
+        }
+
+        /// <summary>
+        /// Same grammar as <see cref="TryParse(IReadOnlyList{Token}, out double?, out bool)"/> ([ auto ||
+        /// &lt;ratio&gt; ]) but validated directly against the raw string via span scanning, for
+        /// css-properties.json's "ratio" cssDataType (ValidatorExpressionBuilder) — which only needs
+        /// accept/reject, not the full CSS-OM tokenizer. Kept in this same class (not a separate parser) so
+        /// a future grammar change only has one place to update; AspectRatioGrammarEquivalenceTests proves
+        /// the two entry points agree.
+        /// </summary>
+        internal static bool TryParseFast(string value, out double? ratio, out bool hasAuto)
+        {
+            ratio = null;
+            hasAuto = false;
+            if (string.IsNullOrEmpty(value)) return false;
+
+            var span = value.AsSpan().Trim();
+            if (span.IsEmpty) return false;
+
+            if (TryStripLeadingAuto(ref span)) hasAuto = true;
+
+            if (span.IsEmpty) return hasAuto; // bare `auto`
+
+            if (!hasAuto && TryStripTrailingAuto(ref span))
+            {
+                hasAuto = true;
+                span = span.TrimEnd();
+            }
+
+            if (span.IsEmpty) return false; // "auto" consumed twice, or malformed
+
+            if (!TryParseRatioSpan(span, out ratio)) return false;
+
+            return true;
+        }
+
+        private static bool TryStripLeadingAuto(ref ReadOnlySpan<char> span)
+        {
+            if (!span.StartsWith("auto", StringComparison.OrdinalIgnoreCase)) return false;
+            if (span.Length > 4 && !char.IsWhiteSpace(span[4])) return false; // whole-word only ("autox")
+            span = span[4..].TrimStart();
+            return true;
+        }
+
+        private static bool TryStripTrailingAuto(ref ReadOnlySpan<char> span)
+        {
+            if (!span.EndsWith("auto", StringComparison.OrdinalIgnoreCase)) return false;
+            if (span.Length > 4 && !char.IsWhiteSpace(span[^5])) return false; // whole-word only ("banauto")
+            span = span[..^4];
+            return true;
+        }
+
+        private static bool TryParseRatioSpan(ReadOnlySpan<char> span, out double? ratio)
+        {
+            ratio = null;
+            var slash = span.IndexOf('/');
+
+            var widthSpan = (slash < 0 ? span : span[..slash]).Trim();
+            if (widthSpan.IsEmpty || !TryNonNegativeNumber(widthSpan, out var width)) return false;
+
+            double height = 1;
+            if (slash >= 0)
+            {
+                var heightSpan = span[(slash + 1)..].Trim();
+                if (heightSpan.IsEmpty || !TryNonNegativeNumber(heightSpan, out height)) return false;
+            }
+
+            ratio = width <= 0 || height <= 0 ? null : width / height;
+            return true;
+        }
+
+        private static bool TryNonNegativeNumber(ReadOnlySpan<char> span, out double value)
+        {
+            if (double.TryParse(span, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && value >= 0)
+                return true;
+            value = 0;
+            return false;
         }
 
         private static bool IsAuto(Token token) => token.Type == TokenType.Ident && token.Data.Isi(Keywords.Auto);

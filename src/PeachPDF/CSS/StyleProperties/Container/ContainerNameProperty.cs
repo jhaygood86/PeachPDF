@@ -16,8 +16,12 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class ContainerNameProperty : Property
     {
-        private static readonly IValueConverter StyleConverter =
-            new IdentifierValueConverter(ToContainerNameList).OrDefault();
+        // Exposed for css-properties.json's "cssom-grammar" validator (ValidatorExpressionBuilder),
+        // which calls this same real grammar directly instead of the full cssom PropertyFactory/
+        // StylesheetParser round trip - see CLAUDE.md's "one parser" rule.
+        internal static readonly IValueConverter ValueGrammar = new IdentifierValueConverter(ToContainerNameList);
+
+        private static readonly IValueConverter StyleConverter = ValueGrammar.OrDefault();
 
         internal ContainerNameProperty()
             : base(PropertyNames.ContainerName)

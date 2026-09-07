@@ -51,13 +51,17 @@ namespace PeachPDF.CSS
             WithOrder(Horizontal, Vertical)
                 .Or(WithAnyOrderIndependent(HorizontalKeyword, VerticalKeyword));
 
-        private static readonly IValueConverter StyleConverter =
+        // Exposed for css-properties.json's "cssom-grammar" validator (ValidatorExpressionBuilder),
+        // which calls this same real grammar directly instead of the full cssom PropertyFactory/
+        // StylesheetParser round trip - see CLAUDE.md's "one parser" rule.
+        internal static readonly IValueConverter ValueGrammar =
             // Two-value position followed by a (required) <length> z-offset - this branch only matches when a
             // third length token is actually present...
             WithOrder(TwoValuePosition, LengthConverter)
                 // ...otherwise a plain one- or two-value <position> with no z-offset.
-                .Or(Position)
-                .OrDefault(Point.Center);
+                .Or(Position);
+
+        private static readonly IValueConverter StyleConverter = ValueGrammar.OrDefault(Point.Center);
 
         internal TransformOriginProperty()
             : base(PropertyNames.TransformOrigin, PropertyFlags.Animatable)

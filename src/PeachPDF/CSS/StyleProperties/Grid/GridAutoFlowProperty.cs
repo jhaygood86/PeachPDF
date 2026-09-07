@@ -3,7 +3,7 @@ namespace PeachPDF.CSS
     /// <summary>The <c>grid-auto-flow</c> property (CSS Grid §7.7): the auto-placement direction and packing.</summary>
     internal sealed class GridAutoFlowProperty : Property
     {
-        private static readonly IValueConverter StyleConverter = new GridAutoFlowValueConverter().OrDefault();
+        private static readonly IValueConverter StyleConverter = GridAutoFlowValueConverter.Instance.OrDefault();
 
         internal GridAutoFlowProperty()
             : base(PropertyNames.GridAutoFlow)

@@ -25,12 +25,17 @@ namespace PeachPDF.CSS
 
         private static readonly ContentMode[] Default = [new NormalContentMode()];
 
-        private static readonly IValueConverter StyleConverter = Assign(Keywords.Normal, Default).OrNone().Or(
+        // Exposed for css-properties.json's "cssom-grammar" validator (ValidatorExpressionBuilder),
+        // which calls this same real grammar directly instead of the full cssom PropertyFactory/
+        // StylesheetParser round trip - see CLAUDE.md's "one parser" rule.
+        internal static readonly IValueConverter ValueGrammar = Assign(Keywords.Normal, Default).OrNone().Or(
             ContentModes.ToConverter().Or(
                 UrlConverter).Or(
                 Converters.GradientConverter).Or(
                 Converters.ContentListItemConverter).Or(
-                new GcpmElementFunctionConverter()).Many()).OrDefault();
+                new GcpmElementFunctionConverter()).Many());
+
+        private static readonly IValueConverter StyleConverter = ValueGrammar.OrDefault();
 
         private abstract class ContentMode
         {
