@@ -2331,6 +2331,37 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Hands a repeating group's just-laid-out page instance to the fragment emitter, immediately
+        /// after <paramref name="proxy"/>'s own layout captures its <see cref="CssProxyBox.SourceGeometry"/> -
+        /// see <see cref="HtmlContainerInt.RecordRepeatingGroupInstance"/>. This is what lets
+        /// <see cref="FragmentEmitter"/> visit the repeated group's source content directly, keyed by
+        /// <paramref name="slot"/>, instead of discovering it by walking the live tree for a
+        /// <see cref="CssProxyBox"/>.
+        /// </summary>
+        /// <remarks>
+        /// A no-op without a container: the unpaginated/measurement pass has no fragment tree to build and
+        /// no page grid to name a band against. <paramref name="proxy"/>'s own <c>SourceGeometry</c> is
+        /// likewise only ever null before its first layout, which by construction has already happened at
+        /// every call site (this always runs right after <c>await proxy.PerformLayout(g)</c>) - the check
+        /// exists for robustness, not because a real call reaches it.
+        /// </remarks>
+        private void RecordRepeatingGroupFragmentInstance(HtmlContainerInt? container, CssProxyBox proxy, int slot)
+        {
+            if (container is null || proxy.SourceGeometry is not { } geometry) return;
+
+            var band = (container.PageTopOf(slot), container.PageBottomOf(slot));
+
+            // A fresh identity for this one instance - mirrors CssLayoutEngineColumns.FillColumns's own
+            // per-column context, so a repeated group's source content could itself hold further nested
+            // captures (e.g. a multi-column layout inside a repeating header) without those being
+            // confused with a different page's instance of the same header.
+            var self = new FragmentainerContext(container, proxy.SourceBox, slot, band, inheritsSuppression: true);
+
+            container.RecordRepeatingGroupInstance(
+                _tableBox, slot, band, geometry, proxy.SourceBox, self, container.CurrentFragmentainer);
+        }
+
+        /// <summary>
         /// Lays <paramref name="captions"/> out stacked in source order along the table's own row axis
         /// (physical Y for horizontal-tb, physical X for a vertical table), starting at
         /// <paramref name="rowAxisCursor"/> and sized to the table's full column-axis extent
@@ -3299,6 +3330,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (headerProxy != null)
                 {
                     await headerProxy.PerformLayout(g);
+                    RecordRepeatingGroupFragmentInstance(container, headerProxy, cursor.SlotIndex);
 
                     var headerRoom = _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
                     if (_continuesAPreviousPass) resumedHeaderRoom = headerRoom;
@@ -3498,6 +3530,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (pageFooterProxy != null)
                 {
                     await pageFooterProxy.PerformLayout(g);
+                    RecordRepeatingGroupFragmentInstance(container, pageFooterProxy, leaving);
 
                     // Same record, and for the same reason, as TakeBreakBeforeRow's: this is where the
                     // table's slice on that page ends, and FragmentPainter clips the table's bottom border
@@ -3536,6 +3569,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (finalFooterProxy != null)
                 {
                     await finalFooterProxy.PerformLayout(g);
+                    RecordRepeatingGroupFragmentInstance(container, finalFooterProxy, cursor.SlotIndex);
                     cursor.CurrentY += _footerHeight + VerticalSpacingAt(_grid?.RowCount ?? 0);
 
                     // cursor.MaxBottom is the row-axis tracker (physical X for a vertical table) - the
@@ -4370,6 +4404,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (footerProxy != null)
                 {
                     await footerProxy.PerformLayout(g);
+                    RecordRepeatingGroupFragmentInstance(container, footerProxy, slot);
                     // Footer is part of this page's table slice — extend clip to cover it.
                     pageBreakBottomY = footerProxy.ActualBottom;
                 }
@@ -4399,6 +4434,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (headerProxy != null)
                 {
                     await headerProxy.PerformLayout(g);
+                    RecordRepeatingGroupFragmentInstance(container, headerProxy, target);
                     cursor.CurrentY += _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
                     GrowMaxRightFor(cursor, headerProxy);
                 }
@@ -4475,6 +4511,7 @@ namespace PeachPDF.Html.Core.Dom
                 if (headerProxy != null)
                 {
                     await headerProxy.PerformLayout(g);
+                    RecordRepeatingGroupFragmentInstance(container, headerProxy, target);
                     cursor.CurrentY += _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
                     GrowMaxRightFor(cursor, headerProxy);
                 }
@@ -4771,6 +4808,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (headerProxy != null)
                     {
                         await headerProxy.PerformLayout(g);
+                        RecordRepeatingGroupFragmentInstance(container, headerProxy, slot);
                         GrowMaxRightFor(cursor, headerProxy);
                     }
                 }
@@ -4787,6 +4825,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (footerProxy != null)
                     {
                         await footerProxy.PerformLayout(g);
+                        RecordRepeatingGroupFragmentInstance(container, footerProxy, slot);
 
                         // Where this band's slice ends, for the same reason and in the same place as the
                         // other footer sites: FragmentPainter clips the table's bottom border to this

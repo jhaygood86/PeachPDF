@@ -603,6 +603,23 @@ namespace PeachPDF.Html.Core
         internal void RecordFloatScanBoxVisits(int boxesVisited) => FloatScanBoxVisits += boxesVisited;
 
         /// <summary>
+        /// How many times <see cref="Fragmentation.FragmentEmitter"/>'s <c>BuildDraft</c> walk visited a
+        /// box during the current <see cref="PerformLayoutOnePass"/> call - i.e. across every
+        /// fragmentainer pass's own emission plus every <c>CatchUpStaleSlotsBehind</c> re-walk. Reset
+        /// alongside <see cref="FloatScanCalls"/>, for the same reason: a regression test can assert the
+        /// *complexity* of fragment emission - the work it repeats per page - deterministically, rather
+        /// than timing a render (<see href="https://github.com/jhaygood86/PeachPDF/issues/917">#917</see>,
+        /// the analogue of the float-scan guard for <see href="https://github.com/jhaygood86/PeachPDF/issues/482">#482</see>).
+        /// </summary>
+        internal long BuildDraftCalls { get; private set; }
+
+        /// <summary>
+        /// Records that <c>FragmentEmitter.BuildDraft</c> visited one box. Called by
+        /// <see cref="Fragmentation.FragmentEmitter"/>.
+        /// </summary>
+        internal void RecordBuildDraftCall() => BuildDraftCalls++;
+
+        /// <summary>
         /// Whether any box in the current document asks for <c>box-decoration-break: clone</c>. Reserving room
         /// for a cloned border and padding at a break (css-break-3 §6.2) means asking, for a great many words,
         /// what a box's ancestors declared; this settles the answer once so a document that clones nothing —
@@ -1051,6 +1068,7 @@ namespace PeachPDF.Html.Core
             ActualSize = RSize.Empty;
             FloatScanCalls = 0;
             FloatScanBoxVisits = 0;
+            BuildDraftCalls = 0;
             if (Root is null) return;
 
             // A document with per-page left/right margins settles its box->page assignment in the reflow
@@ -1848,7 +1866,7 @@ namespace PeachPDF.Html.Core
 
             _passesRewoundFor.Add(pull.Head);
             PassRewinds++;
-            _emitter?.InvalidateFrom(rewoundSlot);
+            _emitter?.InvalidateFrom(rewoundSlot, pull.Head);
 
             PassRewind.RollBackTo(rewoundToken, Root!.Boxes);
 
@@ -2025,14 +2043,27 @@ namespace PeachPDF.Html.Core
         /// <see cref="FragmentEmitter.InvalidateFrom"/>. A no-op in the ordinary forward case, and during an
         /// unpaginated/measurement pass, which has no grid to name a slot against.
         /// </summary>
+        /// <remarks>
+        /// Also a no-op for a repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>'s detached source subtree
+        /// (<see cref="CssBox.IsInDetachedRepeatingGroup"/>): its own <see cref="CssBox.Location"/> is
+        /// relocated once per page it repeats onto purely so the <i>next</i> page's proxy captures the
+        /// right snapshot - every already-emitted page read that content through its <i>own</i> frozen
+        /// <c>BoxGeometrySnapshot</c>, taken when that page was built, never through the source's live,
+        /// currently-relocating position, so nothing already emitted is stale. Left ungated, a long
+        /// repeating header relocating on every page it spans turned a real, document-wide re-walk into a
+        /// per-page event throughout the header's own span - reported as issue #917's dominant cost,
+        /// confirmed independent of forced breaks by a single repeating-header table with no forced break
+        /// anywhere in it.
+        /// </remarks>
         internal void InvalidateEmittedFragmentsFor(CssBox box, double documentY)
         {
             // The box question first, deliberately: this runs on every block-axis reposition in the document,
             // and PageIndexOf under a per-page @page geometry table is a forward-incremental walk rather than
             // arithmetic. Nothing should be asked of the page grid for a box that cannot need re-emitting.
             if (_emitter is null || !_emitter.HoldsFragmentsFor(box) || !HasRealPageGrid) return;
+            if (box.IsInDetachedRepeatingGroup) return;
 
-            _emitter.InvalidateFrom(PageIndexOf(documentY));
+            _emitter.InvalidateFrom(PageIndexOf(documentY), box);
         }
 
         /// <summary>
@@ -2046,7 +2077,7 @@ namespace PeachPDF.Html.Core
         /// <b>inline</b> axis: a box continuing into the next column is laid out again at that column's own
         /// position, so its live geometry describes only the last fragment it produced.
         /// </remarks>
-        internal void RecordNestedFragmentainer(
+        internal void RecordCapturedInstance(
             CssBox contextRoot,
             int slot,
             (double Top, double Bottom) band,
@@ -2055,22 +2086,37 @@ namespace PeachPDF.Html.Core
             IReadOnlySet<CssBox> continuing,
             FragmentainerContext self,
             FragmentainerContext? parentContext) =>
-            _emitter?.RecordNestedFragmentainer(contextRoot, slot, band, inline, geometry, continuing, self, parentContext);
+            _emitter?.RecordCapturedInstance(contextRoot, slot, band, inline, geometry, continuing, self, parentContext);
 
         /// <summary>
         /// Discards what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> — or, with no
         /// slot, in every slot — for a fill being attempted afresh.
         /// </summary>
-        internal void ClearNestedFragmentainers(CssBox contextRoot, int? slot = null) =>
-            _emitter?.ClearNestedFragmentainers(contextRoot, slot);
+        internal void ClearCapturedInstances(CssBox contextRoot, int? slot = null) =>
+            _emitter?.ClearCapturedInstances(contextRoot, slot);
 
         /// <summary>
         /// Discards only what <paramref name="contextRoot"/> recorded in <paramref name="slot"/> from
         /// index <paramref name="keepFirst"/> onward, leaving an earlier <c>column-span: all</c> run's
         /// already-finished columns in the same slot untouched.
         /// </summary>
-        internal void ClearNestedFragmentainersFrom(CssBox contextRoot, int slot, int keepFirst) =>
-            _emitter?.ClearNestedFragmentainersFrom(contextRoot, slot, keepFirst);
+        internal void ClearCapturedInstancesFrom(CssBox contextRoot, int slot, int keepFirst) =>
+            _emitter?.ClearCapturedInstancesFrom(contextRoot, slot, keepFirst);
+
+        /// <summary>
+        /// Hands the emitter one repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> instance's captured
+        /// geometry for the page it was just laid out on — see
+        /// <see cref="FragmentEmitter.RecordRepeatingGroupInstance"/>.
+        /// </summary>
+        internal void RecordRepeatingGroupInstance(
+            CssBox tableBox,
+            int slot,
+            (double Top, double Bottom) band,
+            BoxGeometrySnapshot geometry,
+            CssBox sourceRoot,
+            FragmentainerContext self,
+            FragmentainerContext? parentContext) =>
+            _emitter?.RecordRepeatingGroupInstance(tableBox, slot, band, geometry, sourceRoot, self, parentContext);
 
         /// <summary>
         /// States that <paramref name="box"/> occupies <paramref name="rect"/> in the fragmentainer that

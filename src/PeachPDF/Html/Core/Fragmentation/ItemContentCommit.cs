@@ -79,6 +79,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // border-box (ActualBoxSizeIncludedWidth/Height is already 0 there, so this is a no-op).
                 box.Width = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingWidth - box.ActualBoxSizeIncludedWidth), box);
                 box.Height = FormatLayoutUnits(Math.Max(0, box.ActualBoxSizingHeight - box.ActualBoxSizeIncludedHeight), box);
+                box.ItemContentSizeEverPinned = true;
 
                 box.RectanglesReset();
 

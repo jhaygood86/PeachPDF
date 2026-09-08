@@ -74,13 +74,14 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         /// <summary>
         /// Identifies a box within the emission walk. A repeating table header's source subtree is reached
-        /// through a <see cref="CssProxyBox"/> and appears once per page at a different position each time,
-        /// so the same <see cref="CssBox"/> can carry several unrelated spans — the owning proxy
-        /// disambiguates them. <see cref="BoxFragment"/> itself does not record the proxy, which is why the
-        /// association has to be carried here deliberately rather than recovered later.
+        /// through a recorded <see cref="CapturedInstance"/> and appears once per page at a different
+        /// position each time, so the same <see cref="CssBox"/> can carry several unrelated spans -
+        /// <see cref="EnclosingContext"/> (that instance's own <see cref="CapturedInstance.Self"/>)
+        /// disambiguates them, the same way it already disambiguates one multi-column column's fragments
+        /// from another's.
         /// </summary>
         /// <remarks>
-        /// <see cref="Instance"/> names which of a slot's nested fragmentainers the fragment belongs to, 0
+        /// <see cref="Instance"/> names which of a slot's captured instances the fragment belongs to, 0
         /// for the page itself. Two columns of one page are two fragmentainers of the same slot, so a box
         /// appearing in both produces two fragments that a (box, slot) pair alone could not tell apart.
         /// <see cref="EnclosingContext"/> extends this one level of disambiguation to arbitrary nesting
@@ -89,13 +90,31 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <c>Instance</c> numbers under every outer column it is filled in, and without this field two
         /// simultaneous, unrelated fragments (one per outer column, both instance 1) would collide on the
         /// same key and have their decoration rectangles merged in <see cref="_rectangles"/>. It is the
-        /// enclosing capture's own <see cref="NestedFragmentainer.Self"/> that was active when this
+        /// enclosing capture's own <see cref="CapturedInstance.Self"/> that was active when this
         /// fragment's own <c>Instance</c> was assigned - null wherever <see cref="Instance"/> alone is
         /// already unique (the page level, and the degenerate page-grid-resumption keys that never carry
-        /// an owner or a real instance either).
+        /// a real instance either).
         /// </remarks>
+        /// <param name="Box">The box this key identifies a fragment of.</param>
+        /// <param name="Instance">See this type's own remarks on <see cref="Instance"/>.</param>
+        /// <param name="EnclosingContext">See this type's own remarks on <see cref="EnclosingContext"/>.</param>
+        /// <param name="RepeatingGroupInstance">
+        /// Null for every fragment except a repeating group's, where it is that instance's own
+        /// <see cref="CapturedInstance.Self"/> - the same value <see cref="EnclosingContext"/> carries for
+        /// such a fragment, named separately because the two answer different questions. A box split
+        /// across multi-column columns is genuinely one box's content divided between fragments, which
+        /// <see cref="_fragmentRange"/>/<see cref="_fragmentsOf"/> must concatenate - so their key must
+        /// stay the <i>same</i> across a box's own column instances, the way the removed proxy-owner field
+        /// naturally did (always null for multi-column). A repeating group's source root, read through a
+        /// <i>different</i> page's instance, is the opposite: content repeated wholesale, never divided -
+        /// concatenating two pages' worth into one "unbroken strip" would be nonsense, so their key must
+        /// differ per page instead. <see cref="EnclosingContext"/> cannot serve both: it is deliberately
+        /// unique per multi-column instance too (to separate nested captures - see its own remarks), which
+        /// is exactly the wrong answer for <see cref="_fragmentRange"/>/<see cref="_fragmentsOf"/>.
+        /// </param>
         private readonly record struct FragmentKey(
-            CssBox Box, CssProxyBox? Owner, int Instance, FragmentainerContext? EnclosingContext = null);
+            CssBox Box, int Instance, FragmentainerContext? EnclosingContext = null,
+            FragmentainerContext? RepeatingGroupInstance = null);
 
         /// <summary>
         /// One emitted pagination slot: its index and the document-space band layout paginated against.
@@ -153,17 +172,23 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// One nested fragmentainer's geometry, handed over by the engine that filled it — a multi-column
-        /// column (<see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>: "a column in
-        /// multi-column layout, or a page in paged media").
+        /// One captured occurrence of a subtree's geometry, handed over explicitly by whichever engine
+        /// filled it, rather than discovered by the emitter walking the live tree for a special box kind.
+        /// Two unrelated engines record these: a multi-column column
+        /// (<see href="https://www.w3.org/TR/css-break-3/#fragmentainer">§2</see>: "a column in multi-column
+        /// layout, or a page in paged media") and a repeating table <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>
+        /// group, once per page it repeats onto (<see cref="DetachedSourceRoot"/>).
         /// </summary>
         /// <remarks>
         /// This is layout <i>telling</i> the emitter where the content it placed went, rather than the
-        /// emitter reading where the boxes currently are. It has to be: a box continuing from one column
-        /// into the next is laid out again at the next column's inline position, so by the end of the page
-        /// pass its live geometry describes only its last fragment. The captured snapshot is the geometry
-        /// as it stood when that column was filled, and <see cref="FragmentRegion"/> is what tells the
-        /// column's own rectangles from the ones a neighbouring column contributed to the same box.
+        /// emitter reading where the boxes currently are. For a multi-column column that has to be true: a
+        /// box continuing from one column into the next is laid out again at the next column's inline
+        /// position, so by the end of the page pass its live geometry describes only its last fragment. For
+        /// a repeating group it is true for a different reason: the source subtree is detached from the live
+        /// tree entirely and repositioned once per page it repeats onto, so there is no single "live"
+        /// position to read at all. Either way the captured snapshot is the geometry as it stood when this
+        /// instance was filled, and <see cref="FragmentRegion"/> is what tells this instance's own
+        /// rectangles from the ones a neighbouring instance contributed to the same box.
         /// </remarks>
         /// <remarks>
         /// <see cref="Continuing"/> holds the boxes that did not finish here and carry on into the next one.
@@ -171,9 +196,11 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// that completes it — so their decoration area is the content they placed here rather than the
         /// zero-height box they still report. The page grid needs no equivalent: there a continuing box's
         /// bounds are cut to the band, which is exactly what cannot separate two fragmentainers sharing one.
+        /// Always empty for a repeating-group instance — a repeated header/footer is laid out complete on
+        /// every page it appears on, never split across two.
         /// </remarks>
         /// <remarks>
-        /// <see cref="ContinuedFrom"/> is the previous fragmentainer's <see cref="Continuing"/> — the boxes
+        /// <see cref="ContinuedFrom"/> is the previous instance's <see cref="Continuing"/> — the boxes
         /// this one <i>resumes</i>. Kept here rather than re-derived because §6.2's block-axis edges are a
         /// break fact and this is where that fact lives for a nested context: a box that carries on past a
         /// column and one that ends there have the same block extent, so nothing downstream can tell them
@@ -181,21 +208,38 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         /// <remarks>
         /// <see cref="Self"/> is the fragmentainer context this capture was itself filled under — the
-        /// specific column instance <see cref="CssLayoutEngineColumns.FillColumns"/> entered to produce it.
+        /// specific column instance <see cref="CssLayoutEngineColumns.FillColumns"/> entered to produce it,
+        /// or (for a repeating group) the page-level context the table itself is laid out under.
         /// <see cref="ParentContext"/> is whatever was active immediately before <see cref="Self"/> was
         /// entered — null for a capture recorded at the page level. Two different fills of the same
         /// <i>inner</i> multi-column container, one per <i>outer</i> column, are otherwise indistinguishable:
-        /// both land under the same <c>(CssBox, Slot)</c> key in <see cref="_nested"/>, and a deeper
-        /// capture's own <see cref="ParentContext"/> is what lets <see cref="ChildrenOf"/> tell which outer
-        /// column's fill it belongs to, by comparing it against the outer capture's own <see cref="Self"/>.
+        /// both land under the same <c>(CssBox, Slot)</c> key in <see cref="_capturedInstances"/>, and a
+        /// deeper capture's own <see cref="ParentContext"/> is what lets <see cref="ChildrenOf"/> tell which
+        /// outer column's fill it belongs to, by comparing it against the outer capture's own
+        /// <see cref="Self"/>.
         /// </remarks>
-        private readonly record struct NestedFragmentainer(
+        /// <param name="Region">This instance's own rectangle, telling its fragments from a neighbour's.</param>
+        /// <param name="Geometry">The subtree's geometry as captured for this instance.</param>
+        /// <param name="Continuing">See this type's own remarks on <see cref="Continuing"/>.</param>
+        /// <param name="ContinuedFrom">See this type's own remarks on <see cref="ContinuedFrom"/>.</param>
+        /// <param name="Self">See this type's own remarks on <see cref="Self"/>.</param>
+        /// <param name="ParentContext">See this type's own remarks on <see cref="ParentContext"/>.</param>
+        /// <param name="DetachedSourceRoot">
+        /// Null for an ordinary multi-column capture, whose held children are found by filtering the
+        /// container's own <see cref="CssBox.Boxes"/> through <see cref="BoxGeometrySnapshot.Holds"/> (its
+        /// content is genuinely divided across columns). Non-null for a repeating group: the detached
+        /// <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> source subtree this instance captured wholesale - there
+        /// is no membership question to ask, since the whole source is the content, so
+        /// <see cref="ChildrenOf"/> yields it directly instead of filtering <see cref="CssBox.Boxes"/>.
+        /// </param>
+        private readonly record struct CapturedInstance(
             FragmentRegion Region,
             BoxGeometrySnapshot Geometry,
             IReadOnlySet<CssBox> Continuing,
             IReadOnlySet<CssBox> ContinuedFrom,
             FragmentainerContext Self,
-            FragmentainerContext? ParentContext);
+            FragmentainerContext? ParentContext,
+            CssBox? DetachedSourceRoot = null);
 
         /// <summary>
         /// A fragment before its first/last flags are known — which cannot be until every slot has been
@@ -224,7 +268,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             /// Whether the box's decoration area runs to the bottom of what it actually placed here rather
             /// than to the bottom it currently reports, for either of two reasons: it continues past a
             /// nested fragmentainer without having had its own height applied yet (see
-            /// <see cref="NestedFragmentainer.Continuing"/>), or - on the page grid - its own declared bounds
+            /// <see cref="CapturedInstance.Continuing"/>), or - on the page grid - its own declared bounds
             /// were pinned by an item-content commit pass before the content that overflows past them was
             /// known, so they simply do not reach the region its later content genuinely landed in (issue
             /// <see href="https://github.com/jhaygood86/PeachPDF/issues/569">#569</see>).
@@ -361,18 +405,21 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// Where each box's fragments begin and end in fill order, ignoring which nested fragmentainer they
         /// landed in — the question <see cref="_spans"/> cannot answer, since two columns of one slot are two
         /// keys. A break edge only exists where there is a fragment on the other side of it, and that is what
-        /// this says.
+        /// this says. Keyed by <see cref="FragmentKey.RepeatingGroupInstance"/>, not
+        /// <see cref="FragmentKey.EnclosingContext"/> - see that field's own remarks for why this dictionary
+        /// specifically needs the coarser key.
         /// </summary>
-        private readonly Dictionary<(CssBox Box, CssProxyBox? Owner),
+        private readonly Dictionary<(CssBox Box, FragmentainerContext? RepeatingGroupInstance),
             ((int Slot, int Instance) First, (int Slot, int Instance) Last)> _fragmentRange = [];
 
         /// <summary>
         /// Every fragment of a box, in fill order — what §6.2's <b>block-axis</b> strip is the concatenation
         /// of inside a nested fragmentainer. Kept as drafts rather than as extents so the measurement can be
         /// taken lazily: an extent is a question about a draft's whole subtree, and the subtree is complete
-        /// only once every slot has been emitted.
+        /// only once every slot has been emitted. Keyed the same way as <see cref="_fragmentRange"/>, for the
+        /// same reason.
         /// </summary>
-        private readonly Dictionary<(CssBox Box, CssProxyBox? Owner), List<Draft>> _fragmentsOf = [];
+        private readonly Dictionary<(CssBox Box, FragmentainerContext? RepeatingGroupInstance), List<Draft>> _fragmentsOf = [];
 
         /// <summary>
         /// Memoized document-space extents and fragmentainer-local rectangles, one per draft. Both are
@@ -389,7 +436,57 @@ namespace PeachPDF.Html.Core.Fragmentation
         private readonly Dictionary<FragmentKey, Dictionary<CssLineBox, RRect>> _rectangles = [];
         private readonly HashSet<CssBox> _frozen = new(ReferenceEqualityComparer.Instance);
         private readonly SortedSet<int> _stale = [];
-        private readonly Dictionary<(CssBox Root, int Slot), List<NestedFragmentainer>> _nested = [];
+        private readonly Dictionary<(CssBox Root, int Slot), List<CapturedInstance>> _capturedInstances = [];
+
+        /// <summary>
+        /// Every box that has ever owned a <see cref="CapturedInstance"/>, at any slot, for the life of
+        /// this emitter - a container's coverage of captured instances across slots is not guaranteed
+        /// contiguous (a multi-column container inside another engine's own fragmenting content can
+        /// legitimately have no instance recorded for one slot and a real one again at a later slot, e.g.
+        /// spanning a table cell's own resumed pass), so an "emitted nothing" mark ever recorded on such a
+        /// box while it fell through to its plain <see cref="CssBox.Boxes"/> for lack of an instance at one
+        /// particular slot must never be trusted by <see cref="ChildrenOf"/>'s own live-child cursor - only
+        /// by the ordinary, always-re-checked-per-visit path <c>BuildDraft</c> itself already uses. Checked
+        /// there, not by excluding such boxes from earning a mark in the first place, since the mark is
+        /// still safe for a normal <c>BuildDraft</c> call to consult (it re-derives <c>ownPrunable</c> fresh
+        /// every visit); only the cursor's blind, no-BuildDraft-call skip needs the extra caution.
+        /// </summary>
+        private readonly HashSet<CssBox> _capturedInstanceOwners = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Every ancestor of every box in <see cref="_capturedInstanceOwners"/>, for the life of this
+        /// emitter - a superset that answers "does this box's own subtree contain a captured-instance
+        /// owner anywhere", not just "is this box itself one". <see cref="ChildrenOf"/>'s own geometric
+        /// "ahead of this slot" skip needs this: a normal-flow ancestor that is not itself a captured
+        /// instance owner can still have one nested inside it (a card wrapping a table with a repeating
+        /// header, say), and that owner's own captured geometry at a slot the ancestor's settled position
+        /// no longer overlaps can be a leftover of an abandoned layout attempt that has not been
+        /// superseded for that exact (box, slot) pair the way the box's own ordinary geometry has -
+        /// skipping the ancestor's visit entirely would never let BuildDraft's own per-visit recursion
+        /// discover it (found empirically: RepeatingTableRelayoutTests.ACardHoldingARepeatingHeaderTable_IsRelocatedWithoutCarryingAGap,
+        /// where a break-inside:avoid card relocated flush onto the next slot's own top still produced
+        /// content at the earlier slot in the unpruned reference walk). A separate set from
+        /// <see cref="_capturedInstanceOwners"/> rather than folding ancestors into it directly, so the
+        /// existing, already-validated live-child cursor's own distrust of an owner keeps meaning
+        /// precisely "this exact box", not "this box or anything below it" - the cursor's blind skip and
+        /// this filter's per-visit one have different enough safety margins that widening one silently
+        /// widening the other is not obviously safe either.
+        /// </summary>
+        private readonly HashSet<CssBox> _capturedInstanceOwnerAncestors = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Walks from <paramref name="owner"/> up through every <see cref="CssBox.ParentBox"/>, adding each
+        /// to <see cref="_capturedInstanceOwnerAncestors"/>, stopping as soon as one is already present
+        /// (everything above it was added on an earlier call already). Called wherever a box is added to
+        /// <see cref="_capturedInstanceOwners"/>.
+        /// </summary>
+        private void MarkCapturedInstanceOwnerAncestors(CssBox owner)
+        {
+            for (var ancestor = owner.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (!_capturedInstanceOwnerAncestors.Add(ancestor)) break;
+            }
+        }
 
         /// <summary>
         /// Where a box's <i>content-free</i> continuation sits — the geometry of a fragment holding none of
@@ -488,6 +585,24 @@ namespace PeachPDF.Html.Core.Fragmentation
         private bool _forcingUnprunedReferenceWalk;
 
         /// <summary>
+        /// Whether the <see cref="EmitPass"/> call currently running is the last one <c>LayoutDocument</c>
+        /// will make for this layout generation - its own <c>outgoing</c> token is null, so the document
+        /// concluded and nothing will call <c>Root.PerformLayout</c> again. Read by <see cref="BuildDraft"/>'s
+        /// own "nothing here" offer to admit a box that has been reached and positioned (not
+        /// <see cref="CssBox.NeverTouchedThisLayout"/>) but has not yet held a fragment anywhere
+        /// (<c>!_frozen.Contains(box)</c>) - ordinarily excluded, since for such a box "nothing here" is
+        /// indistinguishable from "not here yet, content still to come later in this very pass" (see that
+        /// offer's own remarks) - once its own settled geometry additionally proves it starts strictly
+        /// after the slot being built, which only this flag can make a safe conclusion rather than a
+        /// guess about a position a later pass could still move (see
+        /// <see cref="CommitGeometricallySettledObservations"/>'s own remarks on the same distinction).
+        /// Set and cleared around <see cref="EmitPass"/>'s own body rather than threaded as a parameter
+        /// through every <see cref="BuildDraft"/>/<see cref="ChildrenOf"/> call in between, the same way
+        /// <see cref="_pruningSuspended"/>/<see cref="_forcingUnprunedReferenceWalk"/> already are.
+        /// </summary>
+        private bool _currentPassIsFinal;
+
+        /// <summary>
         /// <see cref="_frozen"/> as it stood before the slot currently being emitted began, so the
         /// verification build can be run against the same starting state the pruned one saw. Only
         /// maintained when <see cref="VerifyPruningAgainstFullWalk"/> is on.
@@ -504,10 +619,62 @@ namespace PeachPDF.Html.Core.Fragmentation
         private readonly HashSet<CssBox> _producedSomethingThisSlot = new(ReferenceEqualityComparer.Instance);
 
         /// <summary>
-        /// Every reopening <see cref="InvalidateFrom"/> has recorded, so an observation can be checked
-        /// against only the reopenings that could actually have affected it.
+        /// One <see cref="InvalidationHistory"/> per top-level section (see <see cref="ScopeOwnerOf"/>),
+        /// rather than one for the whole document, so a reopening only ever retires marks belonging to
+        /// its own scope instead of every box in the document whose recorded slot happens to be at or
+        /// after the reopening's own. A single global history made one relocation's reopening (e.g. a
+        /// <c>break-inside: avoid</c> table pushed to the next page) collaterally retire every unrelated
+        /// section's marks too, forcing <c>BuildDraft</c> to re-walk the whole document from scratch on
+        /// every subsequent <see cref="CatchUpStaleSlotsBehind"/> call - the O(pages) catch-up calls times
+        /// O(pages) stale slots times O(document size) per walk composing into the cubic pagination cost
+        /// reported in <see href="https://github.com/jhaygood86/PeachPDF/issues/917">#917</see>. Sound
+        /// because every box a relocation actually affects fires its own reposition and immediately
+        /// discards its own and its ancestors' marks (<see cref="CssBox.DiscardEmittedNothing"/>) - a
+        /// document-wide history was never needed to catch a box whose own subtree moved, only ever
+        /// (over-)catching boxes elsewhere that a mover never touched.
         /// </summary>
-        private readonly InvalidationHistory _invalidationHistory = new();
+        private readonly Dictionary<CssBox, InvalidationHistory> _invalidationHistoryByScope =
+            new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// The <see cref="InvalidationHistory"/> scoped to <paramref name="scopeOwner"/>, created empty on
+        /// first use.
+        /// </summary>
+        private InvalidationHistory HistoryFor(CssBox scopeOwner)
+        {
+            if (!_invalidationHistoryByScope.TryGetValue(scopeOwner, out var history))
+            {
+                _invalidationHistoryByScope[scopeOwner] = history = new InvalidationHistory();
+            }
+
+            return history;
+        }
+
+        /// <summary>
+        /// The scope <paramref name="box"/>'s "emitted nothing" observation is checked against - its
+        /// nearest ancestor that is itself a direct child of the document root, or the box itself when it
+        /// has no such ancestor (already a direct child of root, or reached from outside the layout tree
+        /// entirely).
+        /// </summary>
+        /// <remarks>
+        /// A cheap, shallow walk bounded by DOM nesting depth, not document size: a table cell's own
+        /// section ancestor is typically a handful of levels up, regardless of how many other sections the
+        /// document has. Deliberately not cached on <see cref="CssBox"/> - see the type's own remarks for
+        /// why a box's scope, once assigned, must be re-derived rather than trusted, and this walk is cheap
+        /// enough that doing so on every call was not worth the extra invalidation surface a cached field
+        /// would need.
+        /// </remarks>
+        private static CssBox ScopeOwnerOf(CssBox box)
+        {
+            var current = box;
+
+            while (current.EffectiveParentBox is { IsRoot: false } parent)
+            {
+                current = parent;
+            }
+
+            return current;
+        }
 
         /// <summary>
         /// Whether an "emitted nothing here" observation about <paramref name="box"/> could be relied on
@@ -515,7 +682,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The observation says "this subtree's fragments are all behind us". Four things break that,
+        /// The observation says "this subtree's fragments are all behind us". Three things break that,
         /// and each is excluded here rather than hedged against later:
         /// </para>
         /// <list type="bullet">
@@ -525,15 +692,15 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// one repeats on every page — so an ancestor's fragments are not a contiguous span.
         /// </item>
         /// <item>
-        /// <b>A box reached through a proxy</b> (<paramref name="owner"/> non-null) is one subtree
-        /// standing in for a repeated header on <i>every</i> page, at a different position each time.
-        /// Its runs are per proxy, not per box, and its geometry lives in a captured snapshot that moves
-        /// without any write to the box.
-        /// </item>
-        /// <item>
-        /// <b>A box inside a nested fragmentainer</b> (<paramref name="nested"/> non-null) is visited
-        /// once per column of the same slot, against a different snapshot and a different inline extent
-        /// each time.
+        /// <b>A box reached through a <i>multi-column</i> capture</b> (<paramref name="capture"/> non-null
+        /// and <see cref="CapturedInstance.DetachedSourceRoot"/> null) is one subtree standing in for
+        /// content that recurs at several unrelated spans within the <i>same</i> slot - a multi-column
+        /// container's child once per column - each visited against a different snapshot, at a different
+        /// position, without any write to the box itself. A <i>repeating-group</i> capture
+        /// (<c>DetachedSourceRoot</c> non-null) is not this: the whole detached source subtree is repeated
+        /// <b>verbatim</b> on every page it spans rather than divided across them, so "no instance was
+        /// recorded for this source root at slot k" means the table's repeating span has genuinely ended
+        /// by k - exactly the same contiguity guarantee ordinary content already relies on.
         /// </item>
         /// <item>
         /// <b>A displaced box</b> draws somewhere its own geometry does not say, decided per slot.
@@ -546,10 +713,9 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </para>
         /// </remarks>
         private static bool MayBeObservedEmpty(
-            CssBox box, CssProxyBox? owner, NestedFragmentainer? nested, bool isFixed,
+            CssBox box, CapturedInstance? capture, bool isFixed,
             (CssBox Root, double Shift, RRect Band)? displacement) =>
-            owner is null
-            && nested is null
+            capture is not { DetachedSourceRoot: null }
             && displacement is null
             && !box.IsRoot
             && ContentStaysInOneRun(box, isFixed);
@@ -571,32 +737,180 @@ namespace PeachPDF.Html.Core.Fragmentation
         private static bool ContentStaysInOneRun(CssBox box, bool isFixed) =>
             !isFixed
             && !box.IsOutOfFlow
-            && box is not CssProxyBox and not CssSpacingBox and not CssBoxMarker;
+            && box is not CssSpacingBox and not CssBoxMarker;
 
         /// <summary>
-        /// Keeps, as an observation on each box, the part of this slot's walk that found nothing —
-        /// everything the walk saw empty and never afterwards saw hold anything.
+        /// Boxes found empty in an unbroken run of slots since the earliest one this still remembers for
+        /// them, pending <see cref="CommitRemainingObservations"/>.
         /// </summary>
-        /// <param name="slotIndex">the slot just walked</param>
-        /// <param name="frontier">
-        /// whether this slot is the furthest one layout has reached. Only there may an empty walk be
-        /// concluded from: <see cref="EmitPass"/> freezes a whole range of slots in one go, after the
-        /// pass that filled them has already flowed content into every one, so at any slot below the
-        /// frontier "found nothing" also describes content that is simply further down — and no write
-        /// will ever come along to correct it.
-        /// </param>
-        private void RecordEmptyObservations(int slotIndex, bool frontier)
+        /// <remarks>
+        /// Committing as soon as a box is frozen (has produced a fragment somewhere) and observed empty,
+        /// rather than waiting for the walk's own true end, was tried and found unsound: a table under a
+        /// css-break-3 §4.3 keep-with-next precheck can show nothing for one slot and real content again
+        /// for a later one within the very same still-open pass, so "frozen and empty" does not, by
+        /// itself, rule out "content simply further down" the way it does once the whole range being
+        /// walked is known to hold nothing more - see
+        /// <c>PageBreakTableKeepWithNextIntegrationTests.GapOneThenGapTwo_BothPrechecksFireForSameTable_ComposeWithoutDoubleCounting</c>,
+        /// which the pruning-parity oracle caught this against.
+        /// </remarks>
+        private readonly Dictionary<CssBox, int> _emptySincePass = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Keeps, as a candidate observation, the part of this slot's walk that found nothing — everything
+        /// the walk saw empty and never afterwards saw hold anything — pending <see cref="CommitRemainingObservations"/>.
+        /// </summary>
+        private void RecordEmptyObservations(int slotIndex)
         {
-            if (frontier)
+            foreach (var box in _emptyHereThisSlot)
             {
-                foreach (var box in _emptyHereThisSlot)
-                {
-                    if (!_producedSomethingThisSlot.Contains(box)) box.RecordEmittedNothingAt(slotIndex, _invalidationHistory.Count);
-                }
+                if (_producedSomethingThisSlot.Contains(box)) continue;
+                if (!_emptySincePass.ContainsKey(box)) _emptySincePass[box] = slotIndex;
+            }
+
+            foreach (var box in _producedSomethingThisSlot)
+            {
+                _emptySincePass.Remove(box);
             }
 
             _emptyHereThisSlot.Clear();
             _producedSomethingThisSlot.Clear();
+        }
+
+        /// <summary>
+        /// Writes every candidate <see cref="RecordEmptyObservations"/> has accumulated as a mark, or
+        /// discards them all, then clears the accumulated state either way.
+        /// </summary>
+        /// <param name="commit">
+        /// false discards without writing - the walk never reached the layout frontier (a redo of an
+        /// already-frozen range) or comes from a caller that may not draw new conclusions at all
+        /// (<see cref="Finish"/>'s replay, <see cref="EmitReservedBlankSlots"/>): only once a whole
+        /// contiguous range has been walked with nothing left over is it safe to conclude a box that
+        /// shows nothing is done for good rather than simply not reached yet, or between two real runs -
+        /// see <see cref="_emptySincePass"/>'s own remarks for the case that rules out committing any
+        /// earlier.
+        /// </param>
+        private void CommitRemainingObservations(bool commit)
+        {
+            if (commit)
+            {
+                foreach (var (box, sinceSlot) in _emptySincePass)
+                {
+                    var scopeOwner = ScopeOwnerOf(box);
+                    box.RecordEmittedNothingAt(sinceSlot, scopeOwner, HistoryFor(scopeOwner).Count);
+                }
+            }
+
+            _emptySincePass.Clear();
+        }
+
+        /// <summary>
+        /// Commits every candidate in <see cref="_emptySincePass"/> whose own settled geometry <i>proves</i>
+        /// it is already behind <paramref name="slotIndex"/>, without waiting for <see cref="EmitPass"/>'s
+        /// own range to finish - the dominant fix for
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/917">#917</see>'s pagination cost.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>Why this is safe where committing on "frozen and empty" alone was not</b> (the attempt
+        /// <see cref="_emptySincePass"/>'s own remarks record as unsound, caught by
+        /// <c>PageBreakTableKeepWithNextIntegrationTests.GapOneThenGapTwo_BothPrechecksFireForSameTable_ComposeWithoutDoubleCounting</c>):
+        /// that attempt inferred "done for good" from box state (<c>_frozen</c> membership) that can
+        /// describe a stale, since-superseded position. This instead reads each candidate box's own
+        /// <see cref="CssBox.ActualBottom"/> - a fact about geometry, not history - and only within
+        /// <see cref="EmitPass"/>'s own caller, whose whole <c>[fromSlot, throughSlot]</c> range
+        /// <c>Root.PerformLayout</c> already completed <i>before</i> <see cref="EmitPass"/> was ever called.
+        /// Nothing moves such a box again within this same pass, so if its settled bottom
+        /// already sits above this slot's own top, that is a proof, not an inference: the box's content
+        /// genuinely ends before <paramref name="slotIndex"/>, exactly as it will still read once the whole
+        /// pass finishes. <see cref="CatchUpStaleSlotsBehind"/> and <see cref="Finish"/>'s replay call
+        /// neither this method nor anything like it, and must not: their own "range" is a scattered set of
+        /// slots with no such guarantee that the boxes in between are settled.
+        /// </para>
+        /// <para>
+        /// <b>Excludes a box whose <c>ActualBottom</c> is not trustworthy at all</b> -
+        /// <see cref="CssBox.ItemContentSizeEverPinned"/> - rather than assume the pin cannot matter here.
+        /// A flex/grid item's content-box size, once pinned by a fresh <c>ItemContentCommit.CommitLayout</c>,
+        /// can understate the item's true content span for as long as content overflowing past that pin
+        /// keeps fragmenting into later slots (issue #569) - the identical gap
+        /// <see cref="Draft.BoundsEndAtItsContent"/> exists to paper over for a materialized fragment's own
+        /// decoration. A geometric proof has no equivalent fallback: reading a pinned <c>ActualBottom</c> at
+        /// face value could commit "done for good" on a box that is about to prove otherwise two slots from
+        /// now. Left in <see cref="_emptySincePass"/>, such a box still reaches the always-safe
+        /// <see cref="CommitRemainingObservations"/> at this pass's true end.
+        /// </para>
+        /// <para>
+        /// <b>Requires <see cref="_frozen"/> membership too</b> - found empirically, not anticipated up
+        /// front: <see cref="CssBox.ActualBottom"/> defaults to <c>0</c> for a box the layout frontier has
+        /// not reached <i>at all</i> yet (<see cref="CssBox.NeverTouchedThisLayout"/>, the other half of the
+        /// same caller-side gate that admits a box to <see cref="_emptySincePass"/> in the first place - see
+        /// its own call site's remarks). <c>0</c> trivially satisfies <c>ActualBottom &lt;= slotTop</c> for
+        /// every non-negative <paramref name="slotIndex"/>, which proved every not-yet-reached box "done"
+        /// before it was ever laid out. Only <see cref="_frozen"/> membership means <c>ActualBottom</c>
+        /// describes a box that has genuinely been laid out somewhere, which is the one thing this proof's
+        /// geometric reading requires.
+        /// </para>
+        /// <para>
+        /// <b>Requires <see cref="FragmentainerContext.IsFragmenting"/> too</b> - the second thing found
+        /// empirically, both caught by the same fixture
+        /// (<c>NoProgressBackstopTests.TheRecovery_KeepsAMulticolChildsContent</c>, which failed by
+        /// dropping real content - items past the fourteenth of a sixty-item multi-column block - not by a
+        /// pruning-parity divergence). <c>HtmlContainerInt.LayoutTheRemainderMonolithically</c>'s
+        /// last-resort recovery pass suppresses real pagination
+        /// (<c>FragmentainerContext.IsFragmenting</c> false) while still laying out content taller than one
+        /// page, and a multi-column container's content reached through it is visited as ordinary,
+        /// uncaptured content - no <see cref="CapturedInstance"/> is ever recorded while breaking is
+        /// suppressed - yet its live position is still whatever the columns engine's own repeated
+        /// <c>PlaceColumn</c> translation last left it at, which is only ever correct for a single-page
+        /// document (two columns sharing one page-height band), not a monotonic document-space position
+        /// once several such bands exist. Two side-by-side columns' own first items reported the identical
+        /// <c>ActualBottom</c>, and this proof read that as "both done by page 0", dropping every later item
+        /// real pagination would have placed further down. Excluding a suppressed context costs this fix
+        /// nothing on the ordinary large-paginated-document case it targets:
+        /// <see cref="HtmlContainerInt.LastResortRelayouts"/> is meant to almost never fire at all.
+        /// </para>
+        /// </remarks>
+        /// <param name="slotIndex">the slot <see cref="EmitPass"/> just emitted.</param>
+        private void CommitGeometricallySettledObservations(int slotIndex)
+        {
+            if (_emptySincePass.Count == 0) return;
+
+            // Suppressed only for HtmlContainerInt.LayoutTheRemainderMonolithically's last-resort recovery
+            // pass - the one caller where "Root.PerformLayout already completed for this whole range"
+            // does not mean every box's own ActualBottom is trustworthy geometry. That pass suppresses real
+            // pagination (FragmentainerContext.IsFragmenting false) but still lays out content taller than
+            // one page, and content inside a multi-column container reached this way is visited as
+            // ordinary, uncaptured content (no CapturedInstance is ever recorded when breaking is
+            // suppressed) while its live position is still whatever the columns engine's own repeated
+            // PlaceColumn translation last left it at - multiple columns sharing one page-height band, not
+            // a single monotonic document position. Found empirically: two side-by-side columns' first
+            // items reported the identical ActualBottom, which this proof read as "both done by page 0",
+            // silently dropping every later item real pagination would have placed further down
+            // (NoProgressBackstopTests.TheRecovery_KeepsAMulticolChildsContent). Rare by construction
+            // (HtmlContainerInt.LastResortRelayouts is meant to almost never fire), so excluding it costs
+            // this fix nothing on the ordinary large-paginated-document case it targets.
+            if (container.CurrentFragmentainer is not { IsFragmenting: true }) return;
+
+            var slotTop = container.PageTopOf(slotIndex);
+            List<CssBox>? settled = null;
+
+            foreach (var (box, sinceSlot) in _emptySincePass)
+            {
+                // A box the layout frontier has not reached at all yet defaults ActualBottom to 0 -
+                // trivially "at or before" any slotTop, which would prove every not-yet-reached box done
+                // before it is even laid out. Only _frozen membership means ActualBottom reflects a real,
+                // laid-out position at all; box.NeverTouchedThisLayout is exactly the other half of
+                // MayBeObservedEmpty's caller-side gate this proof must not skip.
+                if (!_frozen.Contains(box) || box.ItemContentSizeEverPinned || box.ActualBottom > slotTop)
+                    continue;
+
+                var scopeOwner = ScopeOwnerOf(box);
+                box.RecordEmittedNothingAt(sinceSlot, scopeOwner, HistoryFor(scopeOwner).Count);
+                (settled ??= []).Add(box);
+            }
+
+            if (settled is null) return;
+
+            foreach (var box in settled) _emptySincePass.Remove(box);
         }
 
         /// <summary>The empty box set the first nested fragmentainer of a slot resumes nothing from.</summary>
@@ -617,13 +931,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <param name="continuing">the boxes that carry on into the next fragmentainer</param>
         /// <param name="self">
         /// the fragmentainer context this fill was entered under — see
-        /// <see cref="NestedFragmentainer"/>'s own remarks.
+        /// <see cref="CapturedInstance"/>'s own remarks.
         /// </param>
         /// <param name="parentContext">
         /// the fragmentainer that was active immediately before <paramref name="self"/> was entered, or null
-        /// at the page level — see <see cref="NestedFragmentainer"/>'s own remarks.
+        /// at the page level — see <see cref="CapturedInstance"/>'s own remarks.
         /// </param>
-        internal void RecordNestedFragmentainer(
+        internal void RecordCapturedInstance(
             CssBox contextRoot,
             int slot,
             (double Top, double Bottom) band,
@@ -633,12 +947,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             FragmentainerContext self,
             FragmentainerContext? parentContext)
         {
-            if (!_nested.TryGetValue((contextRoot, slot), out var fragmentainers))
+            if (!_capturedInstances.TryGetValue((contextRoot, slot), out var fragmentainers))
             {
-                _nested[(contextRoot, slot)] = fragmentainers = [];
+                _capturedInstances[(contextRoot, slot)] = fragmentainers = [];
             }
 
-            fragmentainers.Add(new NestedFragmentainer(
+            fragmentainers.Add(new CapturedInstance(
                 new FragmentRegion(band.Top, band.Bottom, inline.Left, inline.Right),
                 geometry,
                 continuing,
@@ -652,6 +966,68 @@ namespace PeachPDF.Html.Core.Fragmentation
             // need no equivalent: they only ever gained content by being laid out, which discards
             // theirs already.
             contextRoot.DiscardEmittedNothing();
+            _capturedInstanceOwners.Add(contextRoot);
+            MarkCapturedInstanceOwnerAncestors(contextRoot);
+        }
+
+        /// <summary>
+        /// Hands over one repeating table <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> group's instance on one
+        /// page - the detached source subtree, captured wholesale, standing in for that page's copy of it.
+        /// </summary>
+        /// <remarks>
+        /// Reuses <see cref="CapturedInstance"/> rather than a parallel mechanism: a repeating group is,
+        /// like a multi-column column, content the emitter reads through a captured snapshot instead of the
+        /// box's own live position, keyed the same way by <c>(root, slot)</c>. What differs is cardinality
+        /// and shape - exactly one instance per slot (not several within it), and the whole source subtree
+        /// captured as one unit rather than the container's own children divided across it - which is what
+        /// <see cref="CapturedInstance.DetachedSourceRoot"/> on the resulting record tells
+        /// <see cref="ChildrenOf"/> to do: yield <paramref name="sourceRoot"/> directly instead of filtering
+        /// <paramref name="tableBox"/>'s own <see cref="CssBox.Boxes"/>. <see cref="CapturedInstance.Continuing"/>/
+        /// <see cref="CapturedInstance.ContinuedFrom"/> are always empty on the resulting record - a repeated
+        /// header/footer is laid out complete on every page, never split across two - and there is no
+        /// <c>inline</c> axis to restrict, since the group spans the table's full width.
+        /// </remarks>
+        /// <param name="tableBox">the table the repeating group belongs to - the key's own root</param>
+        /// <param name="slot">the pagination slot this page's instance sits in</param>
+        /// <param name="band">the instance's block-axis extent in document space</param>
+        /// <param name="geometry">
+        /// the source subtree's geometry as captured for this page - see <see cref="CssProxyBox.SourceGeometry"/>
+        /// </param>
+        /// <param name="sourceRoot">the detached source subtree this instance represents</param>
+        /// <param name="self">
+        /// the fragmentainer context this page is laid out under - see <see cref="CapturedInstance"/>'s own
+        /// remarks
+        /// </param>
+        /// <param name="parentContext">
+        /// the fragmentainer that was active immediately before <paramref name="self"/> was entered, or null
+        /// at the page level — see <see cref="CapturedInstance"/>'s own remarks
+        /// </param>
+        internal void RecordRepeatingGroupInstance(
+            CssBox tableBox,
+            int slot,
+            (double Top, double Bottom) band,
+            BoxGeometrySnapshot geometry,
+            CssBox sourceRoot,
+            FragmentainerContext self,
+            FragmentainerContext? parentContext)
+        {
+            if (!_capturedInstances.TryGetValue((tableBox, slot), out var instances))
+            {
+                _capturedInstances[(tableBox, slot)] = instances = [];
+            }
+
+            instances.Add(new CapturedInstance(
+                new FragmentRegion(band.Top, band.Bottom, Left: null, Right: null),
+                geometry,
+                NoBoxes,
+                NoBoxes,
+                self,
+                parentContext,
+                DetachedSourceRoot: sourceRoot));
+
+            tableBox.DiscardEmittedNothing();
+            _capturedInstanceOwners.Add(tableBox);
+            MarkCapturedInstanceOwnerAncestors(tableBox);
         }
 
         /// <summary>
@@ -667,7 +1043,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// fragmentainers it recorded in the slot it has left describe geometry that no longer exists
         /// anywhere.
         /// </remarks>
-        internal void ClearNestedFragmentainers(CssBox contextRoot, int? slot = null)
+        internal void ClearCapturedInstances(CssBox contextRoot, int? slot = null)
         {
             if (slot is { } only)
             {
@@ -675,15 +1051,15 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // when there was one to remove. A fresh slot that never recorded anything (the common
                 // case: this runs once per page for a resumed container, before that page has filled a
                 // single column) must not spend an observation it never invalidated.
-                if (_nested.Remove((contextRoot, only))) contextRoot.DiscardEmittedNothing();
+                if (_capturedInstances.Remove((contextRoot, only))) contextRoot.DiscardEmittedNothing();
                 return;
             }
 
             var removedAny = false;
 
-            foreach (var key in new List<(CssBox Root, int Slot)>(_nested.Keys))
+            foreach (var key in new List<(CssBox Root, int Slot)>(_capturedInstances.Keys))
             {
-                if (ReferenceEquals(key.Root, contextRoot) && _nested.Remove(key)) removedAny = true;
+                if (ReferenceEquals(key.Root, contextRoot) && _capturedInstances.Remove(key)) removedAny = true;
             }
 
             if (removedAny) contextRoot.DiscardEmittedNothing();
@@ -695,16 +1071,16 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// before it untouched.
         /// </summary>
         /// <remarks>
-        /// <see cref="ClearNestedFragmentainers"/>'s single-slot form wipes the whole list, which is right
+        /// <see cref="ClearCapturedInstances"/>'s single-slot form wipes the whole list, which is right
         /// only while one run of columns ever occupies a slot. A <c>column-span: all</c> element splits a
         /// multi-column container's content into independent runs that share the same
         /// <paramref name="slot"/> — an earlier run's columns are already finished and recorded by the
         /// time a later run's own balance retry needs to discard <i>its</i> abandoned attempt, and that
         /// discard must not erase the earlier run's geometry along with it.
         /// </remarks>
-        internal void ClearNestedFragmentainersFrom(CssBox contextRoot, int slot, int keepFirst)
+        internal void ClearCapturedInstancesFrom(CssBox contextRoot, int slot, int keepFirst)
         {
-            if (!_nested.TryGetValue((contextRoot, slot), out var fragmentainers)) return;
+            if (!_capturedInstances.TryGetValue((contextRoot, slot), out var fragmentainers)) return;
             if (fragmentainers.Count <= keepFirst) return;
 
             fragmentainers.RemoveRange(keepFirst, fragmentainers.Count - keepFirst);
@@ -719,7 +1095,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         /// <remarks>
         /// The second place layout <i>states</i> geometry rather than leaving it to be read off the boxes,
-        /// and for the sharper of the two reasons. <see cref="RecordNestedFragmentainer"/> exists because a
+        /// and for the sharper of the two reasons. <see cref="RecordCapturedInstance"/> exists because a
         /// box's live geometry describes only its last column; this exists because the box has no geometry
         /// here <i>at all</i> — a continuation deliberately leaves its one <see cref="CssBox.Location"/>
         /// naming the fragmentainer that placed it, and giving it a second retracts the earlier fragment.
@@ -755,7 +1131,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// slot, in every slot — because the pass about to run decides it again.
         /// </summary>
         /// <remarks>
-        /// Both forms are needed, and they are <see cref="ClearNestedFragmentainers"/>' two forms for the
+        /// Both forms are needed, and they are <see cref="ClearCapturedInstances"/>' two forms for the
         /// same two reasons. A run continuing an earlier pass re-decides only the slots from the one it
         /// resumes in onward; the earlier ones were settled by the passes that filled them and are still
         /// true, which is what lets a row spanning three fragmentainers keep a shell in each. A run laid out
@@ -890,17 +1266,44 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // speaks about, so the whole range is marked rather than just its ends.
                 RecordChain(incoming, slot, _continuedFrom);
                 RecordChain(outgoing, slot, _continuesInto);
-
-                // The one path that verifies against the full walk: these are the slots the pass that has
-                // just ended filled, frozen while the geometry it produced is still what the box tree says.
-                //
-                // Only the last slot of the range, and only if the range genuinely reaches past
-                // everything emitted so far, may an observation be drawn from - see
-                // RecordEmptyObservations. Every earlier slot of the range still USES observations
-                // already made; it just may not make new ones.
-                EmitSlot(slot, mayWrite: true, mayVerify: true,
-                    frontier: slot == throughSlot && slot >= _lastEmittedSlot);
             }
+
+            // Whether this pass's own range reaches past everything emitted before it started - checked once,
+            // up front: false for a redo of an already-frozen range (the driver's no-progress backstop
+            // re-emitting a failed pass's slots, or InvalidateFrom reopening one), the same case the
+            // original single-slot check excluded, so a redo still writes no new observations.
+            var reachesPastEverythingSoFar = throughSlot >= _lastEmittedSlot;
+
+            // See _currentPassIsFinal's own remarks. Reset in `finally` rather than left true past this
+            // call's own return: CatchUpStaleSlotsBehind and Finish's replay both call BuildDraft too, and
+            // neither may benefit from a flag this call alone earned.
+            _currentPassIsFinal = outgoing is null;
+
+            try
+            {
+                // Ascending, same as ever: _frozen (and so ShellIn's rowspan-continuation gate, and every
+                // other reader of it) has to see this range's own earlier slots freeze before its later ones do
+                // - a spanning cell's second fragment is recognized as a continuation only once the cell already
+                // holds a real one from an earlier slot, which processing this range top-down would get
+                // backwards. Every slot's own finding is only a candidate (RecordEmptyObservations) until either
+                // CommitGeometricallySettledObservations proves it geometrically (as soon as that becomes
+                // possible, below) or CommitRemainingObservations decides, once the whole range is walked,
+                // whether whatever is left may become a mark at all - see _emptySincePass's own remarks for why
+                // even a frozen box's "empty here" cannot be trusted from state alone (a keep-with-next precheck
+                // gap can show nothing for one slot and real content again for a later one in the very same
+                // pass) the way a settled box's own geometry can be.
+                for (var slot = fromSlot; slot <= throughSlot && slot < MaxSlots; slot++)
+                {
+                    EmitSlot(slot, mayWrite: true, mayVerify: true);
+                    CommitGeometricallySettledObservations(slot);
+                }
+            }
+            finally
+            {
+                _currentPassIsFinal = false;
+            }
+
+            CommitRemainingObservations(reachesPastEverythingSoFar);
         }
 
         /// <summary>
@@ -926,6 +1329,8 @@ namespace PeachPDF.Html.Core.Fragmentation
                 // un-observed by a later layout - nothing may be concluded from it.
                 EmitSlot(slot, mayWrite: false);
             }
+
+            CommitRemainingObservations(commit: false);
         }
 
         /// <summary>
@@ -951,7 +1356,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// itself filling or anything after it, since those are not frozen yet, so ordinary forward layout
         /// never re-emits anything.
         /// </remarks>
-        internal void InvalidateFrom(int fromSlot)
+        internal void InvalidateFrom(int fromSlot, CssBox relocatedBox)
         {
             // Deliberately after the early return, not before it: this method is reached on every
             // block-axis reposition of a box that holds fragments, which during a pass is constant, and
@@ -959,13 +1364,17 @@ namespace PeachPDF.Html.Core.Fragmentation
             // superseded. Bumping on the rest retired every observation as fast as they were made.
             if (fromSlot > _lastEmittedSlot) return;
 
-            // Every "emitted nothing here" observation naming a slot at or after fromSlot is void from
-            // here on: re-opening a frozen fragmentainer means the driver is about to lay content out
-            // again over ground at and after fromSlot, so only an observation about that ground - not
-            // the whole document - could describe a layout that no longer exists. See
-            // InvalidationHistory for why a suffix-minimum over every reopening's own fromSlot answers
-            // this without enumerating boxes.
-            _invalidationHistory.Record(fromSlot);
+            // Every "emitted nothing here" observation naming a slot at or after fromSlot, IN THE SAME
+            // SCOPE AS relocatedBox, is void from here on: re-opening a frozen fragmentainer means the
+            // driver is about to lay content out again over ground at and after fromSlot, so only an
+            // observation about that ground - not the whole document - could describe a layout that no
+            // longer exists. Scoped to relocatedBox's own top-level section (see ScopeOwnerOf) rather
+            // than recorded globally: a relocation only ever needs to retire marks on its own ancestor
+            // chain (every box a mover actually touches fires its own reposition and discards its own
+            // marks immediately, see CssBox.DiscardEmittedNothing), so retiring marks document-wide here
+            // was always broader than correctness required. See InvalidationHistory for why a
+            // suffix-minimum over one scope's own reopenings answers this without enumerating boxes.
+            HistoryFor(ScopeOwnerOf(relocatedBox)).Record(fromSlot);
 
             for (var slot = fromSlot; slot <= _lastEmittedSlot; slot++)
             {
@@ -1009,7 +1418,15 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             foreach (var stale in new List<int>(_stale))
             {
-                if (stale < slot) EmitSlot(stale, mayWrite: true, frontier: stale >= _lastEmittedSlot);
+                if (stale < slot)
+                {
+                    // Committed per stale slot, not once over the whole scattered set: unlike EmitPass's
+                    // own contiguous range, _stale can (and here does) skip slots in between that this
+                    // call never re-walks, so an earlier stale slot has no guarantee that everything above
+                    // it - within this specific call - has already been confirmed.
+                    EmitSlot(stale, mayWrite: true);
+                    CommitRemainingObservations(stale >= _lastEmittedSlot);
+                }
             }
         }
 
@@ -1041,6 +1458,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 EmitSlot(slot, mayWrite: false);
             }
+
+            CommitRemainingObservations(commit: false);
 
             if (_emitted.Count == 0) return new FragmentTree([]);
 
@@ -1115,7 +1534,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                 ? (Math.Min(span.First, draft.Slot.Index), Math.Max(span.Last, draft.Slot.Index))
                 : (draft.Slot.Index, draft.Slot.Index);
 
-            var boxKey = (draft.Key.Box, draft.Key.Owner);
+            var boxKey = (draft.Key.Box, draft.Key.RepeatingGroupInstance);
             var position = (draft.Slot.Index, draft.Key.Instance);
 
             _fragmentRange[boxKey] = _fragmentRange.TryGetValue(boxKey, out var range)
@@ -1164,10 +1583,12 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// passes true here — <see cref="VerifyAgainstTheFullWalk"/>'s before/after frozen-state
         /// comparison assumes an ordinary, in-order pass.
         /// </param>
-        /// <param name="frontier">
-        /// whether this is the furthest slot layout has reached — see <see cref="RecordEmptyObservations"/>.
-        /// </param>
-        private void EmitSlot(int index, bool mayWrite, bool mayVerify = false, bool frontier = false)
+        /// <remarks>
+        /// Leaves any observation this slot's walk found pending in <see cref="_emptySincePass"/> - the
+        /// caller commits or discards it via <see cref="CommitRemainingObservations"/> once it knows
+        /// whether this slot (or the range it belongs to) actually reached the layout frontier.
+        /// </remarks>
+        private void EmitSlot(int index, bool mayWrite, bool mayVerify = false)
         {
             var bandTop = container.PageTopOf(index);
 
@@ -1197,15 +1618,15 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             try
             {
-                built = BuildDraft(root, owner: null, snapshot: null, slot,
-                    nested: null, instance: 0, ref hasPrintableContent, ref prunable);
+                built = BuildDraft(root, snapshot: null, slot,
+                    capture: null, instance: 0, ref hasPrintableContent, ref prunable);
             }
             finally
             {
                 _pruningSuspended = wasSuspended;
             }
 
-            RecordEmptyObservations(index, frontier && mayWrite && !wasSuspended);
+            RecordEmptyObservations(index);
 
             if (verifying)
             {
@@ -1270,8 +1691,8 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             try
             {
-                full = BuildDraft(root, owner: null, snapshot: null, slot,
-                    nested: null, instance: 0, ref fullHadPrintableContent, ref fullPrunable);
+                full = BuildDraft(root, snapshot: null, slot,
+                    capture: null, instance: 0, ref fullHadPrintableContent, ref fullPrunable);
             }
             finally
             {
@@ -1401,7 +1822,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             for (var link = token; link is not null;)
             {
-                into.Add((new FragmentKey(link.Box, null, 0), slot));
+                into.Add((new FragmentKey(link.Box, 0), slot));
 
                 if (link is BlockBreakToken { ChildToken: { } child })
                 {
@@ -1654,7 +2075,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private bool HasFragmentBeside(Draft draft, bool before)
         {
-            if (!_fragmentRange.TryGetValue((draft.Key.Box, draft.Key.Owner), out var range)) return false;
+            if (!_fragmentRange.TryGetValue((draft.Key.Box, draft.Key.RepeatingGroupInstance), out var range)) return false;
 
             var position = (draft.Slot.Index, draft.Key.Instance);
 
@@ -1669,7 +2090,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         private Draft EmptyRootDraft(CssBox root, Slot slot)
         {
             var draft = new Draft(
-                new FragmentKey(root, null, 0), root, slot, PageRegionOf(isFixed: false, slot),
+                new FragmentKey(root, 0), root, slot, PageRegionOf(isFixed: false, slot),
                 snapshot: null, slot.LocalOriginY);
 
             draft.IsMonolithic = MonolithicContent.IsMonolithicForFragmentation(root);
@@ -1685,16 +2106,17 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </remarks>
         private Draft? BuildDraft(
             CssBox box,
-            CssProxyBox? owner,
             BoxGeometrySnapshot? snapshot,
             Slot slot,
-            NestedFragmentainer? nested,
+            CapturedInstance? capture,
             int instance,
             ref bool hasPrintableContent,
             ref bool subtreePrunable,
             (CssBox Root, double Shift, RRect Band)? displacement = null,
             (double Dx, double Dy) fixedOffset = default)
         {
+            container.RecordBuildDraftCall();
+
             // A display:none subtree paints nothing at all, so it produces no fragments either.
             if (box.DerivedStyle.ActualDisplay == Keywords.None) return null;
 
@@ -1743,19 +2165,19 @@ namespace PeachPDF.Html.Core.Fragmentation
             // asked of where the geometry *lands*, so it takes the displaced rectangle explicitly.
             var originY = isFixed ? 0 : slot.LocalOriginY - shift;
 
-            // A fixed box belongs to the page rather than to any nested fragmentainer inside it: it is
+            // A fixed box belongs to the page rather than to any captured instance inside it: it is
             // emitted in every fragmentainer at identical coordinates, so a column's own extent says
             // nothing about where it lands.
-            var region = isFixed || nested is null ? PageRegionOf(isFixed, slot) : nested.Value.Region;
+            var region = isFixed || capture is null ? PageRegionOf(isFixed, slot) : capture.Value.Region;
 
             // Whether an "emitted nothing here" observation about this box could be relied on later at
             // all. Asked before the observation is read as well as before one is made, so a box that
             // could never be marked is never skipped on the strength of a stale mark either.
             //
             // Two separate facts, and only the second travels: whether THIS visit could observe the box
-            // (per-visit - which proxy, which column), and whether the box's content is contiguous at
-            // all (a property of the box, and therefore of every ancestor that contains it).
-            var ownPrunable = MayBeObservedEmpty(box, owner, nested, isFixed, displacement);
+            // (per-visit - which repeating-group page, which column), and whether the box's content is
+            // contiguous at all (a property of the box, and therefore of every ancestor that contains it).
+            var ownPrunable = MayBeObservedEmpty(box, capture, isFixed, displacement);
             var contiguous = ContentStaysInOneRun(box, isFixed);
 
             // Skip the whole subtree: the emitter has already walked it once this layout, found it
@@ -1775,9 +2197,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             // replay (reserved blank slots, Finish's stale-slot replay) may not draw new conclusions, but
             // an existing, still-valid one describes ground behind every slot such a replay could still
             // be filling, so reading it is exactly as sound out of order as in it.
-            if (ownPrunable && !_forcingUnprunedReferenceWalk && box.EmittedNothingAtOrBefore(slot.Index, _invalidationHistory))
+            if (ownPrunable && !_forcingUnprunedReferenceWalk)
             {
-                return null;
+                var scopeOwner = ScopeOwnerOf(box);
+
+                if (box.EmittedNothingAtOrBefore(slot.Index, scopeOwner, HistoryFor(scopeOwner)))
+                    return null;
             }
 
             List<(CssLineBox Line, RRect Rect)> lines = [];
@@ -1793,10 +2218,6 @@ namespace PeachPDF.Html.Core.Fragmentation
             RRect Shifted(RRect r) =>
                 fixedOffset is (0, 0) ? r : new RRect(r.X + fixedOffset.Dx, r.Y + fixedOffset.Dy, r.Width, r.Height);
 
-            // A proxy carries no content of its own - it stands in for its source subtree, whose
-            // styles it copied wholesale, so painting its own decoration would draw a repeated
-            // header's background twice.
-            if (box is not CssProxyBox)
             {
                 var rectangles = RectanglesOf(box, snapshot);
 
@@ -1831,15 +2252,15 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             List<Draft> children = [];
 
-            foreach (var (childBox, childOwner, childSnapshot, childNested, childInstance)
-                     in ChildrenOf(box, owner, snapshot, slot, nested, instance))
+            foreach (var (childBox, childSnapshot, childCapture, childInstance)
+                     in ChildrenOf(box, snapshot, slot, capture, instance))
             {
                 // A child that cannot be relied on makes this box unreliable too: the observation is
                 // about the whole subtree, so it is only as good as its weakest member.
                 var childPrunable = true;
 
                 var childDraft = BuildDraft(
-                    childBox, childOwner, childSnapshot, slot, childNested, childInstance,
+                    childBox, childSnapshot, slot, childCapture, childInstance,
                     ref hasPrintableContent, ref childPrunable, displacement, fixedOffset);
 
                 contiguous &= childPrunable;
@@ -1896,20 +2317,20 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             // A box that genuinely holds content here - real children, not the pure-shell case just above -
-            // whose own declared bounds may not reach far enough to cover it: not a nested fragmentainer
+            // whose own declared bounds may not reach far enough to cover it: not a captured instance
             // (that case is handled below via BoundsEndAtItsContent's other arm), but a page-grid box whose
             // Width/Height an item-content commit pass pinned before the content that overflows past them was
             // known (ItemContentCommit.CommitLayout pins a flex/grid item's content-box size once, on its
             // first, fresh commit, and never revisits it on a later, resumed one - see its own remarks). Its
             // content still fragments and lands in later slots regardless, so this fragment's decoration is
-            // extended from what it actually holds here, the same way a nested fragmentainer's continuing box
+            // extended from what it actually holds here, the same way a captured instance's continuing box
             // already is. Unconditional whenever there is real content to extend from, not only when the
             // box's own bounds miss this region entirely - a pinned box's declared bounds can still land a
             // sliver inside the right region while the bulk of what it actually holds here runs well past
             // that sliver (ExtentOf only ever grows the bottom, so this is a no-op wherever the box's own
             // bounds already reach far enough on their own). Closes issue #569.
             var boundsEndAtContentOnThePageGrid = shellRect is null && usesOwnBounds
-                && nested is null && (children.Count > 0 || words.Count > 0);
+                && capture is null && (children.Count > 0 || words.Count > 0);
 
             // A shell is backgrounds and borders and nothing else, which CSS Paged Media Level 3 §3.2
             // excludes from printable content by name - so it can never on its own make a slot into a page.
@@ -1927,7 +2348,9 @@ namespace PeachPDF.Html.Core.Fragmentation
             subtreePrunable &= contiguous;
 
             var draft = new Draft(
-                new FragmentKey(box, owner, instance, nested?.Self), box, slot, region, snapshot, originY);
+                new FragmentKey(box, instance, capture?.Self,
+                    capture is { DetachedSourceRoot: not null } ? capture.Value.Self : null),
+                box, slot, region, snapshot, originY);
 
             draft.Lines.AddRange(lines);
             draft.Words.AddRange(words);
@@ -1945,18 +2368,18 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.FixedSizeDeltaHeight = fixedSizeDelta.DeltaHeight;
             draft.InlineExtentDeltaWidth = inlineExtentDeltaWidth;
             draft.BoundsEndAtItsContent = boundsEndAtContentOnThePageGrid
-                || (nested is { } fragmentainer && fragmentainer.Continuing.Contains(box));
+                || (capture is { } instanceCaptured && instanceCaptured.Continuing.Contains(box));
 
             // Which of the box's block-axis edges are its own, from the two records that state it: the pass's
-            // own resumption chain for the page grid, and the nested fragmentainer's carry sets for a column.
-            // Both are consulted for a nested fragment, because a box can resume a *page* into a column - the
-            // first column of a slot has no previous column to have carried it.
-            var passKey = new FragmentKey(box, null, 0);
+            // own resumption chain for the page grid, and the captured instance's carry sets for a column.
+            // Both are consulted for a captured fragment, because a box can resume a *page* into a column -
+            // the first column of a slot has no previous column to have carried it.
+            var passKey = new FragmentKey(box, 0);
 
             draft.ContinuedFromThePrevious = _continuedFrom.Contains((passKey, slot.Index))
-                || (nested?.ContinuedFrom.Contains(box) ?? false);
+                || (capture?.ContinuedFrom.Contains(box) ?? false);
             draft.ContinuesIntoTheNext = _continuesInto.Contains((passKey, slot.Index))
-                || (nested?.Continuing.Contains(box) ?? false);
+                || (capture?.Continuing.Contains(box) ?? false);
 
             return draft;
         }
@@ -2068,57 +2491,53 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// A box's children for fragment-building purposes. This is <see cref="CssBox.Boxes"/> for
-        /// every box except a <see cref="CssProxyBox"/>, whose real content is its
-        /// <see cref="CssProxyBox.SourceBox"/> — deliberately kept out of the live tree so one source
-        /// subtree can be repeated on many pages. Descending into it through the proxy's own captured
-        /// geometry is what puts a repeating table header into the fragment tree.
+        /// A box's children for fragment-building purposes. This is <see cref="CssBox.Boxes"/> for an
+        /// ordinary box, filtered to skip any <see cref="CssBox.IsFragmentWalkPlaceholder"/> entry - a
+        /// layout-internal marker (e.g. the <see cref="CssProxyBox"/> a repeating table header/footer
+        /// leaves behind in its table's own child list) that contributes nothing the fragment walk should
+        /// visit directly, because its content is represented by an explicitly recorded
+        /// <see cref="CapturedInstance"/> instead - see <see cref="RecordRepeatingGroupInstance"/>.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>A box that owns nested fragmentainers yields its children once per fragmentainer</b>, each with
-        /// that one's captured geometry and its own <see cref="FragmentRegion"/>. This is what lets a box
-        /// split across two multi-column columns produce two fragments: the two differ in the inline axis,
-        /// which the box's own single <c>Location</c> cannot express and the captures can.
+        /// <b>A box that owns captured instances yields its children once per instance</b>, each with
+        /// that one's captured geometry and its own <see cref="FragmentRegion"/>. For a multi-column
+        /// container this is what lets a box split across two columns produce two fragments: the two
+        /// differ in the inline axis, which the box's own single <c>Location</c> cannot express and the
+        /// captures can. For a repeating group's instance (<see cref="CapturedInstance.DetachedSourceRoot"/>
+        /// non-null) there is nothing to filter <see cref="CssBox.Boxes"/> for at all - the whole detached
+        /// source subtree is yielded directly, since the entire captured geometry belongs to it.
         /// </para>
         /// <para>
-        /// A box already inside a nested fragmentainer can still own its own nested captures — a
-        /// multi-column container nested inside another one — and <see cref="NestedFragmentainer.ParentContext"/>
+        /// A box already inside a captured instance can still own its own nested captures — a
+        /// multi-column container nested inside another one — and <see cref="CapturedInstance.ParentContext"/>
         /// is what tells them apart: a box's inner columns are re-filled once per <i>outer</i> column, so all
-        /// of them land under the same <c>(CssBox, Slot)</c> key in <see cref="_nested"/>, and only the
-        /// enclosing capture's own <see cref="NestedFragmentainer.Self"/> — compared against each candidate's
-        /// <see cref="NestedFragmentainer.ParentContext"/> — says which outer column's fill a given inner
-        /// capture belongs to. At the page level (<paramref name="nested"/> null) there is only one outer
+        /// of them land under the same <c>(CssBox, Slot)</c> key in <see cref="_capturedInstances"/>, and only the
+        /// enclosing capture's own <see cref="CapturedInstance.Self"/> — compared against each candidate's
+        /// <see cref="CapturedInstance.ParentContext"/> — says which outer column's fill a given inner
+        /// capture belongs to. At the page level (<paramref name="capture"/> null) there is only one outer
         /// instance to begin with, so every capture recorded for the box is its own, unfiltered.
         /// </para>
         /// </remarks>
-        private IEnumerable<(CssBox Box, CssProxyBox? Owner, BoxGeometrySnapshot? Snapshot,
-            NestedFragmentainer? Nested, int Instance)> ChildrenOf(
-            CssBox box, CssProxyBox? owner, BoxGeometrySnapshot? snapshot, Slot slot,
-            NestedFragmentainer? nested, int instance)
+        private IEnumerable<(CssBox Box, BoxGeometrySnapshot? Snapshot,
+            CapturedInstance? Capture, int Instance)> ChildrenOf(
+            CssBox box, BoxGeometrySnapshot? snapshot, Slot slot,
+            CapturedInstance? capture, int instance)
         {
-            if (box is CssProxyBox proxy)
-            {
-                if (proxy.SourceGeometry is { } proxyGeometry)
-                    yield return (proxy.SourceBox, proxy, proxyGeometry, nested, instance);
-
-                yield break;
-            }
-
             // A rowspan placeholder shows the cell that spans into it, which lives in an earlier row.
             // That cell therefore appears in the tree once per row it spans - the fragments are
             // distinct objects, so each is painted in its own place.
             if (box is CssSpacingBox spacing)
-                yield return (spacing.ExtendedBox, owner, snapshot, nested, instance);
+                yield return (spacing.ExtendedBox, snapshot, capture, instance);
 
-            if (_nested.TryGetValue((box, slot.Index), out var allCaptures) && allCaptures.Count > 0)
+            if (_capturedInstances.TryGetValue((box, slot.Index), out var allCaptures) && allCaptures.Count > 0)
             {
                 // At the page level every capture recorded for this box is its own. Nested one level
                 // deeper, only the captures recorded while the enclosing capture's own column was the one
                 // being filled belong to it - see this method's own remarks.
-                var fragmentainers = nested is null
+                var fragmentainers = capture is null
                     ? allCaptures
-                    : allCaptures.FindAll(f => ReferenceEquals(f.ParentContext, nested.Value.Self));
+                    : allCaptures.FindAll(f => ReferenceEquals(f.ParentContext, capture.Value.Self));
 
                 if (fragmentainers.Count > 0)
                 {
@@ -2126,31 +2545,170 @@ namespace PeachPDF.Html.Core.Fragmentation
                     {
                         var fragmentainer = fragmentainers[i];
 
+                        if (fragmentainer.DetachedSourceRoot is { } sourceRoot)
+                        {
+                            yield return (sourceRoot, fragmentainer.Geometry, fragmentainer, i + 1);
+                            continue;
+                        }
+
                         foreach (var childBox in box.Boxes)
                         {
+                            if (childBox.IsFragmentWalkPlaceholder) continue;
+
                             if (fragmentainer.Geometry.Holds(childBox))
-                                yield return (childBox, owner, fragmentainer.Geometry, fragmentainer, i + 1);
+                                yield return (childBox, fragmentainer.Geometry, fragmentainer, i + 1);
                         }
                     }
 
                     // A child no fragmentainer holds was not placed into one — an out-of-flow child, which
                     // css-multicol resolves against the container rather than a column, and which the columns
                     // engine lays out once at the end. It is read live and belongs to the page, exactly as it
-                    // did before nested fragmentainers existed.
+                    // did before captured instances existed.
                     foreach (var childBox in box.Boxes)
                     {
+                        if (childBox.IsFragmentWalkPlaceholder) continue;
+
                         if (!HeldByAny(fragmentainers, childBox))
-                            yield return (childBox, owner, snapshot, null, instance);
+                            yield return (childBox, snapshot, null, instance);
                     }
 
                     yield break;
                 }
             }
 
-            foreach (var childBox in box.Boxes)
+            // Ordinary content: start past any leading run of children already individually confirmed to
+            // hold nothing at or before this slot, rather than re-checking (and re-yielding a BuildDraft
+            // call for) each of them again on every later slot - see CssBox.LiveChildStart's own remarks.
+            // Safe for the same reason trusting a single box's own mark is: a skipped child was reached and
+            // observed empty by an earlier slot's walk, and nothing has written to it since - a write would
+            // have discarded both the child's own mark and this box's cursor together
+            // (CssBox.DiscardEmittedNothing).
+            //
+            // Never consulted or advanced while _forcingUnprunedReferenceWalk is live: that walk exists to
+            // see every child regardless of any mark (BuildDraft's own pruning check is gated on the exact
+            // same flag), and this cursor is derived from the same marks - trusting or updating it here
+            // would make the "unpruned" reference walk quietly pruned too, so the parity oracle could never
+            // catch this cursor being wrong. Found exactly that way: a first version skipped this guard and
+            // dropped real content (MulticolLayoutIntegrationTests' two-flex-items and inside-another-engine
+            // cases) with no PruningDiverged exception at all, since both walks were equally wrong.
+            var startIndex = 0;
+
+            if (!_forcingUnprunedReferenceWalk)
             {
-                yield return (childBox, owner, snapshot, nested, instance);
+                var scopeOwner = ScopeOwnerOf(box);
+                var history = HistoryFor(scopeOwner);
+                startIndex = box.LiveChildStart;
+
+                while (startIndex < box.Boxes.Count)
+                {
+                    var candidate = box.Boxes[startIndex];
+
+                    // A placeholder never earns a mark of its own (it is never visited by BuildDraft at all -
+                    // see CssBox.IsFragmentWalkPlaceholder), so advancing past it unconditionally, rather than
+                    // stopping the run there, is what lets a repeating header's proxy sit between two "done"
+                    // stretches of ordinary rows without pinning the cursor behind it forever. Harmless either
+                    // way since a placeholder is filtered out of what is yielded below regardless.
+                    if (candidate.IsFragmentWalkPlaceholder) { startIndex++; continue; }
+
+                    // A box that owns captured instances can have genuine gaps in which slots carry one -
+                    // a multi-column container nested inside another engine's own fragmenting content (a
+                    // table cell that pauses and resumes across pages) can show no instance at one slot and
+                    // a real one again at a later slot within the very same box's own span, unlike ordinary
+                    // content's guaranteed-contiguous run. An "emitted nothing" mark earned while such a box
+                    // fell through to its plain Boxes for lack of an instance at one particular slot is still
+                    // safe for BuildDraft's own per-visit check (it re-derives eligibility fresh every call,
+                    // so a slot where captures resume again simply never trusts the stale mark) - but not
+                    // safe for this cursor's blind skip, which never gives BuildDraft the chance to notice
+                    // captures have resumed at all. See _capturedInstanceOwners's own remarks.
+                    if (_capturedInstanceOwners.Contains(candidate)) break;
+
+                    if (!candidate.EmittedNothingAtOrBefore(slot.Index, scopeOwner, history)) break;
+
+                    startIndex++;
+                }
+
+                box.RecordLiveChildStart(startIndex);
             }
+
+            for (var i = startIndex; i < box.Boxes.Count; i++)
+            {
+                var childBox = box.Boxes[i];
+                if (childBox.IsFragmentWalkPlaceholder) continue;
+
+                // A per-visit skip, never a persisted mark: unlike the cursor above (and
+                // CommitGeometricallySettledObservations' own "behind" proof), this makes no claim
+                // beyond "not here, this slot" - re-derived fresh on every call, so a child correctly
+                // skipped for an earlier slot is simply re-examined, not assumed empty, once its own
+                // slot arrives. That is the fix for the one mark-based version of this got wrong
+                // (RecordEmittedNothingAt states "empty from this slot on, forever" -
+                // EmittedNothingAtOrBefore's own >= check - which is right for content already finished
+                // but not for content that has not started: it would have permanently hidden a row's own,
+                // later, real appearance). Gated on _currentPassIsFinal for the same reason
+                // CommitGeometricallySettledObservations' "behind" proof needs Root.PerformLayout to have
+                // completed the whole range already - only once nothing will ever call it again is a
+                // child's own settled top trustworthy for "not yet started" rather than a still-open
+                // pass's provisional placement (PageBreakTableKeepWithNextIntegrationTests.GapOneThenGapTwo_BothPrechecksFireForSameTable_ComposeWithoutDoubleCounting
+                // is the same class of fixture that makes an intermediate pass's reading unsafe). Gated on
+                // !container.HasOutOfFlowBoxes for a second reason with no cheap per-box test: an
+                // in-flow child can still contain a fixed or absolutely-positioned descendant whose own
+                // visual position does not follow from this child's - skipping the visit would also skip
+                // ever reaching that descendant, the same risk FragmentPainter's own Bounds-based
+                // page-visibility pruning already excludes out-of-flow documents from for. Gated on
+                // !_capturedInstanceOwnerAncestors.Contains(childBox) for the same class of reason: a
+                // captured-instance owner nested anywhere inside this child (a relocated card wrapping a
+                // repeating-header table, say) can still hold a captured instance at a slot this child's
+                // own settled position no longer overlaps - a leftover of an abandoned layout attempt that
+                // BuildDraft's own per-visit recursion would otherwise discover and this filter must not
+                // hide by skipping the visit outright (see _capturedInstanceOwnerAncestors' own remarks).
+                // Gated on !HoldsARowspanContinuation(childBox) for a third: a table row that closes a
+                // rowspan can legitimately start on a later page while the spanning cell's own content -
+                // reachable only through this row's direct CssSpacingBox child, which yields the cell
+                // itself (see this method's own top) - still belongs to an earlier one. Skipping the row
+                // because its own geometry looks "ahead" would skip ever reaching that child too; unlike
+                // the reverted early-break's version of this exclusion, this one does not need to stop an
+                // entire ordered walk over it, only decline to skip this one row.
+                // Gated on snapshot is null for a fourth, structural reason: a non-null snapshot means this
+                // child is being read through a captured instance's own geometry (a repeating header's
+                // source subtree, re-snapshotted and repositioned once per page it repeats on, or a
+                // multi-column column's own fill) rather than the box's live position at all -
+                // OwnGeometryTop reads Rectangles/Words/Location directly off the box, which is one
+                // specific page's translated position, not the geometry this particular slot's draft is
+                // actually being built from (RectanglesOf/BoundsOf read the snapshot, not the live box,
+                // for exactly this reason). Checking the wrong geometry here found exactly this failure:
+                // a repeating header's own row, reached through the header's captured snapshot, still
+                // read its live Location - wherever the live box last happened to sit - rather than this
+                // page's own snapshotted position.
+                if (_currentPassIsFinal && !container.HasOutOfFlowBoxes && !_forcingUnprunedReferenceWalk
+                    && snapshot is null
+                    && childBox is not CssSpacingBox
+                    && !childBox.NeverTouchedThisLayout
+                    && !_capturedInstanceOwnerAncestors.Contains(childBox)
+                    && !_capturedInstanceOwners.Contains(childBox)
+                    && !HoldsARowspanContinuation(childBox)
+                    && childBox.OwnGeometryTop() >= container.PageTopOf(slot.Index + 1))
+                {
+                    continue;
+                }
+
+                yield return (childBox, snapshot, capture, instance);
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> directly holds a <see cref="CssSpacingBox"/> child - a rowspan
+        /// continuation marker, which <see cref="ChildrenOf"/>'s own top yields as the spanning cell
+        /// itself. Such a cell's content can still belong to an earlier slot than the row that closes the
+        /// span, so a row holding one must never be skipped on the strength of the row's own geometry
+        /// alone - see the call site's own remarks.
+        /// </summary>
+        private static bool HoldsARowspanContinuation(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child is CssSpacingBox) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -2347,7 +2905,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             return slices;
         }
 
-        private static bool HeldByAny(List<NestedFragmentainer> fragmentainers, CssBox box)
+        private static bool HeldByAny(List<CapturedInstance> fragmentainers, CssBox box)
         {
             foreach (var fragmentainer in fragmentainers)
             {
@@ -2382,7 +2940,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             if (draft.Region.Left is null) return bounds;
 
-            if (!_fragmentsOf.TryGetValue((draft.Key.Box, draft.Key.Owner), out var fragments)
+            if (!_fragmentsOf.TryGetValue((draft.Key.Box, draft.Key.RepeatingGroupInstance), out var fragments)
                 || fragments.Count < 2)
             {
                 return bounds;
