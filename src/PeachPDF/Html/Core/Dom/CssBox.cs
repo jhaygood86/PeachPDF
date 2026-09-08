@@ -5403,6 +5403,33 @@ namespace PeachPDF.Html.Core.Dom
             offset.Value.Value is { } value ? CssValueParser.ParseLength(value, basis, box) : 0;
 
         /// <summary>
+        /// CSS 2.1 §9.5.1 rule 6 -- a float's outer top may not be lower than the top of the
+        /// line box it appears in. A float is laid out here as an ordinary block child, so inline
+        /// content before it has already closed a line and the float landed on the NEXT one. The case
+        /// that found this: a bordered badge that belongs beside a heading in the same table cell was
+        /// drawn a line below it.
+        ///
+        /// Scoped to the one shape that means the float shares a line with what precedes it: the
+        /// immediately preceding sibling is the ANONYMOUS block the parser wrapped that inline run in
+        /// (no HtmlTag of its own) and it ended with a line box. A float after a real block-level
+        /// sibling starts below it, which is what a browser does too, and a float with `clear` is left
+        /// to <c>ClearBox</c>. Returns null when the rule does not apply.
+        /// </summary>
+        private double? FloatLineTop(CssBox child, double top)
+        {
+            if (!child.IsFloated || child.Clear.Value is not ClearMode.None) return null;
+
+            var index = Boxes.IndexOf(child);
+            if (index <= 0) return null;
+
+            var prev = Boxes[index - 1];
+            if (prev.HtmlTag is not null || prev.IsExcludedFromFlow || prev.LineBoxes.Count == 0) return null;
+
+            var lineTop = prev.LineBoxes[^1].LineTop;
+            return lineTop < top ? lineTop : null;
+        }
+
+        /// <summary>
         /// Writes the offset <see cref="ResolveBlockChildOffset"/> decided on, positions
         /// <paramref name="child"/> under whichever positioning scheme it uses, and registers the used page
         /// name it lands on.
@@ -5419,7 +5446,7 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (offset.PositionedInBlockFlow)
                 {
-                    var top = offset.Top;
+                    var top = FloatLineTop(child, offset.Top) ?? offset.Top;
 
                     child.Location = new RPoint(offset.Left + child.ActualMarginLeft, top);
                     child.ActualBottom = top;
