@@ -35,6 +35,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [InlineData("monospace")]
         [InlineData("cursive")]
         [InlineData("fantasy")]
+        [InlineData("system-ui")]   // resolved through fontconfig like the five above
         public void ResolveGenericFamily_DoesNotThrow(string generic)
         {
             // Exercises the fontconfig generic-alias-matching P/Invoke path directly, regardless of the
@@ -65,6 +66,7 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         [InlineData("monospace")]
         [InlineData("cursive")]
         [InlineData("fantasy")]
+        [InlineData("system-ui")]   // resolved through fontconfig like the five above
         public void ResolveGenericFamily_OnLinux_ReturnsARealInstalledFamilyName(string generic)
         {
             // Real Linux CI/dev machines ship fontconfig with at least a serif/sans-serif/monospace
