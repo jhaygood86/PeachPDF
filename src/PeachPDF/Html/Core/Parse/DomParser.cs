@@ -243,10 +243,10 @@ namespace PeachPDF.Html.Core.Parse
                 // Check for the <link rel=stylesheet> tag. Per HTML4/5, `rel` is a space-separated set
                 // of link types (e.g. `rel="appendix stylesheet"` is still a stylesheet link), so this
                 // must check for the "stylesheet" token rather than requiring an exact match.
-                if (box.HtmlTag.Name.Equals("link", StringComparison.CurrentCultureIgnoreCase) &&
+                if (box.HtmlTag.Name.Equals("link", StringComparison.OrdinalIgnoreCase) &&
                    box.GetAttribute("rel", string.Empty)
                        .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
-                       .Any(token => token.Equals("stylesheet", StringComparison.CurrentCultureIgnoreCase)))
+                       .Any(token => token.Equals("stylesheet", StringComparison.OrdinalIgnoreCase)))
                 {
                     CloneCssData(ref cssData, ref cssDataChanged);
                     var (stylesheet, resolvedUri) = await StylesheetLoadHandler.LoadStylesheet(htmlContainer, box.GetAttribute("href", string.Empty));
@@ -255,7 +255,7 @@ namespace PeachPDF.Html.Core.Parse
                 }
 
                 // Check for the <style> tag
-                if (box.HtmlTag.Name.Equals("style", StringComparison.CurrentCultureIgnoreCase) && box.Boxes.Count > 0)
+                if (box.HtmlTag.Name.Equals("style", StringComparison.OrdinalIgnoreCase) && box.Boxes.Count > 0)
                 {
                     CloneCssData(ref cssData, ref cssDataChanged);
                     // The tokenizer splits a <style> element's raw text into multiple data tokens whenever the

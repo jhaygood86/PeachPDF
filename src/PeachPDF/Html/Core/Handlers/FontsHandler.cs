@@ -33,12 +33,12 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// Allow to map not installed fonts to different
         /// </summary>
-        private readonly Dictionary<string, string> _fontsMapping = new(StringComparer.InvariantCultureIgnoreCase);
+        private readonly Dictionary<string, string> _fontsMapping = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// collection of all installed and added font families to check if font exists
         /// </summary>
-        private readonly Dictionary<string, RFontFamily> _existingFontFamilies = new(StringComparer.InvariantCultureIgnoreCase);
+        private readonly Dictionary<string, RFontFamily> _existingFontFamilies = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// cache of all the font used not to create same font again and again - keyed by (style, weight,
@@ -50,7 +50,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// doesn't affect face selection, but two requests differing only in it would otherwise
         /// incorrectly share one cached RFont and silently keep whichever angle was cached first.
         /// </summary>
-        private readonly Dictionary<string, Dictionary<double, Dictionary<(RFontStyle Style, int Weight, int Stretch, double? ObliqueSkewSinus), RFont?>>> _fontsCache = new(StringComparer.InvariantCultureIgnoreCase);
+        private readonly Dictionary<string, Dictionary<double, Dictionary<(RFontStyle Style, int Weight, int Stretch, double? ObliqueSkewSinus), RFont?>>> _fontsCache = new(StringComparer.OrdinalIgnoreCase);
 
         #endregion
 

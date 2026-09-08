@@ -85,7 +85,7 @@ namespace PeachPDF.Html.Core.Utils
                     return null;
                 }
 
-                if (box.HtmlTag != null && box.HtmlTag.Name.Equals(tagName, StringComparison.CurrentCultureIgnoreCase))
+                if (box.HtmlTag != null && box.HtmlTag.Name.Equals(tagName, StringComparison.OrdinalIgnoreCase))
                 {
                     return box.ParentBox ?? root;
                 }
