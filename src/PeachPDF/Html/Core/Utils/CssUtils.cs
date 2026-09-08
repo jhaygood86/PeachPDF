@@ -93,6 +93,15 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Whether <paramref name="propName"/> has a typed fast-path setter at all. The cheap question —
+        /// a lookup in the same two-entry table <see cref="TrySetTypedPropertyValue"/> uses — so a caller
+        /// can ask it before doing anything more expensive on a property that has no fast path.
+        /// </summary>
+        /// <param name="propName">the name of the CSS property</param>
+        /// <returns>true when a typed setter is registered for <paramref name="propName"/></returns>
+        public static bool HasTypedPropertySetter(string propName) => _typedPropertySetters.ContainsKey(propName);
+
+        /// <summary>
         /// Assigns a property's already-parsed, strongly-typed value straight onto a <see cref="CssBox"/> from
         /// its Layer A <see cref="ITypedPropertyValue{T}"/> carrier, without re-parsing the authored string.
         /// Returns false when <paramref name="propName"/> has no typed setter, or when

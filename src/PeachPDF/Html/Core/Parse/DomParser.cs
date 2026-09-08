@@ -1380,7 +1380,13 @@ namespace PeachPDF.Html.Core.Parse
                 // (e.g. grid-template-* -> GridTemplate); apply it straight to the box without re-parsing. A
                 // global keyword's `value` is the RESOLVED string (parent/initial/revert target) and its
                 // DeclaredValue is not a typed carrier, so it falls through to the string setter.
-                if (!CssGlobalKeywords.TryParse(prop.Value, out _)
+                // Cheapest test first. _typedPropertySetters has two entries, so on any document
+                // that is not a grid this path cannot fire — but the old operand order ran
+                // CssGlobalKeywords.TryParse (five OrdinalIgnoreCase comparisons) on every
+                // declaration of every box first, to answer a question the two-entry lookup
+                // settles outright. All three tests are pure; the side-effecting setter is still last.
+                if (CssUtils.HasTypedPropertySetter(prop.Name)
+                    && !CssGlobalKeywords.TryParse(prop.Value, out _)
                     && prop is Property typedProp
                     && CssUtils.TrySetTypedPropertyValue(box, prop.Name, typedProp.DeclaredValue))
                 {
