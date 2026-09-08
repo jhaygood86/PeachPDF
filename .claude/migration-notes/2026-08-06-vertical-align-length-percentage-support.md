@@ -1,7 +1,7 @@
 # `vertical-align` now supports length and percentage values
 
 **Landed:** 2026-08-06 — Fix open alignment issues (#603)
-**Doc section:** docs/html-css-support.md § [vertical-align row](../../docs/html-css-support.md#text)
+**Doc section:** docs/html-css-support.md § [vertical-align row](../../docs/html-css-support.md#color--typography)
 
 `vertical-align`'s cascade storage (`css-properties.json`'s `vertical-align` entry) was keyword-only —
 a `<length>`/`<percentage>` value (CSS 2.1 §10.8.1: "raises (or lowers, if the value is negative) the box
