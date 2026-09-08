@@ -431,6 +431,61 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FloatAfterAnInlineRun_LandsOnThatRunsLine()
+        {
+            // CSS 2.1 §9.5.1 rule 6: a float's outer top may not be lower than the top of the line box
+            // it appears in. The inline run before the float closes a line, and the float is laid out as
+            // an ordinary block child, so without the rule it starts on the line BELOW its own.
+            var html = Wrap(@"
+                <div style='width:300pt;'>
+                    <b>BILL TO</b><div id='badge' style='float:left; width:40pt; height:12pt;'></div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var badge = FindById(root, "badge")!;
+            var word = FindFirstWord(root)!;
+
+            Assert.True(badge.Location.Y <= word.Rectangle.Top + 0.001,
+                $"the float belongs on the line it follows (top {word.Rectangle.Top}), was at Y={badge.Location.Y}");
+        }
+
+        [Fact]
+        public async Task FloatAfterAnInlineRun_WithClear_StillGoesBelowTheLine()
+        {
+            // `clear` is ClearBox's job and rule 6 must not pre-empt it: the same shape with clear:left
+            // keeps the float below the line.
+            var html = Wrap(@"
+                <div style='width:300pt;'>
+                    <div style='float:left; width:20pt; height:30pt;'></div>
+                    <b>BILL TO</b><div id='badge' style='clear:left; float:left; width:40pt; height:12pt;'></div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var badge = FindById(root, "badge")!;
+
+            Assert.True(badge.Location.Y >= 30,
+                $"clear:left must still clear the 30pt float, was at Y={badge.Location.Y}");
+        }
+
+        [Fact]
+        public async Task FloatAfterARealBlockSibling_StartsBelowIt()
+        {
+            // The rule is scoped to a float whose preceding sibling is the ANONYMOUS block the parser
+            // wrapped an inline run in. After a real block-level element a float starts below it, which
+            // is what a browser does — so the preceding-sibling test has to distinguish the two.
+            var html = Wrap(@"
+                <div style='width:300pt;'>
+                    <p style='margin:0; height:30pt;'>BILL TO</p><div id='badge' style='float:left; width:40pt; height:12pt;'></div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var badge = FindById(root, "badge")!;
+
+            Assert.True(badge.Location.Y >= 30,
+                $"a float after a real block sibling starts below it, was at Y={badge.Location.Y}");
+        }
+
+        [Fact]
         public async Task FloatRight_InOneGridItem_DoesNotNarrowLinesInTheNext()
         {
             // A grid item establishes an independent formatting context (css-grid-1 §6), so a float
