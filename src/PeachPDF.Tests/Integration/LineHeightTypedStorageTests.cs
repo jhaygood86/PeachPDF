@@ -1,7 +1,5 @@
 using PeachPDF.CSS;
 using PeachPDF.Tests.TestSupport;
-using System;
-using System.IO;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -126,9 +124,8 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<PeachPDF.Html.Core.Dom.CssBox?> GetNormalLineHeightBoxAsync(string fontPath, string mimeType)
         {
-            var b64 = Convert.ToBase64String(File.ReadAllBytes(fontPath));
             var html = $@"<!DOCTYPE html><html><head><style>
-@font-face {{ font-family: 'NormalLineHeightTestFont'; src: url('data:{mimeType};base64,{b64}'); }}
+{BundledFonts.FontFaceRule(fontPath, "NormalLineHeightTestFont", mimeType)}
 </style></head><body style='margin:0'>
 <div id='t' style=""font-family:'NormalLineHeightTestFont';font-size:20pt;line-height:normal"">x</div>
 </body></html>";

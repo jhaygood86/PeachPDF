@@ -577,7 +577,10 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ASpanningCellWhoseContentFinishesInTheSameBandTheSpanEndsIn_ClosesAtTheRowsOwnBottom()
         {
-            var words = string.Join(" ", Enumerable.Range(0, 40).Select(i => $"word{i:0000}"));
+            // 70 words, not 40 - a generous margin over how many lines fit in the opening band, which is
+            // font-dependent (issue #956 made line-height:normal genuinely font-dependent; 40 words no
+            // longer reliably overflowed the band on hosts resolving a shorter default font).
+            var words = string.Join(" ", Enumerable.Range(0, 70).Select(i => $"word{i:0000}"));
 
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(
@@ -702,7 +705,10 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task ASpanningCellInTheLastColumn_StillClosesAfterMultipleResumptionPasses()
         {
-            var words = string.Join(" ", Enumerable.Range(0, 40).Select(i => $"word{i:0000}"));
+            // 70 words, not 40 - a generous margin over how many lines fit in the opening band, which is
+            // font-dependent (issue #956 made line-height:normal genuinely font-dependent; 40 words no
+            // longer reliably overflowed the band on hosts resolving a shorter default font).
+            var words = string.Join(" ", Enumerable.Range(0, 70).Select(i => $"word{i:0000}"));
 
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(

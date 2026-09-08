@@ -93,11 +93,16 @@ namespace PeachPDF.Tests.Integration
         }
 
         // The cell still paginates: the fix moves the straddling line rather than truncating the cell.
+        // 400 words (well above NoWordIsPaintedTwice_AtAPageBoundary's own 200-320 sweep range, which
+        // exists precisely because how many lines fit per page is font-dependent - see that test's own
+        // comment) so this reliably spans more than one page regardless of which font the host resolves
+        // (issue #956 made line-height:normal genuinely font-dependent, where it used to be a flat
+        // constant identical on every platform).
         [Fact]
         public async Task ACellTallerThanAPage_StillPaginatesAllOfItsText()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<table style='width:100%'><tr><td>{Words(244)}</td></tr></table>"),
+                LayoutHarness.Wrap($"<table style='width:100%'><tr><td>{Words(400)}</td></tr></table>"),
                 pageHeight: 300, margin: 20);
 
             var laidOut = LayoutHarness.Descendants(root)

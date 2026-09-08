@@ -180,6 +180,19 @@ namespace PeachPDF.Tests.TestSupport
             FontResolver.SupportedFonts.FirstOrDefault() ?? Ttf;
 
         /// <summary>
+        /// An inline <c>@font-face</c> rule embedding <paramref name="fontPath"/> as a base64 data URL
+        /// under <paramref name="familyName"/> - for an HTML-layer (<c>LayoutHarness</c>) test whose
+        /// fixture geometry is calibrated against a specific font's real metrics and so must not depend on
+        /// whatever font the host OS happens to resolve a bare <c>font-family</c> keyword to (issue #956's
+        /// own line-height:normal tests hit exactly this: identical fixtures passed on Windows and failed
+        /// on Linux/macOS CI runners purely because they resolved to different default system fonts with
+        /// different real metrics). <paramref name="mimeType"/> is <c>font/truetype</c> for <see cref="Ttf"/>
+        /// or <c>font/opentype</c> for <see cref="Otf"/>.
+        /// </summary>
+        internal static string FontFaceRule(string fontPath, string familyName, string mimeType) =>
+            $"@font-face {{ font-family: '{familyName}'; src: url('data:{mimeType};base64,{Convert.ToBase64String(File.ReadAllBytes(fontPath))}'); }}";
+
+        /// <summary>
         /// Ensures <paramref name="resolver"/> can resolve at least one font family and
         /// returns its name, using a system font if one was detected or registering the
         /// bundled TTF as a custom font otherwise.
