@@ -2045,14 +2045,37 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (orgNumOfNans > 0)
                     {
-                        // Spread extra width between all non width specified columns, but never
-                        // past a column's own explicit CSS max-width (unset columns are uncapped,
-                        // matching the normal "auto columns fill remaining space" behavior).
+                        // Spread extra width between all non width specified columns IN PROPORTION
+                        // to what each already measures, never past a column's own explicit CSS
+                        // max-width (unset columns are uncapped, matching the normal "auto columns
+                        // fill remaining space" behavior).
+                        //
+                        // An equal absolute share hands the same number of points to a 250pt
+                        // description column and a 30pt quantity column, which does not keep a table
+                        // widened to its own declared width looking like the same table. CSS 2.1
+                        // §17.5.2.2 only says "the extra width should be distributed over the
+                        // columns"; browsers scale them. The all-columns-specified clause below
+                        // already spreads proportionally via SpreadSurplusProportionally, so this is
+                        // also the two clauses agreeing on what "distributed" means.
+                        //
+                        // Columns that measure nothing at all share equally, there being no
+                        // proportion to go on.
                         var explicitMaxWidths = GetColumnExplicitMaxWidths();
-                        var extWidth = (availCellSpace - occupiedSpace) / orgNumOfNans;
+                        var surplus = availCellSpace - occupiedSpace;
+
+                        var autoTotal = 0d;
                         for (var i = 0; i < _columnWidths.Length; i++)
                             if (orgColWidths == null || double.IsNaN(orgColWidths[i]))
-                                _columnWidths[i] = Math.Min(_columnWidths[i] + extWidth, explicitMaxWidths[i]);
+                                autoTotal += _columnWidths[i];
+
+                        for (var i = 0; i < _columnWidths.Length; i++)
+                            if (orgColWidths == null || double.IsNaN(orgColWidths[i]))
+                            {
+                                var share = autoTotal > 0
+                                    ? surplus * (_columnWidths[i] / autoTotal)
+                                    : surplus / orgNumOfNans;
+                                _columnWidths[i] = Math.Min(_columnWidths[i] + share, explicitMaxWidths[i]);
+                            }
                     }
                     else
                     {
