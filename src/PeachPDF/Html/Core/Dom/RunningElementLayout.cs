@@ -1,6 +1,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using System;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -61,6 +62,16 @@ namespace PeachPDF.Html.Core.Dom
                 Size = new RSize(marginBoxContentRect.Width, marginBoxContentRect.Height)
             };
 
+            // Before the reparent, deliberately. Re-resolving `content` re-runs
+            // CssContentEngine.ApplyContent, whose open-quote/close-quote handling walks
+            // box.ParentBox and previous siblings live (GetQuoteDepthAtStart has no memoization, unlike
+            // the counter lookup, which short-circuits on FinalizedCounterNames and never re-walks).
+            // Run after the reparent, a running element mixing quotes with counter(page) -- say
+            // `content: open-quote counter(page) close-quote` -- would resolve its quote depth against
+            // syntheticContainer, which has no ancestors and no siblings, instead of its real position
+            // in the document.
+            RefreshPageCounterContent(runningBox, container);
+
             runningBox.ParentBox = syntheticContainer;
             runningBox.Location = new RPoint(marginBoxContentRect.X, marginBoxContentRect.Y);
             runningBox.ActualBottom = runningBox.Location.Y;
@@ -81,6 +92,64 @@ namespace PeachPDF.Html.Core.Dom
                 runningBox.ParentBox = savedParent;
             }
         }
+
+        /// <summary>
+        /// Re-resolves any <c>counter(page)</c>/<c>counter(pages)</c> in this subtree's
+        /// <c>content</c> against the page being laid out for, before that layout runs.
+        /// </summary>
+        /// <remarks>
+        /// <c>CssContentEngine.ApplyContent</c> runs once, at DOM-construction time, and bakes the
+        /// resolved string into the box's <c>Text</c>. For everything else in a running element that is
+        /// correct - the text does not depend on which page the band is drawn on - but the page counters
+        /// do, and left alone they read "Page 1 of 1" on every page. This is the same re-apply-then-
+        /// re-parse shape <c>HtmlContainerInt.ReapplyPseudoElementContent</c> already uses for
+        /// <c>string()</c>, run per page here because that is the granularity the answer changes at.
+        /// Reading <c>Content</c> rather than a flag set at parse time keeps this self-contained; a
+        /// running element is a header or footer band, so the subtree is small and walked once per page.
+        /// </remarks>
+        private static void RefreshPageCounterContent(CssBox box, HtmlContainerInt container)
+        {
+            if (container.RunningElementPageContext is null) return;
+
+            if (!string.IsNullOrEmpty(box.Content)
+                && box.Content != Keywords.None
+                && box.Content != Keywords.Normal
+                && MentionsPageCounter(box.Content))
+            {
+                CssContentEngine.ApplyContent(box);
+
+                if (!string.IsNullOrEmpty(box.Text))
+                {
+                    box.ParseToWords();
+                }
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                RefreshPageCounterContent(child, container);
+            }
+        }
+
+        /// <summary>
+        /// Whether a <c>content</c> declaration plausibly references the <c>page</c> or <c>pages</c>
+        /// counter. Deliberately a cheap textual pre-check ahead of the real tokenizing resolution in
+        /// <see cref="CssContentEngine.ApplyContent"/>.
+        /// </summary>
+        /// <remarks>
+        /// It is closer to "mentions `counter` and the substring `page` somewhere" than to a real
+        /// parse, so <c>counter(page-count)</c> or <c>counter(total-pages)</c> match too. That is
+        /// harmless: re-resolving a document counter returns the same value, because
+        /// <c>CssCounterEngine.GetCounter</c> short-circuits on <c>FinalizedCounterNames</c> and reads
+        /// the value already cached on the box rather than re-walking the tree. The quote depth is the
+        /// one thing a re-resolution could get wrong, which is why this runs before the reparent — see
+        /// the call site.
+        ///
+        /// There is no false negative: any spelling that tokenizes as <c>counter(page)</c> or
+        /// <c>counter(pages)</c> contains both substrings.
+        /// </remarks>
+        private static bool MentionsPageCounter(string content) =>
+            content.Contains("page", StringComparison.OrdinalIgnoreCase)
+            && content.Contains("counter", StringComparison.OrdinalIgnoreCase);
 
         private static void ResetRectanglesRecursively(CssBox box)
         {
