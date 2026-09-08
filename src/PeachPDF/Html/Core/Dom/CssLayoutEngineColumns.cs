@@ -193,7 +193,7 @@ namespace PeachPDF.Html.Core.Dom
             // recorded its columns in, so what it recorded anywhere describes geometry that no longer
             // exists. A resumed one is the opposite case: the columns it filled on earlier pages are
             // still there.
-            htmlContainer.ClearNestedFragmentainers(columnsBox, resume is null ? null : startSlot);
+            htmlContainer.ClearCapturedInstances(columnsBox, resume is null ? null : startSlot);
 
             // A resumed pass continues only the segment the earlier fragment stopped inside - the ones
             // before it already finished on an earlier page, and the ones after it were never reached.
@@ -541,7 +541,7 @@ namespace PeachPDF.Html.Core.Dom
                 // The attempt being discarded recorded columns of its own - but only its own: an earlier
                 // run sharing this (columnsBox, startSlot) slot already finished and must not be erased
                 // by this run's retry.
-                htmlContainer.ClearNestedFragmentainersFrom(columnsBox, startSlot, recordedBefore);
+                htmlContainer.ClearCapturedInstancesFrom(columnsBox, startSlot, recordedBefore);
             }
 
             // One rule per gap between the columns actually used in this run, spanning the content they
@@ -617,7 +617,7 @@ namespace PeachPDF.Html.Core.Dom
                     // no fragmentainer at all: laid out, and painted nowhere. Extending the block axis
                     // cannot claim a neighbouring column's content, because columns are told apart by the
                     // inline axis, and nothing outside this container is ever asked about this region.
-                    htmlContainer.RecordNestedFragmentainer(
+                    htmlContainer.RecordCapturedInstance(
                         columnsBox,
                         startSlot,
                         (boxTop, Math.Max(boxTop + target, columnBottom)),

@@ -214,6 +214,38 @@ namespace PeachPDF.Html.Core.Dom
         internal CssBox? EffectiveParentBox => ParentBox ?? DomParentBox;
 
         /// <summary>
+        /// Whether this box is the detached root of a repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>
+        /// group (<see cref="CssLayoutEngineTable.RemoveHeaderFooterFromTree"/>), or a descendant of one.
+        /// </summary>
+        /// <remarks>
+        /// Only the group's own root has its <see cref="ParentBox"/> nulled - a descendant's own link to
+        /// its immediate parent, within the detached subtree, is untouched - so this walks up through
+        /// <see cref="ParentBox"/> (never <see cref="EffectiveParentBox"/>, which would already answer
+        /// true for the ordinary document root too) until it runs out, and asks only there whether
+        /// <see cref="DomParentBox"/> names a real DOM parent - which only a detached group's own root has.
+        /// Bounded by DOM nesting depth, not document size.
+        /// </remarks>
+        internal bool IsInDetachedRepeatingGroup
+        {
+            get
+            {
+                var current = this;
+
+                while (current.ParentBox is { } parent) current = parent;
+
+                return current.DomParentBox is not null;
+            }
+        }
+
+        /// <summary>
+        /// Whether this box exists purely as a layout-internal record of a detached, repeating source
+        /// subtree's current position, and contributes nothing the fragment walk should visit directly -
+        /// its content is represented by an explicitly recorded per-slot instance instead (see
+        /// <see cref="FragmentEmitter.RecordRepeatingGroupInstance"/>).
+        /// </summary>
+        internal virtual bool IsFragmentWalkPlaceholder => false;
+
+        /// <summary>
         /// Gets the children boxes of this box
         /// </summary>
         public List<CssBox> Boxes { get; } = [];
@@ -2362,12 +2394,25 @@ namespace PeachPDF.Html.Core.Dom
         private int _emittedNothingGeneration = -1;
 
         /// <summary>
-        /// How many reopening events (<c>FragmentEmitter.InvalidateFrom</c>) had been recorded when this
-        /// observation was made — checked against <see cref="Fragmentation.InvalidationHistory"/> at read
-        /// time so only a reopening that could actually have affected this box's own recorded slot
-        /// retires the observation, rather than every reopening retiring every box's.
+        /// How many reopening events (<c>FragmentEmitter.InvalidateFrom</c>) had been recorded, against
+        /// <see cref="_emittedNothingScopeOwner"/>'s own <see cref="Fragmentation.InvalidationHistory"/>,
+        /// when this observation was made — checked at read time so only a reopening that could actually
+        /// have affected this box's own recorded slot retires the observation, rather than every
+        /// reopening anywhere in the document retiring every box's.
         /// </summary>
         private int _emittedNothingRecordedAt = -1;
+
+        /// <summary>
+        /// The box whose <see cref="Fragmentation.InvalidationHistory"/> was current when this
+        /// observation was made — <c>FragmentEmitter</c> keeps one history per top-level section rather
+        /// than one for the whole document, since a reopening anywhere only ever needs to retire marks on
+        /// its own ancestor chain (every box a relocation actually affects fires its own reposition, which
+        /// discards its own and its ancestors' marks immediately — see <see cref="DiscardEmittedNothing"/>).
+        /// Re-checked against the box's <i>current</i> scope at read time rather than trusted blindly: a
+        /// box reparented since this was recorded (e.g. a <c>position: running()</c> box) is treated as
+        /// unsafe rather than validated against the wrong scope's history.
+        /// </summary>
+        private CssBox? _emittedNothingScopeOwner;
 
         /// <summary>
         /// Records that this box's subtree contributed nothing to pagination slot
@@ -2390,10 +2435,11 @@ namespace PeachPDF.Html.Core.Dom
         /// fields do not describe every fragment it has.
         /// </para>
         /// </remarks>
-        internal void RecordEmittedNothingAt(int slotIndex, int invalidationCountNow)
+        internal void RecordEmittedNothingAt(int slotIndex, CssBox scopeOwner, int invalidationCountNow)
         {
             _emittedNothingAtSlot = slotIndex;
             _emittedNothingGeneration = HtmlContainer?.LayoutGeneration ?? 0;
+            _emittedNothingScopeOwner = scopeOwner;
             _emittedNothingRecordedAt = invalidationCountNow;
         }
 
@@ -2401,10 +2447,11 @@ namespace PeachPDF.Html.Core.Dom
         /// Whether this box was observed to emit nothing at a slot at or before
         /// <paramref name="slotIndex"/>, and nothing has invalidated that observation since.
         /// </summary>
-        internal bool EmittedNothingAtOrBefore(int slotIndex, Fragmentation.InvalidationHistory history) =>
+        internal bool EmittedNothingAtOrBefore(int slotIndex, CssBox scopeOwner, Fragmentation.InvalidationHistory history) =>
             _emittedNothingGeneration == (HtmlContainer?.LayoutGeneration ?? 0)
             && _emittedNothingAtSlot >= 0
             && slotIndex >= _emittedNothingAtSlot
+            && ReferenceEquals(_emittedNothingScopeOwner, scopeOwner)
             && history.StillSafe(_emittedNothingRecordedAt, _emittedNothingAtSlot);
 
         /// <summary>
@@ -2428,6 +2475,16 @@ namespace PeachPDF.Html.Core.Dom
 
                 box._emittedNothingGeneration = -1;
                 box._emittedNothingAtSlot = -1;
+                box._emittedNothingScopeOwner = null;
+
+                // A box only ever advances past a child via LiveChildStart once that child itself earned
+                // an "emitted nothing" mark (see the accessor's own remarks), so a write that reaches this
+                // box on the way up from a rewritten descendant means whatever prefix of ITS OWN children
+                // this box's own cursor advanced past may itself be stale - discarded here for the same
+                // reason and on the same walk as the mark above, rather than left for a stale index to be
+                // read back later.
+                box._liveChildStartIndex = 0;
+                box._liveChildStartGeneration = -1;
 
                 // Every caller of this is a write that gives a box content or moves it, so it is also
                 // the signal layout has REACHED this box at all - which is what separates a subtree
@@ -2439,6 +2496,58 @@ namespace PeachPDF.Html.Core.Dom
                 // only ever set walking up from below, so one clear ancestor means all of them are.
                 if (wasClear) break;
             }
+        }
+
+        /// <summary>
+        /// How many of this box's leading <see cref="Boxes"/>, in order, <see cref="_liveChildStartGeneration"/>
+        /// last found were each already marked <see cref="EmittedNothingAtOrBefore"/> - a cache
+        /// <see cref="Fragmentation.FragmentEmitter.ChildrenOf"/> uses so a container's ordinary (uncaptured)
+        /// child walk can start past a prefix already known to hold nothing further, rather than
+        /// re-checking every one of them again on every later slot.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="Fragmentation.FragmentEmitter.ChildrenOf"/> must neither read nor advance this while
+        /// its own <c>_forcingUnprunedReferenceWalk</c> is live: that walk exists specifically to see every
+        /// child regardless of any mark - <c>BuildDraft</c>'s own pruning check is gated on that exact same
+        /// flag - and this cursor is derived from the same marks, so trusting or updating it there would
+        /// make the "unpruned" reference walk quietly pruned too. That defeats the one thing the flag
+        /// exists for: with both the real and "reference" walks sharing this cursor, the
+        /// <c>PEACHPDF_VERIFY_FRAGMENT_PRUNING</c> parity oracle can never disagree with itself over a bug
+        /// in this cursor, however wrong it is. Found exactly that way: a first version skipped this guard
+        /// and silently dropped real content in two multi-column integration tests, with no
+        /// <c>PruningDiverged</c> exception at all, because both walks were equally wrong.
+        /// </remarks>
+        private int _liveChildStartIndex;
+
+        /// <inheritdoc cref="_liveChildStartIndex"/>
+        private int _liveChildStartGeneration = -1;
+
+        /// <summary>
+        /// <see cref="_liveChildStartIndex"/> if it was computed in the current layout generation, else
+        /// <c>0</c> - a stale index from an earlier generation names nothing meaningful in <see cref="Boxes"/>
+        /// as it stands now.
+        /// </summary>
+        internal int LiveChildStart =>
+            _liveChildStartGeneration == (HtmlContainer?.LayoutGeneration ?? 0) ? _liveChildStartIndex : 0;
+
+        /// <summary>
+        /// Records that <see cref="Boxes"/><c>[0, </c><paramref name="index"/><c>)</c> were each individually
+        /// confirmed <see cref="EmittedNothingAtOrBefore"/> as of the current layout generation.
+        /// </summary>
+        /// <remarks>
+        /// Safe to trust on a later call precisely because <see cref="DiscardEmittedNothing"/> resets this
+        /// alongside the mark it is derived from: a child in the confirmed prefix can only stop being
+        /// "nothing further" by being written to again, and every such write walks up through that child
+        /// into this box (the child cannot lose a mark <see cref="DiscardEmittedNothing"/> never reaches),
+        /// clearing this the same way. A structural change to <see cref="Boxes"/> itself - inserting a
+        /// child back at a specific index rather than appending - only ever happens as part of laying this
+        /// box out again, which is itself a write to this box and so passes through the same reset before
+        /// any later reader could see a stale index.
+        /// </remarks>
+        internal void RecordLiveChildStart(int index)
+        {
+            _liveChildStartIndex = index;
+            _liveChildStartGeneration = HtmlContainer?.LayoutGeneration ?? 0;
         }
 
         /// <summary>
@@ -3016,6 +3125,27 @@ namespace PeachPDF.Html.Core.Dom
         /// </para>
         /// </remarks>
         internal bool PositionAssignedByEngine { get; set; }
+
+        /// <summary>
+        /// Whether a <b>fresh</b> <c>ItemContentCommit.CommitLayout</c> has ever pinned this flex/grid
+        /// item's <see cref="Width"/>/<see cref="Height"/> to its already-resolved outer size before laying
+        /// its content out. Set once, on that first commit, and never cleared - a resumed commit reuses the
+        /// same pinned size rather than re-pinning it, so this stays true for the item's remaining
+        /// fragmentainers too.
+        /// </summary>
+        /// <remarks>
+        /// Exists so <see cref="Fragmentation.FragmentEmitter"/>'s geometric pruning proof
+        /// (<c>CommitGeometricallySettledObservations</c>) can tell a box whose <see cref="ActualBottom"/>
+        /// is trustworthy from one that is not: a pinned item's declared bounds can understate its true
+        /// content span for as long as content that overflows past the pin keeps fragmenting into later
+        /// slots (issue <see href="https://github.com/jhaygood86/PeachPDF/issues/569">#569</see>) - the
+        /// same gap <see cref="Fragmentation.FragmentEmitter"/>'s own <c>BoundsEndAtItsContent</c> exists to
+        /// paper over for a materialized fragment's decoration. A pruning proof reading <c>ActualBottom</c>
+        /// directly has no such fallback, so it must decline to trust the value at all rather than risk
+        /// concluding a box is behind the frontier while content it will keep growing has not finished
+        /// fragmenting.
+        /// </remarks>
+        internal bool ItemContentSizeEverPinned { get; set; }
 
         /// <summary>
         /// Everything that must happen exactly once for this box, before any of its content is placed:

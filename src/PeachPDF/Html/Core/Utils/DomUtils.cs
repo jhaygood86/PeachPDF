@@ -658,6 +658,31 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Whether this box establishes an independent formatting context, so floats outside it
+        /// never reach its lines and its own floats never reach out. The cases that matter here are
+        /// a grid or flex ITEM (css-grid-1 §6, css-flexbox-1 §4 — an item does so whatever its own
+        /// display), a table cell, an inline-block, a float, an out-of-flow box, and anything with a
+        /// non-visible overflow (CSS 2.1 §9.4.1).
+        /// </summary>
+        internal static bool EstablishesIndependentFormattingContext(CssBox box)
+        {
+            if (box.ParentBox is null) return true;
+            if (box.IsFloated) return true;
+            if (box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) return true;
+            if (box.Overflow.Value is not Overflow.Visible) return true;
+
+            if (box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.TableCell
+                or Keywords.TableCaption or Keywords.Flex or Keywords.InlineFlex
+                or Keywords.Grid or Keywords.InlineGrid)
+            {
+                return true;
+            }
+
+            return box.ParentBox.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
+                or Keywords.Grid or Keywords.InlineGrid;
+        }
+
+        /// <summary>
         /// A right float's constraint on a line is unlike a left float's: a left float caps where
         /// the cursor itself currently sits (a point-collision test, correct in
         /// <see cref="GetLastLeftIntersectingFloatBox"/> above), but a right float caps how far
@@ -699,6 +724,21 @@ namespace PeachPDF.Html.Core.Utils
 
             while (reference.ParentBox is not null)
             {
+                // A float cannot narrow a line outside its own formatting context (CSS 2.1 §9.5,
+                // css-display-3 §2.1). Without this the walk runs to the document root and scans
+                // every preceding sibling on the way, so a `float: right` in one grid item sets the
+                // wrap limit for lines in the NEXT one.
+                //
+                // Tested at the STARTING level too, unlike FindIntersectingFloatBox, and the
+                // difference is in what each is handed. This walk's `reference` comes from FlowBox's
+                // word-flow loop: it is the block whose line is being laid out, so if IT establishes
+                // a formatting context, the walk is already outside and has nothing to find.
+                // FindIntersectingFloatBox is called from FloatBoxLeft/FloatBoxRight with a float
+                // itself as `reference`, and a float always establishes one — breaking at its
+                // starting level would stop it being positioned against its own siblings, which is
+                // the whole job. Same rule, different starting box.
+                if (EstablishesIndependentFormattingContext(reference)) break;
+
                 var currentBoxIdx = reference.ParentBox.Boxes.IndexOf(reference);
 
                 for (var i = 0; i < currentBoxIdx; i++)

@@ -33,16 +33,37 @@ namespace PeachPDF.CSS
             return true;
         }
 
-        public string Value => DeclaredValue != null ? DeclaredValue.CssText : Keywords.Initial;
+        /// <summary>
+        /// Memoized. <see cref="IPropertyValue.CssText"/> is not a stored string — nearly every
+        /// converter re-serializes it on each read, several with LINQ and string.Join over their
+        /// components (BorderRadiusConverter, EndListValueConverter, BackgroundPositionValueConverter,
+        /// …).
+        ///
+        /// A parsed declaration is shared by every box its rule matches, and the cascade reads this
+        /// up to three times per declaration per box (the global-keyword switch, its fall-through arm,
+        /// and CssGlobalKeywords.TryParse), so one document-wide rule re-serializes its values
+        /// thousands of times in a single render.
+        ///
+        /// Invalidated by <see cref="DeclaredValue"/>'s setter, which is the only way the underlying
+        /// value changes; the value objects a converter builds are themselves immutable.
+        ///
+        /// <c>null</c> is the "not computed yet" marker, the same way <see cref="DeclaredValue"/>'s
+        /// own <c>null</c> means "no declaration" — this file is <c>#nullable disable</c>, so the
+        /// field carries no annotation. A converter that returned a null <c>CssText</c> would only
+        /// re-serialize on the next read; it could never report a stale value.
+        /// </summary>
+        public string Value => _valueText ??= DeclaredValue != null ? DeclaredValue.CssText : Keywords.Initial;
+
+        private string _valueText;
 
         public string Original => DeclaredValue != null ? DeclaredValue.Original.Text : Keywords.Initial;
 
         public bool IsInherited => (_flags & PropertyFlags.Inherited) == PropertyFlags.Inherited && IsInitial ||
-                                   DeclaredValue != null && DeclaredValue.CssText.Is(Keywords.Inherit);
+                                   DeclaredValue != null && Value.Is(Keywords.Inherit);
 
         public bool IsAnimatable => (_flags & PropertyFlags.Animatable) == PropertyFlags.Animatable;
 
-        public bool IsInitial => DeclaredValue == null || DeclaredValue.CssText.Is(Keywords.Initial);
+        public bool IsInitial => DeclaredValue == null || Value.Is(Keywords.Initial);
 
         internal bool HasValue => DeclaredValue != null;
 
@@ -62,6 +83,16 @@ namespace PeachPDF.CSS
 
         internal abstract IValueConverter Converter { get; }
 
-        internal IPropertyValue DeclaredValue { get; set; }
+        internal IPropertyValue DeclaredValue
+        {
+            get => _declaredValue;
+            set
+            {
+                _declaredValue = value;
+                _valueText = null;
+            }
+        }
+
+        private IPropertyValue _declaredValue = null!;
     }
 }

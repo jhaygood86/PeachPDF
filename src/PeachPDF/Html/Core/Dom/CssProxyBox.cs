@@ -58,6 +58,14 @@ namespace PeachPDF.Html.Core.Dom
         internal int SourceIndex { get; }
 
         /// <summary>
+        /// A proxy contributes nothing the fragment walk should visit directly - its content is
+        /// represented by an explicitly recorded <see cref="Fragmentation.FragmentEmitter.RecordRepeatingGroupInstance"/>
+        /// instance instead, sourced from <see cref="SourceBox"/> rather than discovered by walking this
+        /// proxy as an ordinary child.
+        /// </summary>
+        internal override bool IsFragmentWalkPlaceholder => true;
+
+        /// <summary>
         /// Creates a proxy box that references an original source box.
         /// </summary>
         /// <param name="parent">Parent box for this proxy in the document tree</param>
