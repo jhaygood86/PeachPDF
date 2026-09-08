@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -6,7 +7,7 @@ using System.Linq;
 
 namespace PeachPDF.CSS
 {
-    internal sealed class TokenValue : StylesheetNode, IEnumerable<Token>
+    internal sealed class TokenValue : StylesheetNode, IReadOnlyList<Token>
     {
         private readonly List<Token> _tokens;
         public static TokenValue Initial = FromString(Keywords.Initial);
@@ -29,13 +30,13 @@ namespace PeachPDF.CSS
 
         public static TokenValue FromString(string text)
         {
-            var token = new Token(TokenType.Ident, text, TextPosition.Empty);
+            var token = new Token(TokenType.Ident, text.AsMemory(), TextPosition.Empty);
             return new TokenValue(token);
         }
 
         public static TokenValue FromNumber(int number)
         {
-            var token = new NumberToken(number.ToString(CultureInfo.InvariantCulture), TextPosition.Empty);
+            var token = Token.NewNumber(number.ToString(CultureInfo.InvariantCulture).AsMemory(), TextPosition.Empty);
             return new TokenValue(token);
         }
 
@@ -45,9 +46,17 @@ namespace PeachPDF.CSS
 
         public string Text => this.ToCss();
 
-        public IEnumerator<Token> GetEnumerator()
+        // A concrete (non-interface-typed) GetEnumerator lets `foreach` duck-type directly to
+        // List<Token>.Enumerator (a struct) instead of going through the interface, which would box the
+        // enumerator once per foreach - the standard List<T>-style pattern.
+        public List<Token>.Enumerator GetEnumerator()
         {
             return _tokens.GetEnumerator();
+        }
+
+        IEnumerator<Token> IEnumerable<Token>.GetEnumerator()
+        {
+            return GetEnumerator();
         }
 
         IEnumerator IEnumerable.GetEnumerator()

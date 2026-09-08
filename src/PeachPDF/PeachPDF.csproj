@@ -32,6 +32,7 @@
 	<ItemGroup>
 		<PackageReference Include="DefaultDocumentation" Version="1.2.5" PrivateAssets="all" IncludeAssets="build" />
 		<PackageReference Include="MimeKit" Version="4.17.0" />
+		<PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
 	</ItemGroup>
 	<!--
 		Raster image decode/encode (PdfSharpCore/Utils/PeachImageSource.cs). Replaced

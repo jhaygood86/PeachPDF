@@ -179,7 +179,7 @@ namespace PeachPDF.CSS
 
         private static bool TryNonNegativeNumber(Token token, out double value)
         {
-            if (token is NumberToken number && number.Value >= 0f)
+            if (token is { Type: TokenType.Number } number && number.Value >= 0f)
             {
                 value = number.Value;
                 return true;

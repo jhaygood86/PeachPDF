@@ -73,7 +73,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
                                         // letter, so the all-letters unit check rejects the whole "e2" -
                                         // the real tokenizer now correctly reads this as a single
                                         // scientific-notation Number(100) token (issue #921), which still
-                                        // isn't a UnitToken, so this stays Inconclusive either way
+                                        // isn't a Dimension/Percentage token, so this stays Inconclusive either way
         [InlineData("1e+")]            // no digit follows the sign, so this isn't an exponent - 'e'
                                         // claims the unit branch, then a bare trailing '+' left over
         [InlineData("10-foo")]         // NumberDash: a unit may start with '-' after digits
@@ -124,7 +124,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
 
             var tokens = CssValueParser.GetCssTokens(input);
 
-            if (tokens is [UnitToken unitToken]) return (unitToken.Unit, unitToken.Value, true);
+            if (tokens is [{ Type: TokenType.Dimension or TokenType.Percentage } unitToken]) return (unitToken.Unit, unitToken.Value, true);
 
             return (null, null, false);
         }

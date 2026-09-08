@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -9,14 +9,14 @@ namespace PeachPDF.CSS
     internal sealed class StructValueConverter<T> : IValueConverter
         where T : struct, IFormattable
     {
-        private readonly Func<IEnumerable<Token>, T?> _converter;
+        private readonly Func<IReadOnlyList<Token>, T?> _converter;
 
-        public StructValueConverter(Func<IEnumerable<Token>, T?> converter)
+        public StructValueConverter(Func<IReadOnlyList<Token>, T?> converter)
         {
             _converter = converter;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var val = _converter(value);
             return val.HasValue ? new StructValue(val.Value, value) : null;
@@ -31,7 +31,7 @@ namespace PeachPDF.CSS
         {
             private readonly T _value;
 
-            public StructValue(T value, IEnumerable<Token> tokens)
+            public StructValue(T value, IReadOnlyList<Token> tokens)
             {
                 _value = value;
                 Original = new TokenValue(tokens);

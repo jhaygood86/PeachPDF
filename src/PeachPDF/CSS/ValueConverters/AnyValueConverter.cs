@@ -4,7 +4,7 @@ namespace PeachPDF.CSS
 {
     internal sealed class AnyValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             return new AnyValue(value);
         }

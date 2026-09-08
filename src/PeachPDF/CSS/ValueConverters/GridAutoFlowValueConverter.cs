@@ -19,7 +19,7 @@ namespace PeachPDF.CSS
         // the grammar; this is just a cached instance to call .Convert on.
         internal static readonly IValueConverter Instance = new GridAutoFlowValueConverter();
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.ToArray();
             var idents = tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();

@@ -32,8 +32,9 @@ namespace PeachPDF.CSS
             var isDisposed = StringBuffer == null;
             if (!isDisposed)
             {
-                var disposable = Source as IDisposable;
-                disposable?.Dispose();
+                // TextSource owns nothing that needs disposing (an already-decoded
+                // ReadOnlyMemory<char> cursor - see TextSource.cs), so only the pooled StringBuilder
+                // needs returning here.
                 StringBuffer.Clear().ToPool();
                 StringBuffer = null;
             }
@@ -155,9 +156,19 @@ namespace PeachPDF.CSS
         private char NormalizeForward(char symbol)
         {
             if (symbol != Symbols.CarriageReturn) return symbol;
+            // A raw '\r' always becomes a logical '\n' here, whether or not it was paired with a
+            // following '\n' - the character a token ends up holding then differs from the literal
+            // source byte(s) at this position, so a token whose scan crosses this point can't be
+            // represented as a plain slice of Source. Lexer resets this when a content run starts and
+            // consults it before deciding whether a slice is safe (see Lexer.BeginContentAt/EndContent).
+            CrossedCarriageReturn = true;
             if (Source.ReadCharacter() != Symbols.LineFeed) Source.Index--;
             return Symbols.LineFeed;
         }
+
+        // Set by NormalizeForward above; reset by Lexer at the start of each content run it wants to
+        // consider slicing directly from Source instead of materializing via FlushBuffer().
+        public bool CrossedCarriageReturn { get; set; }
 
         private char NormalizeBackward(char symbol)
         {

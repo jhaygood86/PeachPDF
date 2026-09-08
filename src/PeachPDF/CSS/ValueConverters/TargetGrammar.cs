@@ -13,6 +13,6 @@ namespace PeachPDF.CSS
     internal static class TargetGrammar
     {
         public static bool IsValidTarget(Token token) =>
-            token is StringToken or UrlToken or FunctionToken { Data: FunctionNames.Attr };
+            token is { Type: TokenType.String } or { Type: TokenType.Url } or { Type: TokenType.Function, Data: FunctionNames.Attr };
     }
 }

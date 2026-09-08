@@ -18,9 +18,9 @@ namespace PeachPDF.CSS
             public bool IsAuto { get; }
 
             /// <summary>The length/percentage/calc() token for this component, null when <see cref="IsAuto"/>.</summary>
-            public Token Value { get; }
+            public Token? Value { get; }
 
-            public Component(bool isAuto, Token value)
+            public Component(bool isAuto, Token? value)
             {
                 IsAuto = isAuto;
                 Value = value;

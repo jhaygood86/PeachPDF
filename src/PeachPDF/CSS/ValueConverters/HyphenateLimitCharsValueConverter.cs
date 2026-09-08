@@ -12,7 +12,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class HyphenateLimitCharsValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.ToArray();
             return HyphenateLimitCharsGrammar.TryParse(tokens, out _, out _, out _) ? new HyphenateLimitCharsValue(tokens) : null;

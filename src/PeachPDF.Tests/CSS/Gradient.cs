@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.CSS
         {
             var source = "linear-gradient(135deg, red, blue)";
             var value = ParseValue(source);
-            Assert.Equal(1, value.Count);
+            Assert.Single(value);
             Assert.Equal("linear-gradient", value[0].Data);
         }
 

@@ -6,7 +6,7 @@ namespace PeachPDF.CSS
 {
     internal sealed class UrlValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var str = value.ToUri();
             return str != null ? new UrlValue(str, value) : null;

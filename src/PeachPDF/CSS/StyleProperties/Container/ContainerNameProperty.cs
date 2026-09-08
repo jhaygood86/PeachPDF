@@ -30,7 +30,7 @@ namespace PeachPDF.CSS
 
         internal override IValueConverter Converter => StyleConverter;
 
-        private static string ToContainerNameList(IEnumerable<Token> value)
+        private static string ToContainerNameList(IReadOnlyList<Token> value)
         {
             var literals = ValueExtensions.ToLiterals(value);
             if (literals is null) return null;

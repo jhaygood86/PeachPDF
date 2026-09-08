@@ -195,9 +195,20 @@ namespace PeachPDF.Html.Core.Dom
             var colLineNames = BuildLineNames(colTemplate);
             var rowLineNames = BuildLineNames(rowTemplate);
 
+            // A ref struct (PooledTokenList) local can't live in an async method's own body under this
+            // project's net8.0 C# 12 language version (CS9202 - relaxed only in C# 13+), so the pooled
+            // tokenization is isolated in this local function, which compiles as its own ordinary method
+            // rather than becoming part of the async state machine.
+            static GridAreas ParseAreas(string gridTemplateAreas)
+            {
+                using var pooledTokens = CssValueParser.GetCssTokensPooled(gridTemplateAreas);
+                List<Token> tokens = pooledTokens;
+                return GridTemplateAreasGrammar.TryParse(tokens);
+            }
+
             var areas = string.IsNullOrEmpty(_gridBox.GridTemplateAreas) || _gridBox.GridTemplateAreas.Isi(Keywords.None)
                 ? null
-                : GridTemplateAreasGrammar.TryParse(CssValueParser.GetCssTokens(_gridBox.GridTemplateAreas));
+                : ParseAreas(_gridBox.GridTemplateAreas);
             if (areas is not null)
             {
                 foreach (var (name, b) in areas.Areas)
@@ -790,8 +801,19 @@ namespace PeachPDF.Html.Core.Dom
         private static (int Start, int Span) ResolveAxis(string startValue, string endValue, int explicitCount,
             IReadOnlyDictionary<string, List<int>> lineNames)
         {
-            var start = GridLineGrammar.TryParse(CssValueParser.GetCssTokens(startValue)) ?? GridLine.Auto;
-            var end = GridLineGrammar.TryParse(CssValueParser.GetCssTokens(endValue)) ?? GridLine.Auto;
+            GridLine start;
+            using (var pooledTokens = CssValueParser.GetCssTokensPooled(startValue))
+            {
+                List<Token> tokens = pooledTokens;
+                start = GridLineGrammar.TryParse(tokens) ?? GridLine.Auto;
+            }
+
+            GridLine end;
+            using (var pooledTokens = CssValueParser.GetCssTokensPooled(endValue))
+            {
+                List<Token> tokens = pooledTokens;
+                end = GridLineGrammar.TryParse(tokens) ?? GridLine.Auto;
+            }
 
             // A named-line reference resolves to a concrete line number against this axis's name table
             // (honoring the §8.3.1 -start/-end suffix rule for area names) before numeric handling.
@@ -1680,7 +1702,9 @@ namespace PeachPDF.Html.Core.Dom
         private static List<GridTrackSize> ExpandTrackSizes(string value)
         {
             if (string.IsNullOrEmpty(value)) return [GridTrackSize.Auto];
-            var list = GridTrackListGrammar.TryParseTrackSizeList(CssValueParser.GetCssTokens(value));
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
+            var list = GridTrackListGrammar.TryParseTrackSizeList(tokens);
             return list is { Count: > 0 } ? list.ToList() : [GridTrackSize.Auto];
         }
 

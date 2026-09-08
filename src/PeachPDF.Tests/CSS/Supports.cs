@@ -6,6 +6,19 @@ namespace PeachPDF.Tests.CSS
 
     public class CssSupportsTests : CssConstructionFunctions
     {
+        // ConditionText's setter (as opposed to its getter, exercised by every other test in this file)
+        // goes through StylesheetParser.ParseCondition - the CSSOM programmatic-assignment path.
+        [Fact]
+        public void ConditionTextSetter_ReplacesTheCondition()
+        {
+            var sheet = ParseStyleSheet("@supports (background-color: red) { }");
+            var supports = (SupportsRule)sheet.Rules[0];
+
+            supports.ConditionText = "(color: blue)";
+
+            Assert.Equal("(color: blue)", supports.ConditionText);
+        }
+
         [Fact]
         public void SupportsEmptyRule()
         {

@@ -16,11 +16,11 @@ namespace PeachPDF.CSS
     {
         private static readonly string[] ValidModes = { "content", "before", "after", "first-letter" };
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var first = value.OnlyOrDefault();
 
-            if (first is not FunctionToken funcToken ||
+            if (first is not { Type: TokenType.Function } funcToken ||
                 !funcToken.Data.Equals(FunctionNames.TargetText, System.StringComparison.OrdinalIgnoreCase))
                 return null;
 
@@ -34,7 +34,7 @@ namespace PeachPDF.CSS
             var mode = "content";
             if (args.Length > 1)
             {
-                if (args[1] is not KeywordToken modeToken)
+                if (args[1] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } modeToken)
                     return null;
 
                 var kw = modeToken.Data.ToLowerInvariant();

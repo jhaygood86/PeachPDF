@@ -23,7 +23,7 @@ namespace PeachPDF.CSS
             _delayIndex = delayIndex;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var list = new List<Token>(value);
             if (list.Count == 0)

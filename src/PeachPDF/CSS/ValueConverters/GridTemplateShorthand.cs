@@ -1,5 +1,6 @@
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -15,13 +16,13 @@ namespace PeachPDF.CSS
     /// </summary>
     internal static class GridTemplateShorthand
     {
-        internal static readonly Token AutoToken = new(TokenType.Ident, Keywords.Auto, TextPosition.Empty);
-        private static readonly Token NoneToken = new(TokenType.Ident, Keywords.None, TextPosition.Empty);
+        internal static readonly Token AutoToken = new(TokenType.Ident, Keywords.Auto.AsMemory(), TextPosition.Empty);
+        private static readonly Token NoneToken = new(TokenType.Ident, Keywords.None.AsMemory(), TextPosition.Empty);
 
         /// <summary>
         /// Splits the flat token stream on top-level <c>/</c> delimiters, preserving each group's
         /// whitespace. No bracket/paren depth counter is needed: functions are single <see
-        /// cref="FunctionToken"/>s (their args nested) and <c>[name]</c> groups hold only idents, so a
+        /// cref="Token"/>s of <see cref="TokenType.Function"/> (their args nested) and <c>[name]</c> groups hold only idents, so a
         /// <c>/</c> never appears nested at the flat level (same reasoning as
         /// <see cref="GridPlacementShorthand"/>).
         /// </summary>
@@ -55,7 +56,7 @@ namespace PeachPDF.CSS
         }
 
         private static bool ContainsRepeat(IEnumerable<Token> significant) =>
-            significant.Any(t => t is FunctionToken fn && fn.Data.Isi(FunctionNames.Repeat));
+            significant.Any(t => t is { Type: TokenType.Function } fn && fn.Data.Isi(FunctionNames.Repeat));
 
         /// <summary>Drops leading/trailing whitespace tokens, keeping internal whitespace.</summary>
         internal static IReadOnlyList<Token> Trim(IReadOnlyList<Token> tokens)
@@ -73,11 +74,11 @@ namespace PeachPDF.CSS
         /// <summary>The <c>grid-auto-flow</c> token slice for the <c>grid</c> auto-flow forms.</summary>
         internal static IReadOnlyList<Token> BuildAutoFlow(bool column, bool dense)
         {
-            var flow = new List<Token> { new(TokenType.Ident, column ? Keywords.Column : Keywords.Row, TextPosition.Empty) };
+            var flow = new List<Token> { new(TokenType.Ident, (column ? Keywords.Column : Keywords.Row).AsMemory(), TextPosition.Empty) };
             if (dense)
             {
                 flow.Add(Token.Whitespace);
-                flow.Add(new Token(TokenType.Ident, Keywords.Dense, TextPosition.Empty));
+                flow.Add(new Token(TokenType.Ident, Keywords.Dense.AsMemory(), TextPosition.Empty));
             }
             return flow;
         }

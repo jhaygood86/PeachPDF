@@ -1,5 +1,6 @@
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -18,7 +19,7 @@ namespace PeachPDF.CSS
             public bool IsBareCustomIdent { get; init; }
         }
 
-        private static readonly Token AutoToken = new(TokenType.Ident, Keywords.Auto, TextPosition.Empty);
+        private static readonly Token AutoToken = new(TokenType.Ident, Keywords.Auto.AsMemory(), TextPosition.Empty);
 
         /// <summary>Splits the value on top-level <c>/</c> delimiters into <c>&lt;grid-line&gt;</c> components,
         /// validating each via <see cref="GridLineGrammar"/>. Returns null on any invalid component or an

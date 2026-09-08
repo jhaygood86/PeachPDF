@@ -5,6 +5,20 @@ namespace PeachPDF.Tests.CSS
     using Xunit;
     public class CssDocumentFunctionTests : CssConstructionFunctions
     {
+        // ConditionText's setter (as opposed to its getter, exercised by every other test in this file)
+        // goes through StylesheetParser.ParseDocumentRules - the CSSOM programmatic-assignment path.
+        [Fact]
+        public void ConditionTextSetter_ReplacesTheConditions()
+        {
+            var rule = ParseRule("@document url(http://www.w3.org/) { }") as DocumentRule;
+            Assert.NotNull(rule);
+
+            rule.ConditionText = "domain('mozilla.org')";
+
+            Assert.Single(rule.Conditions);
+            Assert.Equal("domain", rule.Conditions.First().Name);
+        }
+
         [Fact]
         public void CssDocumentRuleSingleUrlFunction()
         {

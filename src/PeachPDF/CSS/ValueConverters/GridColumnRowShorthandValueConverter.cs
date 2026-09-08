@@ -22,7 +22,7 @@ namespace PeachPDF.CSS
             _endName = endName;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var components = GridPlacementShorthand.Split(value, maxComponents: 2);
             if (components is null) return null;

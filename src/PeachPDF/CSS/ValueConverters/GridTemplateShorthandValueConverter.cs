@@ -11,7 +11,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class GridTemplateShorthandValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             if (!GridTemplateShorthand.TryParseTemplate(value, out var rows, out var columns, out var areas))
                 return null;

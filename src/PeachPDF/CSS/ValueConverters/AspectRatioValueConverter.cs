@@ -13,7 +13,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class AspectRatioValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.ToArray();
             return AspectRatioGrammar.TryParse(tokens, out _) ? new AspectRatioValue(tokens) : null;

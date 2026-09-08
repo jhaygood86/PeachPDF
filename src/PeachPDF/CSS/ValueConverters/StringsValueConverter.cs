@@ -7,7 +7,7 @@ namespace PeachPDF.CSS
 {
     internal sealed class StringsValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var items = value.ToItems();
             var n = items.Count;

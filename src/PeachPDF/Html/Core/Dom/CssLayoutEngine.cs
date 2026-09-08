@@ -238,8 +238,16 @@ namespace PeachPDF.Html.Core.Dom
             if (string.IsNullOrEmpty(aspectRatio) || aspectRatio == Keywords.Auto)
                 return intrinsicRatio;
 
-            if (!AspectRatioGrammar.TryParse(CssValueParser.GetCssTokens(aspectRatio), out var ratio, out var hasAuto)
-                || ratio is not (> 0))
+            bool parsed;
+            double? ratio;
+            bool hasAuto;
+            using (var pooledTokens = CssValueParser.GetCssTokensPooled(aspectRatio))
+            {
+                List<Token> tokens = pooledTokens;
+                parsed = AspectRatioGrammar.TryParse(tokens, out ratio, out hasAuto);
+            }
+
+            if (!parsed || ratio is not (> 0))
                 return intrinsicRatio; // bare `auto`, or a zero-term ratio: natural ratio only
 
             // `auto <ratio>` prefers the natural ratio; a bare `<ratio>` overrides it.
@@ -1844,7 +1852,8 @@ namespace PeachPDF.Html.Core.Dom
             if (string.IsNullOrEmpty(box.AspectRatio) || box.AspectRatio == Keywords.Auto) return false;
             if (box.Size.Width <= 0) return false;
 
-            var tokens = CssValueParser.GetCssTokens(box.AspectRatio);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(box.AspectRatio);
+            List<Token> tokens = pooledTokens;
             if (!AspectRatioGrammar.TryParse(tokens, out var ratio) || ratio is not (> 0)) return false;
 
             height = box.Size.Width / ratio.Value + box.ActualBoxSizeIncludedHeight;
@@ -1886,7 +1895,8 @@ namespace PeachPDF.Html.Core.Dom
             if (box.Width != Keywords.Auto && !string.IsNullOrEmpty(box.Width)) return false;
             if (!HasDefiniteHeight(box)) return false;
 
-            var tokens = CssValueParser.GetCssTokens(box.AspectRatio);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(box.AspectRatio);
+            List<Token> tokens = pooledTokens;
             if (!AspectRatioGrammar.TryParse(tokens, out var ratio) || ratio is not (> 0)) return false;
 
             var boxSizingHeight = CssValueParser.ParseLength(box.Height, PercentageBase(box).Size.Height, box);

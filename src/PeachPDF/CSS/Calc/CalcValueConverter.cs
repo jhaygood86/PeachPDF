@@ -21,9 +21,9 @@ namespace PeachPDF.CSS
             _allowed = allowed;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
-            if (value.OnlyOrDefault() is not FunctionToken function) return null;
+            if (value.OnlyOrDefault() is not { Type: TokenType.Function } function) return null;
             if (!CalcParser.IsCalcFamily(function.Data)) return null;
 
             var node = CalcParser.Parse(function);

@@ -50,14 +50,14 @@ namespace PeachPDF.CSS
             return new ParsedPaletteMix(space!, hue, first, second!);
         }
 
-        private static FunctionToken? SinglePaletteMixFunction(IReadOnlyList<Token> value)
+        private static Token? SinglePaletteMixFunction(IReadOnlyList<Token> value)
         {
-            FunctionToken? found = null;
+            Token? found = null;
             foreach (var token in value)
             {
                 if (token.Type == TokenType.Whitespace)
                     continue;
-                if (found is not null || token is not FunctionToken fn || !fn.Data.Isi(FunctionName))
+                if (found is not null || token is not { Type: TokenType.Function } fn || !fn.Data.Isi(FunctionName))
                     return null;
                 found = fn;
             }
@@ -114,7 +114,7 @@ namespace PeachPDF.CSS
             double? percentage = null;
             if (tokens.Count == 2)
             {
-                if (tokens[1] is not UnitToken { Type: TokenType.Percentage } pct)
+                if (tokens[1] is not { Type: TokenType.Percentage } pct)
                     return false;
                 percentage = pct.Value;
             }

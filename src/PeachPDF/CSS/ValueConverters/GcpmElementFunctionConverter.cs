@@ -17,21 +17,21 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class GcpmElementFunctionConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var first = value.OnlyOrDefault();
 
-            if (first is not FunctionToken funcToken || !funcToken.Data.Isi(FunctionNames.Element))
+            if (first is not { Type: TokenType.Function } funcToken || !funcToken.Data.Isi(FunctionNames.Element))
                 return null;
 
             var args = funcToken.ArgumentTokens
                 .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
                 .ToArray();
 
-            // KeywordToken is also how a '#'-prefixed hash lexes (Type == TokenType.Hash) - the Images-4
+            // Type == TokenType.Hash is also how a '#'-prefixed hash lexes - the Images-4
             // element(#id) form - so the type check on top of the C# type pattern is what actually
             // disambiguates the two, not merely the different class each converter happens to check for.
-            if (args.Length == 0 || args[0] is not KeywordToken { Type: TokenType.Ident } nameToken)
+            if (args.Length == 0 || args[0] is not { Type: TokenType.Ident } nameToken)
                 return null;
 
             var name = nameToken.Data;
@@ -39,7 +39,7 @@ namespace PeachPDF.CSS
 
             if (args.Length > 1)
             {
-                if (args[1] is not KeywordToken { Type: TokenType.Ident } keywordToken)
+                if (args[1] is not { Type: TokenType.Ident } keywordToken)
                     return null;
 
                 var kw = keywordToken.Data.ToLowerInvariant();

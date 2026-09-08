@@ -167,7 +167,9 @@ namespace PeachPDF.Html.Core.Parse
             // silently never got assigned to CssBox.Height at all, leaving it at its "auto" default
             // instead of the declared zero - the CSS-OM layer already handled this case correctly via
             // ValueExtensions.ToLength's explicit `TokenType.Number when Value == 0f` branch.
-            return GetCssTokens(value).ToDistance() != null;
+            using var pooledTokens = GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
+            return tokens.ToDistance() != null;
         }
 
         /// <summary>
@@ -193,7 +195,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <remarks>
         /// Skips tokenizing entirely when <paramref name="length"/> has no <c>(</c> at all: a CSS function
         /// token is only ever produced from an ident immediately followed by <c>(</c> (CSS Syntax 3 §4.3.4),
-        /// so <c>tokens is [FunctionToken fn]</c> below can never hold without one - this is a necessary,
+        /// so <c>tokens is [{ Type: TokenType.Function } fn]</c> below can never hold without one - this is a necessary,
         /// not merely typical, precondition, so the short-circuit changes no outcome. This runs on every
         /// length this layer resolves (an ordinary "10px"/"50%"/"auto" value has no calc-family function at
         /// all, so it's the overwhelming majority), and a `dotnet-trace` allocation profile of the full
@@ -202,7 +204,7 @@ namespace PeachPDF.Html.Core.Parse
         /// called into (`Lexer`/`TextSource`/its `StringBuilder`) was being constructed fresh just to
         /// discover almost every time that the value wasn't a function at all.
         /// </remarks>
-        private static bool TryGetCalcFunction(string length, out FunctionToken? function)
+        private static bool TryGetCalcFunction(string length, out Token? function)
         {
             if (!length.Contains('('))
             {
@@ -210,9 +212,10 @@ namespace PeachPDF.Html.Core.Parse
                 return false;
             }
 
-            var tokens = GetCssTokens(length);
+            using var pooledTokens = GetCssTokensPooled(length);
+            List<Token> tokens = pooledTokens;
 
-            if (tokens is [FunctionToken fn] && CalcParser.IsCalcFamily(fn.Data))
+            if (tokens is [{ Type: TokenType.Function } fn] && CalcParser.IsCalcFamily(fn.Data))
             {
                 function = fn;
                 return true;
@@ -517,7 +520,7 @@ namespace PeachPDF.Html.Core.Parse
                 // CalcValueConverter (directly, or via DomParser's var()-substitution re-parse) - a null
                 // result here should be unreachable, but 0 is the same "can't make sense of this" fallback
                 // used elsewhere in this method for any other degenerate input.
-                var node = CalcParser.Parse(calcFunction);
+                var node = CalcParser.Parse(calcFunction!.Value);
                 var context = new CalcContext(hundredPercent, emFactor, remFactor, returnPoints, containerInlineSizePt, containerBlockSizePt,
                     viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt,
                     pixelsPerPoint);
@@ -567,9 +570,10 @@ namespace PeachPDF.Html.Core.Parse
 
             // Inconclusive - fall through to the real tokenizer unchanged, exactly as before this fast
             // path existed.
-            var tokens = GetCssTokens(length);
+            using var pooledTokens = GetCssTokensPooled(length);
+            List<Token> tokens = pooledTokens;
 
-            if (tokens is [UnitToken unitToken])
+            if (tokens is [{ Type: TokenType.Dimension or TokenType.Percentage } unitToken])
             {
                 hasUnit = true;
                 return (unitToken.Unit, unitToken.Value);
@@ -746,11 +750,12 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>parsed value</returns>
         public static CssImage? GetImagePropertyValue(string propValue)
         {
-            var tokens = GetCssTokens(propValue);
+            using var pooledTokens = GetCssTokensPooled(propValue);
+            List<Token> tokens = pooledTokens;
 
-            var urlToken = tokens.OfType<UrlToken>().SingleOrDefault();
+            var urlToken = tokens.SingleOfTypeOrNull(TokenType.Url);
 
-            return urlToken is not null ? new CssImage.Url(urlToken.Data) : null;
+            return urlToken is { } token ? new CssImage.Url(token.Data) : null;
         }
 
         /// <summary>
@@ -765,20 +770,24 @@ namespace PeachPDF.Html.Core.Parse
         /// </summary>
         public static List<CssFontFace> GetFontFacePropertyValue(string propValue)
         {
-            var tokens = GetCssTokens(propValue);
+            using var pooledTokens = GetCssTokensPooled(propValue);
+            List<Token> tokens = pooledTokens;
             var result = new List<CssFontFace>();
             var segment = new List<Token>();
+
+            static string? FirstArgData(Token? functionToken) =>
+                functionToken is { } ft && ft.ArgumentTokens.Count > 0 ? ft.ArgumentTokens[0].Data : null;
 
             void FlushSegment()
             {
                 if (segment.Count == 0) return;
 
-                var urlToken = segment.OfType<UrlToken>().SingleOrDefault();
-                var formatToken = segment.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "format");
-                var techToken = segment.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "tech");
-                var localToken = segment.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "local");
+                var urlToken = segment.SingleOfTypeOrNull(TokenType.Url);
+                var formatToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data == "format");
+                var techToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data == "tech");
+                var localToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data == "local");
 
-                result.Add(new CssFontFace(urlToken?.Data, formatToken?.ArgumentTokens?.FirstOrDefault()?.Data, techToken?.ArgumentTokens?.FirstOrDefault()?.Data, localToken?.ArgumentTokens?.FirstOrDefault()?.Data));
+                result.Add(new CssFontFace(urlToken?.Data, FirstArgData(formatToken), FirstArgData(techToken), FirstArgData(localToken)));
                 segment = [];
             }
 
@@ -796,12 +805,36 @@ namespace PeachPDF.Html.Core.Parse
 
         public static List<Token> GetCssTokens(string propValue, bool inValueContext = false, bool preserveWhitespace = false)
         {
+            List<Token> tokens = [];
+            TokenizeInto(tokens, propValue, inValueContext, preserveWhitespace);
+            return tokens;
+        }
+
+        /// <summary>
+        /// Same tokenization as <see cref="GetCssTokens"/>, but the returned list's backing array comes
+        /// from a thread-static pool instead of a fresh allocation - use only at a call site that has been
+        /// individually audited to never retain the list (or a sub-list/enumerable slice of it) past the
+        /// <c>using</c> block, e.g. <c>using var tokens = GetCssTokensPooled(value); // extract a scalar,
+        /// discard</c>. Reading one or more <see cref="Token"/> <em>values</em> out of it (indexing,
+        /// pattern matching, a value-extracting call like <c>.ToLength()</c>) is always safe regardless of
+        /// pooling, since <see cref="Token"/> is a value type - what must not happen is the list itself
+        /// (or anything wrapping it, like a <see cref="TokenValue"/>/<c>IPropertyValue.Original</c>)
+        /// surviving past the block, since its backing array can be handed to an unrelated caller the
+        /// moment this one's <c>using</c> block ends.
+        /// </summary>
+        public static PooledTokenList GetCssTokensPooled(string propValue, bool inValueContext = false, bool preserveWhitespace = false)
+        {
+            var tokens = Pool.NewTokenList();
+            TokenizeInto(tokens, propValue, inValueContext, preserveWhitespace);
+            return new PooledTokenList(tokens);
+        }
+
+        private static void TokenizeInto(List<Token> tokens, string propValue, bool inValueContext, bool preserveWhitespace)
+        {
             // In a value context '#rrggbb' lexes to a single Color token; otherwise a letter-leading hex is a
             // Hash token and a digit-leading hex is '#' + number. Callers that hand the tokens to the Layer-A
             // color/gradient grammar (which reads Color tokens) must set inValueContext so hex stops resolve.
             using var lexer = new Lexer(propValue) { IsInValue = inValueContext };
-
-            List<Token> tokens = [];
 
             Token token;
 
@@ -822,15 +855,14 @@ namespace PeachPDF.Html.Core.Parse
                 }
 
             } while (token.Type != TokenType.EndOfFile);
-
-            return tokens;
         }
 
         public static string GetFontFaceFamilyName(string propValue)
         {
-            var tokens = GetCssTokens(propValue);
+            using var pooledTokens = GetCssTokensPooled(propValue);
+            List<Token> tokens = pooledTokens;
 
-            if (tokens is [StringToken stringToken])
+            if (tokens is [{ Type: TokenType.String } stringToken])
             {
                 return stringToken.Data;
             }
@@ -876,17 +908,21 @@ namespace PeachPDF.Html.Core.Parse
                 return null;
             }
 
-            List<Token> tokens;
+            // ToList<Token>() with the explicit type argument, not the bare .ToList() - the latter
+            // resolves to ValueExtensions.ToList(this IEnumerable<Token>) (a comma-splitting helper
+            // returning List<List<Token>>), which shadows System.Linq's for this exact parameter type.
+            List<Token> functionTokens;
             try
             {
-                tokens = GetCssTokens(transformValue);
+                using var pooledTokens = GetCssTokensPooled(transformValue);
+                List<Token> tokens = pooledTokens;
+                functionTokens = tokens.Where(t => t.Type == TokenType.Function).ToList<Token>();
             }
             catch
             {
                 return null;
             }
 
-            var functionTokens = tokens.OfType<FunctionToken>().ToList();
             if (functionTokens.Count == 0)
                 return null;
 
@@ -935,7 +971,7 @@ namespace PeachPDF.Html.Core.Parse
         /// Builds the 4x4 matrix for a single CSS transform function. Returns null for unrecognized functions
         /// (which contribute identity - i.e. are silently skipped rather than invalidating the whole declaration).
         /// </summary>
-        private static Matrix4x4? BuildFunctionMatrix(FunctionToken funcToken, CssBox box)
+        private static Matrix4x4? BuildFunctionMatrix(Token funcToken, CssBox box)
         {
             var name = funcToken.Data;
             var args = funcToken.ArgumentTokens.ToList();
@@ -950,10 +986,10 @@ namespace PeachPDF.Html.Core.Parse
                 var direct = args[index].ToSingle();
                 if (direct.HasValue) return direct.Value;
 
-                // A calc()-family argument is a FunctionToken, not a NumberToken, so ToSingle() above
-                // can't see it - fall back to evaluating it directly. hundredPercent is a don't-care here
-                // (1) since a Number-category calc() can never contain a percentage leaf.
-                if (args[index] is [FunctionToken fn] && CalcParser.IsCalcFamily(fn.Data))
+                // A calc()-family argument is a Function-typed token, not a Number-typed one, so
+                // ToSingle() above can't see it - fall back to evaluating it directly. hundredPercent is
+                // a don't-care here (1) since a Number-category calc() can never contain a percentage leaf.
+                if (args[index] is [{ Type: TokenType.Function } fn] && CalcParser.IsCalcFamily(fn.Data))
                 {
                     var node = CalcParser.Parse(fn);
                     var context = new CalcContext(1, box.GetEmHeight(), box.GetRemHeight(), false);
@@ -1085,17 +1121,16 @@ namespace PeachPDF.Html.Core.Parse
             if (string.IsNullOrWhiteSpace(value) || string.Equals(value.Trim(), Keywords.None, StringComparison.OrdinalIgnoreCase))
                 return true;
 
-            List<Token> tokens;
             try
             {
-                tokens = GetCssTokens(value);
+                using var pooledTokens = GetCssTokensPooled(value);
+                List<Token> tokens = pooledTokens;
+                return tokens.Count > 0 && tokens.All(t => t is { Type: TokenType.Function } ft && IsRecognizedTransformFunctionName(ft.Data));
             }
             catch
             {
                 return false;
             }
-
-            return tokens.Count > 0 && tokens.All(t => t is FunctionToken ft && IsRecognizedTransformFunctionName(ft.Data));
         }
 
         /// <summary>
@@ -1126,7 +1161,7 @@ namespace PeachPDF.Html.Core.Parse
         /// No separator is required between two functions ("translate(10px)scale(2)" is accepted, not
         /// just "translate(10px) scale(2)") - verified empirically against the real declaration parser,
         /// which accepts both, because <c>ValueExtensions.ToItems()</c> (behind <c>.Many()</c>) treats
-        /// every <c>FunctionToken</c> as its own item boundary regardless of literal whitespace. Genuine
+        /// every Function-typed token as its own item boundary regardless of literal whitespace. Genuine
         /// junk between functions (e.g. "translate(10px)!scale(2)") is still rejected: the next
         /// identifier scan simply fails to consume any characters at that position.
         /// </remarks>
@@ -1311,18 +1346,21 @@ namespace PeachPDF.Html.Core.Parse
 
         private ParsedLinearGradient? ParseLinearGradient(string value)
         {
-            var tokens = GetCssTokens(value);
+            Token? funcToken;
+            using (var pooledTokens = GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                funcToken = tokens.FirstOrNull(t => t.Type == TokenType.Function &&
+                    (string.Equals(t.Data, FunctionNames.LinearGradient, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(t.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase)));
+            }
 
-            var funcToken = tokens.OfType<FunctionToken>().FirstOrDefault(t =>
-                string.Equals(t.Data, FunctionNames.LinearGradient, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase));
-
-            if (funcToken == null)
+            if (funcToken is not { } func)
                 return null;
 
-            bool isRepeating = string.Equals(funcToken.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase);
+            bool isRepeating = string.Equals(func.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase);
 
-            var args = funcToken.ArgumentTokens.ToList();
+            var args = func.ArgumentTokens.ToList();
             if (args.Count == 0)
                 return null;
 
@@ -1341,7 +1379,7 @@ namespace PeachPDF.Html.Core.Parse
             // combine with || (CSS Images 4), so they may appear in either order in the first group - take
             // the direction from the group with the "in ..." slice removed rather than assuming it trails
             // the clause (otherwise "to right in oklab" would drop its direction and fall back to 180deg).
-            IEnumerable<Token> directionTokens = firstGroup;
+            IReadOnlyList<Token> directionTokens = firstGroup;
             if (nextIdentIdx >= 0 &&
                 ColorInterpolationMethodGrammar.TryExtractInterpolationMethod(firstGroup, out var directionRemainder, out _))
                 directionTokens = directionRemainder;
@@ -1434,18 +1472,21 @@ namespace PeachPDF.Html.Core.Parse
 
         private ParsedRadialGradient? ParseRadialGradient(string value)
         {
-            var tokens = GetCssTokens(value);
+            Token? funcToken;
+            using (var pooledTokens = GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                funcToken = tokens.FirstOrNull(t => t.Type == TokenType.Function &&
+                    (string.Equals(t.Data, FunctionNames.RadialGradient, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(t.Data, FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase)));
+            }
 
-            var funcToken = tokens.OfType<FunctionToken>().FirstOrDefault(t =>
-                string.Equals(t.Data, FunctionNames.RadialGradient, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.Data, FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase));
-
-            if (funcToken == null)
+            if (funcToken is not { } func)
                 return null;
 
-            bool isRepeating = string.Equals(funcToken.Data, FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase);
+            bool isRepeating = string.Equals(func.Data, FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase);
 
-            var args = funcToken.ArgumentTokens.ToList();
+            var args = func.ArgumentTokens.ToList();
             if (args.Count == 0)
                 return null;
 
@@ -1660,18 +1701,21 @@ namespace PeachPDF.Html.Core.Parse
 
         private ParsedConicGradient? ParseConicGradient(string value)
         {
-            var tokens = GetCssTokens(value);
+            Token? funcToken;
+            using (var pooledTokens = GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                funcToken = tokens.FirstOrNull(t => t.Type == TokenType.Function &&
+                    (string.Equals(t.Data, FunctionNames.ConicGradient, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(t.Data, FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase)));
+            }
 
-            var funcToken = tokens.OfType<FunctionToken>().FirstOrDefault(t =>
-                string.Equals(t.Data, FunctionNames.ConicGradient, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(t.Data, FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase));
-
-            if (funcToken == null)
+            if (funcToken is not { } func)
                 return null;
 
-            bool isRepeating = string.Equals(funcToken.Data, FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase);
+            bool isRepeating = string.Equals(func.Data, FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase);
 
-            var args = funcToken.ArgumentTokens.ToList();
+            var args = func.ArgumentTokens.ToList();
             if (args.Count == 0)
                 return null;
 
@@ -1810,16 +1854,21 @@ namespace PeachPDF.Html.Core.Parse
                 value.Equals("none", StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            var tokens = GetCssTokens(value);
+            Token? urlToken;
+            Token? funcToken;
+            using (var pooledTokens = GetCssTokensPooled(value))
+            {
+                List<Token> tokens = pooledTokens;
+                urlToken = tokens.FirstOfTypeOrNull(TokenType.Url);
+                funcToken = tokens.FirstOfTypeOrNull(TokenType.Function);
+            }
 
-            var urlToken = tokens.OfType<UrlToken>().FirstOrDefault();
-            if (urlToken != null)
-                return new CssImage.Url(urlToken.Data);
+            if (urlToken is { } url)
+                return new CssImage.Url(url.Data);
 
-            var funcToken = tokens.OfType<FunctionToken>().FirstOrDefault();
-            if (funcToken == null) return null;
+            if (funcToken is not { } func) return null;
 
-            var name = funcToken.Data;
+            var name = func.Data;
             if (name.Equals(FunctionNames.LinearGradient, StringComparison.OrdinalIgnoreCase) ||
                 name.Equals(FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase))
             {
@@ -1977,7 +2026,7 @@ namespace PeachPDF.Html.Core.Parse
             // so `1turn * 0.35` → 0.35 turn; any percentage inside resolves against a full turn (100% = 2π),
             // matching the plain-percentage branch above. This is what lets a Charts.css pie slice — whose
             // every stop position is `calc(1turn * <value>)` — get its correct angular sweep.
-            if (item.Count == 1 && item[0] is FunctionToken function && CalcParser.IsCalcFamily(function.Data))
+            if (item.Count == 1 && item[0] is { Type: TokenType.Function } function && CalcParser.IsCalcFamily(function.Data))
             {
                 var node = CalcParser.Parse(function);
                 if (node is not null)
@@ -1988,7 +2037,7 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             // In CSS, bare 0 is a valid zero value for any dimension including angles.
-            if (item.Count == 1 && item[0].Type == TokenType.Number && ((NumberToken)item[0]).Value == 0f)
+            if (item.Count == 1 && item[0].Type == TokenType.Number && item[0].Value == 0f)
                 return 0.0;
 
             return null;
@@ -2068,7 +2117,7 @@ namespace PeachPDF.Html.Core.Parse
             return Math.PI; // default
         }
 
-        private static string BuildColorText(IEnumerable<IEnumerable<Token>> itemGroups)
+        private static string BuildColorText(IEnumerable<IReadOnlyList<Token>> itemGroups)
         {
             var sb = new StringBuilder();
             foreach (var group in itemGroups)
@@ -2272,7 +2321,9 @@ namespace PeachPDF.Html.Core.Parse
             // own hash-token rule, which only requires a name code point (IsNameStart() OR a digit/hyphen)
             // or a valid escape. A letter-leading hex (e.g. "#e11d48") satisfies both, so it lexes fine as
             // a Hash token either way (see GetCssTokens' inValueContext doc comment).
-            var parsed = GetCssTokens(substring, inValueContext: true).ToResolvedColor();
+            using var pooledTokens = GetCssTokensPooled(substring, inValueContext: true);
+            List<Token> tokens = pooledTokens;
+            var parsed = tokens.ToResolvedColor();
 
             if (parsed.HasValue)
             {

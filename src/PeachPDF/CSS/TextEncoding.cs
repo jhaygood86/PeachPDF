@@ -16,8 +16,15 @@ namespace PeachPDF.CSS
         public static readonly Encoding Utf8 = new UTF8Encoding(false);
         public static readonly Encoding Utf16Be = new UnicodeEncoding(true, false);
         public static readonly Encoding Utf16Le = new UnicodeEncoding(false, false);
-        public static readonly Encoding Utf32Le = GetEncoding("UTF-32LE");
-        public static readonly Encoding Utf32Be = GetEncoding("UTF-32BE");
+        // Constructed directly, like Utf16Be/Utf16Le above, rather than via GetEncoding(string) by
+        // name: Encoding.GetEncodings() (which populates AvailableEncodings, the gate GetEncoding(string)
+        // checks before calling Encoding.GetEncoding(name)) registers "utf-32" and "utf-32BE" as its
+        // canonical names, not "UTF-32LE"/"UTF-32BE" - so GetEncoding("UTF-32LE") silently fell back to
+        // Utf8 here even though Encoding.GetEncoding("UTF-32LE") resolves fine when called directly
+        // (bypassing that gate). Confirmed via CssStreamLoaderTests's UTF-32 BOM tests, the first test
+        // coverage of an actual UTF-32 stream decode in this codebase.
+        public static readonly Encoding Utf32Le = new UTF32Encoding(false, false);
+        public static readonly Encoding Utf32Be = new UTF32Encoding(true, false);
         public static readonly Encoding Gb18030 = GetEncoding("GB18030");
         public static readonly Encoding Big5 = GetEncoding("big5");
         public static readonly Encoding Windows874 = GetEncoding("windows-874");

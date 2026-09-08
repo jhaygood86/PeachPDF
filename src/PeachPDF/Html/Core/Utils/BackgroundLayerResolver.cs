@@ -2,6 +2,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace PeachPDF.Html.Core.Utils
@@ -58,7 +59,8 @@ namespace PeachPDF.Html.Core.Utils
             var value = string.IsNullOrWhiteSpace(sizeLayerValue) ? Keywords.Auto : sizeLayerValue.Trim();
             var hasRatio = intrinsicRatio is > 0;
 
-            var tokens = CssValueParser.GetCssTokens(value);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
             var parsed = BackgroundSizeGrammar.TryParse(tokens);
             if (parsed is null)
                 return (Math.Max(0, containerWidth), Math.Max(0, containerHeight));
@@ -81,8 +83,8 @@ namespace PeachPDF.Html.Core.Utils
                 return (scaleWidth, scaleHeight);
             }
 
-            double? resolvedWidth = parsed.Width.IsAuto ? null : Math.Max(0, CssValueParser.ParseLength(parsed.Width.Value.ToValue(), containerWidth, box));
-            double? resolvedHeight = parsed.Height.IsAuto ? null : Math.Max(0, CssValueParser.ParseLength(parsed.Height.Value.ToValue(), containerHeight, box));
+            double? resolvedWidth = parsed.Width.IsAuto ? null : Math.Max(0, CssValueParser.ParseLength(parsed.Width.Value!.Value.ToValue(), containerWidth, box));
+            double? resolvedHeight = parsed.Height.IsAuto ? null : Math.Max(0, CssValueParser.ParseLength(parsed.Height.Value!.Value.ToValue(), containerHeight, box));
 
             if (resolvedWidth is null && resolvedHeight is null)
             {
@@ -126,7 +128,8 @@ namespace PeachPDF.Html.Core.Utils
             CssBox box)
         {
             var value = string.IsNullOrWhiteSpace(positionLayerValue) ? "0% 0%" : positionLayerValue.Trim();
-            var tokens = CssValueParser.GetCssTokens(value);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
             var parsed = BackgroundPositionGrammar.TryParse(tokens);
             if (parsed is null)
                 return (0, 0);
@@ -143,14 +146,14 @@ namespace PeachPDF.Html.Core.Utils
             switch (component.Keyword)
             {
                 case BackgroundPositionGrammar.AxisKeyword.None:
-                    return CssValueParser.ParseLength(component.Offset.ToValue(), available, box);
+                    return CssValueParser.ParseLength(component.Offset!.Value.ToValue(), available, box);
                 case BackgroundPositionGrammar.AxisKeyword.Center:
                     return available / 2.0;
                 case BackgroundPositionGrammar.AxisKeyword.Right:
                 case BackgroundPositionGrammar.AxisKeyword.Bottom:
-                    return component.Offset is null ? available : available - CssValueParser.ParseLength(component.Offset.ToValue(), available, box);
+                    return component.Offset is null ? available : available - CssValueParser.ParseLength(component.Offset.Value.ToValue(), available, box);
                 default: // Left or Top
-                    return component.Offset is null ? 0.0 : CssValueParser.ParseLength(component.Offset.ToValue(), available, box);
+                    return component.Offset is null ? 0.0 : CssValueParser.ParseLength(component.Offset.Value.ToValue(), available, box);
             }
         }
     }

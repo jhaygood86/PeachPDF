@@ -17,11 +17,11 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class TargetCounterFunctionConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var first = value.OnlyOrDefault();
 
-            if (first is not FunctionToken funcToken ||
+            if (first is not { Type: TokenType.Function } funcToken ||
                 !funcToken.Data.Equals(FunctionNames.TargetCounter, System.StringComparison.OrdinalIgnoreCase))
                 return null;
 
@@ -32,13 +32,13 @@ namespace PeachPDF.CSS
             if (args.Length < 2 || !TargetGrammar.IsValidTarget(args[0]))
                 return null;
 
-            if (args[1] is not KeywordToken counterNameToken)
+            if (args[1] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } counterNameToken)
                 return null;
 
             var style = Keywords.Decimal;
             if (args.Length > 2)
             {
-                if (args[2] is not KeywordToken styleToken)
+                if (args[2] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken)
                     return null;
 
                 style = styleToken.Data;

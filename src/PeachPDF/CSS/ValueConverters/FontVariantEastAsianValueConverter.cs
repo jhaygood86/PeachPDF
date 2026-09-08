@@ -26,7 +26,7 @@ namespace PeachPDF.CSS
             [Keywords.Ruby]
         ];
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var result = TokenListConverter.Convert(value);
             return result != null && IsValid(result.CssText) ? result : null;

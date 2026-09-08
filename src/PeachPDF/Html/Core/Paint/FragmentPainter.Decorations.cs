@@ -198,7 +198,12 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         private static void PaintBoxShadows(RGraphics g, CssBox box, in BoxDecorationGeometry geometry, bool inset)
         {
-            var layers = BoxShadowGrammar.TryParse(CssValueParser.GetCssTokens(box.BoxShadow));
+            List<BoxShadowGrammar.ShadowLayer> layers;
+            using (var pooledTokens = CssValueParser.GetCssTokensPooled(box.BoxShadow))
+            {
+                List<Token> tokens = pooledTokens;
+                layers = BoxShadowGrammar.TryParse(tokens);
+            }
             if (layers is null || layers.Count == 0) return;
 
             // Both kinds are painted in separate passes over the same layer list, so a box carrying only the

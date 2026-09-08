@@ -30,7 +30,7 @@ namespace PeachPDF.CSS
             _converters = converters;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             // Fast path: match the operands in declaration order, identical to WithAny. This covers every
             // already-ordered value and keeps its serialization byte-for-byte the same.

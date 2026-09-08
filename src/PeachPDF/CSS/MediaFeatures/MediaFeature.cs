@@ -83,7 +83,7 @@ namespace PeachPDF.CSS
         {
             if (!HasValue) return null;
 
-            var numbers = _tokenValue.OfType<NumberToken>().Select(token => (double)token.Value).ToList();
+            var numbers = _tokenValue.Where(t => t.Type == TokenType.Number).Select(token => (double)token.Value).ToList();
 
             if (numbers.Count >= 2) return numbers[1] != 0 ? numbers[0] / numbers[1] : null;
             if (numbers.Count == 1) return numbers[0] > 0 ? numbers[0] : null;

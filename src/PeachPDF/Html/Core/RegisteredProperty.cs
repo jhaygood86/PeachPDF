@@ -191,50 +191,111 @@ namespace PeachPDF.Html.Core
             switch (type)
             {
                 case "<length>":
-                    return NumericOk(value, CalcCategory.Length, v => CssValueParser.GetCssTokens(v).ToLength() != null);
+                    return NumericOk(value, CalcCategory.Length, v =>
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(v);
+                        List<Token> tokens = pooledTokens;
+                        return tokens.ToLength() != null;
+                    });
                 case "<percentage>":
-                    return NumericOk(value, CalcCategory.Percentage, v => CssValueParser.GetCssTokens(v).ToPercent() != null);
+                    return NumericOk(value, CalcCategory.Percentage, v =>
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(v);
+                        List<Token> tokens = pooledTokens;
+                        return tokens.ToPercent() != null;
+                    });
                 case "<length-percentage>":
-                    return NumericOk(value, CalcCategory.LengthPercentage, v => CssValueParser.GetCssTokens(v).ToDistance() != null);
+                    return NumericOk(value, CalcCategory.LengthPercentage, v =>
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(v);
+                        List<Token> tokens = pooledTokens;
+                        return tokens.ToDistance() != null;
+                    });
                 case "<number>":
-                    return NumericOk(value, CalcCategory.Number, v => CssValueParser.GetCssTokens(v).ToSingle() != null);
+                    return NumericOk(value, CalcCategory.Number, v =>
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(v);
+                        List<Token> tokens = pooledTokens;
+                        return tokens.ToSingle() != null;
+                    });
                 case "<integer>":
-                    return NumericOk(value, CalcCategory.Number, v => CssValueParser.GetCssTokens(v).ToInteger() != null);
+                    return NumericOk(value, CalcCategory.Number, v =>
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(v);
+                        List<Token> tokens = pooledTokens;
+                        return tokens.ToInteger() != null;
+                    });
                 case "<angle>":
-                    return NumericOk(value, CalcCategory.Angle, v => CssValueParser.GetCssTokens(v).ToAngle() != null);
+                    return NumericOk(value, CalcCategory.Angle, v =>
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(v);
+                        List<Token> tokens = pooledTokens;
+                        return tokens.ToAngle() != null;
+                    });
                 case "<ratio>":
                     // <ratio> = <number [0,∞]> [ / <number [0,∞]> ]? (CSS Values 4 §11) — notably NOT `auto`,
                     // so `@property { syntax: "<ratio>"; initial-value: auto }` is invalid and the rule drops.
                     // A whole-value calc() here resolves to a Number (a single-number ratio).
-                    return NumericOk(value, CalcCategory.Number, v => AspectRatioGrammar.TryParseRatio(CssValueParser.GetCssTokens(v), out _));
+                    return NumericOk(value, CalcCategory.Number, v =>
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(v);
+                        List<Token> tokens = pooledTokens;
+                        return AspectRatioGrammar.TryParseRatio(tokens, out _);
+                    });
                 case "<color>":
                     return valueParser.IsColorValid(value);
                 case "<url>":
                     // A single url() token (CSS Values 4 §4.5).
-                    return CssValueParser.GetCssTokens(value).ToUri() != null;
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+                        List<Token> tokens = pooledTokens;
+                        return tokens.ToUri() != null;
+                    }
                 case "<image>":
                     // Validate through the shared Layer-A <image> grammar (Converters.ImageSourceConverter):
                     // url(), gradients, and the syntactically-valid-but-not-rendered image functions
                     // image-set()/cross-fade()/element() (CSS Images 4 §2) — the same grammar background-image
                     // and friends use, so registration and property parsing agree. Tokenized in value context
                     // so hex gradient stops (#f00 / #00f) resolve as Color tokens for the gradient converters.
-                    return Converters.ImageSourceConverter.Convert(CssValueParser.GetCssTokens(value, inValueContext: true)) is not null;
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(value, inValueContext: true);
+                        List<Token> tokens = pooledTokens;
+                        return Converters.ImageSourceConverter.Convert(tokens) is not null;
+                    }
                 case "<time>":
                     // A literal <time> dimension (s/ms) or a <time>-category calc() (CalcParser now models
                     // time units); s/ms are absolute, so a time calc() is always computationally independent.
-                    return NumericOk(value, CalcCategory.Time, v => CssValueParser.GetCssTokens(v).ToTime() != null);
+                    return NumericOk(value, CalcCategory.Time, v =>
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(v);
+                        List<Token> tokens = pooledTokens;
+                        return tokens.ToTime() != null;
+                    });
                 case "<resolution>":
                     // A literal <resolution> dimension (dpi/dpcm/dppx) or a <resolution>-category calc().
-                    return NumericOk(value, CalcCategory.Resolution, v => CssValueParser.GetCssTokens(v).ToResolution() != null);
+                    return NumericOk(value, CalcCategory.Resolution, v =>
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(v);
+                        List<Token> tokens = pooledTokens;
+                        return tokens.ToResolution() != null;
+                    });
                 case "<transform-function>":
                     // Exactly one transform function, validated (name + argument arity/types) through the
                     // shared Layer-A transform grammar. FunctionValueConverter's OnlyOrDefault rejects a list.
-                    return Converters.TransformConverter.Convert(CssValueParser.GetCssTokens(value)) is not null;
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+                        List<Token> tokens = pooledTokens;
+                        return Converters.TransformConverter.Convert(tokens) is not null;
+                    }
                 case "<transform-list>":
                     // One or more space-separated transform functions (CSS Transforms 1). GetCssTokens drops
                     // whitespace, but ToItems() (used by Many) starts a new item at each function token, so a
                     // multi-function list still splits correctly.
-                    return Converters.TransformConverter.Many().Convert(CssValueParser.GetCssTokens(value)) is not null;
+                    {
+                        using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+                        List<Token> tokens = pooledTokens;
+                        return Converters.TransformConverter.Many().Convert(tokens) is not null;
+                    }
                 case "<custom-ident>":
                     return IsIdent(value);
                 case "<string>":
@@ -294,8 +355,9 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private static bool CalcMatchesCategory(string value, CalcCategory allowed)
         {
-            var tokens = CssValueParser.GetCssTokens(value);
-            if (tokens is not [FunctionToken fn] || !CalcParser.IsCalcFamily(fn.Data)) return false;
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
+            if (tokens is not [{ Type: TokenType.Function } fn] || !CalcParser.IsCalcFamily(fn.Data)) return false;
             var node = CalcParser.Parse(fn);
             if (node is null) return false;
             var category = CalcTypeChecker.Check(node);
@@ -311,8 +373,9 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private static bool CalcIsComputationallyIndependent(string value)
         {
-            var tokens = CssValueParser.GetCssTokens(value);
-            if (tokens is not [FunctionToken fn] || !CalcParser.IsCalcFamily(fn.Data)) return true;
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
+            if (tokens is not [{ Type: TokenType.Function } fn] || !CalcParser.IsCalcFamily(fn.Data)) return true;
             var node = CalcParser.Parse(fn);
             return node is not null && IsComputationallyIndependent(node);
         }

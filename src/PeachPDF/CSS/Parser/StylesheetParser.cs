@@ -44,22 +44,17 @@ namespace PeachPDF.CSS
             return Parse(source);
         }
 
-        public Stylesheet Parse(Stream content)
-        {
-            var source = new TextSource(content);
-            return Parse(source);
-        }
-
         public Task<Stylesheet> ParseAsync(string content)
         {
             return ParseAsync(content, CancellationToken.None);
         }
 
-        public async Task<Stylesheet> ParseAsync(string content, CancellationToken cancelToken)
+        public Task<Stylesheet> ParseAsync(string content, CancellationToken cancelToken)
         {
+            // A string source is already fully decoded text - nothing to await, but this overload stays
+            // Task-returning (rather than synchronous) to keep the existing async-call-site contract.
             var source = new TextSource(content);
-            await source.PrefetchAllAsync(cancelToken).ConfigureAwait(false);
-            return Parse(source);
+            return Task.FromResult(Parse(source));
         }
 
         public Task<Stylesheet> ParseAsync(Stream content)
@@ -69,8 +64,8 @@ namespace PeachPDF.CSS
 
         public async Task<Stylesheet> ParseAsync(Stream content, CancellationToken cancelToken)
         {
-            var source = new TextSource(content);
-            await source.PrefetchAllAsync(cancelToken).ConfigureAwait(false);
+            var data = await CssStreamLoader.LoadAsync(content, null, cancelToken).ConfigureAwait(false);
+            var source = new TextSource(data);
             return Parse(source);
         }
 
@@ -93,7 +88,7 @@ namespace PeachPDF.CSS
 
         internal KeyframeSelector ParseKeyframeSelector(string keyText)
         {
-            return Parse(keyText, (b, t) => Tuple.Create(b.CreateKeyframeSelector(ref t), t));
+            return Parse(keyText, (b, t) => (b.CreateKeyframeSelector(ref t), t));
         }
 
         internal SelectorConstructor GetSelectorCreator()
@@ -106,12 +101,11 @@ namespace PeachPDF.CSS
 
         internal Stylesheet Parse(TextSource source)
         {
-            // Deliberately not `using` here: `source` is the caller's, not this method's, and every
-            // rule/statement CreateRules produces stashes it (via StylesheetComposer.CreateView ->
-            // StylesheetText) for a *lazy* `.Text` read after this method returns. Disposing the Lexer
-            // would dispose `source` too (LexerBase.Dispose walks Source), which is harmless for a
-            // string-backed source (its Dispose is a no-op) but corrupts a stream-backed one (Parse(Stream)
-            // -> `_content` goes null) for every StylesheetText read made afterward.
+            // `source` is the caller's, not this method's: every rule/statement CreateRules produces
+            // stashes it (via StylesheetComposer.CreateView -> StylesheetText) for a *lazy* `.Text` read
+            // after this method returns, so it must outlive this call - TextSource itself owns nothing
+            // that needs disposing (it's an already-decoded ReadOnlyMemory<char> cursor), so there is no
+            // lifetime hazard here to guard against the way there was when it could be stream-backed.
             var sheet = new Stylesheet(this);
             var tokenizer = new Lexer(source);
             var start = tokenizer.GetCurrentPosition();
@@ -119,27 +113,6 @@ namespace PeachPDF.CSS
             var end = builder.CreateRules(sheet);
             var range = new TextRange(start, end);
             sheet.StylesheetText = new StylesheetText(range, source);
-            return sheet;
-        }
-
-        internal async Task<Stylesheet> ParseAsync(Stylesheet sheet, TextSource source)
-        {
-            await source.PrefetchAllAsync(CancellationToken.None).ConfigureAwait(false);
-            var tokenizer = new Lexer(source);
-            var start = tokenizer.GetCurrentPosition();
-            var builder = new StylesheetComposer(tokenizer, this);
-            //var tasks = new List<Task>();
-            var end = builder.CreateRules(sheet);
-            var range = new TextRange(start, end);
-            sheet.StylesheetText = new StylesheetText(range, source);
-
-            foreach (var rule in sheet.Rules)
-            {
-                if (rule.Type == RuleType.Charset) continue;
-                if (rule.Type != RuleType.Import) break;
-            }
-
-            //await TaskEx.WhenAll(tasks).ConfigureAwait(false);
             return sheet;
         }
 
@@ -159,27 +132,27 @@ namespace PeachPDF.CSS
 
         internal Property ParseDeclaration(string declarationText)
         {
-            return Parse(declarationText, (b, t) => Tuple.Create(b.CreateDeclaration(ref t), t));
+            return Parse(declarationText, (b, t) => (b.CreateDeclaration(ref t), t));
         }
 
         internal List<Medium> ParseMediaList(string mediaText)
         {
-            return Parse(mediaText, (b, t) => Tuple.Create(b.CreateMedia(ref t), t));
+            return Parse(mediaText, (b, t) => (b.CreateMedia(ref t), t));
         }
 
         internal IConditionFunction ParseCondition(string conditionText)
         {
-            return Parse(conditionText, (b, t) => Tuple.Create(b.CreateCondition(ref t), t));
+            return Parse(conditionText, (b, t) => (b.CreateCondition(ref t), t));
         }
 
         internal List<DocumentFunction> ParseDocumentRules(string documentText)
         {
-            return Parse(documentText, (b, t) => Tuple.Create(b.CreateFunctions(ref t), t));
+            return Parse(documentText, (b, t) => (b.CreateFunctions(ref t), t));
         }
 
         internal Medium ParseMedium(string mediumText)
         {
-            return Parse(mediumText, (b, t) => Tuple.Create(b.CreateMedium(ref t), t));
+            return Parse(mediumText, (b, t) => (b.CreateMedium(ref t), t));
         }
 
         internal KeyframeRule ParseKeyframeRule(string ruleText)
@@ -203,13 +176,13 @@ namespace PeachPDF.CSS
             return tokenizer.Get().Type == TokenType.EndOfFile ? rule : default;
         }
 
-        private T Parse<T>(string source, Func<StylesheetComposer, Token, Tuple<T, Token>> create)
+        private T Parse<T>(string source, Func<StylesheetComposer, Token, (T Value, Token Token)> create)
         {
             using var tokenizer = CreateTokenizer(source);
             var token = tokenizer.Get();
             var builder = new StylesheetComposer(tokenizer, this);
             var pair = create(builder, token);
-            return pair.Item2.Type == TokenType.EndOfFile ? pair.Item1 : default;
+            return pair.Token.Type == TokenType.EndOfFile ? pair.Value : default;
         }
 
         private static Lexer CreateTokenizer(string sourceCode)

@@ -55,8 +55,12 @@ namespace PeachPDF.CSS
         }
 
         /// <summary>Convenience overload that tokenizes <paramref name="value"/> first.</summary>
-        internal static bool TryParse(string value, out int? wordMin, out int? beforeMin, out int? afterMin) =>
-            TryParse(global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokens(value), out wordMin, out beforeMin, out afterMin);
+        internal static bool TryParse(string value, out int? wordMin, out int? beforeMin, out int? afterMin)
+        {
+            using var pooledTokens = global::PeachPDF.Html.Core.Parse.CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
+            return TryParse(tokens, out wordMin, out beforeMin, out afterMin);
+        }
 
         /// <summary>Re-serializes the three limits back into a canonical, always-fully-explicit value.</summary>
         internal static string Serialize(int? wordMin, int? beforeMin, int? afterMin) =>
@@ -91,7 +95,7 @@ namespace PeachPDF.CSS
                 return true;
             }
 
-            if (token is NumberToken { IsInteger: true } number && number.IntegerValue >= 0)
+            if (token is { Type: TokenType.Number, IsInteger: true } number && number.IntegerValue >= 0)
             {
                 value = number.IntegerValue;
                 return true;

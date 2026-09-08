@@ -31,7 +31,8 @@ namespace PeachPDF.Html.Core
             var value = string.IsNullOrWhiteSpace(fontPalette) ? Keywords.Normal : fontPalette!.Trim();
             var family = usedFamily ?? string.Empty;
 
-            var tokens = CssValueParser.GetCssTokens(value);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
             if (PaletteMixGrammar.TryParse(tokens) is { } mix)
                 return ResolvePaletteMix(mix, font, family, registry);
 

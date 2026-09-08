@@ -40,7 +40,7 @@ namespace PeachPDF.CSS
     /// <summary><c>element( &lt;id-selector&gt; )</c> — a single <c>#id</c> hash argument.</summary>
     internal sealed class ElementImageConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             // ToArray (LINQ) — a bare ToList() on IEnumerable<Token> resolves to the CSS comma-group splitter.
             var tokens = value.Where(t => t.Type != TokenType.Whitespace).ToArray();
@@ -56,7 +56,7 @@ namespace PeachPDF.CSS
     /// <summary><c>image-set( &lt;image-set-option&gt;# )</c>, option = <c>[ &lt;image&gt; | &lt;string&gt; ] [ &lt;resolution&gt; || type(&lt;string&gt;) ]?</c>.</summary>
     internal sealed class ImageSetConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var options = value.ToList(); // comma-separated groups
             if (options.Count == 0 || options.Any(o => !IsOption(o))) return null;
@@ -83,9 +83,9 @@ namespace PeachPDF.CSS
 
         private static bool IsTypeFunction(List<Token> item)
         {
-            if (item is not [FunctionToken fn] || !fn.Data.Equals("type", System.StringComparison.OrdinalIgnoreCase))
+            if (item is not [{ Type: TokenType.Function } fn] || !fn.Data.Equals("type", System.StringComparison.OrdinalIgnoreCase))
                 return false;
-            var inner = fn.Where(t => t.Type is not (TokenType.Whitespace or TokenType.RoundBracketClose)).ToArray();
+            var inner = fn.Arguments.Where(t => t.Type is not (TokenType.Whitespace or TokenType.RoundBracketClose)).ToArray();
             return inner.Length == 1 && inner[0].Type == TokenType.String;
         }
 
@@ -96,7 +96,7 @@ namespace PeachPDF.CSS
     /// plus the legacy <c>cross-fade( &lt;image&gt;, &lt;image&gt;, &lt;percentage&gt; )</c> form.</summary>
     internal sealed class CrossFadeConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var args = value.ToList(); // comma-separated groups
             if (args.Count == 0) return null;

@@ -19,7 +19,7 @@ namespace PeachPDF.CSS
         // StylesheetParser round trip - see CLAUDE.md's "one parser" rule.
         internal static readonly IValueConverter Instance = new TextIndentValueConverter();
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.ToArray();
             return TextIndentGrammar.TryParse(tokens, out _, out _, out _) ? new TextIndentValue(tokens) : null;

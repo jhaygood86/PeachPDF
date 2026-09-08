@@ -392,6 +392,22 @@ h1 { color: green }";
             Assert.Equal(String.Concat(media[0], ", ", media[2]), m.MediaText);
         }
 
+        // MediaList.MediaText's setter (as opposed to its getter, exercised throughout this file via
+        // media.Media.MediaText reads) goes through StylesheetParser.ParseMediaList - the CSSOM
+        // programmatic-assignment path, distinct from parsing a whole stylesheet.
+        [Fact]
+        public void MediaTextSetter_ReplacesTheMediaListContents()
+        {
+            var p = new StylesheetParser();
+            var m = new MediaList(p);
+            m.Add("screen");
+
+            m.MediaText = "print, (min-width: 30px)";
+
+            Assert.Equal(2, m.Length);
+            Assert.Equal("print, (min-width: 30px)", m.MediaText);
+        }
+
         [Fact]
         public void CombinedConditionMediaQueriesLevel4()
         {

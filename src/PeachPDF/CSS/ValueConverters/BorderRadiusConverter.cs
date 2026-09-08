@@ -1,5 +1,6 @@
 ﻿#nullable disable
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -14,7 +15,7 @@ namespace PeachPDF.CSS
             PropertyNames.BorderBottomRightRadius,
             PropertyNames.BorderBottomLeftRadius);
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var front = new List<Token>();
             var back = new List<Token>();
@@ -80,7 +81,7 @@ namespace PeachPDF.CSS
 
                 var h = _converter.Convert(front);
                 var v = _converter.Convert(back);
-                var o = front.Concat(new Token(TokenType.Delim, "/", TextPosition.Empty)).Concat(back);
+                var o = front.Concat(new Token(TokenType.Delim, "/".AsMemory(), TextPosition.Empty)).Concat(back);
 
                 return new BorderRadiusValue(h, v, new TokenValue(o));
             }

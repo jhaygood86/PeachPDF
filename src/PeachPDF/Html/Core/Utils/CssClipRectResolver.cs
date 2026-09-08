@@ -3,6 +3,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace PeachPDF.Html.Core.Utils
@@ -32,15 +33,16 @@ namespace PeachPDF.Html.Core.Utils
             clipRect = default;
             if (string.IsNullOrWhiteSpace(value)) return false;
 
-            var tokens = CssValueParser.GetCssTokens(value);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
 
-            if (tokens is [KeywordToken { Data: Keywords.Auto }]) return false;
-            if (tokens.Count != 1 || tokens[0] is not FunctionToken function) return false;
+            if (tokens is [{ Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.Auto }]) return false;
+            if (tokens.Count != 1 || tokens[0] is not { Type: TokenType.Function } function) return false;
             if (!function.Data.Isi(FunctionNames.Rect)) return false;
 
             // rect()'s two legal separators (CSS 2.1 §11.1.2 allows both the comma and the older
             // space-separated form) each carry exactly one token per edge - a length, a calc()
-            // (one FunctionToken, whose own Token.ToValue() reconstructs the full "calc(...)" text), or
+            // (one Function-typed token, whose own Token.ToValue() reconstructs the full "calc(...)" text), or
             // the "auto" keyword - so stripping the separators and reading what's left positionally
             // handles both forms uniformly; no need to group multi-token arguments the way a
             // multi-token shape argument (e.g. a polygon vertex pair) would.
@@ -66,7 +68,7 @@ namespace PeachPDF.Html.Core.Utils
         /// (the box's own edge, already an absolute coordinate); otherwise <paramref name="origin"/> plus
         /// the parsed length (offset from that edge, per CSS 2.1 §11.1.2).</summary>
         private static double ResolveEdge(Token edge, CssBox box, double basis, double origin, double autoValue) =>
-            edge is KeywordToken { Data: Keywords.Auto }
+            edge is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.Auto }
                 ? autoValue
                 : origin + CssValueParser.ParseLength(edge.ToValue(), basis, box);
     }

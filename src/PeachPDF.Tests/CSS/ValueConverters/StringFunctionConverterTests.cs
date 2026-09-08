@@ -18,16 +18,16 @@ namespace PeachPDF.Tests.CSS.ValueConverters
 
             Assert.Single(tokens);
             var token = tokens[0];
-            Assert.IsType<FunctionToken>(token);
+            Assert.Equal(TokenType.Function, token.Type);
 
-            var functionToken = (FunctionToken)token;
+            var functionToken = token;
             Assert.Equal("string", functionToken.Data);
             Assert.NotEmpty(functionToken.ArgumentTokens);
 
             // First argument should be the identifier "chapter"
             var firstArg = functionToken.ArgumentTokens.First(t => t.Type != TokenType.Whitespace);
-            Assert.IsType<KeywordToken>(firstArg);
-            Assert.Equal("chapter", ((KeywordToken)firstArg).Data);
+            Assert.True(firstArg.Type is TokenType.Hash or TokenType.AtKeyword or TokenType.Ident);
+            Assert.Equal("chapter", firstArg.Data);
         }
 
         [Fact]
@@ -38,9 +38,9 @@ namespace PeachPDF.Tests.CSS.ValueConverters
 
             Assert.Single(tokens);
             var token = tokens[0];
-            Assert.IsType<FunctionToken>(token);
+            Assert.Equal(TokenType.Function, token.Type);
 
-            var functionToken = (FunctionToken)token;
+            var functionToken = token;
             Assert.Equal("string", functionToken.Data);
 
             var args = functionToken.ArgumentTokens
@@ -48,8 +48,8 @@ namespace PeachPDF.Tests.CSS.ValueConverters
          .ToArray();
 
             Assert.Equal(2, args.Length);
-            Assert.Equal("chapter", ((KeywordToken)args[0]).Data);
-            Assert.Equal("first", ((KeywordToken)args[1]).Data);
+            Assert.Equal("chapter", args[0].Data);
+            Assert.Equal("first", args[1].Data);
         }
 
         [Fact]
@@ -58,14 +58,14 @@ namespace PeachPDF.Tests.CSS.ValueConverters
             var input = "string(chapter, last)";
             var tokens = CssValueParser.GetCssTokens(input);
 
-            var functionToken = (FunctionToken)tokens[0];
+            var functionToken = tokens[0];
             var args = functionToken.ArgumentTokens
          .Where(t => t.Type != TokenType.Whitespace && t.Type != TokenType.Comma)
                      .ToArray();
 
             Assert.Equal(2, args.Length);
-            Assert.Equal("chapter", ((KeywordToken)args[0]).Data);
-            Assert.Equal("last", ((KeywordToken)args[1]).Data);
+            Assert.Equal("chapter", args[0].Data);
+            Assert.Equal("last", args[1].Data);
         }
 
         [Fact]
@@ -74,14 +74,14 @@ namespace PeachPDF.Tests.CSS.ValueConverters
             var input = "string(chapter, start)";
             var tokens = CssValueParser.GetCssTokens(input);
 
-            var functionToken = (FunctionToken)tokens[0];
+            var functionToken = tokens[0];
             var args = functionToken.ArgumentTokens
            .Where(t => t.Type != TokenType.Whitespace && t.Type != TokenType.Comma)
            .ToArray();
 
             Assert.Equal(2, args.Length);
-            Assert.Equal("chapter", ((KeywordToken)args[0]).Data);
-            Assert.Equal("start", ((KeywordToken)args[1]).Data);
+            Assert.Equal("chapter", args[0].Data);
+            Assert.Equal("start", args[1].Data);
         }
 
         [Fact]
@@ -90,14 +90,14 @@ namespace PeachPDF.Tests.CSS.ValueConverters
             var input = "string(chapter, first-except)";
             var tokens = CssValueParser.GetCssTokens(input);
 
-            var functionToken = (FunctionToken)tokens[0];
+            var functionToken = tokens[0];
             var args = functionToken.ArgumentTokens
         .Where(t => t.Type != TokenType.Whitespace && t.Type != TokenType.Comma)
         .ToArray();
 
             Assert.Equal(2, args.Length);
-            Assert.Equal("chapter", ((KeywordToken)args[0]).Data);
-            Assert.Equal("first-except", ((KeywordToken)args[1]).Data);
+            Assert.Equal("chapter", args[0].Data);
+            Assert.Equal("first-except", args[1].Data);
         }
 
         [Fact]
@@ -106,13 +106,13 @@ namespace PeachPDF.Tests.CSS.ValueConverters
             var input = "string(my-chapter-title)";
             var tokens = CssValueParser.GetCssTokens(input);
 
-            var functionToken = (FunctionToken)tokens[0];
+            var functionToken = tokens[0];
             var args = functionToken.ArgumentTokens
        .Where(t => t.Type != TokenType.Whitespace)
      .ToArray();
 
             Assert.Single(args);
-            Assert.Equal("my-chapter-title", ((KeywordToken)args[0]).Data);
+            Assert.Equal("my-chapter-title", args[0].Data);
         }
 
         [Fact]
@@ -121,13 +121,13 @@ namespace PeachPDF.Tests.CSS.ValueConverters
             var input = "string(chapter_title)";
             var tokens = CssValueParser.GetCssTokens(input);
 
-            var functionToken = (FunctionToken)tokens[0];
+            var functionToken = tokens[0];
             var args = functionToken.ArgumentTokens
             .Where(t => t.Type != TokenType.Whitespace)
            .ToArray();
 
             Assert.Single(args);
-            Assert.Equal("chapter_title", ((KeywordToken)args[0]).Data);
+            Assert.Equal("chapter_title", args[0].Data);
         }
 
         [Fact]
@@ -184,14 +184,14 @@ namespace PeachPDF.Tests.CSS.ValueConverters
             var input = "string(chapter , last)";
             var tokens = CssValueParser.GetCssTokens(input);
 
-            var functionToken = (FunctionToken)tokens[0];
+            var functionToken = tokens[0];
             var args = functionToken.ArgumentTokens
      .Where(t => t.Type != TokenType.Whitespace && t.Type != TokenType.Comma)
         .ToArray();
 
             Assert.Equal(2, args.Length);
-            Assert.Equal("chapter", ((KeywordToken)args[0]).Data);
-            Assert.Equal("last", ((KeywordToken)args[1]).Data);
+            Assert.Equal("chapter", args[0].Data);
+            Assert.Equal("last", args[1].Data);
         }
 
         [Fact]
@@ -200,14 +200,14 @@ namespace PeachPDF.Tests.CSS.ValueConverters
             var input = "string(chapter, LAST)";
             var tokens = CssValueParser.GetCssTokens(input);
 
-            var functionToken = (FunctionToken)tokens[0];
+            var functionToken = tokens[0];
             var args = functionToken.ArgumentTokens
   .Where(t => t.Type != TokenType.Whitespace && t.Type != TokenType.Comma)
      .ToArray();
 
             Assert.Equal(2, args.Length);
             // Keywords are typically lowercased during parsing
-            Assert.Equal("LAST", ((KeywordToken)args[1]).Data);
+            Assert.Equal("LAST", args[1].Data);
         }
     }
 }

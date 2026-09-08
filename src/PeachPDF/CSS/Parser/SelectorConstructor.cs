@@ -348,7 +348,7 @@ namespace PeachPDF.CSS
                     return;
                 case TokenType.Function:
                     {
-                        var sel = GetPseudoFunction(token as FunctionToken);
+                        var sel = GetPseudoFunction(token);
                         if (sel != null)
                         {
                             Insert(sel);
@@ -555,7 +555,7 @@ namespace PeachPDF.CSS
             }
         }
 
-        private ISelector GetPseudoFunction(FunctionToken arguments)
+        private ISelector GetPseudoFunction(Token arguments)
         {
             if (!PseudoClassFunctions.TryGetValue(arguments.Data, out var creator))
             {
@@ -570,7 +570,9 @@ namespace PeachPDF.CSS
 
             using var function = creator(this);
             _ready = false;
-            if (arguments.Any(token => function.Finished(token)))
+            // The raw (untrimmed) argument list - includes the terminal RoundBracketClose the pseudo-
+            // class state machines below key off of to detect the end of their argument grammar.
+            if (arguments.Arguments.Any(token => function.Finished(token)))
             {
                 var sel = function.Produce();
                 if (IsNested && function is NotFunctionState)
@@ -905,7 +907,7 @@ namespace PeachPDF.CSS
                         return OnOffset(token);
                     case TokenType.Dimension:
                         {
-                            var dim = (UnitToken)token;
+                            var dim = token;
                             _valid = _valid && dim.Unit.Isi("n") && int.TryParse(token.Data, out _step);
                             _step *= _sign;
                             _sign = 1;
@@ -974,7 +976,7 @@ namespace PeachPDF.CSS
                         _state = ParseState.AfterOffsetSign;
                         return false;
                     case TokenType.Number:
-                        _valid = _valid && ((NumberToken)token).IsInteger && int.TryParse(token.Data, out _offset);
+                        _valid = _valid && token.IsInteger && int.TryParse(token.Data, out _offset);
                         _offset *= _sign;
                         _state = ParseState.BeforeOf;
                         return false;
@@ -993,7 +995,7 @@ namespace PeachPDF.CSS
                         // The production requires a <signless-integer> here, defined as "a <number-token>
                         // with its type flag set to integer, and no sign character" (CSS Syntax 3 §6.2), so
                         // `10n + -1` and `10n + +1` are invalid - §6.1 lists `3n + -6` as an invalid example.
-                        _valid = _valid && ((NumberToken)token).IsInteger && int.TryParse(token.Data, out _offset);
+                        _valid = _valid && token.IsInteger && int.TryParse(token.Data, out _offset);
                         _offset *= _sign;
                         _state = ParseState.BeforeOf;
                         return false;

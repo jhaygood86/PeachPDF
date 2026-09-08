@@ -15,7 +15,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class GridShorthandValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             // NB: the domain-specific IEnumerable<Token>.ToList() extension splits on commas; materialize the
             // flat token list explicitly instead.
