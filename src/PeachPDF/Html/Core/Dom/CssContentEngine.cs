@@ -431,11 +431,32 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            var counterValue = CssCounterEngine.GetCounter(counterBox, counterName.Data)?.Value ?? 1;
-
             var style = arguments.Length > 1 && arguments[1] is KeywordToken styleToken
                 ? styleToken.Data
                 : Keywords.Decimal;
+
+            // The page and pages counters are UA magic, not document counters -
+            // CssCounterEngine has no notion of pagination and answers 1 for both. MarginBoxRenderer
+            // already resolves them for a margin box's own content; this is the same resolution for a
+            // running element's descendants, against the page the running element is currently being
+            // laid out for. Outside that window the context is null and both fall through to the
+            // document-counter lookup below, which is the pre-existing behavior everywhere else.
+            if (counterBox.HtmlContainer?.RunningElementPageContext is { } pageContext)
+            {
+                if (counterName.Data.Equals("page", StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Page, style));
+                    return;
+                }
+
+                if (counterName.Data.Equals("pages", StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Pages, style));
+                    return;
+                }
+            }
+
+            var counterValue = CssCounterEngine.GetCounter(counterBox, counterName.Data)?.Value ?? 1;
 
             sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
         }

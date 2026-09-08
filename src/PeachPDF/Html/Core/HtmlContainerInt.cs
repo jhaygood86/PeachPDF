@@ -963,6 +963,24 @@ namespace PeachPDF.Html.Core
         internal (IReadOnlyDictionary<int, int> SlotToPage, int MaxMappedSlot, int FallbackPageCount)? TargetPageMap { get; private set; }
 
         /// <summary>
+        /// The page a <c>position: running()</c> element is currently being laid out for, set
+        /// only for the duration of one <see cref="Dom.RunningElementLayout.LayoutRunningElementFor"/>
+        /// call from <see cref="LayoutMarginBoxes"/>. <c>counter(page)</c>/<c>counter(pages)</c> inside a
+        /// running element resolve against this rather than through <c>CssCounterEngine</c>, which knows
+        /// nothing about pagination and answers 1 for both.
+        /// </summary>
+        /// <remarks>
+        /// The margin box's own <c>content: counter(page)</c> has always paginated - <see cref="Dom.MarginBoxRenderer.ResolveContent"/>
+        /// is handed the page number directly. A running element bypasses that path entirely
+        /// (<c>content: element(name)</c> short-circuits before it), so its descendants kept whatever
+        /// <c>ApplyContent</c> resolved at DOM-construction time and every page read "Page 1 of 1".
+        /// Because the running element is genuinely re-laid-out per page, refreshing its counter text
+        /// first is all that is needed - and it must be refreshed before layout, since "Page 9 of 14" is
+        /// wider than "Page 1 of 1" and the difference changes line breaking inside the band.
+        /// </remarks>
+        internal (int Page, int Pages)? RunningElementPageContext { get; set; }
+
+        /// <summary>
         /// Measures the bounds of box and children, recursively.
         /// </summary>
         /// <param name="g">Device context to draw</param>
@@ -1340,7 +1358,20 @@ namespace PeachPDF.Html.Core
 
                     var pixelRect = new RRect(rectPt.X * ppp, rectPt.Y * ppp, rectPt.Width * ppp, rectPt.Height * ppp);
 
-                    await RunningElementLayout.LayoutRunningElementFor(g, runningBox, pixelRect, this);
+                    // Scoped to this one call so counter(page)/counter(pages) inside the
+                    // running element resolve against the page it is being laid out for. Cleared in a
+                    // finally so an exception mid-layout cannot leak a page number into the ordinary
+                    // document-counter path.
+                    RunningElementPageContext = (pageNumber, totalPages);
+                    try
+                    {
+                        await RunningElementLayout.LayoutRunningElementFor(g, runningBox, pixelRect, this);
+                    }
+                    finally
+                    {
+                        RunningElementPageContext = null;
+                    }
+
                     var content = MarginBoxContentFragmentBuilder.Build(runningBox);
 
                     (marginBoxes ??= []).Add(new MarginBoxFragment(boxName, content));
