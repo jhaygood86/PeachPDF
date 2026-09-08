@@ -1354,6 +1354,13 @@ namespace PeachPDF.Html.Core
                     var rectPt = MarginBoxRenderer.GetMarginBoxRect(
                         boxName, sheetSizePt, geom.MarginLeftPt, geom.MarginTopPt, geom.MarginRightPt, geom.MarginBottomPt,
                         applicableMargins, applicablePageStyle, remPt);
+                    // The same margin/padding the text path applies (see
+                    // MarginBoxRenderer.ApplyBoxModel). Without it a margin box holding element()
+                    // ignores its own box model, which is how a footer band on a shallow page margin
+                    // has no way to grow upward over the content the way a browser's overlay does.
+                    rectPt = MarginBoxRenderer.ApplyBoxModel(rectPt, marginRule, applicablePageStyle, remPt,
+                        MarginBoxRenderer.MarginAreaWidth(boxName, sheetSizePt, geom.MarginLeftPt, geom.MarginRightPt),
+                        MarginBoxRenderer.MarginAreaHeight(boxName, sheetSizePt, geom.MarginTopPt, geom.MarginBottomPt));
                     if (rectPt.Width <= 0 || rectPt.Height <= 0) continue;
 
                     var pixelRect = new RRect(rectPt.X * ppp, rectPt.Y * ppp, rectPt.Width * ppp, rectPt.Height * ppp);
