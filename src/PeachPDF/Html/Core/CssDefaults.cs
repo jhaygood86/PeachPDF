@@ -148,7 +148,7 @@ namespace PeachPDF.Html.Core
             /* Not in the specification but necessary */
             a               { color: #0055BB; text-decoration:underline }
             table           { border-color:#dfdfdf; }
-            td, th          { border-color:#dfdfdf; overflow: hidden; }
+            td, th          { border-color:#dfdfdf; }
             style, title,
             script, link,
             meta, area,

@@ -3454,10 +3454,10 @@ namespace PeachPDF.Html.Core.Dom
                     // must still be suppressed): a column is a real fragmentainer in its own right and
                     // drives its own (nested) fragmentation regardless of this box's own monolithic status.
                     //
-                    // Excludes table-cell/table-caption: td/th get overflow:hidden from the UA stylesheet
-                    // (CssDefaults.cs), making every cell "monolithic" by IsScrollContainer's own overflow
-                    // test - but a cell's own fragmentation across pages is CssLayoutEngineTable's
-                    // long-standing, well-tested feature, unrelated to this box's own overflow value, and
+                    // Excludes table-cell/table-caption, and by display rather than by overflow value:
+                    // a cell that declares overflow: hidden itself would otherwise read as "monolithic"
+                    // by IsScrollContainer's own overflow test - but a cell's own fragmentation across
+                    // pages is CssLayoutEngineTable's long-standing, well-tested feature, and
                     // both display types are always positioned by that engine (PositionAssignedByEngine)
                     // rather than by this generic dispatch's own frame.
                     var dispatchesToColumnsEngine = EstablishesMultiColumnContext && Boxes.Count > 0 && !DomUtils.ContainsInlinesOnly(this);

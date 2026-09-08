@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Verifies that overflow:hidden clips at the CSS padding edge, not the content edge.
     ///
-    /// The bug: table cells inherit overflow:hidden from the PeachPDF default stylesheet.
+    /// The bug: a clipping table cell (these fixtures declare <c>overflow: hidden</c> on the cell)
     /// The old clip used ClientRectangle (content-box) which was occasionally too narrow for
     /// child elements that fill the content area, causing border-radius arcs to be cut off.
     /// The fix expands the clip to the padding-box (ClientRectangle + ActualPadding*).
@@ -57,7 +57,7 @@ body { margin: 0; }
             var html = @"<!DOCTYPE html><html><head><style>
 body { margin: 0; }
 table { border-collapse: collapse; width: 300px; }
-td { padding: 3px; }
+td { padding: 3px; overflow: hidden; }
 </style></head><body>
 <table><tr>
   <td><div style='border-radius: 10px 30px; height: 60px; border: 2px solid black;'></div></td>
@@ -71,7 +71,10 @@ td { padding: 3px; }
             Assert.NotNull(td);
             Assert.NotNull(div);
 
-            // td has overflow:hidden from the PeachPDF default stylesheet
+            // The fixture declares overflow: hidden on the cell. It used to come from the default
+            // stylesheet, which the HTML Standard's own UA sheet does not set on td/th - the subject
+            // here is the padding-box clip bound under a non-uniform radius, not where the property
+            // came from, so the fixture states it rather than relying on that.
             Assert.Equal(Overflow.Hidden, td!.Overflow.Value);
 
             var paddingBoxRight = td.ClientRight + td.ActualPaddingRight;
@@ -86,7 +89,7 @@ td { padding: 3px; }
             var html = @"<!DOCTYPE html><html><head><style>
 body { margin: 0; }
 table { border-collapse: collapse; width: 300px; }
-td { padding: 3px; }
+td { padding: 3px; overflow: hidden; }
 </style></head><body>
 <table><tr>
   <td><div style='border-radius: 5px 15px 30px 45px; height: 60px; border: 2px solid black;'></div></td>
@@ -286,7 +289,7 @@ body { margin: 0; }
         {
             var html = @"<!DOCTYPE html><html><head><style>
 table { border-collapse: collapse; width: 100%; }
-td { padding: 3px; }
+td { padding: 3px; overflow: hidden; }
 .rbox { height: 60px; background: steelblue; border: 2px solid #1a6b8a; }
 </style></head><body>
 <table><tr>
