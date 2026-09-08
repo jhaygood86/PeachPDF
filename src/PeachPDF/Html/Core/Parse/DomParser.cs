@@ -2629,22 +2629,16 @@ namespace PeachPDF.Html.Core.Parse
 
         /// <summary>
         /// Whether the box is an inline-level box that the inline layout path places as one atomic item and
-        /// then hands to an engine of its own — today that is <c>inline-flex</c>
-        /// (<c>CssLayoutEngine.FlowBox</c>'s inline-flex branch).
+        /// then hands to an engine of its own — <c>inline-flex</c>, <c>inline-grid</c> and
+        /// <c>inline-table</c> to their respective layout engines, and <c>inline-block</c> (when its own
+        /// content isn't inlines-only) to ordinary block-content layout
+        /// (<c>CssLayoutEngine.FlowBox</c>'s atomic-placement branches).
         /// </summary>
-        /// <remarks>
-        /// <c>inline-block</c>, <c>inline-grid</c> and <c>inline-table</c> are atomic inline-level boxes too
-        /// (CSS Display 3 §2.3) and belong here on paper, but no branch places them atomically: their
-        /// children are walked as the parent line's own inline content, which places nothing at all for a
-        /// block-level child. Naming them here would stop the split without giving them a layout path, so a
-        /// box that renders something wrong today would render nothing — measured on an
-        /// <c>inline-block</c>/<c>inline-grid</c>/<c>inline-table</c> holding two &lt;div&gt;s. Tracked as
-        /// issue #473.
-        /// </remarks>
         /// <param name="box">the box to check</param>
         /// <returns>true - an atomic inline-level box with a layout path of its own, false - otherwise</returns>
         private static bool IsAtomicInlineLevel(CssBox box) =>
-            box.DerivedStyle.ActualDisplay is Keywords.InlineFlex;
+            box.DerivedStyle.ActualDisplay is Keywords.InlineFlex or Keywords.InlineBlock
+                or Keywords.InlineTable or Keywords.InlineGrid;
 
         /// <summary>
         /// Check if the given box contains inline and block child boxes.

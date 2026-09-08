@@ -51,8 +51,16 @@ namespace PeachPDF.Tests.Integration
 
             var (root, _) = await BuildAndLayout(html);
             var inlineTable = FindById(root, "it")!;
+            var cell = FindById(root, "cell")!;
             var hidden = FindById(root, "hidden")!;
 
+            // The visible cell content is the real regression guard (issue #473): before the fix, this is
+            // exactly the content CorrectBlockInsideInlineImp hoisted out from under its real inline-table
+            // parent - this test previously only checked the display:none sibling, which happened to keep
+            // passing throughout because CorrectBlockInsideInlineImp's replacement box reuses the original
+            // box's own HtmlTag reference, so FindById("it") still found something holding "hidden"
+            // regardless of what happened to "cell".
+            Assert.True(IsDescendantOf(cell, inlineTable), "the real cell content inside an inline-table must stay nested under it, not be hoisted out.");
             Assert.True(IsDescendantOf(hidden, inlineTable), "a display:none sibling inside an inline-table must stay nested under it.");
         }
 

@@ -469,6 +469,36 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FloatSiblingOfAnInlineBlockTable_StaysContainedInsideTheDiv()
+        {
+            // Issue #18: a float:right image sibling of a <table style="display:inline-block"> (an
+            // atomic inline-level box per CSS Display 3 §2.3, issue #473) used to escape the containing
+            // div entirely and overlap whatever followed it in the document. DomParser's anonymous-block
+            // correction leaves the float as the sole child of its own tag-less wrapper - one level
+            // removed from being a direct sibling of the table's own wrapper - which used to defeat rule
+            // 6's "immediately preceding sibling" check (CssBox.FloatLineTop/UnwrapSoleFloatChild) and
+            // MarginBottomCollapse's "last in-flow child" pick alike.
+            var html = Wrap(@"
+                <div id='outer' style='width:300pt;'>
+                    <table style='display:inline-block; width:90%'>
+                        <tr><td>A</td></tr><tr><td>B</td></tr><tr><td>C</td></tr>
+                    </table>
+                    <div id='badge' style='float:right; width:20pt; height:20pt;'></div>
+                </div>
+                <div id='next'>after</div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var outer = FindById(root, "outer")!;
+            var badge = FindById(root, "badge")!;
+            var next = FindById(root, "next")!;
+
+            Assert.True(badge.ActualBottom <= outer.ActualBottom + 0.5,
+                $"the float (bottom={badge.ActualBottom}) must stay inside its container (bottom={outer.ActualBottom}), not escape past it");
+            Assert.True(outer.ActualBottom <= next.Location.Y + 0.5,
+                $"the container's own reported height (bottom={outer.ActualBottom}) must not collapse below its real content, or the next sibling (Y={next.Location.Y}) starts inside it");
+        }
+
+        [Fact]
         public async Task FloatAfterARealBlockSibling_StartsBelowIt()
         {
             // The rule is scoped to a float whose preceding sibling is the ANONYMOUS block the parser

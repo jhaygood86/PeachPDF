@@ -694,6 +694,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Gets the containing block-box of this box. (The nearest parent box with display=block)
         /// </summary>
+        /// <remarks>
+        /// Also stops at an atomic inline-level box (CSS Display 3 §2.3: <c>inline-table</c>/
+        /// <c>inline-block</c>/<c>inline-grid</c>, alongside the <c>inline-flex</c> already here) - each
+        /// has its own resolved content box and establishes the containing block for its own normal-flow
+        /// descendants (CSS 2.1 §10.1) the same way <c>Flex</c>/<c>InlineFlex</c> already do here, rather
+        /// than being skipped past as a plain pass-through inline box. Without this, a percentage width on
+        /// a cell inside a table whose own `display` is `inline-table`/`inline-block` resolved against
+        /// whatever real block ancestor was next in the chain (commonly a much wider containing `&lt;div&gt;`)
+        /// instead of the table's own, narrower width - found via issue #18's real-world document.
+        /// </remarks>
         public CssBox ContainingBlock
         {
             get
@@ -710,6 +720,10 @@ namespace PeachPDF.Html.Core.Dom
                        box.DerivedStyle.ActualDisplay != Keywords.TableCell &&
                        box.DerivedStyle.ActualDisplay != Keywords.Flex &&
                        box.DerivedStyle.ActualDisplay != Keywords.InlineFlex &&
+                       box.DerivedStyle.ActualDisplay != Keywords.Grid &&
+                       box.DerivedStyle.ActualDisplay != Keywords.InlineGrid &&
+                       box.DerivedStyle.ActualDisplay != Keywords.InlineTable &&
+                       box.DerivedStyle.ActualDisplay != Keywords.InlineBlock &&
                        box.ParentBox != null)
                 {
                     box = box.ParentBox;
@@ -3356,7 +3370,7 @@ namespace PeachPDF.Html.Core.Dom
             IsBlock
             || DerivedStyle.ActualDisplay is Keywords.ListItem or Keywords.Table or Keywords.InlineTable
                        or Keywords.TableCell or Keywords.TableCaption or Keywords.Flex or Keywords.InlineFlex
-                       or Keywords.Grid or Keywords.InlineGrid;
+                       or Keywords.Grid or Keywords.InlineGrid or Keywords.InlineBlock;
 
         /// <summary>
         /// Lays out this box's content, inside the position its frame has already given it — the part of
@@ -5602,9 +5616,22 @@ namespace PeachPDF.Html.Core.Dom
         /// sibling starts below it, which is what a browser does too, and a float with `clear` is left
         /// to <c>ClearBox</c>. Returns null when the rule does not apply.
         /// </summary>
+        /// <remarks>
+        /// <paramref name="child"/> is unwrapped first (see <see cref="UnwrapSoleFloatChild"/>): the DOM
+        /// correction pass that separates a float from a run of inline content sometimes leaves it as the
+        /// only child of its own anonymous block, one level below the direct sibling this method's index
+        /// lookup expects, rather than as that direct sibling itself - <c>child.IsFloated</c> and
+        /// <c>child.Clear</c> would both read false/none off that wrapper (neither property is anything a
+        /// plain block box carries), and <c>Boxes.IndexOf(child)</c> would find the wrapper's own correct
+        /// position among its siblings regardless, so unwrapping only for the floated-ness/clear checks
+        /// - not for the index lookup, which must stay keyed on the actual sibling in <c>Boxes</c> - is
+        /// what makes the rule reach a float sitting beside an atomic inline-level box's own anonymous
+        /// wrapper (e.g. an `inline-table`) the same way it already reaches one beside plain inline text.
+        /// </remarks>
         private double? FloatLineTop(CssBox child, double top)
         {
-            if (!child.IsFloated || child.Clear.Value is not ClearMode.None) return null;
+            var floated = UnwrapSoleFloatChild(child);
+            if (!floated.IsFloated || floated.Clear.Value is not ClearMode.None) return null;
 
             var index = Boxes.IndexOf(child);
             if (index <= 0) return null;
@@ -5615,6 +5642,16 @@ namespace PeachPDF.Html.Core.Dom
             var lineTop = prev.LineBoxes[^1].LineTop;
             return lineTop < top ? lineTop : null;
         }
+
+        /// <summary>
+        /// <paramref name="box"/> itself, unless it is a tag-less wrapper holding nothing but a single
+        /// floated child - in which case that child, since it is what actually carries
+        /// <see cref="IsFloated"/>/<see cref="Clear"/> for <see cref="FloatLineTop"/>'s purposes. Such a
+        /// wrapper contributes no height of its own (a float is excluded from its parent's in-flow
+        /// content), so it is otherwise indistinguishable from the float it holds.
+        /// </summary>
+        private static CssBox UnwrapSoleFloatChild(CssBox box) =>
+            box.HtmlTag is null && box.Boxes.Count == 1 && box.Boxes[0].IsFloated ? box.Boxes[0] : box;
 
         /// <summary>
         /// Writes the offset <see cref="ResolveBlockChildOffset"/> decided on, positions
@@ -7535,7 +7572,22 @@ namespace PeachPDF.Html.Core.Dom
         /// <returns>Resulting bottom margin</returns>
         internal double MarginBottomCollapse()
         {
-            var lastNonFloatingBox = Boxes.Last(b => !b.IsExcludedFromFlow);
+            // A box holding nothing but a single out-of-flow float (see UnwrapSoleFloatChild/
+            // FloatLineTop) contributes no visual content of its own - the float inside it is excluded
+            // from flow, and the wrapper is otherwise empty - so it must not be picked as "the last
+            // in-flow child" just because the wrapper box itself isn't directly IsExcludedFromFlow. Left
+            // unguarded, a trailing float sibling of an atomic inline-level box's own anonymous wrapper
+            // (an inline-table/inline-block) made THIS box's own auto-height collapse to the wrapper's
+            // own near-zero height instead of the real content before it, so whatever followed THIS box
+            // in the document started too early and visibly overlapped it. Falls back to the plain
+            // !IsExcludedFromFlow match when nothing else qualifies (this box's ENTIRE content is such a
+            // wrapper and nothing else) - Boxes.Last always has at least that match, by this box's own
+            // precondition for being called at all (see PerformLayoutEpilogue's own gate), and the
+            // stricter match is only ever meant to prefer a REAL sibling over the wrapper, not to leave
+            // this box with no candidate at all.
+            var lastNonFloatingBox = Boxes.LastOrDefault(b => !b.IsExcludedFromFlow
+                && !(b.HtmlTag is null && b.Boxes.Count == 1 && b.Boxes[0].IsExcludedFromFlow))
+                ?? Boxes.Last(b => !b.IsExcludedFromFlow);
 
             double margin = 0;
             // Per CSS 2.1 §8.3.1, a box's own bottom margin can only collapse with (i.e. be folded
