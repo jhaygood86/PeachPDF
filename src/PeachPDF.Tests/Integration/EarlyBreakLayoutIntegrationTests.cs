@@ -600,6 +600,73 @@ namespace PeachPDF.Tests.Integration
             Assert.True(rewound > 0, "no member of the fixture family sent the driver back to a finished pass");
         }
 
+        /// <summary>
+        /// #384: the pass being re-entered here has itself stepped over a forced break before it ever
+        /// reaches <c>h1</c> - <c>marker</c>'s <c>break-after:page</c> moves the pass's own cursor forward
+        /// without ending it (<c>FragmentainerContext.StepOverTo</c>), so the entry
+        /// <see cref="HtmlContainerInt"/> recorded for this pass names only the slot it <i>opened</i> at,
+        /// not the one it was filling by the time it placed <c>h1</c>. A lookup keyed on that opening slot
+        /// (the pre-#384 shape) either finds nothing there at all and declines the rewind outright, or -
+        /// worse, when some other pass happens to share the same opening slot number - finds that other
+        /// pass's entry instead and rolls back to the wrong point. <c>h1</c>'s own recorded pass index
+        /// (<see cref="CssBox.PlacedByPassIfStillValid"/>) answers correctly regardless, because it is
+        /// stamped by the pass that actually placed it rather than derived from where that pass began.
+        /// </summary>
+        /// <remarks>
+        /// Swept for the same reason <see cref="PulledRun_FromAPassThatResumedIntoAParagraph_ReEntersThatPass"/>
+        /// is: which combination actually reaches the re-entry depends on the platform's font metrics.
+        /// </remarks>
+        [Fact]
+        public async Task PulledRun_FromAPassThatSteppedOverAForcedBreak_ReEntersThatPass()
+        {
+            var rewound = 0;
+
+            foreach (var (leadWords, cardWords, pageHeight) in new[]
+                     {
+                         (20, 30, 160.0), (20, 40, 160.0), (20, 50, 160.0), (20, 50, 170.0), (30, 30, 170.0)
+                     })
+            {
+                var (_, container) = await LayoutHarness.LayoutAsync(
+                    ResumedParagraphWithLeadingForcedBreakDocument(leadWords, cardWords),
+                    pageWidth: 300, pageHeight: pageHeight, margin: 10);
+
+                rewound += container.PassRewinds;
+            }
+
+            Assert.True(rewound > 0, "no member of the fixture family sent the driver back to a finished pass");
+        }
+
+        /// <summary>
+        /// The companion correctness check for <see cref="PulledRun_FromAPassThatSteppedOverAForcedBreak_ReEntersThatPass"/>:
+        /// wherever the rewind actually fires, each heading still lands with the block it is chained to,
+        /// rather than being left behind by a declined (or misdirected) rewind.
+        /// </summary>
+        [Theory]
+        [InlineData(20, 30, 160.0)]
+        [InlineData(20, 40, 160.0)]
+        [InlineData(20, 50, 160.0)]
+        [InlineData(20, 50, 170.0)]
+        [InlineData(30, 30, 170.0)]
+        public async Task PulledRun_FromAPassThatSteppedOverAForcedBreak_KeepsEachHeadingWithItsBlock(
+            int leadWords, int cardWords, double pageHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                ResumedParagraphWithLeadingForcedBreakDocument(leadWords, cardWords),
+                pageWidth: 300, pageHeight: pageHeight, margin: 10);
+
+            foreach (var n in new[] { 1, 2 })
+            {
+                var heading = LayoutHarness.FindById(root, $"h{n}")!;
+                var card = LayoutHarness.FindById(root, $"card{n}")!;
+
+                Assert.Equal(
+                    container.PageIndexOf(heading.Location.Y + HtmlContainerInt.PageBoundaryEpsilon),
+                    container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon));
+                Assert.True(heading.ActualBottom <= card.Location.Y + 1.0,
+                    $"heading {n} must still sit above the block it is chained to");
+            }
+        }
+
         private static List<CssRect> WordsIn(CssBox box) =>
             LayoutHarness.Descendants(box).SelectMany(b => b.Words).ToList();
 
@@ -610,6 +677,22 @@ namespace PeachPDF.Tests.Integration
         private static string ResumedParagraphDocument(int leadWords, int cardWords) =>
             LayoutHarness.Wrap(
                 $"<p id='lead'>{Filler(leadWords, "lead")}</p>"
+                + "<h2 id='h1'>Head</h2>"
+                + $"<div id='card1' style='break-inside:avoid'>{Filler(cardWords, "a")}</div>"
+                + "<h2 id='h2'>Head</h2>"
+                + $"<div id='card2' style='break-inside:avoid'>{Filler(cardWords, "b")}</div>");
+
+        /// <summary>
+        /// Same shape as <see cref="ResumedParagraphDocument"/>, except a <c>marker</c> div with
+        /// <c>break-after:page</c> opens the document, ahead of <c>lead</c> - so the pass that places
+        /// <c>lead</c>/<c>h1</c>/<c>card1</c> steps its own cursor forward before it ever reaches them
+        /// (<c>FragmentainerContext.StepOverTo</c>), and its recorded pass entry names the slot it opened
+        /// at (<c>marker</c>'s page), not the one it was filling by the time it placed them (see #384).
+        /// </summary>
+        private static string ResumedParagraphWithLeadingForcedBreakDocument(int leadWords, int cardWords) =>
+            LayoutHarness.Wrap(
+                "<div id='marker' style='break-after:page;margin:0'></div>"
+                + $"<p id='lead'>{Filler(leadWords, "lead")}</p>"
                 + "<h2 id='h1'>Head</h2>"
                 + $"<div id='card1' style='break-inside:avoid'>{Filler(cardWords, "a")}</div>"
                 + "<h2 id='h2'>Head</h2>"

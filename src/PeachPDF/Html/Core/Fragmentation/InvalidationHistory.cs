@@ -43,6 +43,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// <summary>How many reopening events have been recorded so far this layout.</summary>
         internal int Count => _fromSlots.Count;
 
+        /// <summary>Forgets every reopening recorded so far, for a fresh layout invocation to start clean.</summary>
+        internal void Clear()
+        {
+            _fromSlots.Clear();
+            _suffixMin.Clear();
+        }
+
         /// <summary>
         /// Records that layout is about to redo everything from <paramref name="fromSlot"/> on.
         /// </summary>
