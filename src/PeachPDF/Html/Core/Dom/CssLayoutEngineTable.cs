@@ -483,7 +483,21 @@ namespace PeachPDF.Html.Core.Dom
             // output is undone first. A resumed pass is the one run that is not starting from the markup:
             // it continues the table this output belongs to, and the proxies it would drop here are the
             // only surviving reference to the detached group every earlier page repeats.
-            if (!_continuesAPreviousPass) RestoreStructureFromAnyPreviousRun();
+            if (!_continuesAPreviousPass)
+            {
+                RestoreStructureFromAnyPreviousRun();
+
+                // Dropping the proxies undoes only half of the last run's output. Each one also recorded a
+                // repeating-group instance with the emitter (RecordRepeatingGroupFragmentInstance), and it is
+                // those records - not the proxies - that paint reads. A table laid out again from the start
+                // may span different pages than the run before it, so every instance the last run recorded
+                // describes a header or footer that is no longer anywhere, and leaving them behind draws the
+                // group once more for each one, on top of the real one. Same case, and the same call, as the
+                // multi-column engine's own re-run (CssLayoutEngineColumns). A resumed pass is excluded for
+                // the reason it is excluded above: the instances it would drop are the ones every earlier
+                // page of this same table repeats.
+                _tableBox.HtmlContainer?.ClearCapturedInstances(_tableBox);
+            }
 
             // get the table boxes into the proper fields
             AssignBoxKinds();
