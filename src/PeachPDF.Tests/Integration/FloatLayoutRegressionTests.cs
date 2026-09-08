@@ -1,3 +1,4 @@
+using System;
 using System.Text;
 using PeachPDF;
 using PeachPDF.Adapters;
@@ -429,7 +430,65 @@ namespace PeachPDF.Tests.Integration
                 $"clear:right must not clear past a float:left sibling, was pushed to Y={cleared.Location.Y}");
         }
 
+        [Fact]
+        public async Task FloatRight_InOneGridItem_DoesNotNarrowLinesInTheNext()
+        {
+            // A grid item establishes an independent formatting context (css-grid-1 §6), so a float
+            // inside one is invisible to the next one's lines. The right-float wrap-limit walk used to
+            // run all the way to the document root, scanning every preceding sibling on the way, so
+            // the float in the first item set the wrap limit for the second item's text.
+            const string grid = @"
+                <div style='display:grid; grid-template-columns:200pt 200pt; width:400pt;'>
+                    <div>{0}<p style='margin:0;'>left column</p></div>
+                    <div><p id='text' style='margin:0;'>The quick brown fox jumps over the lazy dog again and again</p></div>
+                </div>";
+
+            var (withFloat, _) = await BuildAndLayout(Wrap(
+                string.Format(grid, "<div style='float:right; width:150pt; height:60pt;'></div>")));
+            var (withoutFloat, _) = await BuildAndLayout(Wrap(string.Format(grid, "")));
+
+            var constrained = RightmostWordEdge(FindById(withFloat, "text")!);
+            var unconstrained = RightmostWordEdge(FindById(withoutFloat, "text")!);
+
+            Assert.Equal(unconstrained, constrained, 3);
+        }
+
+        [Fact]
+        public async Task FloatRight_InTheSameFormattingContext_StillNarrowsTheLine()
+        {
+            // The contrast case, and the reason the assertion above is about the formatting-context
+            // boundary rather than about float avoidance having stopped working: with the float in the
+            // SAME block as the text, its wrap limit must still apply.
+            const string block = @"
+                <div style='width:200pt;'>
+                    {0}<p id='text' style='margin:0;'>The quick brown fox jumps over the lazy dog again and again</p>
+                </div>";
+
+            var (withFloat, _) = await BuildAndLayout(Wrap(
+                string.Format(block, "<div style='float:right; width:150pt; height:60pt;'></div>")));
+            var (withoutFloat, _) = await BuildAndLayout(Wrap(string.Format(block, "")));
+
+            var constrained = RightmostWordEdge(FindById(withFloat, "text")!);
+            var unconstrained = RightmostWordEdge(FindById(withoutFloat, "text")!);
+
+            Assert.True(constrained < unconstrained - 1,
+                $"a float:right in the same formatting context must still cap the line: " +
+                $"{constrained} vs {unconstrained} unconstrained");
+        }
+
         // ── Helpers ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// How far right this subtree's text actually reached — the wrap limit as laid out, which is
+        /// what a float's line constraint moves.
+        /// </summary>
+        private static double RightmostWordEdge(CssBox box)
+        {
+            var right = 0d;
+            foreach (var word in box.Words) right = Math.Max(right, word.Rectangle.Right);
+            foreach (var child in box.Boxes) right = Math.Max(right, RightmostWordEdge(child));
+            return right;
+        }
 
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
