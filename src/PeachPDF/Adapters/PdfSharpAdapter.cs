@@ -100,11 +100,46 @@ namespace PeachPDF.Adapters
             }
 
             // Chromium's system-ui resolves to Segoe UI on Windows - an exact match for
-            // DefaultFontResolver.DefaultFont there. On macOS/Linux/Android this is a pragmatic approximation
-            // (real native system-UI-font detection, e.g. macOS's private San Francisco font, is out of
-            // scope - see docs).
-            AddFontFamilyMapping("system-ui", DefaultFontResolver.DefaultFont);
+            // DefaultFontResolver.DefaultFont there. On macOS/Android this stays a pragmatic
+            // approximation (real native system-UI-font detection, e.g. macOS's private San
+            // Francisco font, is out of scope - see docs).
+            //
+            // On Linux, ask fontconfig, exactly as the five generics above do.
+            // Chromium delegates system-ui to fontconfig on Linux too, and hardcoding the
+            // default font here made this the ONE family that ignored the host's own
+            // configuration: with the deployment font set installed, `fc-match system-ui`
+            // gives FreeSans while DefaultFont is Liberation Sans. Those two disagree on
+            // line box height by 11.7% (ascent+descent 1.000em against 1.117em), and
+            // system-ui is the family every generated header/footer band is drawn in - so
+            // every band was 11.7% taller than the same band under Chromium, and on a page
+            // whose top margin the band already fills, that difference is what tipped body
+            // text into overprinting it.
+            AddFontFamilyMapping("system-ui", ResolveSystemUiFamily(
+                isLinux ? LinuxSystemFontResolver.ResolveGenericFamily("system-ui") : null,
+                IsFontExists));
         }
+
+        /// <summary>
+        /// The family <c>system-ui</c> maps to: whatever fontconfig resolved, when that is a family
+        /// actually installed on this host, and <see cref="DefaultFontResolver.DefaultFont"/> otherwise.
+        /// </summary>
+        /// <param name="fontconfigFamily">
+        /// fontconfig's own answer, or <c>null</c> off Linux and whenever
+        /// <see cref="LinuxSystemFontResolver.ResolveGenericFamily"/> could not answer (no
+        /// <c>libfontconfig.so.1</c>, or a resolution failure — it catches and returns null).
+        /// </param>
+        /// <param name="fontExists">the installed-family check — <c>IsFontExists</c> in production</param>
+        /// <returns>the family name to map <c>system-ui</c> to</returns>
+        /// <remarks>
+        /// Separated from the constructor so the fallback arm can be tested at all: on any real
+        /// machine fontconfig answers and the answer is installed, so the branch never runs in situ —
+        /// the same reason <c>DefaultFontFallbackTests</c> uses a synthetic family name rather than
+        /// the real default font.
+        /// </remarks>
+        internal static string ResolveSystemUiFamily(string? fontconfigFamily, Func<string, bool> fontExists) =>
+            fontconfigFamily is not null && fontExists(fontconfigFamily)
+                ? fontconfigFamily
+                : DefaultFontResolver.DefaultFont;
 
         public RNetworkLoader NetworkLoader { get; set; } = new DataUriNetworkLoader();
 
