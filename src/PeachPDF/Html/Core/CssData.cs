@@ -118,9 +118,14 @@ namespace PeachPDF.Html.Core
         {
             if (_universalRules is not null) return;
 
-            var tagIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
-            var classIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
-            var idIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.InvariantCultureIgnoreCase);
+            // Ordinal, not InvariantCulture. These three indexes are hashed once per
+            // candidate tag/class/id on every box, and a culture-aware comparer routes every one of
+            // those hashes through ICU. HTML/CSS identifiers are
+            // ASCII and the spec matches them ASCII case-insensitively, so ordinal is both faster and
+            // closer to the rule than Unicode case folding is.
+            var tagIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.OrdinalIgnoreCase);
+            var classIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.OrdinalIgnoreCase);
+            var idIndex = new Dictionary<string, List<IndexedRule>>(StringComparer.OrdinalIgnoreCase);
             var universal = new List<IndexedRule>();
             var keys = new List<(SelectorBucketKind Kind, string Key)>();
             var layerRegistry = new LayerRegistry();
@@ -982,8 +987,8 @@ namespace PeachPDF.Html.Core
 
         // Attribute selectors read the value once via node.GetAttribute (case-sensitivity of the
         // attribute-name lookup is the node's own: case-insensitive for HTML/CssBox, case-sensitive for
-        // SVG), then compare the value with node.NameComparison (InvariantCultureIgnoreCase for HTML -
-        // byte-identical to the previous behaviour - Ordinal for SVG).
+        // SVG), then compare the value with node.NameComparison (OrdinalIgnoreCase for HTML, which is
+        // what "ASCII case-insensitively" means - Ordinal for SVG).
         private static bool DoesSelectorMatch(AttrAvailableSelector s, ICssDomNode? node)
         {
             return node?.GetAttribute(s.Attribute) is not null;

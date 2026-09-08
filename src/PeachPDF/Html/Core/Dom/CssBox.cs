@@ -319,7 +319,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Is the box is of "br" element.
         /// </summary>
-        public bool IsBrElement => HtmlTag != null && HtmlTag.Name.Equals("br", StringComparison.InvariantCultureIgnoreCase);
+        public bool IsBrElement => HtmlTag != null && HtmlTag.Name.Equals("br", StringComparison.OrdinalIgnoreCase);
 
         public bool IsRoot { get; set; }
 
@@ -6535,14 +6535,18 @@ namespace PeachPDF.Html.Core.Dom
         // The HTML box tree is the primary ICssDomNode implementation the selector engine matches
         // against; these members are thin views over the box's existing state. HTML matches element/
         // attribute names ASCII case-insensitively (unlike SVG's XML case-sensitivity), so NameComparison
-        // reports InvariantCultureIgnoreCase - the value the matcher previously hardcoded, keeping HTML
-        // matching byte-identical. Implemented explicitly where the natural name collides with an existing
+        // reports an ignore-case comparison. Implemented explicitly where the natural name collides with an existing
         // member (GetAttribute, the CustomProperties field).
         string? ICssDomNode.TagName => HtmlTag?.Name;
 
         string? ICssDomNode.GetAttribute(string name) => GetAttribute(name, null);
 
-        StringComparison ICssDomNode.NameComparison => StringComparison.InvariantCultureIgnoreCase;
+        // Ordinal, not InvariantCulture. The comment above already states the rule as ASCII
+        // case-insensitivity, which is what ordinal expresses; InvariantCulture applies full Unicode
+        // case folding, under which U+212A KELVIN SIGN equals ASCII "k" and a class of "K" matches
+        // the selector `.k`. It is also the hot comparison in the selector matcher - one name against
+        // every candidate rule for every box - and a culture-aware one routes each through ICU.
+        StringComparison ICssDomNode.NameComparison => StringComparison.OrdinalIgnoreCase;
 
         ICssDomNode? ICssDomNode.Parent => ParentBox;
 

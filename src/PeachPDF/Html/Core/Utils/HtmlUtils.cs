@@ -55,7 +55,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         static HtmlUtils()
         {
-            var decodeOnlyBuilder = new Dictionary<string, char>(StringComparer.InvariantCultureIgnoreCase);
+            var decodeOnlyBuilder = new Dictionary<string, char>(StringComparer.OrdinalIgnoreCase);
 
             // "nbsp" below decodes to the real U+00A0 non-breaking space, not a plain ASCII space -
             // callers that need to tell it apart from ordinary collapsible whitespace (line-wrapping,
@@ -305,7 +305,7 @@ namespace PeachPDF.Html.Core.Utils
             decodeOnlyBuilder["hearts"] = Convert.ToChar(9829);
             decodeOnlyBuilder["diams"] = Convert.ToChar(9830);
 
-            _decodeOnly = decodeOnlyBuilder.ToFrozenDictionary(StringComparer.InvariantCultureIgnoreCase);
+            _decodeOnly = decodeOnlyBuilder.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         }
 
         public static string FixNewLines(string text)

@@ -238,7 +238,7 @@ namespace PeachPDF.Fonts
             memoryStream.Seek(0, SeekOrigin.Begin);
 
             var fontFileInfo = FontFileInfo.Load(memoryStream);
-            var key = fontFamilyName.ToLower();
+            var key = fontFamilyName.ToLowerInvariant();
             _customFamilyNames.Add(key);
 
             var weight = weightOverride ?? fontFileInfo.FontDescription.Weight;
@@ -352,7 +352,7 @@ namespace PeachPDF.Fonts
                 {
                     var familyName = familyGroup.Key;
                     var family = DeserializeFontFamily(familyName, familyGroup);
-                    families.Add(familyName.ToLower(), family);
+                    families.Add(familyName.ToLowerInvariant(), family);
                 }
                 catch (System.Exception e)
                 {
@@ -407,7 +407,7 @@ namespace PeachPDF.Fonts
         /// </summary>
         public bool HasExplicitRanges(string familyName)
         {
-            return InstalledFonts.TryGetValue(familyName.ToLower(), out var family)
+            return InstalledFonts.TryGetValue(familyName.ToLowerInvariant(), out var family)
                    && family.Faces.Any(f => f.ExplicitRanges is not null);
         }
 
@@ -436,7 +436,7 @@ namespace PeachPDF.Fonts
             if (InstalledFonts.Count == 0)
                 throw new System.IO.FileNotFoundException("No Fonts installed on this device!");
 
-            if (InstalledFonts.TryGetValue(familyName.ToLower(), out var family))
+            if (InstalledFonts.TryGetValue(familyName.ToLowerInvariant(), out var family))
             {
                 if (TryFindNearestFace(family, weight, isItalic, stretch, codepoint, out var face))
                 {
