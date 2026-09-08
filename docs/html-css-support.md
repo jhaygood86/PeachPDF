@@ -145,7 +145,7 @@ Example:
 | `bdi` | [bdi](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdi) | Full support — isolates its content from the surrounding paragraph's Unicode Bidi Algorithm resolution (`unicode-bidi: isolate`, per the UA stylesheet), and when it has no `dir` attribute of its own, its base direction is auto-detected from its content's first strong character, same as an explicit `dir="auto"` |
 | `bdo` | [bdo](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/bdo) | Full support |
 | `big` | [big](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/big) | Deprecated element; rendered with a larger font size |
-| `br` | [br](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/br) | Full support |
+| `br` | [br](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/br) | Full support. A forced break ends the line it falls on, so one with nothing after it in its block leaves no line behind it: `x<br>` is one line tall, and so is `x<br>` followed by a block-level sibling. Only the last break in a run is taken back this way — `x<br><br>` is two lines and `x<br><br>c` is three |
 | `cite` | [cite](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/cite) | Rendered as italic |
 | `code` | [code](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/code) | Rendered in a monospace font |
 | `del` | [del](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/del) | Rendered with strikethrough |

@@ -437,6 +437,8 @@ namespace PeachPDF.Html.Core.Dom
                 blockBox.ActualRight = coordinates.MaxRight + blockBox.ActualPaddingRight + blockBox.ActualBorderRightWidth;
             }
 
+            DropATrailingForcedBreaksOwnLine(blockBox, coordinates);
+
             FinalizeLineBoxes(blockBox, completedLines);
 
             blockBox.ActualBottom = coordinates.MaxBottom + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
@@ -1082,6 +1084,50 @@ namespace PeachPDF.Html.Core.Dom
                 if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
                 await blockBox.LayoutBlockChild(g, child);
             }
+        }
+
+        /// <summary>
+        /// Takes back the line a forced break at the very end of a block's content opened, which
+        /// CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visuren.html#inline-formatting">§9.4.2</see>
+        /// says is not there.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A forced line break (<see href="https://www.w3.org/TR/css-text-3/#forced-line-break">css-text-3
+        /// §5.5</see>) ends the line it falls on. This engine instead closes that line and places the
+        /// break's own word at the start of the next one, so a break is always <i>followed</i> by a
+        /// line — including where nothing follows it in the block, and that line holds nothing.
+        /// §9.4.2 is explicit about such a line: one with "no text, no preserved white space, no
+        /// inline elements with non-zero margins, padding, or borders, and no other in-flow content"
+        /// must "be treated as not existing for any other purpose". A <c>&lt;br&gt;</c> is not the
+        /// preserved newline that section carves out. The block measured one line taller than a
+        /// browser makes it, for <c>x&lt;br&gt;</c> as much as for a bare <c>&lt;br&gt;</c>.
+        /// </para>
+        /// <para>
+        /// Only ever the last line, and only when it holds nothing but breaks: <c>a&lt;br&gt;&lt;br&gt;</c>
+        /// is genuinely two lines and <c>a&lt;br&gt;&lt;br&gt;c</c> three, so each break but the final
+        /// one keeps the line it opened. A line with no words at all is left alone too — that is a
+        /// block with no inline content, not a break's leftover.
+        /// </para>
+        /// </remarks>
+        private static void DropATrailingForcedBreaksOwnLine(CssBox blockBox, CssLineBoxCoordinates coordinates)
+        {
+            if (blockBox.LineBoxes.Count <= 1) return;
+
+            var last = blockBox.LineBoxes[^1];
+
+            if (last.Words.Count == 0) return;
+
+            foreach (var word in last.Words)
+            {
+                if (!word.IsLineBreak) return;
+            }
+
+            blockBox.LineBoxes.Remove(last);
+
+            // The block now ends where the line it just lost began, which is the bottom of the line
+            // the break actually terminated.
+            coordinates.MaxBottom = last.Words[0].Top;
         }
 
         /// <summary>
