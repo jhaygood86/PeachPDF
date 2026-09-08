@@ -2080,6 +2080,96 @@ namespace PeachPDF.Tests.Integration
             return FindByTag(root, tag)!;
         }
 
+        // ─── Item sizing from block children (css-flexbox-1 §9.2) ───────────────
+
+        [Fact]
+        public async Task SpaceBetween_ItemWithBlockChildren_IsSizedByItsContent_NotAnEvenSplit()
+        {
+            // A flex item's hypothetical main size is its max-content size. An auto-width BLOCK
+            // child fills its container on layout, so measuring the item by its laid-out width
+            // reports the CONTAINER's width instead of the item's content -- every item then
+            // measures the full container, justify-content has no free space left to distribute,
+            // and the result reads as an even split.
+            var html = Wrap(@"
+                <div style='display:flex; justify-content:space-between; width:400pt;'>
+                    <div id='a'><div>SHORT</div></div>
+                    <div id='b'><div>a considerably longer run of text than the first item</div></div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            // Sized by content: the two items differ, and neither is the 200pt even split.
+            Assert.True(a.ActualRight - a.Location.X < b.ActualRight - b.Location.X,
+                $"the short item must measure narrower than the long one, was {a.ActualRight - a.Location.X} vs {b.ActualRight - b.Location.X}");
+            Assert.True(a.ActualRight - a.Location.X < 150,
+                $"the short item must hug its content, not take half the 400pt row, was {a.ActualRight - a.Location.X}");
+
+            // space-between then has real free space to distribute: the second item is pushed to
+            // the row's far edge rather than starting at its midpoint.
+            Assert.True(b.ActualRight >= root.Location.X + 390,
+                $"space-between must push the last item to the row's right edge, ended at {b.ActualRight}");
+        }
+
+        [Fact]
+        public async Task Item_WhoseMinContentExceedsTheRow_KeepsItsMinContent()
+        {
+            // CSS 2.1 §10.3.5 shrink-to-fit is min(max(min-content, available), max-content):
+            // min-content is the LOWER bound. An unbreakable token wider than the row must keep its
+            // min-content width and overflow, not be clamped down to the available width -- clamping
+            // the other way round (max-content vs min-content first, then against available)
+            // collapses to min(max-content, available) and silently under-sizes exactly this case.
+            // flex-shrink:0 so the item keeps its hypothetical main size -- the stage this clamp
+            // decides. With shrink left on, the shrink pass would clamp it back to the row either
+            // way and the fixture would say nothing about the clamp order.
+            var html = Wrap(@"
+                <div style='display:flex; width:60pt;'>
+                    <div id='item' style='flex-shrink:0;'><div>Supercalifragilisticexpialidocious</div></div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+            var width = item.ActualRight - item.Location.X;
+
+            Assert.True(width > 60,
+                $"an item whose min-content exceeds the row keeps its min-content and overflows, was {width} in a 60pt row");
+        }
+
+        [Fact]
+        public async Task WrappedItem_DoesNotCountTrailingWhiteSpaceInItsMeasure()
+        {
+            // css-text-3 §4.1.2: white space at the end of a line hangs and is not part of the
+            // line's measure. Counted, a wrapped item measures one word space wider than it draws,
+            // the row's items over-subscribe their container, and flex-shrink takes the difference
+            // out of the item that can least afford it.
+            //
+            // max-width forces the wrap, so the intrinsic per-line measurement is what sizes the
+            // item; flex-shrink:0 keeps the shrink pass from resizing it afterwards.
+            var html = Wrap(@"
+                <div style='display:flex; width:200pt;'>
+                    <div id='item' style='flex-shrink:0; max-width:80pt;'>alpha bravo charlie delta echo foxtrot</div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var item = FindById(root, "item")!;
+
+            var widestDrawn = LayoutHarness.Descendants(item)
+                .SelectMany(b => b.Words)
+                .Select(w => w.Right)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            Assert.True(LayoutHarness.Descendants(item).Sum(b => b.LineBoxes.Count) > 1,
+                "fixture must actually wrap, or it says nothing about a line's trailing space");
+
+            // The item's box tracks what it draws, to within the deliberate 0.01 anti-rounding
+            // epsilon added at the measurement site. Counting the hanging space instead leaves a
+            // whole word space of slack — 3.07pt against 0.01pt here.
+            Assert.True(item.ActualRight - widestDrawn < 1.0,
+                $"the item is {item.ActualRight - widestDrawn}pt wider than anything it draws — a hanging space was counted into its measure");
+        }
+
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
             var adapter = new PdfSharpAdapter();

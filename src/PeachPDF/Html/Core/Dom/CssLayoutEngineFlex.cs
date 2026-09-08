@@ -430,7 +430,13 @@ namespace PeachPDF.Html.Core.Dom
                     double maxContent;
                     if (DomUtils.ContainsInlinesOnly(box) && box.LineBoxes.Count > 0)
                     {
-                        double lineWidth = box.LineBoxes.Max(lb => lb.Words.Sum(w => w.FullWidth));
+                        // Trailing white space at the end of a line does not contribute to
+                        // max-content (css-text-3 §4.1.2 -- it hangs). Counted, an item measures wider
+                        // than it draws, the line's items over-subscribe their container and flex-shrink
+                        // takes the difference out of the item that can least afford it. A header with a
+                        // logo beside an address block, a newline between the two in the source,
+                        // wrapped the address on that one space.
+                        double lineWidth = box.LineBoxes.Max(lb => LineContentWidth(lb));
                         // Add a sub-pixel epsilon so that when this width is used as the explicit
                         // content size in ResizeItem, the same words don't spuriously wrap due to
                         // IEEE 754 rounding differences between (a+b)+c and (a+c)+b.
@@ -438,10 +444,47 @@ namespace PeachPDF.Html.Core.Dom
                             + box.ActualPaddingLeft + box.ActualPaddingRight
                             + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
                     }
+                    else if (box.Boxes.Count == 0
+                             || box.DerivedStyle.ActualDisplay is Keywords.Grid or Keywords.InlineGrid)
+                    {
+                        // Two cases the intrinsic measurement below cannot answer, both falling back
+                        // to the laid-out width as this always did.
+                        //
+                        // A leaf with no line boxes has no content to measure -- a replaced element,
+                        // where the laid-out width IS the intrinsic width.
+                        //
+                        // A nested GRID container places its children on tracks the intrinsic walk
+                        // knows nothing about. A nested flex row is handled: CssBox.IsFlexRowItem
+                        // stops its items each starting a new line, so their widths add up the way
+                        // the row lays them out.
+                        maxContent = naturalMain;
+                    }
                     else
                     {
-                        // Block children: no word measurement; use container fill width as fallback.
-                        maxContent = naturalMain;
+                        // Block children get the same intrinsic measurement everything else
+                        // does, rather than the container-fill width. An auto-width block child fills
+                        // its container on layout, so naturalMain is the CONTAINER's width, not the
+                        // item's content -- every item measured the full container and
+                        // justify-content then had no free space to distribute, which reads as an
+                        // equal split. A document with two address blocks in a
+                        // space-between row had each one land on half the page instead of hugging
+                        // its own edge.
+                        //
+                        // CSS 2.1 §10.3.5's shrink-to-fit: min(max(min-content, available),
+                        // max-content) -- min-content is the LOWER bound, so an item whose own
+                        // min-content is wider than the row keeps its min-content and overflows,
+                        // rather than being sized below what it can draw. Clamping the other way
+                        // round (max first, then min against the available width) collapses to
+                        // min(max-content, available) and silently under-sizes exactly that case.
+                        //
+                        // Not CssLayoutEngine.GetFitContentWidth: that is
+                        // min(GetLargestChildWidth(max-content), available), which has no
+                        // min-content floor either. Both of these return outer widths, which is
+                        // what `hypothetical` is.
+                        var minContent = await CssLayoutEngine.GetMinContentWidth(g, box);
+                        maxContent = Math.Max(
+                            minContent,
+                            Math.Min(await CssLayoutEngine.GetMaxContentWidth(g, box), naturalMain));
                     }
                     // min-width constrains content width; outer minimum = min-width + padding + border
                     if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
@@ -1690,6 +1733,34 @@ namespace PeachPDF.Html.Core.Dom
                 outerSize = Math.Max(outerSize, CssValueParser.ParseLength(minRaw, mainSize, box) + MainPaddingBorder(box));
 
             return outerSize;
+        }
+
+        /// <summary>
+        /// A line box's width with its trailing white space removed, per css-text-3 §4.1.2 —
+        /// white space at the end of a line hangs and does not contribute to the line's measure.
+        ///
+        /// Counted, an item measures wider than it draws: the line's items over-subscribe their
+        /// container and flex-shrink takes the difference out of the item that can least afford it.
+        /// <see cref="CssBox.GetMinMaxSumWords"/> already backs the same space out of ITS total,
+        /// which is why the two measurements disagreed by exactly one word space.
+        /// </summary>
+        private static double LineContentWidth(CssLineBox line)
+        {
+            var width = 0d;
+            var pending = 0d;
+            var trailingSpacing = 0d;
+            foreach (var word in line.Words)
+            {
+                // Held back rather than dropped: a space only hangs when nothing follows it on the
+                // line, and spaces BETWEEN words are part of the content.
+                if (word.IsSpaces && !word.IsLineBreak) { pending += word.FullWidth; continue; }
+                width += pending + word.FullWidth;
+                pending = 0;
+                // CssRect.FullWidth adds a word space unconditionally, so the last word on the line
+                // carries one that nothing follows.
+                trailingSpacing = word.ActualWordSpacing;
+            }
+            return Math.Max(0, width - trailingSpacing);
         }
 
         // ─── Gap helpers ──────────────────────────────────────────────────────────
