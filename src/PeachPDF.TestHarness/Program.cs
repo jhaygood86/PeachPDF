@@ -5417,6 +5417,42 @@ await SaveShowcaseAsync("vertical_align", "Typography & Text", "Vertical Align",
     "vertical-align behaviors for inline content, from baseline and middle to explicit offsets, including its length and percentage forms.",
     verticalAlignHtml, pdfConfig);
 
+// --- line-height: normal showcase (CSS 2.1 §10.8.1) ---
+
+const string NormalLineHeightCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font-size: 12pt; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    p.intro { font-family: Arial, sans-serif; color: #444; margin: 0 0 1em; max-width: 500pt }
+    .sample { border: 1px solid #ccc; background: #fafafa; padding: 0; margin-bottom: 10pt; max-width: 380pt }
+    .sample .label { font-family: Arial, sans-serif; font-size: 7pt; font-weight: bold; color: #444; background: #eee; padding: 3pt 6pt; border-bottom: 1px solid #ccc }
+    .sample .text { font-size: 24pt; line-height: normal; margin: 0; padding: 0 6pt; background: #e8f0fe }
+    .sample.serif .text { font-family: Georgia, 'Times New Roman', serif }
+    .sample.sans .text { font-family: Arial, Helvetica, sans-serif }
+    .sample.mono .text { font-family: 'Courier New', monospace }
+    </style>
+    """;
+
+var normalLineHeightHtml = "<!DOCTYPE html><html><head>" + NormalLineHeightCss + "</head><body>" +
+
+    "<h1>line-height: normal</h1>" +
+    "<p class=\"intro\">Each box below sets only <code>font-size: 24pt; line-height: normal</code> - no explicit " +
+    "line-height. The used value is resolved from that font's own ascent/descent/line-gap metrics (CSS 2.1 " +
+    "&sect;10.8.1), matching how browsers do it, so it varies by font rather than being a flat multiplier of " +
+    "font-size. The shaded background is exactly one line box tall, so its height relative to the glyphs " +
+    "shows each font's own leading.</p>" +
+
+    "<div class=\"sample serif\"><div class=\"label\">serif</div><div class=\"text\">Aligny jpqg</div></div>" +
+    "<div class=\"sample sans\"><div class=\"label\">sans-serif</div><div class=\"text\">Aligny jpqg</div></div>" +
+    "<div class=\"sample mono\"><div class=\"label\">monospace</div><div class=\"text\">Aligny jpqg</div></div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("line_height_normal", "Typography & Text", "line-height: normal",
+    "line-height: normal resolved from each font's own ascent/descent/line-gap metrics, matching browser behavior, rather than a flat 1.2× font-size.",
+    normalLineHeightHtml, pdfConfig);
+
 // --- letter-spacing / word-spacing showcase ---
 
 const string SpacingCss = """

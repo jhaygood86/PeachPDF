@@ -1224,10 +1224,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
         public double ActualLineHeight => Style.Text.LineHeight.Value.Value is { } lineHeight
             ? CssValueParser.ParseLength(lineHeight, Owner.Size.Height, Owner)
-            // GetEmHeight() is device-scaled (see CssValueParser.ParseLength(LengthOrUnitless,...)'s
-            // identical correction for line-height's own explicit unitless multiplier) - undo that the
-            // same way for the normal/default 1.2 multiplier (issue #814's line-height sibling).
-            : 1.2 * GetEmHeight() * ((Owner.HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0);
+            // `normal` (CSS 2.1 §10.8.1) resolves from the used font's own metrics, matching browsers -
+            // see RFont.NormalLineHeight (issue #956). Already fully scaled, same convention as
+            // ActualFont.Ascent/Height elsewhere - no further PixelsPerPoint correction here.
+            : ActualFont.NormalLineHeight;
 
         #endregion
 

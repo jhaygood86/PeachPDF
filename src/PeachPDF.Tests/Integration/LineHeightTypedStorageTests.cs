@@ -1,5 +1,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Tests.TestSupport;
+using System;
+using System.IO;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -84,16 +86,55 @@ namespace PeachPDF.Tests.Integration
 
         // ─── ActualLineHeight resolution (not just storage) ────────────────────────
 
-        [Fact]
-        public async Task NormalKeyword_ActualLineHeight_ResolvesToOnePointTwoTimesFontSize()
-        {
-            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                "<div id='t' style='font-size:20pt;line-height:normal'>x</div>"));
+        // `normal` (CSS 2.1 §10.8.1) resolves from the used font's own ascent/descent/line-gap metrics,
+        // matching Chromium/Firefox/Safari - not a flat 1.2x-font-size approximation (issue #956). Two
+        // bundled fonts with different `hhea` metrics are registered via @font-face/data-URL (rather than
+        // relying on whatever "no font-family" resolves to, which is platform-dependent) so the expected
+        // values below are derived from each font's own real table data, not from the code under test.
+        //
+        // Both fonts lack the OS/2 USE_TYPO_METRICS bit, so both take the hhea branch:
+        //   SourceSans3-Regular (BundledFonts.Ttf): unitsPerEm=1000, hhea ascent=1000, |descent|=326, lineGap=0.
+        //     At 20pt: ascent 20.00pt -> round to nearest 0.75pt (CSS px) -> 20.25pt;
+        //              descent 6.52pt -> 6.75pt; gap 0pt. Sum = 27.00pt.
+        //   SourceCodePro-Regular (BundledFonts.Otf): unitsPerEm=1000, hhea ascent=984, |descent|=273, lineGap=0.
+        //     At 20pt: ascent 19.68pt -> 19.50pt; descent 5.46pt -> 5.25pt; gap 0pt. Sum = 24.75pt.
+        // Neither equals the old flat 1.2*20=24pt, and the two differ from each other - proving the value
+        // is now genuinely font-dependent rather than a constant multiplier.
 
-            var box = LayoutHarness.FindById(root, "t");
+        [Fact]
+        public async Task NormalKeyword_ActualLineHeight_ResolvesFromTheFontsOwnHheaMetrics()
+        {
+            var box = await GetNormalLineHeightBoxAsync(BundledFonts.Ttf, "font/truetype");
 
             Assert.NotNull(box);
-            Assert.Equal(1.2 * 20, box!.ActualLineHeight, 2);
+            Assert.Equal(27.00, box!.ActualLineHeight, 2);
+        }
+
+        [Fact]
+        public async Task NormalKeyword_ActualLineHeight_DiffersByFont_NotAFlatMultiplier()
+        {
+            var sansBox = await GetNormalLineHeightBoxAsync(BundledFonts.Ttf, "font/truetype");
+            var monoBox = await GetNormalLineHeightBoxAsync(BundledFonts.Otf, "font/opentype");
+
+            Assert.NotNull(sansBox);
+            Assert.NotNull(monoBox);
+            Assert.Equal(24.75, monoBox!.ActualLineHeight, 2);
+            Assert.NotEqual(sansBox!.ActualLineHeight, monoBox.ActualLineHeight);
+            Assert.NotEqual(1.2 * 20, sansBox.ActualLineHeight, 2);
+            Assert.NotEqual(1.2 * 20, monoBox.ActualLineHeight, 2);
+        }
+
+        private static async Task<PeachPDF.Html.Core.Dom.CssBox?> GetNormalLineHeightBoxAsync(string fontPath, string mimeType)
+        {
+            var b64 = Convert.ToBase64String(File.ReadAllBytes(fontPath));
+            var html = $@"<!DOCTYPE html><html><head><style>
+@font-face {{ font-family: 'NormalLineHeightTestFont'; src: url('data:{mimeType};base64,{b64}'); }}
+</style></head><body style='margin:0'>
+<div id='t' style=""font-family:'NormalLineHeightTestFont';font-size:20pt;line-height:normal"">x</div>
+</body></html>";
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            return LayoutHarness.FindById(root, "t");
         }
 
         [Fact]

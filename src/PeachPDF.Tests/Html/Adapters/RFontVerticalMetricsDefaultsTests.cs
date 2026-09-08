@@ -25,5 +25,18 @@ namespace PeachPDF.Tests.Html.Adapters
             Assert.False(font.HasVerticalOrigin);
             Assert.Equal(font.Ascent, font.GetVerticalOriginY(rune));
         }
+
+        /// <summary>
+        /// <see cref="PeachPDF.Html.Adapters.RFont.NormalLineHeight"/> (issue #956) follows the identical
+        /// pattern: virtual, with a default that reproduces the pre-#956 flat 1.2x-font-size approximation
+        /// exactly, so only <see cref="PeachPDF.Adapters.FontAdapter"/> resolves it from real font metrics.
+        /// </summary>
+        [Fact]
+        public void NormalLineHeightDefault_ReproducesThePreExistingApproximation()
+        {
+            var font = new TestFont(20);
+
+            Assert.Equal(1.2 * font.Size, font.NormalLineHeight);
+        }
     }
 }
