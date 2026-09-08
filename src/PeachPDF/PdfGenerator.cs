@@ -545,6 +545,17 @@ namespace PeachPDF
             foreach (var cachedImage in marginBoxImageCache.Values)
                 cachedImage?.Dispose();
 
+            // Hand the painter's clip findings to the caller. Drained here, after the page loop, and
+            // before `container` (a `using`) is disposed at the end of this method - it is the only
+            // point where the whole render's collection exists and is still reachable.
+            // Appended, not assigned. AddPdfPages is a repeatable public API - a caller adds more
+            // pages to an existing document across several calls, each building its own container
+            // and its own report - so replacing the property wholesale would silently discard the
+            // findings of every earlier call. PeachPdfDocument.PageCount accumulates across the same
+            // calls via the underlying PdfDocument; a report whose whole purpose is not to lose
+            // information quietly should not be the one member that does.
+            document.ClipReport.Append(container.HtmlContainerInt.ClipReport);
+
             // Finalizes /ParentTree page-keyed entries before HandleLinks (which, when tagging is
             // enabled, appends further annotation-keyed entries to the same tree - see
             // StructureTagBuilder.Finish and HandleLinks's own tagging-aware section below).

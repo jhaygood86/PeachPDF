@@ -23,6 +23,18 @@ public class PeachPdfDocument
     /// </summary>
     public int PageCount => _document.PageCount;
 
+    /// <summary>
+    /// Words this render drew and then truncated with a clip - the loss class reading the finished
+    /// PDF back cannot detect. See <see cref="PeachPDF.ClipReport"/> for what it does and does not
+    /// cover.
+    /// </summary>
+    /// <remarks>
+    /// Public because the consumer of this library is a separate assembly and the internals are not
+    /// visible to it. Everything else the render reports about itself is read back OUT of the bytes;
+    /// this is the one fact only the engine holds, so it has to be handed over rather than inferred.
+    /// </remarks>
+    public ClipReport ClipReport { get; internal set; } = new();
+
     internal PdfPages Pages => _document.Pages;
 
     /// <summary>

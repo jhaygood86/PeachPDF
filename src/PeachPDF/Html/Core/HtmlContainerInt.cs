@@ -2568,6 +2568,19 @@ namespace PeachPDF.Html.Core
         internal RRect? PageClipOverride { get; set; }
 
         /// <summary>
+        /// Words this render DREW and then truncated with a clip - see <see cref="PeachPDF.ClipReport"/>.
+        /// </summary>
+        /// <remarks>
+        /// Per RENDER, not per page, which is why it lives here rather than on <c>FragmentPainter</c>:
+        /// the painter is constructed fresh for each page (<see cref="PerformPaint"/>) and holds
+        /// per-page state deliberately. <see cref="PageClipOverride"/> immediately above is the same
+        /// shape of per-render slot in the other direction - written by <c>PdfGenerator</c>'s page loop
+        /// and read by the painter; this one is written by the painter and drained by
+        /// <c>PdfGenerator.AddPdfPages</c> once the loop is done.
+        /// </remarks>
+        internal PeachPDF.ClipReport ClipReport { get; } = new();
+
+        /// <summary>
         /// The page/viewport rect, in the same fragmentainer-local coordinate space every painted
         /// fragment uses - the same rect <see cref="PerformPaint"/>
         /// pushes as the top-level page clip, also used as the background positioning area for a

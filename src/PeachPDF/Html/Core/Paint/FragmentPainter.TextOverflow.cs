@@ -166,7 +166,13 @@ namespace PeachPDF.Html.Core.Paint
         /// The caller uses this to record the line as truncated so a later sibling box sharing it paints
         /// nothing further (see <see cref="PaintWordsWithEllipsis"/>'s own remarks).
         /// </returns>
-        private static bool PaintLineWithEllipsis(RGraphics g, CssBox box, List<TextFragment> lineWords, bool isVertical, bool isRtl, double boundary, double lineStart)
+        // Not static only because PaintWordSequence stopped being static: it now records words that
+        // were drawn and then clipped, which needs the container. The words this path hands it are
+        // the line's SURVIVING whole words, painted normally, so recording them is right. The word
+        // this path truncates itself is drawn elsewhere (FitTruncatedWord/DrawEllipsis) and is
+        // deliberately NOT recorded - `text-overflow: ellipsis` is truncation the author asked for
+        // and the reader can see, which is the opposite of the silent loss the report exists for.
+        private bool PaintLineWithEllipsis(RGraphics g, CssBox box, List<TextFragment> lineWords, bool isVertical, bool isRtl, double boundary, double lineStart)
         {
             var lastLeading = LeadingEdge(lineWords[^1].Rect, isVertical, isRtl);
             if (!(Forward(lastLeading, isRtl) > Forward(boundary, isRtl)))
