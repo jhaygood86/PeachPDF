@@ -1184,19 +1184,36 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the size of 1em, per spec: an element's own computed font-size.</summary>
         public double GetEmHeight() => ActualFont.Size;
 
-        /// <summary>Gets the height of the root font.</summary>
+        /// <summary>
+        /// The font size of the ROOT ELEMENT (css-values-3 §5.1.2), which is the outermost box that
+        /// corresponds to an element.
+        ///
+        /// Walking all the way to the topmost <see cref="CssBox"/> instead lands on the container's
+        /// own root box, which sits above &lt;html&gt; and carries no element, so its font size is
+        /// always <see cref="DefaultFontResolver.FontSize"/>. Every <c>rem</c> in the document then
+        /// resolves against that default no matter what the root declares: with
+        /// <c>html { font-size: 32px }</c>, <c>1em</c> and <c>1rem</c> disagree in the same document.
+        /// </summary>
         public double GetRemHeight()
         {
             var box = Owner;
-            var parentBox = box.ParentBox;
+            CssBox? rootElement = null;
 
-            while (parentBox is not null)
+            for (var parentBox = box.ParentBox; parentBox is not null; parentBox = parentBox.ParentBox)
             {
                 box = parentBox;
-                parentBox = box.ParentBox;
+                if (box.HtmlTag is not null)
+                {
+                    rootElement = box;
+                }
             }
 
-            return box.GetEmHeight();
+            // `box` is now the topmost box, above <html> and carrying no element, so its font size is
+            // the default. That is the right answer when there is no root ELEMENT above the caller: a
+            // fragment with no element boxes, and — importantly — the root element resolving its OWN
+            // font size, where a rem resolves against the initial value (css-values-3 §5.1.2) and
+            // consulting the root again would recurse forever through ActualFont.
+            return (rootElement ?? box).GetEmHeight();
         }
 
         #endregion
