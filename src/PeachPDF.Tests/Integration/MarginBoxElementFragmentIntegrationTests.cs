@@ -129,6 +129,48 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task RunningHeading_MarginBoxHonoursItsOwnPadding()
+        {
+            // The element() path goes through HtmlContainerInt.LayoutMarginBoxes, not
+            // MarginBoxRenderer.Render, so it needs its own call to ApplyBoxModel — a running-element
+            // footer should respect its own padding exactly like a text one. Measured against the
+            // identical document with no padding, so the assertion is about the padding alone.
+            var withPadding = await LayoutPaddedAsync("padding-left: 10pt; padding-top: 4pt;");
+            var without = await LayoutPaddedAsync("");
+
+            var padded = FirstTopCentre(withPadding);
+            var plain = FirstTopCentre(without);
+
+            Assert.Equal(plain.Content.Rect.X + 10, padded.Content.Rect.X, 3);
+            Assert.Equal(plain.Content.Rect.Y + 4, padded.Content.Rect.Y, 3);
+            Assert.Equal(plain.Content.Rect.Width - 10, padded.Content.Rect.Width, 3);
+        }
+
+        private static PeachPDF.Html.Core.Fragments.MarginBoxFragment FirstTopCentre(HtmlContainerInt container) =>
+            container.FragmentTree!.Fragmentainers
+                .SelectMany(f => f.MarginBoxes)
+                .First(m => m.BoxName == "top-center");
+
+        private static async Task<HtmlContainerInt> LayoutPaddedAsync(string extraTopCentreCss)
+        {
+            var html = $$"""
+                <!DOCTYPE html>
+                <html><head><style>
+                @page { size: a6; margin: 12mm; }
+                @page { @top-center { content: element(heading); font-size: 8pt; {{extraTopCentreCss}} } }
+                h1.running { position: running(heading); margin: 0; }
+                </style></head><body>
+                <h1 class="running">Chapter One</h1>
+                """ +
+                string.Concat(Enumerable.Repeat("<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>", 40)) +
+                "</body></html>";
+
+            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
+                html, new PdfGenerateConfig { PageSize = PageSize.A6 });
+            return container;
+        }
+
+        [Fact]
         public async Task RunningHeading_ContributesNoSizeInNormalFlow()
         {
             var container = await LayoutFixtureAsync();

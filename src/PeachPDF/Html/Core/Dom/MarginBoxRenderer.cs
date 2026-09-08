@@ -68,6 +68,10 @@ namespace PeachPDF.Html.Core.Dom
 
                 var rect = GetMarginBoxRect(boxName, pageSize, marginLeft, marginTop, marginRight, marginBottom, margins,
                     pageStyle, htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize);
+                rect = ApplyBoxModel(rect, marginRule, pageStyle,
+                    htmlContainer.PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize,
+                    MarginAreaWidth(boxName, pageSize, marginLeft, marginRight),
+                    MarginAreaHeight(boxName, pageSize, marginTop, marginBottom));
                 if (rect.Width <= 0 || rect.Height <= 0)
                     continue;
 
@@ -99,6 +103,133 @@ namespace PeachPDF.Html.Core.Dom
                 g.DrawString(visualText, font, brush, rect, format, logicalText: logicalText);
             }
         }
+
+        /// <summary>
+        /// A margin box's own margin and padding on one axis, resolved against
+        /// <paramref name="basisPt"/>. One implementation because the two callers need it in
+        /// opposite directions: <see cref="GetMarginBoxRect"/> ADDS it, since a declared
+        /// <c>width</c>/<c>height</c> is the CONTENT-box dimension and the slot it distributes is
+        /// therefore the outer size (css-page-3 §5.3.2/§5.3.3's fixed-dimension equality:
+        /// <c>margin + border + padding + width + padding + border + margin = the margin area's
+        /// extent</c>), and <see cref="ApplyBoxModel"/> SUBTRACTS the same amount back to reach the
+        /// content box the caller paints into.
+        ///
+        /// <paramref name="basisPt"/> is the CONTAINING BLOCK's extent along this axis — its WIDTH for
+        /// the left/right edges, its HEIGHT for the top/bottom ones. css-page-3 §6 overrides CSS 2.1
+        /// §8.3/§8.4 here, which resolve every edge against the containing block's width: "For right
+        /// and left values, percentages are relative to the width of the containing block; for top and
+        /// bottom values, percentages are relative to the height of the containing block."
+        ///
+        /// The containing block is the page-margin box's own slot in the margin area (§5.3.1): for a
+        /// top or bottom row, the content band's width by the used page margin's thickness; for a left
+        /// or right column, that margin's thickness by the content band's height; and for a corner, the
+        /// rectangle where the two page margins meet. <see cref="MarginAreaWidth"/> and
+        /// <see cref="MarginAreaHeight"/> resolve those two dimensions from the box's name.
+        ///
+        /// Padding may not be negative (CSS 2.1 §8.4); a margin may be, which is how a footer band
+        /// on a page margin shallower than the inset it wants grows back over the page the way a
+        /// browser's print-footer overlay does.
+        ///
+        /// Border is deliberately not included: a margin box does not paint one today, so charging
+        /// it space would move content for a decoration that never appears. Tracked as a gap rather
+        /// than silently omitted.
+        /// </summary>
+        internal static (double Start, double End) BoxModelExtent(
+            MarginStyleRule rule, StyleDeclaration? pageStyle, double remPt, double basisPt, bool horizontal)
+        {
+            var style = rule.Style;
+            var emPt = ResolveFontSizePt(style, pageStyle);
+
+            double Len(string? value, bool clampToZero)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                    return 0;
+                var pt = DomParser.ParseLengthToPdfPoints(value, new PageLengthContext(emPt, remPt, basisPt)) ?? 0;
+                return clampToZero ? Math.Max(0, pt) : pt;
+            }
+
+            return horizontal
+                ? (Len(style.MarginLeft, false) + Len(style.PaddingLeft, true),
+                   Len(style.MarginRight, false) + Len(style.PaddingRight, true))
+                : (Len(style.MarginTop, false) + Len(style.PaddingTop, true),
+                   Len(style.MarginBottom, false) + Len(style.PaddingBottom, true));
+        }
+
+        /// <summary>
+        /// Applies a margin box's margin and padding to its rect, so <c>content</c> is painted in the
+        /// content box rather than the border box. Per css-page-3 §5.1 a margin box is a block-level
+        /// box that accepts the whole box model, and <see cref="GetMarginBoxRect"/> already resolves
+        /// <c>width</c>/<c>height</c> from the same declaration; margin and padding were simply never
+        /// read.
+        ///
+        /// It matters because a text margin box is painted with a single <c>DrawString</c> into this
+        /// rect, so <c>vertical-align</c> offers exactly three positions within it and nothing else
+        /// moves the content -- <c>line-height</c> included. On a 1.5in bottom margin those three are
+        /// 98pt, 49pt and 0pt from the page edge, and a page number that has to land 15pt from the
+        /// edge (which is where a browser's print footer sits) cannot be expressed at all. A negative
+        /// margin covers the other end of the same problem: a browser's footer band is an overlay over
+        /// the page rather than a box inside the page margin, so it keeps that 15pt inset even on a
+        /// margin thinner than 15pt, which a margin box can only follow by growing past its band.
+        ///
+        /// This subtracts exactly what <see cref="GetMarginBoxRect"/> added for an explicitly sized
+        /// box, so a declared <c>width</c> survives as the content width rather than being charged
+        /// for its own padding twice. For an auto-sized box the slot really was an outer allocation,
+        /// and subtracting is what turns it into the content box.
+        /// </summary>
+        /// <param name="rect">the box's slot, as <see cref="GetMarginBoxRect"/> allocated it</param>
+        /// <param name="rule">the <c>@page</c> margin-box rule whose box model to apply</param>
+        /// <param name="pageStyle">the base <c>@page</c> declaration, for the em basis</param>
+        /// <param name="remPt">the root element's font size, in points</param>
+        /// <param name="containingBlockWidthPt">
+        /// The width of this box's containing block — the percentage basis for the left and right
+        /// edges. See <see cref="MarginAreaWidth"/>.
+        /// </param>
+        /// <param name="containingBlockHeightPt">
+        /// The height of this box's containing block — the percentage basis for the top and bottom
+        /// edges, which is a DIFFERENT number per css-page-3 §6. See <see cref="MarginAreaHeight"/>.
+        /// </param>
+        internal static XRect ApplyBoxModel(XRect rect, MarginStyleRule rule, StyleDeclaration? pageStyle,
+            double remPt, double containingBlockWidthPt, double containingBlockHeightPt)
+        {
+            var (left, right) = BoxModelExtent(rule, pageStyle, remPt, containingBlockWidthPt, horizontal: true);
+            var (top, bottom) = BoxModelExtent(rule, pageStyle, remPt, containingBlockHeightPt, horizontal: false);
+
+            if (left == 0 && right == 0 && top == 0 && bottom == 0)
+                return rect;
+
+            // XRect refuses a negative extent; the caller's own guard then skips the box, which is
+            // what an over-padded box should do anyway.
+            return new XRect(rect.X + left, rect.Y + top,
+                Math.Max(0, rect.Width - left - right),
+                Math.Max(0, rect.Height - top - bottom));
+        }
+
+        /// <summary>
+        /// The WIDTH of <paramref name="name"/>'s containing block (css-page-3 §5.3.1) — the basis a
+        /// <c>margin-left</c>/<c>margin-right</c>/<c>padding-left</c>/<c>padding-right</c> percentage
+        /// resolves against. A left or right column is as wide as that page margin; a corner is as wide
+        /// as the margin it sits in; a top or bottom row spans the content band.
+        /// </summary>
+        internal static double MarginAreaWidth(string name, XSize page, double mL, double mR) => name switch
+        {
+            "top-left-corner" or "bottom-left-corner" or "left-top" or "left-middle" or "left-bottom" => mL,
+            "top-right-corner" or "bottom-right-corner" or "right-top" or "right-middle" or "right-bottom" => mR,
+            _ => page.Width - mL - mR,
+        };
+
+        /// <summary>
+        /// The HEIGHT of <paramref name="name"/>'s containing block (css-page-3 §5.3.1) — the basis a
+        /// <c>margin-top</c>/<c>margin-bottom</c>/<c>padding-top</c>/<c>padding-bottom</c> percentage
+        /// resolves against, and a different number from <see cref="MarginAreaWidth"/> for every box.
+        /// A top or bottom row is as tall as that page margin; a corner is as tall as the margin it sits
+        /// in; a left or right column spans the content band's height.
+        /// </summary>
+        internal static double MarginAreaHeight(string name, XSize page, double mT, double mB) => name switch
+        {
+            "top-left-corner" or "top-right-corner" or "top-left" or "top-center" or "top-right" => mT,
+            "bottom-left-corner" or "bottom-right-corner" or "bottom-left" or "bottom-center" or "bottom-right" => mB,
+            _ => page.Height - mT - mB,
+        };
 
         /// <summary>
         /// Detects and resolves an <c>&lt;image&gt;</c>-valued <c>content</c> (a bare <c>url()</c>, or
@@ -380,12 +511,31 @@ namespace PeachPDF.Html.Core.Dom
                 return DomParser.ParseLengthToPdfPoints(value, new PageLengthContext(emPt, remPt, hundredPercentPt));
             }
 
-            double? PW(MarginStyleRule? r)    => ResolveDim(r, r?.Style.Width,     contentWidth);
-            double? PMinW(MarginStyleRule? r) => ResolveDim(r, r?.Style.MinWidth,  contentWidth);
-            double? PMaxW(MarginStyleRule? r) => ResolveDim(r, r?.Style.MaxWidth,  contentWidth);
-            double? PH(MarginStyleRule? r)    => ResolveDim(r, r?.Style.Height,    contentHeight);
-            double? PMinH(MarginStyleRule? r) => ResolveDim(r, r?.Style.MinHeight, contentHeight);
-            double? PMaxH(MarginStyleRule? r) => ResolveDim(r, r?.Style.MaxHeight, contentHeight);
+            // A declared width/height is the CONTENT box (css-page-3 §5.3.2/§5.3.3), so what gets
+            // distributed into the row or column is that plus the box's own margin and padding --
+            // otherwise ApplyBoxModel subtracts them from a slot that never accounted for them and
+            // the box renders narrower than it asked for. An auto dimension stays null and is
+            // unaffected.
+            //
+            // `bmBasis` is the containing block's extent along the axis being added, per css-page-3
+            // §6: contentWidth for a top/bottom row's horizontal edges, contentHeight for a
+            // left/right column's vertical ones. Those are the only two combinations reached here --
+            // PW is only ever asked of a row, PH only of a column.
+            double? Outer(double? contentDim, MarginStyleRule? r, double bmBasis, bool horizontal)
+            {
+                // A non-null contentDim means ResolveDim found a value, which it only does for a
+                // non-null rule.
+                if (contentDim is not { } value) return null;
+                var (start, end) = BoxModelExtent(r!, pageStyle, remPt, bmBasis, horizontal);
+                return value + start + end;
+            }
+
+            double? PW(MarginStyleRule? r)    => Outer(ResolveDim(r, r?.Style.Width,     contentWidth), r, contentWidth, true);
+            double? PMinW(MarginStyleRule? r) => Outer(ResolveDim(r, r?.Style.MinWidth,  contentWidth), r, contentWidth, true);
+            double? PMaxW(MarginStyleRule? r) => Outer(ResolveDim(r, r?.Style.MaxWidth,  contentWidth), r, contentWidth, true);
+            double? PH(MarginStyleRule? r)    => Outer(ResolveDim(r, r?.Style.Height,    contentHeight), r, contentHeight, false);
+            double? PMinH(MarginStyleRule? r) => Outer(ResolveDim(r, r?.Style.MinHeight, contentHeight), r, contentHeight, false);
+            double? PMaxH(MarginStyleRule? r) => Outer(ResolveDim(r, r?.Style.MaxHeight, contentHeight), r, contentHeight, false);
 
             var tlR = FindMargin(margins, "top-left");
             var tcR = FindMargin(margins, "top-center");
