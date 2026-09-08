@@ -2556,6 +2556,7 @@ namespace PeachPDF.Html.Core.Dom
                 // read back later.
                 box._liveChildStartIndex = 0;
                 box._liveChildStartGeneration = -1;
+                box._liveChildStartSlot = -1;
 
                 // Every caller of this is a write that gives a box content or moves it, so it is also
                 // the signal layout has REACHED this box at all - which is what separates a subtree
@@ -2594,16 +2595,35 @@ namespace PeachPDF.Html.Core.Dom
         private int _liveChildStartGeneration = -1;
 
         /// <summary>
-        /// <see cref="_liveChildStartIndex"/> if it was computed in the current layout generation, else
-        /// <c>0</c> - a stale index from an earlier generation names nothing meaningful in <see cref="Boxes"/>
-        /// as it stands now.
+        /// The slot <see cref="_liveChildStartIndex"/> was derived at. The prefix it names was confirmed
+        /// <see cref="EmittedNothingAtOrBefore"/> <i>that slot</i>, which is a claim about that slot and
+        /// every later one — never about an earlier one, where the same children may hold real content.
         /// </summary>
-        internal int LiveChildStart =>
-            _liveChildStartGeneration == (HtmlContainer?.LayoutGeneration ?? 0) ? _liveChildStartIndex : 0;
+        private int _liveChildStartSlot = -1;
+
+        /// <summary>
+        /// <see cref="_liveChildStartIndex"/> where it can be trusted for <paramref name="slot"/>, else
+        /// <c>0</c>.
+        /// </summary>
+        /// <remarks>
+        /// Two things make it untrustworthy. A stale index from an earlier generation names nothing
+        /// meaningful in <see cref="Boxes"/> as it stands now. And an index derived at a <i>later</i> slot
+        /// answers a different question than the one being asked: the prefix it names was confirmed
+        /// "nothing at or after that slot", which says nothing about a slot before it — where those same
+        /// children may hold the content this walk is looking for. Emitting an earlier slot again is not
+        /// hypothetical; <see cref="Fragmentation.FragmentEmitter.CatchUpStaleSlotsBehind"/> exists to do
+        /// exactly that.
+        /// </remarks>
+        /// <param name="slot">the slot the walk asking for this is building</param>
+        internal int LiveChildStartFor(int slot) =>
+            _liveChildStartGeneration == (HtmlContainer?.LayoutGeneration ?? 0) && slot >= _liveChildStartSlot
+                ? _liveChildStartIndex
+                : 0;
 
         /// <summary>
         /// Records that <see cref="Boxes"/><c>[0, </c><paramref name="index"/><c>)</c> were each individually
-        /// confirmed <see cref="EmittedNothingAtOrBefore"/> as of the current layout generation.
+        /// confirmed <see cref="EmittedNothingAtOrBefore"/> <paramref name="slot"/>, as of the current
+        /// layout generation.
         /// </summary>
         /// <remarks>
         /// Safe to trust on a later call precisely because <see cref="DiscardEmittedNothing"/> resets this
@@ -2615,10 +2635,11 @@ namespace PeachPDF.Html.Core.Dom
         /// box out again, which is itself a write to this box and so passes through the same reset before
         /// any later reader could see a stale index.
         /// </remarks>
-        internal void RecordLiveChildStart(int index)
+        internal void RecordLiveChildStart(int index, int slot)
         {
             _liveChildStartIndex = index;
             _liveChildStartGeneration = HtmlContainer?.LayoutGeneration ?? 0;
+            _liveChildStartSlot = slot;
         }
 
         /// <summary>
