@@ -31,10 +31,10 @@ namespace PeachPDF.Tests.CSS
             }
         }
 
-        public static Stylesheet ToCssStylesheet(this Stream content)
+        public static Task<Stylesheet> ToCssStylesheetAsync(this Stream content)
         {
             var parser = new StylesheetParser();
-            return parser.Parse(content);
+            return parser.ParseAsync(content);
         }
     }
 }

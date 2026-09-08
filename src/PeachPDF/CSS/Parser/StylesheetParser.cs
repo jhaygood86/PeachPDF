@@ -44,12 +44,6 @@ namespace PeachPDF.CSS
             return Parse(source);
         }
 
-        public Stylesheet Parse(Stream content)
-        {
-            var source = new TextSource(CssStreamLoader.Load(content));
-            return Parse(source);
-        }
-
         public Task<Stylesheet> ParseAsync(string content)
         {
             return ParseAsync(content, CancellationToken.None);

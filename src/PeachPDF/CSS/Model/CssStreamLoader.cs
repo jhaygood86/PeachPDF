@@ -24,11 +24,6 @@ namespace PeachPDF.CSS
     /// </summary>
     internal static class CssStreamLoader
     {
-        public static ReadOnlyMemory<char> Load(Stream stream, Encoding? encoding = null)
-        {
-            return LoadAsync(stream, encoding, CancellationToken.None).GetAwaiter().GetResult();
-        }
-
         public static async Task<ReadOnlyMemory<char>> LoadAsync(Stream stream, Encoding? encoding,
             CancellationToken cancellationToken)
         {

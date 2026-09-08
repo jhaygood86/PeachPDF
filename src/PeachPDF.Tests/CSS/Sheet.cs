@@ -883,7 +883,7 @@ h1 { color: blue }");
         }
 
         [Fact]
-        public void CssSheetFromStreamWeirdBytesLeadingToInfiniteLoop()
+        public async Task CssSheetFromStreamWeirdBytesLeadingToInfiniteLoop()
         {
             var bs = new byte[8];
             bs[0] = 239;
@@ -897,18 +897,18 @@ h1 { color: blue }");
 
             using (var memoryStream = new MemoryStream(bs, false))
             {
-                var sheet = memoryStream.ToCssStylesheet();
+                var sheet = await memoryStream.ToCssStylesheetAsync();
             }
         }
 
         [Fact]
-        public void CssSheetFromStreamOnlyZerosAvailable()
+        public async Task CssSheetFromStreamOnlyZerosAvailable()
         {
             var bs = new byte[7180];
 
             using (var memoryStream = new MemoryStream(bs, false))
             {
-                var sheet = memoryStream.ToCssStylesheet();
+                var sheet = await memoryStream.ToCssStylesheetAsync();
                 Assert.NotNull(sheet);
                 Assert.Equal(0, sheet.Rules.Length);
             }
