@@ -2673,6 +2673,12 @@ namespace PeachPDF.Html.Core.Dom
                     coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + appliedLeftSpacing;
                 }
 
+                // Where b's own content box starts on this line, after every branch above that can
+                // establish it. An atomic inline-level box has to occupy its declared width from
+                // here, not just the width its words happened to measure - see the advance at the
+                // end of this child's placement.
+                var childContentStartX = coordinates.CurrentX;
+
                 if (b.Words.Count > 0)
                 {
                     var wrapNoWrapBox = false;
@@ -3113,6 +3119,43 @@ namespace PeachPDF.Html.Core.Dom
                 if (preShiftedForAtomicInset && ReferenceEquals(lineBeforeChild, coordinates.Line))
                 {
                     coordinates.CurrentY -= atomicTopInset;
+                }
+
+                // CSS 2.1 §10.3.9: an atomic inline-level box occupies its own used width on the
+                // line, not the width its content happened to measure. The flow otherwise just
+                // accumulates word widths, so `width` on a display: inline-block was inert and
+                // whatever followed sat flush against its text - a fixed-width label span stopped
+                // lining its values up, and an empty bordered inline-block used as a checkbox glyph
+                // took no room at all. The flex/grid path a few hundred lines up already does exactly
+                // this via `CurrentX = b.ClientRight`; this box's own geometry is never assigned on
+                // the plain inline path, so the declared width has to be resolved here instead.
+                //
+                // Only ever forward: content wider than the declared width overflows rather than
+                // being pulled back, which is what `overflow: visible` means. A percentage width is
+                // left alone - it resolves against a containing block this line does not know.
+                if (b.DerivedStyle.ActualDisplay is Keywords.InlineBlock
+                    && !ReferenceEquals(b, box)
+                    && CssValueParser.IsValidLength(b.Width)
+                    && !b.Width.EndsWith('%'))
+                {
+                    // childContentStartX is the CONTENT-box start (leftSpacing has been applied) and
+                    // rightSpacing is added below, so what belongs between them is the CONTENT width.
+                    // A declared width is that already under box-sizing: content-box, but under
+                    // border-box it also covers the padding and border those two spacings re-add, so
+                    // they come off here or they are counted twice.
+                    //
+                    // Not ActualBoxSizeIncludedWidth: that answers the opposite question - what a
+                    // declared size does NOT include - so it is padding+border for content-box and
+                    // ZERO for border-box, which is a no-op in exactly the case that needs adjusting.
+                    var declared = CssValueParser.ParseLength(b.Width, 0, b);
+
+                    if (b.BoxSizing.Value is BoxSizingMode.BorderBox)
+                    {
+                        declared -= b.ActualPaddingLeft + b.ActualPaddingRight
+                                    + b.ActualBorderLeftWidth + b.ActualBorderRightWidth;
+                    }
+
+                    coordinates.CurrentX = Math.Max(coordinates.CurrentX, childContentStartX + declared);
                 }
 
                 // A box whose content was all placed in an earlier fragmentainer is not re-closed here
