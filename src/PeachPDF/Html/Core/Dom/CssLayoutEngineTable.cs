@@ -102,6 +102,15 @@ namespace PeachPDF.Html.Core.Dom
 
         private string CellInlineMaxSize(CssBox cell) => _isVertical ? cell.MaxHeight : cell.MaxWidth;
 
+        /// <summary>
+        /// The padding and border a cell's declared inline size does NOT include, along the column
+        /// axis. Zero under <c>box-sizing: border-box</c>, where the declared size already covers
+        /// them — <see cref="CssBox.ActualBoxSizeIncludedWidth"/> makes that distinction, so this is
+        /// only its writing-mode switch, mirroring <see cref="CellInlineSize"/>'s.
+        /// </summary>
+        private double CellInlineSizeExcludes(CssBox cell) =>
+            _isVertical ? cell.ActualBoxSizeIncludedHeight : cell.ActualBoxSizeIncludedWidth;
+
         private string CellInlineMinSize(CssBox cell) => _isVertical ? cell.MinHeight : cell.MinWidth;
 
         /// <summary>The table's own border width consumed at the column axis's start/end edge.</summary>
@@ -1828,11 +1837,22 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (i >= row.Boxes.Count || row.Boxes[i].DerivedStyle.ActualDisplay != Keywords.TableCell) continue;
 
-                        var len = CssValueParser.ParseLength(CellInlineSize(row.Boxes[i]), availCellSpace, row.Boxes[i]);
+                        var cell = row.Boxes[i];
+                        var len = CssValueParser.ParseLength(CellInlineSize(cell), availCellSpace, cell);
 
                         if (!(len > 0)) continue; //If some width specified
 
-                        var colspan = GetColSpan(row.Boxes[i]);
+                        // A declared size is the CONTENT size under box-sizing: content-box (the
+                        // default), so the cell's padding and border sit outside it. _columnWidths
+                        // holds OUTER widths -- GetColumnMinWidths fills the same array from
+                        // cell.GetMinimumWidth(), which already includes them -- so storing the bare
+                        // content width here made every explicitly sized column narrower than a
+                        // browser's by exactly its padding plus border, and handed the difference to
+                        // whichever column was auto. Zero under border-box, where the declared size
+                        // already covers them.
+                        len += CellInlineSizeExcludes(cell);
+
+                        var colspan = GetColSpan(cell);
                         len /= Convert.ToSingle(colspan);
 
                         for (var j = i; j < i + colspan; j++)
