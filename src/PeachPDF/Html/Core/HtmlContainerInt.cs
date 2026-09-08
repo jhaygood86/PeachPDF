@@ -1612,10 +1612,15 @@ namespace PeachPDF.Html.Core
 
             // Both per layout, not per document: ShrinkToFit and the per-page reflow loop each re-run this
             // method, and a record kept across them would describe passes that no longer exist while the
-            // latch silently disabled the correction on every layout after the first.
+            // latch silently disabled the correction on every layout after the first (#320). Every box's
+            // own _placedByPass stamp is guarded by a LayoutGeneration check of its own
+            // (CssBox.PlacedByPassIfStillValid), so nothing here has to walk the tree resetting those -
+            // clearing _passInvalidations is still needed so it does not grow without bound across a
+            // document's ShrinkToFit/reflow iterations.
             _passEntries.Clear();
             _passEntrySet.Clear();
             _passesRewoundFor.Clear();
+            _passInvalidations.Clear();
 
             // Each invocation re-decides the whole document, so the fragments an earlier one emitted
             // describe a layout that no longer exists.
@@ -1829,6 +1834,36 @@ namespace PeachPDF.Html.Core
         private readonly HashSet<(int Slot, BreakToken Token)> _passEntrySet = [];
 
         /// <summary>
+        /// Every <see cref="TruncatePassEntries"/> event so far this layout, scoped by which
+        /// <see cref="_passEntries"/> index it discarded from — the retraction history
+        /// <see cref="CssBox.PlacedByPassIfStillValid"/> checks a box's own recorded pass index against.
+        /// Reuses <see cref="Fragmentation.InvalidationHistory"/> rather than a single bumped counter for
+        /// the same reason that type itself replaced one (see its own remarks): a truncation at index 5
+        /// says nothing about a box stamped with pass index 2, and a plain counter cannot tell the two
+        /// apart from one that actually retires it.
+        /// </summary>
+        private readonly InvalidationHistory _passInvalidations = new();
+
+        /// <summary>
+        /// The index into <see cref="_passEntries"/> of the fragmentainer pass currently running, for a
+        /// box being placed <i>right now</i> to stamp itself with (<see cref="CssBox.CommitBlockChildOffset"/>).
+        /// </summary>
+        internal int CurrentPassIndex => _passEntries.Count - 1;
+
+        /// <summary>
+        /// How many <see cref="_passInvalidations"/> events have been recorded so far, for a box to stamp
+        /// itself with alongside <see cref="CurrentPassIndex"/> (<see cref="CssBox.CommitBlockChildOffset"/>).
+        /// </summary>
+        internal int PassInvalidationCount => _passInvalidations.Count;
+
+        /// <summary>
+        /// Whether a box's own recorded pass index is still trustworthy — see
+        /// <see cref="CssBox.PlacedByPassIfStillValid"/>, the only caller.
+        /// </summary>
+        internal bool PassEntryStillValid(int recordedAt, int placedByPass) =>
+            _passInvalidations.StillSafe(recordedAt, placedByPass);
+
+        /// <summary>
         /// Notes that a fragmentainer pass is about to run at <paramref name="slot"/> with
         /// <paramref name="token"/>.
         /// </summary>
@@ -1846,6 +1881,14 @@ namespace PeachPDF.Html.Core
         private void TruncatePassEntries(int index)
         {
             _passEntries.RemoveRange(index, _passEntries.Count - index);
+
+            // Every index a box stamped itself with (CssBox._placedByPass) that named a slot at or past
+            // this truncation is retired by it, whether it still fits inside the shortened list or not:
+            // the passes that follow are about to run again, and a later one can fill this same index
+            // with a different pass entirely (see PlacedByPassIfStillValid's own remarks). Recorded by
+            // index rather than a bare bump so an unrelated truncation elsewhere in the document does not
+            // retire a stamp this one never touched.
+            _passInvalidations.Record(index);
 
             _passEntrySet.Clear();
 
@@ -1913,7 +1956,11 @@ namespace PeachPDF.Html.Core
         /// <para>
         /// Also declined where no recorded pass was filling the head's own slot, which is the honest way to
         /// ask "is there a pass to go back to": the head's position is the only thing that says which
-        /// fragmentainer it was placed in.
+        /// fragmentainer it was placed in. Preferring the head's own <see cref="CssBox.PlacedByPassIfStillValid"/>
+        /// stamp over deriving the slot from <see cref="CssBox.Location"/> is what answers this correctly
+        /// for a head a forced break stepped a still-open pass forward onto: that pass recorded its entry
+        /// at the slot it <i>opened</i> at, not the one its cursor reached, so a lookup keyed on the head's
+        /// own slot would find nothing there at all (issue #384).
         /// </para>
         /// </remarks>
         internal bool RequestPassRewind(CssBox head, double top)
@@ -1927,7 +1974,7 @@ namespace PeachPDF.Html.Core
                 || !HasRealPageGrid
                 || CurrentFragmentainer is { HasOwnBand: true }
                 || _passesRewoundFor.Contains(head)
-                || PassEntryFilling(SlotStartingAt(head.Location.Y)) < 0)
+                || PassEntryFor(head) < 0)
             {
                 return false;
             }
@@ -1963,7 +2010,7 @@ namespace PeachPDF.Html.Core
         /// </remarks>
         private bool TryRewindForRunPull((CssBox Head, double Top) pull, ref BreakToken? token, ref int slot)
         {
-            var entry = PassEntryFilling(SlotStartingAt(pull.Head.Location.Y));
+            var entry = PassEntryFor(pull.Head);
 
             if (entry < 0) return false;
 
@@ -1994,6 +2041,25 @@ namespace PeachPDF.Html.Core
         /// the one that placed the content now being reconsidered.
         /// </remarks>
         private int PassEntryFilling(int slot) => _passEntries.FindIndex(entry => entry.Slot == slot);
+
+        /// <summary>
+        /// The index of the pass that placed <paramref name="head"/>, or -1 when none can be identified.
+        /// </summary>
+        /// <remarks>
+        /// Prefers <paramref name="head"/>'s own <see cref="CssBox.PlacedByPassIfStillValid"/> stamp — set
+        /// directly by the pass that actually placed it (<see cref="CssBox.CommitBlockChildOffset"/>) —
+        /// over <see cref="PassEntryFilling"/>'s slot-keyed lookup, which cannot find a pass whose own
+        /// cursor stepped past the slot it opened at without ending the pass (a forced break stepping a
+        /// still-open pass forward, issue #384): that pass's one <see cref="_passEntries"/> entry names
+        /// only the slot it opened <i>at</i>, not every slot it went on to fill. Falls back to the slot
+        /// lookup when the stamp is absent or stale, which keeps every caller correct for content this
+        /// stamp does not (yet) cover.
+        /// </remarks>
+        private int PassEntryFor(CssBox head)
+        {
+            var stamped = head.PlacedByPassIfStillValid(this);
+            return stamped >= 0 ? stamped : PassEntryFilling(SlotStartingAt(head.Location.Y));
+        }
 
         /// <summary>
         /// Records <paramref name="box"/>'s request to re-run the pass it is completing, with its previous

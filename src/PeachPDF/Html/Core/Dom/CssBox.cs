@@ -1934,10 +1934,53 @@ namespace PeachPDF.Html.Core.Dom
 
 
         /// <summary>
-        /// Re-entrancy guard for the keep-with-next first-line retry in <see cref="PerformLayoutImp"/> -
-        /// prevents the retried layout pass from scheduling yet another retry.
+        /// The index into <see cref="HtmlContainerInt.CurrentPassIndex"/>'s own pass list that placed this
+        /// box, stamped by <see cref="CommitBlockChildOffset"/> immediately after <see cref="Location"/> is
+        /// set — or -1 before this box has ever been placed in block flow. Meaningless on its own; read
+        /// only through <see cref="PlacedByPassIfStillValid"/>, which is what checks whether a retraction
+        /// since then has made the index describe a different pass now (issue #384).
         /// </summary>
-        private bool _keepWithNextRetried;
+        private int _placedByPass = -1;
+
+        /// <summary>
+        /// <see cref="HtmlContainerInt.LayoutGeneration"/> as it stood when <see cref="_placedByPass"/> was
+        /// stamped, mirroring <see cref="_emittedNothingGeneration"/>'s own reason for existing: a fresh
+        /// <see cref="HtmlContainerInt.LayoutDocument"/> invocation (<c>ShrinkToFit</c>, the per-page reflow
+        /// loop) rebuilds <c>_passEntries</c> from nothing, so an index recorded against a previous
+        /// invocation's list must never be read as if it named a slot in this one's - the two lists share
+        /// no relationship beyond both starting at 0.
+        /// </summary>
+        private int _placedByPassGeneration = -1;
+
+        /// <summary>
+        /// <see cref="HtmlContainerInt.PassInvalidationCount"/> as it stood when <see cref="_placedByPass"/>
+        /// was stamped — what <see cref="PlacedByPassIfStillValid"/> checks the container's
+        /// <see cref="Fragmentation.InvalidationHistory"/> against, scoped by this box's own recorded pass
+        /// index rather than a bare bump, so a truncation that never reached this index does not retire it.
+        /// </summary>
+        private int _placedByPassRecordedAt = -1;
+
+        /// <summary>
+        /// <see cref="_placedByPass"/>, or -1 when this box has never been placed in block flow this layout
+        /// invocation, or a pass rewind since it was stamped has retracted the entry it named.
+        /// </summary>
+        /// <remarks>
+        /// <c>HtmlContainerInt.TruncatePassEntries</c> can both shorten the pass list <i>and</i> have it
+        /// grow again afterward, so a stale index is not always out of range - it can land back inside the
+        /// (shorter, then regrown) list and silently name a pass that is not the one that actually placed
+        /// this box. A plain bounds check cannot tell the two apart; <paramref name="container"/>'s
+        /// <see cref="Fragmentation.InvalidationHistory"/> can, the same way it already does for
+        /// <see cref="RecordEmittedNothingAt"/> - scoped to "was a truncation recorded at or before my own
+        /// index since I was stamped", not "was anything at all truncated anywhere in the document". The
+        /// generation check guards the layer above that: an index is only ever meaningful against the
+        /// <c>_passEntries</c> list <i>this</i> layout invocation built, never a previous one's.
+        /// </remarks>
+        internal int PlacedByPassIfStillValid(HtmlContainerInt container) =>
+            _placedByPass >= 0
+            && _placedByPassGeneration == container.LayoutGeneration
+            && container.PassEntryStillValid(_placedByPassRecordedAt, _placedByPass)
+                ? _placedByPass
+                : -1;
 
         /// <summary>
         /// Whether a forced break falls before this box, resolved by <see cref="PerformLayoutPrologue"/>
@@ -5675,6 +5718,17 @@ namespace PeachPDF.Html.Core.Dom
                     child.Location = new RPoint(offset.Left + child.ActualMarginLeft, top);
                     child.ActualBottom = top;
 
+                    // Stamped on every block-flow placement, not only a run head's - a box's own record
+                    // of "which pass currently holds my placement" has to reflect its latest one, whichever
+                    // pass that turns out to be, since a box can be placed more than once across a layout
+                    // (a rewind's own re-entry, PerformLayout's per-page reflow loop). See #384.
+                    if (child.HtmlContainer is { } container)
+                    {
+                        child._placedByPass = container.CurrentPassIndex;
+                        child._placedByPassGeneration = container.LayoutGeneration;
+                        child._placedByPassRecordedAt = container.PassInvalidationCount;
+                    }
+
                     // The root places itself (PlaceAsBlockChild's (ParentBox ?? this) receiver), and §5.2's
                     // whole crossing question above is never asked of it - "only the root is excluded - it
                     // has nothing before it for a break to fall between." A descendant's margin can still
@@ -5845,91 +5899,6 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             CssLayoutEngine.ApplyParentHeight(this);
-
-            // css-break keep-with-next at the word-flow fragmentation site: word flow moves any line
-            // that would straddle a page boundary to the next page as a whole (CssRect.WouldStraddleFragmentainer,
-            // asked from CssLayoutEngine.FlowBox). When that happens to this block's FIRST line, the break
-            // effectively falls right before this box's content - so preceding siblings chained to it
-            // by break-after/break-before: avoid (css-break §3.1, e.g. the UA default
-            // `h1-h6 { break-after: avoid }`) must not be left behind on the old page. Move the
-            // chained run to the top of the page the line landed on, then re-run this box's own layout:
-            // its position re-derives from the moved run's new bottom and its lines re-flow without a
-            // boundary in the middle (PerformLayoutImp double-execution is already an established
-            // pattern - see HtmlContainerInt.PerformLayout's own double layout). Guarded to one retry.
-            //
-            // The run pull below has never fired, and the reason is structural rather than a missing
-            // fixture. Measured twice - once by #538, once by #539, which went looking for a fixture that
-            // would reach it: across the whole suite `firstLinePage > ownPage` is true 244 times and
-            // `keepWithNextRun.Count > 0` on none of them, and every attempt to build a document that
-            // reaches it with a run in hand was intercepted first. Whenever a run does precede a box whose
-            // first line would land on the next page, an earlier mechanism has already pulled it - the
-            // break-decision movers in LayoutBlockChildren (EarlyBreak.Discover + TryRestartAt, on the
-            // §3.1-propagation and orphans arms) and PlaceBlockChild's own §5.2 pull, all of which run on
-            // the pass that *declines* to place the box and therefore before this epilogue is reached at
-            // all. What is left here is the case where none of them applied, which is the case where the
-            // box has no run. Deliberately left as-is rather than converted or deleted: proving it dead is
-            // not the same as proving it unnecessary, and #545 is where that is decided.
-            if (!_keepWithNextRetried
-                && Position.Value is PositionMode.Static or PositionMode.Relative or PositionMode.Sticky && !IsFloated
-                && LineBoxes.Count > 0 && LineBoxes[0].Words.Count > 0
-                && HtmlContainer!.PageSize.Height > 0
-                && !PositionAssignedByEngine)
-            {
-                var firstWordTop = LineBoxes[0].Words.Min(w => w.Top);
-                var ownPage = HtmlContainer.PageIndexOf(Location.Y);
-                var firstLinePage = HtmlContainer.PageIndexOf(firstWordTop);
-
-                if (firstLinePage > ownPage)
-                {
-                    var keepWithNextRun = DomUtils.GetPrecedingKeepWithNextRun(this, FragmentationContext.Page);
-
-                    if (keepWithNextRun.Count > 0)
-                    {
-                        var runTop = keepWithNextRun[0].Location.Y;
-                        var extraAbove = Location.Y - runTop;
-                        var runStartsOnSamePage = HtmlContainer.PageIndexOf(runTop) == ownPage;
-                        var pageStart = HtmlContainer.PageTopOf(firstLinePage);
-
-                        // Same decline as the sibling pull above (CssBox.PlaceAndSizeBlockChild's own
-                        // keep-with-next pull, a few hundred lines up in this file): OffsetTop translates
-                        // the run without re-measuring it, so the pull is only correct when the page it
-                        // leaves and the page it lands on share one measure.
-                        if (extraAbove > 0 && runStartsOnSamePage
-                            && extraAbove + ActualBottom - firstWordTop <= HtmlContainer.PageBandHeightOf(firstLinePage)
-                            && HtmlContainer.MeasureIsSharedBetween(ownPage, firstLinePage))
-                        {
-                            var runDelta = pageStart - runTop;
-
-                            foreach (var member in keepWithNextRun)
-                            {
-                                member.OffsetTop(runDelta);
-                            }
-
-                            _keepWithNextRetried = true;
-
-                            // The retry re-runs this box from scratch, prologue included: it is a fresh
-                            // layout of the same box at a new position, not a continuation, so its
-                            // per-line rectangles must be reset and its words re-measured. (A resumed
-                            // fragmentainer pass is the opposite case and deliberately keeps them.)
-                            _prologueDone = false;
-
-                            try
-                            {
-                                // The same frame this pass was driven from — the retry re-places this box
-                                // as well as re-flowing it, and this arm is unreachable for a box a layout
-                                // engine positioned (PositionAssignedByEngine, guarded above).
-                                await PerformLayoutImp(g, ParentBox ?? this, framePlacesChild: true);
-                            }
-                            finally
-                            {
-                                _keepWithNextRetried = false;
-                            }
-
-                            return;
-                        }
-                    }
-                }
-            }
 
             // avoid / avoid-page, but not avoid-column or avoid-region: this mover is a page-context
             // mover by construction (it measures against PageBandHeightOf and relocates to PageTopOf),
