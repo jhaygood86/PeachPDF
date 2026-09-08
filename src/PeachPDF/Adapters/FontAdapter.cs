@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.CSS;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
@@ -38,6 +39,11 @@ namespace PeachPDF.Adapters
         /// Cached font ascent.
         /// </summary>
         private readonly double _ascent;
+
+        /// <summary>
+        /// Cached `line-height: normal` value (CSS 2.1 §10.8.1) - see <see cref="NormalLineHeight"/>.
+        /// </summary>
+        private readonly double _normalLineHeight;
 
         /// <summary>
         /// Cached font whitespace width.
@@ -73,6 +79,20 @@ namespace PeachPDF.Adapters
             var descriptor = font.Descriptor;
             var descent = font.Size * descriptor.Descender / descriptor.UnitsPerEm;
             var ascent = font.Size * descriptor.Ascender / descriptor.UnitsPerEm;
+            // `font.Size` is a true (unscaled) point size - see the Ascent/Height property comments below
+            // for why the PixelsPerPoint multiply has to happen separately, at the property/here, not baked
+            // into font.Size itself. Each of ascent/descent/gap is rounded to a whole CSS pixel *in that
+            // true-point space* before summing (not the summed total, and not after the PixelsPerPoint
+            // multiply - rounding post-multiply would round to the wrong granularity whenever
+            // PixelsPerPoint != 1, since RoundToWholeCssPixel's divisor is a fixed pt-per-CSS-px ratio,
+            // not a pt-per-internal-unit one) - this is what makes it land exactly on Chrome's figures
+            // rather than merely close (issue #956). The PixelsPerPoint multiply is applied once, after
+            // rounding, to convert the whole sum into this container's internal layout-unit space -
+            // mirroring Ascent's own single multiply, just applied to the rounded sum instead of a raw value.
+            double ScaleUnits(int designUnits) => font.Size * designUnits / descriptor.UnitsPerEm;
+            _normalLineHeight = (RoundToWholeCssPixel(ScaleUnits(descriptor.NormalLineHeightAscent)) +
+                                 RoundToWholeCssPixel(ScaleUnits(descriptor.NormalLineHeightDescent)) +
+                                 RoundToWholeCssPixel(ScaleUnits(descriptor.NormalLineHeightGap))) * pixelsPerPoint;
             // XFont.Height (int, System.Drawing.Font-style API) rounds up to a whole point via
             // Math.Ceiling - harmless at an ordinary font.Size, but collapses to exactly 1 for any
             // sub-1pt size, discarding all proportional information. This adapter's own Height then
@@ -105,6 +125,15 @@ namespace PeachPDF.Adapters
         public override double Height => _height * PixelsPerPoint;
 
         public override double Ascent => Math.Round(_ascent * PixelsPerPoint);
+
+        /// <summary>
+        /// The used value of `line-height: normal`, resolved the way real browsers do: the font's own
+        /// ascent + descent + line-gap (CSS 2.1 §10.8.1) - see the constructor for the rounding-order
+        /// rationale (issue #956).
+        /// </summary>
+        public override double NormalLineHeight => _normalLineHeight;
+
+        private static double RoundToWholeCssPixel(double pt) => Math.Round(pt / Length.PointsPerPx) * Length.PointsPerPx;
 
         public override double LeftPadding => Height / 6f;
 

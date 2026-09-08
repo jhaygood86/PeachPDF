@@ -128,5 +128,19 @@ namespace PeachPDF.Html.Adapters
         /// <c>FragmentPainter.Text.cs</c>'s <c>PaintUprightVerticalRun</c> remarks for the derivation).
         /// </summary>
         public virtual double GetVerticalOriginY(System.Text.Rune rune) => Ascent;
+
+        /// <summary>
+        /// The used value of `line-height: normal` (CSS 2.1 §10.8.1), intended to be in the same pixel
+        /// units as <see cref="Height"/>/<see cref="Ascent"/>. Real browsers resolve this from the font's
+        /// own ascent/descent/line-gap metrics rather than a flat multiplier; the default here reproduces
+        /// the flat 1.2×-font-size approximation used before real per-font metrics were available (issue
+        /// #956), so only the OpenType-descriptor-backed adapter overrides it - mirroring the vertical-
+        /// metrics section above. Note this default is only faithful to that unit contract for an
+        /// <see cref="RFont"/> whose own <see cref="Size"/> is already in that same space;
+        /// <see cref="PeachPDF.Adapters.FontAdapter"/>'s <see cref="Size"/> is not (it's a true, unscaled
+        /// point size - see its own remarks), which is exactly why it can't just inherit this default and
+        /// overrides the property instead.
+        /// </summary>
+        public virtual double NormalLineHeight => 1.2 * Size;
     }
 }

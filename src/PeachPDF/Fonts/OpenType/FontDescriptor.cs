@@ -343,7 +343,7 @@ namespace PeachPDF.Fonts.OpenType
         int _stemV;
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         public int LineSpacing
         {
@@ -351,6 +351,41 @@ namespace PeachPDF.Fonts.OpenType
             protected set { _lineSpacing = value; }
         }
         int _lineSpacing;
+
+        // ---- `line-height: normal` metrics (CSS 2.1 §10.8.1) ------------------------------------
+        // Deliberately separate from Ascender/Descender/LineSpacing above: those follow WPF's
+        // FontDriver.ReadBasicMetrics, which substitutes OS/2 win ascent/descent for hhea in the
+        // non-typo-metrics case (a legacy Windows-GDI/old-IE convention) and backs PDF /FontDescriptor
+        // metrics and baseline positioning. Browsers resolve `normal` from the raw hhea (or, when
+        // USE_TYPO_METRICS is set, OS/2 typo) ascent/descent/lineGap triple instead, with no win-metrics
+        // substitution - issue #956.
+
+        /// <summary>Design-units ascent for `line-height: normal` (raw <c>hhea.ascender</c>, or
+        /// <c>OS/2.sTypoAscender</c> when <c>USE_TYPO_METRICS</c> is set).</summary>
+        public int NormalLineHeightAscent
+        {
+            get { return _normalLineHeightAscent; }
+            protected set { _normalLineHeightAscent = value; }
+        }
+        int _normalLineHeightAscent;
+
+        /// <summary>Design-units descent (positive) for `line-height: normal` (raw <c>hhea.descender</c>,
+        /// or <c>OS/2.sTypoDescender</c> when <c>USE_TYPO_METRICS</c> is set).</summary>
+        public int NormalLineHeightDescent
+        {
+            get { return _normalLineHeightDescent; }
+            protected set { _normalLineHeightDescent = value; }
+        }
+        int _normalLineHeightDescent;
+
+        /// <summary>Design-units line gap (clamped to ≥ 0) for `line-height: normal` (raw
+        /// <c>hhea.lineGap</c>, or <c>OS/2.sTypoLineGap</c> when <c>USE_TYPO_METRICS</c> is set).</summary>
+        public int NormalLineHeightGap
+        {
+            get { return _normalLineHeightGap; }
+            protected set { _normalLineHeightGap = value; }
+        }
+        int _normalLineHeightGap;
 
 
         internal static string ComputeKey(XFont font)

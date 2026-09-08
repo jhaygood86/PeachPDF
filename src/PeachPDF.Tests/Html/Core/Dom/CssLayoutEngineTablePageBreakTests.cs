@@ -309,10 +309,18 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var pageHeight = 300.0;
             var marginBottom = 20.0;
 
+            // Pinned to a bundled font (rather than the bare default the body used to have no
+            // font-family at all, resolving through whatever the host OS happens to have installed) so
+            // the estimation-inaccuracy tolerance below is calibrated against one known, cross-platform-
+            // stable set of real metrics - issue #956 made line-height:normal genuinely font-dependent,
+            // where it used to be a flat constant identical on every platform.
             var html = @"
 <!DOCTYPE html>
 <html>
-<body>
+<head><style>
+" + BundledFonts.FontFaceRule(BundledFonts.Ttf, "TablePageBreakTestFont", "font/truetype") + @"
+</style></head>
+<body style='font-family:""TablePageBreakTestFont""'>
     <table style='width:100%;border-collapse:collapse;'>
         <tbody>
 " + string.Join("", Enumerable.Range(1, 20).Select(i =>

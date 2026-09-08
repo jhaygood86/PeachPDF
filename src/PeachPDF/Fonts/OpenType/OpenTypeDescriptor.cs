@@ -132,31 +132,46 @@ namespace PeachPDF.Fonts.OpenType
                 // A signed typo descent would be quite unusual as it would indicate the descender was above the baseline
                 Descender = -typoDescender;
                 LineSpacing = typoAscender + typoLineGap - typoDescender;
+
+                // `line-height: normal` (CSS 2.1 §10.8.1): browsers use this same OS/2 typo triple when
+                // USE_TYPO_METRICS is set, but - unlike Ascender/Descender/LineSpacing above - never fall
+                // back to the OS/2 win metrics in the branch below; see that branch's own comment.
+                NormalLineHeightAscent = typoAscender;
+                NormalLineHeightDescent = -typoDescender;
+                NormalLineHeightGap = Math.Max((short)0, typoLineGap);
             }
             else
             {
                 // Comment from WPF: get the ascender field
                 int ascender = FontFace.hhea.ascender;
-                // Comment from WPF: get the descender field; this is measured in the same direction as ascender and is therefore 
+                // Comment from WPF: get the descender field; this is measured in the same direction as ascender and is therefore
                 // normally negative whereas we want a positive value; however some fonts get the sign wrong
                 // so instead of just negating we take the absolute value.
                 int descender = Math.Abs(FontFace.hhea.descender);
-                // Comment from WPF: get the lineGap field and make sure it's >= 0 
+                // Comment from WPF: get the lineGap field and make sure it's >= 0
                 int lineGap = Math.Max((short)0, FontFace.hhea.lineGap);
+
+                // `line-height: normal`: browsers resolve this from the raw hhea triple - never the OS/2
+                // win-metrics substitution the block below applies to Ascender/Descender/LineSpacing (that
+                // substitution is a legacy Windows-GDI/old-IE convention; Chromium/Gecko/WebKit all read
+                // hhea here instead - issue #956).
+                NormalLineHeightAscent = ascender;
+                NormalLineHeightDescent = descender;
+                NormalLineHeightGap = lineGap;
 
                 if (!os2SeemsToBeEmpty)
                 {
                     // Comment from WPF: we could use sTypoAscender, sTypoDescender, and sTypoLineGap which are supposed to represent
-                    // optimal typographic values not constrained by backwards compatibility; however, many fonts get 
-                    // these fields wrong or get them right only for Latin text; therefore we use the more reliable 
+                    // optimal typographic values not constrained by backwards compatibility; however, many fonts get
+                    // these fields wrong or get them right only for Latin text; therefore we use the more reliable
                     // platform-specific Windows values. We take the absolute value of the win32descent in case some
-                    // fonts get the sign wrong. 
+                    // fonts get the sign wrong.
                     int winAscent = FontFace.os2.usWinAscent;
                     int winDescent = Math.Abs(FontFace.os2.usWinDescent);
 
                     Ascender = winAscent;
                     Descender = winDescent;
-                    // Comment from WPF: The following calculation for designLineSpacing is per [....]. The default line spacing 
+                    // Comment from WPF: The following calculation for designLineSpacing is per [....]. The default line spacing
                     // should be the sum of the Mac ascender, descender, and lineGap unless the resulting value would
                     // be less than the cell height (winAscent + winDescent) in which case we use the cell height.
                     // See also http://www.microsoft.com/typography/otspec/recom.htm.
