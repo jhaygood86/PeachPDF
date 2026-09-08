@@ -1675,7 +1675,27 @@ namespace PeachPDF.Html.Core.Dom
                 width = CssValueParser.ParseLength(box.Width, widthBasis, box);
             }
 
-            if (box is { Width: Keywords.Auto, Position.Value: not PositionMode.Absolute })
+            // CSS 2.1 §10.3.5: a FLOATING box's auto width is shrink-to-fit, not
+            // stretch-to-containing-block. Given the stretch width, a float fills its containing
+            // block, which leaves `float: right` nowhere to go — it lands at the left as a
+            // full-width bar and the content that belongs beside it is pushed onto its own line.
+            //
+            // Float PLACEMENT was never the problem, which is what makes this hard to see: a float
+            // with a DECLARED width lands on a browser's x to the point. Only the auto measurement
+            // was wrong.
+            //
+            // min(max-content, max(min-content, available)) is §10.3.5's own formula, and the same
+            // fit-content/min-content pair the orthogonal-flow shrink already uses. Both are outer
+            // widths, so they compare against the stretch width as it stands and the box's own
+            // decoration comes back off at the end — the same subtraction the plain auto branch
+            // makes, and a no-op under box-sizing: border-box.
+            if (box is { Width: Keywords.Auto, Position.Value: not (PositionMode.Absolute or PositionMode.Fixed) }
+                && box.IsFloated)
+            {
+                var fit = Math.Max(await GetFitContentWidth(g, box, width), await GetMinContentWidth(g, box));
+                width = fit - box.ActualBoxSizeIncludedWidth;
+            }
+            else if (box is { Width: Keywords.Auto, Position.Value: not PositionMode.Absolute })
             {
                 width -= box.ActualBoxSizeIncludedWidth;
             }
