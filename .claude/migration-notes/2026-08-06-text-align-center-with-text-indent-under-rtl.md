@@ -1,7 +1,7 @@
 # `text-align: center` now reserves the full `text-indent` on the line-start side under RTL
 
 **Landed:** 2026-08-06 — Fix open alignment issues (#623)
-**Doc section:** docs/html-css-support.md § [text-indent row](../../docs/html-css-support.md#text)
+**Doc section:** docs/html-css-support.md § [text-indent row](../../docs/html-css-support.md#text-layout)
 
 `ApplyCenterAlignment` didn't inset its flush target for `direction: rtl`, unlike `ApplyRightAlignment`/
 `ApplyJustifyAlignment` (both already RTL-aware since issue #607). For LTR content this was already
