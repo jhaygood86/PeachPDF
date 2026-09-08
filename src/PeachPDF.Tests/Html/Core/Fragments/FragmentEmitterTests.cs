@@ -340,8 +340,9 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             var tree = container.FragmentTree!;
             Assert.True(tree.Fragmentainers.Count > 1, "fixture must paginate");
 
-            // The repeated header lives in CssProxyBox instances created by the table engine; each
-            // proxy is a distinct box, so the header text appears once per page it repeats on.
+            // The repeated header's source subtree is reached once per page through its own recorded
+            // CapturedInstance (see FragmentEmitter.RecordRepeatingGroupInstance), so the header text
+            // appears once per page it repeats on even though every page reads the same source box.
             var headerPages = tree.Fragmentainers
                 .SelectMany(f => Flatten(f.Root))
                 .Where(f => f.Words.Any(w => w.Word.Text == "Header"))
@@ -877,7 +878,7 @@ namespace PeachPDF.Tests.Html.Core.Fragments
         // ─── Clearing recorded state is a no-op when nothing was recorded (#581) ───
 
         /// <summary>
-        /// <c>CssLayoutEngineColumns.Layout</c> calls <c>ClearNestedFragmentainers(columnsBox,
+        /// <c>CssLayoutEngineColumns.Layout</c> calls <c>ClearCapturedInstances(columnsBox,
         /// startSlot)</c> once per <c>Layout()</c> invocation - i.e. once per page a resumed multi-column
         /// container continues onto - even on the very first attempt, before that page has filled a
         /// single column. On a fresh slot nothing has been recorded yet for that key, so the call used to
@@ -889,46 +890,46 @@ namespace PeachPDF.Tests.Html.Core.Fragments
         /// single page a large container spans - the mechanism issue #581 traced.
         /// </summary>
         [Fact]
-        public async Task ClearNestedFragmentainers_WithNothingRecordedForTheGivenSlot_LeavesAnExistingObservationIntact()
+        public async Task ClearCapturedInstances_WithNothingRecordedForTheGivenSlot_LeavesAnExistingObservationIntact()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<div id='mc' style='columns:2'>x</div>"));
             var mc = LayoutHarness.FindById(root, "mc")!;
 
             // The same observation FragmentEmitter.BuildDraft would have recorded for a box behind the
             // layout frontier that produced no fragment at or before slot 0.
-            mc.RecordEmittedNothingAt(0, 0);
-            Assert.True(mc.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            mc.RecordEmittedNothingAt(0, root, 0);
+            Assert.True(mc.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
 
             // Slot 5 was never recorded for this container - the shape of the very first
-            // ClearNestedFragmentainers call CssLayoutEngineColumns.Layout makes on a fresh page.
-            container.ClearNestedFragmentainers(mc, 5);
+            // ClearCapturedInstances call CssLayoutEngineColumns.Layout makes on a fresh page.
+            container.ClearCapturedInstances(mc, 5);
 
-            Assert.True(mc.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            Assert.True(mc.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
         }
 
         /// <summary>
-        /// The companion case: when a slot genuinely held recorded nested fragmentainers, clearing it must
+        /// The companion case: when a slot genuinely held recorded captured instances, clearing it must
         /// still discard the observation exactly as before - the guard only skips the call when there was
         /// truly nothing to invalidate.
         /// </summary>
         [Fact]
-        public async Task ClearNestedFragmentainers_WithSomethingRecordedForTheGivenSlot_StillDiscardsTheObservation()
+        public async Task ClearCapturedInstances_WithSomethingRecordedForTheGivenSlot_StillDiscardsTheObservation()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(SplitAcrossColumns(), pageHeight: 200, margin: 0);
             var mc = LayoutHarness.FindById(root, "mc")!;
 
-            // A real multi-column layout has already recorded nested fragmentainers for this container at
-            // slot 0 via CssLayoutEngineColumns.Layout/RecordNestedFragmentainer.
-            mc.RecordEmittedNothingAt(0, 0);
-            Assert.True(mc.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            // A real multi-column layout has already recorded captured instances for this container at
+            // slot 0 via CssLayoutEngineColumns.Layout/RecordCapturedInstance.
+            mc.RecordEmittedNothingAt(0, root, 0);
+            Assert.True(mc.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
 
-            container.ClearNestedFragmentainers(mc, 0);
+            container.ClearCapturedInstances(mc, 0);
 
-            Assert.False(mc.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            Assert.False(mc.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
         }
 
         /// <summary>
-        /// The same shape as <see cref="ClearNestedFragmentainers_WithNothingRecordedForTheGivenSlot_LeavesAnExistingObservationIntact"/>
+        /// The same shape as <see cref="ClearCapturedInstances_WithNothingRecordedForTheGivenSlot_LeavesAnExistingObservationIntact"/>
         /// for the table-row continuation-shell bookkeeping.
         /// </summary>
         [Fact]
@@ -937,12 +938,12 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p'>hello</p>"));
             var p = LayoutHarness.FindById(root, "p")!;
 
-            p.RecordEmittedNothingAt(0, 0);
-            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            p.RecordEmittedNothingAt(0, root, 0);
+            Assert.True(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
 
             container.ClearContinuationShells(p, fromSlot: 3);
 
-            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            Assert.True(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
         }
 
         /// <summary>
@@ -957,12 +958,12 @@ namespace PeachPDF.Tests.Html.Core.Fragments
 
             container.RecordContinuationShell(p, 2, new RRect(0, 0, 100, 100));
 
-            p.RecordEmittedNothingAt(0, 0);
-            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            p.RecordEmittedNothingAt(0, root, 0);
+            Assert.True(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
 
             container.ClearContinuationShells(p, fromSlot: 2);
 
-            Assert.False(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            Assert.False(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
         }
 
         /// <summary>
@@ -974,12 +975,12 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap("<p id='p'>hello</p>"));
             var p = LayoutHarness.FindById(root, "p")!;
 
-            p.RecordEmittedNothingAt(0, 0);
-            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            p.RecordEmittedNothingAt(0, root, 0);
+            Assert.True(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
 
             container.ClearFragmentDisplacements(p, fromSlot: 3);
 
-            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            Assert.True(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
         }
 
         /// <summary>
@@ -994,12 +995,12 @@ namespace PeachPDF.Tests.Html.Core.Fragments
 
             container.RecordFragmentDisplacement(p, 2, 10, new RRect(0, 0, 100, 100));
 
-            p.RecordEmittedNothingAt(0, 0);
-            Assert.True(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            p.RecordEmittedNothingAt(0, root, 0);
+            Assert.True(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
 
             container.ClearFragmentDisplacements(p, fromSlot: 2);
 
-            Assert.False(p.EmittedNothingAtOrBefore(0, new InvalidationHistory()));
+            Assert.False(p.EmittedNothingAtOrBefore(0, root, new InvalidationHistory()));
         }
 
         // ─── A fragment's own geometry (§2, nested fragmentainers) ─────────────────
