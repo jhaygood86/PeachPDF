@@ -2,7 +2,10 @@ using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Structure;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration
@@ -84,6 +87,48 @@ namespace PeachPDF.Tests.Integration
                 Assert.True(doc.Pages[i].Annotations.Count > 0,
                     $"page {i + 1} is missing the running header's anchor-link annotation");
             }
+        }
+
+        [Fact]
+        public async Task RunningElementLink_RelativeHref_ResolvesAgainstTheDocumentBase()
+        {
+            // The external-URL branch of HandleRunningElementLinks resolves a relative href against the
+            // document base (its own <base href>, else the adapter's) - and does so once per page the
+            // running element was selected onto, which is why that base is memoized on the container
+            // rather than re-walked. A relative href that reached the annotation unresolved would be
+            // unusable to a reader, so assert the written /URI action, not just that an annotation exists.
+            var html = """
+                <!DOCTYPE html><html><head>
+                <base href="https://example.test/docs/">
+                <style>
+                @page { size: a6; margin: 12mm; }
+                @page { @top-center { content: element(heading); } }
+                h1.running { position: running(heading); margin: 0; font-size: 9pt; }
+                p { line-height: 1.6; }
+                </style></head><body>
+                <h1 class="running">Chapter <a href="chapter-one.html">One</a></h1>
+                """ +
+                string.Concat(Enumerable.Repeat("<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>", 80)) +
+                """
+                </body></html>
+                """;
+
+            var doc = await new PdfGenerator().GeneratePdf(html, PageSize.A6);
+
+            Assert.True(doc.PageCount > 1, "fixture does not paginate, so it asserts nothing");
+
+            var ms = new MemoryStream();
+            doc.Save(ms);
+            var pdfText = Encoding.Latin1.GetString(ms.ToArray());
+
+            Assert.DoesNotContain("/URI(chapter-one.html)", pdfText);
+
+            // One resolved annotation per page, which is also what makes the base worth memoizing: this
+            // is the href re-resolved for every page the running element was selected onto. Counting the
+            // occurrences (rather than asserting one exists) additionally rules out a single match that
+            // came from the main-tree loop, should the running element ever leak into normal flow.
+            var resolved = Regex.Matches(pdfText, Regex.Escape("/URI(https://example.test/docs/chapter-one.html)")).Count;
+            Assert.Equal(doc.PageCount, resolved);
         }
 
         [Fact]

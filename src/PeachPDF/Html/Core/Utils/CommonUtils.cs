@@ -329,18 +329,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <param name="overrideBaseUri">a base URI that takes precedence over the document's own base, if any</param>
         public static RUri? ResolveAgainstDocumentBase(HtmlContainerInt htmlContainer, string src, RUri? overrideBaseUri = null)
         {
-            RUri? baseUri;
-
-            if (overrideBaseUri is not null)
-            {
-                baseUri = overrideBaseUri;
-            }
-            else
-            {
-                var baseElement = DomUtils.GetBoxByTagName(htmlContainer.Root, "base");
-                var baseHref = baseElement?.HtmlTag?.TryGetAttribute("href", "");
-                baseUri = string.IsNullOrWhiteSpace(baseHref) ? htmlContainer.Adapter.BaseUri : new RUri(baseHref);
-            }
+            var baseUri = overrideBaseUri ?? htmlContainer.DocumentBaseUri;
 
             try
             {
