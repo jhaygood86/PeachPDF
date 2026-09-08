@@ -118,6 +118,14 @@ namespace PeachPDF.Html.Core.Dom
             {
                 CssContentEngine.ApplyContent(box);
 
+                // Re-resolve bidi for the new text before re-parsing words. BidiLevels/CharScripts/
+                // JoiningForms are indexed against the text the LAST resolution saw, and a page
+                // counter changes its own length -- "9" becomes "10" -- so ParseToWords would index
+                // past the end of a stale array and throw IndexOutOfRangeException. Same contract
+                // HtmlContainerInt.ReapplyPseudoElementContent and ResolveTargetPageContent already
+                // follow for the other two re-resolution paths.
+                CssBidiParagraphResolver.ResolveOwnTextAsParagraph(box);
+
                 if (!string.IsNullOrEmpty(box.Text))
                 {
                     box.ParseToWords();

@@ -20,7 +20,7 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class RunningElementPageCounterTests
     {
-        private static string Fixture(string footerContent, string extraCss) =>
+        private static string Fixture(string footerContent, string extraCss, int paragraphs = 60) =>
             $$"""
             <!DOCTYPE html>
             <html><head><style>
@@ -32,13 +32,13 @@ namespace PeachPDF.Tests.Integration
             </style></head><body>
             <div id="foot"></div>
             """ +
-            string.Concat(Enumerable.Repeat("<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>", 60)) +
+            string.Concat(Enumerable.Repeat("<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>", paragraphs)) +
             "</body></html>";
 
-        private static async Task<string[]> FooterTextPerPageAsync(string footerContent, string extraCss = "")
+        private static async Task<string[]> FooterTextPerPageAsync(string footerContent, string extraCss = "", int paragraphs = 60)
         {
             var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
-                Fixture(footerContent, extraCss), new PdfGenerateConfig { PageSize = PageSize.A6 });
+                Fixture(footerContent, extraCss, paragraphs), new PdfGenerateConfig { PageSize = PageSize.A6 });
 
             Assert.True(container.FragmentTree!.Fragmentainers.Count > 2,
                 "fixture must run to at least three pages, or 'Page N of M' asserts nothing");
@@ -93,6 +93,25 @@ namespace PeachPDF.Tests.Integration
             var total = perPage.Length;
             Assert.Equal(
                 Enumerable.Range(1, total).Select(n => $"{n}of{total}").ToArray(),
+                perPage);
+        }
+
+        [Fact]
+        public async Task CounterPage_PastTheFirstTwoDigitPage_DoesNotThrow()
+        {
+            // Re-resolving `content` changes the text's LENGTH the moment the counter gains a digit
+            // — "9" becomes "10". BidiLevels/CharScripts/JoiningForms are indexed against the text
+            // the last resolution saw, so without re-resolving bidi first, ParseToWords indexes past
+            // the end of a stale array and throws IndexOutOfRangeException.
+            //
+            // Every other fixture here runs to seven pages, where the counter is one digit
+            // throughout and the arrays happen to stay the right length. This one has to pass ten.
+            var perPage = await FooterTextPerPageAsync("counter(page)", paragraphs: 200);
+
+            Assert.True(perPage.Length >= 10,
+                $"fixture must reach a two-digit page number, only got {perPage.Length}");
+            Assert.Equal(
+                Enumerable.Range(1, perPage.Length).Select(n => n.ToString()).ToArray(),
                 perPage);
         }
 
