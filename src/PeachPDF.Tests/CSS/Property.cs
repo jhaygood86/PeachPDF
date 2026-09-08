@@ -1508,6 +1508,41 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("my-Property", property.Name);
             Assert.IsType<UnknownProperty>(property);
         }
+
+        /// <summary>
+        /// <see cref="Property.Value"/> memoizes the declaration's serialization, so reassigning the
+        /// declaration must invalidate it. Reading <c>Value</c> before each reassignment is the point
+        /// of the test — an unmemoized implementation passes it either way.
+        /// </summary>
+        [Fact]
+        public void CssPropertyValueFollowsAReassignedDeclaration()
+        {
+            var property = ParseDeclaration("break-after: avoid");
+            Assert.Equal("avoid", property.Value);
+
+            Assert.True(property.TrySetValue(ParseValue("page")));
+            Assert.Equal("page", property.Value);
+            Assert.Equal("break-after: page", property.CssText);
+
+            Assert.True(property.TrySetValue(ParseValue("column")));
+            Assert.Equal("column", property.Value);
+        }
+
+        /// <summary>
+        /// The no-declaration arm of <see cref="Property.Value"/> is memoized too, and the derived
+        /// <see cref="Property.IsInitial"/>/<see cref="Property.IsInherited"/> read through it.
+        /// </summary>
+        [Fact]
+        public void CssPropertyValueFollowsADeclarationClearedToInitial()
+        {
+            var property = ParseDeclaration("break-after: avoid");
+            Assert.Equal("avoid", property.Value);
+            Assert.False(property.IsInitial);
+
+            Assert.True(property.TrySetValue(null));
+            Assert.Equal(Keywords.Initial, property.Value);
+            Assert.True(property.IsInitial);
+        }
     }
 }
 
