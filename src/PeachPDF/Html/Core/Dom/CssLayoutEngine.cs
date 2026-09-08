@@ -2400,6 +2400,127 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Treats an inline-table/inline-grid, or an inline-block whose own content is not inlines-only, as
+        /// an atomic inline element (issue #473): positions it, lays out its own content through the same
+        /// dispatch an ordinary block-level box of that display type would get, applies its own
+        /// string-set/named-page-name, then advances the cursor by its outer size and registers it in the
+        /// line so its border/background paints. Mirrors <see cref="FlowInlineFlexChild"/>, but delegates
+        /// content layout to <see cref="CssBox.LayoutContentAtItsAssignedPosition"/> instead of calling a
+        /// specific engine directly - that reuses <see cref="CssBox.LayoutContents"/>'s own already-correct
+        /// per-display dispatch (table/grid engines, or ordinary block children) rather than duplicating it
+        /// here for each of the three display values.
+        /// </summary>
+        private static async ValueTask FlowAtomicBlockContentChild(RGraphics g, CssBox b, CssLineBoxCoordinates coordinates)
+        {
+            // coordinates.CurrentX is already past the left margin+border+padding (leftSpacing was added
+            // by the caller), so Location.X sits at the border-left edge (after margin).
+            b.Location = new RPoint(
+                coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
+                coordinates.CurrentY);
+            b.ActualBottom = b.Location.Y;
+            b.FirstHostingLineBox = coordinates.Line;
+            b.LastHostingLineBox = coordinates.Line;
+
+            // An inline-table/inline-grid resolves its own width internally via its own column/track
+            // algorithm and needs no pre-step. A plain inline-block never gets ActualRight resolved by
+            // anything else on this path - unlike the ordinary inline-block-with-inline-content case (which
+            // never reaches this helper at all), so it's resolved here unconditionally: GetBoxWidth alone
+            // handles an explicit length/percentage width, and an auto width additionally needs the
+            // shrink-to-fit refinement (CSS2.1 §10.3.9) GetFitContentWidth/GetMinContentWidth add, mirroring
+            // the orthogonal-flow-child shrink-to-fit case at CssBox.PlaceAndSizeBlockChild (~line
+            // 4269-4300). Without this, CssBox.LayoutContents' own ContainsInlinesOnly/LayoutBlockChildren
+            // dispatch for this box's content - reached next, via LayoutContentAtItsAssignedPosition - would
+            // run against an unresolved (zero) ClientRight.
+            if (b.DerivedStyle.ActualDisplay == Keywords.InlineBlock)
+            {
+                var stretchWidth = await GetBoxWidth(g, b);
+
+                if (!CssValueParser.IsValidLength(b.Width))
+                {
+                    var fitContentWidth = await GetFitContentWidth(g, b, stretchWidth);
+                    fitContentWidth = Math.Max(fitContentWidth, await GetMinContentWidth(g, b));
+
+                    if (b.MinWidth != "0" && CssValueParser.IsValidLength(b.MinWidth))
+                    {
+                        var minWidth = CssValueParser.ParseLength(b.MinWidth, b.ContainingBlock.Size.Width, b)
+                            + b.ActualBoxSizeIncludedWidth;
+                        fitContentWidth = Math.Max(fitContentWidth, minWidth);
+                    }
+
+                    b.ActualRight = b.Location.X + fitContentWidth;
+                }
+                else
+                {
+                    b.ActualRight = b.Location.X + stretchWidth;
+                }
+            }
+
+            // Same as FlowInlineFlexChild: b.Location is already final here, so string-set can be applied
+            // and finalized in one step. `page` is deliberately not registered here either (issue #149) -
+            // an inline-level box never creates a class-A break point.
+            if (!string.IsNullOrEmpty(b.StringSet) && b.StringSet != Keywords.None)
+            {
+                if (b.NamedStrings.Count > 0)
+                {
+                    b.HtmlContainer?.UnregisterNamedStrings(b.NamedStrings.Values);
+                    b.NamedStrings.Clear();
+                }
+
+                CssNamedStringEngine.ApplyStringSet(b);
+                foreach (var namedString in b.NamedStrings.Values)
+                {
+                    namedString.Y = b.Location.Y;
+                }
+            }
+
+            // Deliberately NOT wrapped in DetachFragmentainer/SuppressWordPageBreaks: FragmentEmitter's own
+            // recording (FragmentEmitter.cs, guarded by `CurrentFragmentainer is not { IsFragmenting: true }
+            // -> return`) skips emitting anything at all while the fragmentainer is detached, since that
+            // guard exists for genuine measurement/monolithic passes whose content is never meant to reach
+            // the page. This box's content is real, on-page content - it needs the ambient fragmentainer
+            // live the same way FlowInlineFlexChild's direct CssLayoutEngineFlex.PerformLayout(g, b) call
+            // already relies on it being, or nothing paints (confirmed: an earlier version of this method
+            // that did detach produced a fully-laid-out box tree - correct Location/Words on every
+            // descendant - whose PDF content stream carried zero text objects).
+            await b.LayoutContentAtItsAssignedPosition(g);
+
+            // Advance to content-right so that the outer rightSpacing addition lands correctly.
+            coordinates.CurrentX = b.ClientRight;
+            coordinates.MaxRight = Math.Max(coordinates.MaxRight, b.Location.X + b.ActualBoxSizingWidth);
+            coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, b.Location.Y + b.ActualBoxSizingHeight);
+
+            // Register the box in the parent line so its border/background is painted.
+            coordinates.Line.Rectangles[b] = new RRect(
+                b.Location.X, b.Location.Y, b.ActualBoxSizingWidth, b.ActualBoxSizingHeight);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> has a genuinely block-level box anywhere in its subtree - looking
+        /// THROUGH nested atomic inline-level boxes rather than stopping at them, unlike
+        /// <see cref="DomUtils.ContainsInlinesOnly"/>'s own deep-descent counterpart in <c>DomParser</c>
+        /// (which deliberately treats an atomic box as opaque for DOM-fixup purposes - see issue #473).
+        /// Used to decide whether an inline-block box needs FlowAtomicBlockContentChild's block-content
+        /// layout path rather than the ordinary recursive-inline-flow one: a
+        /// <c>&lt;table style="display:inline-block"&gt;</c> whose rows were wrapped in a synthesized,
+        /// <c>Display=InlineTable</c> anonymous box (an inline-block table isn't <see cref="CssBox.IsBlock"/>,
+        /// so <c>DomParser.CorrectAnonymousTablesGenerateMissingParents</c> gives it an inline-table wrapper
+        /// rather than a block one) has only ONE direct child, and that child is itself
+        /// <see cref="CssBox.IsInline"/> - a shallow check reports "purely inline content" for a box that in
+        /// fact holds a whole table's worth of block-level rows one level further down.
+        /// </summary>
+        private static bool HasBlockLevelDescendant(CssBox box)
+        {
+            foreach (var childBox in box.Boxes)
+            {
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (!childBox.IsInline) return true;
+                if (HasBlockLevelDescendant(childBox)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Recursively flows the content of the box using the inline model
         /// </summary>
         /// <param name="g">Device Info</param>
@@ -2480,7 +2601,12 @@ namespace PeachPDF.Html.Core.Dom
                 // coordinates.Line never changes and the "undo" after this dispatch cancels the shift
                 // with no effect - safe to pre-shift unconditionally for clone rather than having to tell
                 // "still straddling" apart from "already done" up front.
-                var appliesAtomicInset = b.DerivedStyle.ActualDisplay is Keywords.InlineBlock && !ReferenceEquals(b, box);
+                // Excludes an inline-block with a real block-level descendant (see HasBlockLevelDescendant):
+                // that shape is routed to FlowAtomicBlockContentChild below instead, which positions and
+                // sizes the box (border/padding included) as one atomic unit via its own box-model
+                // machinery - applying this pre-shift too would double the top inset for it.
+                var appliesAtomicInset = b.DerivedStyle.ActualDisplay is Keywords.InlineBlock && !ReferenceEquals(b, box)
+                    && !HasBlockLevelDescendant(b);
                 var clonesAtomicDecorations = appliesAtomicInset && b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone;
                 var atomicTopInset = appliesAtomicInset ? b.ActualBorderTopWidth + b.ActualPaddingTop : 0;
                 var atomicBottomInset = appliesAtomicInset ? b.ActualBorderBottomWidth + b.ActualPaddingBottom : 0;
@@ -2917,6 +3043,31 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
                     }
+                }
+                else if (b.DerivedStyle.ActualDisplay == Keywords.InlineTable
+                         || b.DerivedStyle.ActualDisplay == Keywords.InlineGrid
+                         || (b.DerivedStyle.ActualDisplay == Keywords.InlineBlock && HasBlockLevelDescendant(b)))
+                {
+                    // An inline-table/inline-grid's structural children (rows, grid items) are never
+                    // inline-formatting-context content regardless of what's inside them, so those two are
+                    // routed here unconditionally. An inline-block is routed here only when it has a real
+                    // block-level descendant somewhere in its subtree (issue #473) - the ordinary case
+                    // (inline-block holding only text/inline content) keeps using the recursive FlowBox call
+                    // below, unchanged. HasBlockLevelDescendant looks THROUGH nested atomic inline-level
+                    // boxes rather than stopping at them (unlike DomUtils.ContainsInlinesOnly/
+                    // DomParser.ContainsInlinesOnlyDeep): a <table style="display:inline-block"> whose <tr>
+                    // rows were wrapped in an anonymous Display=InlineTable box (DomParser.
+                    // CorrectAnonymousTablesGenerateMissingParents, since an inline-block table isn't
+                    // IsBlock) has only ONE direct child, and that child is itself IsInline (InlineTable is
+                    // in CssBox.IsInline's set) - a shallow "are all direct children inline" check is fooled
+                    // by that wrapper into reporting "yes, purely inline content" for a box that in fact
+                    // holds a whole table's worth of block-level rows one level further down. Same
+                    // resumed-pass guard as the inline-flex branch below: this box is treated as monolithic
+                    // within the surrounding inline flow, so a pass only walking through it (already placed
+                    // on an earlier fragmentainer) places nothing again.
+                    if (!childOpensHere) continue;
+
+                    await FlowAtomicBlockContentChild(g, b, coordinates);
                 }
                 else if (b.DerivedStyle.ActualDisplay == Keywords.InlineFlex)
                 {

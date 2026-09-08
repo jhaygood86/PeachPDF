@@ -466,21 +466,12 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 An `inline-block` box's text flows through the surrounding inline formatting context rather
 than being laid out as one opaque unit. Its content is correctly inset by its own
 border+padding (its label sits inside the padding box, and the line reserves the full padding
-box height), but two knock-on gaps remain:
+box height), but one knock-on gap remains:
 
 - An explicit `height` on an inline-flowed `inline-block` does not size the line — the line's
   height comes from the flowed content plus padding/border, so
   `<span style="display: inline-block; height: 100px">x</span>` reserves only its natural text
   height, not 100px (CSS2.1 §10.8.1 expects the atomic box's margin box to size the line).
-- `display: inline-table` is not atomic in inline flow at all: when it participates in a
-  surrounding inline formatting context its content flows like ordinary inline text (the table
-  layout algorithm only runs when the box is laid out at block level).
-- A **block-level child** of an `inline-block`, `inline-grid` or `inline-table` box is lifted out
-  of it by the block-in-inline box-tree fixup, which treats the box as an ordinary inline one:
-  the child is laid out as a sibling of the box rather than inside it, so it is drawn outside the
-  box's own border and the box reports only what is left. Wrapping the block-level content in an
-  `inline-block` of its own, or making the outer box block-level, avoids it. `display: inline-flex`
-  is not affected — it is read as the atomic box it is, and holds its own items.
 
 ### Stacking Context
 
