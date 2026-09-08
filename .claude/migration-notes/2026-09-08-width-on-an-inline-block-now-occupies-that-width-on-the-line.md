@@ -19,4 +19,4 @@ second at 91.5pt (90pt plus its 1px borders). PeachPDF now agrees with both to w
 Content **wider** than the declared width still overflows rather than being pulled back, which is
 what `overflow: visible` means, and a **percentage** width is unaffected.
 
-See [Display](../../docs/html-css-support.md#display) in `docs/html-css-support.md`.
+See [Display & Layout](../../docs/html-css-support.md#display--layout) in `docs/html-css-support.md`.
