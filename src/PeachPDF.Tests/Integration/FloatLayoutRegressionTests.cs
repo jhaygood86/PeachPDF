@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Text;
 using PeachPDF;
@@ -529,6 +530,30 @@ namespace PeachPDF.Tests.Integration
             Assert.True(constrained < unconstrained - 1,
                 $"a float:right in the same formatting context must still cap the line: " +
                 $"{constrained} vs {unconstrained} unconstrained");
+        }
+
+        [Fact]
+        public async Task LeftFloatScan_StopsAtAFormattingContextBoundary()
+        {
+            // The left-side point-collision walk used to run to the document root, scanning every
+            // preceding sibling on the way, even though a float cannot affect content outside its own
+            // formatting context (CSS 2.1 §9.5, css-display-3 §2.1) — the rule the right-side walk
+            // already applies. Asserted on FloatScanBoxVisits rather than elapsed time, for the reason
+            // this class's own doc comment gives about wall-clock bounds on a contended runner.
+            var (_, container) = await BuildAndLayout(Wrap(string.Concat(Enumerable.Repeat(
+                @"<div style='display:grid; grid-template-columns:200pt 200pt; width:400pt;'>
+                    <div><div style='float:left; width:80pt; height:20pt;'></div><p style='margin:0;'>col a text here</p></div>
+                    <div><p style='margin:0;'>col b text here</p></div>
+                  </div>", 40))));
+
+            // Each grid item is its own formatting context, so a walk that respects the boundary
+            // examines a handful of boxes per call rather than the whole document behind it. Before
+            // the boundary check this document cost 237,757 visits across 2,880 calls (83 each).
+            var perCall = (double)container.FloatScanBoxVisits / container.FloatScanCalls;
+
+            Assert.True(perCall < 10,
+                $"the left float scan should not climb past its formatting context: " +
+                $"{container.FloatScanBoxVisits} visits across {container.FloatScanCalls} calls ({perCall:F1} each)");
         }
 
         // ── Helpers ────────────────────────────────────────────────────────────
