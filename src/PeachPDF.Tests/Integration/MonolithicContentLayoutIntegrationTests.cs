@@ -346,9 +346,9 @@ namespace PeachPDF.Tests.Integration
             Assert.True(bottom > top, "fixture must actually span more than one page");
         }
 
-        // The control: table cells get overflow:hidden from the UA stylesheet too, but a cell's own
-        // fragmentation across pages is CssLayoutEngineTable's own long-standing feature and must not be
-        // suppressed by the scroll-container rule above.
+        // The control: a cell is excluded from the scroll-container rule by its display rather than by
+        // its overflow value, because a cell's own fragmentation across pages is
+        // CssLayoutEngineTable's own long-standing feature and must not be suppressed by that rule.
         [Fact]
         public async Task TableCellTallerThanAnyPage_StillFragmentsNormally_NotTreatedAsMonolithic()
         {
