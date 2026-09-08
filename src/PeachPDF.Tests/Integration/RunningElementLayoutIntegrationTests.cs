@@ -160,6 +160,89 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal("heading", entry.Name);
         }
 
+        // ─── A running band must not grow the flow's own extent (HtmlContainerInt.ActualSize) ───
+        //
+        // Asserted through ShrinkToFit rather than by reading ActualSize directly. ActualSize is
+        // reachable from the lightweight harness, but a fixture built on it passes against the
+        // pre-fix code either way — the update only runs on the path the real generator takes. The
+        // rescale is also the reported symptom, so this exercises the defect rather than a proxy
+        // for it.
+
+        private const string BandFixture = """
+            <!DOCTYPE html><html><head><style>
+            @page { size: letter; margin: 36pt; }
+            @page { @top-center { content: element(band); } }
+            #band { position: running(band); }
+            </style></head><body>
+            <div id="band"><div style="width:900pt;">a company header spanning the full page</div></div>
+            <p>Body content that fits the content box comfortably.</p>
+            </body></html>
+            """;
+
+        private const string InFlowFixture = """
+            <!DOCTYPE html><html><head><style>
+            @page { size: letter; margin: 36pt; }
+            </style></head><body>
+            <div><div style="width:900pt;">a company header spanning the full page</div></div>
+            <p>Body content that fits the content box comfortably.</p>
+            </body></html>
+            """;
+
+        [Fact]
+        public async Task ShrinkToFit_DoesNotScaleTheDocumentDownForARunningBand()
+        {
+            // A running element is painted into a page MARGIN box, so its width is bounded by the
+            // margin band, not by the flow's content box — a header spanning the full page is wider
+            // than the content box by design. Counted into ActualSize it reports the document as
+            // overflowing its own page when nothing in the flow does, and ShrinkToFit then scales the
+            // whole document down to fit content that was never in the flow.
+            //
+            // The wide box is a CHILD of the running box, which is the shape that reaches this: the
+            // running box itself was already skipped, but its wrapper children each ran the same
+            // ActualSize update in their own right.
+            var (_, _, _, pixelsPerPoint) = await PdfGeneratorLayoutHarness.LayoutWithRescaleAsync(
+                BandFixture, new PdfGenerateConfig { PageSize = PageSize.Letter, ShrinkToFit = true });
+
+            Assert.Equal(1.0, pixelsPerPoint, 3);
+        }
+
+        [Fact]
+        public async Task ShrinkToFit_StillScalesDownForTheSameContentInTheFlow()
+        {
+            // The contrast case: the identical wide box, not running. ShrinkToFit must still do its
+            // job — otherwise the assertion above also passes if ActualSize stopped tracking width.
+            var (_, _, _, pixelsPerPoint) = await PdfGeneratorLayoutHarness.LayoutWithRescaleAsync(
+                InFlowFixture, new PdfGenerateConfig { PageSize = PageSize.Letter, ShrinkToFit = true });
+
+            // pixelsPerPoint is the device scale the fit is expressed as, so shrinking the document
+            // raises it: 900pt of content into a 540pt content box comes out at ~1.68, i.e. drawn at
+            // ~0.6x. The band case above stays at exactly 1.0 — no rescale at all.
+            Assert.True(pixelsPerPoint > 1.0,
+                $"in-flow content wider than the page must still shrink the document, was {pixelsPerPoint}");
+        }
+
+        [Fact]
+        public async Task IsFixedOrInRunningElement_TerminatesOnASelfParentingBox()
+        {
+            // The ancestor walk carries the same `box.ParentBox == box` guard IsFixed's own walk has.
+            // Nothing in the tree produces a self-parented box today, but the guard is what stops the
+            // walk spinning if anything ever does — and an uncovered loop-termination guard is worth
+            // exactly one test.
+            var (root, _) = await LayoutAsync(Wrap("<div id='solo'>x</div>"));
+            var solo = FindById(root, "solo")!;
+            var savedParent = solo.ParentBox;
+
+            try
+            {
+                solo.ParentBox = solo;
+                Assert.False(solo.IsFixedOrInRunningElement);
+            }
+            finally
+            {
+                solo.ParentBox = savedParent;
+            }
+        }
+
         [Fact]
         public async Task RunningMulticolChild_ExcludedFromColumnFlow_AndRegistered()
         {

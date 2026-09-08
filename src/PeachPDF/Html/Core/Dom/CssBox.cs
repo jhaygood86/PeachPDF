@@ -509,6 +509,10 @@ namespace PeachPDF.Html.Core.Dom
         /// into it: <see cref="IsOutOfFlow"/> also gates the absolute/fixed <i>placement</i> machinery
         /// (<c>CommitBlockChildOffset</c>), which a running box must never enter at all - it is excluded
         /// from flow far more completely than "out of flow but still positioned like <c>absolute</c>".
+        ///
+        /// See also <see cref="IsFixedOrInRunningElement"/>, which is narrower and answers a different
+        /// question — whether a box is painted outside the flow <see cref="HtmlContainerInt.ActualSize"/>
+        /// measures, rather than whether it contributes to its parent's in-flow content.
         /// </summary>
         internal bool IsExcludedFromFlow => IsOutOfFlow || IsRunningPositioned;
 
@@ -521,6 +525,59 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see cref="DomUtils.GetAllLinkBoxes"/>) and tagged-PDF /Link mapping, not just :link matching.
         /// </summary>
         public virtual bool IsClickable => HtmlTag is { Name: HtmlConstants.A } && HtmlTag.HasAttribute("href");
+
+        /// <summary>
+        /// Whether this box, or any ancestor, is <c>position: fixed</c> or
+        /// <c>position: running()</c> - i.e. painted somewhere other than the flow.
+        ///
+        /// One ancestor walk answering both, rather than <see cref="IsFixed"/> followed by a
+        /// second walk for the running case: this runs at the end of every box's layout, so a
+        /// duplicate walk is a measurable cost on a deep document for an answer already in hand.
+        ///
+        /// A running element is placed in a page MARGIN box, so its width is bounded by the page
+        /// margin band and not by the flow's content box. It is legitimate, and normal, for it to
+        /// be wider than the content box: a header that spans the full page is exactly that.
+        /// Letting it grow <see cref="HtmlContainerInt.ActualSize"/> therefore reports the document
+        /// as overflowing its own page when nothing in the flow does, and <c>ShrinkToFit</c> then
+        /// scales the whole document down to fit content that was never in the flow. Measured: a
+        /// Letter invoice with a company header and footer shrank to 0.968 while the same document
+        /// with both bands removed did not shrink at all.
+        ///
+        /// Walks ancestors rather than testing this box alone because the band's own wrapper divs
+        /// are CHILDREN of the running box and each grows ActualSize in its own right.
+        ///
+        /// <b>Not <see cref="IsExcludedFromFlow"/>, deliberately.</b> That answers the adjacent-sounding
+        /// question "does this box contribute to its PARENT's in-flow content", and is the wider set:
+        /// it includes <see cref="IsOutOfFlow"/>, so absolute and floated boxes too. This one answers
+        /// "is this box painted somewhere other than the flow whose extent
+        /// <see cref="HtmlContainerInt.ActualSize"/> reports", and the gate here only ever excluded
+        /// <c>fixed</c>. Widening it to the whole of <see cref="IsExcludedFromFlow"/> would silently
+        /// stop absolutely-positioned and floated content growing <c>ActualSize</c> as well — a real
+        /// behaviour change well beyond the running-element defect, and one <c>ShrinkToFit</c> would
+        /// feel immediately. Two predicates because there are two questions.
+        ///
+        /// The <c>Position.Value == PositionMode.Fixed</c> test is written out rather than reading
+        /// <see cref="IsFixed"/> per ancestor, because <see cref="IsFixed"/> is itself an ancestor walk
+        /// and nesting the two is quadratic. <see cref="IsFixed"/> is <c>virtual</c> but has no override
+        /// in the tree today; if one is ever added, this walk will not pick it up and both will need to
+        /// change together.
+        /// </summary>
+        internal bool IsFixedOrInRunningElement
+        {
+            get
+            {
+                for (var box = this; box is not null; box = box.ParentBox)
+                {
+                    if (box.Position.Value == PositionMode.Fixed || box.IsRunningPositioned)
+                        return true;
+
+                    if (box.ParentBox == box)
+                        break;
+                }
+
+                return false;
+            }
+        }
 
         /// <summary>
         /// Gets a value indicating whether this instance or one of its parents has Position = fixed.
@@ -6041,7 +6098,9 @@ namespace PeachPDF.Html.Core.Dom
 #if DEBUG
             Console.WriteLine($"layout finish: {ToString()} [x: {Location.X}, y: {Location.Y}, b: {ActualBottom}, r: {ActualRight}, h: {Size.Height}, w: {Size.Width}]");
 #endif
-            if (IsFixed) return;
+            // A fixed box is painted per page rather than flowed, and a running box is painted
+            // into a page margin box - neither is part of the flow whose width ActualSize reports.
+            if (IsFixedOrInRunningElement) return;
 
             var actualWidth = Math.Max(GetMinimumWidth() + GetWidthMarginDeep(this), Size.Width < 90999 ? ActualRight - HtmlContainer!.Root!.Location.X : 0);
             HtmlContainer!.ActualSize = CommonUtils.Max(HtmlContainer.ActualSize, new RSize(actualWidth, ActualBottom - HtmlContainer!.Root!.Location.Y));
