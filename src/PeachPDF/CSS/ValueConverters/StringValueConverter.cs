@@ -6,7 +6,7 @@ namespace PeachPDF.CSS
 {
     internal sealed class StringValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var str = value.ToCssString();
             return str != null ? new StringValue(str, value) : null;

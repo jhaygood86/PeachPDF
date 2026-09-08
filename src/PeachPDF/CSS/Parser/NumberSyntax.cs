@@ -33,7 +33,7 @@ namespace PeachPDF.CSS
         /// and <paramref name="value"/> is the parsed value - parsed as <see langword="float"/> via
         /// <see cref="float.TryParse(ReadOnlySpan{char},NumberStyles,IFormatProvider,out float)"/>
         /// (invariant culture) and then widened to <see langword="double"/>, exactly how
-        /// <see cref="UnitToken.Value"/> itself parses <c>Data</c> - not parsed directly as
+        /// <see cref="Token.Value"/> itself parses <c>Data</c> - not parsed directly as
         /// <see langword="double"/>, which can disagree with a widened <see langword="float"/> parse by a
         /// double-rounding ULP for some inputs. Returns <see langword="false"/> - leaving
         /// <paramref name="length"/>/<paramref name="value"/> at their defaults - when <paramref name="s"/>

@@ -19,7 +19,7 @@ namespace PeachPDF.CSS
             _labels = labels;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var list = new List<Token>(value);
             var options = new IPropertyValue[_labels.Length == 0 ? 4 : _labels.Length];

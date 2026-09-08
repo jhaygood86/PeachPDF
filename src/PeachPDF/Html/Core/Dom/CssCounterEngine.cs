@@ -435,20 +435,22 @@ namespace PeachPDF.Html.Core.Dom
 
         private static (string CounterName, bool IsReversed) GetCounterName(string propValue)
         {
-            var tokens = CssValueParser.GetCssTokens(propValue);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(propValue);
+            List<Token> tokens = pooledTokens;
 
-            var reversedToken = tokens.OfType<FunctionToken>().SingleOrDefault(x => x.Data == "reversed");
-            var keywordToken = tokens.OfType<KeywordToken>().FirstOrDefault();
+            var reversedToken = tokens.SingleOrNull(x => x.Type == TokenType.Function && x.Data == "reversed");
+            var keywordToken = tokens.FirstOrNull(t => t.Type is TokenType.Hash or TokenType.AtKeyword or TokenType.Ident);
 
-            if (reversedToken is not null)
+            if (reversedToken is { } reversed)
             {
-                var counterName = reversedToken.ArgumentTokens.FirstOrDefault()?.Data;
+                var args = reversed.ArgumentTokens;
+                var counterName = args.Count > 0 ? args[0].Data : null;
 
                 return (counterName!, true);
             }
-            else if (keywordToken is not null)
+            else if (keywordToken is { } keyword)
             {
-                var counterName = keywordToken.Data;
+                var counterName = keyword.Data;
 
                 return (counterName, false);
             }

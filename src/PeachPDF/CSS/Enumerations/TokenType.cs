@@ -2,6 +2,10 @@
 {
     internal enum TokenType : byte
     {
+        // First member so default(Token).Type reads as an obviously-uninitialized sentinel rather than
+        // the misleading TokenType.String that used to occupy slot 0 - only ever compared symbolically
+        // (never cast to/from its numeric value or serialized), so reordering is safe.
+        None,
         String,
         Url,
         Color,

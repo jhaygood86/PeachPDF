@@ -1,5 +1,6 @@
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -21,7 +22,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class PrincePdfFormFieldSettingsShorthandConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value as Token[] ?? value.ToArray();
             var items = tokens.ToItems();
@@ -62,7 +63,7 @@ namespace PeachPDF.CSS
                     continue;
                 }
 
-                if (item is [FunctionToken fn] && fn.Data.Is(Keywords.Comb))
+                if (item is [{ Type: TokenType.Function } fn] && fn.Data.Is(Keywords.Comb))
                 {
                     if (comb != null) return null;
 
@@ -113,16 +114,16 @@ namespace PeachPDF.CSS
             public TokenValue ExtractFor(string name)
             {
                 if (name.Is(PropertyNames.PdfFormField))
-                    return new TokenValue([new Token(TokenType.Ident, kind, TextPosition.Empty)]);
+                    return new TokenValue([new Token(TokenType.Ident, kind.AsMemory(), TextPosition.Empty)]);
 
                 if (name.Is(PropertyNames.PdfFormFieldAutoFontSize))
-                    return autoFontSize ? new TokenValue([new Token(TokenType.Ident, Keywords.Auto, TextPosition.Empty)]) : TokenValue.Empty;
+                    return autoFontSize ? new TokenValue([new Token(TokenType.Ident, Keywords.Auto.AsMemory(), TextPosition.Empty)]) : TokenValue.Empty;
 
                 if (name.Is(PropertyNames.PdfFormFieldDoNotScroll))
-                    return doNotScroll ? new TokenValue([new Token(TokenType.Ident, Keywords.Auto, TextPosition.Empty)]) : TokenValue.Empty;
+                    return doNotScroll ? new TokenValue([new Token(TokenType.Ident, Keywords.Auto.AsMemory(), TextPosition.Empty)]) : TokenValue.Empty;
 
                 if (name.Is(PropertyNames.PdfFormFieldComb))
-                    return comb is { } cells ? new TokenValue([new NumberToken(cells.ToString(), TextPosition.Empty)]) : TokenValue.Empty;
+                    return comb is { } cells ? new TokenValue([Token.NewNumber(cells.ToString().AsMemory(), TextPosition.Empty)]) : TokenValue.Empty;
 
                 return TokenValue.Empty;
             }

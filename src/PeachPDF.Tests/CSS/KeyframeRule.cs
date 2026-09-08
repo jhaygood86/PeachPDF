@@ -45,6 +45,19 @@ namespace PeachPDF.Tests.CSS
             Assert.Equal("margin-left", rule.Style.Declarations.First().Name);
         }
 
+        // KeyText's setter (as opposed to its getter, exercised by every other test in this file) goes
+        // through StylesheetParser.ParseKeyframeSelector - the CSSOM programmatic-assignment path.
+        [Fact]
+        public void KeyTextSetter_ReplacesTheKeyframeSelector()
+        {
+            var rule = ParseKeyframeRule("from { margin-left: 0px; }");
+
+            rule.KeyText = "50%";
+
+            Assert.Equal("50%", rule.KeyText);
+            Assert.Single(rule.Key.Stops);
+        }
+
         [Fact]
         public void KeyframeRuleWithFromTo255075PercentAndPaddingTopPaddingLeftColor()
         {

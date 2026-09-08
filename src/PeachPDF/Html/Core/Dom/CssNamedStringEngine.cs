@@ -1,6 +1,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Parse;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -29,10 +30,11 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // Parse the string-set value into tokens
-            var tokens = CssValueParser.GetCssTokens(cssBox.StringSet);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(cssBox.StringSet);
+            List<Token> tokens = pooledTokens;
 
             string? currentName = null;
-            var contentItems = new System.Collections.Generic.List<Token>();
+            var contentItems = new List<Token>();
 
             foreach (var token in tokens)
             {
@@ -65,7 +67,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 // First identifier after comma (or at start) is the name
-                if (currentName == null && token is KeywordToken keywordToken)
+                if (currentName == null && token is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                 {
                     currentName = keywordToken.Data;
                 }
@@ -106,12 +108,12 @@ namespace PeachPDF.Html.Core.Dom
             {
                 switch (token)
                 {
-                    case StringToken stringToken:
+                    case { Type: TokenType.String } stringToken:
                         // Direct string literal
                         result.Append(stringToken.Data);
                         break;
 
-                    case FunctionToken functionToken:
+                    case { Type: TokenType.Function } functionToken:
                         result.Append(EvaluateFunction(cssBox, functionToken));
                         break;
                 }
@@ -126,7 +128,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="cssBox">The CSS box context for evaluation</param>
         /// <param name="functionToken">The function token to evaluate</param>
         /// <returns>The evaluated string value of the function</returns>
-        private static string EvaluateFunction(CssBox cssBox, FunctionToken functionToken)
+        private static string EvaluateFunction(CssBox cssBox, Token functionToken)
         {
             var functionName = functionToken.Data.ToLowerInvariant();
 
@@ -156,17 +158,19 @@ namespace PeachPDF.Html.Core.Dom
         /// Evaluates counter() function - returns the value of a named counter.
         /// Syntax: counter(name) or counter(name, style)
         /// </summary>
-        private static string EvaluateCounterFunction(CssBox cssBox, FunctionToken functionToken)
+        private static string EvaluateCounterFunction(CssBox cssBox, Token functionToken)
         {
-            var arguments = functionToken.ArgumentTokens.ToArray();
+            // ArgumentTokens already returns a freshly materialized IReadOnlyList<Token> (Token.cs's own
+            // List<Token>.GetRange copy) - no need for a second .ToArray() copy on top of it.
+            var arguments = functionToken.ArgumentTokens;
 
-            if (arguments.Length == 0)
+            if (arguments.Count == 0)
             {
                 return string.Empty;
             }
 
             // First argument is the counter name
-            if (arguments[0] is KeywordToken counterNameToken)
+            if (arguments[0] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } counterNameToken)
             {
                 var counter = CssCounterEngine.GetCounter(cssBox, counterNameToken.Data);
                 var counterValue = counter?.Value ?? 0;
@@ -183,7 +187,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Evaluates counters() function - returns all counter values with separator.
         /// Syntax: counters(name, separator) or counters(name, separator, style)
         /// </summary>
-        private static string EvaluateCountersFunction(CssBox cssBox, FunctionToken functionToken)
+        private static string EvaluateCountersFunction(CssBox cssBox, Token functionToken)
         {
             var arguments = functionToken.ArgumentTokens
                 .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
@@ -195,13 +199,13 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // First argument is the counter name
-            if (arguments[0] is not KeywordToken counterNameToken)
+            if (arguments[0] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } counterNameToken)
             {
                 return string.Empty;
             }
 
             // Second argument is the separator string
-            var separator = arguments[1] is StringToken separatorToken
+            var separator = arguments[1] is { Type: TokenType.String } separatorToken
               ? separatorToken.Data
                          : ".";
 
@@ -226,7 +230,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Evaluates attr() function - returns the value of an element attribute.
         /// Syntax: attr(attribute-name)
         /// </summary>
-        private static string EvaluateAttrFunction(CssBox cssBox, FunctionToken functionToken)
+        private static string EvaluateAttrFunction(CssBox cssBox, Token functionToken)
         {
             var arguments = functionToken.ArgumentTokens
                           .Where(t => t.Type != TokenType.Whitespace)
@@ -238,7 +242,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // First argument is the attribute name
-            if (arguments[0] is KeywordToken attrNameToken)
+            if (arguments[0] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } attrNameToken)
             {
                 var attributeName = attrNameToken.Data;
                 return cssBox.GetAttribute(attributeName, string.Empty);
@@ -251,7 +255,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Evaluates content() function - returns element content based on mode.
         /// Syntax: content() or content(text) or content(before) or content(after) or content(first-letter)
         /// </summary>
-        private static string EvaluateContentFunction(CssBox cssBox, FunctionToken functionToken)
+        private static string EvaluateContentFunction(CssBox cssBox, Token functionToken)
         {
             var arguments = functionToken.ArgumentTokens
          .Where(t => t.Type != TokenType.Whitespace)
@@ -260,7 +264,7 @@ namespace PeachPDF.Html.Core.Dom
             // Default mode is "text"
             var mode = "text";
 
-            if (arguments.Length > 0 && arguments[0] is KeywordToken modeToken)
+            if (arguments.Length > 0 && arguments[0] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } modeToken)
             {
                 mode = modeToken.Data.ToLowerInvariant();
             }
@@ -280,7 +284,7 @@ namespace PeachPDF.Html.Core.Dom
         /// Syntax: string(name) or string(name, keyword)
         /// Keywords: first (default), start, last, first-except
         /// </summary>
-        private static string EvaluateStringFunction(CssBox cssBox, FunctionToken functionToken)
+        private static string EvaluateStringFunction(CssBox cssBox, Token functionToken)
         {
             var arguments = functionToken.ArgumentTokens
              .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
@@ -292,7 +296,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // First argument is the named string identifier
-            if (arguments[0] is not KeywordToken nameToken)
+            if (arguments[0] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken)
             {
                 return string.Empty;
             }
@@ -302,7 +306,7 @@ namespace PeachPDF.Html.Core.Dom
             // Second argument is the optional keyword (first, start, last, first-except)
             // Default is "first"
             var keyword = "first";
-            if (arguments.Length > 1 && arguments[1] is KeywordToken keywordToken)
+            if (arguments.Length > 1 && arguments[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
             {
                 keyword = keywordToken.Data.ToLowerInvariant();
             }

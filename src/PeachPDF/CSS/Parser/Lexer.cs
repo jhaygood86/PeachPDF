@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Globalization;
@@ -9,6 +9,17 @@ namespace PeachPDF.CSS
     {
         public event EventHandler<TokenizerError> Error;
         private TextPosition _position;
+
+        // Content-run tracking for Token.Data's zero-allocation slice path: _contentStart/_contentEnd
+        // bound the region of the shared Source buffer a token's Data would occupy if nothing that
+        // makes it diverge from a literal source range happened during the scan (see BeginContentAt/
+        // AppendLiteral/EndContent below). _mustMaterialize is set by AppendEscape/AppendLineContinuation
+        // whenever content genuinely differs from source text; CrossedCarriageReturn (on LexerBase) is
+        // set by NormalizeForward whenever a raw '\r' was collapsed to '\n' - both force EndContent() to
+        // fall back to an owned string via FlushBuffer(), exactly as before this design existed.
+        private int _contentStart;
+        private int _contentEnd;
+        private bool _mustMaterialize;
 
         public Lexer(TextSource source) : base(source)
         {
@@ -37,6 +48,73 @@ namespace PeachPDF.CSS
 
             var errorEvent = new TokenizerError(error, position);
             handler.Invoke(this, errorEvent);
+        }
+
+        // Starts tracking a new token-content run that may end up representable as a literal slice of
+        // Source instead of an owned string materialized via FlushBuffer(). `start` is the source index
+        // of the run's first character - callers pass Source.Index directly when nothing has been read
+        // yet for this run, or an explicitly captured earlier position (e.g. Source.Index - 1 for a
+        // character already consumed as a method parameter) when the first character was already read
+        // before this call.
+        private void BeginContentAt(int start)
+        {
+            _contentStart = start;
+            _contentEnd = start;
+            _mustMaterialize = false;
+            CrossedCarriageReturn = false;
+        }
+
+        // Appends a character that is a direct, unmodified echo of one just read from Source (never an
+        // escape-decoded or line-continuation substitute - AppendEscape/AppendLineContinuation handle
+        // those, and set _mustMaterialize instead) and advances the tracked content-end to match.
+        // Because this always runs with Source.Index sitting one past the character just appended,
+        // _contentEnd correctly tracks "the position right after the last real content character" even
+        // when the caller goes on to peek further ahead (and maybe back up, possibly more than once)
+        // before finishing the token - no fragile "how many extra lookahead reads happened since"
+        // reconstruction at the point a token completes is ever needed.
+        private void AppendLiteral(char c)
+        {
+            StringBuffer.Append(c);
+            _contentEnd = Source.Index;
+        }
+
+        // Same as AppendLiteral, but for a character read (and possibly followed by further lookahead
+        // that didn't pan out) earlier than the live cursor position - e.g. NumberExponential's fallback
+        // re-appends 'letter' ('e'/'E') as the first character of a dimension's unit after having peeked
+        // one or two characters further ahead to check for a valid exponent. Trusting live Source.Index
+        // there would wrongly include that lookahead in the tracked content-end, so the character's own
+        // known position is passed explicitly instead.
+        private void AppendLiteralAt(char c, int position)
+        {
+            StringBuffer.Append(c);
+            _contentEnd = position + 1;
+        }
+
+        // Ends a content run started by BeginContentAt(): if nothing that would make the tracked
+        // [_contentStart, _contentEnd) range diverge from the accumulated buffer happened (no escape, no
+        // CRLF/lone-CR normalization, no escaped line continuation), slices Source directly and discards
+        // the buffer - zero allocation. Otherwise falls back to the buffer's own already-decoded content
+        // as an owned string, exactly as before this design existed.
+        private ReadOnlyMemory<char> EndContent()
+        {
+            if (!_mustMaterialize && !CrossedCarriageReturn)
+            {
+                var length = _contentEnd - _contentStart;
+                StringBuffer.Clear();
+                return Source.Slice(_contentStart, length);
+            }
+
+            return FlushBuffer().AsMemory();
+        }
+
+        // CSS's string/url escaped-line-continuation feature ("\" followed by a newline consumes the
+        // newline without adding it to the value) - StringBuilder.AppendLine() appends the platform
+        // default line terminator, not the source's own newline character(s), so content that crosses
+        // this can never be represented as a literal source slice.
+        private void AppendLineContinuation()
+        {
+            StringBuffer.AppendLine();
+            _mustMaterialize = true;
         }
 
         private Token Data(char current)
@@ -241,6 +319,7 @@ namespace PeachPDF.CSS
 
         private Token StringDoubleQuote()
         {
+            BeginContentAt(Source.Index);
             while (true)
             {
                 var current = GetNext();
@@ -248,32 +327,32 @@ namespace PeachPDF.CSS
                 {
                     case Symbols.DoubleQuote:
                     case Symbols.EndOfFile:
-                        return NewString(FlushBuffer(), Symbols.DoubleQuote);
+                        return NewString(EndContent(), Symbols.DoubleQuote);
                     case Symbols.FormFeed:
                     case Symbols.LineFeed:
                         RaiseErrorOccurred(ParseError.LineBreakUnexpected);
                         Back();
-                        return NewString(FlushBuffer(), Symbols.DoubleQuote, true);
+                        return NewString(EndContent(), Symbols.DoubleQuote, true);
                     case Symbols.ReverseSolidus:
                         current = GetNext();
                         if (current.IsLineBreak())
                         {
-                            StringBuffer.AppendLine();
+                            AppendLineContinuation();
                         }
                         else if (current != Symbols.EndOfFile)
                         {
-                            StringBuffer.Append(ConsumeEscape(current));
+                            AppendEscape(current);
                         }
                         else
                         {
                             RaiseErrorOccurred(ParseError.EOF);
                             Back();
-                            return NewString(FlushBuffer(), Symbols.DoubleQuote, true);
+                            return NewString(EndContent(), Symbols.DoubleQuote, true);
                         }
 
                         break;
                     default:
-                        StringBuffer.Append(current);
+                        AppendLiteral(current);
                         break;
                 }
             }
@@ -281,6 +360,7 @@ namespace PeachPDF.CSS
 
         private Token StringSingleQuote()
         {
+            BeginContentAt(Source.Index);
             while (true)
             {
                 var current = GetNext();
@@ -288,32 +368,32 @@ namespace PeachPDF.CSS
                 {
                     case Symbols.SingleQuote:
                     case Symbols.EndOfFile:
-                        return NewString(FlushBuffer(), Symbols.SingleQuote);
+                        return NewString(EndContent(), Symbols.SingleQuote);
                     case Symbols.FormFeed:
                     case Symbols.LineFeed:
                         RaiseErrorOccurred(ParseError.LineBreakUnexpected);
                         Back();
-                        return NewString(FlushBuffer(), Symbols.SingleQuote, true);
+                        return NewString(EndContent(), Symbols.SingleQuote, true);
                     case Symbols.ReverseSolidus:
                         current = GetNext();
                         if (current.IsLineBreak())
                         {
-                            StringBuffer.AppendLine();
+                            AppendLineContinuation();
                         }
                         else if (current != Symbols.EndOfFile)
                         {
-                            StringBuffer.Append(ConsumeEscape(current));
+                            AppendEscape(current);
                         }
                         else
                         {
                             RaiseErrorOccurred(ParseError.EOF);
                             Back();
-                            return NewString(FlushBuffer(), Symbols.SingleQuote, true);
+                            return NewString(EndContent(), Symbols.SingleQuote, true);
                         }
 
                         break;
                     default:
-                        StringBuffer.Append(current);
+                        AppendLiteral(current);
                         break;
                 }
             }
@@ -331,6 +411,7 @@ namespace PeachPDF.CSS
             }
 
             Back();
+            BeginContentAt(Source.Index);
 
             // A '#' always begins a <hash-token>, consuming a whole <name> (CSS Syntax §4.3.4). Classify it as
             // a color literal only when the name is entirely hex digits (e.g. "#f00"); otherwise keep it as an
@@ -345,18 +426,18 @@ namespace PeachPDF.CSS
                 if (current.IsName())
                 {
                     allHex = allHex && current.IsHex();
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else if (IsValidEscape(current))
                 {
                     current = GetNext();
-                    StringBuffer.Append(ConsumeEscape(current));
+                    AppendEscape(current);
                     allHex = false;
                 }
                 else
                 {
                     Back();
-                    var text = FlushBuffer();
+                    var text = EndContent();
                     return allHex ? NewColor(text) : NewHash(text);
                 }
             }
@@ -364,17 +445,18 @@ namespace PeachPDF.CSS
 
         private Token HashStart()
         {
+            BeginContentAt(Source.Index);
             var current = GetNext();
             if (current.IsNameStart())
             {
-                StringBuffer.Append(current);
+                AppendLiteral(current);
                 return HashRest();
             }
 
             if (IsValidEscape(current))
             {
                 current = GetNext();
-                StringBuffer.Append(ConsumeEscape(current));
+                AppendEscape(current);
                 return HashRest();
             }
 
@@ -396,56 +478,58 @@ namespace PeachPDF.CSS
                 var current = GetNext();
                 if (current.IsName())
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else if (IsValidEscape(current))
                 {
                     current = GetNext();
-                    StringBuffer.Append(ConsumeEscape(current));
+                    AppendEscape(current);
                 }
                 else if (current == Symbols.ReverseSolidus)
                 {
                     RaiseErrorOccurred(ParseError.InvalidCharacter);
                     Back();
-                    return NewHash(FlushBuffer());
+                    return NewHash(EndContent());
                 }
                 else
                 {
                     Back();
-                    return NewHash(FlushBuffer());
+                    return NewHash(EndContent());
                 }
             }
         }
 
         private Token Comment()
         {
+            BeginContentAt(Source.Index);
             var current = GetNext();
             while (current != Symbols.EndOfFile)
                 if (current == Symbols.Asterisk)
                 {
                     current = GetNext();
-                    if (current == Symbols.Solidus) return NewComment(FlushBuffer());
-                    StringBuffer.Append(Symbols.Asterisk);
+                    if (current == Symbols.Solidus) return NewComment(EndContent());
+                    AppendLiteral(Symbols.Asterisk);
                 }
                 else
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                     current = GetNext();
                 }
 
             RaiseErrorOccurred(ParseError.EOF);
-            return NewComment(FlushBuffer(), true);
+            return NewComment(EndContent(), true);
         }
 
         private Token AtKeywordStart()
         {
+            BeginContentAt(Source.Index);
             var current = GetNext();
             if (current == Symbols.Minus)
             {
                 current = GetNext();
                 if (current.IsNameStart() || IsValidEscape(current))
                 {
-                    StringBuffer.Append(Symbols.Minus);
+                    AppendLiteral(Symbols.Minus);
                     return AtKeywordRest(current);
                 }
 
@@ -455,14 +539,14 @@ namespace PeachPDF.CSS
 
             if (current.IsNameStart())
             {
-                StringBuffer.Append(current);
+                AppendLiteral(current);
                 return AtKeywordRest(GetNext());
             }
 
             if (IsValidEscape(current))
             {
                 current = GetNext();
-                StringBuffer.Append(ConsumeEscape(current));
+                AppendEscape(current);
                 return AtKeywordRest(GetNext());
             }
 
@@ -476,17 +560,17 @@ namespace PeachPDF.CSS
             {
                 if (current.IsName())
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else if (IsValidEscape(current))
                 {
                     current = GetNext();
-                    StringBuffer.Append(ConsumeEscape(current));
+                    AppendEscape(current);
                 }
                 else
                 {
                     Back();
-                    return NewAtKeyword(FlushBuffer());
+                    return NewAtKeyword(EndContent());
                 }
 
                 current = GetNext();
@@ -495,12 +579,14 @@ namespace PeachPDF.CSS
 
         private Token IdentStart(char current)
         {
+            BeginContentAt(Source.Index - 1);
+
             if (current == Symbols.Minus)
             {
                 current = GetNext();
                 if (current.IsNameStart() || current == Symbols.Minus || IsValidEscape(current))
                 {
-                    StringBuffer.Append(Symbols.Minus);
+                    AppendLiteral(Symbols.Minus);
                     return IdentRest(current);
                 }
 
@@ -510,14 +596,14 @@ namespace PeachPDF.CSS
 
             if (current.IsNameStart())
             {
-                StringBuffer.Append(current);
+                AppendLiteral(current);
                 return IdentRest(GetNext());
             }
 
             if (current == Symbols.ReverseSolidus && IsValidEscape(current))
             {
                 current = GetNext();
-                StringBuffer.Append(ConsumeEscape(current));
+                AppendEscape(current);
                 return IdentRest(GetNext());
             }
 
@@ -530,23 +616,23 @@ namespace PeachPDF.CSS
             {
                 if (current.IsName())
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else if (IsValidEscape(current))
                 {
                     current = GetNext();
-                    StringBuffer.Append(ConsumeEscape(current));
+                    AppendEscape(current);
                 }
                 else if (current == Symbols.RoundBracketOpen)
                 {
-                    var name = FlushBuffer();
-                    var type = name.GetTypeFromName();
-                    return type == TokenType.Function ? NewFunction(name) : UrlStart(name);
+                    var name = EndContent();
+                    var type = name.Span.GetTypeFromName();
+                    return type == TokenType.Function ? NewFunction(name) : UrlStart(name.ToString());
                 }
                 else
                 {
                     Back();
-                    return NewIdent(FlushBuffer());
+                    return NewIdent(EndContent());
                 }
 
                 current = GetNext();
@@ -574,31 +660,33 @@ namespace PeachPDF.CSS
         {
             while (true)
             {
+                BeginContentAt(Source.Index - 1);
+
                 if (current.IsOneOf(Symbols.Plus, Symbols.Minus))
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                     current = GetNext();
                     if (current == Symbols.Dot)
                     {
-                        StringBuffer.Append(current);
-                        StringBuffer.Append(GetNext());
+                        AppendLiteral(current);
+                        AppendLiteral(GetNext());
                         return NumberFraction();
                     }
 
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                     return NumberRest();
                 }
 
                 if (current == Symbols.Dot)
                 {
-                    StringBuffer.Append(current);
-                    StringBuffer.Append(GetNext());
+                    AppendLiteral(current);
+                    AppendLiteral(GetNext());
                     return NumberFraction();
                 }
 
                 if (current.IsDigit())
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                     return NumberRest();
                 }
 
@@ -613,7 +701,7 @@ namespace PeachPDF.CSS
             {
                 if (current.IsDigit())
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else if (current == 'e' || current == 'E')
                 {
@@ -626,7 +714,7 @@ namespace PeachPDF.CSS
                 else
                 {
                     var dimension = TryStartDimension(current);
-                    if (dimension is not null) return dimension;
+                    if (dimension is not null) return dimension.Value;
                     break;
                 }
 
@@ -639,12 +727,13 @@ namespace PeachPDF.CSS
                     current = GetNext();
                     if (current.IsDigit())
                     {
-                        StringBuffer.Append(Symbols.Dot).Append(current);
+                        AppendLiteral(Symbols.Dot);
+                        AppendLiteral(current);
                         return NumberFraction();
                     }
 
                     Back();
-                    return NewNumber(FlushBuffer());
+                    return NewNumber(EndContent());
                 case 'e':
                 case 'E':
                     return NumberExponential(current);
@@ -662,7 +751,7 @@ namespace PeachPDF.CSS
             {
                 if (current.IsDigit())
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else if (current == 'e' || current == 'E')
                 {
@@ -671,7 +760,7 @@ namespace PeachPDF.CSS
                 else
                 {
                     var dimension = TryStartDimension(current);
-                    if (dimension is not null) return dimension;
+                    if (dimension is not null) return dimension.Value;
                     break;
                 }
 
@@ -699,20 +788,27 @@ namespace PeachPDF.CSS
         /// caller's loop position and <see cref="LexerBase.StringBuffer"/> untouched so the caller can
         /// break out and dispatch on <paramref name="current"/> itself.
         /// </summary>
-        private Token TryStartDimension(char current)
+        private Token? TryStartDimension(char current)
         {
+            // Captured once, up front: current was already read by the caller (Source.Index is one past
+            // it), and neither branch below reads anything else before deciding whether current itself
+            // starts the unit - so this is exactly current's own position regardless of which branch runs.
+            var currentPosition = Source.Index - 1;
+
             if (current.IsNameStart())
             {
-                var number = FlushBuffer();
-                StringBuffer.Append(current);
+                var number = EndContent();
+                BeginContentAt(currentPosition);
+                AppendLiteral(current);
                 return Dimension(number);
             }
 
             if (IsValidEscape(current))
             {
                 current = GetNext();
-                var number = FlushBuffer();
-                StringBuffer.Append(ConsumeEscape(current));
+                var number = EndContent();
+                BeginContentAt(currentPosition);
+                AppendEscape(current);
                 return Dimension(number);
             }
 
@@ -729,7 +825,7 @@ namespace PeachPDF.CSS
         {
             if (current == '%')
             {
-                return NewPercentage(FlushBuffer());
+                return NewPercentage(EndContent());
             }
 
             if (current == Symbols.Minus)
@@ -738,27 +834,27 @@ namespace PeachPDF.CSS
             }
 
             Back();
-            return NewNumber(FlushBuffer());
+            return NewNumber(EndContent());
         }
 
-        private Token Dimension(string number)
+        private Token Dimension(ReadOnlyMemory<char> number)
         {
             while (true)
             {
                 var current = GetNext();
                 if (current.IsLetter())
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else if (IsValidEscape(current))
                 {
                     current = GetNext();
-                    StringBuffer.Append(ConsumeEscape(current));
+                    AppendEscape(current);
                 }
                 else
                 {
                     Back();
-                    return NewDimension(number, FlushBuffer());
+                    return NewDimension(number, EndContent().ToString());
                 }
             }
         }
@@ -770,12 +866,12 @@ namespace PeachPDF.CSS
             {
                 if (current.IsDigit())
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else
                 {
                     var dimension = TryStartDimension(current);
-                    if (dimension is not null) return dimension;
+                    if (dimension is not null) return dimension.Value;
                     break;
                 }
 
@@ -792,13 +888,13 @@ namespace PeachPDF.CSS
             {
                 case Symbols.EndOfFile:
                     RaiseErrorOccurred(ParseError.EOF);
-                    return NewUrl(functionName, string.Empty, true);
+                    return NewUrl(functionName, ReadOnlyMemory<char>.Empty, true);
                 case Symbols.DoubleQuote:
                     return UrlDoubleQuote(functionName);
                 case Symbols.SingleQuote:
                     return UrlSingleQuote(functionName);
                 case Symbols.RoundBracketClose:
-                    return NewUrl(functionName, string.Empty);
+                    return NewUrl(functionName, ReadOnlyMemory<char>.Empty);
                 default:
                     return UrlUnquoted(current, functionName);
             }
@@ -806,6 +902,7 @@ namespace PeachPDF.CSS
 
         private Token UrlDoubleQuote(string functionName)
         {
+            BeginContentAt(Source.Index);
             while (true)
             {
                 var current = GetNext();
@@ -818,14 +915,14 @@ namespace PeachPDF.CSS
                 switch (current)
                 {
                     case Symbols.EndOfFile:
-                        return NewUrl(functionName, FlushBuffer());
+                        return NewUrl(functionName, EndContent());
                     case Symbols.DoubleQuote:
                         return UrlEnd(functionName);
                 }
 
                 if (current != Symbols.ReverseSolidus)
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else
                 {
@@ -834,19 +931,20 @@ namespace PeachPDF.CSS
                     {
                         Back(2);
                         RaiseErrorOccurred(ParseError.EOF);
-                        return NewUrl(functionName, FlushBuffer(), true);
+                        return NewUrl(functionName, EndContent(), true);
                     }
 
                     if (current.IsLineBreak())
-                        StringBuffer.AppendLine();
+                        AppendLineContinuation();
                     else
-                        StringBuffer.Append(ConsumeEscape(current));
+                        AppendEscape(current);
                 }
             }
         }
 
         private Token UrlSingleQuote(string functionName)
         {
+            BeginContentAt(Source.Index);
             while (true)
             {
                 var current = GetNext();
@@ -859,14 +957,14 @@ namespace PeachPDF.CSS
                 switch (current)
                 {
                     case Symbols.EndOfFile:
-                        return NewUrl(functionName, FlushBuffer());
+                        return NewUrl(functionName, EndContent());
                     case Symbols.SingleQuote:
                         return UrlEnd(functionName);
                 }
 
                 if (current != Symbols.ReverseSolidus)
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else
                 {
@@ -875,24 +973,25 @@ namespace PeachPDF.CSS
                     {
                         Back(2);
                         RaiseErrorOccurred(ParseError.EOF);
-                        return NewUrl(functionName, FlushBuffer(), true);
+                        return NewUrl(functionName, EndContent(), true);
                     }
 
                     if (current.IsLineBreak())
-                        StringBuffer.AppendLine();
+                        AppendLineContinuation();
                     else
-                        StringBuffer.Append(ConsumeEscape(current));
+                        AppendEscape(current);
                 }
             }
         }
 
         private Token UrlUnquoted(char current, string functionName)
         {
+            BeginContentAt(Source.Index - 1);
             while (true)
             {
                 if (current.IsSpaceCharacter()) return UrlEnd(functionName);
                 if (current.IsOneOf(Symbols.RoundBracketClose, Symbols.EndOfFile))
-                    return NewUrl(functionName, FlushBuffer());
+                    return NewUrl(functionName, EndContent());
                 if (current.IsOneOf(Symbols.DoubleQuote, Symbols.SingleQuote, Symbols.RoundBracketOpen) ||
                     current.IsNonPrintable())
                 {
@@ -902,12 +1001,12 @@ namespace PeachPDF.CSS
 
                 if (current != Symbols.ReverseSolidus)
                 {
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                 }
                 else if (IsValidEscape(current))
                 {
                     current = GetNext();
-                    StringBuffer.Append(ConsumeEscape(current));
+                    AppendEscape(current);
                 }
                 else
                 {
@@ -924,7 +1023,7 @@ namespace PeachPDF.CSS
             while (true)
             {
                 var current = GetNext();
-                if (current == Symbols.RoundBracketClose) return NewUrl(functionName, FlushBuffer());
+                if (current == Symbols.RoundBracketClose) return NewUrl(functionName, EndContent());
 
                 if (current.IsSpaceCharacter()) continue;
 
@@ -936,6 +1035,12 @@ namespace PeachPDF.CSS
 
         private Token UrlBad(string functionName)
         {
+            // A rare error-recovery path with non-trivial paren/brace-depth bookkeeping and multiple
+            // possible entry points (mid-run from UrlDoubleQuote/SingleQuote/Unquoted/End) - always
+            // materialize via FlushBuffer() rather than trying to verify slice-safety here; the buffer
+            // was already being accumulated character-by-character by the run this continues anyway.
+            _mustMaterialize = true;
+
             var current = Current;
             var curly = 0;
             var round = 1;
@@ -944,21 +1049,21 @@ namespace PeachPDF.CSS
                 if (current == Symbols.Semicolon)
                 {
                     Back();
-                    return NewUrl(functionName, FlushBuffer(), true);
+                    return NewUrl(functionName, EndContent(), true);
                 }
 
                 if (current == Symbols.CurlyBracketClose && --curly == -1)
                 {
                     Back();
-                    return NewUrl(functionName, FlushBuffer(), true);
+                    return NewUrl(functionName, EndContent(), true);
                 }
 
                 if (current == Symbols.RoundBracketClose && --round == 0)
-                    return NewUrl(functionName, FlushBuffer(), true);
+                    return NewUrl(functionName, EndContent(), true);
                 if (IsValidEscape(current))
                 {
                     current = GetNext();
-                    StringBuffer.Append(ConsumeEscape(current));
+                    AppendEscape(current);
                 }
                 else
                 {
@@ -972,14 +1077,16 @@ namespace PeachPDF.CSS
             }
 
             RaiseErrorOccurred(ParseError.EOF);
-            return NewUrl(functionName, FlushBuffer(), true);
+            return NewUrl(functionName, EndContent(), true);
         }
 
         private Token UnicodeRange(char current)
         {
+            BeginContentAt(Source.Index - 1);
+
             for (var i = 0; i < 6 && current.IsHex(); i++)
             {
-                StringBuffer.Append(current);
+                AppendLiteral(current);
                 current = GetNext();
             }
 
@@ -1003,19 +1110,23 @@ namespace PeachPDF.CSS
                         break;
                     }
 
-                    StringBuffer.Append(current);
+                    AppendLiteral(current);
                     current = GetNext();
                 }
 
-                return NewRange(FlushBuffer());
+                return NewRange(EndContent().ToString());
             }
 
             if (current == Symbols.Minus)
             {
+                // current (the '-') was already read by the main hex loop above, so its own position is
+                // one behind live Source.Index right now.
+                var minusPosition = Source.Index - 1;
                 current = GetNext();
                 if (current.IsHex())
                 {
-                    var start = FlushBuffer();
+                    var start = EndContent();
+                    BeginContentAt(minusPosition + 1);
                     for (var i = 0; i < 6; i++)
                     {
                         if (!current.IsHex())
@@ -1025,115 +1136,115 @@ namespace PeachPDF.CSS
                             break;
                         }
 
-                        StringBuffer.Append(current);
+                        AppendLiteral(current);
                         current = GetNext();
                     }
 
-                    var end = FlushBuffer();
-                    return NewRange(start, end);
+                    var end = EndContent();
+                    return NewRange(start.ToString(), end.ToString());
                 }
 
                 Back(2);
-                return NewRange(FlushBuffer());
+                return NewRange(EndContent().ToString());
             }
 
             Back();
-            return NewRange(FlushBuffer());
+            return NewRange(EndContent().ToString());
         }
 
         private Token NewMatch(string match)
         {
-            return new(TokenType.Match, match, _position);
+            return new(TokenType.Match, match.AsMemory(), _position);
         }
 
         private Token NewColumn()
         {
-            return new(TokenType.Column, Combinators.Column, _position);
+            return new(TokenType.Column, Combinators.Column.AsMemory(), _position);
         }
 
         private Token NewCloseCurly()
         {
-            return new(TokenType.CurlyBracketClose, "}", _position);
+            return new(TokenType.CurlyBracketClose, "}".AsMemory(), _position);
         }
 
         private Token NewOpenCurly()
         {
-            return new(TokenType.CurlyBracketOpen, "{", _position);
+            return new(TokenType.CurlyBracketOpen, "{".AsMemory(), _position);
         }
 
         private Token NewCloseSquare()
         {
-            return new(TokenType.SquareBracketClose, "]", _position);
+            return new(TokenType.SquareBracketClose, "]".AsMemory(), _position);
         }
 
         private Token NewOpenSquare()
         {
-            return new(TokenType.SquareBracketOpen, "[", _position);
+            return new(TokenType.SquareBracketOpen, "[".AsMemory(), _position);
         }
 
         private Token NewOpenComment()
         {
-            return new(TokenType.Cdo, "<!--", _position);
+            return new(TokenType.Cdo, "<!--".AsMemory(), _position);
         }
 
         private Token NewSemicolon()
         {
-            return new(TokenType.Semicolon, ";", _position);
+            return new(TokenType.Semicolon, ";".AsMemory(), _position);
         }
 
         private Token NewColon()
         {
-            return new(TokenType.Colon, ":", _position);
+            return new(TokenType.Colon, ":".AsMemory(), _position);
         }
 
         private Token NewCloseComment()
         {
-            return new(TokenType.Cdc, "-->", _position);
+            return new(TokenType.Cdc, "-->".AsMemory(), _position);
         }
 
         private Token NewComma()
         {
-            return new(TokenType.Comma, ",", _position);
+            return new(TokenType.Comma, ",".AsMemory(), _position);
         }
 
         private Token NewCloseRound()
         {
-            return new(TokenType.RoundBracketClose, ")", _position);
+            return new(TokenType.RoundBracketClose, ")".AsMemory(), _position);
         }
 
         private Token NewOpenRound()
         {
-            return new(TokenType.RoundBracketOpen, "(", _position);
+            return new(TokenType.RoundBracketOpen, "(".AsMemory(), _position);
         }
 
-        private Token NewString(string value, char quote, bool bad = false)
+        private Token NewString(ReadOnlyMemory<char> value, char quote, bool bad = false)
         {
-            return new StringToken(value, bad, quote, _position);
+            return Token.NewString(value, bad, quote, _position);
         }
 
-        private Token NewHash(string value)
+        private Token NewHash(ReadOnlyMemory<char> value)
         {
-            return new KeywordToken(TokenType.Hash, value, _position);
+            return Token.NewKeyword(TokenType.Hash, value, _position);
         }
 
-        private Token NewComment(string value, bool bad = false)
+        private Token NewComment(ReadOnlyMemory<char> value, bool bad = false)
         {
-            return new CommentToken(value, bad, _position);
+            return Token.NewComment(value, bad, _position);
         }
 
-        private Token NewAtKeyword(string value)
+        private Token NewAtKeyword(ReadOnlyMemory<char> value)
         {
-            return new KeywordToken(TokenType.AtKeyword, value, _position);
+            return Token.NewKeyword(TokenType.AtKeyword, value, _position);
         }
 
-        private Token NewIdent(string value)
+        private Token NewIdent(ReadOnlyMemory<char> value)
         {
-            return new KeywordToken(TokenType.Ident, value, _position);
+            return Token.NewKeyword(TokenType.Ident, value, _position);
         }
 
-        private Token NewFunction(string value)
+        private Token NewFunction(ReadOnlyMemory<char> value)
         {
-            var function = new FunctionToken(value, _position);
+            var function = Token.NewFunction(value, _position);
 
             // Tracks paren depth so a bare (non-function) parenthesized group nested inside the
             // function's arguments - e.g. calc((1px + 2px) * 3) - doesn't get mistaken for the end of
@@ -1163,69 +1274,73 @@ namespace PeachPDF.CSS
             return function;
         }
 
-        private Token NewPercentage(string value)
+        private Token NewPercentage(ReadOnlyMemory<char> value)
         {
-            return new UnitToken(TokenType.Percentage, value, "%", _position);
+            return Token.NewUnit(TokenType.Percentage, value, "%", _position);
         }
 
-        private Token NewDimension(string value, string unit)
+        private Token NewDimension(ReadOnlyMemory<char> value, string unit)
         {
-            return new UnitToken(TokenType.Dimension, value, unit, _position);
+            return Token.NewUnit(TokenType.Dimension, value, unit, _position);
         }
 
-        private Token NewUrl(string functionName, string data, bool bad = false)
+        private Token NewUrl(string functionName, ReadOnlyMemory<char> data, bool bad = false)
         {
-            return new UrlToken(functionName, data, bad, _position);
+            return Token.NewUrl(functionName, data, bad, _position);
         }
 
         private Token NewRange(string range)
         {
-            return new RangeToken(range, _position);
+            return Token.NewRange(range, _position);
         }
 
         private Token NewRange(string start, string end)
         {
-            return new RangeToken(start, end, _position);
+            return Token.NewRange(start, end, _position);
         }
 
         private Token NewWhitespace(char character)
         {
-            return new(TokenType.Whitespace, character.ToString(), _position);
+            return new(TokenType.Whitespace, SingleCharStrings.Of(character).AsMemory(), _position);
         }
 
-        private Token NewNumber(string number)
+        private Token NewNumber(ReadOnlyMemory<char> number)
         {
-            return new NumberToken(number, _position);
+            return Token.NewNumber(number, _position);
         }
 
         private Token NewDelimiter(char c)
         {
-            return new(TokenType.Delim, c.ToString(), _position);
+            return new(TokenType.Delim, SingleCharStrings.Of(c).AsMemory(), _position);
         }
 
-        private Token NewColor(string text)
+        private Token NewColor(ReadOnlyMemory<char> text)
         {
-            return new ColorToken(text, _position);
+            return Token.NewColor(text, _position);
         }
 
         private Token NewEof()
         {
-            return new(TokenType.EndOfFile, string.Empty, _position);
+            return new(TokenType.EndOfFile, ReadOnlyMemory<char>.Empty, _position);
         }
 
-        private Token NewGreaterThan() => new Token(TokenType.GreaterThan, ">", _position);
-        private Token NewGreaterThanOrEqual() => new Token(TokenType.GreaterThanOrEqual, ">=", _position);
-        private Token NewLessThan() => new Token(TokenType.LessThan, "<", _position);
-        private Token NewLessThanOrEqual() => new Token(TokenType.LessThanOrEqual, "<=", _position);
-        private Token NewEqual() => new Token(TokenType.Equal, "=", _position);
+        private Token NewGreaterThan() => new Token(TokenType.GreaterThan, ">".AsMemory(), _position);
+        private Token NewGreaterThanOrEqual() => new Token(TokenType.GreaterThanOrEqual, ">=".AsMemory(), _position);
+        private Token NewLessThan() => new Token(TokenType.LessThan, "<".AsMemory(), _position);
+        private Token NewLessThanOrEqual() => new Token(TokenType.LessThanOrEqual, "<=".AsMemory(), _position);
 
 
         private Token NumberExponential(char letter)
         {
+            // letter ('e'/'E') was already read by the caller, so its own position is one behind live
+            // Source.Index right now - captured up front since the branches below read further ahead
+            // (and sometimes back up again) before deciding where the number ends and the unit begins.
+            var letterPosition = Source.Index - 1;
             var current = GetNext();
             if (current.IsDigit())
             {
-                StringBuffer.Append(letter).Append(current);
+                AppendLiteral(letter);
+                AppendLiteral(current);
                 return SciNotation();
             }
 
@@ -1235,48 +1350,73 @@ namespace PeachPDF.CSS
                 current = GetNext();
                 if (current.IsDigit())
                 {
-                    StringBuffer.Append(letter).Append(op).Append(current);
+                    AppendLiteral(letter);
+                    AppendLiteral(op);
+                    AppendLiteral(current);
                     return SciNotation();
                 }
 
                 Back();
             }
 
-            var number = FlushBuffer();
-            StringBuffer.Append(letter);
+            // Not actually a valid exponent (e.g. "3e" or "3e+" with no following digit) - the number is
+            // just the digits scanned so far, and 'letter' becomes the first character of a dimension's
+            // unit instead (e.g. "3e px" is nonsensical CSS, but "3epx" parses as the dimension "3" + "epx").
+            var number = EndContent();
+            BeginContentAt(letterPosition);
+            AppendLiteralAt(letter, letterPosition);
             Back();
             return Dimension(number);
         }
 
         private Token NumberDash()
         {
+            // The '-' was already read by the caller, so its own position is one behind live Source.Index.
+            var minusPosition = Source.Index - 1;
             var current = GetNext();
             if (current.IsNameStart())
             {
-                var number = FlushBuffer();
-                StringBuffer.Append(Symbols.Minus).Append(current);
+                var number = EndContent();
+                BeginContentAt(minusPosition);
+                AppendLiteral(Symbols.Minus);
+                AppendLiteral(current);
                 return Dimension(number);
             }
 
             if (IsValidEscape(current))
             {
                 current = GetNext();
-                var number = FlushBuffer();
-                StringBuffer.Append(Symbols.Minus).Append(ConsumeEscape(current));
+                var number = EndContent();
+                BeginContentAt(minusPosition);
+                AppendLiteral(Symbols.Minus);
+                AppendEscape(current);
                 return Dimension(number);
             }
 
             Back(2);
-            return NewNumber(FlushBuffer());
+            return NewNumber(EndContent());
         }
 
-        private string ConsumeEscape(char current)
+        // Appends a CSS escape sequence's decoded content directly to StringBuffer, without ever
+        // allocating a scratch string for it - char.ConvertFromUtf32 exists only to hand back a
+        // string, but nearly every real escape resolves to a single BMP codepoint appendable as one
+        // char, and a rare supplementary-plane escape needs only the same manual surrogate-pair math
+        // ConvertFromUtf32 performs internally, computed straight into the buffer.
+        private void AppendEscape(char current)
         {
-            if (!current.IsHex()) return current.ToString();
+            // Escape-decoded content never matches the literal source bytes it came from (that's the
+            // entire point of an escape), so a token whose scan crosses one can never be sliced.
+            _mustMaterialize = true;
 
-            var isHex = true;
-            var escape = new char[6];
+            if (!current.IsHex())
+            {
+                StringBuffer.Append(current);
+                return;
+            }
+
+            Span<char> escape = stackalloc char[6];
             var length = 0;
+            var isHex = true;
             while (isHex && length < escape.Length)
             {
                 escape[length++] = current;
@@ -1285,10 +1425,23 @@ namespace PeachPDF.CSS
             }
 
             if (!current.IsSpaceCharacter()) Back();
-            var code = int.Parse(new string(escape, 0, length), NumberStyles.HexNumber);
-            if (!code.IsInvalid()) return code.ConvertFromUtf32();
-            current = Symbols.Replacement;
-            return current.ToString();
+
+            var code = int.Parse(escape[..length], NumberStyles.HexNumber);
+
+            if (code.IsInvalid())
+            {
+                StringBuffer.Append(Symbols.Replacement);
+                return;
+            }
+
+            if (code <= 0xFFFF)
+            {
+                StringBuffer.Append((char)code);
+                return;
+            }
+
+            code -= 0x10000;
+            StringBuffer.Append((char)((code >> 10) + 0xD800)).Append((char)((code & 0x3FF) + 0xDC00));
         }
 
         private bool IsValidEscape(char current)

@@ -157,21 +157,22 @@ namespace PeachPDF.Html.Core.Handlers
             var raw = box.BookmarkTarget;
             if (string.IsNullOrWhiteSpace(raw)) return null;
 
-            var tokens = CssValueParser.GetCssTokens(raw);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(raw);
+            List<Token> tokens = pooledTokens;
             if (tokens.Count == 0) return null;
 
             return tokens[0] switch
             {
-                KeywordToken { Data: Keywords.Self } => null,
-                UrlToken urlToken => string.IsNullOrEmpty(urlToken.Data) ? null : urlToken.Data,
-                FunctionToken { Data: "attr" } attrToken => ResolveAttrTarget(box, attrToken),
+                { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.Self } => null,
+                { Type: TokenType.Url } urlToken => string.IsNullOrEmpty(urlToken.Data) ? null : urlToken.Data,
+                { Type: TokenType.Function, Data: "attr" } attrToken => ResolveAttrTarget(box, attrToken),
                 _ => null
             };
         }
 
-        private static string? ResolveAttrTarget(CssBox box, FunctionToken attrToken)
+        private static string? ResolveAttrTarget(CssBox box, Token attrToken)
         {
-            if (attrToken.ArgumentTokens.FirstOrDefault() is not KeywordToken nameToken) return null;
+            if (attrToken.ArgumentTokens.FirstOrDefault() is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken) return null;
 
             // Same pseudo-element -> parent redirect CssContentEngine's own attr() handling uses - a
             // pseudo-element's own attributes don't exist, so it must read the real source element's.

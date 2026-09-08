@@ -1,5 +1,6 @@
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -17,7 +18,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class ContainerShorthandConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var front = new List<Token>();
             var back = new List<Token>();
@@ -60,7 +61,7 @@ namespace PeachPDF.CSS
             if (name == null || type == null) return null;
 
             var original = new TokenValue(nameValue.Original
-                .Concat([new Token(TokenType.Delim, "/", TextPosition.Empty)])
+                .Concat([new Token(TokenType.Delim, "/".AsMemory(), TextPosition.Empty)])
                 .Concat(typeValue.Original));
 
             return new ContainerShorthandValue(name, type, original);

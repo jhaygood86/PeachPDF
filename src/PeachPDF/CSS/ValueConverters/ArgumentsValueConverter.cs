@@ -14,7 +14,7 @@ namespace PeachPDF.CSS
             _converters = converters;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var items = value.ToList();
             var length = _converters.Length;
@@ -25,7 +25,7 @@ namespace PeachPDF.CSS
 
             for (var i = 0; i < length; i++)
             {
-                var item = i < items.Count ? items[i] : Enumerable.Empty<Token>();
+                var item = i < items.Count ? items[i] : (IReadOnlyList<Token>)System.Array.Empty<Token>();
                 args[i] = _converters[i].Convert(item);
 
                 if (args[i] == null) return null;

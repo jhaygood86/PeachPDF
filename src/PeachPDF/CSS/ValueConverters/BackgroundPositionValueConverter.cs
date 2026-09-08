@@ -12,7 +12,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class BackgroundPositionValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.Where(t => t.Type != TokenType.Whitespace).ToArray();
             var parsed = BackgroundPositionGrammar.TryParse(tokens);
@@ -43,10 +43,10 @@ namespace PeachPDF.CSS
             private static string ComponentText(BackgroundPositionGrammar.Component c)
             {
                 if (c.Keyword == BackgroundPositionGrammar.AxisKeyword.None)
-                    return LengthText(c.Offset);
+                    return LengthText(c.Offset!.Value);
 
                 var keyword = KeywordText(c.Keyword);
-                return c.Offset != null ? keyword + " " + LengthText(c.Offset) : keyword;
+                return c.Offset != null ? keyword + " " + LengthText(c.Offset.Value) : keyword;
             }
 
             private static string KeywordText(BackgroundPositionGrammar.AxisKeyword keyword) => keyword switch

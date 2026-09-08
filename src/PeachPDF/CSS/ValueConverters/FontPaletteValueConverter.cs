@@ -19,7 +19,7 @@ namespace PeachPDF.CSS
         // StylesheetParser round trip - see CLAUDE.md's "one parser" rule.
         internal static readonly IValueConverter Instance = new FontPaletteValueConverter();
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.Where(t => t.Type != TokenType.Whitespace).ToArray();
 

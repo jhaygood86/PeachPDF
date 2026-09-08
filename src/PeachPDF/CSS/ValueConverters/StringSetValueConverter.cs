@@ -24,12 +24,12 @@ namespace PeachPDF.CSS
                 .Or(Converters.AttrConverter);
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var first = value.OnlyOrDefault();
 
             // Check for "none" keyword
-            if (first is KeywordToken keyword && keyword.Data.Isi(Keywords.None))
+            if (first is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keyword && keyword.Data.Isi(Keywords.None))
             {
                 return new StringSetValue(null, value);
             }
@@ -59,13 +59,13 @@ namespace PeachPDF.CSS
                 return null;
 
             // First token should be an identifier (the name)
-            if (tokens[0] is not KeywordToken nameToken || nameToken.Type != TokenType.Ident)
+            if (tokens[0] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken || nameToken.Type != TokenType.Ident)
                 return null;
 
             var name = nameToken.Data;
 
             // Remaining tokens form the content-list - split by whitespace
-            var contentItems = tokens.Skip(1).ToItems();
+            var contentItems = tokens.GetRange(1, tokens.Count - 1).ToItems();
             var values = new List<IPropertyValue>();
 
             foreach (var item in contentItems)

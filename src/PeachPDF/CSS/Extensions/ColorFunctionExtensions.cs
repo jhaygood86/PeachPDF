@@ -11,8 +11,8 @@ namespace PeachPDF.CSS
     /// Resolves the CSS color <em>function</em> forms from a tokenized value into a concrete
     /// <see cref="Color"/>: the legacy/CSS Color 4 <c>rgb()/rgba()/hsl()/hsla()/hwb()/gray()</c> and the
     /// CSS Color 4/5 <c>lab()/oklab()/lch()/oklch()/color-mix()</c>. Tokenization is the CSS-OM's job, so
-    /// this consumes the already-parsed <see cref="FunctionToken"/> stream (nested functions arrive as a
-    /// single token) rather than re-scanning the source text.
+    /// this consumes the already-parsed, Function-typed <see cref="Token"/> stream (nested functions
+    /// arrive as a single token) rather than re-scanning the source text.
     /// </summary>
     internal static class ColorFunctionExtensions
     {
@@ -23,7 +23,7 @@ namespace PeachPDF.CSS
         /// cascade uses and which deliberately preserves a function's specified form for serialization),
         /// this is the render-layer resolver: it always computes the sRGB value.
         /// </summary>
-        public static Color? ToResolvedColor(this IEnumerable<Token> value)
+        public static Color? ToResolvedColor(this IReadOnlyList<Token> value)
         {
             var basic = value.ToColor();
             if (basic.HasValue) return basic;
@@ -31,13 +31,13 @@ namespace PeachPDF.CSS
             var element = value.OnlyOrDefault();
 
             // A hex color nested inside a function (e.g. a color-mix() operand) tokenizes as a Hash
-            // keyword token rather than a ColorToken, so ToColor misses it - resolve it here.
+            // token rather than a Color-typed one, so ToColor misses it - resolve it here.
             if (element is { Type: TokenType.Hash } hash) return Color.FromHex(hash.Data);
 
-            return element is FunctionToken function ? ParseColorFunction(function) : null;
+            return element is { Type: TokenType.Function } function ? ParseColorFunction(function) : null;
         }
 
-        public static Color? ParseColorFunction(FunctionToken function)
+        public static Color? ParseColorFunction(Token function)
         {
             var name = function.Data;
             var args = function.ArgumentTokens;
@@ -79,7 +79,7 @@ namespace PeachPDF.CSS
             var g = AsTokens(comps[1]).ToRgbComponent();
             var b = AsTokens(comps[2]).ToRgbComponent();
             if (r is null || g is null || b is null) return null;
-            var a = alphaTok is null ? 1f : AsTokens(alphaTok).ToAlphaValue() ?? 1f;
+            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
             return new Color(r.Value, g.Value, b.Value, Clamp01Byte(a));
         }
 
@@ -91,7 +91,7 @@ namespace PeachPDF.CSS
             var sat = AsTokens(comps[1]).ToPercent();
             var light = AsTokens(comps[2]).ToPercent();
             if (hue is null || sat is null || light is null) return null;
-            var a = alphaTok is null ? 1f : AsTokens(alphaTok).ToAlphaValue() ?? 1f;
+            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
             return Color.FromHsla((float)(hue.Value / 360.0), sat.Value.NormalizedValue, light.Value.NormalizedValue, a);
         }
 
@@ -103,7 +103,7 @@ namespace PeachPDF.CSS
             var white = AsTokens(comps[1]).ToPercent();
             var black = AsTokens(comps[2]).ToPercent();
             if (hue is null || white is null || black is null) return null;
-            var a = alphaTok is null ? 1f : AsTokens(alphaTok).ToAlphaValue() ?? 1f;
+            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
             return Color.FromHwba((float)(hue.Value / 360.0), white.Value.NormalizedValue, black.Value.NormalizedValue, a);
         }
 
@@ -113,7 +113,7 @@ namespace PeachPDF.CSS
             if (!Extract(args, 1, out var comps, out var alphaTok)) return null;
             var value = AsTokens(comps[0]).ToRgbComponent();
             if (value is null) return null;
-            var a = alphaTok is null ? 1f : AsTokens(alphaTok).ToAlphaValue() ?? 1f;
+            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
             return Color.FromGray(value.Value, a);
         }
 
@@ -125,7 +125,7 @@ namespace PeachPDF.CSS
             var a = Component(comps[1], abReference);
             var b = Component(comps[2], abReference);
             if (l is null || a is null || b is null) return null;
-            var alpha = alphaTok is null ? 1f : AsTokens(alphaTok).ToAlphaValue() ?? 1f;
+            var alpha = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
             return build(l.Value, a.Value, b.Value, alpha);
         }
 
@@ -137,7 +137,7 @@ namespace PeachPDF.CSS
             var c = Component(comps[1], chromaReference);
             var h = HueDegrees(comps[2]);
             if (l is null || c is null || h is null) return null;
-            var alpha = alphaTok is null ? 1f : AsTokens(alphaTok).ToAlphaValue() ?? 1f;
+            var alpha = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
             return build(l.Value, c.Value, h.Value, alpha);
         }
 
@@ -208,7 +208,7 @@ namespace PeachPDF.CSS
         // Partitions a function's argument tokens into `count` component tokens and an optional alpha
         // token. Whitespace and commas separate; a "/" delimiter (CSS Color 4) marks the alpha that
         // follows. Without a slash, a trailing extra value (legacy rgba/hsla comma alpha) is the alpha.
-        private static bool Extract(IEnumerable<Token> args, int count, out List<Token> components, out Token alpha)
+        private static bool Extract(IEnumerable<Token> args, int count, out List<Token> components, out Token? alpha)
         {
             components = [];
             alpha = null;

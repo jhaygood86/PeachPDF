@@ -16,7 +16,7 @@ namespace PeachPDF.Tests.CSS
     {
         private static double? EvaluateAngle(string calc)
         {
-            var function = CssValueParser.GetCssTokens(calc).OfType<FunctionToken>().Single();
+            var function = CssValueParser.GetCssTokens(calc).Single(t => t.Type == TokenType.Function);
             var node = CalcParser.Parse(function);
             Assert.NotNull(node);
             // A full turn is 2π radians; em/rem factors are irrelevant to an angle calc.
@@ -49,7 +49,7 @@ namespace PeachPDF.Tests.CSS
 
         private static double? Evaluate(string calc)
         {
-            var function = CssValueParser.GetCssTokens(calc).OfType<FunctionToken>().Single();
+            var function = CssValueParser.GetCssTokens(calc).Single(t => t.Type == TokenType.Function);
             var node = CalcParser.Parse(function);
             Assert.NotNull(node);
             return CalcEvaluator.Evaluate(node!, new CalcContext(0, 0, 0));
@@ -74,7 +74,7 @@ namespace PeachPDF.Tests.CSS
 
         private static string Serialize(string calc, CalcCategory category)
         {
-            var function = CssValueParser.GetCssTokens(calc).OfType<FunctionToken>().Single();
+            var function = CssValueParser.GetCssTokens(calc).Single(t => t.Type == TokenType.Function);
             var node = CalcParser.Parse(function);
             Assert.NotNull(node);
             return CalcSerializer.Serialize(node!, category);

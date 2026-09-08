@@ -15,6 +15,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -119,8 +120,9 @@ namespace PeachPDF.Html.Core.Dom
             // cost for every ordinary keyword value.
             if (listStyleType.Length > 0 && (listStyleType[0] == '"' || listStyleType[0] == '\''))
             {
-                var tokens = CssValueParser.GetCssTokens(listStyleType);
-                if (tokens.Count == 1 && tokens[0] is StringToken literalMarker)
+                using var pooledTokens = CssValueParser.GetCssTokensPooled(listStyleType);
+                List<Token> tokens = pooledTokens;
+                if (tokens.Count == 1 && tokens[0] is { Type: TokenType.String } literalMarker)
                 {
                     Text = literalMarker.Data;
                     return;

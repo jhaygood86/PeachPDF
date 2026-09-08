@@ -1,24 +1,10 @@
 namespace PeachPDF.Tests.CSS
 {
-    using System.Text;
     using PeachPDF.CSS;
     using Xunit;
 
     public class TextSourceTests
     {
-        [Fact]
-        public void CurrentEncoding_SetterIsANoOpForAStringSource()
-        {
-            // A string source is already fully decoded text - it must never be re-sniffed/re-decoded,
-            // unlike a stream source mid-BOM-detection (see TextSource.cs's CurrentEncoding setter).
-            var source = new TextSource("hello");
-
-            source.CurrentEncoding = Encoding.UTF32;
-
-            Assert.Equal("hello", source.Text);
-            Assert.NotEqual(Encoding.UTF32, source.CurrentEncoding);
-        }
-
         [Fact]
         public void Text_ReturnsTheOriginalString()
         {
@@ -109,30 +95,27 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
-        public void Dispose_DoesNotThrow_AndIsIdempotent()
+        public void MemoryConstructor_BehavesIdenticallyToStringConstructor()
         {
-            var source = new TextSource("abc");
+            // TextSource(ReadOnlyMemory<char>) is what CssStreamLoader's decoded output flows through -
+            // must behave exactly like the string constructor for every basic operation.
+            var source = new TextSource("hello world".AsMemory());
 
-            source.Dispose();
-            source.Dispose();
+            Assert.Equal("hello world", source.Text);
+            Assert.Equal(11, source.Length);
+            Assert.Equal('h', source[0]);
+            Assert.Equal('h', source.ReadCharacter());
+            Assert.Equal("ello", source.ReadCharacters(4));
         }
 
         [Fact]
-        public void Dispose_LeavesAStringBackedSourceFullyUsable()
+        public void Slice_ReturnsTheRequestedRangeOfTheSourceMemory()
         {
-            // Deliberate: a string source owns no pooled/disposable state (see TextSource.cs), so
-            // Dispose() is a no-op for it - CssValueParser.GetCssTokens and StylesheetParser.
-            // CreateTokenizer's callers rely on this to safely `using` a Lexer around one even though
-            // some of the values it produces (StylesheetComposer.CreateView) keep a reference to this
-            // same TextSource for a lazy .Text read afterward.
-            var source = new TextSource("abc");
+            var source = new TextSource("hello world");
 
-            source.Dispose();
+            var slice = source.Slice(6, 5);
 
-            Assert.Equal("abc", source.Text);
-            Assert.Equal('a', source[0]);
-            Assert.Equal(3, source.Length);
-            Assert.Equal('a', source.ReadCharacter());
+            Assert.Equal("world", slice.ToString());
         }
 
         // Regression for a bug caught while writing the string-backed fast path: a lone trailing '\r'

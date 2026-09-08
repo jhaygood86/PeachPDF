@@ -53,6 +53,20 @@ namespace PeachPDF.CSS
                 : TokenType.Function;
         }
 
+        // Span overload for Lexer's function-vs-url dispatch: avoids forcing the function/url name into
+        // an owned string just to classify it, when the name may otherwise stay a zero-allocation slice
+        // of the source buffer (a Function token's Data). FunctionTypes has exactly 3 entries, so a
+        // direct comparison against each is cheaper and simpler than round-tripping through a
+        // span-keyed dictionary lookup.
+        public static TokenType GetTypeFromName(this ReadOnlySpan<char> functionName)
+        {
+            return functionName.Equals(FunctionNames.Url, StringComparison.OrdinalIgnoreCase) ||
+                   functionName.Equals(FunctionNames.Domain, StringComparison.OrdinalIgnoreCase) ||
+                   functionName.Equals(FunctionNames.UrlPrefix, StringComparison.OrdinalIgnoreCase)
+                ? TokenType.Url
+                : TokenType.Function;
+        }
+
         public static Func<IEnumerable<IConditionFunction>, IConditionFunction> GetCreator(this string conjunction)
         {
             GroupCreators.TryGetValue(conjunction, out var creator);
@@ -104,13 +118,13 @@ namespace PeachPDF.CSS
             {
                 case TokenType.Url:
                     {
-                        var functionName = ((UrlToken)token).FunctionName;
+                        var functionName = token.FunctionName;
                         FunctionTypes.TryGetValue(functionName, out var creator);
                         return creator(token.Data);
                     }
                 case TokenType.Function when token.Data.Isi(FunctionNames.Regexp):
                     {
-                        var css = ((FunctionToken)token).ArgumentTokens.ToCssString();
+                        var css = token.ArgumentTokens.ToCssString();
                         if (css != null)
                         {
                             return new RegexpFunction(css);

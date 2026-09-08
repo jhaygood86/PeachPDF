@@ -502,7 +502,8 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (string.IsNullOrEmpty(value)) return value;
 
-            var tokens = CssValueParser.GetCssTokens(value);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
             if (!TextIndentGrammar.TryParse(tokens, out var length, out var hasHanging, out var hasEachLine))
                 return value; // a global keyword (initial/inherit/...) or an already-invalid value - left untouched, as NoEms does
 
@@ -537,17 +538,26 @@ namespace PeachPDF.Html.Core.Dom
         internal string ResolveFontSizeValueComputation(string value)
         {
             var trimmed = value.Trim();
-            if (!CssValueParser.IsCalcFunction(value) && ParentBox is { } parent &&
-                (CssValueParser.GetCssTokens(value) is [UnitToken unitToken] &&
-                    Length.GetUnit(unitToken.Unit) is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Ch or Length.Unit.Percent
-                 || trimmed.Equals(Keywords.Smaller, StringComparison.OrdinalIgnoreCase)
-                 || trimmed.Equals(Keywords.Larger, StringComparison.OrdinalIgnoreCase)))
+            if (!CssValueParser.IsCalcFunction(value) && ParentBox is { } parent)
             {
-                var pixelsPerPoint = (HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
-                var parentSizePt = parent.ActualFont.Size * pixelsPerPoint;
+                bool matches;
+                using (var pooledTokens = CssValueParser.GetCssTokensPooled(value))
+                {
+                    List<Token> tokens = pooledTokens;
+                    matches = (tokens is [{ Type: TokenType.Dimension or TokenType.Percentage } unitToken] &&
+                        Length.GetUnit(unitToken.Unit) is Length.Unit.Em or Length.Unit.Ex or Length.Unit.Ch or Length.Unit.Percent
+                     || trimmed.Equals(Keywords.Smaller, StringComparison.OrdinalIgnoreCase)
+                     || trimmed.Equals(Keywords.Larger, StringComparison.OrdinalIgnoreCase));
+                }
 
-                var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt);
-                return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
+                if (matches)
+                {
+                    var pixelsPerPoint = (HtmlContainer?.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
+                    var parentSizePt = parent.ActualFont.Size * pixelsPerPoint;
+
+                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt);
+                    return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
+                }
             }
 
             return value;

@@ -11,17 +11,17 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class StringFunctionConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var first = value.OnlyOrDefault();
 
-            if (first is not FunctionToken funcToken || !funcToken.Data.Equals("string", System.StringComparison.OrdinalIgnoreCase))
+            if (first is not { Type: TokenType.Function } funcToken || !funcToken.Data.Equals("string", System.StringComparison.OrdinalIgnoreCase))
                 return null;
 
             // First argument must be the string name (identifier)
             var argToken = funcToken.ArgumentTokens.FirstOrDefault();
 
-            if (argToken is not KeywordToken nameToken)
+            if (argToken is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken)
                 return null;
 
             var name = nameToken.Data;
@@ -36,7 +36,7 @@ namespace PeachPDF.CSS
 
             if (args.Length > 1)
             {
-                if (args[1] is KeywordToken keywordToken)
+                if (args[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                 {
                     var kw = keywordToken.Data.ToLowerInvariant();
                     if (!GcpmSelectionKeywords.Values.Contains(kw))

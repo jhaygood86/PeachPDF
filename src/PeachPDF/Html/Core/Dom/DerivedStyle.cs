@@ -768,7 +768,8 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (!double.IsNaN(_actualTextIndent)) return;
 
-            var tokens = CssValueParser.GetCssTokens(Style.Text.TextIndent);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(Style.Text.TextIndent);
+            List<Token> tokens = pooledTokens;
             if (TextIndentGrammar.TryParse(tokens, out var length, out var hasHanging, out var hasEachLine))
             {
                 _actualTextIndent = CssValueParser.ParseLength(length.Text, Owner.Size.Width, Owner);

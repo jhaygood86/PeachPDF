@@ -16,11 +16,11 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class LeaderFunctionConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var first = value.OnlyOrDefault();
 
-            if (first is not FunctionToken funcToken ||
+            if (first is not { Type: TokenType.Function } funcToken ||
                 !funcToken.Data.Equals(FunctionNames.Leader, System.StringComparison.OrdinalIgnoreCase))
                 return null;
 
@@ -33,12 +33,12 @@ namespace PeachPDF.CSS
 
             switch (args[0])
             {
-                case KeywordToken keywordToken:
+                case { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken:
                     var kw = keywordToken.Data.ToLowerInvariant();
                     return kw is Keywords.Dotted or Keywords.Solid or Keywords.Space
                         ? new LeaderFunctionValue(kw, null, value)
                         : null;
-                case StringToken stringToken:
+                case { Type: TokenType.String } stringToken:
                     return new LeaderFunctionValue(null, stringToken.Data, value);
                 default:
                     return null;

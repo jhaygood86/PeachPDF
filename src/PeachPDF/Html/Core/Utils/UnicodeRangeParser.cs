@@ -13,9 +13,9 @@ namespace PeachPDF.Html.Core.Utils
     /// Parses a CSS <c>@font-face</c> <c>unicode-range</c> descriptor (or an equivalent
     /// programmatically-supplied list) into a compact set of inclusive codepoint <see cref="Range"/>s,
     /// reusing the existing CSS tokenizer's <c>U+</c> grammar (<see cref="CssValueParser.GetCssTokens"/>
-    /// → <see cref="RangeToken"/>) rather than re-implementing it - the same shared-grammar convention as
-    /// <c>CalcParser</c>. Only the hex <see cref="RangeToken.Start"/>/<see cref="RangeToken.End"/> bounds
-    /// are read (never the token's materialized per-codepoint list), so a wide range costs nothing.
+    /// → a Range-typed <see cref="Token"/>) rather than re-implementing it - the same shared-grammar
+    /// convention as <c>CalcParser</c>. Only the hex <see cref="Token.RangeStart"/>/<see cref="Token.RangeEnd"/>
+    /// bounds are read (never the token's materialized per-codepoint list), so a wide range costs nothing.
     /// </summary>
     internal static class UnicodeRangeParser
     {
@@ -48,13 +48,18 @@ namespace PeachPDF.Html.Core.Utils
                 if (!normalized.StartsWith("U+", StringComparison.OrdinalIgnoreCase))
                     normalized = "U+" + normalized;
 
-                var rangeToken = CssValueParser.GetCssTokens(normalized).OfType<RangeToken>().FirstOrDefault();
+                Token? rangeToken;
+                using (var pooledTokens = CssValueParser.GetCssTokensPooled(normalized))
+                {
+                    List<Token> tokens = pooledTokens;
+                    rangeToken = tokens.FirstOfTypeOrNull(TokenType.Range);
+                }
 
-                if (rangeToken is null)
+                if (rangeToken is not { } range)
                     continue;
 
-                if (!int.TryParse(rangeToken.Start, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var start) ||
-                    !int.TryParse(rangeToken.End, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var end))
+                if (!int.TryParse(range.RangeStart, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var start) ||
+                    !int.TryParse(range.RangeEnd, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var end))
                     continue;
 
                 if (start > Symbols.MaximumCodepoint)

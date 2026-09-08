@@ -29,14 +29,15 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            var tokens = CssValueParser.GetCssTokens(cssBox.Content);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(cssBox.Content);
+            List<Token> tokens = pooledTokens;
 
             // Detect image content (url() or gradient functions) before building text
             if (tokens.Count > 0 && cssBox.HtmlContainer?.Adapter is RAdapter adapter)
             {
                 var first = tokens[0];
-                if (first is UrlToken ||
-                    (first is FunctionToken ft && IsGradientFunctionName(ft.Data)))
+                if (first.Type == TokenType.Url ||
+                    (first is { Type: TokenType.Function } ft && IsGradientFunctionName(ft.Data)))
                 {
                     var image = new CssValueParser(adapter).ParseImage(cssBox.Content);
                     if (image != null)
@@ -67,7 +68,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var token in tokens)
             {
-                if (token is FunctionToken { Data: FunctionNames.Leader }) return true;
+                if (token is { Type: TokenType.Function, Data: FunctionNames.Leader }) return true;
             }
 
             return false;
@@ -96,7 +97,7 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var token in tokens)
             {
-                if (token is FunctionToken { Data: FunctionNames.Leader } leaderToken)
+                if (token is { Type: TokenType.Function, Data: FunctionNames.Leader } leaderToken)
                 {
                     FlushText();
                     var (kind, pattern) = ResolveLeaderToken(leaderToken);
@@ -117,7 +118,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="LeaderKind.Dotted"/>) as well as for any other malformed value, which degrades the
         /// same way rather than throwing.
         /// </summary>
-        private static (LeaderKind Kind, string? Pattern) ResolveLeaderToken(FunctionToken leaderToken)
+        private static (LeaderKind Kind, string? Pattern) ResolveLeaderToken(Token leaderToken)
         {
             var args = leaderToken.ArgumentTokens
                 .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
@@ -127,11 +128,11 @@ namespace PeachPDF.Html.Core.Dom
             {
                 switch (args[0])
                 {
-                    case KeywordToken { Data: Keywords.Solid }:
+                    case { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.Solid }:
                         return (LeaderKind.Solid, null);
-                    case KeywordToken { Data: Keywords.Space }:
+                    case { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.Space }:
                         return (LeaderKind.Space, null);
-                    case StringToken stringToken:
+                    case { Type: TokenType.String } stringToken:
                         return (LeaderKind.Custom, stringToken.Data);
                 }
             }
@@ -156,21 +157,21 @@ namespace PeachPDF.Html.Core.Dom
             {
                 switch (token)
                 {
-                    case StringToken stringToken:
+                    case { Type: TokenType.String } stringToken:
                         contentText.Append(stringToken.Data);
                         break;
-                    case KeywordToken { Data: Keywords.OpenQuote or Keywords.NoOpenQuote or Keywords.CloseQuote or Keywords.NoCloseQuote } quoteToken:
+                    case { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.OpenQuote or Keywords.NoOpenQuote or Keywords.CloseQuote or Keywords.NoCloseQuote } quoteToken:
                         {
                             quotePairs ??= GetQuotePairs(cssBox);
                             AppendQuote(contentText, quotePairs, quoteToken.Data, ref quoteDepth);
                             break;
                         }
-                    case FunctionToken { Data: FunctionNames.Counter } functionToken:
+                    case { Type: TokenType.Function, Data: FunctionNames.Counter } functionToken:
                         {
                             AppendCounter(contentText, cssBox, functionToken);
                             break;
                         }
-                    case FunctionToken { Data: "content" } contentFunctionToken:
+                    case { Type: TokenType.Function, Data: "content" } contentFunctionToken:
                         {
                             var contentValue = ExtractContentValue(cssBox, contentFunctionToken);
                             if (!string.IsNullOrEmpty(contentValue))
@@ -179,7 +180,7 @@ namespace PeachPDF.Html.Core.Dom
                             }
                             break;
                         }
-                    case FunctionToken { Data: "string" } stringFunctionToken:
+                    case { Type: TokenType.Function, Data: "string" } stringFunctionToken:
                         {
                             var stringValue = ExtractStringValue(cssBox, stringFunctionToken);
                             if (!string.IsNullOrEmpty(stringValue))
@@ -188,13 +189,13 @@ namespace PeachPDF.Html.Core.Dom
                             }
                             break;
                         }
-                    case FunctionToken { Data: "attr" } attrFunctionToken:
+                    case { Type: TokenType.Function, Data: "attr" } attrFunctionToken:
                         {
                             // Handle attr() function
                             if (attrFunctionToken.ArgumentTokens.Any())
                             {
                                 var attrNameToken = attrFunctionToken.ArgumentTokens.FirstOrDefault();
-                                if (attrNameToken is KeywordToken keywordToken)
+                                if (attrNameToken is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                                 {
                                     var attrName = keywordToken.Data;
                                     // Get attribute from parent element if this is a pseudo-element
@@ -210,12 +211,12 @@ namespace PeachPDF.Html.Core.Dom
                             }
                             break;
                         }
-                    case FunctionToken { Data: FunctionNames.TargetCounter } targetCounterToken:
+                    case { Type: TokenType.Function, Data: FunctionNames.TargetCounter } targetCounterToken:
                         {
                             AppendTargetCounter(contentText, cssBox, targetCounterToken);
                             break;
                         }
-                    case FunctionToken { Data: FunctionNames.TargetText } targetTextToken:
+                    case { Type: TokenType.Function, Data: FunctionNames.TargetText } targetTextToken:
                         {
                             var targetTextValue = ResolveTargetText(cssBox, targetTextToken);
                             if (!string.IsNullOrEmpty(targetTextValue))
@@ -241,13 +242,13 @@ namespace PeachPDF.Html.Core.Dom
         /// placeholder emitted before a page map exists. Any other counter name resolves immediately via
         /// <see cref="CssCounterEngine.GetCounter"/>, with no pagination dependency.
         /// </summary>
-        private static void AppendTargetCounter(StringBuilder sb, CssBox cssBox, FunctionToken functionToken)
+        private static void AppendTargetCounter(StringBuilder sb, CssBox cssBox, Token functionToken)
         {
             var arguments = functionToken.ArgumentTokens
                 .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
                 .ToArray();
 
-            if (arguments.Length < 2 || arguments[1] is not KeywordToken counterNameToken)
+            if (arguments.Length < 2 || arguments[1] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } counterNameToken)
             {
                 return;
             }
@@ -262,7 +263,7 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            var style = arguments.Length > 2 && arguments[2] is KeywordToken styleToken
+            var style = arguments.Length > 2 && arguments[2] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken
                 ? styleToken.Data
                 : Keywords.Decimal;
 
@@ -305,7 +306,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>content</c> property and <c>bookmark-label</c>) - just against the resolved
         /// <paramref name="functionToken"/> target box instead of <paramref name="cssBox"/> itself.
         /// </summary>
-        private static string? ResolveTargetText(CssBox cssBox, FunctionToken functionToken)
+        private static string? ResolveTargetText(CssBox cssBox, Token functionToken)
         {
             var arguments = functionToken.ArgumentTokens
                 .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
@@ -322,7 +323,7 @@ namespace PeachPDF.Html.Core.Dom
                 return null;
             }
 
-            var mode = arguments.Length > 1 && arguments[1] is KeywordToken modeToken
+            var mode = arguments.Length > 1 && arguments[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } modeToken
                 ? modeToken.Data.ToLowerInvariant()
                 : "content";
 
@@ -356,9 +357,9 @@ namespace PeachPDF.Html.Core.Dom
 
             var id = targetToken switch
             {
-                StringToken stringToken => stringToken.Data,
-                UrlToken urlToken => string.IsNullOrEmpty(urlToken.Data) ? null : urlToken.Data,
-                FunctionToken { Data: "attr" } attrToken => ResolveTargetAttr(cssBox, attrToken),
+                { Type: TokenType.String } stringToken => stringToken.Data,
+                { Type: TokenType.Url } urlToken => string.IsNullOrEmpty(urlToken.Data) ? null : urlToken.Data,
+                { Type: TokenType.Function, Data: "attr" } attrToken => ResolveTargetAttr(cssBox, attrToken),
                 _ => null
             };
 
@@ -375,9 +376,9 @@ namespace PeachPDF.Html.Core.Dom
             return string.IsNullOrEmpty(id) ? null : container.GetBoxById(cssBox, id);
         }
 
-        private static string? ResolveTargetAttr(CssBox cssBox, FunctionToken attrToken)
+        private static string? ResolveTargetAttr(CssBox cssBox, Token attrToken)
         {
-            if (attrToken.ArgumentTokens.FirstOrDefault() is not KeywordToken nameToken)
+            if (attrToken.ArgumentTokens.FirstOrDefault() is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken)
             {
                 return null;
             }
@@ -396,7 +397,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public static string ResolveBookmarkLabel(CssBox cssBox)
         {
-            var tokens = CssValueParser.GetCssTokens(cssBox.BookmarkLabel);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(cssBox.BookmarkLabel);
+            List<Token> tokens = pooledTokens;
             var quoteDepth = GetQuoteDepthAtStart(cssBox);
             return ResolveContentTokens(cssBox, tokens, ref quoteDepth);
         }
@@ -420,18 +422,18 @@ namespace PeachPDF.Html.Core.Dom
         /// falls back to <c>decimal</c> per CSS Counter Styles Level 3 §2 (both handled by
         /// <see cref="CssCounterEngine.FormatCounterValue"/>).
         /// </summary>
-        private static void AppendCounter(StringBuilder sb, CssBox counterBox, FunctionToken functionToken)
+        private static void AppendCounter(StringBuilder sb, CssBox counterBox, Token functionToken)
         {
             var arguments = functionToken.ArgumentTokens
                 .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
                 .ToArray();
 
-            if (arguments.Length == 0 || arguments[0] is not KeywordToken counterName)
+            if (arguments.Length == 0 || arguments[0] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } counterName)
             {
                 return;
             }
 
-            var style = arguments.Length > 1 && arguments[1] is KeywordToken styleToken
+            var style = arguments.Length > 1 && arguments[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken
                 ? styleToken.Data
                 : Keywords.Decimal;
 
@@ -578,7 +580,9 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (box.Content is not (Keywords.None or Keywords.Normal))
                 {
-                    aggregate = CombineQuoteAggregate(aggregate, ComputeContentListQuoteAggregate(CssValueParser.GetCssTokens(box.Content)));
+                    using var pooledTokens = CssValueParser.GetCssTokensPooled(box.Content);
+                    List<Token> tokens = pooledTokens;
+                    aggregate = CombineQuoteAggregate(aggregate, ComputeContentListQuoteAggregate(tokens));
                 }
 
                 foreach (var child in box.Boxes)
@@ -608,7 +612,7 @@ namespace PeachPDF.Html.Core.Dom
             var min = 0;
             foreach (var token in tokens)
             {
-                if (token is not KeywordToken keywordToken) continue;
+                if (token is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken) continue;
 
                 switch (keywordToken.Data)
                 {
@@ -640,7 +644,9 @@ namespace PeachPDF.Html.Core.Dom
             var depth = startDepth;
             if (box.Content is not (Keywords.None or Keywords.Normal))
             {
-                ApplyContentListQuoteDepth(CssValueParser.GetCssTokens(box.Content), ref depth);
+                using var pooledTokens = CssValueParser.GetCssTokensPooled(box.Content);
+                List<Token> tokens = pooledTokens;
+                ApplyContentListQuoteDepth(tokens, ref depth);
             }
 
             foreach (var child in box.Boxes)
@@ -658,7 +664,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var token in tokens)
             {
-                if (token is not KeywordToken keywordToken) continue;
+                if (token is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken) continue;
 
                 switch (keywordToken.Data)
                 {
@@ -735,14 +741,15 @@ namespace PeachPDF.Html.Core.Dom
             var raw = cssBox.Quotes;
             if (string.IsNullOrWhiteSpace(raw)) return DefaultQuotePairs;
 
-            var tokens = CssValueParser.GetCssTokens(raw);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(raw);
+            List<Token> tokens = pooledTokens;
 
-            if (tokens is [KeywordToken { Data: Keywords.None }])
+            if (tokens is [{ Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.None }])
             {
                 return [];
             }
 
-            if (tokens.Count == 0 || tokens.Count % 2 != 0 || tokens.Any(t => t is not StringToken))
+            if (tokens.Count == 0 || tokens.Count % 2 != 0 || tokens.Any(t => t.Type != TokenType.String))
             {
                 return DefaultQuotePairs;
             }
@@ -750,12 +757,12 @@ namespace PeachPDF.Html.Core.Dom
             var pairs = new (string, string)[tokens.Count / 2];
             for (var i = 0; i < pairs.Length; i++)
             {
-                pairs[i] = (((StringToken)tokens[i * 2]).Data, ((StringToken)tokens[i * 2 + 1]).Data);
+                pairs[i] = (tokens[i * 2].Data, tokens[i * 2 + 1].Data);
             }
             return pairs;
         }
 
-        private static string? ExtractStringValue(CssBox cssBox, FunctionToken stringFunctionToken)
+        private static string? ExtractStringValue(CssBox cssBox, Token stringFunctionToken)
         {
             var arguments = stringFunctionToken.ArgumentTokens
    .Where(t => t.Type != TokenType.Comma && t.Type != TokenType.Whitespace)
@@ -767,7 +774,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // First argument is the named string identifier
-            if (arguments[0] is not KeywordToken nameToken)
+            if (arguments[0] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken)
             {
                 return null;
             }
@@ -777,7 +784,7 @@ namespace PeachPDF.Html.Core.Dom
             // Second argument is the optional keyword (first, start, last, first-except)
             // Default is "first"
             var keyword = "first";
-            if (arguments.Length > 1 && arguments[1] is KeywordToken keywordToken)
+            if (arguments.Length > 1 && arguments[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
             {
                 keyword = keywordToken.Data.ToLowerInvariant();
             }
@@ -842,7 +849,7 @@ namespace PeachPDF.Html.Core.Dom
             };
         }
 
-        private static string? ExtractContentValue(CssBox cssBox, FunctionToken contentFunctionToken)
+        private static string? ExtractContentValue(CssBox cssBox, Token contentFunctionToken)
         {
             // Default mode is "text" if no argument provided
             var mode = "text";
@@ -850,7 +857,7 @@ namespace PeachPDF.Html.Core.Dom
             if (contentFunctionToken.ArgumentTokens.Any())
             {
                 var argToken = contentFunctionToken.ArgumentTokens.FirstOrDefault();
-                if (argToken is KeywordToken keywordToken)
+                if (argToken is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                 {
                     mode = keywordToken.Data.ToLowerInvariant();
                 }
@@ -900,7 +907,8 @@ namespace PeachPDF.Html.Core.Dom
                 return null;
             }
 
-            var tokens = CssValueParser.GetCssTokens(pseudoElement.Content);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(pseudoElement.Content);
+            List<Token> tokens = pooledTokens;
             var contentText = new StringBuilder();
             var quoteDepth = GetQuoteDepthAtStart(pseudoElement);
             IReadOnlyList<(string Open, string Close)>? quotePairs = null;
@@ -909,26 +917,26 @@ namespace PeachPDF.Html.Core.Dom
             {
                 switch (token)
                 {
-                    case StringToken stringToken:
+                    case { Type: TokenType.String } stringToken:
                         contentText.Append(stringToken.Data);
                         break;
-                    case KeywordToken { Data: Keywords.OpenQuote or Keywords.NoOpenQuote or Keywords.CloseQuote or Keywords.NoCloseQuote } quoteToken:
+                    case { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.OpenQuote or Keywords.NoOpenQuote or Keywords.CloseQuote or Keywords.NoCloseQuote } quoteToken:
                         {
                             quotePairs ??= GetQuotePairs(pseudoElement);
                             AppendQuote(contentText, quotePairs, quoteToken.Data, ref quoteDepth);
                             break;
                         }
-                    case FunctionToken { Data: FunctionNames.Counter } functionToken:
+                    case { Type: TokenType.Function, Data: FunctionNames.Counter } functionToken:
                         {
                             AppendCounter(contentText, pseudoElement, functionToken);
                             break;
                         }
-                    case FunctionToken { Data: "attr" } attrFunctionToken:
+                    case { Type: TokenType.Function, Data: "attr" } attrFunctionToken:
                         {
                             if (attrFunctionToken.ArgumentTokens.Any())
                             {
                                 var attrNameToken = attrFunctionToken.ArgumentTokens.FirstOrDefault();
-                                if (attrNameToken is KeywordToken keywordToken)
+                                if (attrNameToken is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                                 {
                                     var attrName = keywordToken.Data;
                                     var targetBox = pseudoElement.IsPseudoElement && pseudoElement.ParentBox != null

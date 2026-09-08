@@ -87,10 +87,11 @@ namespace PeachPDF.Tests.CSS
         public void UnicodeRangeTokenStartAndEnd(string source, string start, string end)
         {
             var lexer = new Lexer(new TextSource(source));
-            var range = Assert.IsType<RangeToken>(lexer.Get());
+            var range = lexer.Get();
+            Assert.Equal(TokenType.Range, range.Type);
 
-            Assert.Equal(start, range.Start);
-            Assert.Equal(end, range.End);
+            Assert.Equal(start, range.RangeStart);
+            Assert.Equal(end, range.RangeEnd);
             Assert.Equal(TokenType.EndOfFile, lexer.Get().Type);
         }
     }

@@ -31,7 +31,7 @@ namespace PeachPDF.CSS
             hasHanging = false;
             hasEachLine = false;
 
-            Token lengthToken = null;
+            Token? lengthToken = null;
 
             foreach (var token in tokens)
             {
@@ -55,14 +55,14 @@ namespace PeachPDF.CSS
                 lengthToken = token;
             }
 
-            if (lengthToken is null) return false;
+            if (lengthToken is not { } resolvedLength) return false;
 
             // Reuse the shared length/percentage/calc() grammar rather than re-deriving what counts as a
             // length here - this also rejects a non-length token (e.g. `none`) that isn't `hanging`/
             // `each-line` either.
-            if (Converters.LengthOrPercentConverter.Convert(new[] { lengthToken }) is null) return false;
+            if (Converters.LengthOrPercentConverter.Convert(new[] { resolvedLength }) is null) return false;
 
-            length = new TokenValue(new[] { lengthToken });
+            length = new TokenValue(new[] { resolvedLength });
             return true;
         }
 

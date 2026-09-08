@@ -15,7 +15,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class BoxShadowValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.ToArray();
             return BoxShadowGrammar.TryParse(tokens) is null ? null : new BoxShadowValue(tokens);

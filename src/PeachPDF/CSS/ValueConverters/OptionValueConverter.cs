@@ -14,7 +14,7 @@ namespace PeachPDF.CSS
             _converter = converter;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             return value.Any() ? _converter.Convert(value) : new OptionValue(value);
         }
@@ -58,7 +58,7 @@ namespace PeachPDF.CSS
             _converter = converter;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             return value.Any() ? _converter.Convert(value) : new OptionValue(value);
         }

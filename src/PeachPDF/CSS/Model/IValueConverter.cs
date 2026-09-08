@@ -6,7 +6,7 @@ namespace PeachPDF.CSS
 {
     internal interface IValueConverter
     {
-        IPropertyValue Convert(IEnumerable<Token> value);
+        IPropertyValue Convert(IReadOnlyList<Token> value);
         IPropertyValue Construct(Property[] properties);
     }
 

@@ -178,7 +178,7 @@ namespace PeachPDF.CSS
                     continue;
                 }
 
-                if (toks[i] is FunctionToken fn && fn.Data.Isi(FunctionNames.Repeat))
+                if (toks[i] is { Type: TokenType.Function } fn && fn.Data.Isi(FunctionNames.Repeat))
                 {
                     if (!TryParseRepeat(fn, out var repeatKind, out var repeatTracks)) return null;
 
@@ -278,7 +278,7 @@ namespace PeachPDF.CSS
             return result;
         }
 
-        private static bool TryParseRepeat(FunctionToken fn, out GridAutoRepeatKind kind, out List<GridTrackSize> tracks)
+        private static bool TryParseRepeat(Token fn, out GridAutoRepeatKind kind, out List<GridTrackSize> tracks)
         {
             kind = GridAutoRepeatKind.None;
             tracks = null;
@@ -294,7 +294,7 @@ namespace PeachPDF.CSS
             var countTokens = 0;
             if (IsIdent(first[0], Keywords.AutoFill)) kind = GridAutoRepeatKind.AutoFill;
             else if (IsIdent(first[0], Keywords.AutoFit)) kind = GridAutoRepeatKind.AutoFit;
-            else if (first[0] is NumberToken { IsInteger: true } n && n.IntegerValue >= 1) countTokens = n.IntegerValue;
+            else if (first[0] is { Type: TokenType.Number, IsInteger: true } n && n.IntegerValue >= 1) countTokens = n.IntegerValue;
             else return false;
 
             // Remaining groups are the repeated <track-size>s. (A repeat body may not itself contain a
@@ -330,7 +330,7 @@ namespace PeachPDF.CSS
 
             // minmax(<inflexible-breadth>, <track-breadth>), fit-content(<length-percentage>), and a
             // math function (calc()/min()/max()/clamp()) that resolves to a <length-percentage>.
-            if (token is FunctionToken fn)
+            if (token is { Type: TokenType.Function } fn)
             {
                 if (fn.Data.Isi(FunctionNames.Minmax)) return TryParseMinmax(fn, out track);
                 if (fn.Data.Isi(FunctionNames.FitContent)) return TryParseFitContent(fn, out track);
@@ -349,7 +349,7 @@ namespace PeachPDF.CSS
             // A math function (calc()/min()/max()/clamp()) computes to a <length-percentage> at used-value
             // time; keep its reconstructed text (Layer B ParseLength evaluates it). This lets a calc() be a
             // track breadth anywhere a length/percentage is allowed — bare, and inside minmax()/repeat().
-            if (token is FunctionToken calc && IsLengthPercentageCalc(calc))
+            if (token is { Type: TokenType.Function } calc && IsLengthPercentageCalc(calc))
             {
                 track = GridTrackSize.Length(calc.ToValue());
                 return true;
@@ -365,7 +365,7 @@ namespace PeachPDF.CSS
 
             if (token.Type == TokenType.Percentage) { track = GridTrackSize.Percent(token.ToValue()); return true; }
 
-            if (token is UnitToken unit && token.Type == TokenType.Dimension)
+            if (token is { Type: TokenType.Dimension } unit)
             {
                 if (unit.Unit.Isi("fr"))
                 {
@@ -380,12 +380,12 @@ namespace PeachPDF.CSS
             }
 
             // Unitless zero is a valid length.
-            if (token is NumberToken { Value: 0f }) { track = GridTrackSize.Length("0"); return true; }
+            if (token is { Type: TokenType.Number, Value: 0f }) { track = GridTrackSize.Length("0"); return true; }
 
             return false;
         }
 
-        private static bool TryParseMinmax(FunctionToken fn, out GridTrackSize track)
+        private static bool TryParseMinmax(Token fn, out GridTrackSize track)
         {
             track = null;
             var groups = SplitByComma(fn.ArgumentTokens.Where(t => t.Type != TokenType.Whitespace).ToArray());
@@ -401,7 +401,7 @@ namespace PeachPDF.CSS
             return true;
         }
 
-        private static bool TryParseFitContent(FunctionToken fn, out GridTrackSize track)
+        private static bool TryParseFitContent(Token fn, out GridTrackSize track)
         {
             track = null;
             var args = fn.ArgumentTokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
@@ -410,13 +410,13 @@ namespace PeachPDF.CSS
             // fit-content(<length-percentage>).
             var t = args[0];
             if (t.Type is TokenType.Percentage) { track = GridTrackSize.FitContentTo(t.ToValue()); return true; }
-            if (t is UnitToken && t.Type == TokenType.Dimension && !((UnitToken)t).Unit.Isi("fr"))
+            if (t.Type == TokenType.Dimension && !t.Unit.Isi("fr"))
             {
                 track = GridTrackSize.FitContentTo(t.ToValue());
                 return true;
             }
-            if (t is NumberToken { Value: 0f }) { track = GridTrackSize.FitContentTo("0"); return true; }
-            if (t is FunctionToken calc && IsLengthPercentageCalc(calc))
+            if (t is { Type: TokenType.Number, Value: 0f }) { track = GridTrackSize.FitContentTo("0"); return true; }
+            if (t is { Type: TokenType.Function } calc && IsLengthPercentageCalc(calc))
             {
                 track = GridTrackSize.FitContentTo(calc.ToValue());
                 return true;
@@ -432,7 +432,7 @@ namespace PeachPDF.CSS
         /// (e.g. an angle) drops the whole track list rather than silently resolving to 0 during layout;
         /// its reconstructed text is resolved by Layer B <c>ParseLength</c>.
         /// </summary>
-        private static bool IsLengthPercentageCalc(FunctionToken fn) =>
+        private static bool IsLengthPercentageCalc(Token fn) =>
             CalcParser.IsCalcFamily(fn.Data)
             && CalcParser.Parse(fn) is { } node
             && CalcTypeChecker.Check(node) is CalcCategory.Length or CalcCategory.Percentage

@@ -16,7 +16,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal static class CalcParser
     {
-        public static CalcNode Parse(FunctionToken function)
+        public static CalcNode Parse(Token function)
         {
             var name = function.Data;
 
@@ -48,7 +48,7 @@ namespace PeachPDF.CSS
             return null;
         }
 
-        private static List<CalcNode> ParseCommaSeparatedSums(FunctionToken function, out int groupCount)
+        private static List<CalcNode> ParseCommaSeparatedSums(Token function, out int groupCount)
         {
             var groups = function.ArgumentTokens.ToList();
             groupCount = groups.Count;
@@ -151,15 +151,15 @@ namespace PeachPDF.CSS
             {
                 case TokenType.Number:
                     pos++;
-                    return new NumberCalcNode(((NumberToken)token).Value);
+                    return new NumberCalcNode(token.Value);
 
                 case TokenType.Percentage:
                     pos++;
-                    return new PercentageCalcNode(((UnitToken)token).Value);
+                    return new PercentageCalcNode(token.Value);
 
                 case TokenType.Dimension:
                 {
-                    var unitToken = (UnitToken)token;
+                    var unitToken = token;
                     var lengthUnit = Length.GetUnit(unitToken.Unit);
                     if (IsSupportedLengthUnit(lengthUnit))
                     {
@@ -222,7 +222,7 @@ namespace PeachPDF.CSS
 
                 case TokenType.Function:
                 {
-                    var nested = (FunctionToken)token;
+                    var nested = token;
                     if (!IsCalcFamily(nested.Data)) return null;
                     pos++;
                     return Parse(nested);

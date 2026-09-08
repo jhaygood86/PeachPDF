@@ -132,7 +132,7 @@ namespace PeachPDF.CSS
             var significant = tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
 
             if (significant.Length != 1) return null;
-            if (significant[0] is not FunctionToken function) return null;
+            if (significant[0] is not { Type: TokenType.Function } function) return null;
 
             var args = function.ArgumentTokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
 
@@ -276,13 +276,13 @@ namespace PeachPDF.CSS
                 case BackgroundPositionGrammar.AxisKeyword.Left:
                 case BackgroundPositionGrammar.AxisKeyword.Top:
                     // "left"/"top" == 0% edge; "left 20px" == 20px in from that edge.
-                    return c.Offset != null ? c.Offset.ToValue() : "0%";
+                    return c.Offset != null ? c.Offset.Value.ToValue() : "0%";
                 case BackgroundPositionGrammar.AxisKeyword.Right:
                 case BackgroundPositionGrammar.AxisKeyword.Bottom:
                     // "right"/"bottom" == 100% edge; "right 20px" == 20px in from the far edge.
-                    return c.Offset != null ? $"calc(100% - {c.Offset.ToValue()})" : "100%";
+                    return c.Offset != null ? $"calc(100% - {c.Offset.Value.ToValue()})" : "100%";
                 default: // a bare length-percentage
-                    return c.Offset.ToValue();
+                    return c.Offset!.Value.ToValue();
             }
         }
 
@@ -366,7 +366,8 @@ namespace PeachPDF.CSS
             {
                 // A <shape-radius> is a non-negative <length-percentage> (CSS Shapes 1 §3.2); a negative
                 // radius makes the whole clip-path value invalid.
-                if (token is UnitToken { Value: < 0f } or NumberToken { Value: < 0f })
+                if (token is { Type: TokenType.Dimension or TokenType.Percentage, Value: < 0f } or
+                    { Type: TokenType.Number, Value: < 0f })
                 {
                     radius = default;
                     return false;
@@ -387,9 +388,9 @@ namespace PeachPDF.CSS
             // resolver (CssClipPathResolver → CssValueParser.ParseLength) evaluates it, and the token's
             // ToValue() reconstructs the full "calc(…)" text, so accept it here rather than invalidating the
             // whole shape (this is what lets a Charts.css area/line polygon vertex be a calc() expression).
-            if (token is FunctionToken function && CalcParser.IsCalcFamily(function.Data)) return true;
+            if (token is { Type: TokenType.Function } function && CalcParser.IsCalcFamily(function.Data)) return true;
             // Unitless zero is a valid length.
-            return token is NumberToken { Value: 0f };
+            return token is { Type: TokenType.Number, Value: 0f };
         }
     }
 }

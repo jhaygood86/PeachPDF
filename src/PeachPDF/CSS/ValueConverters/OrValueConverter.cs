@@ -13,7 +13,7 @@ namespace PeachPDF.CSS
             _next = next;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             return _previous.Convert(value) ?? _next.Convert(value);
         }

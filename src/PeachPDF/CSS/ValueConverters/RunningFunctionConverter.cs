@@ -12,7 +12,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class RunningFunctionConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             return PositionValueGrammar.TryParseRunningTokens(value, out var name)
                 ? new RunningFunctionValue(name, value)

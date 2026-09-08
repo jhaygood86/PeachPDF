@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -7,14 +7,14 @@ namespace PeachPDF.CSS
 {
     internal sealed class IdentifierValueConverter : IValueConverter
     {
-        private readonly Func<IEnumerable<Token>, string> _converter;
+        private readonly Func<IReadOnlyList<Token>, string> _converter;
 
-        public IdentifierValueConverter(Func<IEnumerable<Token>, string> converter)
+        public IdentifierValueConverter(Func<IReadOnlyList<Token>, string> converter)
         {
             _converter = converter;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var result = _converter(value);
             return result != null ? new IdentifierValue(result, value) : null;
@@ -27,7 +27,7 @@ namespace PeachPDF.CSS
 
         private sealed class IdentifierValue : IPropertyValue
         {
-            public IdentifierValue(string identifier, IEnumerable<Token> tokens)
+            public IdentifierValue(string identifier, IReadOnlyList<Token> tokens)
             {
                 CssText = identifier;
                 Original = new TokenValue(tokens);
@@ -55,7 +55,7 @@ namespace PeachPDF.CSS
             _result = result;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             return value.Is(_identifier) ? new IdentifierValue(_identifier, value) : null;
         }
@@ -67,7 +67,7 @@ namespace PeachPDF.CSS
 
         private sealed class IdentifierValue : IPropertyValue
         {
-            public IdentifierValue(string identifier, IEnumerable<Token> tokens)
+            public IdentifierValue(string identifier, IReadOnlyList<Token> tokens)
             {
                 CssText = identifier;
                 Original = new TokenValue(tokens);

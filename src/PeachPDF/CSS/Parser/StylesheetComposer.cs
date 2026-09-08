@@ -12,6 +12,17 @@ namespace PeachPDF.CSS
         private readonly StylesheetParser _parser;
         private readonly Stack<StylesheetNode> _nodes;
 
+        // PropertyFactory.Instance is a fixed singleton, so these method-group conversions are safe to
+        // cache once instead of re-converting on every declaration - unlike a lambda (which the C#
+        // compiler already caches as a static delegate when it captures nothing), an instance-method-group
+        // conversion allocates a fresh delegate on every evaluation, and CreatePropertyWith/FillDeclarations
+        // below run per-declaration, the hottest loop in the whole parse.
+        private static readonly Func<string, Property> CreateDeclarationProperty = PropertyFactory.Instance.Create;
+        private static readonly Func<string, Property> CreateViewportProperty = PropertyFactory.Instance.CreateViewport;
+        private static readonly Func<string, Property> CreateFontProperty = PropertyFactory.Instance.CreateFont;
+        private static readonly Func<string, Property> CreatePropertyDescriptorProperty = PropertyFactory.Instance.CreatePropertyDescriptor;
+        private static readonly Func<string, Property> CreateFontPaletteDescriptorProperty = PropertyFactory.Instance.CreateFontPaletteDescriptor;
+
         // The source index (raw, into _lexer.Source) immediately before the most recently read token.
         // Captured by NextToken so a CSS-Nesting classification look-ahead can rewind to a construct's
         // exact start without any position arithmetic (which is unreliable across \r\n normalization and
@@ -130,7 +141,7 @@ namespace PeachPDF.CSS
 
             if (token.Type == TokenType.CurlyBracketOpen)
             {
-                var end = FillDeclarations(rule, PropertyFactory.Instance.CreateViewport);
+                var end = FillDeclarations(rule, CreateViewportProperty);
 
                 rule.StylesheetText = CreateView(start, end);
                 _nodes.Pop();
@@ -151,7 +162,7 @@ namespace PeachPDF.CSS
 
             if (token.Type == TokenType.CurlyBracketOpen)
             {
-                var end = FillDeclarations(rule, PropertyFactory.Instance.CreateFont);
+                var end = FillDeclarations(rule, CreateFontProperty);
                 rule.StylesheetText = CreateView(start, end);
                 _nodes.Pop();
                 return rule;
@@ -173,7 +184,7 @@ namespace PeachPDF.CSS
 
             if (token.Type == TokenType.CurlyBracketOpen)
             {
-                var end = FillDeclarations(rule, PropertyFactory.Instance.CreatePropertyDescriptor);
+                var end = FillDeclarations(rule, CreatePropertyDescriptorProperty);
                 rule.StylesheetText = CreateView(start, end);
                 _nodes.Pop();
                 return rule;
@@ -195,7 +206,7 @@ namespace PeachPDF.CSS
 
             if (token.Type == TokenType.CurlyBracketOpen)
             {
-                var end = FillDeclarations(rule, PropertyFactory.Instance.CreateFontPaletteDescriptor);
+                var end = FillDeclarations(rule, CreateFontPaletteDescriptorProperty);
                 rule.StylesheetText = CreateView(start, end);
                 _nodes.Pop();
                 return rule;
@@ -299,13 +310,14 @@ namespace PeachPDF.CSS
             // Unlike @supports's bare `(...)` condition grouping (RoundBracketOpen, walked live off the
             // shared lexer stream via NextToken() - see ExtractCondition), `style(...)` is an actual
             // function call: the lexer already tokenizes its entire argument list into one self-contained
-            // FunctionToken (see FunctionToken.ArgumentTokens) before ever returning it, so a NextToken()
+            // Function-typed Token (see Token.ArgumentTokens) before ever returning it, so a NextToken()
             // call here would skip straight past the whole function to whatever follows it (the rule's
             // `{`), not step into its contents. The style-query grammar below is therefore parsed from
             // that already-materialized token list with its own local index cursor, not from the shared
             // lexer/NextToken() state ExtractCondition's family relies on.
-            if (token.Type == TokenType.Function && token.Data.Isi(FunctionNames.Style) && token is FunctionToken styleFunction)
+            if (token.Type == TokenType.Function && token.Data.Isi(FunctionNames.Style))
             {
+                var styleFunction = token;
                 // Not .ToList() - ValueExtensions.ToList(this IEnumerable<Token>) is a comma-splitting
                 // helper (List<List<Token>>) that shadows System.Linq's for this exact parameter type.
                 var styleTokens = new List<Token>(styleFunction.ArgumentTokens);
@@ -661,7 +673,7 @@ namespace PeachPDF.CSS
                 switch (token.Type)
                 {
                     case TokenType.Percentage:
-                        keys.Add(new Percent(((UnitToken)token).Value));
+                        keys.Add(new Percent(token.Value));
                         break;
                     case TokenType.Ident when token.Data.Is(Keywords.From):
                         keys.Add(Percent.Zero);
@@ -765,104 +777,115 @@ namespace PeachPDF.CSS
 
         public TextPosition FillDeclarations(StyleDeclaration style)
         {
-            var finalProperties = new Dictionary<string, IProperty>(StringComparer.OrdinalIgnoreCase);
+            // Lazily created (a block with only nested rules/comments and no direct declarations never
+            // needs one) and pooled - it's pure scratch space for this method's own !important-precedence
+            // decisions, never read once the block finishes.
+            Dictionary<string, IProperty> finalProperties = null;
             var token = NextToken();
             _nodes.Push(style);
             ParseComments(ref token);
 
-            while (token.IsNot(TokenType.EndOfFile, TokenType.CurlyBracketClose))
+            try
             {
-                // @page selectors support declaration blocks in the form of at rules.  This 
-                // conditional accounts for the nested at with a page parent
-                //
-                // @page {
-                //   @top-left { ... /* document name */ }
-                //   @bottom-center { ... /* page number */}
-                // }
-                if (token.Is(TokenType.AtKeyword))
+                while (token.IsNot(TokenType.EndOfFile, TokenType.CurlyBracketClose))
                 {
-                    var parentPageRule = _nodes.FirstOrDefault(parent => parent is PageRule);
-                    if (parentPageRule != null)
+                    // @page selectors support declaration blocks in the form of at rules.  This
+                    // conditional accounts for the nested at with a page parent
+                    //
+                    // @page {
+                    //   @top-left { ... /* document name */ }
+                    //   @bottom-center { ... /* page number */}
+                    // }
+                    if (token.Is(TokenType.AtKeyword))
                     {
-                        //var genericAtRule = CreateMarginRule(ref token);
-                        //parentPageRule.AppendChild(genericAtRule);
-                        // Rewind to capture the margin's @ symbol
+                        var parentPageRule = _nodes.FirstOrDefault(parent => parent is PageRule);
+                        if (parentPageRule != null)
+                        {
+                            //var genericAtRule = CreateMarginRule(ref token);
+                            //parentPageRule.AppendChild(genericAtRule);
+                            // Rewind to capture the margin's @ symbol
 
-                        var marginToken = new Token(TokenType.Ident, token.Data, token.Position);
-                        var marginStyle = CreateMarginStyle(ref marginToken);
-                        parentPageRule.AppendChild(marginStyle);
-                        // FillDeclarations inside CreateMarginStyle consumed through the closing }
-                        // of the margin box. Advance past it to pick up the next token in @page {}.
-                        token = NextToken();
+                            var marginToken = new Token(TokenType.Ident, token.Data.AsMemory(), token.Position);
+                            var marginStyle = CreateMarginStyle(ref marginToken);
+                            parentPageRule.AppendChild(marginStyle);
+                            // FillDeclarations inside CreateMarginStyle consumed through the closing }
+                            // of the margin box. Advance past it to pick up the next token in @page {}.
+                            token = NextToken();
+                        }
+                        else
+                        {
+                            // Advance to the next token or this is an endless loop
+                            token = NextToken();
+                        }
+                    }
+                    else if (TryCreateNestedRule(ref token))
+                    {
+                        // CSS Nesting: a nested style rule was parsed and attached to the enclosing rule.
                     }
                     else
                     {
-                        // Advance to the next token or this is an endless loop
-                        token = NextToken();
-                    }
-                }
-                else if (TryCreateNestedRule(ref token))
-                {
-                    // CSS Nesting: a nested style rule was parsed and attached to the enclosing rule.
-                }
-                else
-                {
-                    var sourceProperty = CreateDeclarationWith(PropertyFactory.Instance.Create, ref token);
-                    var resolvedProperties = new[] { sourceProperty };
+                        var sourceProperty = CreateDeclarationWith(CreateDeclarationProperty, ref token);
+                        var resolvedProperties = new[] { sourceProperty };
 
-                    if (sourceProperty is { HasValue: true })
-                    {
-                        // For shorthand properties we need to first find out what alternate set of properties they will
-                        // end up resolving into so that we can compare them with their previously parsed counterparts (if any)
-                        // and determine which one takes priority over the other.
-                        // Example 1: "margin-left: 5px !important; text-align:center; margin: 3px;";
-                        // Example 2: "margin: 5px !important; text-align:center; margin-left: 3px;";
-                        if (sourceProperty is ShorthandProperty shorthandProperty)
+                        if (sourceProperty is { HasValue: true })
                         {
-                            if (shorthandProperty.DeclaredValue.Original.ContainsFunction(FunctionNames.Var))
+                            // For shorthand properties we need to first find out what alternate set of properties they will
+                            // end up resolving into so that we can compare them with their previously parsed counterparts (if any)
+                            // and determine which one takes priority over the other.
+                            // Example 1: "margin-left: 5px !important; text-align:center; margin: 3px;";
+                            // Example 2: "margin: 5px !important; text-align:center; margin-left: 3px;";
+                            if (sourceProperty is ShorthandProperty shorthandProperty)
                             {
-                                // A var() reference can't be split into per-longhand slices at parse time —
-                                // the referenced custom property's value is only known per-element, at cascade
-                                // time. Keep the shorthand declaration whole so cascade-time substitution +
-                                // shorthand expansion (CssUtils.SetPropertyValue) can handle it once resolved.
-                                resolvedProperties = new Property[] { shorthandProperty };
+                                if (shorthandProperty.DeclaredValue.Original.ContainsFunction(FunctionNames.Var))
+                                {
+                                    // A var() reference can't be split into per-longhand slices at parse time —
+                                    // the referenced custom property's value is only known per-element, at cascade
+                                    // time. Keep the shorthand declaration whole so cascade-time substitution +
+                                    // shorthand expansion (CssUtils.SetPropertyValue) can handle it once resolved.
+                                    resolvedProperties = new Property[] { shorthandProperty };
+                                }
+                                else
+                                {
+                                    resolvedProperties = PropertyFactory.Instance.CreateLonghandsFor(shorthandProperty.Name);
+                                    shorthandProperty.Export(resolvedProperties);
+                                }
                             }
-                            else
-                            {
-                                resolvedProperties = PropertyFactory.Instance.CreateLonghandsFor(shorthandProperty.Name);
-                                shorthandProperty.Export(resolvedProperties);
-                            }
-                        }
 
-                        foreach (var resolvedProperty in resolvedProperties)
-                        {
-                            // The following relies on the fact that the tokens are processed in 
-                            // top-to-bottom order of how they are defined in the parsed style declaration.
-                            // This handles exposing the correct value for a property when it appears multiple 
-                            // times in the same style declaration.
-                            // Example: "background-color:green !important; text-align:center; background-color:yellow;";
-                            // In this example even though background-color yellow is defined last, the previous value
-                            // of green should be the one exposed given it is tagged as important.
-                            // ------------------------------------------------------------------------------------------
-                            // Only set this property if one of the following conditions is true:
-                            // a) It was not previously added or...
-                            // b) The previously added property is not tagged as important or ...
-                            // c) The previously added property is tagged as important but so is this new one.
-                            var shouldSetProperty =
-                                !finalProperties.TryGetValue(resolvedProperty.Name, out var previousProperty)
-                                || !previousProperty.IsImportant
-                                || resolvedProperty.IsImportant;
-
-                            if (shouldSetProperty)
+                            foreach (var resolvedProperty in resolvedProperties)
                             {
-                                style.SetProperty(resolvedProperty);
-                                finalProperties[resolvedProperty.Name] = resolvedProperty;
+                                // The following relies on the fact that the tokens are processed in
+                                // top-to-bottom order of how they are defined in the parsed style declaration.
+                                // This handles exposing the correct value for a property when it appears multiple
+                                // times in the same style declaration.
+                                // Example: "background-color:green !important; text-align:center; background-color:yellow;";
+                                // In this example even though background-color yellow is defined last, the previous value
+                                // of green should be the one exposed given it is tagged as important.
+                                // ------------------------------------------------------------------------------------------
+                                // Only set this property if one of the following conditions is true:
+                                // a) It was not previously added or...
+                                // b) The previously added property is not tagged as important or ...
+                                // c) The previously added property is tagged as important but so is this new one.
+                                finalProperties ??= Pool.NewPropertyDictionary();
+                                var shouldSetProperty =
+                                    !finalProperties.TryGetValue(resolvedProperty.Name, out var previousProperty)
+                                    || !previousProperty.IsImportant
+                                    || resolvedProperty.IsImportant;
+
+                                if (shouldSetProperty)
+                                {
+                                    style.SetProperty(resolvedProperty);
+                                    finalProperties[resolvedProperty.Name] = resolvedProperty;
+                                }
                             }
                         }
                     }
-                }
 
-                ParseComments(ref token);
+                    ParseComments(ref token);
+                }
+            }
+            finally
+            {
+                if (finalProperties != null) Pool.ReturnPropertyDictionary(finalProperties);
             }
 
             _nodes.Pop();
@@ -955,7 +978,16 @@ namespace PeachPDF.CSS
         /// </summary>
         private void CreateNestedStyleRule(int preludeStart, int braceStart)
         {
-            var parent = _nodes.OfType<StyleRule>().FirstOrDefault();
+            StyleRule parent = null;
+            foreach (var node in _nodes)
+            {
+                if (node is StyleRule styleRule)
+                {
+                    parent = styleRule;
+                    break;
+                }
+            }
+
             var preludeText = _lexer.Source.Text.Substring(preludeStart, braceStart - preludeStart);
 
             // The enclosing rule has to have a RESOLVED selector, not merely exist: CreateStyle pushes
@@ -1118,7 +1150,7 @@ namespace PeachPDF.CSS
         public Property CreateDeclaration(ref Token token)
         {
             ParseComments(ref token);
-            return CreateDeclarationWith(PropertyFactory.Instance.Create, ref token);
+            return CreateDeclarationWith(CreateDeclarationProperty, ref token);
         }
 
         public Medium CreateMedium(ref Token token)
@@ -1392,7 +1424,7 @@ namespace PeachPDF.CSS
         // additionally accepts a bare declaration starting directly on an Ident token, which
         // ExtractCondition (@supports) never does.
 
-        // The style()-argument token list has no meaningful EndOfFile token of its own (FunctionToken.
+        // The style()-argument token list has no meaningful EndOfFile token of its own (Token.
         // ArgumentTokens strips the trailing RoundBracketClose), so "no more tokens" is simply
         // index >= tokens.Count throughout this family, mirroring how the live-stream methods above
         // check token.Type == TokenType.EndOfFile.

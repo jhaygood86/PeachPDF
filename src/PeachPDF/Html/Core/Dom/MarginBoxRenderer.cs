@@ -247,14 +247,25 @@ namespace PeachPDF.Html.Core.Dom
             HtmlContainerInt htmlContainer,
             Dictionary<string, CssImage?> imageCache)
         {
-            var tokens = CssValueParser.GetCssTokens(contentValue);
-            if (tokens.Count == 0)
-                return null;
+            // A ref struct (PooledTokenList) local can't live in an async method's own body under this
+            // project's net8.0 C# 12 language version (CS9202 - relaxed only in C# 13+), so the pooled
+            // tokenization is isolated in this local function, which compiles as its own ordinary method
+            // rather than becoming part of the async state machine. An empty token list and a
+            // not-image-content first token both fall through to the same "return null" outcome below,
+            // so collapsing both into a single false is behavior-preserving.
+            static bool IsImageContent(string value)
+            {
+                using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+                List<Token> tokens = pooledTokens;
+                if (tokens.Count == 0)
+                    return false;
 
-            var first = tokens[0];
-            var isImageContent = first is UrlToken ||
-                (first is FunctionToken ft && CssContentEngine.IsGradientFunctionName(ft.Data));
-            if (!isImageContent)
+                var first = tokens[0];
+                return first.Type == TokenType.Url ||
+                    (first is { Type: TokenType.Function } ft && CssContentEngine.IsGradientFunctionName(ft.Data));
+            }
+
+            if (!IsImageContent(contentValue))
                 return null;
 
             if (imageCache.TryGetValue(contentValue, out var cached))
@@ -335,22 +346,23 @@ namespace PeachPDF.Html.Core.Dom
             if (contentValue.Equals("none", StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            var tokens = CssValueParser.GetCssTokens(contentValue);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(contentValue);
+            List<Token> tokens = pooledTokens;
             var sb = new StringBuilder();
 
             foreach (var token in tokens)
             {
                 switch (token)
                 {
-                    case StringToken stringToken:
+                    case { Type: TokenType.String } stringToken:
                         sb.Append(stringToken.Data);
                         break;
-                    case FunctionToken { Data: "counter" } counterToken:
+                    case { Type: TokenType.Function, Data: "counter" } counterToken:
                     {
                         var args = counterToken.ArgumentTokens
                             .Where(t => t.Type != TokenType.Whitespace)
                             .ToArray();
-                        if (args.Length > 0 && args[0] is KeywordToken nameToken)
+                        if (args.Length > 0 && args[0] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken)
                         {
                             sb.Append(nameToken.Data.Equals("pages", StringComparison.OrdinalIgnoreCase)
                                 ? totalPages.ToString()
@@ -358,14 +370,14 @@ namespace PeachPDF.Html.Core.Dom
                         }
                         break;
                     }
-                    case FunctionToken { Data: "string" } stringFunctionToken:
+                    case { Type: TokenType.Function, Data: "string" } stringFunctionToken:
                     {
                         var args = stringFunctionToken.ArgumentTokens
                             .Where(t => t.Type != TokenType.Whitespace && t.Type != TokenType.Comma)
                             .ToArray();
-                        if (args.Length > 0 && args[0] is KeywordToken nameToken)
+                        if (args.Length > 0 && args[0] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken)
                         {
-                            var keyword = args.Length > 1 && args[1] is KeywordToken kw ? kw.Data : "first";
+                            var keyword = args.Length > 1 && args[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } kw ? kw.Data : "first";
                             var currentPageIndex = htmlContainer.SlotStartingAt(pageY);
                             sb.Append(ResolveNamedString(nameToken.Data, keyword, currentPageIndex, htmlContainer.SlotStartingAt, namedStrings));
                         }
@@ -392,22 +404,23 @@ namespace PeachPDF.Html.Core.Dom
             name = null;
             keyword = "first";
 
-            var tokens = CssValueParser.GetCssTokens(contentValue);
-            if (tokens is not [FunctionToken { Data: "element" } elementToken])
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(contentValue);
+            List<Token> tokens = pooledTokens;
+            if (tokens is not [{ Type: TokenType.Function, Data: "element" } elementToken])
                 return false;
 
             var args = elementToken.ArgumentTokens
                 .Where(t => t.Type != TokenType.Whitespace && t.Type != TokenType.Comma)
                 .ToArray();
 
-            if (args.Length == 0 || args[0] is not KeywordToken { Type: TokenType.Ident } nameToken)
+            if (args.Length == 0 || args[0] is not { Type: TokenType.Ident } nameToken)
                 return false;
 
             name = nameToken.Data;
 
             if (args.Length > 1)
             {
-                if (args[1] is not KeywordToken { Type: TokenType.Ident } keywordToken)
+                if (args[1] is not { Type: TokenType.Ident } keywordToken)
                     return false;
 
                 keyword = keywordToken.Data;

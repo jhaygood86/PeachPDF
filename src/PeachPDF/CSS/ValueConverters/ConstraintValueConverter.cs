@@ -16,7 +16,7 @@ namespace PeachPDF.CSS
             _labels = labels;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var result = _converter.Convert(value);
             return result != null ? new TransformationValueConverter(result, _labels) : null;

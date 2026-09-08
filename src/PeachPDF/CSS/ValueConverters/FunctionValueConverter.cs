@@ -16,13 +16,13 @@ namespace PeachPDF.CSS
             _arguments = arguments;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
-            var function = value.OnlyOrDefault() as FunctionToken;
+            var function = value.OnlyOrDefault();
 
             if (!Check(function)) return null;
 
-            var args = _arguments.Convert(function.ArgumentTokens);
+            var args = _arguments.Convert(function.Value.ArgumentTokens);
             return args != null ? new FunctionValue(_name, args, value) : null;
         }
 
@@ -31,9 +31,9 @@ namespace PeachPDF.CSS
             return properties.Guard<FunctionValue>();
         }
 
-        private bool Check(FunctionToken function)
+        private bool Check(Token? function)
         {
-            return function != null && function.Data.Equals(_name, StringComparison.OrdinalIgnoreCase);
+            return function is { Type: TokenType.Function } f && f.Data.Equals(_name, StringComparison.OrdinalIgnoreCase);
         }
 
         private sealed class FunctionValue : IPropertyValue

@@ -11,7 +11,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class BackgroundSizeValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.Where(t => t.Type != TokenType.Whitespace).ToArray();
             var parsed = BackgroundSizeGrammar.TryParse(tokens);
@@ -50,7 +50,7 @@ namespace PeachPDF.CSS
             public TokenValue ExtractFor(string name) => Original;
 
             private static string ComponentText(BackgroundSizeGrammar.Component c) =>
-                c.IsAuto ? Keywords.Auto : Converters.LengthOrPercentConverter.Convert(new[] { c.Value })?.CssText ?? string.Empty;
+                c.IsAuto ? Keywords.Auto : Converters.LengthOrPercentConverter.Convert(new[] { c.Value!.Value })?.CssText ?? string.Empty;
         }
     }
 }

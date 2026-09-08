@@ -20,21 +20,22 @@ namespace PeachPDF.CSS
         /// (which tokenizes a raw string first) and <see cref="RunningFunctionConverter"/> (which already
         /// has tokens from the CSS-OM parser).
         /// </summary>
-        internal static bool TryParseRunningTokens(IEnumerable<Token> tokens, out string name)
+        internal static bool TryParseRunningTokens(IReadOnlyList<Token> tokens, out string name)
         {
             name = null;
 
-            if (tokens.OnlyOrDefault() is not FunctionToken fn || !fn.Data.Isi(FunctionNames.Running))
+            if (tokens.OnlyOrDefault() is not { Type: TokenType.Function } fn || !fn.Data.Isi(FunctionNames.Running))
                 return false;
 
             var args = fn.ArgumentTokens
                 .Where(t => t.Type != TokenType.Whitespace && t.Type != TokenType.Comma)
                 .ToArray();
 
-            // KeywordToken is also how a '#'-prefixed hash lexes (Type == TokenType.Hash - see
-            // KeywordToken.ToValue()'s own "#" + Data case), so the type check must be on top of the
-            // C# type pattern - otherwise running(#foo) would wrongly accept "foo" as the custom-ident.
-            if (args is not [KeywordToken { Type: TokenType.Ident } nameToken])
+            // An Ident-typed Token doesn't follow just from matching a single-element list - a
+            // '#'-prefixed hash also lexes to a Token (Type == TokenType.Hash - see Token.ToValue()'s
+            // own "#" + Data case), so the Type check must be explicit in the pattern - otherwise
+            // running(#foo) would wrongly accept "foo" as the custom-ident.
+            if (args is not [{ Type: TokenType.Ident } nameToken])
                 return false;
 
             name = nameToken.Data;
@@ -54,10 +55,14 @@ namespace PeachPDF.CSS
                 return true;
             }
 
-            if (TryParseRunningTokens(CssValueParser.GetCssTokens(value), out runningName))
+            using (var pooledTokens = CssValueParser.GetCssTokensPooled(value))
             {
-                mode = PositionMode.Running;
-                return true;
+                List<Token> tokens = pooledTokens;
+                if (TryParseRunningTokens(tokens, out runningName))
+                {
+                    mode = PositionMode.Running;
+                    return true;
+                }
             }
 
             mode = default;

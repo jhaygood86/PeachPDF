@@ -22,9 +22,9 @@ namespace PeachPDF.CSS
 
             /// <summary>The length/percentage/calc() token for this component, or null when there is
             /// none (a keyword-only component, or the implicit "center" filled in for a 1-token value).</summary>
-            public Token Offset { get; }
+            public Token? Offset { get; }
 
-            public Component(AxisKeyword keyword, Token offset)
+            public Component(AxisKeyword keyword, Token? offset)
             {
                 Keyword = keyword;
                 Offset = offset;

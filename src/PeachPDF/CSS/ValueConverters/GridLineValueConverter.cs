@@ -12,7 +12,7 @@ namespace PeachPDF.CSS
     /// </summary>
     internal sealed class GridLineValueConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.ToArray();
             return GridLineGrammar.TryParse(tokens.Where(t => t.Type != TokenType.Whitespace).ToArray()) is null

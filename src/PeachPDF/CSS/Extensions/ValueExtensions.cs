@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -14,48 +14,89 @@ namespace PeachPDF.CSS
             return value is >= 1 and <= 1000;
         }
 
-        public static Token OnlyOrDefault(this IEnumerable<Token> value)
+        public static Token? OnlyOrDefault(this IReadOnlyList<Token> value)
         {
-            var result = default(Token);
+            return value.Count == 1 ? value[0] : null;
+        }
 
-            foreach (var item in value)
+        // Token?-returning replacements for the LINQ .OfType<X>().FirstOrDefault()/.SingleOrDefault()
+        // pattern the former Token class hierarchy allowed - a plain Where(...).FirstOrDefault() against
+        // the struct Token would silently return default(Token) (a real, plausible-looking value, not an
+        // error) when nothing matches, corrupting the "nothing found" case a null reference used to
+        // represent safely.
+        public static Token? FirstOfTypeOrNull(this IReadOnlyList<Token> value, TokenType type)
+        {
+            for (var i = 0; i < value.Count; i++)
             {
-                if (result == null)
-                {
-                    result = item;
-                    continue;
-                }
+                if (value[i].Type == type) return value[i];
+            }
 
-                result = default;
-                break;
+            return null;
+        }
+
+        public static Token? SingleOfTypeOrNull(this IReadOnlyList<Token> value, TokenType type)
+        {
+            Token? result = null;
+
+            for (var i = 0; i < value.Count; i++)
+            {
+                if (value[i].Type != type) continue;
+                if (result != null) return null;
+                result = value[i];
             }
 
             return result;
         }
 
-        public static bool Is(this IEnumerable<Token> value, string expected)
+        // Predicate-based siblings of FirstOfTypeOrNull/SingleOfTypeOrNull, for the
+        // .OfType<X>().FirstOrDefault(t => ...)/.SingleOrDefault(t => ...) shape (a type check plus an
+        // extra condition) - same Token?/default(Token) hazard, same fix.
+        public static Token? FirstOrNull(this IReadOnlyList<Token> value, Func<Token, bool> predicate)
+        {
+            for (var i = 0; i < value.Count; i++)
+            {
+                if (predicate(value[i])) return value[i];
+            }
+
+            return null;
+        }
+
+        public static Token? SingleOrNull(this IReadOnlyList<Token> value, Func<Token, bool> predicate)
+        {
+            Token? result = null;
+
+            for (var i = 0; i < value.Count; i++)
+            {
+                if (!predicate(value[i])) continue;
+                if (result != null) return null;
+                result = value[i];
+            }
+
+            return result;
+        }
+
+        public static bool Is(this IReadOnlyList<Token> value, string expected)
         {
             var identifier = value.ToIdentifier();
             return identifier != null && identifier.Isi(expected);
         }
 
-        public static string ToUri(this IEnumerable<Token> value)
+        public static string ToUri(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element is { Type: TokenType.Url }) return element.Data;
+            if (element is { Type: TokenType.Url } token) return token.Data;
 
             return null;
         }
 
-        public static Length? ToDistance(this IEnumerable<Token> value)
+        public static Length? ToDistance(this IReadOnlyList<Token> value)
         {
-            var enumerable = value as Token[] ?? value.ToArray();
-            var percent = enumerable.ToPercent();
+            var percent = value.ToPercent();
 
             return percent.HasValue
                 ? new Length(percent.Value.Value, Length.Unit.Percent)
-                : enumerable.ToLength();
+                : value.ToLength();
         }
 
         public static Length ToLength(this FontSize fontSize)
@@ -83,20 +124,19 @@ namespace PeachPDF.CSS
             }
         }
 
-        public static Percent? ToPercent(this IEnumerable<Token> value)
+        public static Percent? ToPercent(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element is { Type: TokenType.Percentage })
-                return new Percent(((UnitToken)element).Value);
+            if (element is { Type: TokenType.Percentage } token)
+                return new Percent(token.Value);
 
             return null;
         }
 
-        public static Percent? ToPercentOrFraction(this IEnumerable<Token> value)
+        public static Percent? ToPercentOrFraction(this IReadOnlyList<Token> value)
         {
-            var enumerable = value as Token[] ?? value.ToArray();
-            var percent = ToPercent(enumerable);
+            var percent = value.ToPercent();
 
             if (percent is not null)
             {
@@ -104,7 +144,7 @@ namespace PeachPDF.CSS
             }
 
             var element = value.OnlyOrDefault();
-            if (element is not NumberToken token)
+            if (element is not { Type: TokenType.Number } token)
             {
                 return null;
             }
@@ -121,10 +161,9 @@ namespace PeachPDF.CSS
             }
         }
 
-        public static Number? ToPercentOrNumber(this IEnumerable<Token> value)
+        public static Number? ToPercentOrNumber(this IReadOnlyList<Token> value)
         {
-            var enumerable = value as Token[] ?? value.ToArray();
-            var percent = ToPercent(enumerable);
+            var percent = value.ToPercent();
 
             if (percent is not null)
             {
@@ -132,7 +171,7 @@ namespace PeachPDF.CSS
             }
 
             var element = value.OnlyOrDefault();
-            if (element is not NumberToken token)
+            if (element is not { Type: TokenType.Number } token)
             {
                 return null;
             }
@@ -147,58 +186,54 @@ namespace PeachPDF.CSS
             }
         }
 
-        public static string ToCssString(this IEnumerable<Token> value)
+        public static string ToCssString(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element is { Type: TokenType.String }) return element.Data;
+            if (element is { Type: TokenType.String } token) return token.Data;
 
             return null;
         }
 
-        public static string ToLiterals(this IEnumerable<Token> value)
+        public static string ToLiterals(this IReadOnlyList<Token> value)
         {
+            if (value.Count == 0) return null;
+
             var elements = new List<string>();
-            var it = value.GetEnumerator();
 
-            if (it.MoveNext())
+            for (var i = 0; i < value.Count; i++)
             {
-                do
-                {
-                    if (it.Current?.Type != TokenType.Ident) return null;
+                if (value[i].Type != TokenType.Ident) return null;
 
-                    elements.Add(it.Current.Data);
+                elements.Add(value[i].Data);
 
-                    if (it.MoveNext() && it.Current?.Type != TokenType.Whitespace) return null;
-                } while (it.MoveNext());
-
-                it.Dispose();
-                return string.Join(" ", elements);
+                i++;
+                if (i >= value.Count) break;
+                if (value[i].Type != TokenType.Whitespace) return null;
             }
 
-            it.Dispose();
-            return null;
+            return string.Join(" ", elements);
         }
 
-        public static string ToIdentifier(this IEnumerable<Token> value)
+        public static string ToIdentifier(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element != null && element.Type == TokenType.Ident) return element.Data.ToLowerInvariant();
+            if (element is { Type: TokenType.Ident } token) return token.Data.ToLowerInvariant();
 
             return null;
         }
 
-        public static string ToIdentifierCaseInsensitive(this IEnumerable<Token> value)
+        public static string ToIdentifierCaseInsensitive(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element != null && element.Type == TokenType.Ident) return element.Data;
+            if (element is { Type: TokenType.Ident } token) return token.Data;
 
             return null;
         }
 
-        public static string ToAnimatableIdentifier(this IEnumerable<Token> value)
+        public static string ToAnimatableIdentifier(this IReadOnlyList<Token> value)
         {
             var identifier = value.ToIdentifier();
 
@@ -211,34 +246,34 @@ namespace PeachPDF.CSS
             return null;
         }
 
-        public static float? ToSingle(this IEnumerable<Token> value)
+        public static float? ToSingle(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element != null && element.Type == TokenType.Number) return ((NumberToken)element).Value;
+            if (element is { Type: TokenType.Number } token) return token.Value;
 
             return null;
         }
 
-        public static float? ToNaturalSingle(this IEnumerable<Token> value)
+        public static float? ToNaturalSingle(this IReadOnlyList<Token> value)
         {
             var element = value.ToSingle();
             return element >= 0f ? element : null;
         }
 
-        public static float? ToGreaterOrEqualOneSingle(this IEnumerable<Token> value)
+        public static float? ToGreaterOrEqualOneSingle(this IReadOnlyList<Token> value)
         {
             var element = value.ToSingle();
             return element >= 1f ? element : null;
         }
 
-        public static int? ToInteger(this IEnumerable<Token> value)
+        public static int? ToInteger(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element != null && element.Type == TokenType.Number && ((NumberToken)element).IsInteger)
+            if (element is { Type: TokenType.Number } number && number.IsInteger)
             {
-                return ((NumberToken)element).IntegerValue;
+                return number.IntegerValue;
             }
 
             // CSS Values and Units Level 4 §10.9: a math function is accepted anywhere <integer> is
@@ -248,7 +283,7 @@ namespace PeachPDF.CSS
             // a Number-category calc() has no em/rem/percent-relative leaf to defer to layout, so it can
             // - and must, to satisfy every existing int.Parse(box.ZIndex)-style consumer - be folded to a
             // concrete integer right here rather than carried as a CalcValue.
-            if (element is FunctionToken function && CalcParser.IsCalcFamily(function.Data))
+            if (element is { Type: TokenType.Function } function && CalcParser.IsCalcFamily(function.Data))
             {
                 var node = CalcParser.Parse(function);
                 if (node is null || CalcTypeChecker.Check(node) != CalcCategory.Number) return null;
@@ -260,63 +295,60 @@ namespace PeachPDF.CSS
             return null;
         }
 
-        public static int? ToNaturalInteger(this IEnumerable<Token> value)
+        public static int? ToNaturalInteger(this IReadOnlyList<Token> value)
         {
             var element = value.ToInteger();
             return element >= 0 ? element : null;
         }
 
-        public static int? ToPositiveInteger(this IEnumerable<Token> value)
+        public static int? ToPositiveInteger(this IReadOnlyList<Token> value)
         {
             var element = value.ToInteger();
             return element > 0 ? element : null;
         }
 
-        public static int? ToWeightInteger(this IEnumerable<Token> value)
+        public static int? ToWeightInteger(this IReadOnlyList<Token> value)
         {
             var element = value.ToPositiveInteger();
             return element.HasValue && IsWeight(element.Value) ? element : null;
         }
 
-        public static int? ToBinary(this IEnumerable<Token> value)
+        public static int? ToBinary(this IReadOnlyList<Token> value)
         {
             var element = value.ToInteger();
             return element.HasValue && (element.Value == 0 || element.Value == 1) ? element : null;
         }
 
-        public static float? ToAlphaValue(this IEnumerable<Token> value)
+        public static float? ToAlphaValue(this IReadOnlyList<Token> value)
         {
-            var enumerable = value as Token[] ?? value.ToArray();
-            var element = enumerable.ToNaturalSingle();
+            var element = value.ToNaturalSingle();
 
             if (element.HasValue) return Math.Min(element.Value, 1f);
 
-            var percent = enumerable.ToPercent();
+            var percent = value.ToPercent();
 
             return percent?.NormalizedValue;
         }
 
-        public static byte? ToRgbComponent(this IEnumerable<Token> value)
+        public static byte? ToRgbComponent(this IReadOnlyList<Token> value)
         {
-            var enumerable = value as Token[] ?? value.ToArray();
-            var element = enumerable.ToNaturalInteger();
+            var element = value.ToNaturalInteger();
 
             if (element.HasValue) return (byte)Math.Min(element.Value, 255);
 
-            var percent = enumerable.ToPercent();
+            var percent = value.ToPercent();
 
             if (!percent.HasValue) return null;
 
             return (byte)(255f * percent.Value.NormalizedValue);
         }
 
-        public static Angle? ToAngle(this IEnumerable<Token> value)
+        public static Angle? ToAngle(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element == null || element.Type != TokenType.Dimension) return null;
+            if (element is not { Type: TokenType.Dimension } token) return null;
 
-            var token = (UnitToken)element;
             var unit = Angle.GetUnit(token.Unit);
 
             if (unit != Angle.Unit.None) return new Angle(token.Value, unit);
@@ -324,37 +356,35 @@ namespace PeachPDF.CSS
             return null;
         }
 
-        public static Angle? ToAngleNumber(this IEnumerable<Token> value)
+        public static Angle? ToAngleNumber(this IReadOnlyList<Token> value)
         {
-            var enumerable = value as Token[] ?? value.ToArray();
-            var angle = enumerable.ToAngle();
+            var angle = value.ToAngle();
 
             if (angle.HasValue) return angle.Value;
 
-            var number = enumerable.ToSingle();
+            var number = value.ToSingle();
 
             if (!number.HasValue) return null;
 
             return new Angle(number.Value, Angle.Unit.Deg);
         }
 
-        public static Length? ToLength(this IEnumerable<Token> value)
+        public static Length? ToLength(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element != null)
+            if (element is { } token)
             {
-                switch (element.Type)
+                switch (token.Type)
                 {
                     case TokenType.Dimension:
                         {
-                            var token = (UnitToken)element;
                             var unit = Length.GetUnit(token.Unit);
 
                             if (unit != Length.Unit.None) return new Length(token.Value, unit);
                             break;
                         }
-                    case TokenType.Number when ((NumberToken)element).Value == 0f:
+                    case TokenType.Number when token.Value == 0f:
                         return Length.Zero;
                 }
             }
@@ -362,13 +392,12 @@ namespace PeachPDF.CSS
             return null;
         }
 
-        public static Resolution? ToResolution(this IEnumerable<Token> value)
+        public static Resolution? ToResolution(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element == null || element.Type != TokenType.Dimension) return null;
+            if (element is not { Type: TokenType.Dimension } token) return null;
 
-            var token = (UnitToken)element;
             var unit = Resolution.GetUnit(token.Unit);
 
             if (unit != Resolution.Unit.None) return new Resolution(token.Value, unit);
@@ -376,13 +405,12 @@ namespace PeachPDF.CSS
             return null;
         }
 
-        public static Time? ToTime(this IEnumerable<Token> value)
+        public static Time? ToTime(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element == null || element.Type != TokenType.Dimension) return null;
+            if (element is not { Type: TokenType.Dimension } token) return null;
 
-            var token = (UnitToken)element;
             var unit = Time.GetUnit(token.Unit);
 
             if (unit != Time.Unit.None) return new Time(token.Value, unit);
@@ -390,29 +418,29 @@ namespace PeachPDF.CSS
             return null;
         }
 
-        public static Length? ToBorderWidth(this IEnumerable<Token> value)
+        public static Length? ToBorderWidth(this IReadOnlyList<Token> value)
         {
-            var enumerable = value as Token[] ?? value.ToArray();
-            var length = enumerable.ToLength();
+            var length = value.ToLength();
 
             if (length != null) return length;
 
-            if (enumerable.Is(Keywords.Thin)) return Length.Thin;
+            if (value.Is(Keywords.Thin)) return Length.Thin;
 
-            if (enumerable.Is(Keywords.Medium)) return Length.Medium;
+            if (value.Is(Keywords.Medium)) return Length.Medium;
 
-            return enumerable.Is(Keywords.Thick) ? Length.Thick : length;
+            return value.Is(Keywords.Thick) ? Length.Thick : length;
         }
 
-        public static List<List<Token>> ToItems(this IEnumerable<Token> value)
+        public static List<List<Token>> ToItems(this IReadOnlyList<Token> value)
         {
             var list = new List<List<Token>>();
             var current = new List<Token>();
             var nested = 0;
             list.Add(current);
 
-            foreach (var token in value)
+            for (var i = 0; i < value.Count; i++)
             {
+                var token = value[i];
                 var whitespace = token.Type == TokenType.Whitespace;
                 var newItem = token.Type == TokenType.String || token.Type == TokenType.Url ||
                               token.Type == TokenType.Function;
@@ -459,15 +487,17 @@ namespace PeachPDF.CSS
             value.RemoveRange(0, begin);
         }
 
-        public static List<List<Token>> ToList(this IEnumerable<Token> value)
+        public static List<List<Token>> ToList(this IReadOnlyList<Token> value)
         {
             var list = new List<List<Token>>();
             var current = new List<Token>();
             var nested = 0;
             list.Add(current);
 
-            foreach (var token in value)
+            for (var i = 0; i < value.Count; i++)
             {
+                var token = value[i];
+
                 if (nested == 0 && token.Type == TokenType.Comma)
                 {
                     current = new List<Token>();
@@ -495,16 +525,24 @@ namespace PeachPDF.CSS
             return list;
         }
 
-        public static string ToText(this IEnumerable<Token> value)
+        public static string ToText(this IReadOnlyList<Token> value)
         {
-            return string.Join(string.Empty, value.Select(m => m.ToValue()));
+            var sb = Pool.NewStringBuilder();
+
+            for (var i = 0; i < value.Count; i++)
+            {
+                sb.Append(value[i].ToValue());
+            }
+
+            return sb.ToPool();
         }
 
-        public static bool ContainsFunction(this IEnumerable<Token> tokens, string functionName)
+        public static bool ContainsFunction(this IReadOnlyList<Token> tokens, string functionName)
         {
-            foreach (var token in tokens)
+            for (var i = 0; i < tokens.Count; i++)
             {
-                if (token is FunctionToken function &&
+                var token = tokens[i];
+                if (token is { Type: TokenType.Function } function &&
                     (function.Data.Isi(functionName) || function.ArgumentTokens.ContainsFunction(functionName)))
                 {
                     return true;
@@ -514,15 +552,15 @@ namespace PeachPDF.CSS
             return false;
         }
 
-        public static Color? ToColor(this IEnumerable<Token> value)
+        public static Color? ToColor(this IReadOnlyList<Token> value)
         {
             var element = value.OnlyOrDefault();
 
-            if (element != null && element.Type == TokenType.Ident) return Color.FromName(element.Data);
+            if (element is { Type: TokenType.Ident } identToken) return Color.FromName(identToken.Data);
 
-            if (element != null && element.Type == TokenType.Color && !((ColorToken)element).IsValid)
+            if (element is { Type: TokenType.Color } colorToken && !colorToken.IsValid)
             {
-                return Color.FromHex(element.Data);
+                return Color.FromHex(colorToken.Data);
             }
 
             return null;

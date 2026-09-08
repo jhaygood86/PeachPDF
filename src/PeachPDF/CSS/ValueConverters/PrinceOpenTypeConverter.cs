@@ -88,9 +88,9 @@ namespace PeachPDF.CSS
                 ["ruby"] = Keywords.Ruby
             };
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
-            if (value.OnlyOrDefault() is not FunctionToken function
+            if (value.OnlyOrDefault() is not { Type: TokenType.Function } function
                 || !function.Data.Equals(FunctionNames.PrinceOpenType, StringComparison.OrdinalIgnoreCase))
                 return null;
 
@@ -180,7 +180,7 @@ namespace PeachPDF.CSS
 
             private static TokenValue KeywordToken(string keyword) => keyword is null
                 ? new TokenValue(Enumerable.Empty<Token>())
-                : new TokenValue([new Token(TokenType.Ident, keyword, TextPosition.Empty)]);
+                : new TokenValue([new Token(TokenType.Ident, keyword.AsMemory(), TextPosition.Empty)]);
 
             private static TokenValue KeywordListTokens(IReadOnlyList<string> keywords)
             {
@@ -190,7 +190,7 @@ namespace PeachPDF.CSS
                 foreach (var keyword in keywords)
                 {
                     if (tokens.Count > 0) tokens.Add(Token.Whitespace);
-                    tokens.Add(new Token(TokenType.Ident, keyword, TextPosition.Empty));
+                    tokens.Add(new Token(TokenType.Ident, keyword.AsMemory(), TextPosition.Empty));
                 }
 
                 return new TokenValue(tokens);
@@ -209,15 +209,15 @@ namespace PeachPDF.CSS
                         tokens.Add(Token.Whitespace);
                     }
 
-                    tokens.Add(new StringToken(tag, true, '"', TextPosition.Empty));
+                    tokens.Add(Token.NewString(tag.AsMemory(), true, '"', TextPosition.Empty));
 
                     if (value is not null)
                     {
                         tokens.Add(Token.Whitespace);
                         tokens.Add(value.Equals(Keywords.On, StringComparison.OrdinalIgnoreCase)
                                    || value.Equals(Keywords.Off, StringComparison.OrdinalIgnoreCase)
-                            ? new Token(TokenType.Ident, value, TextPosition.Empty)
-                            : new NumberToken(value, TextPosition.Empty));
+                            ? new Token(TokenType.Ident, value.AsMemory(), TextPosition.Empty)
+                            : Token.NewNumber(value.AsMemory(), TextPosition.Empty));
                     }
                 }
 

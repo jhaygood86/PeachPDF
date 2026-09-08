@@ -126,7 +126,7 @@ namespace PeachPDF.CSS
         /// is checked via the shared <see cref="ColorValidator"/>, but a hex color is special-cased: the
         /// raw <c>CssValueParser.GetCssTokens</c> tokenizer Layer B feeds this grammar produces a bare
         /// <see cref="TokenType.Hash"/> token for <c>#fff</c> (only the in-declaration-value tokenizer path
-        /// yields a <see cref="ColorToken"/> the converter understands), so accept a well-formed hex token
+        /// yields a Color-typed <see cref="Token"/> the converter understands), so accept a well-formed hex token
         /// directly - otherwise a hex shadow color accepted by Layer A would be dropped at paint time.
         /// </summary>
         private static bool IsValidColor(IReadOnlyList<Token> colorTokens)
@@ -162,7 +162,7 @@ namespace PeachPDF.CSS
                     && tokens[i + 1].Type is TokenType.Number or TokenType.Dimension
                     && IsHexColor(tokens[i + 1].ToValue()))
                 {
-                    result.Add(new KeywordToken(TokenType.Hash, tokens[i + 1].ToValue(), token.Position));
+                    result.Add(Token.NewKeyword(TokenType.Hash, tokens[i + 1].ToValue().AsMemory(), token.Position));
                     i++;
                     continue;
                 }
@@ -181,13 +181,13 @@ namespace PeachPDF.CSS
         private static bool IsLength(Token token)
         {
             if (token.Type == TokenType.Dimension) return true;
-            return token is NumberToken { Value: 0f };
+            return token is { Type: TokenType.Number, Value: 0f };
         }
 
         private static float LengthValue(Token token) => token switch
         {
-            UnitToken unit => unit.Value,
-            NumberToken number => number.Value,
+            { Type: TokenType.Dimension or TokenType.Percentage } unit => unit.Value,
+            { Type: TokenType.Number } number => number.Value,
             _ => 0f,
         };
 

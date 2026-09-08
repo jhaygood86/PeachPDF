@@ -13,7 +13,7 @@ namespace PeachPDF.CSS
         }
 
         private readonly List<Token> _values;
-        private Token _buffer;
+        private Token? _buffer;
         private bool _valid;
         private int _open;
 
@@ -117,7 +117,7 @@ namespace PeachPDF.CSS
         private void Add(Token token)
         {
             if (_buffer != null && !IsCommaOrSlash(token))
-                _values.Add(_buffer);
+                _values.Add(_buffer.Value);
             else if (_values.Count != 0 && !IsComma(token) && IsComma(_values[_values.Count - 1]))
                 _values.Add(Token.Whitespace);
 

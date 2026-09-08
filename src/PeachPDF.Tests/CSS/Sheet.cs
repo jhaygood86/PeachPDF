@@ -488,7 +488,7 @@ h1 { color: blue }");
         {
             var valueString = " , ";
             var list = ParseValue(valueString);
-            Assert.Equal(1, list.Count);
+            Assert.Single(list);
         }
 
         [Fact]

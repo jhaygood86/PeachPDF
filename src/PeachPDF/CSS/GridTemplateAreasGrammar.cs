@@ -42,7 +42,7 @@ namespace PeachPDF.CSS
             int colCount = -1;
             foreach (var t in toks)
             {
-                var cells = ((StringToken)t).Data
+                var cells = t.Data
                     .Split((char[])null, System.StringSplitOptions.RemoveEmptyEntries);
                 if (cells.Length == 0) return null;          // an empty string is invalid
                 if (colCount < 0) colCount = cells.Length;

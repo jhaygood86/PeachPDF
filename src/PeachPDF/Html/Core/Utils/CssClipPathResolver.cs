@@ -4,6 +4,7 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using System;
+using System.Collections.Generic;
 
 namespace PeachPDF.Html.Core.Utils
 {
@@ -32,7 +33,8 @@ namespace PeachPDF.Html.Core.Utils
 
             if (string.IsNullOrWhiteSpace(value)) return false;
 
-            var tokens = CssValueParser.GetCssTokens(value);
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
             var shape = BasicShapeGrammar.TryParse(tokens);
 
             if (shape is null) return false;

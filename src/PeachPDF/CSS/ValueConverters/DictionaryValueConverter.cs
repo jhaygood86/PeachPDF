@@ -13,7 +13,7 @@ namespace PeachPDF.CSS
             _values = values;
         }
 
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var identifier = value.ToIdentifier();
 

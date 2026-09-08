@@ -9,7 +9,7 @@ namespace PeachPDF.CSS
     {
         public static IPropertyValue ConvertDefault(this IValueConverter converter)
         {
-            return converter.Convert(Enumerable.Empty<Token>());
+            return converter.Convert(System.Array.Empty<Token>());
         }
 
         public static IPropertyValue VaryStart(this IValueConverter converter, List<Token> list)
@@ -21,7 +21,7 @@ namespace PeachPDF.CSS
                     continue;
                 }
 
-                var value = converter.Convert(list.Take(count));
+                var value = converter.Convert(list.GetRange(0, count));
 
                 if (value == null)
                 {
@@ -54,7 +54,7 @@ namespace PeachPDF.CSS
                         continue;
                     }
 
-                    var value = converter.Convert(list.Skip(i).Take(count));
+                    var value = converter.Convert(list.GetRange(i, count));
 
                     if (value == null) continue;
                     list.RemoveRange(i, count);

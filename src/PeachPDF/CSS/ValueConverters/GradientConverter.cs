@@ -8,7 +8,7 @@ namespace PeachPDF.CSS
 
     internal abstract class GradientConverter : IValueConverter
     {
-        public IPropertyValue Convert(IEnumerable<Token> value)
+        public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var args = value.ToList();
             var initial = args.Count != 0 ? ConvertFirstArgument(args[0]) : null;
@@ -90,7 +90,7 @@ namespace PeachPDF.CSS
             return items.Count == 0 ? new StopValue(color, firstPosition, secondPosition, value) : null;
         }
 
-        protected abstract IPropertyValue ConvertFirstArgument(IEnumerable<Token> value);
+        protected abstract IPropertyValue ConvertFirstArgument(IReadOnlyList<Token> value);
 
         private sealed class StopValue : IPropertyValue
         {
@@ -193,7 +193,7 @@ namespace PeachPDF.CSS
                 SideOrCornerConverter.StartsWithKeyword(Keywords.To));
         }
 
-        protected override IPropertyValue ConvertFirstArgument(IEnumerable<Token> value)
+        protected override IPropertyValue ConvertFirstArgument(IReadOnlyList<Token> value)
         {
             // "[ <angle> | to <side-or-corner> ] || <color-interpolation-method>" (CSS Images 4). Validate
             // any "in <colorspace> [<hue-method>]" prelude, then validate what remains as the direction.
@@ -229,7 +229,7 @@ namespace PeachPDF.CSS
         protected override IValueConverter StopPositionConverter { get; } =
             AngleConverter.Or(PercentConverter).Or(new ZeroOrCalcPositionConverter());
 
-        protected override IPropertyValue ConvertFirstArgument(IEnumerable<Token> value)
+        protected override IPropertyValue ConvertFirstArgument(IReadOnlyList<Token> value)
         {
             // "[ from <angle> ]? [ at <position> ]? || <color-interpolation-method>" — validate any
             // "in <colorspace> [<hue-method>]" prelude, then validate what remains as from/at.
@@ -242,18 +242,18 @@ namespace PeachPDF.CSS
             return remainder.Count == 0 || ConvertPrelude(remainder) != null ? CreatePlaceholder(value) : null;
         }
 
-        private IPropertyValue ConvertPrelude(IEnumerable<Token> value)
+        private IPropertyValue ConvertPrelude(IReadOnlyList<Token> value)
         {
             // If the first non-whitespace token is an ident that is not a prelude keyword, this comma
             // group is a color stop, not a prelude — return null so it flows to stop validation.
-            Token first = null;
+            Token? first = null;
             foreach (var t in value)
             {
                 if (t.Type != TokenType.Whitespace) { first = t; break; }
             }
-            if (first != null && first.Type == TokenType.Ident)
+            if (first is { Type: TokenType.Ident } firstToken)
             {
-                var id = first.Data;
+                var id = firstToken.Data;
                 if (!string.Equals(id, Keywords.From, System.StringComparison.OrdinalIgnoreCase) &&
                     !string.Equals(id, Keywords.At, System.StringComparison.OrdinalIgnoreCase))
                     return null;
@@ -267,15 +267,15 @@ namespace PeachPDF.CSS
         // branches of CssValueParser.TryParseConicAngle, using the same primitives.
         private sealed class ZeroOrCalcPositionConverter : IValueConverter
         {
-            public IPropertyValue Convert(IEnumerable<Token> value)
+            public IPropertyValue Convert(IReadOnlyList<Token> value)
             {
                 var only = value.OnlyOrDefault();
                 if (only == null) return null;
 
-                if (only.Type == TokenType.Number && ((NumberToken)only).Value == 0f)
+                if (only is { Type: TokenType.Number, Value: 0f })
                     return CreatePlaceholder(value);
 
-                if (only is FunctionToken function && CalcParser.IsCalcFamily(function.Data))
+                if (only is { Type: TokenType.Function } function && CalcParser.IsCalcFamily(function.Data))
                     return CreatePlaceholder(value);
 
                 return null;
@@ -306,7 +306,7 @@ namespace PeachPDF.CSS
             _converter = circle.Or(ellipse.Or(extents));
         }
 
-        protected override IPropertyValue ConvertFirstArgument(IEnumerable<Token> value)
+        protected override IPropertyValue ConvertFirstArgument(IReadOnlyList<Token> value)
         {
             // "[ <ending-shape> || <size> ]? [ at <position> ]? || <color-interpolation-method>" — validate
             // any "in <colorspace> [<hue-method>]" prelude, then validate what remains as shape/size/position.
@@ -319,19 +319,19 @@ namespace PeachPDF.CSS
             return remainder.Count == 0 || ConvertShape(remainder) != null ? CreatePlaceholder(value) : null;
         }
 
-        private IPropertyValue ConvertShape(IEnumerable<Token> value)
+        private IPropertyValue ConvertShape(IReadOnlyList<Token> value)
         {
             // If the first non-whitespace token is an ident that is not a known gradient
             // shape/size keyword, it must be a CSS color name (e.g. "red" in "red 0 8px").
             // In that case, this comma group is a color stop, not a shape/size modifier.
-            Token first = null;
+            Token? first = null;
             foreach (var t in value)
             {
                 if (t.Type != TokenType.Whitespace) { first = t; break; }
             }
-            if (first != null && first.Type == TokenType.Ident)
+            if (first is { Type: TokenType.Ident } firstToken)
             {
-                var id = first.Data;
+                var id = firstToken.Data;
                 if (!string.Equals(id, "circle", System.StringComparison.OrdinalIgnoreCase) &&
                     !string.Equals(id, "ellipse", System.StringComparison.OrdinalIgnoreCase) &&
                     !string.Equals(id, "at", System.StringComparison.OrdinalIgnoreCase) &&
