@@ -23,6 +23,7 @@ using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
 using System.Collections.Generic;
@@ -129,6 +130,16 @@ namespace PeachPDF.Html.Core
         private Dictionary<string, CssBox>? _idIndex;
 
         private CssBox? _idIndexRoot;
+
+        /// <summary>
+        /// The document's own resolved <c>&lt;base href&gt;</c> backing <see cref="DocumentBaseUri"/>, or
+        /// null when it declares none - a document's <c>&lt;base&gt;</c> does not change mid-pass, and a
+        /// re-parse produces a new tree, so this is memoized against the tree's topmost box identity in
+        /// the same shape as <see cref="_idIndex"/>.
+        /// </summary>
+        private RUri? _documentBase;
+
+        private CssBox? _documentBaseRoot;
 
         #endregion
 
@@ -760,6 +771,58 @@ namespace PeachPDF.Html.Core
         internal WritingMode RootWritingMode { get; set; } = WritingMode.HorizontalTb;
 
         /// <summary>
+        /// The URI relative references in this document resolve against: its own <c>&lt;base href&gt;</c>
+        /// when it declares a usable one, else <see cref="RAdapter.BaseUri"/>. The single place that rule
+        /// lives - <see cref="CommonUtils.ResolveAgainstDocumentBase"/> (images, stylesheets),
+        /// <c>HtmlContainer.ResolveHref</c> (links, bookmark targets) and
+        /// <c>PdfGenerator.HandleRunningElementLinks</c> all read it from here.
+        /// <para>
+        /// The <c>&lt;base&gt;</c> lookup is memoized per box tree because it is a
+        /// <see cref="DomUtils.GetBoxByTagName"/> walk that cannot short-circuit when the document
+        /// declares no <c>&lt;base&gt;</c> at all - it visits every box in the tree - while callers ask
+        /// once per reference rather than once per document: a link inside a css-gcpm-3 running element is
+        /// re-resolved on every page its element was selected onto. Rendering a 188-page report with one
+        /// such link spent 5 525 506 box visits in that walk; it now spends 79 849, worth about 5% of the
+        /// whole render. The <see cref="RAdapter.BaseUri"/> fallback is deliberately re-read on each
+        /// access rather than frozen into the memo - it is a cheap property on the adapter, not a walk,
+        /// and a document that declares no base should keep answering whatever the adapter currently says.
+        /// </para>
+        /// <para>
+        /// The memo is keyed on <see cref="Root"/>'s object identity, which is replaced wholesale by every
+        /// re-parse (<see cref="SetHtml"/> clears first, and the <c>@container</c> convergence loop and
+        /// <c>PdfGenerator.SetContent</c>'s shrink-to-fit path both go through it) - not on
+        /// <see cref="Dom.CssBox.Id"/>, which is deliberately stable across those two back-to-back parses.
+        /// Unlike <see cref="_idIndex"/>, which walks up from an arbitrary box so that it also works while
+        /// <see cref="Root"/> is still null mid-parse, this gives up on a null root: see below.
+        /// </para>
+        /// </summary>
+        internal RUri? DocumentBaseUri
+        {
+            get
+            {
+                // Root is only assigned once SetHtml returns, so a <link>/@import stylesheet - loaded from
+                // inside DomParser.GenerateCssTree - resolves with no document base and falls back to the
+                // adapter's. Long-standing behaviour, kept as-is. (An <img> is not in that group: images
+                // are resolved during layout, via CssBoxImage.MeasureWordsSize, by which point Root is
+                // assigned and <base> is honoured.) The early return is only a fast path - the memo key
+                // already handles a null root, since the next read against a real tree fails
+                // ReferenceEquals and re-walks.
+                if (Root is null) return Adapter.BaseUri;
+
+                if (!ReferenceEquals(_documentBaseRoot, Root))
+                {
+                    var href = DomUtils.GetBoxByTagName(Root, "base")?.HtmlTag?.TryGetAttribute("href", "");
+                    // A malformed href still throws from exactly where it did before - and, since the key
+                    // is only committed afterwards, from every later read too rather than just the first.
+                    _documentBase = string.IsNullOrWhiteSpace(href) ? null : new RUri(href);
+                    _documentBaseRoot = Root;
+                }
+
+                return _documentBase ?? Adapter.BaseUri;
+            }
+        }
+
+        /// <summary>
         /// Metadata extracted from the HTML head elements.
         /// </summary>
         internal HtmlDocumentMetadata? DocumentMetadata { get; private set; }
@@ -851,6 +914,10 @@ namespace PeachPDF.Html.Core
             Root.Dispose();
             Root = null;
             DocumentLanguage = null;
+            // Dropped with the tree it was keyed on, so a disposed tree is not kept reachable by the memo
+            // until the next document happens to read through it.
+            _documentBase = null;
+            _documentBaseRoot = null;
             ClearNamedStrings();
             ClearRunningElements();
             ClearNamedPageElements();

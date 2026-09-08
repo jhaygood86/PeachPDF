@@ -946,9 +946,10 @@ namespace PeachPDF
                         }
                         else
                         {
-                            var baseElement = DomUtils.GetBoxByTagName(container.HtmlContainerInt.Root, "base");
-                            var baseUrl = baseElement?.HtmlTag?.TryGetAttribute("href", "");
-                            var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? container.HtmlContainerInt.Adapter.BaseUri : new RUri(baseUrl);
+                            // Read once per external link per page (a running element's own link is
+                            // re-resolved for every page it was selected onto), so the document base has
+                            // to be memoized rather than re-walked - see HtmlContainerInt.DocumentBaseUri.
+                            var baseUri = container.HtmlContainerInt.DocumentBaseUri;
                             var resolvedHref = baseUri is null ? href : new RUri(baseUri, href).AbsoluteUri;
 
                             annotation = document.Pages[pageIndex].AddWebLink(new PdfRectangle(xRect), resolvedHref);

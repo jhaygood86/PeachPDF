@@ -15,7 +15,6 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Utils;
 using PeachPDF.Network;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Utilities;
@@ -201,9 +200,9 @@ namespace PeachPDF
         /// </summary>
         internal string ResolveHref(string href)
         {
-            var baseElement = DomUtils.GetBoxByTagName(HtmlContainerInt.Root, "base");
-            var baseUrl = baseElement?.HtmlTag?.TryGetAttribute("href", "") ?? "";
-            var baseUri = string.IsNullOrWhiteSpace(baseUrl) ? HtmlContainerInt.Adapter.BaseUri : new RUri(baseUrl);
+            // Read per link, so the document base has to be memoized rather than re-walked - see
+            // HtmlContainerInt.DocumentBaseUri.
+            var baseUri = HtmlContainerInt.DocumentBaseUri;
 
             return href.StartsWith('#') || baseUri is null ? href : new RUri(baseUri, href).AbsoluteUri;
         }
