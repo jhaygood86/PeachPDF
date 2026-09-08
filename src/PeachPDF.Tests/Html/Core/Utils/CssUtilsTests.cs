@@ -1177,6 +1177,36 @@ namespace PeachPDF.Tests.Html.Core.Utils
 div {{ width: 200px; height: 100px; {css} }}
 </style></head><body><div>Text</div></body></html>";
 
+        /// <summary>
+        /// <see cref="CssUtils.HasTypedPropertySetter"/> answers exactly the registered set — it is read
+        /// as the cheap first operand of the cascade's typed fast path, so a name it wrongly answers true
+        /// for costs the work the guard exists to skip, and one it wrongly answers false for silently
+        /// drops the fast path back to the string setter.
+        /// </summary>
+        [Theory]
+        [InlineData("grid-template-columns", true)]
+        [InlineData("grid-template-rows", true)]
+        [InlineData("grid-template-areas", false)]
+        [InlineData("display", false)]
+        [InlineData("color", false)]
+        [InlineData("--custom", false)]
+        [InlineData("", false)]
+        public void HasTypedPropertySetter_MatchesTheRegisteredSet(string propName, bool expected)
+        {
+            Assert.Equal(expected, CssUtils.HasTypedPropertySetter(propName));
+        }
+
+        /// <summary>
+        /// The lookup is ordinal, matching the table <see cref="CssUtils.TrySetTypedPropertyValue"/>
+        /// itself uses — so the two never disagree about whether a name has a fast path. Property names
+        /// reach this already lower-cased by the parser.
+        /// </summary>
+        [Fact]
+        public void HasTypedPropertySetter_IsOrdinal_LikeTheTableItReads()
+        {
+            Assert.False(CssUtils.HasTypedPropertySetter("GRID-TEMPLATE-COLUMNS"));
+        }
+
         private static async Task<CssBox> FindDivBoxFromHtml(string html)
         {
             var adapter = new PdfSharpAdapter();
