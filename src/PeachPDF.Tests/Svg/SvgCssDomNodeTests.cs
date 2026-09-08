@@ -88,6 +88,66 @@ namespace PeachPDF.Tests.Svg
             Assert.False(matched.ContainsKey("stroke"));     // "RECT" did NOT match <rect> (case-sensitive)
         }
 
+        // A sibling combinator resolves its reference node by scanning the parent's child list for the
+        // node itself, and an SVG DOM node is a FRESH wrapper object on every access (SvgXmlDomNode /
+        // SvgCssBoxDomNode both re-wrap the underlying element or box), so that scan must compare by
+        // value. Switching it to ReferenceEquals makes every one of these silently stop matching while
+        // the rest of the suite stays green - see
+        // .claude/invariants/css-selectors-sibling-combinator-equals-not-referenceequals.md.
+        [Theory]
+        [InlineData("rect + rect", "second")]         // adjacent: only the rect right after a rect
+        [InlineData("circle + circle", "c2,c3")]      // every circle that follows one, each adjacent to the last
+        [InlineData("rect + circle", "c1")]           // adjacent across element names
+        public void MatchedDeclarations_AdjacentSiblingCombinator_MatchesTheFollowingElement(string selector, string matchIds)
+        {
+            var expected = matchIds.Split(',');
+            var markup = $$"""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>{{selector}} { fill: #00ff00; }</style>
+                  <rect id="first"/>
+                  <rect id="second"/>
+                  <circle id="c1"/>
+                  <circle id="c2"/>
+                  <circle id="c3"/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+
+            foreach (var element in root.Descendants().Where(e => e.Attribute("id") is not null))
+            {
+                var id = element.Attribute("id")!.Value;
+                var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(element, root), cssData, "print");
+                Assert.Equal(expected.Contains(id), matched!.ContainsKey("fill"));
+            }
+        }
+
+        // The general sibling combinator reaches every following sibling, not just the adjacent one, and
+        // skips the intervening elements that do not match its left-hand side.
+        [Fact]
+        public void MatchedDeclarations_GeneralSiblingCombinator_ReachesEveryFollowingSibling()
+        {
+            var markup = """
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <style>circle ~ circle { fill: #00ff00; }</style>
+                  <circle id="c1"/>
+                  <rect id="between"/>
+                  <circle id="c2"/>
+                  <circle id="c3"/>
+                </svg>
+                """;
+            var root = XDocument.Parse(markup).Root!;
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root));
+
+            string[] expected = ["c2", "c3"];
+            foreach (var element in root.Descendants().Where(e => e.Attribute("id") is not null))
+            {
+                var id = element.Attribute("id")!.Value;
+                var matched = SvgCssStyling.GetMatchedDeclarations(new SvgXmlDomNode(element, root), cssData, "print");
+                Assert.Equal(expected.Contains(id), matched!.ContainsKey("fill"));
+            }
+        }
+
         [Theory]
         [InlineData("rect[data-x*=\"idd\"]", true)]   // substring
         [InlineData("rect[data-x^=\"hi\"]", true)]    // prefix

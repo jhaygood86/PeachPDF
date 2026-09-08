@@ -1415,6 +1415,49 @@ namespace PeachPDF.Html.Core
             return false;
         }
 
+        /// <summary>
+        /// The nearest preceding sibling of <paramref name="node"/> that is an element
+        /// (<c>TagName is not null</c>), or null when there is none — including when
+        /// <paramref name="node"/> is not itself an element, or is absent from
+        /// <paramref name="children"/>. Both of those are the cases the
+        /// <c>Where(...).ToList().IndexOf(...)</c> this replaces folded into <c>idx &lt;= 0</c>.
+        ///
+        /// Comparison is the list's own equality, NOT <c>ReferenceEquals</c>: an SVG DOM node
+        /// (<c>SvgCssBoxDomNode</c>, <c>SvgXmlDomNode</c>) is a fresh wrapper object per access
+        /// that defines value equality over the box it wraps, so reference identity would silently
+        /// stop matching sibling combinators inside inline SVG.
+        /// </summary>
+        private static ICssDomNode? PrecedingElementSibling(IReadOnlyList<ICssDomNode> children, ICssDomNode node)
+        {
+            if (node.TagName is null) return null;
+
+            ICssDomNode? previous = null;
+            for (var i = 0; i < children.Count; i++)
+            {
+                var sibling = children[i];
+                if (sibling.Equals(node)) return previous;
+                if (sibling.TagName is not null) previous = sibling;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// <paramref name="node"/>'s position in <paramref name="children"/>, or -1 when it is not
+        /// an element or is absent. See <see cref="PrecedingElementSibling"/> on the equality.
+        /// </summary>
+        private static int ChildIndexOf(IReadOnlyList<ICssDomNode> children, ICssDomNode node)
+        {
+            if (node.TagName is null) return -1;
+
+            for (var i = 0; i < children.Count; i++)
+            {
+                if (children[i].Equals(node)) return i;
+            }
+
+            return -1;
+        }
+
         private static bool DoesSelectorMatch(ComplexSelector complexSelector, ICssDomNode? node)
         {
             var selectorsInReverse = complexSelector.Reverse().ToList();
@@ -1474,10 +1517,10 @@ namespace PeachPDF.Html.Core
                     {
                         var parent = currentRef.Parent;
                         if (parent is null) return false;
-                        var siblings = parent.Children.Where(b => b.TagName is not null).ToList();
-                        var idx = siblings.IndexOf(currentRef);
-                        if (idx <= 0) return false;
-                        currentRef = siblings[idx - 1];
+
+                        var previous = PrecedingElementSibling(parent.Children, currentRef);
+                        if (previous is null) return false;
+                        currentRef = previous;
                         if (!DoesSelectorMatch(selector.Selector, currentRef)) return false;
                         break;
                     }
@@ -1486,12 +1529,20 @@ namespace PeachPDF.Html.Core
                     {
                         var parent = currentRef.Parent;
                         if (parent is null) return false;
-                        var siblings = parent.Children.Where(b => b.TagName is not null).ToList();
-                        var idx = siblings.IndexOf(currentRef);
-                        if (idx <= 0) return false;
+
+                        var children = parent.Children;
+                        var at = ChildIndexOf(children, currentRef);
+                        if (at <= 0) return false;
+
                         ICssDomNode? match = null;
-                        for (var i = idx - 1; i >= 0; i--)
-                            if (DoesSelectorMatch(selector.Selector, siblings[i])) { match = siblings[i]; break; }
+                        for (var i = at - 1; i >= 0; i--)
+                        {
+                            var sibling = children[i];
+                            if (sibling.TagName is null) continue;
+                            if (!DoesSelectorMatch(selector.Selector, sibling)) continue;
+                            match = sibling;
+                            break;
+                        }
                         if (match is null) return false;
                         currentRef = match;
                         break;
