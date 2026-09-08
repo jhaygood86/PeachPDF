@@ -2274,7 +2274,14 @@ namespace PeachPDF.Html.Core.Fragmentation
             // exact for every box whose height is settled by the pass that freezes this slot - and a box whose
             // height is not settled is one that continues into a later fragmentainer, which by construction has
             // content of its own in this one.
-            var ownBoundsCoverRegion = usesOwnBounds && region.Contains(Displaced(Shifted(BoundsOf(box, snapshot)), shift));
+            //
+            // A box whose own bounds are not reliable membership evidence (CssBox.NeedsAClaimedWordToEstablishMembership -
+            // an outside ::marker of a genuine list item, whose position and its one word's claimed-here
+            // status can disagree after an abandoned column-fill attempt, issue #483) can only be "here"
+            // through that word, not through UsesOwnBounds alone - which stays true regardless, since
+            // RectOf still needs it to size the fragment once that word has genuinely been claimed here.
+            var ownBoundsCoverRegion = usesOwnBounds && !CssBox.NeedsAClaimedWordToEstablishMembership(box)
+                && region.Contains(Displaced(Shifted(BoundsOf(box, snapshot)), shift));
 
             if (lines.Count == 0 && words.Count == 0 && children.Count == 0 && !ownBoundsCoverRegion)
             {

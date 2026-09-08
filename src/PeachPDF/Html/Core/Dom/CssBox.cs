@@ -3129,6 +3129,40 @@ namespace PeachPDF.Html.Core.Dom
             box is { IsMarkerPseudoElement: true, ListStylePosition: not Keywords.Inside };
 
         /// <summary>
+        /// Whether <paramref name="box"/>'s own captured <see cref="Location"/>/<see cref="ActualBottom"/>
+        /// bounds are unreliable evidence of which fragmentainer it belongs to, so a caller deciding
+        /// membership (<c>Fragmentation.FragmentEmitter.BuildDraft</c>'s <c>ownBoundsCoverRegion</c>) must
+        /// fall back to whether one of its words was actually claimed there instead.
+        /// </summary>
+        /// <remarks>
+        /// True only for an <see cref="IsOutsideMarker"/> that carries a real word and belongs to a
+        /// genuine <c>display: list-item</c> box — narrower than "any word-bearing box with no per-line
+        /// <see cref="Rectangles"/>" (an ordinary inline box in that shape, e.g. bare text
+        /// <c>CssLineBox.UpdateRectangle</c>'s <c>clonesDecorations</c>/<c>IsImage</c> gate skips, still
+        /// needs its own bounds to answer membership when none of its words are claimed here but its
+        /// subtree otherwise belongs to this slot), and narrower than "any outside marker" (one with no
+        /// word at all - an invisible <c>list-style: none</c> marker, like a border-only empty-content
+        /// <c>::before</c>/<c>::after</c> - still needs its bounds too, per
+        /// <c>DomUtils.HasOwnPrintableContent</c>'s own carve-out). Both wider versions were measured to
+        /// regress <c>Acid2RegressionTests.FullFixture_MatchesPrinceXmlPageCount</c>: Acid2's own fixture
+        /// retargets some <c>&lt;li&gt;</c>s to <c>display: table-cell</c>/<c>table</c> with no
+        /// <c>list-style: none</c> override, and PeachPDF still produces a marker box with a real word for
+        /// them even though CSS 2.1 §12.5.1 generates a marker only for <c>display: list-item</c> - a
+        /// pre-existing, out-of-scope quirk this predicate must not reach.
+        /// <para>
+        /// For a marker this returns true for, its bounds are captured unconditionally
+        /// (<c>Fragments.BoxGeometrySnapshot.CaptureBox</c>) regardless of whether its word is
+        /// <see cref="CssRect.AwaitsTheNextFragmentainer"/> in that snapshot - stale evidence when a
+        /// column-fill retry positioned the marker there before discovering the item kept nothing in that
+        /// column and resumed it in the next one (<see cref="ResumeInTheNextFragmentainer"/>,
+        /// <see cref="TakeBackTheMarkerOfAnItemThisPassKeptNothingOf"/>). Issue #483.
+        /// </para>
+        /// </remarks>
+        internal static bool NeedsAClaimedWordToEstablishMembership(CssBox box) =>
+            IsOutsideMarker(box) && box.Words.Count > 0
+            && box.ParentBox?.DerivedStyle.ActualDisplay == Keywords.ListItem;
+
+        /// <summary>
         /// Picks up this box's resumption state for the pass that is starting, discarding anything left
         /// over from an earlier layout.
         /// </summary>
