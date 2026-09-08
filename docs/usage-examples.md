@@ -19,6 +19,7 @@ using PeachPDF.Network;
 - [Rendering in the browser (Blazor WebAssembly)](#rendering-in-the-browser-blazor-webassembly)
 - [Sharing a parsed CSS context across renders](#sharing-a-parsed-css-context-across-renders)
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
+- [Detecting text that was clipped away](#detecting-text-that-was-clipped-away)
 - [Fonts](#fonts)
 - [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
 - [Enabling interactive PDF forms](#enabling-interactive-pdf-forms)
@@ -255,6 +256,39 @@ var document = await generator.GeneratePdf(html, pdfConfig);
 using var fileStream = File.Create("output.pdf");
 document.Save(fileStream);
 ```
+
+## Detecting text that was clipped away
+
+A word can be drawn into the PDF and then truncated by a clip — an `overflow: hidden` box narrower than an unbreakable value, most often. The glyphs are still in the content stream, so a reader that parses that stream finds them and reports the document complete, while anything that honours the clip shows only part of the word. Both are behaving correctly; the difference simply is not recorded in the file.
+
+That makes it the one loss class only the engine can report, because only the painter knows the word's rect was wider than the clip it was drawn into. `PeachPdfDocument.ClipReport` is that report:
+
+```csharp
+var document = await generator.GeneratePdf(html, pdfConfig);
+
+if (document.ClipReport.ClippedWords.Count > 0)
+{
+    foreach (var word in document.ClipReport.ClippedWords)
+    {
+        Console.WriteLine(
+            $"'{word.Text}' kept {word.KeptFraction:P0} " +
+            $"({word.VisibleWidth:F1}pt of {word.DrawnWidth:F1}pt)");
+    }
+}
+```
+
+Useful when generating documents from templates against data you do not control, where a value one character longer than its column is the difference between a correct invoice and a truncated one that nothing flagged.
+
+Each `ClippedWord` carries the geometry rather than a verdict — `DrawnWidth`, `VisibleWidth`, `DrawnHeight`, `VisibleHeight`, and `KeptFraction` — so what counts as material loss is yours to decide. A word is reported when **either** dimension was reduced, so a word clipped only vertically — a box short enough to cut a line's height but wide enough to keep the whole word — comes back with `VisibleWidth` equal to `DrawnWidth`. `ClipReport.ClippedChars` totals the characters carried by truncated words; it counts the whole word, since a word is the smallest unit the painter knows and apportioning characters to a sub-rectangle would invent precision the measurement does not have.
+
+The report **accumulates** across repeated `AddPdfPages` calls, so a document assembled from several calls carries every call's findings rather than only the last one's.
+
+Two things are deliberately **not** reported:
+
+- **`text-overflow: ellipsis`.** That is truncation the author asked for and the reader can see, which is the opposite of the silent loss this exists for.
+- **Whitespace.** A clipped space is not something anyone can see or act on.
+
+**The report under-reports, and that is the safe direction rather than completeness.** It measures against the renderer's tracked clip-rect stack, and two clips never reach it: a `border-radius` or `clip-path` clip, and the page-level clip applied outside that stack. An empty report is therefore a weaker statement than "nothing was clipped". A word that fell *entirely* outside its clip is not reported here either — it is never drawn at all, so reading the output back detects it as missing text.
 
 ## Fonts
 

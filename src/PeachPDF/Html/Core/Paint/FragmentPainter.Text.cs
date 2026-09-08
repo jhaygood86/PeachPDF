@@ -66,7 +66,7 @@ namespace PeachPDF.Html.Core.Paint
         /// over an arbitrary (not necessarily <see cref="Fragments.BoxFragment.Words"/> itself) ordered
         /// list.
         /// </summary>
-        private static void PaintWordSequence(RGraphics g, CssBox box, IReadOnlyList<TextFragment> words)
+        private void PaintWordSequence(RGraphics g, CssBox box, IReadOnlyList<TextFragment> words)
         {
             foreach (var wordFragment in words)
             {
@@ -84,6 +84,13 @@ namespace PeachPDF.Html.Core.Paint
                 // content stream and text-extraction layer) duplicate of the word painted on the page it
                 // just left. See GitHub issue #113.
                 if (clip.Width <= VisibilityClipEpsilon || clip.Height <= VisibilityClipEpsilon) continue;
+
+                // Past this point the word IS drawn, and the surviving intersection can still be
+                // smaller than the word itself - the glyphs go into the content stream whole and the
+                // PDF clip operator truncates them on the page. That is invisible to any validator
+                // that reads the content stream back, so record it here, where the intersection has
+                // already been computed. Detection only: nothing about what is painted changes.
+                RecordIfClipped(word, wordFragment.Rect, clip);
 
                 if (word is CssRectLeader leader)
                 {
@@ -106,6 +113,49 @@ namespace PeachPDF.Html.Core.Paint
                     logicalText = PeachPDF.Text.Bidi.BidiMirrorResolver.ReverseRunes(rectWord.PreMirrorText);
                 DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new RSize(word.Width, word.Height), logicalText: logicalText);
             }
+        }
+
+        /// <summary>
+        /// Records a word that was drawn but whose visible rect is smaller than its own - the loss
+        /// class a content-stream reader cannot see. See <see cref="PeachPDF.ClippedWord"/>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <paramref name="visible"/> is the caller's ALREADY-intersected copy, so this adds no
+        /// geometry work to the paint path - it compares two rects it was handed.
+        /// </para>
+        /// <para>
+        /// The tolerance is deliberately coarse. <see cref="VisibilityClipEpsilon"/> exists to catch
+        /// a float-noise zero and is far too tight to mean "materially truncated": at 1e-6 every word
+        /// sitting flush against a clip edge would be reported. A sub-point sliver is not a legible
+        /// loss, so the threshold is a fraction of a point, and the report carries the full geometry
+        /// so what counts as material can be settled by measuring real documents rather than guessed
+        /// here.
+        /// </para>
+        /// </remarks>
+        private void RecordIfClipped(CssRect word, RRect drawn, RRect visible)
+        {
+            const double clippedTolerance = 0.5;
+
+            if (visible.Width >= drawn.Width - clippedTolerance
+                && visible.Height >= drawn.Height - clippedTolerance)
+            {
+                return;
+            }
+
+            // Whitespace carries no legible content, and a clipped space is not a defect anyone can
+            // see or act on. Excluding it keeps the report about text a reader has lost.
+            if (word.IsSpaces) return;
+
+            var text = word.FirstLineText ?? word.Text;
+            if (string.IsNullOrEmpty(text)) return;
+
+            container.ClipReport.Words.Add(new PeachPDF.ClippedWord(
+                text,
+                drawn.Width,
+                Math.Max(0, Math.Min(visible.Width, drawn.Width)),
+                drawn.Height,
+                Math.Max(0, Math.Min(visible.Height, drawn.Height))));
         }
 
         /// <summary>
