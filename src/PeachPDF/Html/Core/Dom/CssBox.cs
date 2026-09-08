@@ -6639,11 +6639,58 @@ namespace PeachPDF.Html.Core.Dom
             double paddingSum = 0f;
             double marginSum = 0f;
 
-            GetMinMaxSumWords(this, ref min, ref maxSum, ref paddingSum, ref marginSum);
+            // WidestLine carries the widest line CLOSED by a <br> anywhere in the
+            // subtree, which maxSum alone cannot -- see GetMinMaxSumWords's own break handling.
+            double widestLine = 0f;
 
-            maxWidth = paddingSum + maxSum;
+            // The trailing space of the last word before a <br> -- see the break handling
+            // in GetMinMaxSumWords.
+            double trailingSpace = 0f;
+
+            // Nothing precedes the first word measured, so its own leading space is at the
+            // start of a line and is removed -- see the word loop in GetMinMaxSumWords.
+            var atLineStart = true;
+
+            GetMinMaxSumWords(this, ref min, ref maxSum, ref paddingSum, ref marginSum, ref widestLine, ref trailingSpace, ref atLineStart);
+
+            maxWidth = paddingSum + Math.Max(maxSum, widestLine);
             minWidth = paddingSum + (min < 90999 ? min : 0);
+
+            // A box that cannot wrap has no smaller size to offer -- its min-content
+            // IS its max-content (CSS 2.1 §17.5.2). Measured as the longest word it is far
+            // smaller, and a table column is sized from this: a column then stays narrower than
+            // the run it holds, and the run prints over the column beside it. The case that found
+            // this declares `.field-label { white-space: nowrap; width: 100px }` and puts a
+            // 23-character label in one -- Chrome widens that column from the declared
+            // 75pt to the 82.4pt the run needs, this left it at 75pt and overprinted the value.
+            // Patch 2 stopped the overflow being clipped away, so it became visible rather
+            // than lost.
+            if (WhiteSpace.Value is Whitespace.NoWrap or Whitespace.Pre)
+            {
+                minWidth = Math.Max(minWidth, maxWidth);
+            }
         }
+
+        /// <summary>
+        /// Whether this box begins a line of its own in the intrinsic walk, and so
+        /// competes for "widest line wins" rather than adding to the line in progress. Named
+        /// because three places need to agree on it.
+        /// </summary>
+        private static bool StartsNewLine(CssBox box) =>
+            box.DerivedStyle.ActualDisplay != Keywords.Inline
+            && box.DerivedStyle.ActualDisplay != Keywords.TableCell
+            && box.WhiteSpace.Value != Whitespace.NoWrap;
+
+        /// <summary>
+        /// Whether this box lays its children out along a horizontal flex line, so their
+        /// intrinsic widths ADD UP instead of competing for "widest line wins".
+        ///
+        /// Row only. A flex column genuinely does stack its items, which is what the block rule this
+        /// walk is built on already describes.
+        /// </summary>
+        private static bool IsFlexRow(CssBox box) =>
+            box.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
+            && box.FlexDirection.Value is CSS.FlexDirection.Row or CSS.FlexDirection.RowReverse;
 
         /// <summary>
         /// Get the <paramref name="min"/> and <paramref name="maxSum"/> of the box words content and <paramref name="paddingSum"/>.<br/>
@@ -6653,8 +6700,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="maxSum">the max width a single line of words can take without wrapping</param>
         /// <param name="paddingSum">the total amount of padding the content has </param>
         /// <param name="marginSum"></param>
+        /// <param name="widestLine">the widest line closed by a &lt;br&gt; anywhere in the subtree.</param>
+        /// <param name="trailingSpace">the hanging trailing space of the last word measured.</param>
+        /// <param name="atLineStart">whether nothing has been measured onto the current line yet.</param>
         /// <returns></returns>
-        private static void GetMinMaxSumWords(CssBox box, ref double min, ref double maxSum, ref double paddingSum, ref double marginSum)
+        private static void GetMinMaxSumWords(CssBox box, ref double min, ref double maxSum, ref double paddingSum, ref double marginSum, ref double widestLine, ref double trailingSpace, ref bool atLineStart)
         {
             double? oldSum = null;
             // paddingSum must be scoped per "line" the same way maxSum is (see the oldSum save/restore
@@ -6669,12 +6719,20 @@ namespace PeachPDF.Html.Core.Dom
             double? oldPaddingSum = null;
 
             // not inline (block) boxes start a new line so we need to reset the max sum
-            if (box.DerivedStyle.ActualDisplay != Keywords.Inline && box.DerivedStyle.ActualDisplay != Keywords.TableCell && box.WhiteSpace.Value != Whitespace.NoWrap)
+            if (StartsNewLine(box))
             {
                 oldSum = maxSum;
                 maxSum = marginSum;
                 oldPaddingSum = paddingSum;
                 paddingSum = 0;
+                atLineStart = true;
+                // Reset with the rest of the per-line state. trailingSpace is the hanging space of
+                // the last word measured, and the line it hung off has just ended -- carrying it into
+                // a freshly-reset maxSum would subtract a previous line's space from this one. The
+                // reachable shape is a block whose very first word is a forced break, where
+                // `widestLine = Math.Max(widestLine, maxSum - trailingSpace)` runs before any word of
+                // this box has been measured.
+                trailingSpace = 0;
             }
 
             // add the padding
@@ -6685,13 +6743,85 @@ namespace PeachPDF.Html.Core.Dom
             if (box.DerivedStyle.ActualDisplay == Keywords.Table)
                 paddingSum += CssLayoutEngineTable.GetTableSpacing(box);
 
-            if (box.Words.Count > 0)
+            // A flex ROW's items sit side by side, so the row's intrinsic width is the SUM
+            // of theirs, and each item's own content is measured in isolation. The flat walk below
+            // cannot express either: it carries ONE running line total across the whole subtree, so a
+            // <br> inside one item terminates the total the previous item contributed to. The case that
+            // found this is a logo beside a five-line address, and the row measured as "logo + the address's
+            // FIRST line" (140pt against the 164pt it needs) -- the outer row then handed it 140pt, and
+            // the address wrapped to one word per line with the logo painted over it.
+            if (IsFlexRow(box) && box.Boxes.Count > 0)
+            {
+                double rowMax = 0, rowMin = 0;
+                var wraps = box.FlexWrap.Value is not CSS.FlexWrap.NoWrap;
+                var items = 0;
+                foreach (var item in box.Boxes)
+                {
+                    if (item.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                    item.GetMinMaxWidth(out var itemMin, out var itemMax);
+                    var itemMargins = item.ActualMarginLeft + item.ActualMarginRight;
+                    rowMax += itemMax + itemMargins;
+                    // A wrapping row can put every item on its own line, so its min-content is the
+                    // widest single item rather than the sum.
+                    rowMin = wraps
+                        ? Math.Max(rowMin, itemMin + itemMargins)
+                        : rowMin + itemMin + itemMargins;
+                    items++;
+                }
+
+                // The gaps sit between the items on the line and are part of the width the row needs
+                // (css-align-3 §8). Left out, the row measures narrower than it lays out and its own
+                // items are shrunk to fit a size that was never big enough.
+                if (items > 1)
+                {
+                    var gap = box.FlexColumnGap.Value is { IsValue: true, Value: { } gapLength }
+                        ? CssValueParser.ParseLength(gapLength, 0, box)
+                        : 0;
+                    rowMax += gap * (items - 1);
+                    if (!wraps) rowMin += gap * (items - 1);
+                }
+
+                maxSum += rowMax;
+                min = Math.Max(min, rowMin);
+            }
+            else if (box.Words.Count > 0)
             {
                 // calculate the min and max sum for all the words in the box
                 foreach (var word in box.Words)
                 {
-                    maxSum += word.FullWidth + (word.HasSpaceBefore ? word.OwnerBox.ActualWordSpacing : 0);
+                    // A <br> ends the line, so max-content is the WIDEST line either
+                    // side of it, not their sum -- the same "widest line wins" rule the block
+                    // boundary at the top of this function already applies, and the reason a
+                    // block-level sibling resets to marginSum rather than accumulating.
+                    // Without it a table cell reading "H-095<br>H-095-A1 HOSE" measured both
+                    // lines end to end and claimed a column 17pt wider than the browser's,
+                    // which the surplus distribution then took out of every other column.
+                    if (word.IsLineBreak)
+                    {
+                        // The space that ended the line hangs and is not part of the line's width
+                        // (css-text-3 §4.1.2), the same rule the last-word subtraction below applies
+                        // to a box's final line. CssRect.FullWidth adds one unconditionally, so
+                        // without this every <br>-separated line measured one space too wide -- 2.6pt
+                        // on that five-line address block, enough to over-subscribe its flex row and wrap
+                        // the heading beside it.
+                        widestLine = Math.Max(widestLine, maxSum - trailingSpace);
+                        maxSum = marginSum;
+                        trailingSpace = 0;
+                        atLineStart = true;
+                        continue;
+                    }
+
+                    // The leading space of the first word on a line is removed the same way its
+                    // trailing one is (css-text-3 §4.1.2) -- and the same way layout now removes it,
+                    // so the two agree. They did not: measurement claimed 2.6pt per line more than
+                    // that same address block draws, over-subscribed the flex row it shares with the
+                    // document heading, and wrapped the heading to get the space back.
+                    maxSum += word.FullWidth
+                              + (word.HasSpaceBefore && !atLineStart ? word.OwnerBox.ActualWordSpacing : 0);
                     min = Math.Max(min, word.Width);
+                    trailingSpace = word.ActualWordSpacing;
+                    atLineStart = false;
                 }
 
                 // remove the last word padding
@@ -6707,9 +6837,23 @@ namespace PeachPDF.Html.Core.Dom
 
                     marginSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
 
-                    //maxSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
+                    // An inline child's horizontal margins sit ON the line and are part
+                    // of its width. A child that starts its own line does not need this -- the
+                    // reset at the top of its own call seeds maxSum from marginSum, which already
+                    // carries them, and adding them here as well would count them twice.
+                    //
+                    // A label/value column labels its detail fields with
+                    // `<span class="label">Printed Date:</span>`, and `.label` has
+                    // `margin-right: 5px`. Uncounted, the `space-between` row holding those fields
+                    // measured 3.8pt narrower than it draws, so the row's right-hand column was
+                    // handed less than its content and wrapped its last word.
+                    if (!StartsNewLine(childBox))
+                    {
+                        maxSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
+                    }
+
                     var maxSumBeforeChild = maxSum;
-                    GetMinMaxSumWords(childBox, ref min, ref maxSum, ref paddingSum, ref marginSum);
+                    GetMinMaxSumWords(childBox, ref min, ref maxSum, ref paddingSum, ref marginSum, ref widestLine, ref trailingSpace, ref atLineStart);
 
                     // This walk otherwise never consults a box's own explicit CSS `width` at all - only
                     // literal word/text content. That's usually fine (explicit width constrains layout
@@ -6750,8 +6894,7 @@ namespace PeachPDF.Html.Core.Dom
                         && !(childBox.DerivedStyle.ActualDisplay == Keywords.Inline && childBox.Words.Count == 0))
                     {
                         var explicitContentWidth = CssValueParser.ParseLength(childBox.Width, 0, childBox);
-                        var childStartsNewLine = childBox.DerivedStyle.ActualDisplay != Keywords.Inline
-                            && childBox.DerivedStyle.ActualDisplay != Keywords.TableCell && childBox.WhiteSpace.Value != Whitespace.NoWrap;
+                        var childStartsNewLine = StartsNewLine(childBox);
                         maxSum = childStartsNewLine
                             ? Math.Max(maxSum, explicitContentWidth)
                             : Math.Max(maxSum, maxSumBeforeChild + explicitContentWidth);
