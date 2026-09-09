@@ -299,6 +299,16 @@ namespace PeachPDF.Fonts.OpenType
 
     internal sealed class GposTable
     {
+
+        private Func<int, GposSingleAdjustmentLookup?>? _readSingleAdjustmentLookupDelegate;
+        private Func<int, GposCursiveAttachmentLookup?>? _readCursiveAttachmentLookupDelegate;
+        private Func<int, GposPairAdjustmentLookup?>? _readPairAdjustmentLookupDelegate;
+        private Func<int, GposMarkToBaseLookup?>? _readMarkToBaseLookupDelegate;
+        private Func<int, GposMarkToMarkLookup?>? _readMarkToMarkLookupDelegate;
+        private Func<int, GposMarkToLigatureLookup?>? _readMarkToLigatureLookupDelegate;
+        private Func<int, GposContextualLookup?>? _readContextualLookupDelegate;
+        private Func<int, GposChainingContextLookup?>? _readChainingContextLookupDelegate;
+        private Func<int, int>? _readResolvedLookupTypeDelegate;
         private readonly OpenTypeFontface _face;
         private readonly int _scriptListOffset;
         private readonly int _featureListOffset;
@@ -392,33 +402,33 @@ namespace PeachPDF.Fonts.OpenType
         }
 
         public GposSingleAdjustmentLookup? GetSingleAdjustmentLookup(int lookupListIndex)
-            => _singleAdjustmentCache.GetOrAdd(lookupListIndex, ReadSingleAdjustmentLookup);
+            => _singleAdjustmentCache.GetOrAdd(lookupListIndex, _readSingleAdjustmentLookupDelegate ??= ReadSingleAdjustmentLookup);
 
         public GposCursiveAttachmentLookup? GetCursiveAttachmentLookup(int lookupListIndex)
-            => _cursiveAttachmentCache.GetOrAdd(lookupListIndex, ReadCursiveAttachmentLookup);
+            => _cursiveAttachmentCache.GetOrAdd(lookupListIndex, _readCursiveAttachmentLookupDelegate ??= ReadCursiveAttachmentLookup);
 
         public GposPairAdjustmentLookup? GetPairAdjustmentLookup(int lookupListIndex)
-            => _pairAdjustmentCache.GetOrAdd(lookupListIndex, ReadPairAdjustmentLookup);
+            => _pairAdjustmentCache.GetOrAdd(lookupListIndex, _readPairAdjustmentLookupDelegate ??= ReadPairAdjustmentLookup);
 
         public GposMarkToBaseLookup? GetMarkToBaseLookup(int lookupListIndex)
-            => _markToBaseCache.GetOrAdd(lookupListIndex, ReadMarkToBaseLookup);
+            => _markToBaseCache.GetOrAdd(lookupListIndex, _readMarkToBaseLookupDelegate ??= ReadMarkToBaseLookup);
 
         public GposMarkToMarkLookup? GetMarkToMarkLookup(int lookupListIndex)
-            => _markToMarkCache.GetOrAdd(lookupListIndex, ReadMarkToMarkLookup);
+            => _markToMarkCache.GetOrAdd(lookupListIndex, _readMarkToMarkLookupDelegate ??= ReadMarkToMarkLookup);
 
         public GposMarkToLigatureLookup? GetMarkToLigatureLookup(int lookupListIndex)
-            => _markToLigatureCache.GetOrAdd(lookupListIndex, ReadMarkToLigatureLookup);
+            => _markToLigatureCache.GetOrAdd(lookupListIndex, _readMarkToLigatureLookupDelegate ??= ReadMarkToLigatureLookup);
 
         public GposContextualLookup? GetContextualLookup(int lookupListIndex)
-            => _contextualLookupCache.GetOrAdd(lookupListIndex, ReadContextualLookup);
+            => _contextualLookupCache.GetOrAdd(lookupListIndex, _readContextualLookupDelegate ??= ReadContextualLookup);
 
         public GposChainingContextLookup? GetChainingContextLookup(int lookupListIndex)
-            => _chainingContextLookupCache.GetOrAdd(lookupListIndex, ReadChainingContextLookup);
+            => _chainingContextLookupCache.GetOrAdd(lookupListIndex, _readChainingContextLookupDelegate ??= ReadChainingContextLookup);
 
         /// <summary>The real lookup type at <paramref name="lookupListIndex"/> - a Type 9 (Extension
         /// Positioning) lookup resolves to whatever type it wraps. Returns -1 for an out-of-range index.</summary>
         public int GetResolvedLookupType(int lookupListIndex)
-            => _resolvedLookupTypeCache.GetOrAdd(lookupListIndex, ReadResolvedLookupType);
+            => _resolvedLookupTypeCache.GetOrAdd(lookupListIndex, _readResolvedLookupTypeDelegate ??= ReadResolvedLookupType);
 
         private (string Tag, int Offset)[] ReadFeatureRecords()
         {
