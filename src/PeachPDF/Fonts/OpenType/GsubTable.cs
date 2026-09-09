@@ -286,6 +286,15 @@ namespace PeachPDF.Fonts.OpenType
 
     internal sealed class GsubTable
     {
+
+        private Func<int, GsubLigatureLookup?>? _readLigatureLookupDelegate;
+        private Func<int, GsubSingleSubstitutionLookup?>? _readSingleSubstitutionLookupDelegate;
+        private Func<int, GsubAlternateSubstitutionLookup?>? _readAlternateSubstitutionLookupDelegate;
+        private Func<int, GsubMultipleSubstitutionLookup?>? _readMultipleSubstitutionLookupDelegate;
+        private Func<int, GsubContextualLookup?>? _readContextualLookupDelegate;
+        private Func<int, GsubChainingContextLookup?>? _readChainingContextLookupDelegate;
+        private Func<int, GsubReverseChainSingleSubstLookup?>? _readReverseChainSingleSubstLookupDelegate;
+        private Func<int, int>? _readResolvedLookupTypeDelegate;
         private readonly OpenTypeFontface _face;
         private readonly int _scriptListOffset;
         private readonly int _featureListOffset;
@@ -397,38 +406,38 @@ namespace PeachPDF.Fonts.OpenType
         /// <summary>Parses (and caches) the lookup at <paramref name="lookupListIndex"/> as a
         /// ligature-substitution lookup, or null if it isn't one (or is an unsupported lookup type).</summary>
         public GsubLigatureLookup? GetLigatureLookup(int lookupListIndex)
-            => _ligatureLookupCache.GetOrAdd(lookupListIndex, ReadLigatureLookup);
+            => _ligatureLookupCache.GetOrAdd(lookupListIndex, _readLigatureLookupDelegate ??= ReadLigatureLookup);
 
         /// <summary>Parses (and caches) the lookup at <paramref name="lookupListIndex"/> as a
         /// single-substitution lookup, or null if it isn't one (or is an unsupported lookup type).</summary>
         public GsubSingleSubstitutionLookup? GetSingleSubstitutionLookup(int lookupListIndex)
-            => _singleSubstitutionLookupCache.GetOrAdd(lookupListIndex, ReadSingleSubstitutionLookup);
+            => _singleSubstitutionLookupCache.GetOrAdd(lookupListIndex, _readSingleSubstitutionLookupDelegate ??= ReadSingleSubstitutionLookup);
 
         /// <summary>Parses (and caches) the lookup at <paramref name="lookupListIndex"/> as an
         /// alternate-substitution lookup, or null if it isn't one (or is an unsupported lookup type).</summary>
         public GsubAlternateSubstitutionLookup? GetAlternateSubstitutionLookup(int lookupListIndex)
-            => _alternateSubstitutionLookupCache.GetOrAdd(lookupListIndex, ReadAlternateSubstitutionLookup);
+            => _alternateSubstitutionLookupCache.GetOrAdd(lookupListIndex, _readAlternateSubstitutionLookupDelegate ??= ReadAlternateSubstitutionLookup);
 
         /// <summary>Parses (and caches) the lookup at <paramref name="lookupListIndex"/> as a
         /// multiple-substitution lookup, or null if it isn't one (or is an unsupported lookup type).</summary>
         public GsubMultipleSubstitutionLookup? GetMultipleSubstitutionLookup(int lookupListIndex)
-            => _multipleSubstitutionLookupCache.GetOrAdd(lookupListIndex, ReadMultipleSubstitutionLookup);
+            => _multipleSubstitutionLookupCache.GetOrAdd(lookupListIndex, _readMultipleSubstitutionLookupDelegate ??= ReadMultipleSubstitutionLookup);
 
         /// <summary>Parses (and caches) the lookup at <paramref name="lookupListIndex"/> as a
         /// contextual-substitution lookup, or null if it isn't one (or is an unsupported lookup type).</summary>
         public GsubContextualLookup? GetContextualLookup(int lookupListIndex)
-            => _contextualLookupCache.GetOrAdd(lookupListIndex, ReadContextualLookup);
+            => _contextualLookupCache.GetOrAdd(lookupListIndex, _readContextualLookupDelegate ??= ReadContextualLookup);
 
         /// <summary>Parses (and caches) the lookup at <paramref name="lookupListIndex"/> as a
         /// chaining-context-substitution lookup, or null if it isn't one (or is an unsupported type).</summary>
         public GsubChainingContextLookup? GetChainingContextLookup(int lookupListIndex)
-            => _chainingContextLookupCache.GetOrAdd(lookupListIndex, ReadChainingContextLookup);
+            => _chainingContextLookupCache.GetOrAdd(lookupListIndex, _readChainingContextLookupDelegate ??= ReadChainingContextLookup);
 
         /// <summary>Parses (and caches) the lookup at <paramref name="lookupListIndex"/> as a
         /// reverse-chaining-context single-substitution lookup, or null if it isn't one (or is an
         /// unsupported type).</summary>
         public GsubReverseChainSingleSubstLookup? GetReverseChainSingleSubstLookup(int lookupListIndex)
-            => _reverseChainSingleSubstLookupCache.GetOrAdd(lookupListIndex, ReadReverseChainSingleSubstLookup);
+            => _reverseChainSingleSubstLookupCache.GetOrAdd(lookupListIndex, _readReverseChainSingleSubstLookupDelegate ??= ReadReverseChainSingleSubstLookup);
 
         /// <summary>
         /// The real lookup type at <paramref name="lookupListIndex"/> - a Type 7 (Extension
@@ -437,7 +446,7 @@ namespace PeachPDF.Fonts.OpenType
         /// Returns -1 for an out-of-range index.
         /// </summary>
         public int GetResolvedLookupType(int lookupListIndex)
-            => _resolvedLookupTypeCache.GetOrAdd(lookupListIndex, ReadResolvedLookupType);
+            => _resolvedLookupTypeCache.GetOrAdd(lookupListIndex, _readResolvedLookupTypeDelegate ??= ReadResolvedLookupType);
 
         /// <summary>
         /// Whether every tag in <paramref name="requiredTags"/> independently resolves to at least

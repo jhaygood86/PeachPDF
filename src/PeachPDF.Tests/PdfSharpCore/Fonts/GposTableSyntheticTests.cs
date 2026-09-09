@@ -578,6 +578,59 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             return combined;
         }
 
+        /// <summary>
+        /// A cache hit on a lookup getter allocates nothing.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Every one of these getters is <c>_cache.GetOrAdd(index, ReadSomething)</c>. The second
+        /// argument is a <b>method group</b>, and converting one to a <c>Func&lt;&gt;</c> allocates a
+        /// fresh delegate on <i>every call</i> — including the overwhelmingly common case where the
+        /// cache already holds the value and the factory is never invoked. The positioner asks these
+        /// questions once per glyph per lookup, so the delegate is allocated per glyph while the
+        /// thing it exists to build is allocated once.
+        /// </para>
+        /// <para>
+        /// Asserted here rather than through a rendered document because allocation over a document
+        /// scales with whatever font a machine resolves; against a synthetic face with the cache
+        /// already primed, the delegate is the only thing left that can allocate, which makes the
+        /// assertion exact and the same everywhere.
+        /// </para>
+        /// </remarks>
+        [Fact]
+        public void ALookupCacheHit_AllocatesNothing()
+        {
+            var (face, tableStart) = BuildFaceWithSyntheticGpos();
+            var gpos = new GposTable(face, tableStart);
+
+            // Prime every cache this touches, and JIT the path, before anything is counted.
+            for (var i = 0; i < 3; i++)
+            {
+                gpos.GetResolvedLookupType(0);
+                gpos.GetMarkToBaseLookup(0);
+                gpos.GetSingleAdjustmentLookup(0);
+            }
+
+            // Per THREAD, not process-wide: this suite runs collections in parallel, so
+            // GC.GetTotalAllocatedBytes would count whatever every other test is allocating.
+            const int calls = 2000;
+            var before = GC.GetAllocatedBytesForCurrentThread();
+
+            for (var i = 0; i < calls; i++)
+            {
+                gpos.GetResolvedLookupType(0);
+                gpos.GetMarkToBaseLookup(0);
+                gpos.GetSingleAdjustmentLookup(0);
+            }
+
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            Assert.True(allocated < 4096,
+                $"{calls * 3:N0} cache hits allocated {allocated:N0} bytes. They should allocate "
+                + "nothing: a method group passed to GetOrAdd becomes a new delegate on every call, "
+                + "even when the cache already has the value.");
+        }
+
         private static (OpenTypeFontface Face, int TableStart) BuildFaceWithSyntheticGpos()
         {
             byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
