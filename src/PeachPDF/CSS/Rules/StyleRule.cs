@@ -30,7 +30,18 @@ namespace PeachPDF.CSS
 
         public ISelector Selector
         {
-            get => Children.OfType<ISelector>().FirstOrDefault();
+            // Indexed rather than Children.OfType<...>().FirstOrDefault(): this is read per box per
+            // candidate rule during selector matching, and the LINQ form allocates an OfType iterator
+            // plus a boxed list enumerator on every read.
+            get
+            {
+                for (var i = 0; i < ChildList.Count; i++)
+                {
+                    if (ChildList[i] is ISelector selector) return selector;
+                }
+
+                return null;
+            }
             set => ReplaceSingle(Selector, value);
         }
 
@@ -44,6 +55,19 @@ namespace PeachPDF.CSS
             set => Selector = Parser.ParseSelector(value);
         }
 
-        public StyleDeclaration Style => Children.OfType<StyleDeclaration>().FirstOrDefault();
+        public StyleDeclaration Style
+        {
+            // Indexed for the same reason as Selector above. Null when the declaration block child
+            // has been removed, which is what the LINQ FirstOrDefault it replaced also returned.
+            get
+            {
+                for (var i = 0; i < ChildList.Count; i++)
+                {
+                    if (ChildList[i] is StyleDeclaration style) return style;
+                }
+
+                return null;
+            }
+        }
     }
 }
