@@ -2,5 +2,22 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
+    <!-- net11.0 is opt-in based on the resolved SDK, not unconditional: global.json pins the
+         floor at a stable .NET 10 SDK with rollForward "latestMajor" and allowPrerelease true,
+         so a contributor with only .NET 10 installed builds/tests exactly as before (net11.0
+         quietly isn't offered), while a machine that also has the .NET 11 RC SDK installed
+         (including CI, once it installs it) automatically gets promoted to it and this condition
+         picks up net11.0 too - no per-contributor or per-job global.json edits needed.
+         $(NETCoreSdkVersion) itself isn't reliably populated yet at this point in project
+         evaluation (confirmed empty here under some SDK versions, populated under others - an
+         internal import-ordering difference between SDK versions, not something to depend on),
+         so the SDK version is derived from $(MSBuildExtensionsPath) instead, which points at the
+         resolved SDK's own root folder and is reliably set this early on every SDK version
+         tested. That path's trailing separator is present under some SDK versions and absent
+         under others (also observed directly), hence the explicit TrimEnd normalization before
+         taking the final path segment. -->
+    <NormalizedSdkPath>$(MSBuildExtensionsPath.TrimEnd('\').TrimEnd('/'))</NormalizedSdkPath>
+    <ResolvedNETCoreSdkVersion>$([System.IO.Path]::GetFileName($(NormalizedSdkPath)))</ResolvedNETCoreSdkVersion>
+    <TargetFrameworks Condition="$([MSBuild]::VersionGreaterThanOrEquals($(ResolvedNETCoreSdkVersion), '11.0.100'))">$(TargetFrameworks);net11.0</TargetFrameworks>
   </PropertyGroup>
 </Project>

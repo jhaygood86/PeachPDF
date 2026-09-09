@@ -4,7 +4,7 @@ Thanks for your interest in contributing. This document covers how to build, tes
 
 ## Getting started
 
-- The solution is at `src/PeachPDF.slnx`. PeachPDF targets .NET 8 and .NET 10.
+- The solution is at `src/PeachPDF.slnx`. PeachPDF targets .NET 8 and .NET 10, plus .NET 11 (currently a release candidate) when the SDK you're building with supports it — see [net11.0 locally](#net110-locally) below. A plain `dotnet build`/`dotnet test` with only the .NET 10 SDK installed works exactly as it always has; nothing extra is required unless you specifically want to build or test against net11.0.
 - All `dotnet` CLI commands below assume your working directory is `src/` — the projects (and their relative paths in this doc) are rooted there.
 
 ## Building and testing
@@ -15,7 +15,17 @@ Run the test suite with a single target framework:
 dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
 ```
 
-`PeachPDF.Tests` multi-targets net8.0 and net10.0. A bare `dotnet test` (no `--framework`) builds and runs the full suite (3000+ tests) twice in one invocation, which roughly doubles local build/test time — always pass `--framework net8.0` for routine local runs. Only add an explicit net10.0 run if you suspect a net10.0-specific issue.
+`PeachPDF.Tests` multi-targets net8.0 and net10.0 by default (net11.0 joins the list only when you're building with an SDK that supports it — see below). A bare `dotnet test` (no `--framework`) builds and runs the full suite (3000+ tests) once per resolved target framework in one invocation, which roughly doubles (or triples, with net11.0 active) local build/test time — always pass `--framework net8.0` for routine local runs. Only add an explicit net10.0 or net11.0 run if you suspect an issue specific to that target.
+
+### net11.0 locally
+
+The repo's tracked `global.json` pins a `10.0.100` floor with `rollForward: "latestMajor"` and `allowPrerelease: true`, and `src/Directory.Build.props` only adds `net11.0` to the multi-targeted projects' `TargetFrameworks` when the SDK actually in use is 11.0.100 or newer. Combined, this means no configuration is needed either way: with only the .NET 10 SDK installed, `dotnet` resolves to it and net11.0 is quietly not offered; install the [.NET 11 RC SDK](https://dotnet.microsoft.com/download/dotnet/11.0) alongside it and `dotnet` automatically promotes to the RC SDK, bringing net11.0 into the list — no `global.json` edits, local or committed.
+
+```
+dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net11.0
+```
+
+(That command only works once the RC SDK is actually installed — see above.)
 
 The `peachpdf` command-line tool has its own test project, `PeachPDF.Cli.Tests` (net10.0-only, since the CLI is net10.0-only):
 
@@ -71,7 +81,7 @@ If a change gives PeachPDF a new visible rendering capability, add or update a s
 
 ## Pull requests
 
-- CI runs the test suite on `windows-latest`, `ubuntu-latest`, and `macos-latest` against both .NET 8 and .NET 10, and enforces the 90% diff-coverage gate described above.
+- CI runs the test suite on `windows-latest`, `ubuntu-latest`, and `macos-latest` against .NET 8, .NET 10, and .NET 11, and enforces the 90% diff-coverage gate described above.
 - `@jhaygood86` is the default code owner for the entire repository and will be requested for review automatically.
 - Keep PRs scoped to one change; include tests and doc updates in the same PR rather than as follow-ups.
 
