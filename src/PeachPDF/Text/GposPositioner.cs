@@ -13,6 +13,13 @@ namespace PeachPDF.Text
     /// glyph ids, matching universal real-shaper pipeline order. Like <see cref="GsubShaper"/>, this
     /// is general text-processing logic built from <c>PeachPDF.Fonts.OpenType</c>'s table data.
     /// </summary>
+    /// <remarks>
+    /// Every walk of a lookup's <c>Subtables</c> below is indexed rather than a <c>foreach</c>, and
+    /// deliberately: the property is declared as <see cref="IReadOnlyList{T}"/>, so a <c>foreach</c>
+    /// boxes a fresh enumerator through the interface every time, and these loops run <b>once per
+    /// glyph</b> — the cost lands on every glyph of every run in a document, whether or not the font
+    /// has anything to position. <c>GposPositionerAllocationTests</c> holds that to zero.
+    /// </remarks>
     internal static class GposPositioner
     {
         // Guards ApplySequenceContextLookup's own nested-lookup application against a pathological/
@@ -139,8 +146,9 @@ namespace PeachPDF.Text
         private static void ApplySingleAdjustmentAt(GposSingleAdjustmentLookup lookup, List<ShapedGlyph> glyphs, int i)
         {
             ushort glyphId = (ushort)glyphs[i].GlyphIndex;
-            foreach (GposSingleAdjustmentSubtable subtable in lookup.Subtables)
+            for (int subtableIndex = 0; subtableIndex < lookup.Subtables.Count; subtableIndex++)
             {
+                GposSingleAdjustmentSubtable subtable = lookup.Subtables[subtableIndex];
                 if (subtable.TryGetValue(glyphId, out GposValueRecord value))
                 {
                     glyphs[i] = AddValue(glyphs[i], value);
@@ -169,8 +177,9 @@ namespace PeachPDF.Text
             ushort first = (ushort)glyphs[i].GlyphIndex;
             ushort second = (ushort)glyphs[i + 1].GlyphIndex;
 
-            foreach (GposPairAdjustmentSubtable subtable in lookup.Subtables)
+            for (int subtableIndex = 0; subtableIndex < lookup.Subtables.Count; subtableIndex++)
             {
+                GposPairAdjustmentSubtable subtable = lookup.Subtables[subtableIndex];
                 if (subtable.TryGetValues(first, second, out GposValueRecord value1, out GposValueRecord value2))
                 {
                     glyphs[i] = AddValue(glyphs[i], value1);
@@ -207,8 +216,9 @@ namespace PeachPDF.Text
             ushort markGlyph = (ushort)glyphs[i].GlyphIndex;
             CoverageTable? markFilteringSet = lookup.MarkFilteringSetIndex is { } mfsIndex ? gdef?.GetMarkGlyphSet(mfsIndex) : null;
 
-            foreach (GposMarkAttachmentSubtable subtable in lookup.Subtables)
+            for (int subtableIndex = 0; subtableIndex < lookup.Subtables.Count; subtableIndex++)
             {
+                GposMarkAttachmentSubtable subtable = lookup.Subtables[subtableIndex];
                 int markIndex = subtable.MarkCoverage.IndexOfGlyph(markGlyph);
                 if (markIndex < 0 || markIndex >= subtable.Marks.Length)
                     continue;
@@ -245,8 +255,9 @@ namespace PeachPDF.Text
             ushort markGlyph = (ushort)glyphs[i].GlyphIndex;
             CoverageTable? markFilteringSet = lookup.MarkFilteringSetIndex is { } mfsIndex ? gdef?.GetMarkGlyphSet(mfsIndex) : null;
 
-            foreach (GposMarkToLigatureSubtable subtable in lookup.Subtables)
+            for (int subtableIndex = 0; subtableIndex < lookup.Subtables.Count; subtableIndex++)
             {
+                GposMarkToLigatureSubtable subtable = lookup.Subtables[subtableIndex];
                 int markIndex = subtable.MarkCoverage.IndexOfGlyph(markGlyph);
                 if (markIndex < 0 || markIndex >= subtable.Marks.Length)
                     continue;
@@ -324,8 +335,9 @@ namespace PeachPDF.Text
             int mark2Index = i - 1;
             ushort mark2Glyph = (ushort)glyphs[mark2Index].GlyphIndex;
 
-            foreach (GposMarkAttachmentSubtable subtable in lookup.Subtables)
+            for (int subtableIndex = 0; subtableIndex < lookup.Subtables.Count; subtableIndex++)
             {
+                GposMarkAttachmentSubtable subtable = lookup.Subtables[subtableIndex];
                 int markIndex = subtable.MarkCoverage.IndexOfGlyph(markGlyph);
                 if (markIndex < 0 || markIndex >= subtable.Marks.Length)
                     continue;
@@ -437,8 +449,9 @@ namespace PeachPDF.Text
 
         private static bool TryGetExitAnchor(GposCursiveAttachmentLookup lookup, ushort glyphId, out GposAnchor anchor)
         {
-            foreach (GposCursiveAttachmentSubtable subtable in lookup.Subtables)
+            for (int subtableIndex = 0; subtableIndex < lookup.Subtables.Count; subtableIndex++)
             {
+                GposCursiveAttachmentSubtable subtable = lookup.Subtables[subtableIndex];
                 int index = subtable.Coverage.IndexOfGlyph(glyphId);
                 if (index < 0 || index >= subtable.EntryExitRecords.Length)
                     continue;
@@ -454,8 +467,9 @@ namespace PeachPDF.Text
 
         private static bool TryGetEntryAnchor(GposCursiveAttachmentLookup lookup, ushort glyphId, out GposAnchor anchor)
         {
-            foreach (GposCursiveAttachmentSubtable subtable in lookup.Subtables)
+            for (int subtableIndex = 0; subtableIndex < lookup.Subtables.Count; subtableIndex++)
             {
+                GposCursiveAttachmentSubtable subtable = lookup.Subtables[subtableIndex];
                 int index = subtable.Coverage.IndexOfGlyph(glyphId);
                 if (index < 0 || index >= subtable.EntryExitRecords.Length)
                     continue;
@@ -564,8 +578,9 @@ namespace PeachPDF.Text
             IReadOnlyList<GposSequenceContextSubtable> subtables, List<ShapedGlyph> glyphs, int pos, GdefTable? gdef,
             ushort lookupFlag, CoverageTable? markFilteringSet)
         {
-            foreach (GposSequenceContextSubtable subtable in subtables)
+            for (int subtableIndex = 0; subtableIndex < subtables.Count; subtableIndex++)
             {
+                GposSequenceContextSubtable subtable = subtables[subtableIndex];
                 if (TryMatchSequenceContext(subtable, glyphs, pos, lookupFlag, gdef, markFilteringSet) is not
                     (int[] inputIndices, GposSequenceLookupRecord[] records))
                     continue;
