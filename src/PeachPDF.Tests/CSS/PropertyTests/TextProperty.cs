@@ -793,6 +793,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             var property = ParseDeclaration(snippet);
             Assert.Equal("overflow-wrap", property.Name);
             Assert.False(property.IsInherited);
+            Assert.True(property.CanBeInherited);
             Assert.False(property.IsImportant);
             Assert.IsType<OverflowWrapProperty>(property);
             var concrete = (OverflowWrapProperty)property;
@@ -807,6 +808,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             var property = ParseDeclaration(snippet);
             Assert.Equal("overflow-wrap", property.Name);
             Assert.False(property.IsInherited);
+            Assert.True(property.CanBeInherited);
             Assert.False(property.IsImportant);
             Assert.IsType<OverflowWrapProperty>(property);
             var concrete = (OverflowWrapProperty)property;
@@ -821,6 +823,7 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             var property = ParseDeclaration(snippet);
             Assert.Equal("overflow-wrap", property.Name);
             Assert.False(property.IsInherited);
+            Assert.True(property.CanBeInherited);
             Assert.False(property.IsImportant);
             Assert.IsType<OverflowWrapProperty>(property);
             var concrete = (OverflowWrapProperty)property;
@@ -835,11 +838,28 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             var property = ParseDeclaration(snippet);
             Assert.Equal("overflow-wrap", property.Name);
             Assert.False(property.IsInherited);
+            Assert.True(property.CanBeInherited);
             Assert.False(property.IsImportant);
             Assert.IsType<OverflowWrapProperty>(property);
             var concrete = (OverflowWrapProperty)property;
             Assert.True(property.HasValue);
             Assert.Equal("break-word", concrete.Value);
+        }
+
+        [Theory]
+        [InlineData("overflow-wrap")]
+        [InlineData("word-wrap")]
+        public void OverflowWrapAnywhereLegal(string propertyName)
+        {
+            var property = ParseDeclaration($"{propertyName}: anywhere");
+
+            Assert.Equal("overflow-wrap", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.True(property.CanBeInherited);
+            Assert.False(property.IsImportant);
+            var concrete = Assert.IsType<OverflowWrapProperty>(property);
+            Assert.True(property.HasValue);
+            Assert.Equal("anywhere", concrete.Value);
         }
 
         [Fact]
@@ -848,7 +868,8 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             var snippet = "overflow-wrap: none";
             var property = ParseDeclaration(snippet);
             Assert.Equal("overflow-wrap", property.Name);
-            Assert.False(property.IsInherited);
+            Assert.True(property.IsInherited);
+            Assert.True(property.CanBeInherited);
             Assert.False(property.IsImportant);
             Assert.IsType<OverflowWrapProperty>(property);
             var concrete = (OverflowWrapProperty)property;
@@ -861,7 +882,8 @@ namespace PeachPDF.Tests.CSS.PropertyTests
             var snippet = "word-wrap: none";
             var property = ParseDeclaration(snippet);
             Assert.Equal("overflow-wrap", property.Name);
-            Assert.False(property.IsInherited);
+            Assert.True(property.IsInherited);
+            Assert.True(property.CanBeInherited);
             Assert.False(property.IsImportant);
             Assert.IsType<OverflowWrapProperty>(property);
             var concrete = (OverflowWrapProperty)property;

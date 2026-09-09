@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.OverflowWrapConverter;
 
         public OverflowWrapProperty()
-            : base(PropertyNames.OverflowWrap)
+            : base(PropertyNames.OverflowWrap, PropertyFlags.Inherited)
         {
         }
 

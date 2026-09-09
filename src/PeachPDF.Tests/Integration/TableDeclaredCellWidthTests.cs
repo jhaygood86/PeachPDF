@@ -8,7 +8,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// A cell's declared <c>width</c> is its CONTENT width under <c>box-sizing: content-box</c> (the
     /// default), so its padding and border sit outside it. <c>_columnWidths</c> holds OUTER widths —
-    /// <c>GetColumnMinWidths</c> fills the same array from <c>cell.GetMinimumWidth()</c>, which
+    /// <c>GetColumnMinWidths</c> fills the same array from <c>cell.GetMinMaxWidth()</c>, which
     /// already includes them — so a bare declared width made every explicitly sized column narrower
     /// than a browser's by exactly its padding plus border.
     /// <para>

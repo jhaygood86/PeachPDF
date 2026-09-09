@@ -818,7 +818,8 @@ namespace PeachPDF.CSS
             new Dictionary<string, OverflowWrap>(StringComparer.OrdinalIgnoreCase)
             {
                 {Keywords.Normal, OverflowWrap.Normal},
-                {Keywords.BreakWord, OverflowWrap.BreakWord}
+                {Keywords.BreakWord, OverflowWrap.BreakWord},
+                {Keywords.Anywhere, OverflowWrap.Anywhere}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, FillRule> FillRules =
             new Dictionary<string, FillRule>(StringComparer.OrdinalIgnoreCase)

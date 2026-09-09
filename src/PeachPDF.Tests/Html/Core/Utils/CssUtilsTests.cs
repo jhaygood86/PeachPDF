@@ -419,7 +419,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
             ["color", "rgb(7, 8, 9)"], ["content", "normal"], ["display", "block"], ["direction", "rtl"], ["empty-cells", "hide"], ["caption-side", "bottom"],
             ["clear", "both"], ["position", "absolute"], ["line-height", "1.5"], ["vertical-align", "middle"], ["text-indent", "20px"],
             ["text-align", "center"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
-            ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"], ["tab-size", "4"], ["tab-size", "2em"],
+            ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["overflow-wrap", "anywhere"], ["word-wrap", "break-word"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"], ["tab-size", "4"], ["tab-size", "2em"],
             ["font-style", "italic"], ["font-variant-caps", "small-caps"], ["font-weight", "bold"], ["font-stretch", "condensed"],
             ["list-style-position", "inside"], ["list-style-type", "square"], ["overflow", "hidden"], ["z-index", "5"],
             ["flex-direction", "column"], ["flex-wrap", "wrap"], ["justify-content", "center"], ["align-items", "stretch"], ["align-content", "center"],
@@ -457,7 +457,6 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [InlineData("font-size", "16px")]
         [InlineData("list-style-image", "none")]
         [InlineData("unicode-bidi", "isolate")]
-        [InlineData("overflow-wrap", "break-word")]
         [InlineData("not-a-real-property", "whatever")]
         public async Task SetPropertyValue_HandledOrUnknownName_DoesNotThrow(string name, string value)
         {

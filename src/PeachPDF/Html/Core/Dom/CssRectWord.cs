@@ -12,6 +12,9 @@
 
 using PeachPDF.Text.Shaping.Arabic;
 using PeachPDF.Text.Shaping.Use;
+using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace PeachPDF.Html.Core.Dom
 {
@@ -217,6 +220,116 @@ namespace PeachPDF.Html.Core.Dom
         /// have to be taken back.
         /// </summary>
         internal CssRectWord? HyphenationPrefix { get; set; }
+
+        /// <summary>
+        /// Set on an <c>overflow-wrap</c>-created prefix: the unsplit word from which this prefix and
+        /// <see cref="OverflowWrapSuffix"/> were made. The layout pass can restore it when the line that
+        /// requested the emergency split is discarded, or before a fresh full reflow with a different
+        /// available measure.
+        /// </summary>
+        internal CssRectWord? PreOverflowWrapWord { get; set; }
+
+        /// <summary>The suffix created alongside an <c>overflow-wrap</c> prefix.</summary>
+        internal CssRectWord? OverflowWrapSuffix { get; set; }
+
+        /// <summary>The prefix created alongside an <c>overflow-wrap</c> suffix.</summary>
+        internal CssRectWord? OverflowWrapPrefix { get; set; }
+
+        /// <summary>
+        /// Splits this word at a UTF-16 index that is already known to be an extended-grapheme-cluster
+        /// boundary. All shaping metadata is sliced with the text so the two fragments retain the
+        /// script, joining, USE, font-fallback, bidi, and first-line state of the original run.
+        /// </summary>
+        internal (CssRectWord Prefix, CssRectWord Suffix) SplitForOverflowWrap(int breakAt)
+        {
+            var sourceText = PreMirrorText;
+            var runeOffset = CountRunes(sourceText.AsSpan(0, breakAt));
+            var prefixRuneCount = runeOffset;
+            var suffixRuneCount = CountRunes(sourceText.AsSpan(breakAt));
+
+            var prefix = CreateSlice(0, breakAt, 0, prefixRuneCount, HasSpaceBefore, false);
+            var suffix = CreateSlice(breakAt, sourceText.Length - breakAt, runeOffset, suffixRuneCount, false,
+                HasSpaceAfter);
+
+            if (FirstLineText is { Length: var firstLineLength } && firstLineLength == sourceText.Length)
+            {
+                prefix.FirstLineText = FirstLineText[..breakAt];
+                suffix.FirstLineText = FirstLineText[breakAt..];
+            }
+
+            prefix.PreOverflowWrapWord = this;
+            prefix.OverflowWrapSuffix = suffix;
+            suffix.OverflowWrapPrefix = prefix;
+
+            // If intrinsic sizing observes this list before the next fresh-layout restoration, keep
+            // anywhere's original widest-grapheme contribution stable across the temporary fragments.
+            prefix.OverflowWrapMinWidth = OverflowWrapMinWidth;
+            suffix.OverflowWrapMinWidth = OverflowWrapMinWidth;
+            return (prefix, suffix);
+        }
+
+        /// <summary>Creates one metadata-preserving text slice for intrinsic-width measurement.</summary>
+        internal CssRectWord SliceForOverflowWrapMeasurement(int charStart, int charLength)
+        {
+            var runeStart = CountRunes(PreMirrorText.AsSpan(0, charStart));
+            var runeLength = CountRunes(PreMirrorText.AsSpan(charStart, charLength));
+            return CreateSlice(charStart, charLength, runeStart, runeLength, false, false);
+        }
+
+        private CssRectWord CreateSlice(int charStart, int charLength, int runeStart, int runeLength,
+            bool hasSpaceBefore, bool hasSpaceAfter)
+        {
+            var originalText = OriginalText is { Length: var originalLength } && originalLength == PreMirrorText.Length
+                ? OriginalText
+                : PreMirrorText;
+            var slice = new CssRectWord(OwnerBox, PreMirrorText.Substring(charStart, charLength), hasSpaceBefore,
+                hasSpaceAfter, originalText.Substring(charStart, charLength),
+                SliceRuneData(_logicalJoiningForms, runeStart, runeLength),
+                SliceRuneData(_logicalUseCategories, runeStart, runeLength))
+            {
+                BidiLevel = BidiLevel,
+                FontSizeScale = FontSizeScale,
+                FirstLineStyle = FirstLineStyle,
+                IsUprightOrientation = IsUprightOrientation,
+                ScriptTag = ScriptTag,
+                SuppressWrapBefore = charStart == 0 && SuppressWrapBefore,
+                UsesPerCodepointFont = UsesPerCodepointFont
+            };
+
+            if (DisplayOrderReversed)
+                slice.MarkDisplayOrderReversed();
+
+            if (HyphenationCandidates is { Count: > 0 })
+            {
+                var candidates = new List<int>();
+                foreach (var candidate in HyphenationCandidates)
+                {
+                    if (candidate > charStart && candidate < charStart + charLength)
+                        candidates.Add(candidate - charStart);
+                }
+
+                if (candidates.Count > 0)
+                    slice.HyphenationCandidates = candidates;
+            }
+
+            return slice;
+        }
+
+        private static T[]? SliceRuneData<T>(T[]? source, int start, int length)
+        {
+            if (source is null) return null;
+
+            var result = new T[length];
+            Array.Copy(source, start, result, 0, length);
+            return result;
+        }
+
+        private static int CountRunes(ReadOnlySpan<char> text)
+        {
+            var count = 0;
+            foreach (var _ in text.EnumerateRunes()) count++;
+            return count;
+        }
 
         /// <summary>
         /// Represents this word for debugging purposes

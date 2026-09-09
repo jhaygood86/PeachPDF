@@ -6,7 +6,7 @@
 // like the days and months;
 // they die and are reborn,
 // like the four seasons."
-// 
+//
 // - Sun Tsu,
 // "The Art of War"
 
@@ -36,6 +36,9 @@ namespace PeachPDF.Html.Core.Dom
         /// the main box of the table
         /// </summary>
         private readonly CssBox _tableBox;
+
+        /// <summary>The active layout graphics context, used by lazy intrinsic text measurement.</summary>
+        private readonly RGraphics _graphics;
 
         // ─── Writing-mode axis mapping ──────────────────────────────────────────
         //
@@ -345,13 +348,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Init.
         /// </summary>
+        /// <param name="graphics">The active layout graphics context.</param>
         /// <param name="tableBox"></param>
         /// <param name="resume">
         /// how this table resumes on the current fragmentainer pass, or null when it is being laid out
         /// from the start.
         /// </param>
-        private CssLayoutEngineTable(CssBox tableBox, BreakToken? resume)
+        private CssLayoutEngineTable(RGraphics graphics, CssBox tableBox, BreakToken? resume)
         {
+            _graphics = graphics;
             _tableBox = tableBox;
 
             var writingMode = tableBox.WritingMode.Value;
@@ -441,7 +446,7 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="g"></param>
         /// <param name="tableBox"> </param>
@@ -457,7 +462,7 @@ namespace PeachPDF.Html.Core.Dom
 
             try
             {
-                var table = new CssLayoutEngineTable(tableBox, resume);
+                var table = new CssLayoutEngineTable(g, tableBox, resume);
                 await table.Layout(g);
             }
             catch (Exception ex)
@@ -1859,7 +1864,7 @@ namespace PeachPDF.Html.Core.Dom
                         // A declared size is the CONTENT size under box-sizing: content-box (the
                         // default), so the cell's padding and border sit outside it. _columnWidths
                         // holds OUTER widths -- GetColumnMinWidths fills the same array from
-                        // cell.GetMinimumWidth(), which already includes them -- so storing the bare
+                        // cell.GetMinMaxWidth(), which already includes them -- so storing the bare
                         // content width here made every explicitly sized column narrower than a
                         // browser's by exactly its padding plus border, and handed the difference to
                         // whichever column was auto. Zero under border-box, where the declared size
@@ -6157,7 +6162,7 @@ namespace PeachPDF.Html.Core.Dom
                     var col = _columnWidths.Length > realCol ? realCol : _columnWidths.Length - 1;
 
                     if ((onlyNans && !double.IsNaN(_columnWidths[col])) || i >= row.Boxes.Count) continue;
-                    cell.GetMinMaxWidth(out var minWidth, out var maxWidth);
+                    cell.GetMinMaxWidth(_graphics, out var minWidth, out var maxWidth);
 
                     // Clamp by the cell's own CSS min-width/max-width, if explicitly set, so a cell
                     // can cap or raise the column's content-driven bounds independent of its content.
@@ -6398,12 +6403,14 @@ namespace PeachPDF.Html.Core.Dom
 
                     var spannedWidth = GetSpannedMinWidth(row, col, colspan) + GetInteriorSpacing(col, colspan);
 
-                    // CssBox.GetMinimumWidth has no vertical-writing-mode-aware equivalent - see
+                    // CssBox.GetMinMaxWidth has no vertical-writing-mode-aware equivalent - see
                     // GetColumnsMinMaxWidthByContent's own remarks - so a vertical table's content-
                     // driven minimum falls back to 0 (only an explicit min-width/min-height still
                     // constrains the column) rather than measuring horizontal word-wrap content that
                     // does not describe this cell's own (vertical) flow.
-                    var cellMinWidth = _isVertical ? 0 : cell.GetMinimumWidth();
+                    var cellMinWidth = 0d;
+                    if (!_isVertical)
+                        cell.GetMinMaxWidth(_graphics, out cellMinWidth, out _);
 
                     // A vertical table's column-sizing hint IS a cell's own explicit `height`
                     // (CellInlineSize - see CalculateColumnWidths), and CSS 2.1 17.5.3 makes a table

@@ -136,15 +136,20 @@
     },
     {
       "name": "overflow-wrap",
-      "comment": "Grammar accepted by Layer A, deliberately unimplemented by Layer B (docs/html-css-support.md). TrySet/SupportsDeclaration correctly return false, replacing the old CssUtils dispatch's silent no-op lambda. inherited: false and initialValue: null both preserve today's actual behavior (CssDefaults never listed it as inherited, despite CSS Text 4 §3 specifying inheritance for it) rather than silently fixing a spec deviation this migration isn't scoped to touch.",
-      "inherited": false,
-      "initialValue": null,
-      "cssDataType": "unsupported",
+      "comment": "CSS Text 3 §5.4. break-word and anywhere create emergency soft-wrap opportunities only when an otherwise-unbreakable sequence cannot fit; anywhere additionally contributes those opportunities to min-content sizing.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "OverflowWrap",
+        "keywordMap": "Map.OverflowWraps",
+        "fallback": "OverflowWrap.Normal"
+      },
       "html": {
-        "propertyPath": null,
-        "csharpDataType": null,
-        "hasGetter": false,
-        "snapshot": false
+        "propertyPath": "OverflowWrap",
+        "csharpDataType": "CssProperty<OverflowWrap>",
+        "area": "TextArea",
+        "getterExpression": "{box}.OverflowWrap.ToString()"
       }
     },
     {
@@ -1956,6 +1961,25 @@
         "csharpDataType": "CssProperty<WordBreak>",
         "area": "TextArea",
         "getterExpression": "{box}.WordBreak.ToString()"
+      }
+    },
+    {
+      "name": "word-wrap",
+      "comment": "Legacy name alias of overflow-wrap (CSS Text 3 §5.4), sharing its grammar, cascade, and computed storage.",
+      "inherited": true,
+      "initialValue": "normal",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "OverflowWrap",
+        "keywordMap": "Map.OverflowWraps",
+        "fallback": "OverflowWrap.Normal"
+      },
+      "aliasOf": "overflow-wrap",
+      "html": {
+        "propertyPath": "OverflowWrap",
+        "csharpDataType": "CssProperty<OverflowWrap>",
+        "area": "TextArea",
+        "getterExpression": "{box}.OverflowWrap.ToString()"
       }
     },
     {

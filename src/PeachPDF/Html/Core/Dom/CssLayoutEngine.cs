@@ -24,6 +24,7 @@ using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -314,6 +315,7 @@ namespace PeachPDF.Html.Core.Dom
             }
             else
             {
+                RestoreOverflowWrapSplits(blockBox);
                 blockBox.LineBoxes.Clear();
 
                 // A word carries no position of its own until the flow reaches it, and the position it
@@ -416,6 +418,7 @@ namespace PeachPDF.Html.Core.Dom
                 // pass, before the resumed pass re-places them. §4.1 has already decided they belong to the
                 // next fragmentainer, so mark them as such; being positioned again clears it.
                 UndoAbandonedHyphenationSplits(coordinates.Line);
+                UndoAbandonedOverflowWrapSplits(coordinates.Line);
 
                 foreach (var word in coordinates.Line.Words)
                 {
@@ -481,6 +484,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         internal static async ValueTask CreateVerticalLineBoxes(RGraphics g, CssBox blockBox)
         {
+            RestoreOverflowWrapSplits(blockBox);
             blockBox.LineBoxes.Clear();
 
             var words = new List<CssRect>();
@@ -644,6 +648,19 @@ namespace PeachPDF.Html.Core.Dom
                     currentColumnHyphenated = true;
                 }
 
+                if (wordDoesNotFit && inlineOffset == 0 &&
+                    TryOverflowWrapWord(g, word, effectiveWrapLimit, out var overflowPrefix,
+                        out var overflowSuffix))
+                {
+                    ReplaceCollectedWordWithOverflowWrapSplit(words, i, word, overflowPrefix!, overflowSuffix!);
+                    word = overflowPrefix!;
+                    (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
+                    wordRectInline = naturalWidth;
+                    wordAdvance = naturalWidth + word.ActualWordSpacing;
+                    wordBlock = naturalHeight;
+                    wordDoesNotFit = false;
+                }
+
                 // A nested nowrap run (a box whose own white-space overrides an otherwise-wrapping
                 // ancestor's, e.g. a <span style="white-space:nowrap"> inside a normally-wrapping vertical
                 // block) must still be able to move to a fresh column as a whole unit if it doesn't fit -
@@ -677,8 +694,25 @@ namespace PeachPDF.Html.Core.Dom
                 // guard FlowBox's own wrap check already applies. inlineOffset > 0 (a real word already
                 // placed in this column) avoids wrapping a column that is still empty - the same
                 // unavoidable-overflow fallback FlowBox's own first-word-of-a-line case gets.
-                if (!word.SuppressWrapBefore && inlineOffset > 0 && (wordDoesNotFit || wrapsWholeNoWrapRun))
+                var startedNewLine = !word.SuppressWrapBefore && inlineOffset > 0
+                                     && (wordDoesNotFit || wrapsWholeNoWrapRun);
+                if (startedNewLine)
                     StartNewLine();
+
+                // The normal opportunity before the word wins on a non-empty column. Only after moving
+                // the whole token to a fresh column do the lower-priority overflow-wrap opportunities
+                // become eligible.
+                if (startedNewLine && naturalWidth > effectiveWrapLimit &&
+                    TryOverflowWrapWord(g, word, effectiveWrapLimit, out overflowPrefix,
+                        out overflowSuffix))
+                {
+                    ReplaceCollectedWordWithOverflowWrapSplit(words, i, word, overflowPrefix!, overflowSuffix!);
+                    word = overflowPrefix!;
+                    (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
+                    wordRectInline = naturalWidth;
+                    wordAdvance = naturalWidth + word.ActualWordSpacing;
+                    wordBlock = naturalHeight;
+                }
 
                 var physical = frame.ToPhysical(new RRect(inlineOffset, blockOffset, wordRectInline, wordBlock));
                 word.Left = physical.X;
@@ -749,6 +783,21 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             await LayoutOutOfFlowDescendants(g, blockBox, outOfFlowDescendants);
+        }
+
+        private static void ReplaceCollectedWordWithOverflowWrapSplit(List<CssRect> collectedWords, int index,
+            CssRect original, CssRectWord prefix, CssRectWord suffix)
+        {
+            var ownerWords = original.OwnerBox.Words;
+            var ownerIndex = ownerWords.IndexOf(original);
+            if (ownerIndex >= 0)
+            {
+                ownerWords[ownerIndex] = prefix;
+                ownerWords.Insert(ownerIndex + 1, suffix);
+            }
+
+            collectedWords[index] = prefix;
+            collectedWords.Insert(index + 1, suffix);
         }
 
         /// <summary>
@@ -1469,7 +1518,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             await MeasureWords(box, g);
 
-            box.GetMinMaxWidth(out var minIntrinsicWidth, out _);
+            box.GetMinMaxWidth(g, out var minIntrinsicWidth, out _);
 
             return minIntrinsicWidth;
         }
@@ -1478,7 +1527,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             await MeasureWords(box, g);
 
-            box.GetMinMaxWidth(out _, out var maxIntrinsicWidth);
+            box.GetMinMaxWidth(g, out _, out var maxIntrinsicWidth);
 
             return maxIntrinsicWidth;
         }
@@ -2835,6 +2884,20 @@ namespace PeachPDF.Html.Core.Dom
                             coordinates.CurrentLineHyphenated = true;
                         }
 
+                        // overflow-wrap is an emergency opportunity, not an ordinary one. If this line is
+                        // already empty there is no earlier normal opportunity to prefer, so split the word
+                        // in place at the last grapheme that fits instead of manufacturing another empty
+                        // line and overflowing the whole token there.
+                        if (overflows && !wrapNoWrapBox && coordinates.Line.Words.Count == 0 &&
+                            TryOverflowWrapWord(g, word, availableWidth, out var overflowPrefix,
+                                out var overflowSuffix))
+                        {
+                            b.Words[wordIndex] = overflowPrefix!;
+                            b.Words.Insert(wordIndex + 1, overflowSuffix!);
+                            word = overflowPrefix!;
+                            overflows = false;
+                        }
+
                         // A resumed flow's opening line is empty, so there is nothing to wrap away from;
                         // honouring the wrap would leave a blank line at the top of the fragmentainer.
                         var wrapping = !word.SuppressWrapBefore && (overflows || word.IsLineBreak || wrapNoWrapBox);
@@ -2980,6 +3043,39 @@ namespace PeachPDF.Html.Core.Dom
                             // straddle the break rather than every cloning ancestor.
                             if (wordOrdinal == coordinates.ResumeOrdinal)
                                 coordinates.CurrentX += childClonedResumeStart;
+                        }
+
+                        // A normal break before this word had priority while the previous line still held
+                        // content. Now that the word has moved whole to a fresh line, an overlong token may
+                        // use overflow-wrap inside itself. Recompute both float edges at the new Y; the
+                        // boundary calculated before the wrap belongs to the line we just closed.
+                        if (wrapping && overflows && !word.IsLineBreak)
+                        {
+                            var emergencyLimitRight = coordinates.Line.ContentRight;
+                            var emergencyRightFloat = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
+                            if (emergencyRightFloat is not null)
+                            {
+                                emergencyLimitRight = emergencyRightFloat.Location.X
+                                                      - emergencyRightFloat.ActualMarginLeft - rightSpacing;
+                            }
+
+                            if (isRtl)
+                            {
+                                emergencyLimitRight -= GetLineTextIndent(blockBox,
+                                    coordinates.Line.Equals(blockBox.LineBoxes[0]),
+                                    coordinates.Line.FollowsForcedBreak);
+                            }
+
+                            var emergencyAvailable = emergencyLimitRight - coordinates.CurrentX
+                                                     - rightSpacing - clonedTrailing;
+                            if (word.Width > emergencyAvailable &&
+                                TryOverflowWrapWord(g, word, emergencyAvailable, out overflowPrefix,
+                                    out overflowSuffix))
+                            {
+                                b.Words[wordIndex] = overflowPrefix!;
+                                b.Words.Insert(wordIndex + 1, overflowSuffix!);
+                                word = overflowPrefix!;
+                            }
                         }
 
                         coordinates.Line.ReportExistanceOf(word);
@@ -3401,6 +3497,155 @@ namespace PeachPDF.Html.Core.Dom
             // last member no longer ends in a hyphen isn't a shorter run, it's no run at all - so the
             // resumed pass must start back at 0 rather than inherit a count this undo has just made stale.
             return stopped with { ResumeWordIndex = stopped.ResumeWordIndex - 1, ConsecutiveHyphenatedLines = 0 };
+        }
+
+        /// <summary>
+        /// Restores every emergency <c>overflow-wrap</c> split before a fresh, non-resumed layout. A split
+        /// is chosen against one line's available measure; carrying it into a later full reflow would turn
+        /// that emergency point into an unconditional ordinary wrap opportunity.
+        /// </summary>
+        private static void RestoreOverflowWrapSplits(CssBox box)
+        {
+            // A suffix may itself have been split later. Restore from right to left so the deepest
+            // prefix/suffix pair is merged before its parent pair; the insertion adjacency checked by
+            // TryRestoreOverflowWrapSplit is consequently re-established at every level.
+            for (var i = box.Words.Count - 1; i >= 0; i--)
+            {
+                if (box.Words[i] is not CssRectWord
+                    {
+                        PreOverflowWrapWord: { } original,
+                        OverflowWrapSuffix: { } suffix
+                    } prefix)
+                    continue;
+
+                TryRestoreOverflowWrapSplit(prefix, original, suffix, awaitsNextFragmentainer: false);
+            }
+
+            foreach (var child in box.Boxes)
+                RestoreOverflowWrapSplits(child);
+        }
+
+        /// <summary>
+        /// Undoes a split made for a line that fragmentation discarded, so the resumed fragmentainer can
+        /// choose a new point against its own full line measure.
+        /// </summary>
+        internal static void UndoAbandonedOverflowWrapSplits(CssLineBox discardedLine)
+        {
+            foreach (var word in discardedLine.Words)
+            {
+                if (word is CssRectWord
+                    {
+                        PreOverflowWrapWord: { } original,
+                        OverflowWrapSuffix: { } suffix
+                    } prefix)
+                {
+                    TryRestoreOverflowWrapSplit(prefix, original, suffix, awaitsNextFragmentainer: true);
+                }
+            }
+        }
+
+        private static bool TryRestoreOverflowWrapSplit(CssRectWord prefix, CssRectWord original,
+            CssRectWord suffix, bool awaitsNextFragmentainer)
+        {
+            var ownerWords = prefix.OwnerBox.Words;
+            var prefixIndex = ownerWords.IndexOf(prefix);
+            if (prefixIndex < 0 || prefixIndex + 1 >= ownerWords.Count
+                                || !ReferenceEquals(ownerWords[prefixIndex + 1], suffix))
+                return false;
+
+            // Split fragments are inserted as one adjacent pair. Removing by index preserves the
+            // prefix index used below and refuses to merge unrelated/non-adjacent list entries.
+            ownerWords.RemoveAt(prefixIndex + 1);
+            ownerWords[prefixIndex] = original;
+            if (awaitsNextFragmentainer)
+                original.AwaitsTheNextFragmentainer = true;
+            return true;
+        }
+
+        private static bool AllowsOverflowWrap(CssRect word) =>
+            word is CssRectWord { IsLineBreak: false }
+            && word.OwnerBox.OverflowWrap.Value != OverflowWrap.Normal
+            && word.OwnerBox.WhiteSpacePermitsWrapping;
+
+        /// <summary>
+        /// Splits an overflowing word at the last extended-grapheme-cluster boundary whose prefix fits.
+        /// No hyphen is inserted. The search is logarithmic so a pathological URL does not turn line
+        /// layout into a quadratic sequence of successively shorter shaping calls.
+        /// </summary>
+        private static bool TryOverflowWrapWord(RGraphics g, CssRect word, double availableWidth,
+            out CssRectWord? prefix, out CssRectWord? suffix)
+        {
+            prefix = null;
+            suffix = null;
+
+            if (!AllowsOverflowWrap(word) || word is not CssRectWord rectWord || availableWidth <= 0)
+                return false;
+
+            var boundaries = StringInfo.ParseCombiningCharacters(rectWord.PreMirrorText);
+            if (boundaries.Length < 2) return false;
+
+            var low = 1;
+            var high = boundaries.Length - 1;
+            var bestBreak = -1;
+
+            while (low <= high)
+            {
+                var middle = low + ((high - low) / 2);
+                var breakAt = boundaries[middle];
+                var trial = rectWord.SliceForOverflowWrapMeasurement(0, breakAt);
+                var trialWidth = MeasureOverflowWrapWord(g, trial);
+
+                if (trialWidth <= availableWidth)
+                {
+                    bestBreak = breakAt;
+                    low = middle + 1;
+                }
+                else
+                {
+                    high = middle - 1;
+                }
+            }
+
+            if (bestBreak <= 0) return false;
+
+            (prefix, suffix) = rectWord.SplitForOverflowWrap(bestBreak);
+            MeasureOverflowWrapWord(g, prefix);
+            MeasureOverflowWrapWord(g, suffix);
+            return true;
+        }
+
+        private static double MeasureOverflowWrapWord(RGraphics g, CssRectWord word)
+        {
+            var styleSource = word.FirstLineStyle ?? word.OwnerBox;
+            var font = CssBox.ResolveWordFont(word, styleSource);
+            var text = word.FirstLineText ?? word.Text;
+            var features = styleSource.ResolveWordShapingFeatures(word);
+            var width = g.MeasureString(text, font, features).Width;
+
+            if (styleSource.ActualLetterSpacing != 0)
+                width += g.CountShapedGlyphs(text, font, features) * styleSource.ActualLetterSpacing;
+
+            word.Width = width;
+            word.Height = styleSource.ActualFont.Height;
+            return width;
+        }
+
+        /// <summary>Measures <c>overflow-wrap:anywhere</c>'s min-content contribution for one word.</summary>
+        internal static double MeasureOverflowWrapMinWidth(RGraphics g, CssRectWord word)
+        {
+            var text = word.PreMirrorText;
+            var boundaries = StringInfo.ParseCombiningCharacters(text);
+            var widest = 0d;
+
+            for (var i = 0; i < boundaries.Length; i++)
+            {
+                var start = boundaries[i];
+                var end = i + 1 < boundaries.Length ? boundaries[i + 1] : text.Length;
+                var cluster = word.SliceForOverflowWrapMeasurement(start, end - start);
+                widest = Math.Max(widest, MeasureOverflowWrapWord(g, cluster));
+            }
+
+            return widest;
         }
 
         /// <summary>

@@ -125,6 +125,22 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
+        public void WordWrapAlias_CssomAddressesTheCanonicalOverflowWrapDeclaration()
+        {
+            var style = CssConstructionFunctions.ParseDeclarations("word-wrap: anywhere");
+
+            Assert.Equal("anywhere", style.GetPropertyValue(PropertyNames.WordWrap));
+            Assert.Equal("anywhere", style.GetPropertyValue(PropertyNames.OverflowWrap));
+
+            style.SetProperty(PropertyNames.WordWrap, "break-word", Keywords.Important);
+            Assert.Equal("break-word", style.GetPropertyValue(PropertyNames.OverflowWrap));
+            Assert.Equal(Keywords.Important, style.GetPropertyPriority(PropertyNames.WordWrap));
+
+            Assert.Equal("break-word", style.RemoveProperty(PropertyNames.WordWrap));
+            Assert.Equal(string.Empty, style.GetPropertyValue(PropertyNames.OverflowWrap));
+        }
+
+        [Fact]
         public void SetPropertyValue_EmptyValue_RemovesProperty()
         {
             var style = CssConstructionFunctions.ParseDeclarations("color: red");
