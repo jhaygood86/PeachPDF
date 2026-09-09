@@ -62,8 +62,11 @@ tag sequences — Scotland and Wales included). Arabic, Devanagari and Latin ren
 before/after (`ImageChops.difference` bbox `None`), which is what proves the gate holds and bounds the
 blast radius of #3 to text that previously got no `ccmp` at all. Suite: 10482 passing; the single failure
 (`FontSynthesisIntegrationTests.ObliqueWithExplicitAngle_…`) was verified to fail identically on a clean
-tree and is unrelated. New `DefaultIgnorableShapingTests` (30 cases) fails **21/30** with the library
-changes reverted, so it is not a no-op guard.
+tree and is unrelated. With the library changes reverted to `main`, the two new suites fail **38 of 47**
+cases — `DefaultIgnorableShapingTests` **26 of 35** (the 9 survivors are exactly its
+non-ignorable-neighbour guards, which are meant to pass either way) and `EmojiSequenceCompositionTests`
+**12 of 12** — so neither is a no-op guard. Re-measure before quoting these: they moved twice during
+review as cases were added, and a stale count is worse than none.
 
 **Deliberately not done.** cmap **format-14** variation sequences are still unapplied — see
 [per-character-font-matching-boundaries.md](../accepted-gaps/per-character-font-matching-boundaries.md).

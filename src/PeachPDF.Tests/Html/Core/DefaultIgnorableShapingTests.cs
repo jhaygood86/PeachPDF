@@ -102,6 +102,19 @@ namespace PeachPDF.Tests.Html.Core
             Assert.Equal(Shape("S")[0], glyphs[0]);
         }
 
+        [Theory]
+        [InlineData("️")]        // a lone U+FE0F
+        [InlineData("‍")]        // a lone ZWJ
+        [InlineData("️‍️")]      // nothing but ignorables
+        public void TextThatIsEntirelyIgnorable_ShapesToNoGlyphsAtAll(string text)
+        {
+            // Every other case here pairs an ignorable with a real glyph, so the "everything was
+            // dropped" path (kept.Count == 0 in DropHiddenIgnorables) never runs. An empty glyph run is
+            // the correct answer - the input asked for nothing visible - and it must come back empty
+            // rather than throwing or leaving a .notdef behind.
+            Assert.Empty(Shape(text));
+        }
+
         [Fact]
         public void DroppingAnIgnorable_RemapsAMarkGlyphsAttachmentIndex()
         {

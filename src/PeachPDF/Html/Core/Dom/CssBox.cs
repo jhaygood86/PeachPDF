@@ -1834,7 +1834,7 @@ namespace PeachPDF.Html.Core.Dom
                 // to have no glyph, so an uncovered one is not a reason to go looking for another face -
                 // no font in the stack would cover it either, and splitting the run here would strand it
                 // in a fragment of its own under whatever fallback face it landed on. Shaping hides it
-                // instead (OpenTypeDescriptor.DropUnrenderableDefaultIgnorables).
+                // instead (OpenTypeDescriptor.DropHiddenIgnorables).
                 if (UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value))
                     continue;
 
