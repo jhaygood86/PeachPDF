@@ -35,6 +35,18 @@ namespace PeachPDF.Html.Core.Dom
         internal ComputedStyle ComputedStyle => _computedStyle;
 
         /// <summary>
+        /// Puts every property back to its initial value by re-pointing at the shared
+        /// <see cref="Dom.ComputedStyle.Default"/>, which <i>is</i> the all-initial state.
+        /// </summary>
+        /// <remarks>
+        /// The cascade's defaulting step (CSS Cascade 4 §2.1) otherwise re-parses the whole
+        /// initial-value table one property at a time for any box that has already been touched. Every
+        /// area is copy-on-write, so sharing the singleton is safe and the first later write forks it —
+        /// the same thing a never-touched box already does.
+        /// </remarks>
+        internal void ResetComputedStyleToInitial() => _computedStyle = ComputedStyle.Default;
+
+        /// <summary>
         /// Adopts <paramref name="source"/>'s entire Border and Background style areas by reference -
         /// safe because each area is copy-on-write (see <see cref="InheritStyle"/>'s own remarks). Used
         /// to give a table's grid-only decoration box (<see cref="CssLayoutEngineTable"/>,
