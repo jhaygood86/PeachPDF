@@ -210,6 +210,90 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// #483's own shape, distinct from <see cref="AnItemCrossingAColumnBoundary_KeepsItsMarkerInTheColumnItBeginsIn"/>:
+        /// a list item whose content is <b>block-level</b> (a wrapped <c>&lt;p&gt;</c>) rather than flowed
+        /// directly into the item, so it reaches <c>CssBox.LayoutBlockChildren</c> instead of
+        /// <c>CssLayoutEngine.CreateLineBoxes</c> and never calls <c>CssBox.AwaitPlacement</c> over its own
+        /// subtree the way inline content's flow start does. The item here does not straddle a column
+        /// boundary the way #468's inline-content case does — a column-fill retry positions its marker,
+        /// discovers the item keeps nothing in this column after all, and resumes the whole item
+        /// (<c>CssBox.ResumeInTheNextFragmentainer</c>) in the next one instead, so it ends up with exactly
+        /// one fragment, in a different column from where its marker was first (and wrongly) positioned.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The root cause: <c>FragmentEmitter.BuildDraft</c> falls back to a box's own captured
+        /// <c>Location</c>/<c>ActualBottom</c> bounds (<c>UsesOwnBounds</c>) to decide whether it belongs
+        /// to a slot, whenever it has no per-line <c>Rectangles</c> — the marker's own case, since
+        /// <c>LayoutOutsideMarker</c> positions it directly rather than through the ordinary inline flow
+        /// that assigns them. That fallback is right for a box with no words at all (a border-only,
+        /// empty-content <c>::before</c>/<c>::after</c>, or an invisible <c>list-style: none</c> marker),
+        /// but for a marker whose one word this slot's own per-word loop has already and correctly
+        /// excluded as <c>AwaitsTheNextFragmentainer</c>, the bounds are stale: they were captured
+        /// unconditionally (<c>BoxGeometrySnapshot.CaptureBox</c>) from the abandoned first attempt, before
+        /// <c>TakeBackTheMarkerOfAnItemThisPassKeptNothingOf</c> re-armed it for the column the item
+        /// actually resumes in.
+        /// </para>
+        /// <para>
+        /// The abandoned attempt's column ends up with a second, <b>empty</b> fragment for the marker
+        /// alongside its real one in the column it actually settled in — empty because the marker's one
+        /// word was correctly excluded from it, so a per-<i>word</i> claimed-once check
+        /// (<see cref="AListWhoseItemsCrossColumnBoundaries_ClaimsEveryWordExactlyOnce"/>'s own shape)
+        /// does not see it at all. Asked of the marker <i>box</i>'s own fragment count instead.
+        /// </para>
+        /// <para>
+        /// Swept over <c>(itemCount, pageHeight)</c> for the same reason
+        /// <see cref="EarlyBreakLayoutIntegrationTests.PulledRun_FromAPassThatResumedIntoAParagraph_ReEntersThatPass"/>
+        /// is: whether a given item's own column-fill attempt gets abandoned this way depends on exactly
+        /// where "para {i} some words here for wrapping" wraps against a 300pt page split into two
+        /// columns, which is a function of the platform's font metrics. No single fixed row is claimed to
+        /// reach it on every platform - the family as a whole is what is asked to. A different row's
+        /// platform-specific wrapping can instead reach the accepted-gap file's own still-open remainder
+        /// (an item spanning three or more fragments across a page <i>and</i> a column boundary can still
+        /// land its marker in the wrong one) - measured directly on Linux CI for <c>(5, 120)</c>'s own
+        /// <c>li4</c>, which is exactly why this test asks only "claimed once, with a real word", not
+        /// "in the right column".
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData(3, 120.0)]
+        [InlineData(5, 120.0)]
+        [InlineData(3, 140.0)]
+        [InlineData(5, 160.0)]
+        [InlineData(8, 200.0)]
+        public async Task ABlockContentItemAColumnFillAttemptAbandons_ClaimsItsMarkerExactlyOnce(
+            int itemCount, double pageHeight)
+        {
+            var items = string.Join("", Enumerable.Range(0, itemCount).Select(i =>
+                $"<li id='li{i}'><p>para {i} some words here for wrapping</p></li>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='column-count:2;column-fill:auto'>"
+                    + $"<ul style='margin:0;padding-left:40pt'>{items}</ul></div>"),
+                pageWidth: 300, pageHeight: pageHeight, margin: 10);
+
+            var listItems = ListItems(root);
+            Assert.NotEmpty(listItems);
+
+            foreach (var item in listItems)
+            {
+                var marker = item.Boxes.Single(b => b.IsMarkerPseudoElement);
+                var itemFragments = FragmentsOf(container, item);
+                var markerFragments = FragmentsOf(container, marker);
+
+                Assert.NotEmpty(itemFragments);
+
+                // Exactly once, and with a real word — not the phantom, empty second fragment an
+                // abandoned column-fill attempt used to leave behind. Which column it lands in is a
+                // separate, still-open question (see the accepted-gap file) this assertion deliberately
+                // does not reach.
+                var markerFragment = Assert.Single(markerFragments);
+                Assert.NotEmpty(markerFragment.Words);
+            }
+        }
+
+        /// <summary>
         /// #374's claimed-exactly-once invariant again, over a document whose list items break across
         /// <i>columns</i> rather than pages. A marker that is positioned twice — once per column the item
         /// passes through — is a duplicate this states directly, and it is what the shipped behaviour did.

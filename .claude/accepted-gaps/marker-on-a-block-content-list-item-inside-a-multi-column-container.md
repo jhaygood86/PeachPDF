@@ -1,78 +1,95 @@
-# A block-content list item does not settle its `::marker` inside a multi-column container
+# A block-content list item's `::marker` can land in the wrong column inside a multi-column container
 
 `<li><p>…</p></li>` is numbered correctly on the page grid, but inside a **multi-column** container its
-marker can land in a later column fragment than the one the item begins in, and in a minority of cases
-be claimed twice or not at all. [CSS 2.1 §12.5.1](https://www.w3.org/TR/CSS21/generate.html#lists) and
+marker can still land in a different column fragment than the one the item begins in.
+[CSS 2.1 §12.5.1](https://www.w3.org/TR/CSS21/generate.html#lists) and
 [CSS Lists Level 3 §3.1](https://www.w3.org/TR/css-lists-3/#marker-position) put the marker beside the
 item's **first** line box, so this is a real deviation. Tracked as
 [#483](https://github.com/jhaygood86/PeachPDF/issues/483).
 
-**Measured**, over 162 documents (`column-fill: auto|balance` × `column-count: 1|2|3` × 3|5|8 items ×
-1|2|4 block children × page heights 120/200/300pt):
+**Fixed:** the marker being claimed *twice* (once by a phantom, empty fragment in a column an abandoned
+attempt positioned it in, once by its real fragment) or **zero** times. Root cause and fix below.
+**Still open, narrower now:** a marker's one surviving fragment can still land in a column other than
+the one the item's own first fragment is in, for an item spanning three or more fragments across both
+page and column boundaries.
 
-| item content | `column-count: 1` | `column-count: 2\|3` |
-|---|---|---|
-| block children, no words | 0 late, 0 bad | 55 late, 3 claimed twice |
-| block children with text | 0 late, 0 bad | 6 late, 18 claimed twice, 6 claimed **zero** times |
+## What was fixed
 
-The page grid is clean in both rows, and **inline** item content is clean everywhere — that is the
-660-document sweep [#468](https://github.com/jhaygood86/PeachPDF/issues/468) was closed against.
+**Root cause, traced from one sweep failure (`column-count:2;column-fill:auto`, 3 items, one `<p>` child
+each, 300×120pt page):** `FragmentEmitter.BuildDraft` decides whether a box belongs to a slot by its own
+per-line `Rectangles` where it has them, and falls back to its own captured `Location`/`ActualBottom`
+bounds (`UsesOwnBounds`/`ownBoundsCoverRegion`) where it doesn't — an outside `::marker`'s case, since
+`CssBox.LayoutOutsideMarker` positions it directly rather than through the ordinary inline flow that
+assigns `Rectangles`. Those bounds are captured *unconditionally* by
+`Fragments.BoxGeometrySnapshot.CaptureBox`, regardless of whether the marker's own word is
+`AwaitsTheNextFragmentainer` in that snapshot. A column-fill attempt positions the marker in column A,
+then — via the same one-shot early-break retry every box gets, not the "kept nothing" take-back alone —
+discovers the item keeps nothing there after all and resumes the whole item in column B
+(`CssBox.ResumeInTheNextFragmentainer`, `CssBox.TakeBackTheMarkerOfAnItemThisPassKeptNothingOf`). Column
+A's stale bounds still register as "the marker is here," producing a second, **empty** `BoxFragment`
+(zero `Words`, since the per-word claim loop upstream of `UsesOwnBounds` correctly excludes the word
+there) alongside the real one in column B — invisible to a per-*word* claimed-once check, since the
+phantom fragment carries no word to double-count.
 
-**Why it is not the marker rule's doing.** An outside marker is positioned by the pass that *places*
-its item and left alone afterwards
-([the invariant](../invariants/fragmentation-an-outside-marker-is-positioned-by-the-pass-that-places-its-item.md)),
-which is correct wherever the item's own fragmentation is. Here the item's fragmentation is what is
-unsettled: a block-content item flows through `CssBox.LayoutBlockChildren`, so nothing calls
-`CssBox.AwaitPlacement` over its subtree the way `CssLayoutEngine.CreateLineBoxes` does for an
-inline-content item (#433's defect class, still open for this shape), and the loop's column arms can
-re-decide which column a child belongs to after the item has been placed.
-`CssBox.TakeBackTheMarkerOfAnItemThisPassKeptNothingOf` covers only the case where the item kept
-*nothing*, not the case where it kept content in a column it is later moved out of.
+**Fix:** narrow the bounds-based fallback (`ownBoundsCoverRegion` in `BuildDraft`) to exclude a box that
+is `CssBox.IsOutsideMarker` **and** has a word **and** whose own item is a genuine
+`display: list-item` box — not every word-bearing, rectangle-less box, and not a marker with no word at
+all. Both narrowings were measured, not assumed:
 
-**Measured, not assumed, to sit upstream of the take-back:** disabling that method entirely leaves the
-same counts (55 late / 3 bad on the wordless row), and a words-only "kept nothing" test — the obvious
-alternative — is much worse, turning 55 late markers into 52 claimed zero or twice. A marker in the
-wrong column is visible; one claimed zero times is invisible, which is #444's symptom.
+- Restricting only to "no words" (any box, not just markers) still needed the per-word loop's own
+  `AwaitsTheNextFragmentainer` check to answer membership for that box — but removing the bounds
+  fallback for *every* such box (not just markers) regressed `Acid2RegressionTests.FullFixture_MatchesPrinceXmlPageCount`
+  (2 pages → 1) and `FixedBars_RepeatOntoPage2_KnownResidualNotCoveredByIntro`: an ordinary inline box in
+  that same "words, no rectangles" shape (bare text `CssLineBox.UpdateRectangle`'s
+  `clonesDecorations`/`IsImage` gate skips) still legitimately needs its own bounds when none of its
+  words are claimed in a slot its subtree otherwise belongs to.
+- Narrowing to markers specifically (`IsOutsideMarker(box) && Words.Count > 0`) *still* regressed the
+  same two Acid2 tests: Acid2's own fixture retargets three `<li>`s to `display: table-cell`/`table`
+  without a `list-style: none` override (`ul li.first-part`/`.second-part`/`.third-part` in
+  `PeachPDF.Tests/TestSupport/acid2.html`), and PeachPDF still produces a marker box with a real word for
+  them even though CSS 2.1 §12.5.1 generates a marker only for `display: list-item` — a pre-existing,
+  out-of-scope quirk this fix must not touch. Adding the `ParentBox?.DerivedStyle.ActualDisplay ==
+  Keywords.ListItem` condition on top scopes the fix to genuine list items only, and both Acid2 tests
+  pass again.
 
-**Reachable only because [#467](https://github.com/jhaygood86/PeachPDF/issues/467) closed.** The same
-sweep on the build before it reports every one of these markers missing outright, and some items
-producing no fragment at all — so this is a residual of a strictly improved state, not a regression.
-Closing it means settling how the columns engine fragments a block-level list item, which is a larger
-change than the marker rule.
+`UsesOwnBounds` itself stays `true` regardless of the new exclusion — it still governs `RectOf`/`ExtentOf`
+sizing the marker's *real* fragment once its word has genuinely been claimed somewhere; only the
+membership question (`ownBoundsCoverRegion`, "is this box's bounds alone enough to say it's here with no
+claimed content") is narrowed.
 
-**A second attempt (2026-09-07) found the actual mechanism, and it is not the column-rejection arms.**
-The plan for this attempt was "take the marker back wherever `CssBox.LayoutBlockChildren`'s own
-column-rejection arms (§3.1 forced/avoid-column-break, column-overflow, column-span:all, the orphans
-retry) push an already-placed child to the next column wholesale" — mirroring
-`TakeBackTheMarkerOfAnItemThisPassKeptNothingOf`'s shape but unconditional, since the whole subtree
-moves. Implemented at all four arms and measured against the same 162-combination sweep: **the late/bad
-counts (21 late, 14 bad on the current build's own parameter grid) were bit-for-bit identical with and
-without the fix.** The four arms are real, but every one of them hands the rejected child a fresh
-`BlockBreakToken` with `ChildToken: null` — and `MarkerBelongsToTheFragmentainerBeingFilled` already
-treats a `null` resume as "reposition it" unconditionally, regardless of whether `AwaitPlacement` was
-ever called. The take-back is not wrong, but it is inert: nothing in the sweep ever needed it.
+**Measured effect** (216-combination sweep: `column-fill: auto|balance` × `column-count: 2|3` ×
+`item-count: 3|5|8` × `child-count: 1|2|4` × `page-height: 120|200|300` × plain-text or block-only
+children): markers claimed zero or twice dropped from **39 to 0**. A separate, narrower "claimed exactly
+once but in the wrong column" count rose from 9 to 16 — expected, not a regression: several of those 16
+are markers that were previously claimed *zero* times (invisible, #444's own symptom) and are now claimed
+once, just not always in the column matching the item's first fragment yet. See below for that remainder.
 
-**The real mechanism, traced from one sweep failure (`li5`, `column-count:2;column-fill:auto`, 8 items,
-2 `<p>` children, page height 120):** the item's *marker word* and the item's own final `Location` came
-back pointing at two different columns entirely — `Location.X` at the column the item's content actually
-settled in, the marker's own word rect still at the column an *earlier, abandoned* attempt had placed it
-in. The seam is `CssBox.ResumeInTheNextFragmentainer` (`CssBox.cs`, called from `DriveBlockChildPass`
-whenever a box resumes with a non-null token): its own doc comment states the design plainly — "**only
-this box moves, not its subtree**... its already-placed descendants belong to the fragmentainer being
-left and keep the geometry that one's own fragment was built from." That is correct for ordinary content
-(a `<p>`'s first half genuinely does stay in the fragmentainer it was placed in), but the *marker* is not
-"content behind in the fragmentainer being left" the way a placed line is — it names a position derived
-from the item's own border box, and `ResumeInTheNextFragmentainer` moves that border box (`Location`)
-without moving the one child (the marker) whose position is supposed to describe it. Compounding this:
-the failing items' own fragments (both, in `li5`'s case) ended up on a pagination slot neither of the two
-logged `LayoutPassContents` visits ever named, meaning at least one further whole-container relayout
-attempt is involved that a simple per-visit trace does not capture — consistent with the file's own
-"settling how the columns engine fragments a block-level list item" framing above, not a narrow gap in
-one method.
+**Regression test:** `StraddlingListMarkerTests.ABlockContentItemAColumnFillAttemptAbandons_ClaimsItsMarkerExactlyOnce`
+— confirmed to fail against pre-fix code (`Assert.Single` finding 2 marker fragments) and pass post-fix.
 
-**Status: still open, scope confirmed larger than a marker-only fix.** A real fix needs
-`ResumeInTheNextFragmentainer` (or whatever relays the item across that further whole-container retry)
-to either move the marker's word along with the box, or explicitly take it back so a later pass
-repositions it — and the second, currently-untraced relayout path needs identifying before either change
-can be verified against the sweep. Left as this file's own open gap rather than shipped as a fix that
-measurably does nothing.
+## What is still open
+
+An item spanning **three or more** fragments across both a page boundary and a column boundary in the
+same run (measured on `column-count:2;column-fill:auto`, 5 items, four empty `<div>` children each,
+120pt page: the item's own fragments land at page 0/column 1 (a sliver), page 0/column 2, and page
+1/column 2) can still end up with its marker's one surviving fragment in none of those three columns —
+a single, valid claim, just not demonstrably the item's *first* one. This is the "at least one further
+whole-container relayout attempt" the previous investigation flagged as untraced; it remains untraced.
+Closing it fully still means settling how the columns engine fragments a block-level list item across
+*that* many fragmentainer boundaries, which is a larger change than this fix's narrow `FragmentEmitter`
+membership correction.
+
+## History (superseded findings, kept for context)
+
+Two earlier investigation passes are folded into the above rather than kept as separate log entries:
+
+- A first attempt found the mechanism was not `CssBox.LayoutBlockChildren`'s column-rejection arms
+  (§3.1 forced/avoid-column-break, column-overflow, column-span:all, the orphans retry) — a take-back
+  mirroring `TakeBackTheMarkerOfAnItemThisPassKeptNothingOf` at all four arms measured bit-for-bit
+  identical late/bad counts with and without it, because every one of those arms hands the rejected
+  child a fresh `BlockBreakToken` with `ChildToken: null`, and `MarkerBelongsToTheFragmentainerBeingFilled`
+  already treats a `null` resume as "reposition it" regardless of whether `AwaitPlacement` ran.
+- A second attempt correctly identified `CssBox.ResumeInTheNextFragmentainer` as the seam (only the
+  box's own `Location` moves, not the marker's word) but had not yet traced *which* mechanism leaves the
+  marker's bounds stale in the fragment tree specifically — that is `FragmentEmitter.BuildDraft`'s
+  `UsesOwnBounds` fallback, identified and fixed above.
