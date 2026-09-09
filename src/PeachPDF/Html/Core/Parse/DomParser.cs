@@ -674,14 +674,44 @@ namespace PeachPDF.Html.Core.Parse
             //    ComputedStyleTests.CascadeDefaultingLoop_OnAFreshBox_OnlyKnownExceptionsAreNotNoOps.
             if (!ReferenceEquals(box.ComputedStyle, ComputedStyle.Default))
             {
-                foreach (var (name, initial) in CssDefaults.InitialValues)
+                // Re-pointing at ComputedStyle.Default IS the all-initial state this loop reconstructs,
+                // so for an anonymous box the loop is several hundred property parses to reach a state
+                // one assignment away. Every area is copy-on-write, so restoring the display below forks
+                // it straight back.
+                //
+                // WHY THIS IS SAFE, and it is not "because the only divergence is a structural display
+                // write" - that was the original justification here and it is wrong. Instrumenting the
+                // branch over a 26-document corpus: of 2,031 boxes reaching it, 2,005 still hold the
+                // INITIAL display. They are pseudo-elements (1,971 ::before/::after, 34 ::marker) that
+                // CssData's synthesis forked by calling InheritStyle on them, out of band, before their
+                // own cascade pass ever ran.
+                //
+                // It is safe for a broader reason: this is a full state overwrite, equivalent to the old
+                // loop for ANY prior divergence rather than for one known cause. The loop discarded every
+                // non-display property unconditionally too, and box.InheritStyle() re-runs immediately
+                // below regardless of which branch is taken, so whatever an out-of-band write left behind
+                // is re-derived either way. An element-backed box still takes the loop: it has author
+                // declarations to apply over the top.
+                if (box.HtmlTag is null)
                 {
-                    if (initial is null) continue;
-                    if (name == PropertyNames.Display && box.HtmlTag is null) continue;
-                    CssUtils.SetPropertyValue(valueParser, box, name, initial);
+                    var structuralDisplay = box.Display;
+                    box.ResetComputedStyleToInitial();
+                    box.Display = structuralDisplay;
+                }
+                else
+                {
+                    foreach (var (name, initial) in CssDefaults.InitialValues)
+                    {
+                        if (initial is null) continue;
+                        CssUtils.SetPropertyValue(valueParser, box, name, initial);
+                    }
                 }
             }
-            else
+
+            // The three properties whose Default-singleton state is NOT what re-parsing their initial
+            // value produces (see the audit above) - now needed on the reset path too, which lands a box
+            // in exactly the same state a never-touched one is in.
+            if (ReferenceEquals(box.ComputedStyle, ComputedStyle.Default) || box.HtmlTag is null)
             {
                 CssUtils.SetPropertyValue(valueParser, box, PropertyNames.FontFamily, CssDefaults.GetInitialValue(PropertyNames.FontFamily)!);
                 CssUtils.SetPropertyValue(valueParser, box, PropertyNames.GridTemplateColumns, CssDefaults.GetInitialValue(PropertyNames.GridTemplateColumns)!);
