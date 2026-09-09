@@ -684,11 +684,22 @@ namespace PeachPDF.Html.Core
         {
             if (selector is ListSelector list)
             {
-                return list
-                    .Where(s => DoesSelectorMatch(s, node))
-                    .Select(s => s.Specificity)
-                    .DefaultIfEmpty(Priority.Zero)
-                    .Max();
+                // Indexed rather than Where().Select().DefaultIfEmpty().Max(): Selectors is
+                // IEnumerable-only, so that chain boxes an enumerator and allocates per call. Every
+                // matching alternative's specificity has to be examined (not just the first), so this
+                // doesn't use MatchOrder's cost-first short-circuiting benefit - it's here purely to
+                // remove the allocation. Priority.Zero is already the minimum possible specificity (its
+                // components are non-negative counts), so seeding the running max with it and folding in
+                // only matched alternatives reproduces Where(...).DefaultIfEmpty(Priority.Zero).Max()
+                // exactly, including the "no alternative matched" case.
+                var max = Priority.Zero;
+                for (var i = 0; i < list.Length; i++)
+                {
+                    if (!DoesSelectorMatch(list[i], node)) continue;
+                    var specificity = list[i].Specificity;
+                    if (specificity > max) max = specificity;
+                }
+                return max;
             }
 
             return selector.Specificity;
@@ -767,9 +778,18 @@ namespace PeachPDF.Html.Core
             return null;
         }
 
-        private static bool DoesSelectorMatch(ListSelector listSelector, ICssDomNode? node)
+        internal static bool DoesSelectorMatch(ListSelector listSelector, ICssDomNode? node)
         {
-            return listSelector.Any(selector => DoesSelectorMatch(selector, node));
+            // Indexed via MatchOrder (cheapest alternative first, see SelectorMatchCost) rather than
+            // LINQ's Any(): Selectors only implements IEnumerable<ISelector>, so Any() boxes an
+            // enumerator and allocates a closure per call on what is the hottest path in the whole
+            // cascade (once per box per candidate rule).
+            var order = listSelector.MatchOrder;
+            for (var i = 0; i < order.Length; i++)
+            {
+                if (DoesSelectorMatch(listSelector[order[i]], node)) return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -802,15 +822,36 @@ namespace PeachPDF.Html.Core
             switch (selector)
             {
                 case ListSelector list:
-                    return list.Any(s => MatchesAsFirstLineSelector(s, box));
+                {
+                    // Indexed via MatchOrder rather than LINQ's Any() - see the DoesSelectorMatch
+                    // overloads above for why (Selectors is IEnumerable-only, so Any() allocates).
+                    var order = list.MatchOrder;
+                    for (var i = 0; i < order.Length; i++)
+                    {
+                        if (MatchesAsFirstLineSelector(list[order[i]], box)) return true;
+                    }
+                    return false;
+                }
 
                 case ComplexSelector complex:
                     var lastSegmentSelector = complex.LastOrDefault().Selector;
                     return lastSegmentSelector is not null && HasFirstLineSubject(lastSegmentSelector);
 
                 case CompoundSelector compound:
-                    return HasFirstLineSubject(compound) &&
-                           compound.Where(x => x is not PseudoElementSelector).All(s => DoesSelectorMatch(s, box));
+                {
+                    if (!HasFirstLineSubject(compound)) return false;
+
+                    // Indexed via MatchOrder rather than Where().All() - see the plain branch of
+                    // DoesSelectorMatch(CompoundSelector, ...) above for the same rewrite and why.
+                    var order = compound.MatchOrder;
+                    for (var i = 0; i < order.Length; i++)
+                    {
+                        var s = compound[order[i]];
+                        if (s is PseudoElementSelector) continue;
+                        if (!DoesSelectorMatch(s, box)) return false;
+                    }
+                    return true;
+                }
 
                 default:
                     return false;
@@ -829,15 +870,32 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private static bool CouldMatchAsFirstLineSelector(ISelector selector) => selector switch
         {
-            ListSelector list => list.Any(CouldMatchAsFirstLineSelector),
+            ListSelector list => AnyCouldMatchAsFirstLineSelector(list),
             ComplexSelector complex => complex.LastOrDefault().Selector is { } last && HasFirstLineSubject(last),
             CompoundSelector compound => HasFirstLineSubject(compound),
             _ => false
         };
 
+        // Indexed rather than list.Any(CouldMatchAsFirstLineSelector) - see the DoesSelectorMatch
+        // overloads above for why (Selectors is IEnumerable-only, so Any() allocates). This method runs
+        // once per rule at EnsureIndex time rather than per box, so the allocation it used to cause was
+        // never actually hot - fixed anyway for consistency now that MatchOrder exists.
+        private static bool AnyCouldMatchAsFirstLineSelector(ListSelector list)
+        {
+            var order = list.MatchOrder;
+            for (var i = 0; i < order.Length; i++)
+            {
+                if (CouldMatchAsFirstLineSelector(list[order[i]])) return true;
+            }
+            return false;
+        }
+
         private static bool HasFirstLineSubject(ISelector selector) => selector switch
         {
-            CompoundSelector compound => compound.LastOrDefault() is PseudoElementSelector { Name: PseudoElementNames.FirstLine },
+            // Indexed rather than LINQ's LastOrDefault() - see the DoesSelectorMatch overloads above
+            // for why (Selectors is IEnumerable-only, so LastOrDefault() allocates).
+            CompoundSelector { Length: > 0 } compound =>
+                compound[compound.Length - 1] is PseudoElementSelector { Name: PseudoElementNames.FirstLine },
             PseudoElementSelector pseudo => pseudo.Name == PseudoElementNames.FirstLine,
             _ => false
         };
@@ -855,21 +913,32 @@ namespace PeachPDF.Html.Core
             _ => false
         };
 
-        private static bool DoesSelectorMatch(CompoundSelector compoundSelector, ICssDomNode? node)
+        internal static bool DoesSelectorMatch(CompoundSelector compoundSelector, ICssDomNode? node)
         {
             if (node is null)
             {
                 return false;
             }
 
-            var lastSelector = compoundSelector.Last();
+            var lastSelector = compoundSelector[compoundSelector.Length - 1];
 
             // Structural pseudo-classes (ChildSelector subtypes, OnlyChildSelector, OnlyOfTypeSelector)
             // are matched against `node` itself here, same as every other compound member - their own
             // DoesSelectorMatch overload re-derives sibling scope from `node` as needed, so no special
             // handling is required for them beyond the plain path below.
             if (lastSelector is not PseudoElementSelector)
-                return compoundSelector.All(selector => DoesSelectorMatch(selector, node));
+            {
+                // Indexed via MatchOrder (cheapest selector first, see SelectorMatchCost) rather than
+                // LINQ's All(): Selectors only implements IEnumerable<ISelector>, so All() boxes an
+                // enumerator and allocates a closure per call on what is the hottest path in the whole
+                // cascade (once per box per candidate rule).
+                var order = compoundSelector.MatchOrder;
+                for (var i = 0; i < order.Length; i++)
+                {
+                    if (!DoesSelectorMatch(compoundSelector[order[i]], node)) return false;
+                }
+                return true;
+            }
 
             // Pseudo-elements (::before/::after/::marker/::first-letter) exist only in the HTML box tree
             // and the synthesis below mutates it; an SVG node never has one, so a pseudo-element compound
@@ -883,9 +952,20 @@ namespace PeachPDF.Html.Core
                     : box.IsFootnoteCallPseudoElement || box.IsFootnoteMarkerPseudoElement ? box.FootnoteSourceBox
                     : box.IsPseudoElement ? box.ParentBox : box;
 
-                var isMatchWithoutPseudoElement = compoundSelector
-                    .Where(x => x is not PseudoElementSelector)
-                    .All(selector => DoesSelectorMatch(selector, referenceBox));
+                // Same indexed-order approach as the plain branch above, skipping the pseudo-element
+                // itself (still pinned/handled separately below) instead of LINQ's Where().All().
+                var isMatchWithoutPseudoElement = true;
+                var order = compoundSelector.MatchOrder;
+                for (var i = 0; i < order.Length; i++)
+                {
+                    var selector = compoundSelector[order[i]];
+                    if (selector is PseudoElementSelector) continue;
+                    if (!DoesSelectorMatch(selector, referenceBox))
+                    {
+                        isMatchWithoutPseudoElement = false;
+                        break;
+                    }
+                }
 
                 if (!isMatchWithoutPseudoElement) return false;
 
@@ -1301,7 +1381,17 @@ namespace PeachPDF.Html.Core
         /// </summary>
         private static bool HasRelativeMatch(ICssDomNode node, ISelector inner)
         {
-            if (inner is ListSelector list) return list.Any(alt => HasRelativeMatch(node, alt));
+            // Indexed via MatchOrder rather than LINQ's Any() - see the DoesSelectorMatch overloads
+            // above for why (Selectors is IEnumerable-only, so Any() allocates).
+            if (inner is ListSelector list)
+            {
+                var order = list.MatchOrder;
+                for (var i = 0; i < order.Length; i++)
+                {
+                    if (HasRelativeMatch(node, list[order[i]])) return true;
+                }
+                return false;
+            }
 
             if (inner is RelativeSelector relative)
                 return MatchesRelativeChain(node, relative.Combinator, relative.Selector);

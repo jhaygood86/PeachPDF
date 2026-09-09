@@ -1,5 +1,6 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -14,10 +15,40 @@ PdfGenerateConfig pdfConfig = new()
 
 PdfGenerator generator = new();
 
-// Optional first argument: directory to write showcase output into (used by the
+// --benchmark [--benchmark-iterations N]: instead of writing any output, times and measures
+// allocation for every showcase's render (GeneratePdf + Save, the same two calls a real caller
+// makes), N times each (default 10), and prints a per-showcase report plus totals at the end. A
+// reusable regression tool for exactly the kind of corpus-wide allocation change issue #971 needed -
+// no files are written in this mode, so it's safe to point at any outputDir. Parsed out of args
+// before the positional outputDir argument below, so "--benchmark" is never mistaken for a directory.
+var positionalArgs = new List<string>();
+var benchmarkMode = false;
+var benchmarkIterations = 10;
+for (var i = 0; i < args.Length; i++)
+{
+    if (args[i] == "--benchmark")
+    {
+        benchmarkMode = true;
+    }
+    else if (args[i] == "--benchmark-iterations" && i + 1 < args.Length
+        && int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedIterations)
+        && parsedIterations > 0)
+    {
+        benchmarkIterations = parsedIterations;
+        i++;
+    }
+    else
+    {
+        positionalArgs.Add(args[i]);
+    }
+}
+
+List<BenchmarkResult> benchmarkResults = [];
+
+// Optional first (positional) argument: directory to write showcase output into (used by the
 // docs-site build to publish /showcase). Defaults to the current directory,
 // matching the historical local workflow.
-var outputDir = args.Length > 0 ? Path.GetFullPath(args[0]) : Directory.GetCurrentDirectory();
+var outputDir = positionalArgs.Count > 0 ? Path.GetFullPath(positionalArgs[0]) : Directory.GetCurrentDirectory();
 Directory.CreateDirectory(outputDir);
 
 // Opt-in PDF/A conformance sweep (PDFA_SWEEP=1) - alongside every showcase's normal PDF, also
@@ -72,6 +103,12 @@ List<ShowcaseEntry> showcaseManifest = [];
 // the website's /showcase page always matches the files actually written.
 async Task SaveShowcaseAsync(string slug, string category, string cardTitle, string cardDescription, string sourceHtml, PdfGenerateConfig renderConfig)
 {
+    if (benchmarkMode)
+    {
+        await BenchmarkShowcaseAsync(slug, sourceHtml, renderConfig);
+        return;
+    }
+
     var showcaseDocument = await generator.GeneratePdf(sourceHtml, renderConfig);
     using var pdfStream = new MemoryStream();
     showcaseDocument.Save(pdfStream);
@@ -95,6 +132,74 @@ async Task SaveShowcaseAsync(string slug, string category, string cardTitle, str
             Console.WriteLine($"PDF/A SWEEP GENERATION FAILED for {slug}: {ex.GetType().Name}: {ex.Message}");
         }
     }
+}
+
+// Renders sourceHtml the same way a real caller would - GeneratePdf, then Save to a stream - without
+// writing anything to disk. This, not just GeneratePdf alone, is what --benchmark times/measures: PDF
+// serialization is a real, distinct cost a caller always pays, not an artifact of the showcase harness.
+async Task RenderOnceAsync(string sourceHtml, PdfGenerateConfig renderConfig)
+{
+    var document = await generator.GeneratePdf(sourceHtml, renderConfig);
+    using var stream = new MemoryStream();
+    document.Save(stream);
+}
+
+async Task BenchmarkShowcaseAsync(string slug, string sourceHtml, PdfGenerateConfig renderConfig)
+{
+    // Warm: JIT the whole render path (parser, cascade, layout, PDF writer) before anything is
+    // counted - the first render of any process pays a one-time JIT/tiering cost that would otherwise
+    // swamp a real per-render number.
+    await RenderOnceAsync(sourceHtml, renderConfig);
+
+    var wallTimesMs = new double[benchmarkIterations];
+    var allocatedBytes = new long[benchmarkIterations];
+
+    for (var i = 0; i < benchmarkIterations; i++)
+    {
+        // GC.GetTotalAllocatedBytes(precise: true) rather than the per-thread counter this repo's
+        // xUnit allocation tests use (e.g. GposPositionerAllocationTests): those run under parallel
+        // test-class execution, where a process-wide counter would pick up unrelated tests'
+        // allocation. The TestHarness is a single-threaded console app with nothing else running
+        // concurrently, so the process-wide precise counter is the more complete measurement here -
+        // it also captures allocation on any thread-pool continuation the async render hops onto,
+        // which a per-thread counter would miss.
+        var before = GC.GetTotalAllocatedBytes(precise: true);
+        var stopwatch = Stopwatch.StartNew();
+        await RenderOnceAsync(sourceHtml, renderConfig);
+        stopwatch.Stop();
+        var after = GC.GetTotalAllocatedBytes(precise: true);
+
+        wallTimesMs[i] = stopwatch.Elapsed.TotalMilliseconds;
+        allocatedBytes[i] = after - before;
+    }
+
+    benchmarkResults.Add(new BenchmarkResult(slug, wallTimesMs, allocatedBytes));
+    Console.WriteLine($"Benchmarked {slug} ({benchmarkIterations} iterations)");
+}
+
+void PrintBenchmarkReport()
+{
+    Console.WriteLine();
+    Console.WriteLine($"=== Benchmark report ({benchmarkResults.Count} showcases x {benchmarkIterations} iterations) ===");
+    Console.WriteLine($"{"Showcase",-40} {"Mean ms",10} {"Median ms",10} {"Mean KB",10} {"Median KB",10}");
+
+    foreach (var result in benchmarkResults.OrderBy(r => r.Slug, StringComparer.Ordinal))
+    {
+        Console.WriteLine($"{result.Slug,-40} {result.MeanWallTimeMs,10:F2} {result.MedianWallTimeMs,10:F2} " +
+            $"{result.MeanAllocatedBytes / 1024.0,10:F1} {result.MedianAllocatedBytes / 1024.0,10:F1}");
+    }
+
+    // Totals sum each showcase's own mean, rather than averaging per-iteration numbers across
+    // showcases directly, so a showcase rendered zero or a different iteration count (were that ever
+    // to vary) still contributes its fair share - and because "total time/allocation for one pass
+    // over the whole corpus" (matching how this repo's other allocation fixes report a "per corpus
+    // pass" figure) is what a caller actually wants out of this report, not a per-iteration average.
+    var totalMeanMs = benchmarkResults.Sum(r => r.MeanWallTimeMs);
+    var totalMeanBytes = benchmarkResults.Sum(r => r.MeanAllocatedBytes);
+    Console.WriteLine(new string('-', 40 + 4 * 11));
+    Console.WriteLine($"{"TOTAL (one corpus pass)",-40} {totalMeanMs,10:F2} {"",10} " +
+        $"{totalMeanBytes / 1024.0,10:F1} {"",10}");
+    Console.WriteLine($"Total: {totalMeanMs:F2} ms, {totalMeanBytes / 1024.0 / 1024.0:F2} MB per pass over the corpus.");
 }
 
 static string Swatch(string desc, string css) =>
@@ -8881,11 +8986,34 @@ await SaveShowcaseAsync("interactive_pdf_forms", "Interactivity", "Interactive P
         EnableInteractivePdfForms = true
     });
 
-// The manifest that drives the website's /showcase page (see docs/showcase.html and
-// .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
-var manifestJson = JsonSerializer.Serialize(showcaseManifest,
-    new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-File.WriteAllText(Path.Combine(outputDir, "showcases.json"), manifestJson);
-Console.WriteLine($"Saved showcases.json ({showcaseManifest.Count} showcases)");
+if (benchmarkMode)
+{
+    PrintBenchmarkReport();
+}
+else
+{
+    // The manifest that drives the website's /showcase page (see docs/showcase.html and
+    // .github/workflows/pages.yml). Field names are camelCased for Liquid (site.data.showcases).
+    var manifestJson = JsonSerializer.Serialize(showcaseManifest,
+        new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+    File.WriteAllText(Path.Combine(outputDir, "showcases.json"), manifestJson);
+    Console.WriteLine($"Saved showcases.json ({showcaseManifest.Count} showcases)");
+}
 
 record ShowcaseEntry(string Slug, string Category, string Title, string Description, string Pdf, string Html);
+
+/// <summary>One showcase's --benchmark measurements: one wall-time (ms) and one allocated-bytes sample per iteration.</summary>
+record BenchmarkResult(string Slug, double[] WallTimesMs, long[] AllocatedBytes)
+{
+    public double MeanWallTimeMs => WallTimesMs.Average();
+    public double MedianWallTimeMs => Median(WallTimesMs);
+    public double MeanAllocatedBytes => AllocatedBytes.Average(b => (double)b);
+    public double MedianAllocatedBytes => Median(AllocatedBytes.Select(b => (double)b));
+
+    private static double Median(IEnumerable<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToArray();
+        var mid = sorted.Length / 2;
+        return sorted.Length % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2.0 : sorted[mid];
+    }
+}
