@@ -46,6 +46,21 @@ jobs:
           8.0.x
           10.0.x
 
+    # A separate step because dotnet-quality applies to every entry in dotnet-version, and
+    # 8.0.x/10.0.x only have GA builds; net11.0 is still pre-GA (RC), which setup-dotnet
+    # classifies as "preview" quality. Drop this step (and the dotnet-quality knob) once
+    # .NET 11 ships its GA SDK. global.json's rollForward "latestMajor"/allowPrerelease
+    # automatically promotes to this SDK once it's installed - net8.0/net10.0 still build/run
+    # fine under it since those runtimes were also installed above. No further wiring needed:
+    # a contributor without this SDK installed keeps building/testing net8.0/net10.0 exactly as
+    # before (see src/Directory.Build.props for how net11.0 opts in per resolved SDK).
+    - name: Setup .NET 11 (RC)
+      if: steps.changes.outputs.src == 'true'
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 11.0.x
+        dotnet-quality: 'preview'
+
     - name: Setup Python
       if: steps.changes.outputs.src == 'true'
       uses: actions/setup-python@v5

@@ -8,7 +8,7 @@ If you're contributing and want the exact local commands and conventions, see [C
 
 The tests live in `src/PeachPDF.Tests`, an [xUnit](https://xunit.net/) project of {% if site.data.tests %}{{ site.data.tests.total }}{% else %}3,000+{% endif %} tests covering the HTML parser, CSS cascade, layout engines (block, inline, flex, table, multi-column), painting, the SVG subsystem, the font pipeline, and PDF output.
 
-The suite multi-targets **`net8.0` and `net10.0`**, and both target frameworks are first-class: continuous integration builds and runs the whole suite against each. (For routine *local* iteration you can run a single target framework to halve build/test time — see [CONTRIBUTING.md](https://github.com/jhaygood86/PeachPDF/blob/main/CONTRIBUTING.md) — but that's a local convenience, not the canonical way the project is validated.)
+The suite multi-targets **`net8.0`, `net10.0`, and `net11.0`**, and all three target frameworks are first-class: continuous integration builds and runs the whole suite against each. (For routine *local* iteration you can run a single target framework to halve build/test time — see [CONTRIBUTING.md](https://github.com/jhaygood86/PeachPDF/blob/main/CONTRIBUTING.md) — but that's a local convenience, not the canonical way the project is validated.)
 
 ## Continuous integration
 
