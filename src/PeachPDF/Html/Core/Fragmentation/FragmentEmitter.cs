@@ -2597,7 +2597,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 var scopeOwner = ScopeOwnerOf(box);
                 var history = HistoryFor(scopeOwner);
-                startIndex = box.LiveChildStart;
+                startIndex = box.LiveChildStartFor(slot.Index);
 
                 while (startIndex < box.Boxes.Count)
                 {
@@ -2627,7 +2627,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     startIndex++;
                 }
 
-                box.RecordLiveChildStart(startIndex);
+                box.RecordLiveChildStart(startIndex, slot.Index);
             }
 
             for (var i = startIndex; i < box.Boxes.Count; i++)
