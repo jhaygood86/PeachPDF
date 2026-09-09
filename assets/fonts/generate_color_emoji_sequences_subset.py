@@ -9,7 +9,15 @@ straight from the cmap:
   * a ZWJ sequence            U+1F469 U+200D U+1F4BB         (woman technologist)
   * regional-indicator pairs  U+1F1FA U+1F1F8, U+1F1EF U+1F1F5 (US, Japan)
   * a tag sequence            U+1F3F4 U+E0067 ... U+E007F    (Scotland)
+  * skin tone modifiers       U+1F44D U+1F3FB .. U+1F3FF      (thumbs up, 5 tones)
   * a bare VS16 pair          U+2764 U+FE0F                  (heart)
+
+The skin tone modifiers (U+1F3FB-U+1F3FF, EMOJI MODIFIER FITZPATRICK TYPE-1-2
+through TYPE-6) are worth calling out: unlike a variation selector they are NOT
+default-ignorable - each has a real swatch glyph of its own - so an unapplied
+`ccmp` does not hide them, it renders them, and a modified emoji comes out as
+the base emoji followed by a bare coloured square. They are retained here (both
+the base and all five modifiers) so a regression shows up as that square.
 
 This is deliberately a *different* asset from NotoColorEmoji-Subset.ttf, which
 covers single-codepoint color glyphs and carries no GSUB at all. Sequence
@@ -42,6 +50,8 @@ CODEPOINTS = [
     0x1F3F3, 0x1F3F4,                            # WHITE FLAG, BLACK FLAG
     0x1F469, 0x1F4BB,                            # WOMAN, LAPTOP
     0x1F1FA, 0x1F1F8, 0x1F1EF, 0x1F1F5,          # regional indicators U, S, J, P
+    0x1F44D,                                     # THUMBS UP (skin-tone base)
+    0x1F3FB, 0x1F3FC, 0x1F3FD, 0x1F3FE, 0x1F3FF, # EMOJI MODIFIER FITZPATRICK TYPE-1-2 .. TYPE-6
     # TAG LATIN letters for "gbsct" plus CANCEL TAG - the Scotland subdivision flag.
     0xE0067, 0xE0062, 0xE0073, 0xE0063, 0xE0074, 0xE007F,
 ]

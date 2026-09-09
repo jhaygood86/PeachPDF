@@ -21,8 +21,14 @@ all text (they are default-on features in the OpenType registry; PeachPDF previo
 Arabic-family and USE-shaped scripts), plus ligature matching stepping over a hidden variation selector.
 
 - *Before:* `🇺🇸` rendered as the two regional-indicator letters "US"; `🏴󠁧󠁢󠁳󠁣󠁴󠁿` rendered as a bare black
-  flag; `🏳️‍🌈` rendered as a white flag followed by a separate rainbow.
+  flag; `🏳️‍🌈` rendered as a white flag followed by a separate rainbow; `👍🏽` rendered as a yellow
+  thumbs-up followed by a bare brown square.
 - *After:* each renders as the one composed glyph the font defines.
+
+Skin tone modifiers (`U+1F3FB`–`U+1F3FF`) are the case most likely to be noticed in ordinary documents,
+and they fail differently from the rest: a modifier is **not** default-ignorable — it has a real colour
+swatch glyph of its own — so before this change it was *drawn* rather than hidden, which is why the old
+output was a visible square rather than a missing-glyph box.
 
 **A font's `ccmp`/`locl` features now apply to all text.** Beyond emoji, a font that decomposes a
 precomposed letter into base + mark, or that supplies localized glyph forms, is now honored for every

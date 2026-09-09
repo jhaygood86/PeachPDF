@@ -42,6 +42,9 @@
     <None Include="..\..\assets\fonts\ColorTestV1.ttf" Link="ColorTestV1.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\NotoColorEmojiSequences-Subset.ttf" Link="NotoColorEmojiSequences-Subset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\assets\fonts\CcmpLigatureTest.ttf" Link="CcmpLigatureTest.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

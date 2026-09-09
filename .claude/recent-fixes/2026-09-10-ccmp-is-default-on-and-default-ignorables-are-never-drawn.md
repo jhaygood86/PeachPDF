@@ -38,6 +38,13 @@ default-on in the OpenType feature registry, not opt-ins. This is not theoretica
 entire `GSUB` FeatureList is a single `ccmp` record**, so 🇺🇸 rendered as the letters "US", and
 🏴󠁧󠁢󠁳󠁣󠁴󠁿 as a bare black flag.
 
+**Skin tone modifiers were the widest-reaching casualty**, and they degrade differently from everything
+else here — worth knowing, because the difference is what makes them easy to misdiagnose. `U+1F3FB`–
+`U+1F3FF` are *not* default-ignorable: each has a real colour-swatch glyph, so an unapplied `ccmp` does
+not hide the modifier, it **draws** it. `👍🏽` came out as a yellow thumbs-up followed by a bare brown
+square. The composition is a Type 4 ligature in lookup 0 of the same `ccmp` feature, so it was fixed by
+(3) alone, with (1) and (2) contributing nothing.
+
 The trap worth remembering: **the rainbow flag worked, and it worked by accident.** ZWJ (U+200D) has
 `Joining_Type=Join_Causing`, so an emoji ZWJ sequence produced a non-empty `JoiningForms` array, tripped
 the *Arabic* pre-stage, and picked up `ccmp` as a side effect. That one working case is exactly why the

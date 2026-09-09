@@ -8201,6 +8201,12 @@ var colorEmojiHtml =
         "Tag sequence", "U+1F3F4 + 5 TAG letters + U+E007F") +
     SeqGlyph("❤️", "Lone VS16", "U+2764 U+FE0F — selector draws nothing") +
     "</tr></table>" +
+    "<p class=\"intro\">Skin tone modifiers (U+1F3FB–U+1F3FF) compose the same way. Unlike a variation " +
+    "selector these are <em>not</em> default-ignorable — each has a real swatch glyph — so a font whose " +
+    "<code>ccmp</code> never ran renders the base emoji followed by a bare coloured square rather than " +
+    "the modified emoji.</p>" +
+    "<div class=\"cg seq\">\U0001F44D \U0001F44D\U0001F3FB \U0001F44D\U0001F3FC \U0001F44D\U0001F3FD " +
+    "\U0001F44D\U0001F3FE \U0001F44D\U0001F3FF</div>" +
     "</body></html>";
 await SaveShowcaseAsync("color_emoji", "Text &amp; Fonts", "Color Fonts (COLR/CPAL)",
     "COLR/CPAL color-glyph fonts — including the real COLR v1 build of Noto Color Emoji — rendered as " +
