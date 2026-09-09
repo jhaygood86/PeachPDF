@@ -296,18 +296,14 @@ namespace PeachPDF.PdfSharpCore.Drawing
             double α = Math.Atan2(pt1.Y - center.Y, pt1.X - center.X);
             double β = Math.Atan2(pt2.Y - center.Y, pt2.X - center.X);
 
-            // (another comparison of two Booleans!)
-            if (isLargeArc == (Math.Abs(β - α) < Math.PI))
-            {
-                if (α < β)
-                    α += 2 * Math.PI;
-                else
-                    β += 2 * Math.PI;
-            }
+            double sweepAngle = β - α;
+            if (clockwise && sweepAngle < 0)
+                sweepAngle += 2 * Math.PI;
+            else if (!clockwise && sweepAngle > 0)
+                sweepAngle -= 2 * Math.PI;
 
             // Invert matrix for final point calculation.
             matrix.Invert();
-            double sweepAngle = β - α;
 
             // Let the algorithm of GDI+ DrawArc to Bézier curves do the rest of the job
             return BezierCurveFromArc(center.X - δx * factor, center.Y - δy, 2 * δx * factor, 2 * δy,
