@@ -123,9 +123,24 @@ jobs:
           }
         }
 
-    - name: Test
+    # One step per target framework, run sequentially, rather than a single bare `dotnet test`
+    # (which builds/runs every TFM in TargetFrameworks at once). A multi-targeted `dotnet test`
+    # launches all of its TFMs' test hosts concurrently - fine for two, but adding net11.0 as a
+    # third pushed windows-latest's runner over the edge: three full ~10,000-test suites (each
+    # spawning Playwright Chromium instances) contending for the runner's small core count caused
+    # xUnit's net8.0 host to miss VSTest's health-check ping ("Test process did not respond within
+    # 60 seconds") and fail the whole job, even though net8.0 itself had nothing wrong with it.
+    - name: Test (net8.0)
       if: steps.changes.outputs.src == 'true'
-      run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+      run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net8.0 --logger "trx;LogFileName=test-results-net8.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
+    - name: Test (net10.0)
+      if: steps.changes.outputs.src == 'true'
+      run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net10.0 --logger "trx;LogFileName=test-results-net10.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
+
+    - name: Test (net11.0)
+      if: steps.changes.outputs.src == 'true'
+      run: dotnet test src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net11.0 --logger "trx;LogFileName=test-results-net11.0.trx" --collect:"XPlat Code Coverage" --settings src/PeachPDF.Tests/coverlet.runsettings --results-directory coverage
 
     # The CLI (net10.0-only) has its own test project; run it into the same coverage directory so the
     # diff-coverage gate below covers PeachPDF.Cli too.
