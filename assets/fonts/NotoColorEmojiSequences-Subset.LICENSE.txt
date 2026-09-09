@@ -1,0 +1,18 @@
+NotoColorEmojiSequences-Subset.ttf is a subset of the COLRv1 build of "Noto
+Color Emoji", Copyright 2013 Google LLC, licensed under the SIL Open Font
+License, Version 1.1 (OFL-1.1). It uses COLR (version 1) + CPAL color glyphs
+over `glyf` outlines (no bitmap tables).
+
+Unlike NotoColorEmoji-Subset.ttf (single-codepoint color glyphs, no GSUB), this
+subset retains the font's `ccmp` feature and the glyphs needed for
+multi-codepoint emoji *sequences* - ZWJ sequences, regional-indicator pairs and
+tag sequences - whose composed glyph comes from GSUB rather than the cmap.
+
+The font is bundled solely as a test/showcase asset to demonstrate and verify
+emoji-sequence composition and COLR/CPAL color-glyph rendering. Only a small
+range of glyphs is retained via fonttools subset (see
+generate_color_emoji_sequences_subset.py); the color glyphs are otherwise
+unmodified.
+
+Full license text: https://openfontlicense.org/open-font-license-official-text/
+Source: https://fonts.google.com/noto/specimen/Noto+Color+Emoji

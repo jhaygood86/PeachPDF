@@ -141,6 +141,28 @@ namespace PeachPDF.Tests.TestSupport
         internal static string ColorV1 => Path.Combine(AppContext.BaseDirectory, "ColorTestV1.ttf");
 
         /// <summary>
+        /// A hand-authored fixture (see CcmpLigatureTest.LICENSE.txt) shaped like a modern color-emoji
+        /// font in the two ways that matter to GSUB feature selection: its <b>only</b> GSUB feature is
+        /// <c>ccmp</c> (no <c>liga</c>/<c>rlig</c>/<c>clig</c> at all), and it has <b>no cmap entry for
+        /// U+FE0F</b>, so that variation selector resolves to <c>.notdef</c>. One Type 4 lookup ligates
+        /// 'A' + 'B' into a single 'AB' glyph; the ligature never mentions U+FE0F, so "A U+FE0F B" only
+        /// ligates if the shaper steps over the hidden default-ignorable while matching components.
+        /// Regenerate with <c>assets/fonts/generate_ccmp_ligature_font.py</c>.
+        /// </summary>
+        internal static string CcmpLigature => Path.Combine(AppContext.BaseDirectory, "CcmpLigatureTest.ttf");
+
+        /// <summary>
+        /// A subset of the real COLR <b>version 1</b> build of Noto Color Emoji (see
+        /// NotoColorEmojiSequences-Subset.LICENSE.txt) that keeps the font's <c>ccmp</c> feature and the
+        /// glyphs multi-codepoint emoji <i>sequences</i> need — ZWJ sequences, regional-indicator pairs,
+        /// tag sequences, and skin tone modifiers — whose composed glyph comes from GSUB rather than the
+        /// cmap. Distinct from <see cref="ColorEmoji"/>, which covers single-codepoint color glyphs and
+        /// carries <b>no GSUB at all</b>. Regenerate with
+        /// <c>assets/fonts/generate_color_emoji_sequences_subset.py</c>.
+        /// </summary>
+        internal static string ColorEmojiSequences => Path.Combine(AppContext.BaseDirectory, "NotoColorEmojiSequences-Subset.ttf");
+
+        /// <summary>
         /// A subset of the real COLR <b>version 1</b> build of Noto Color Emoji (see
         /// NotoColorEmoji-Subset.LICENSE.txt): color glyphs via COLR/CPAL over <c>glyf</c> outlines
         /// (gradients, transforms, compositing), covering a handful of common emoji. Used to prove the

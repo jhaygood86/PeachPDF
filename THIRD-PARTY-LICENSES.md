@@ -218,7 +218,7 @@ it carries no HarfBuzz notice.
 ## Bundled font assets
 
 - **Location:** [`assets/fonts/`](assets/fonts/) — shared by the test suite, the showcase harness, and the browser demo; each font's own license notice sits beside it as a `.LICENSE.txt`
-- **License:** varies per font (SIL OFL 1.1 or 3-Clause BSD)
+- **License:** varies per font (SIL OFL 1.1, 3-Clause BSD, or CC0 for the hand-authored test fixtures)
 
 None of these fonts ships in the PeachPDF library or its NuGet package. See [docs/license.md's "Font assets" table](docs/license.md#font-assets) for the full list, what each one is used for, and its specific license.
 
