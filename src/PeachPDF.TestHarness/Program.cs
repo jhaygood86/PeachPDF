@@ -8136,9 +8136,18 @@ await SaveShowcaseAsync("viewport_units", "Responsive Design", "Viewport units (
 // fixture whose glyphs isolate each paint feature.
 var notoColorB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoColorEmoji-Subset.ttf")));
 var colorFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "ColorTestV1.ttf")));
+// A separate Noto Color Emoji subset that keeps the font's `ccmp` feature and the glyphs the
+// multi-codepoint sequences need - NotoColorEmoji-Subset.ttf above carries no GSUB at all.
+var notoSeqB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoColorEmojiSequences-Subset.ttf")));
 string ColorGlyph(string ch, string title, string detail) =>
     "<td>" +
     $"<div class=\"cg\">{ch}</div>" +
+    $"<div class=\"desc\">{title}</div>" +
+    $"<div class=\"css\">{detail}</div>" +
+    "</td>";
+string SeqGlyph(string text, string title, string detail) =>
+    "<td>" +
+    $"<div class=\"cg seq\">{text}</div>" +
     $"<div class=\"desc\">{title}</div>" +
     $"<div class=\"css\">{detail}</div>" +
     "</td>";
@@ -8147,6 +8156,7 @@ var colorEmojiHtml =
     "@page { size: a4; margin: 15mm }" +
     $"@font-face {{ font-family: 'NotoColor'; src: url('data:font/truetype;base64,{notoColorB64}') format('truetype'); }}" +
     $"@font-face {{ font-family: 'ColorTest'; src: url('data:font/truetype;base64,{colorFontB64}') format('truetype'); }}" +
+    $"@font-face {{ font-family: 'NotoSeq'; src: url('data:font/truetype;base64,{notoSeqB64}') format('truetype'); }}" +
     "body { font: 9pt Arial, sans-serif; margin: 0 }" +
     "h1 { font-size: 15pt; margin: 0 0 0.3em }" +
     "h2 { font-size: 11pt; margin: 1.1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }" +
@@ -8155,6 +8165,7 @@ var colorEmojiHtml =
     "table.sw { border-collapse: collapse; width: 100%; }" +
     "table.sw td { padding: 6px; vertical-align: top; width: 33%; text-align: center }" +
     ".cg { font-family: 'ColorTest'; font-size: 52pt; line-height: 1; height: 70px }" +
+    ".cg.seq { font-family: 'NotoSeq'; font-size: 34pt; height: 56px }" +
     ".desc { font-size: 8pt; font-weight: bold; color: #444; margin-top: 4px }" +
     ".css { font-size: 7pt; color: #666 }" +
     "</style></head><body>" +
@@ -8173,6 +8184,22 @@ var colorEmojiHtml =
     ColorGlyph("T", "Transform", "PaintTranslate over a yellow triangle") +
     ColorGlyph("M", "Blend compositing", "PaintComposite MULTIPLY (blue × yellow → black)") +
     ColorGlyph("F", "Reflect gradient", "PaintLinearGradient, EXTEND_REFLECT") +
+    "</tr></table>" +
+    "<h2>Emoji sequences</h2>" +
+    "<p class=\"intro\">A multi-codepoint emoji sequence composes into the single glyph the font " +
+    "defines for it, via the font's <code>ccmp</code> feature — which is where Noto Color Emoji keeps " +
+    "every one of these (it declares no <code>liga</code>/<code>rlig</code> at all). A " +
+    "<code>U+FE0F</code> variation selector inside a sequence draws nothing of its own and does not " +
+    "stop the ligature forming.</p>" +
+    "<table class=\"sw\"><tr>" +
+    SeqGlyph("\U0001F3F3️‍\U0001F308", "ZWJ + VS16", "U+1F3F3 U+FE0F U+200D U+1F308") +
+    SeqGlyph("\U0001F469‍\U0001F4BB", "ZWJ sequence", "U+1F469 U+200D U+1F4BB") +
+    SeqGlyph("\U0001F1FA\U0001F1F8", "Regional indicators", "U+1F1FA U+1F1F8") +
+    "</tr><tr>" +
+    SeqGlyph("\U0001F1EF\U0001F1F5", "Regional indicators", "U+1F1EF U+1F1F5") +
+    SeqGlyph("\U0001F3F4\U000E0067\U000E0062\U000E0073\U000E0063\U000E0074\U000E007F",
+        "Tag sequence", "U+1F3F4 + 5 TAG letters + U+E007F") +
+    SeqGlyph("❤️", "Lone VS16", "U+2764 U+FE0F — selector draws nothing") +
     "</tr></table>" +
     "</body></html>";
 await SaveShowcaseAsync("color_emoji", "Text &amp; Fonts", "Color Fonts (COLR/CPAL)",

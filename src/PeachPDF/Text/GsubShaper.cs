@@ -37,12 +37,23 @@ namespace PeachPDF.Text
     /// anchor, never on the other glyph's position), so it survives reversal via a plain interval-mirror
     /// with no special-casing - see <see cref="GposPositioner.TryApplyCursivePair"/>'s own remarks.
     /// </summary>
+    /// <remarks>
+    /// <see cref="IsHiddenIgnorable"/> marks a glyph that came out of <see cref="GsubShaper.MapToGlyphs"/>
+    /// as the missing-glyph placeholder (<c>.notdef</c>) for a codepoint Unicode declares
+    /// <c>Default_Ignorable_Code_Point</c> - a variation selector, ZWJ/ZWNJ, a bidi control. It is decided
+    /// once, at map time, where the source codepoint is already in hand; every later stage reads the flag
+    /// instead of re-decoding the text. Such a glyph is invisible by definition and is deleted at the very
+    /// end of <see cref="OpenTypeDescriptor.Shape"/>, but it still occupies a list slot throughout
+    /// GSUB/GPOS so a lookup that genuinely matches on it (a font that maps ZWJ and ligates through it)
+    /// still sees it - see <see cref="OpenTypeDescriptor.Shape"/>'s own remarks on the ordering.
+    /// </remarks>
     internal readonly record struct ShapedGlyph(
         int GlyphIndex, int ClusterStart, int ClusterLength,
         double XAdvanceDelta = 0, double YAdvanceDelta = 0,
         double XOffset = 0, double YOffset = 0,
         int[]? LigatureComponentClusterStarts = null,
-        int? AttachedToIndex = null);
+        int? AttachedToIndex = null,
+        bool IsHiddenIgnorable = false);
 
     /// <summary>Which GSUB ligature features <see cref="GsubShaper.Shape"/> should apply.</summary>
     [Flags]
@@ -435,7 +446,12 @@ namespace PeachPDF.Text
                     lookup = new Rune(rune.Value | (descriptor.FontFace.os2.usFirstCharIndex & 0xFF00));
 
                 int glyphIndex = descriptor.CharCodeToGlyphIndex(lookup);
-                result.Add(new ShapedGlyph(glyphIndex, clusterStart, utf16Length));
+
+                // A Default_Ignorable_Code_Point the font has no glyph for is flagged here rather than
+                // rediscovered later: this is the one place the codepoint and its glyph are both in hand.
+                var hiddenIgnorable = glyphIndex == 0 && UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value);
+
+                result.Add(new ShapedGlyph(glyphIndex, clusterStart, utf16Length, IsHiddenIgnorable: hiddenIgnorable));
                 clusterStart += utf16Length;
             }
 
@@ -451,6 +467,27 @@ namespace PeachPDF.Text
                 // be Type 3 - only an explicit font-feature-settings value greater than 1 asks for a
                 // later one (collected into customAltIndexByTag below instead).
                 var defaultTags = new HashSet<string>();
+
+                // ccmp (Glyph Composition/Decomposition) and locl (Localized Forms) are default-on for
+                // every script in the OpenType spec's own feature registry - not opt-in the way liga/dlig
+                // are - and every real shaping engine enables them unconditionally. PeachPDF used to reach
+                // them only from the two pre-stages just above (Arabic joining, USE), so ordinary text got
+                // no ccmp at all. That is not a theoretical gap: a modern COLR emoji font can put *all* of
+                // its emoji-sequence ligatures in ccmp and define no liga/rlig whatsoever (confirmed
+                // against Noto Color Emoji, whose entire GSUB FeatureList is a single ccmp record), so
+                // U+1F1FA U+1F1F8 rendered as the letters "US" instead of the flag, and a tag-sequence
+                // flag rendered as a bare black flag. The one sequence that did work - an emoji ZWJ
+                // sequence - worked only by accident: ZWJ is Joining_Type=Join_Causing, so it tripped the
+                // Arabic pre-stage, which applied ccmp as a side effect.
+                //
+                // Gated on those two pre-stages NOT having run, because they already applied ccmp/locl for
+                // this same glyph list and a second application is not idempotent in general - a Type 2
+                // (Multiple Substitution) decomposition would happily decompose its own output again.
+                if (key.JoiningForms is not { Count: > 0 } && key.UseCategories is not { Count: > 0 })
+                {
+                    defaultTags.Add("ccmp");
+                    defaultTags.Add("locl");
+                }
 
                 // The Universal Shaping Engine's own "standard typographic presentation" group -
                 // applied AFTER reordering (see ApplyUseShaping's own staging), so it belongs in this
@@ -859,7 +896,17 @@ namespace PeachPDF.Text
 
                     while (compIdx < ligature.ComponentGlyphIds.Length && pos < glyphs.Count)
                     {
-                        if (!GlyphSequenceFilter.Participates((ushort)glyphs[pos].GlyphIndex, lookup.LookupFlag, gdef, markFilteringSet))
+                        // A hidden default-ignorable is stepped over rather than matched against. It can
+                        // never be a component (a component glyph id is a real glyph, never .notdef), so
+                        // without this it would break the run and the ligature would simply not form -
+                        // which is exactly how U+1F3F3 U+FE0F U+200D U+1F308 failed to ligate into the
+                        // rainbow-flag glyph in a font whose ligature reads flag + ZWJ + rainbow and
+                        // never mentions the variation selector at all. Real shaping engines do the same
+                        // (HarfBuzz's SKIP_MAYBE). The glyph is carried in `skipped`, so it is re-inserted
+                        // after the merged ligature and deleted with every other hidden ignorable at the
+                        // end of OpenTypeDescriptor.Shape.
+                        if (glyphs[pos].IsHiddenIgnorable
+                            || !GlyphSequenceFilter.Participates((ushort)glyphs[pos].GlyphIndex, lookup.LookupFlag, gdef, markFilteringSet))
                         {
                             skipped.Add(pos - index);
                             pos++;

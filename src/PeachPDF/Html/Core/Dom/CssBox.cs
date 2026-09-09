@@ -1721,10 +1721,18 @@ namespace PeachPDF.Html.Core.Dom
                 while (index < text.Length)
                 {
                     Rune.DecodeFromUtf16(text.AsSpan(index), out var next, out var nextConsumed);
-                    if (ActualFontForCodepoint(next, fontSizeScale).FaceKey != faceKey)
-                        break;
-                    if (checkOrientation && IsEffectivelyUpright(next) != upright)
-                        break;
+                    // A Default_Ignorable_Code_Point never splits a run: it draws nothing, so which face
+                    // "owns" it is meaningless, and letting it start a fragment of its own would cut a
+                    // word in two around an invisible character (and separate a ZWJ from the sequence it
+                    // joins). It stays with the run it is inside - see NeedsPerCodepointFont.
+                    if (!UnicodeDefaultIgnorables.IsDefaultIgnorable(next.Value))
+                    {
+                        if (ActualFontForCodepoint(next, fontSizeScale).FaceKey != faceKey)
+                            break;
+                        if (checkOrientation && IsEffectivelyUpright(next) != upright)
+                            break;
+                    }
+
                     index += nextConsumed;
                 }
 
@@ -1822,6 +1830,14 @@ namespace PeachPDF.Html.Core.Dom
             var font = ActualFont;
             foreach (var rune in text.EnumerateRunes())
             {
+                // A Default_Ignorable_Code_Point (variation selector, ZWJ, a bidi control) is *expected*
+                // to have no glyph, so an uncovered one is not a reason to go looking for another face -
+                // no font in the stack would cover it either, and splitting the run here would strand it
+                // in a fragment of its own under whatever fallback face it landed on. Shaping hides it
+                // instead (OpenTypeDescriptor.DropUnrenderableDefaultIgnorables).
+                if (UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value))
+                    continue;
+
                 if (!font.HasGlyph(rune))
                     return true;
             }

@@ -122,17 +122,26 @@ namespace PeachPDF.Tests.Html.Core
         }
 
         [Fact]
-        public void NoJoiningFormsRequested_SkipsTheCcmpPreStage()
+        public void NoJoiningFormsRequested_StillAppliesCcmp_ButOnlyOnce()
         {
-            // The pre-#533 behavior (no JoiningForms at all) must still work exactly as before: the
-            // ccmp/locl pre-stage GsubShaper.Shape now runs is gated on JoiningForms being present (see
-            // its own remarks) specifically so it never fires for a caller who never asked for Arabic-
-            // family shaping - BEH stays a single, undecomposed, cmap-nominal glyph.
+            // ccmp is default-on for every script in the OpenType feature registry, so a caller who
+            // never asked for Arabic-family shaping still gets it - BEH decomposes into its base glyph
+            // plus a separate dot mark exactly as it does under the JoiningForms path. This test used to
+            // assert the opposite (a single, undecomposed glyph), pinning a real gap: ccmp was reachable
+            // *only* from the Arabic and USE pre-stages, so ordinary text got none at all. See
+            // GsubShaper.GetActiveLookupIndices' own remarks for what that broke in real emoji fonts.
             var descriptor = Descriptor();
 
-            var shaped = descriptor.Shape(Beh, TextShapingFeatures.Default);
+            var withoutForms = descriptor.Shape(Beh, TextShapingFeatures.Default);
+            var withForms = descriptor.Shape(Beh, new TextShapingFeatures(
+                ScriptTag: "arab", JoiningForms: ArabicJoiningShaper.Resolve([Beh[0]])));
 
-            Assert.Single(shaped);
+            Assert.Equal(2, withoutForms.Count);
+
+            // The pre-stage path must not *also* pick ccmp up from the main per-feature pass: a second
+            // application would decompose the first one's own output again. Same glyph count either way
+            // is what proves the gate in GetActiveLookupIndices actually holds.
+            Assert.Equal(2, withForms.Count);
         }
 
         [Fact]

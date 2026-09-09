@@ -318,11 +318,85 @@ namespace PeachPDF.Fonts.OpenType
         {
             List<ShapedGlyph> glyphs = GsubShaper.Shape(this, text, features);
             GposPositioner.Apply(this, glyphs, features);
+            DropHiddenIgnorables(glyphs);
 
             if (features.ReverseForDisplay)
                 ReverseGlyphsForDisplay(glyphs, text);
 
             return glyphs;
+        }
+
+        /// <summary>
+        /// Deletes every glyph <see cref="GsubShaper.MapToGlyphs"/> flagged
+        /// <see cref="ShapedGlyph.IsHiddenIgnorable"/> - the missing-glyph placeholder (<c>.notdef</c>)
+        /// standing in for a codepoint Unicode declares <c>Default_Ignorable_Code_Point</c>: a variation
+        /// selector, ZWJ/ZWNJ, a bidi control, a language tag character. Those codepoints have no visible
+        /// rendering of their own, so a font is <i>expected</i> to have no glyph for them; letting one fall
+        /// through to <c>.notdef</c> paints a tofu box where the document asked for nothing at all - the
+        /// symptom that found this was <c>&amp;#10084;&amp;#65039;</c> (a heart plus VARIATION SELECTOR-16)
+        /// rendering as a heart followed by a box in a COLR emoji font, in both PDFium and MuPDF.
+        /// </summary>
+        /// <remarks>
+        /// Runs <b>after</b> GSUB and GPOS, never before: an ignorable is load-bearing <i>during</i>
+        /// shaping - ZWJ is exactly what makes an emoji ZWJ sequence ligate, and a bidi control can be the
+        /// context a contextual rule matches on - so it has to reach the lookups and only then be deleted.
+        /// This mirrors how a real shaping engine (HarfBuzz's <c>hide_default_ignorables</c>) sequences the
+        /// same job.
+        ///
+        /// Only a glyph index of 0 is ever flagged, so a font that ships a real (blank, zero-advance) glyph
+        /// for an ignorable is honored as authored rather than second-guessed - which is also what keeps a
+        /// soft hyphen (U+00AD, itself default-ignorable, and drawn as a visible hyphen by most fonts when
+        /// <c>hyphens: none</c> leaves it in the text) behaving exactly as it did before.
+        ///
+        /// <see cref="ShapedGlyph.AttachedToIndex"/> is a <i>glyph-list</i> index, so removal has to remap
+        /// it; a mark attached to a deleted glyph loses its anchor rather than silently pointing at whatever
+        /// slid into that slot. <see cref="ShapedGlyph.LigatureComponentClusterStarts"/> holds text offsets,
+        /// not glyph indices, so it needs no such fixup.
+        /// </remarks>
+        private static void DropHiddenIgnorables(List<ShapedGlyph> glyphs)
+        {
+            // Overwhelmingly the common case - no ignorable reached .notdef, so nothing is rebuilt.
+            var anyToDrop = false;
+            foreach (ShapedGlyph glyph in glyphs)
+            {
+                if (glyph.IsHiddenIgnorable)
+                {
+                    anyToDrop = true;
+                    break;
+                }
+            }
+
+            if (!anyToDrop)
+                return;
+
+            // oldIndex -> newIndex, with -1 marking a deleted glyph, so AttachedToIndex can be rewritten
+            // in the second pass below against the list this one produces.
+            var remap = new int[glyphs.Count];
+            var kept = new List<ShapedGlyph>(glyphs.Count);
+
+            for (var i = 0; i < glyphs.Count; i++)
+            {
+                if (glyphs[i].IsHiddenIgnorable)
+                {
+                    remap[i] = -1;
+                    continue;
+                }
+
+                remap[i] = kept.Count;
+                kept.Add(glyphs[i]);
+            }
+
+            for (var i = 0; i < kept.Count; i++)
+            {
+                if (kept[i].AttachedToIndex is not { } attachedTo)
+                    continue;
+
+                var newAttachedTo = (uint)attachedTo < (uint)remap.Length ? remap[attachedTo] : -1;
+                kept[i] = kept[i] with { AttachedToIndex = newAttachedTo >= 0 ? newAttachedTo : null };
+            }
+
+            glyphs.Clear();
+            glyphs.AddRange(kept);
         }
 
         /// <summary>
