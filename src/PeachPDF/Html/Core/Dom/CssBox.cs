@@ -2591,7 +2591,7 @@ namespace PeachPDF.Html.Core.Dom
                 box._emittedNothingAtSlot = -1;
                 box._emittedNothingScopeOwner = null;
 
-                // A box only ever advances past a child via LiveChildStart once that child itself earned
+                // A box only ever advances past a child via LiveChildStartFor once that child itself earned
                 // an "emitted nothing" mark (see the accessor's own remarks), so a write that reaches this
                 // box on the way up from a rewritten descendant means whatever prefix of ITS OWN children
                 // this box's own cursor advanced past may itself be stale - discarded here for the same

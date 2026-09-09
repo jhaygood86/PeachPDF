@@ -2585,7 +2585,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
             // Ordinary content: start past any leading run of children already individually confirmed to
             // hold nothing at or before this slot, rather than re-checking (and re-yielding a BuildDraft
-            // call for) each of them again on every later slot - see CssBox.LiveChildStart's own remarks.
+            // call for) each of them again on every later slot - see CssBox.LiveChildStartFor's own remarks.
             // Safe for the same reason trusting a single box's own mark is: a skipped child was reached and
             // observed empty by an earlier slot's walk, and nothing has written to it since - a write would
             // have discarded both the child's own mark and this box's cursor together
