@@ -5,6 +5,8 @@
 		<PackageVersion>0.9.17</PackageVersion>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<PackageIcon>peach.png</PackageIcon>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
 		<IncludeSymbols>true</IncludeSymbols>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
