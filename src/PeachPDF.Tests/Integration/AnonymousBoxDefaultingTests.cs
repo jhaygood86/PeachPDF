@@ -1,9 +1,7 @@
 using PeachPDF;
 using PeachPDF.PdfSharpCore;
 using System;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace PeachPDF.Tests.Integration
@@ -28,23 +26,34 @@ namespace PeachPDF.Tests.Integration
     /// few hundred initial values it already held.
     /// </para>
     /// <para>
-    /// <b>Why the assertion is a ratio.</b> Allocated bytes are deterministic for a given build and
-    /// input, but their absolute value depends on the font a machine resolves. Both documents here
-    /// are measured in the same run on the same machine and carry the same text; they differ only in
-    /// whether that text sits in list items. That makes the comparison self-calibrating, so this
-    /// says the same thing on every platform.
+    /// <b>Why the assertion is a ratio of slopes.</b> Allocated bytes are deterministic for a given
+    /// build and input, but their absolute value depends on the font a machine resolves. So this
+    /// measures each shape at two sizes and takes the <i>marginal</i> cost per item, which subtracts
+    /// the fixed baseline — document setup, font loading, the page machinery — and then divides the
+    /// list's slope by a plain block's, which cancels the per-item text work as well. What is left is
+    /// the list machinery itself.
+    /// </para>
+    /// <para>
+    /// The plainer form this replaced — one list document over one plain document — left both of
+    /// those in the numbers, and measured <b>1.71x</b> here against a <b>2.06x</b> a reviewer saw
+    /// repeatably on their own machine, against a 2.05x bound. Same build, same direction, a fifth of
+    /// the window apart purely from what the two machines' baselines cost.
     /// </para>
     /// </remarks>
     public class AnonymousBoxDefaultingTests
     {
-        private const int Items = 400;
+        /// <summary>The two document sizes the slope is taken between.</summary>
+        private const int Small = 200;
+
+        /// <inheritdoc cref="Small"/>
+        private const int Large = 600;
 
         /// <summary>
-        /// Measured on this fixture: <b>1.71x</b> with the fast path and <b>2.41x</b> without, so the
-        /// bound sits between them with roughly 20% of margin either side. Stable to the second decimal
-        /// place both in isolation and with the whole suite running in parallel around it — but only
-        /// because the measurement is per-thread; see <see cref="AllocatedMbPerRender"/> for what that
-        /// is guarding against.
+        /// Measured: <b>1.88x</b> with the fast path and <b>2.87x</b> without — repeatable to three
+        /// decimal places — so the bound sits between them with 25% of margin below and 18% above.
+        /// Stable both in isolation and with the whole suite running in parallel around it, but only
+        /// because the measurement is per-thread; see <see cref="MarginalKbPerItem"/> for what that is
+        /// guarding against.
         ///
         /// The item text is one character on purpose. The saving is a fixed cost per list item, so the
         /// longer the text the more font work dilutes it: at 200 items of a full sentence the same
@@ -55,44 +64,57 @@ namespace PeachPDF.Tests.Integration
         /// It is a ratchet, not a law — if a change makes lists legitimately dearer, move it in the
         /// same commit and say why.
         /// </summary>
-        private const double MaxListOverhead = 2.05;
+        private const double MaxListOverhead = 2.35;
 
         [Fact]
-        public void AListCostsLittleMoreThanTheSameTextWithoutOne()
+        public void AListItemCostsLittleMoreThanAPlainBlock()
         {
-            var lines = Enumerable.Range(0, Items)
-                .Select(i => "x")
-                .ToList();
-
-            var list = Document("<ul>" + string.Concat(lines.Select(l => $"<li>{l}</li>")) + "</ul>");
-            var plain = Document(string.Concat(lines.Select(l => $"<div>{l}</div>")));
-
-            var listMb = AllocatedMbPerRender(list);
-            var plainMb = AllocatedMbPerRender(plain);
-            var overhead = listMb / plainMb;
+            var listSlope = MarginalKbPerItem(list: true);
+            var plainSlope = MarginalKbPerItem(list: false);
+            var overhead = listSlope / plainSlope;
 
             Assert.True(overhead <= MaxListOverhead,
-                $"{Items} list items allocate {overhead:F2}x what the same text costs without a list "
-                + $"({listMb:F1} MB against {plainMb:F1} MB), over the {MaxListOverhead:F2}x bound. Each "
-                + "list item generates an anonymous box, and this is what re-defaulting every one of "
-                + "them from scratch looks like.");
+                $"a list item costs {overhead:F2}x what a plain block costs at the margin "
+                + $"({listSlope:F1} KB against {plainSlope:F1} KB per item), over the {MaxListOverhead:F2}x "
+                + "bound. Each list item generates an anonymous box, and this is what re-defaulting "
+                + "every one of them from scratch looks like.");
         }
 
-        private static string Document(string body) =>
-            $"<html><body style=\"font-family:sans-serif\">{body}</body></html>";
-
         /// <summary>
-        /// Allocated megabytes per render, measured <b>per thread</b> and synchronously.
+        /// Allocated kilobytes per additional item — the slope between two document sizes, so the
+        /// fixed cost of rendering anything at all drops out.
         /// </summary>
         /// <remarks>
-        /// Both of those matter and the first version of this had neither. <c>GC.GetTotalAllocatedBytes</c>
-        /// is process-wide, and this suite runs collections in parallel, so it counts whatever every
-        /// other test is allocating at the same moment — which is how a measurement claimed here to be
-        /// stable to a fraction of a percent was reported swinging between 2.05x and 4.59x on a
-        /// reviewer's machine. <c>GetAllocatedBytesForCurrentThread</c> is immune to that, and blocking
-        /// on the render rather than awaiting it keeps the whole measured region on the one thread it
-        /// counts.
+        /// Measured <b>per thread</b> and synchronously, and both of those matter.
+        /// <c>GC.GetTotalAllocatedBytes</c> is process-wide, and this suite runs collections in
+        /// parallel, so it counts whatever every other test is allocating at the same moment — which
+        /// is how an earlier version of this, stable to a fraction of a percent in isolation, was
+        /// reported swinging between 2.05x and 4.59x with the suite running.
+        /// <c>GetAllocatedBytesForCurrentThread</c> is immune to that, and blocking on the render
+        /// rather than awaiting it keeps the whole measured region on the one thread it counts.
         /// </remarks>
+        private static double MarginalKbPerItem(bool list) =>
+            (AllocatedMbPerRender(Document(Large, list)) - AllocatedMbPerRender(Document(Small, list)))
+            / (Large - Small) * 1024;
+
+        /// <summary>
+        /// The same single character in each item either way, so the two shapes differ only in whether
+        /// it sits in a list. One character on purpose: the saving is a fixed cost per item, so longer
+        /// text dilutes it into the font work.
+        /// </summary>
+        private static string Document(int items, bool list)
+        {
+            var sb = new StringBuilder("<html><body style=\"font-family:sans-serif\">");
+
+            if (list) sb.Append("<ul>");
+
+            for (var i = 0; i < items; i++) sb.Append(list ? "<li>x</li>" : "<div>x</div>");
+
+            if (list) sb.Append("</ul>");
+
+            return sb.Append("</body></html>").ToString();
+        }
+
         private static double AllocatedMbPerRender(string html)
         {
             // Warm the JIT, the font cache and every static table: none of it is per-render cost, and
