@@ -162,6 +162,12 @@ namespace PeachPDF.Html.Core.Dom
         internal (double Width, double Height)? NaturalSize { get; set; }
 
         /// <summary>
+        /// The widest extended grapheme cluster in this word, measured for
+        /// <c>overflow-wrap:anywhere</c>'s min-content contribution. Null until word measurement needs it.
+        /// </summary>
+        internal double? OverflowWrapMinWidth { get; set; }
+
+        /// <summary>
         /// Height of the rectangle
         /// </summary>
         public double Height

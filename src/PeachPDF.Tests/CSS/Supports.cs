@@ -277,6 +277,18 @@ namespace PeachPDF.Tests.CSS
             Assert.True(supports.Condition.Check());
         }
 
+        [Theory]
+        [InlineData("overflow-wrap", "break-word")]
+        [InlineData("overflow-wrap", "anywhere")]
+        [InlineData("word-wrap", "break-word")]
+        [InlineData("word-wrap", "anywhere")]
+        public void SupportsOverflowWrapEmergencyValues(string property, string value)
+        {
+            var sheet = ParseStyleSheet($"@supports ({property}: {value}) {{ }}");
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check());
+        }
+
         // direction's enum-keyword validator now checks Map.DirectionModes' own keys instead of
         // unconditionally returning true - a value outside {ltr, rtl} must fail.
         [Fact]

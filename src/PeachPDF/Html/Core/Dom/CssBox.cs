@@ -6336,6 +6336,10 @@ namespace PeachPDF.Html.Core.Dom
                     // path below.
                     if (boxWord is CssRectLeader) continue;
                     if (boxWord.IsImage) continue;
+                    // A style/content invalidation that reaches this measurement pass can change the
+                    // font, shaping, or letter spacing. Any previously memoized intrinsic grapheme
+                    // width must be recomputed on the next min-content query.
+                    boxWord.OverflowWrapMinWidth = null;
                     var font = ResolveWordFont(boxWord, this);
 
                     if (boxWord.Text == "\n")
@@ -6373,6 +6377,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
                         boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ResolveWordShapingFeatures(boxWord)) * ActualLetterSpacing;
                     boxWord.Height = ActualFont.Height;
+
                 }
             }
 
@@ -6754,9 +6759,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Get the <paramref name="minWidth"/> and <paramref name="maxWidth"/> width of the box content.<br/>
         /// </summary>
+        /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
         /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>
         /// <param name="maxWidth">The total width the content can take without line wrapping (with padding).</param>
-        internal void GetMinMaxWidth(out double minWidth, out double maxWidth)
+        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth)
         {
             double min = 0f;
             double maxSum = 0f;
@@ -6775,7 +6781,8 @@ namespace PeachPDF.Html.Core.Dom
             // start of a line and is removed -- see the word loop in GetMinMaxSumWords.
             var atLineStart = true;
 
-            GetMinMaxSumWords(this, ref min, ref maxSum, ref paddingSum, ref marginSum, ref widestLine, ref trailingSpace, ref atLineStart);
+            GetMinMaxSumWords(g, this, ref min, ref maxSum, ref paddingSum, ref marginSum, ref widestLine,
+                ref trailingSpace, ref atLineStart);
 
             maxWidth = paddingSum + Math.Max(maxSum, widestLine);
             minWidth = paddingSum + (min < 90999 ? min : 0);
@@ -6789,11 +6796,27 @@ namespace PeachPDF.Html.Core.Dom
             // 75pt to the 82.4pt the run needs, this left it at 75pt and overprinted the value.
             // Patch 2 stopped the overflow being clipped away, so it became visible rather
             // than lost.
-            if (WhiteSpace.Value is Whitespace.NoWrap or Whitespace.Pre)
+            if (!WhiteSpacePermitsWrapping)
             {
                 minWidth = Math.Max(minWidth, maxWidth);
             }
         }
+
+        /// <summary>
+        /// Whether this box's computed <c>white-space</c> leaves any soft wrap opportunity in its text
+        /// at all (CSS Text 3 §3/§4.1.1). <c>nowrap</c> and <c>pre</c> are the two values that suppress
+        /// every one of them; <c>pre-wrap</c> and <c>pre-line</c> preserve whitespace but still wrap.
+        /// <para>
+        /// Named because line breaking and intrinsic sizing have to agree on it. They did not: the
+        /// intrinsic walk let <c>overflow-wrap: anywhere</c> contribute one grapheme to a nested
+        /// <c>nowrap</c> run's min-content width while <c>CssLayoutEngine.AllowsOverflowWrap</c>
+        /// correctly refused to split it, sizing the parent to 9.5pt around a run that painted 301.6pt
+        /// wide. Two independently-written copies of this test are what allowed that, so all three
+        /// sites (here, the min-content word loop, and the line breaker) read it from this one place.
+        /// </para>
+        /// </summary>
+        internal bool WhiteSpacePermitsWrapping =>
+            WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre);
 
         /// <summary>
         /// Whether this box begins a line of its own in the intrinsic walk, and so
@@ -6819,6 +6842,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// Get the <paramref name="min"/> and <paramref name="maxSum"/> of the box words content and <paramref name="paddingSum"/>.<br/>
         /// </summary>
+        /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
         /// <param name="box">the box to calculate for</param>
         /// <param name="min">the width that allows for each word to fit (width of the longest word)</param>
         /// <param name="maxSum">the max width a single line of words can take without wrapping</param>
@@ -6828,7 +6852,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="trailingSpace">the hanging trailing space of the last word measured.</param>
         /// <param name="atLineStart">whether nothing has been measured onto the current line yet.</param>
         /// <returns></returns>
-        private static void GetMinMaxSumWords(CssBox box, ref double min, ref double maxSum, ref double paddingSum, ref double marginSum, ref double widestLine, ref double trailingSpace, ref bool atLineStart)
+        private static void GetMinMaxSumWords(RGraphics g, CssBox box, ref double min, ref double maxSum,
+            ref double paddingSum, ref double marginSum, ref double widestLine, ref double trailingSpace,
+            ref bool atLineStart)
         {
             double? oldSum = null;
             // paddingSum must be scoped per "line" the same way maxSum is (see the oldSum save/restore
@@ -6883,7 +6909,7 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     if (item.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
-                    item.GetMinMaxWidth(out var itemMin, out var itemMax);
+                    item.GetMinMaxWidth(g, out var itemMin, out var itemMax);
                     var itemMargins = item.ActualMarginLeft + item.ActualMarginRight;
                     rowMax += itemMax + itemMargins;
                     // A wrapping row can put every item on its own line, so its min-content is the
@@ -6943,7 +6969,19 @@ namespace PeachPDF.Html.Core.Dom
                     // document heading, and wrapped the heading to get the space back.
                     maxSum += word.FullWidth
                               + (word.HasSpaceBefore && !atLineStart ? word.OwnerBox.ActualWordSpacing : 0);
-                    min = Math.Max(min, word.Width);
+                    // CSS Text 3 §5.4: anywhere's emergency opportunities participate in min-content
+                    // sizing, but only where white-space permits wrapping. Measure the widest indivisible
+                    // grapheme lazily here, at the intrinsic-size query that needs it; doing this in every
+                    // ordinary MeasureWordsSize pass made an inherited body-level `anywhere` reshape and
+                    // allocate one temporary word per grapheme even when no intrinsic size was requested.
+                    var anywhereAffectsMinContent =
+                        word.OwnerBox.OverflowWrap.Value == PeachPDF.CSS.OverflowWrap.Anywhere
+                        && word.OwnerBox.WhiteSpacePermitsWrapping;
+                    var wordMinWidth = anywhereAffectsMinContent && word is CssRectWord anywhereWord
+                        ? word.OverflowWrapMinWidth ??=
+                            CssLayoutEngine.MeasureOverflowWrapMinWidth(g, anywhereWord)
+                        : word.Width;
+                    min = Math.Max(min, wordMinWidth);
                     trailingSpace = word.ActualWordSpacing;
                     atLineStart = false;
                 }
@@ -6977,7 +7015,8 @@ namespace PeachPDF.Html.Core.Dom
                     }
 
                     var maxSumBeforeChild = maxSum;
-                    GetMinMaxSumWords(childBox, ref min, ref maxSum, ref paddingSum, ref marginSum, ref widestLine, ref trailingSpace, ref atLineStart);
+                    GetMinMaxSumWords(g, childBox, ref min, ref maxSum, ref paddingSum, ref marginSum,
+                        ref widestLine, ref trailingSpace, ref atLineStart);
 
                     // This walk otherwise never consults a box's own explicit CSS `width` at all - only
                     // literal word/text content. That's usually fine (explicit width constrains layout

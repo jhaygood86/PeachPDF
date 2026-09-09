@@ -5065,6 +5065,44 @@ await SaveShowcaseAsync("flex_item_pinned_height_background", "Layout", "Flex It
     + "children it genuinely holds there (issue #569).",
     flexItemBackgroundHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
+// --- overflow-wrap emergency line-breaking showcase ---
+var overflowWrapHtml = """
+<!DOCTYPE html><html lang="en"><head><style>
+    @page { size: A4; margin: 28pt }
+    body { font-family: Arial, sans-serif; color: #222 }
+    h1 { font-size: 18pt; margin: 0 0 5pt }
+    .intro { color: #555; font-size: 9pt; margin: 0 0 14pt }
+    .row { display: flex; gap: 10pt; align-items: flex-start }
+    .card { width: 112pt; padding: 7pt; border: 1pt solid #bbb; background: #fff8dc }
+    .card h2 { font-size: 9pt; margin: 0 0 5pt; color: #8a5700 }
+    .card p { width: 100%; margin: 0; font-size: 8pt; line-height: 1.35 }
+    .anywhere { overflow-wrap: anywhere }
+    .break-word { overflow-wrap: break-word }
+    .alias { word-wrap: break-word }
+    .intrinsic { margin-top: 18pt; display: grid; grid-template-columns: min-content min-content; gap: 12pt }
+    .chip { padding: 5pt; border: 1pt solid #999; background: #eef6ff; font-size: 8pt }
+</style></head><body>
+<h1>overflow-wrap</h1>
+<p class="intro">Emergency wrapping only breaks an otherwise-unbreakable token. The normal opportunity before the long lake name wins first; once the word is alone on a line, it can split at a grapheme boundary without adding a hyphen.</p>
+<div class="row">
+  <div class="card"><h2>normal</h2><p>Lake Chargoggagoggmanchauggagoggchaubunagungamaugg is in Massachusetts.</p></div>
+  <div class="card"><h2>anywhere</h2><p class="anywhere">Lake Chargoggagoggmanchauggagoggchaubunagungamaugg is in Massachusetts.</p></div>
+  <div class="card"><h2>break-word</h2><p class="break-word">Lake Chargoggagoggmanchauggagoggchaubunagungamaugg is in Massachusetts.</p></div>
+  <div class="card"><h2>word-wrap alias</h2><p class="alias">Lake Chargoggagoggmanchauggagoggchaubunagungamaugg is in Massachusetts.</p></div>
+</div>
+<h2 style="font-size:11pt;margin:18pt 0 5pt">Min-content sizing</h2>
+<p class="intro">anywhere contributes its grapheme opportunities to min-content; break-word deliberately keeps the whole word as its min-content width.</p>
+<div class="intrinsic">
+  <div class="chip anywhere">anywhere: Chargoggagoggmanchauggagoggchaubunagungamaugg</div>
+  <div class="chip break-word">break-word: Chargoggagoggmanchauggagoggchaubunagungamaugg</div>
+</div>
+</body></html>
+""";
+
+await SaveShowcaseAsync("overflow_wrap", "Typography & Text", "overflow-wrap",
+    "CSS Text emergency wrapping with overflow-wrap:anywhere, overflow-wrap:break-word, the legacy word-wrap alias, and their distinct min-content sizing behavior.",
+    overflowWrapHtml, pdfConfig);
+
 // --- hyphens: auto multi-language showcase ---
 // Document language is a whole-container setting (<html lang>, see CssBox/HtmlContainerInt), so
 // each language gets its own small document rather than one page per language like the other

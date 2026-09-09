@@ -106,6 +106,7 @@ namespace PeachPDF.CSS
 
         private void RemovePropertyByName(string propertyName)
         {
+            propertyName = CanonicalLonghandName(propertyName);
             foreach (var declaration in Declarations)
             {
                 if (!declaration.Name.Is(propertyName)) continue;
@@ -210,8 +211,18 @@ namespace PeachPDF.CSS
 
         internal Property GetProperty(string name)
         {
+            name = CanonicalLonghandName(name);
             return Declarations.FirstOrDefault(m => m.Name.Isi(name));
         }
+
+        /// <summary>
+        /// Resolves legacy property-name aliases to the canonical longhand name stored in
+        /// <see cref="Declarations"/>. A <c>word-wrap</c> declaration is constructed as an
+        /// <c>OverflowWrapProperty</c>, whose own name is necessarily <c>overflow-wrap</c>; CSSOM reads,
+        /// priority changes, and removals through either spelling must therefore address that same slot.
+        /// </summary>
+        private static string CanonicalLonghandName(string name) =>
+            name.Isi(PropertyNames.WordWrap) ? PropertyNames.OverflowWrap : name;
 
         internal void SetProperty(Property property)
         {
@@ -1335,8 +1346,8 @@ namespace PeachPDF.CSS
 
         public string OverflowWrap
         {
-            get => GetPropertyValue(PropertyNames.WordWrap);
-            set => SetPropertyValue(PropertyNames.WordWrap, value);
+            get => GetPropertyValue(PropertyNames.OverflowWrap);
+            set => SetPropertyValue(PropertyNames.OverflowWrap, value);
         }
 
         public string Padding
