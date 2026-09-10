@@ -144,10 +144,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             Realize(pen);
 
-            const string format = Config.SignificantFigures4;
-            AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", points[0].X, points[0].Y);
+            AppendPathPoint(points[0].X, points[0].Y, 'm');
             for (int idx = 1; idx < count; idx++)
-                AppendFormatPoint("{0:" + format + "} {1:" + format + "} l\n", points[idx].X, points[idx].Y);
+                AppendPathPoint(points[idx].X, points[idx].Y, 'l');
             _content.Append("S\n");
         }
 
@@ -176,10 +175,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             Realize(pen);
 
-            const string format = Config.SignificantFigures4;
-            AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", points[0].X, points[0].Y);
+            AppendPathPoint(points[0].X, points[0].Y, 'm');
             for (int idx = 1; idx < count; idx += 3)
-                AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n",
+                AppendBezier(
                     points[idx].X, points[idx].Y,
                     points[idx + 1].X, points[idx + 1].Y,
                     points[idx + 2].X, points[idx + 2].Y);
@@ -207,8 +205,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             Realize(pen);
 
-            const string format = Config.SignificantFigures4;
-            AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", points[0].X, points[0].Y);
+            AppendPathPoint(points[0].X, points[0].Y, 'm');
             if (count == 2)
             {
                 // Just draws a line.
@@ -297,15 +294,14 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double y0 = rect.Y + δy;
 
             // Approximate an ellipse by drawing four cubic splines.
-            const string format = Config.SignificantFigures4;
-            AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", x0 + δx, y0);
-            AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n",
+            AppendPathPoint(x0 + δx, y0, 'm');
+            AppendBezier(
               x0 + δx, y0 + fy, x0 + fx, y0 + δy, x0, y0 + δy);
-            AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n",
+            AppendBezier(
               x0 - fx, y0 + δy, x0 - δx, y0 + fy, x0 - δx, y0);
-            AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n",
+            AppendBezier(
               x0 - δx, y0 - fy, x0 - fx, y0 - δy, x0, y0 - δy);
-            AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n",
+            AppendBezier(
               x0 + fx, y0 - δy, x0 + δx, y0 - fy, x0 + δx, y0);
             AppendStrokeFill(pen, brush, XFillMode.Winding, true);
         }
@@ -320,10 +316,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             if (points.Length < 2)
                 throw new ArgumentException("points", PSSR.PointArrayAtLeast(2));
 
-            const string format = Config.SignificantFigures4;
-            AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", points[0].X, points[0].Y);
+            AppendPathPoint(points[0].X, points[0].Y, 'm');
             for (int idx = 1; idx < count; idx++)
-                AppendFormatPoint("{0:" + format + "} {1:" + format + "} l\n", points[idx].X, points[idx].Y);
+                AppendPathPoint(points[idx].X, points[idx].Y, 'l');
 
             AppendStrokeFill(pen, brush, fillmode, true);
         }
@@ -335,8 +330,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         {
             Realize(pen, brush);
 
-            const string format = Config.SignificantFigures4;
-            AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", x + width / 2, y + height / 2);
+            AppendPathPoint(x + width / 2, y + height / 2, 'm');
             AppendPartialArc(x, y, width, height, startAngle, sweepAngle, PathStart.LineTo1st, new XMatrix());
             AppendStrokeFill(pen, brush, XFillMode.Alternate, true);
         }
@@ -356,8 +350,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             Realize(pen, brush);
 
-            const string format = Config.SignificantFigures4;
-            AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", points[0].X, points[0].Y);
+            AppendPathPoint(points[0].X, points[0].Y, 'm');
             if (count == 2)
             {
                 // Just draw a line.
@@ -1220,8 +1213,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             sinβ = Math.Sin(β);
             double cosβ = Math.Cos(β);
 
-            const string format = Config.SignificantFigures3;
             XPoint pt1, pt2, pt3;
+            const string format = Config.SignificantFigures3;
             if (!reflect)
             {
                 // Calculation for quarter 0 and 1
@@ -1229,12 +1222,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 {
                     case PathStart.MoveTo1st:
                         pt1 = matrix.Transform(new XPoint(x0 + δx * cosα, y0 + δy * sinα));
-                        AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", pt1.X, pt1.Y);
+                        AppendPathPoint(pt1.X, pt1.Y, 'm', format);
                         break;
 
                     case PathStart.LineTo1st:
                         pt1 = matrix.Transform(new XPoint(x0 + δx * cosα, y0 + δy * sinα));
-                        AppendFormatPoint("{0:" + format + "} {1:" + format + "} l\n", pt1.X, pt1.Y);
+                        AppendPathPoint(pt1.X, pt1.Y, 'l', format);
                         break;
 
                     case PathStart.Ignore1st:
@@ -1243,8 +1236,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 pt1 = matrix.Transform(new XPoint(x0 + δx * (cosα - κ * sinα), y0 + δy * (sinα + κ * cosα)));
                 pt2 = matrix.Transform(new XPoint(x0 + δx * (cosβ + κ * sinβ), y0 + δy * (sinβ - κ * cosβ)));
                 pt3 = matrix.Transform(new XPoint(x0 + δx * cosβ, y0 + δy * sinβ));
-                AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n",
-                  pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y);
+                AppendBezier(
+                  pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, format);
             }
             else
             {
@@ -1253,12 +1246,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 {
                     case PathStart.MoveTo1st:
                         pt1 = matrix.Transform(new XPoint(x0 - δx * cosα, y0 - δy * sinα));
-                        AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", pt1.X, pt1.Y);
+                        AppendPathPoint(pt1.X, pt1.Y, 'm', format);
                         break;
 
                     case PathStart.LineTo1st:
                         pt1 = matrix.Transform(new XPoint(x0 - δx * cosα, y0 - δy * sinα));
-                        AppendFormatPoint("{0:" + format + "} {1:" + format + "} l\n", pt1.X, pt1.Y);
+                        AppendPathPoint(pt1.X, pt1.Y, 'l', format);
                         break;
 
                     case PathStart.Ignore1st:
@@ -1267,8 +1260,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 pt1 = matrix.Transform(new XPoint(x0 - δx * (cosα - κ * sinα), y0 - δy * (sinα + κ * cosα)));
                 pt2 = matrix.Transform(new XPoint(x0 - δx * (cosβ + κ * sinβ), y0 - δy * (sinβ - κ * cosβ)));
                 pt3 = matrix.Transform(new XPoint(x0 - δx * cosβ, y0 - δy * sinβ));
-                AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n",
-                    pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y);
+                AppendBezier(
+                    pt1.X, pt1.Y, pt2.X, pt2.Y, pt3.X, pt3.Y, format);
             }
         }
 
@@ -1277,8 +1270,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         void AppendCurveSegment(XPoint pt0, XPoint pt1, XPoint pt2, XPoint pt3, double tension3)
         {
-            const string format = Config.SignificantFigures4;
-            AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n",
+            AppendBezier(
                 pt1.X + tension3 * (pt2.X - pt0.X), pt1.Y + tension3 * (pt2.Y - pt0.Y),
                 pt2.X - tension3 * (pt3.X - pt1.X), pt2.Y - tension3 * (pt3.Y - pt1.Y),
                 pt2.X, pt2.Y);
@@ -1289,7 +1281,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// </summary>
         internal void AppendPath(CoreGraphicsPath path)
         {
-            AppendPath(path.PathPoints, path.PathTypes);
+            AppendPath(path.PathPointsSpan, path.PathTypesSpan);
             //XPoint[] points = path.PathPoints;
             //Byte[] types = path.PathTypes;
 
@@ -1337,12 +1329,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             //}
         }
 
-        void AppendPath(XPoint[] points, Byte[] types)
+        void AppendPath(ReadOnlySpan<XPoint> points, ReadOnlySpan<byte> types)
         {
-            const string format = Config.SignificantFigures4;
             int count = points.Length;
             if (count == 0)
                 return;
+            Debug.Assert(types.Length == count);
 
             for (int idx = 0; idx < count; idx++)
             {
@@ -1362,12 +1354,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 {
                     case PathPointTypeStart:
                         //PDF_moveto(pdf, points[idx].X, points[idx].Y);
-                        AppendFormatPoint("{0:" + format + "} {1:" + format + "} m\n", points[idx].X, points[idx].Y);
+                        AppendPathPoint(points[idx].X, points[idx].Y, 'm');
                         break;
 
                     case PathPointTypeLine:
                         //PDF_lineto(pdf, points[idx].X, points[idx].Y);
-                        AppendFormatPoint("{0:" + format + "} {1:" + format + "} l\n", points[idx].X, points[idx].Y);
+                        AppendPathPoint(points[idx].X, points[idx].Y, 'l');
                         if ((type & PathPointTypeCloseSubpath) != 0)
                             Append("h\n");
                         break;
@@ -1377,7 +1369,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                         //PDF_curveto(pdf, points[idx].X, points[idx].Y, 
                         //                 points[idx + 1].X, points[idx + 1].Y, 
                         //                 points[idx + 2].X, points[idx + 2].Y);
-                        AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} c\n", points[idx].X, points[idx].Y,
+                        AppendBezier(points[idx].X, points[idx].Y,
                             points[++idx].X, points[idx].Y, points[++idx].X, points[idx].Y);
                         if ((types[idx] & PathPointTypeCloseSubpath) != 0)
                             Append("h\n");
@@ -1421,10 +1413,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _content.AppendFormat(CultureInfo.InvariantCulture, format, d);
         }
 
-        internal void AppendFormatPoint(string format, double x, double y)
+        private void AppendPathPoint(double x, double y, char operation, string format = Config.SignificantFigures4)
         {
             XPoint result = WorldToView(new XPoint(x, y));
-            _content.AppendFormat(CultureInfo.InvariantCulture, format, result.X, result.Y);
+            AppendPdfNumber(_content, result.X, format);
+            _content.Append(' ');
+            AppendPdfNumber(_content, result.Y, format);
+            _content.Append(' ').Append(operation).Append('\n');
         }
 
         internal void AppendFormatRect(string format, double x, double y, double width, double height)
@@ -1433,12 +1428,55 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _content.AppendFormat(CultureInfo.InvariantCulture, format, point1.X, point1.Y, width, height);
         }
 
-        internal void AppendFormat3Points(string format, double x1, double y1, double x2, double y2, double x3, double y3)
+        private void AppendBezier(double x1, double y1, double x2, double y2, double x3, double y3,
+            string format = Config.SignificantFigures4)
         {
             XPoint point1 = WorldToView(new XPoint(x1, y1));
             XPoint point2 = WorldToView(new XPoint(x2, y2));
             XPoint point3 = WorldToView(new XPoint(x3, y3));
-            _content.AppendFormat(CultureInfo.InvariantCulture, format, point1.X, point1.Y, point2.X, point2.Y, point3.X, point3.Y);
+            AppendPdfNumber(_content, point1.X, format);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point1.Y, format);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point2.X, format);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point2.Y, format);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point3.X, format);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point3.Y, format);
+            _content.Append(" c\n");
+        }
+
+        private void AppendMatrix(double x1, double y1, double x2, double y2, double x3, double y3)
+        {
+            XPoint point1 = WorldToView(new XPoint(x1, y1));
+            XPoint point2 = WorldToView(new XPoint(x2, y2));
+            XPoint point3 = WorldToView(new XPoint(x3, y3));
+            AppendPdfNumber(_content, point1.X, Config.SignificantFigures7);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point1.Y, Config.SignificantFigures7);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point2.X, Config.SignificantFigures7);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point2.Y, Config.SignificantFigures7);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point3.X, Config.SignificantFigures7);
+            _content.Append(' ');
+            AppendPdfNumber(_content, point3.Y, Config.SignificantFigures7);
+            _content.Append(" cm ");
+        }
+
+        internal static void AppendPdfNumber(StringBuilder content, double value, string format)
+        {
+            Span<char> buffer = stackalloc char[64];
+            if (value.TryFormat(buffer, out int written, format.AsSpan(), CultureInfo.InvariantCulture))
+            {
+                content.Append(buffer[..written]);
+                return;
+            }
+
+            content.Append(value.ToString(format, CultureInfo.InvariantCulture));
         }
 
         internal void AppendFormat(string format, XPoint point)
@@ -1559,10 +1597,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             // Save initial graphic state.
             SaveState();
             // Set page transformation.
-            const string format = Config.SignificantFigures7;
             double[] cm = DefaultViewMatrix.GetElements();
-            AppendFormat3Points("{0:" + format + "} {1:" + format + "} {2:" + format + "} {3:" + format + "} {4:" + format + "} {5:" + format + "} cm ",
-                cm[0], cm[1], cm[2], cm[3], cm[4], cm[5]);
+            AppendMatrix(cm[0], cm[1], cm[2], cm[3], cm[4], cm[5]);
         }
 
         /// <summary>

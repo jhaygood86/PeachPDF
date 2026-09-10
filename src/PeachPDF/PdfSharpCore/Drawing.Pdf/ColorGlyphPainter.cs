@@ -302,7 +302,14 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         private static XGraphicsPath BuildPath(GlyphOutline outline, ColrAffine transform)
         {
-            var path = new XGraphicsPath { FillMode = XFillMode.Winding };
+            int pointCount = outline.Contours.Count;
+            foreach (GlyphContour contour in outline.Contours)
+            {
+                foreach (GlyphSegment segment in contour.Segments)
+                    pointCount += segment.IsCubic ? 3 : 1;
+            }
+
+            var path = new XGraphicsPath(pointCount) { FillMode = XFillMode.Winding };
 
             foreach (GlyphContour contour in outline.Contours)
             {
