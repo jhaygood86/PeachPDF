@@ -39,10 +39,18 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     if (!_descriptor.TryGetGlyphOutline(glyph.GlyphId, out GlyphOutline outline) || outline.IsEmpty)
                         break;
 
-                    XGraphicsPath clipPath = BuildPath(outline, t);
                     XRect glyphBounds = WorldBounds(outline, t);
                     XRect newClip = hasClip ? Intersect(clip, glyphBounds) : glyphBounds;
 
+                    // Measuring only needs the clip rectangles the leaves below will fill - building
+                    // and pushing the real clip path would draw nothing and cost the path anyway.
+                    if (_measuring)
+                    {
+                        PaintV1(glyph.Paint, t, true, newClip, depth + 1);
+                        break;
+                    }
+
+                    XGraphicsPath clipPath = BuildPath(outline, t);
                     XGraphicsState state = _gfx.Save();
                     _gfx.IntersectClip(clipPath);
                     PaintV1(glyph.Paint, t, true, newClip, depth + 1);
@@ -88,7 +96,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             PaintV1(composite.Backdrop, t, hasClip, clip, depth + 1);
 
             string? blendMode = BlendModeName(composite.Mode);
-            if (blendMode is null)
+            if (blendMode is null || _measuring)
             {
                 PaintV1(composite.Source, t, hasClip, clip, depth + 1); // source-over
                 return;
@@ -129,6 +137,14 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         {
             if (!hasClip || brush is null || clip.Width <= 0 || clip.Height <= 0)
                 return; // a leaf paint with no enclosing glyph clip is degenerate; draw nothing.
+
+            // Every v1 leaf fill is bounded by its enclosing glyph clip, so accumulating these
+            // rectangles bounds all of the glyph's ink - see IncludeInMeasuredBounds.
+            if (_measuring)
+            {
+                IncludeInMeasuredBounds(clip);
+                return;
+            }
 
             var rect = new XGraphicsPath { FillMode = XFillMode.Winding };
             rect.AddRectangle(clip);

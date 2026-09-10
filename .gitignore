@@ -401,9 +401,22 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Rendered output, wherever it was dropped: the TestHarness writes a .pdf and a .html per showcase
+# into whatever directory it is pointed at (its output directory is a positional argument that
+# defaults to the working directory), so a local harness run must not dirty the tree no matter where
+# it ran from. Source .html files caught by this are re-included by name further down.
 *.pdf
 *.html
-*.pdf
+
+# ...but those two patterns are about FILES. Without this they also match any DIRECTORY whose name
+# ends in .pdf/.html - on a case-insensitive filesystem (Windows, macOS) that is the real source
+# directory src/PeachPDF/PdfSharpCore/Drawing.Pdf (and its test-side twin). git then refuses to
+# recurse into it at all, so every new file added there is silently invisible to `git status` and
+# cannot be re-included from inside, since a negation cannot reach into an excluded directory.
+!*.pdf/
+!*.html/
+
 /coverage-report
 /coverage
 
