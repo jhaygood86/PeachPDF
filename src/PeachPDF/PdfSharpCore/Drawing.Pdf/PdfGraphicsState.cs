@@ -226,8 +226,14 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             // 0 (e.g. right after any opaque solid stroke).
             double strokeAlpha = pen.Brush != null ? 1.0 : color.A;
 
-            if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.A != strokeAlpha || _realizedStrokeOverPrint != overPrint))
+            if (_renderer.Owner.Version >= 14 && (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.A != strokeAlpha || _realizedStrokeOverPrint != overPrint))
             {
+                // The IsEmpty guard mirrors RealizeFillColor's identical fix: a fresh PdfGraphicsState,
+                // or right after a brush stroke resets _realizedStrokeColor to Empty (line 247 below),
+                // starts with A == 0. Without this guard, a solid stroke whose own alpha is genuinely 0
+                // right after such a reset evaluates "0 != 0" as false and skips emitting /CA, leaving
+                // the stroke at whatever alpha the enclosing graphics state had instead of invisible.
+                //
                 // Must create transparency group - checked before any object/resource is built, so a
                 // PDF/A-1 rejection never leaves a partially-built ExtGState behind.
                 if (strokeAlpha < 1)
@@ -340,8 +346,15 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 }
             }
 
-            if (_renderer.Owner.Version >= 14 && (_realizedFillColor.A != color.A || _realizedNonStrokeOverPrint != overPrint))
+            if (_renderer.Owner.Version >= 14 && (_realizedFillColor.IsEmpty || _realizedFillColor.A != color.A || _realizedNonStrokeOverPrint != overPrint))
             {
+                // The IsEmpty guard mirrors the RGB-change check above: a fresh PdfGraphicsState (new
+                // renderer/form, or right after RealizeBrush's gradient-pattern branch invalidates the
+                // fill color) starts with _realizedFillColor == XColor.Empty, whose A is 0. Without this
+                // guard, a fill whose own alpha is genuinely 0 right after such a reset evaluates
+                // "0 != 0" as false and skips emitting /ca, leaving the PDF's actual alpha at whatever
+                // the enclosing graphics state had (often opaque) instead of fully transparent.
+                //
                 // Must create transparency group - checked before any object/resource is built, so a
                 // PDF/A-1 rejection never leaves a partially-built ExtGState behind.
                 if (color.A < 1)
