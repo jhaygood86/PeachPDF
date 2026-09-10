@@ -705,21 +705,16 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task AnywhereDoesNotSplitCrossInlineGraphemeForMinContent()
         {
-            static async Task<double> GridItemWidth(string content)
-            {
-                var html = LayoutHarness.Wrap($$"""
-                    <div style="display:grid; grid-template-columns:min-content">
-                        <div id="item" style="font-size:18pt; overflow-wrap:anywhere">{{content}}</div>
-                    </div>
-                    """);
-                var (root, _) = await LayoutHarness.LayoutAsync(html);
-                return LayoutHarness.FindById(root, "item")!.ActualWidth;
-            }
+            var html = LayoutHarness.Wrap("""
+                <div style="display:grid; grid-template-columns:min-content">
+                    <div id="item" style="font-size:18pt; overflow-wrap:anywhere">👍<span>🏽</span></div>
+                </div>
+                """);
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var item = LayoutHarness.FindById(root, "item")!;
+            var combinedGlyphWidth = WordsOf(item).Sum(word => word.Width);
 
-            var crossInline = await GridItemWidth("👍<span>🏽</span>");
-            var singleRun = await GridItemWidth("👍🏽");
-
-            Assert.Equal(singleRun, crossInline, 0.5);
+            Assert.Equal(combinedGlyphWidth, item.ActualWidth, 0.5);
         }
 
         [Fact]
