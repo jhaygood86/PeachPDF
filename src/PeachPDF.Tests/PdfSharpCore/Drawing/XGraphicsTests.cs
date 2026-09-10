@@ -304,6 +304,26 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         }
 
         [Fact]
+        public void PdfContentWriter_AdaptiveChunksPreserveContentAcrossGrowthBoundaries()
+        {
+            const int length = 25_000;
+            var content = new PdfContentWriter();
+            var expected = new StringBuilder(length);
+
+            for (int i = 0; i < length; i++)
+            {
+                char value = (char)('!' + i % 90);
+                content.Append(value);
+                expected.Append(value);
+            }
+
+            string expectedText = expected.ToString();
+            Assert.Equal(length, content.Length);
+            Assert.Equal(Encoding.ASCII.GetBytes(expectedText), content.ToArray());
+            Assert.Equal(expectedText, content.ToString());
+        }
+
+        [Fact]
         public void PresizedCoreGraphicsPath_DoesNotGrowOrCopyWhileBuilding()
         {
             var warmup = new CoreGraphicsPath(2);
