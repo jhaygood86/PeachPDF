@@ -70,6 +70,10 @@ namespace PeachPDF.Tests.TestSupport
 
         protected override RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint) => new TestFont(size);
 
+        // No family this stub knows about ever "wins" the last-resort search - there is no real
+        // InstalledFonts registry backing it, so the only faithful answer is "nothing found".
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint) => null;
+
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
 
         protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<PeachPDF.RuneRange>? unicodeRanges = null) => Task.FromResult(false);

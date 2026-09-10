@@ -73,10 +73,19 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         private readonly Dictionary<(string Family, double Size, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint), RFont?> _codepointFontsCache = new();
 
+        /// <summary>
+        /// Last-resort system-fallback font cache: (size, style/weight/stretch/oblique, codepoint) →
+        /// resolved font (or null when no registered family covers the codepoint at all). No
+        /// <c>family</c> component - unlike <see cref="_codepointFontsCache"/> - since this path isn't
+        /// keyed by a declared family, it searches every one of them.
+        /// </summary>
+        private readonly Dictionary<(double Size, RFontStyle Style, int Weight, int Stretch, double? Oblique, int Codepoint), RFont?> _systemFallbackFontsCache = new();
+
         public void ClearCache()
         {
             _fontsCache.Clear();
             _codepointFontsCache.Clear();
+            _systemFallbackFontsCache.Clear();
         }
 
         /// <summary>
@@ -139,8 +148,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// <returns>cached font instance</returns>
         public RFont? GetCachedFont(string family, double size, RFontStyle style, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
-            var resolvedWeight = weight ?? ((style & RFontStyle.Bold) != 0 ? 700 : 400);
-            var resolvedStretch = stretch ?? 5;
+            var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
             var font = TryGetFont(family, size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus);
 
             if (font == null)
@@ -178,8 +186,7 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         public RFont? GetCachedFontForCodepoint(string family, double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
         {
-            var resolvedWeight = weight ?? ((style & RFontStyle.Bold) != 0 ? 700 : 400);
-            var resolvedStretch = stretch ?? 5;
+            var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
 
             // Apply font-family mapping (e.g. a generic "serif"/"sans-serif"/"monospace" mapped to a real
             // installed family) before resolving - the resolver only knows real registered family names, so
@@ -198,6 +205,34 @@ namespace PeachPDF.Html.Core.Handlers
             _codepointFontsCache[key] = font;
             return font;
         }
+
+        /// <summary>
+        /// Cached last-resort system-fallback font resolution: a font from any registered family (not
+        /// just those in a box's own <c>font-family</c> stack) that covers <paramref name="codepoint"/>,
+        /// or null when nothing registered does. Unlike <see cref="GetCachedFontForCodepoint"/> there is
+        /// no family parameter to resolve against - the search itself is family-agnostic.
+        /// </summary>
+        public RFont? GetCachedSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        {
+            var (resolvedWeight, resolvedStretch) = ResolveWeightAndStretch(style, weight, stretch);
+
+            var key = (size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint.Value);
+
+            if (_systemFallbackFontsCache.TryGetValue(key, out var cached))
+                return cached;
+
+            var font = _adapter.CreateSystemFallbackFontForCodepoint(size, style, resolvedWeight, resolvedStretch, obliqueSkewSinus, codepoint);
+            _systemFallbackFontsCache[key] = font;
+            return font;
+        }
+
+        /// <summary>
+        /// Resolves the real numeric weight/stretch a caller didn't supply directly: weight defaults from
+        /// <paramref name="style"/>'s Bold bit (700/400), stretch defaults to normal (5). Shared by every
+        /// font-resolution entry point above so the same defaulting rule can't drift between them.
+        /// </summary>
+        private static (int Weight, int Stretch) ResolveWeightAndStretch(RFontStyle style, int? weight, int? stretch) =>
+            (weight ?? ((style & RFontStyle.Bold) != 0 ? 700 : 400), stretch ?? 5);
 
         #region Private methods
 

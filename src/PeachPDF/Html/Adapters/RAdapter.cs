@@ -289,6 +289,23 @@ namespace PeachPDF.Html.Adapters
         }
 
         /// <summary>
+        /// The last-resort step of CSS Fonts 4 §5's font matching algorithm: when no family in a box's own
+        /// <c>font-family</c> stack covers <paramref name="codepoint"/>, resolves a font from any OTHER
+        /// family this adapter knows about (every system-discovered and explicitly-registered font) that
+        /// does. Returns null when nothing registered covers it either, so the caller keeps today's
+        /// <c>.notdef</c>/tofu-box behavior.
+        /// </summary>
+        public RFont? GetSystemFallbackFontForCodepoint(double size, RFontStyle style, System.Text.Rune codepoint, int? weight = null, int? stretch = null, double? obliqueSkewSinus = null)
+        {
+            return _fontsHandler.GetCachedSystemFallbackFontForCodepoint(size, style, codepoint, weight, stretch, obliqueSkewSinus);
+        }
+
+        internal RFont? CreateSystemFallbackFontForCodepoint(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint)
+        {
+            return CreateSystemFallbackFontForCodepointInt(size, style, weight, stretch, obliqueSkewSinus, codepoint);
+        }
+
+        /// <summary>
         /// Get font instance by given font family name, size and style.
         /// </summary>
         /// <param name="family">the font family name</param>
@@ -419,6 +436,13 @@ namespace PeachPDF.Html.Adapters
         /// null when the family has no covering face (so the caller can try the next family).
         /// </summary>
         protected abstract RFont? CreateFontForCodepointInt(string family, double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint);
+
+        /// <summary>
+        /// Builds a font for whichever OTHER registered family (if any) covers <paramref name="codepoint"/>
+        /// - the CSS Fonts 4 §5 system-fallback step, tried only after every family in the box's own
+        /// <c>font-family</c> stack has already missed. Returns null when nothing registered covers it.
+        /// </summary>
+        protected abstract RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint);
 
         /// <summary>Whether any face of <paramref name="family"/> declares an explicit <c>unicode-range</c>.</summary>
         protected abstract bool FamilyHasExplicitUnicodeRangesInt(string family);
