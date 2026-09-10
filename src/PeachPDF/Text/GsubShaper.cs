@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text;
 using PeachPDF.Fonts.OpenType;
@@ -806,7 +807,10 @@ namespace PeachPDF.Text
                         }
                         break;
                     case 4:
-                        if (gsub.GetLigatureLookup(lookupIndex) is { } ligature && ApplyLigatureAt(ligature, glyphs, start, gdef) > 0)
+                        // A single position, so the scratch lists start null and are allocated only if a
+                        // candidate ligature is actually tried - see ApplyLigatureLookup's own remarks.
+                        var ligatureScratch = new LigatureMatchScratch();
+                        if (gsub.GetLigatureLookup(lookupIndex) is { } ligature && ApplyLigatureAt(ligature, glyphs, start, gdef, ref ligatureScratch) > 0)
                             return true;
                         break;
                 }
@@ -841,12 +845,34 @@ namespace PeachPDF.Text
         // (here, testing the lookupFlag/GDEF mark-skip retrofit directly).
         internal static void ApplyLigatureLookup(GsubLigatureLookup lookup, List<ShapedGlyph> glyphs, GdefTable? gdef)
         {
+            // One pair of scratch lists for the whole lookup, not a fresh pair per candidate ligature
+            // per glyph position. The match walk below runs once for every position and on all but a
+            // handful throws away everything it built: most positions are covered by no subtable at
+            // all, and a covered one still usually fails partway through a candidate's component list.
+            // They are created on the first candidate that is actually tried, so a run whose glyphs no
+            // subtable covers - the common case for ccmp/locl on Latin text, which every run now
+            // applies - allocates nothing here at all.
+            var scratch = new LigatureMatchScratch();
+
             int i = 0;
             while (i < glyphs.Count)
             {
-                int consumed = ApplyLigatureAt(lookup, glyphs, i, gdef);
+                int consumed = ApplyLigatureAt(lookup, glyphs, i, gdef, ref scratch);
                 i += consumed > 0 ? consumed : 1;
             }
+        }
+
+        /// <summary>
+        /// The two lists <see cref="TryMatchLigature"/> fills while walking one candidate ligature's
+        /// components. Held by <see cref="ApplyLigatureLookup"/> and cleared per candidate rather than
+        /// reallocated, since a candidate that fails leaves nothing worth keeping. <see cref="Skipped"/>
+        /// is handed to <see cref="ApplyLigatureAt"/> on a match and read there before the next call,
+        /// so reuse is never observable.
+        /// </summary>
+        private struct LigatureMatchScratch
+        {
+            public List<int>? Matched;
+            public List<int>? Skipped;
         }
 
         /// <summary>
@@ -856,10 +882,18 @@ namespace PeachPDF.Text
         /// between two ligature-forming base glyphs), which stays in the glyph stream rather than
         /// being consumed by the ligature, moved to immediately after it - or 0 if nothing matched.
         /// </summary>
-        private static int ApplyLigatureAt(GsubLigatureLookup lookup, List<ShapedGlyph> glyphs, int index, GdefTable? gdef)
+        private static int ApplyLigatureAt(GsubLigatureLookup lookup, List<ShapedGlyph> glyphs, int index, GdefTable? gdef,
+            ref LigatureMatchScratch scratch)
         {
-            if (!TryMatchLigature(lookup, glyphs, index, gdef, out ShapedGlyph merged, out int spanLength, out List<int> skippedOffsets))
+            if (!TryMatchLigature(lookup, glyphs, index, gdef, ref scratch, out ShapedGlyph merged, out int spanLength, out var skippedOffsets))
                 return 0;
+
+            if (skippedOffsets.Count == 0)
+            {
+                glyphs.RemoveRange(index, spanLength);
+                glyphs.Insert(index, merged);
+                return 1;
+            }
 
             var skippedGlyphs = new List<ShapedGlyph>(skippedOffsets.Count);
             foreach (int offset in skippedOffsets)
@@ -873,24 +907,35 @@ namespace PeachPDF.Text
         }
 
         private static bool TryMatchLigature(GsubLigatureLookup lookup, List<ShapedGlyph> glyphs, int index, GdefTable? gdef,
-            out ShapedGlyph merged, out int spanLength, out List<int> skippedOffsets)
+            ref LigatureMatchScratch scratch,
+            out ShapedGlyph merged, out int spanLength, [NotNullWhen(true)] out List<int>? skippedOffsets)
         {
             merged = default;
             spanLength = 0;
-            skippedOffsets = [];
+            // Null, not an empty list: this returns false for the great majority of the positions it is
+            // called on, and an allocation on that path is the whole cost being removed here. The caller
+            // reads skippedOffsets only after a true, which NotNullWhen states for the compiler.
+            skippedOffsets = null;
             var firstGlyph = (ushort)glyphs[index].GlyphIndex;
             CoverageTable? markFilteringSet = lookup.MarkFilteringSetIndex is { } mfsIndex ? gdef?.GetMarkGlyphSet(mfsIndex) : null;
 
-            foreach (GsubLigatureSubtable subtable in lookup.Subtables)
+            // Indexed rather than foreach: Subtables is typed IReadOnlyList<T>, so a foreach over it
+            // boxes List<T>'s struct enumerator on the heap. That is once per glyph position per
+            // lookup - the single hottest count in the shaper, and now hotter still since ccmp/locl
+            // apply to every run. Same change, same reason, as GposPositioner's own subtable walks.
+            for (var s = 0; s < lookup.Subtables.Count; s++)
             {
+                GsubLigatureSubtable subtable = lookup.Subtables[s];
                 int coverageIndex = subtable.Coverage.IndexOfGlyph(firstGlyph);
                 if (coverageIndex < 0 || coverageIndex >= subtable.LigatureSets.Length)
                     continue;
 
                 foreach (GsubLigature ligature in subtable.LigatureSets[coverageIndex])
                 {
-                    var matched = new List<int>(ligature.ComponentGlyphIds.Length);
-                    var skipped = new List<int>();
+                    List<int> matched = scratch.Matched ??= [];
+                    List<int> skipped = scratch.Skipped ??= [];
+                    matched.Clear();
+                    skipped.Clear();
                     int pos = index + 1;
                     int compIdx = 0;
 
@@ -966,8 +1011,9 @@ namespace PeachPDF.Text
             {
                 ushort glyphId = (ushort)glyphs[i].GlyphIndex;
 
-                foreach (GsubReverseChainSingleSubstSubtable subtable in lookup.Subtables)
+                for (var s = 0; s < lookup.Subtables.Count; s++)
                 {
+                    GsubReverseChainSingleSubstSubtable subtable = lookup.Subtables[s];
                     int coverageIndex = subtable.Coverage.IndexOfGlyph(glyphId);
                     if (coverageIndex < 0 || coverageIndex >= subtable.SubstituteGlyphIds.Length)
                         continue;
@@ -1011,8 +1057,9 @@ namespace PeachPDF.Text
         private static void ApplySingleSubstitutionAt(GsubSingleSubstitutionLookup lookup, List<ShapedGlyph> glyphs, int i)
         {
             ushort glyphId = (ushort)glyphs[i].GlyphIndex;
-            foreach (GsubSingleSubstitutionSubtable subtable in lookup.Subtables)
+            for (var s = 0; s < lookup.Subtables.Count; s++)
             {
+                GsubSingleSubstitutionSubtable subtable = lookup.Subtables[s];
                 if (subtable.TryGetSubstitute(glyphId, out ushort substitute))
                 {
                     // See ApplyReverseChainSingleSubstitutionLookup's identical comment on why
@@ -1038,8 +1085,9 @@ namespace PeachPDF.Text
         private static void ApplyAlternateSubstitutionAt(GsubAlternateSubstitutionLookup lookup, List<ShapedGlyph> glyphs, int i, int alternateIndex)
         {
             ushort glyphId = (ushort)glyphs[i].GlyphIndex;
-            foreach (GsubAlternateSubstitutionSubtable subtable in lookup.Subtables)
+            for (var s = 0; s < lookup.Subtables.Count; s++)
             {
+                GsubAlternateSubstitutionSubtable subtable = lookup.Subtables[s];
                 if (subtable.TryGetAlternate(glyphId, alternateIndex, out ushort substitute))
                 {
                     // See ApplyReverseChainSingleSubstitutionLookup's identical comment on why
@@ -1073,8 +1121,9 @@ namespace PeachPDF.Text
         private static int ApplyMultipleSubstitutionAt(GsubMultipleSubstitutionLookup lookup, List<ShapedGlyph> glyphs, int i)
         {
             ushort glyphId = (ushort)glyphs[i].GlyphIndex;
-            foreach (GsubMultipleSubstitutionSubtable subtable in lookup.Subtables)
+            for (var s = 0; s < lookup.Subtables.Count; s++)
             {
+                GsubMultipleSubstitutionSubtable subtable = lookup.Subtables[s];
                 int coverageIndex = subtable.Coverage.IndexOfGlyph(glyphId);
                 if (coverageIndex < 0 || coverageIndex >= subtable.Sequences.Length)
                     continue;
@@ -1147,8 +1196,9 @@ namespace PeachPDF.Text
         private static int TryApplySequenceContextAt(GsubTable gsub, IReadOnlyList<GsubSequenceContextSubtable> subtables,
             List<ShapedGlyph> glyphs, int pos, GdefTable? gdef, ushort lookupFlag, CoverageTable? markFilteringSet, int depth)
         {
-            foreach (GsubSequenceContextSubtable subtable in subtables)
+            for (var s = 0; s < subtables.Count; s++)
             {
+                GsubSequenceContextSubtable subtable = subtables[s];
                 if (TryMatchSequenceContext(subtable, glyphs, pos, lookupFlag, gdef, markFilteringSet) is not
                     (int[] inputIndices, GsubSequenceLookupRecord[] records))
                     continue;
@@ -1438,8 +1488,9 @@ namespace PeachPDF.Text
                         ApplyAlternateSubstitutionAt(alt, glyphs, position, alternateIndex: 0);
                     break;
                 case 4:
+                    var nestedLigatureScratch = new LigatureMatchScratch();
                     if (gsub.GetLigatureLookup(lookupListIndex) is { } lig)
-                        ApplyLigatureAt(lig, glyphs, position, gdef);
+                        ApplyLigatureAt(lig, glyphs, position, gdef, ref nestedLigatureScratch);
                     break;
                 case 5:
                     if (gsub.GetContextualLookup(lookupListIndex) is { } nestedContextual)
