@@ -86,6 +86,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 _cmapInfo.AddGlyphIndices(glyphIndices);
         }
 
+        internal void AddShapedGlyph(int glyphIndex, string sourceText)
+        {
+            if (_cmapInfo != null)
+                _cmapInfo.AddShapedGlyph(glyphIndex, sourceText);
+        }
+
         /// <summary>
         /// Gets or sets the CMapInfo.
         /// </summary>

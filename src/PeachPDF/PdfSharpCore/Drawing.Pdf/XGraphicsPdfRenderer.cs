@@ -427,9 +427,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             bool strikeout = (font.Style & XFontStyle.Strikeout) != 0;
             bool underline = (font.Style & XFontStyle.Underline) != 0;
 
-            // Resolve the descriptor without registering the font for embedding, so a color font
-            // that we draw as vectors (below) is never realized/embedded as an unused subset.
-            OpenTypeDescriptor descriptor = (OpenTypeDescriptor)FontDescriptorCache.GetOrCreateDescriptorFor(font);
+            // Reuse the descriptor this XFont resolved through its owning PdfGenerator's instance font
+            // cache. Going back through the global FontDescriptorCache here would collide when separate
+            // generators register different subset files with the same internal family/style name.
+            // Merely reading the descriptor does not realize/embed the color font below.
+            OpenTypeDescriptor descriptor = font.Descriptor;
             bool isColorFont = font.Unicode && descriptor.IsColorFont;
 
             if (!isColorFont)
@@ -499,12 +501,15 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             if (isColorFont)
             {
                 // Color fonts (COLR/CPAL): paint each glyph's color layers as vector fills rather than
-                // embedding the font program and showing CID text. No AddChars/Tj for these glyphs. The
-                // resolved font-palette (index + entry overrides), when present, selects the CPAL palette.
+                // showing the font's monochrome outlines. Each vector glyph carries its exact source as
+                // /ActualText plus a rendering-mode-3 CID text show at the same position: /ActualText
+                // preserves ambiguous sequences exactly, while the invisible text supplies selection
+                // geometry to viewers which cannot select marked vector content alone. The resolved
+                // font-palette (index + entry overrides), when present, selects the CPAL palette.
                 int paletteIndex = fontPalette?.BasePaletteIndex ?? 0;
                 var colorPainter = new ColorGlyphPainter(this, descriptor, font, brush, x, y,
                     letterSpacing, Gfx.PageDirection, paletteIndex, fontPalette?.Overrides);
-                colorPainter.Paint(s, features);
+                colorPainter.Paint(s, features, logicalText);
             }
             else
             {
@@ -632,9 +637,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// Throws if <paramref name="glyphs"/> contains a reference to the missing-glyph placeholder
         /// (glyph index 0, ".notdef") and PDF/A conformance is requested - every PDF/A part forbids a
         /// text-showing operator from referencing it (e.g. ISO 19005-2 §6.2.11.8), so this is checked
-        /// right where a shaped run is produced, before it ever reaches a Tj. Only the CID/Unicode text
-        /// path calls this - color-font glyphs (COLR/CPAL) are painted as vector fills, never through a
-        /// text-showing operator, so they can't trigger this rule at all.
+        /// right where a shaped run is produced, before it ever reaches a Tj. The ordinary CID/Unicode
+        /// path checks a complete shaped run; color-font vector painting checks each source-bearing
+        /// glyph before emitting its invisible selection text.
         /// </summary>
         void RequireNoMissingGlyphsForPdfA(IReadOnlyList<ShapedGlyph> glyphs, XFont font)
         {
@@ -1601,6 +1606,57 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         {
             BeginPage();
             _content.Append($"{structureType}<</MCID {mcid}>>BDC\n");
+        }
+
+        /// <summary>
+        /// Begins a <c>/Span</c> marked-content sequence whose invisible text represents
+        /// <paramref name="actualText"/>. The value is a Unicode PDF text string (UTF-16BE with BOM),
+        /// allowing color-font glyphs painted as paths to preserve their exact source text when copied.
+        /// </summary>
+        internal void BeginActualText(string actualText)
+        {
+            Debug.Assert(_streamMode == StreamMode.Text);
+
+            string value = PdfEncoders.ToHexStringLiteral(actualText, PdfStringEncoding.Unicode);
+            _content.Append($"/Span<</ActualText {value}>>BDC\n");
+        }
+
+        /// <summary>Begins the shared rendering-mode-3 text object for one color-glyph run.</summary>
+        internal void BeginInvisibleTextRun(XFont font, XBrush brush)
+        {
+            Realize(font, brush, renderingMode: 3);
+        }
+
+        /// <summary>Ends a color-glyph run's invisible text object before subsequent graphic content.</summary>
+        internal void EndInvisibleTextRun()
+        {
+            BeginGraphicMode();
+        }
+
+        /// <summary>
+        /// Shows one already-shaped glyph at its vector paint origin using PDF text rendering mode 3
+        /// (neither fill nor stroke). The text object gives viewers selectable font-derived geometry;
+        /// the surrounding marked-content sequence's <c>/ActualText</c> supplies its exact Unicode,
+        /// including sequences which share the same glyph ID.
+        /// </summary>
+        internal void DrawInvisibleGlyph(XFont font, ShapedGlyph glyph, string sourceText, double x, double y)
+        {
+            if (glyph.GlyphIndex == 0)
+                RequireNoMissingGlyphsForPdfA(new[] { glyph }, font);
+
+            Debug.Assert(_streamMode == StreamMode.Text);
+            PdfFont realizedFont = _gfxState._realizedFont;
+            Debug.Assert(realizedFont != null);
+            realizedFont.AddShapedGlyph(glyph.GlyphIndex, sourceText);
+
+            XPoint pos = WorldToView(new XPoint(x, y));
+            AdjustTdOffset(ref pos, 0, null);
+
+            byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
+            bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
+            string glyphText = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
+            AppendFormatArgs("{0:" + Config.SignificantFigures4 + "} {1:" + Config.SignificantFigures4 + "} Td {2} Tj\n",
+                pos.X, pos.Y, glyphText);
         }
 
         /// <summary>

@@ -388,6 +388,21 @@ namespace PeachPDF.Fonts.OpenType
             if (prep != null)
                 fontData.AddTable(prep);
 
+            // PDFium omits a shown CID from its text page when that CID's TrueType glyph has no contour.
+            // COLR base glyphs are commonly empty because their visible outlines live in layer glyphs;
+            // remember only the selected empty bases so the embedded, mode-3-only subset can give them
+            // a valid contour. Embedding the real layer closure would not help: no Tj references those
+            // layer CIDs, and their outlines are already emitted directly as PDF vector paths.
+            Dictionary<int, byte[]> syntheticSelectionGlyphs = [];
+            if (colr != null)
+            {
+                foreach (int glyphId in glyphs.Keys)
+                {
+                    if (colr.HasColorGlyph(glyphId) && HasNoContours(glyf.GetGlyphData(glyphId)))
+                        syntheticSelectionGlyphs[glyphId] = BuildInvisibleSelectionGlyph(glyphId);
+                }
+            }
+
             // Get closure of used glyphs.
             glyf.CompleteGlyphClosure(glyphs);
 
@@ -400,7 +415,12 @@ namespace PeachPDF.Fonts.OpenType
             // Calculate new size of glyph table.
             int size = 0;
             for (int idx = 0; idx < glyphCount; idx++)
-                size += glyf.GetGlyphSize(glyphArray[idx]);
+            {
+                int glyphId = glyphArray[idx];
+                size += syntheticSelectionGlyphs.TryGetValue(glyphId, out byte[]? synthetic)
+                    ? synthetic.Length
+                    : glyf.GetGlyphSize(glyphId);
+            }
             glyfNew.DirectoryEntry.Length = size;
 
             // Create new loca table
@@ -419,7 +439,9 @@ namespace PeachPDF.Fonts.OpenType
                 if (glyphIndex < glyphCount && glyphArray[glyphIndex] == idx)
                 {
                     glyphIndex++;
-                    byte[] bytes = glyf.GetGlyphData(idx);
+                    byte[] bytes = syntheticSelectionGlyphs.TryGetValue(idx, out byte[]? synthetic)
+                        ? synthetic
+                        : glyf.GetGlyphData(idx);
                     int length = bytes.Length;
                     if (length > 0)
                     {
@@ -434,6 +456,91 @@ namespace PeachPDF.Fonts.OpenType
             fontData.Compile();
 
             return fontData;
+        }
+
+        private static bool HasNoContours(byte[] glyphData)
+        {
+            if (glyphData.Length < 2)
+                return true;
+
+            short numberOfContours = (short)((glyphData[0] << 8) | glyphData[1]);
+            return numberOfContours == 0;
+        }
+
+        /// <summary>
+        /// Builds the stand-in outline embedded for one empty COLR base glyph: a single on-curve
+        /// rectangle spanning that glyph's own advance width and the font's ascent/descent. It exists
+        /// only in a PDF's embedded color-font subset and is shown exclusively with text rendering
+        /// mode 3, so it paints no ink - it exists purely so a viewer has glyph geometry to select.
+        /// Sizing it to the real glyph box rather than to a token one is what lets a search hit
+        /// highlight and a mouse drag actually cover the emoji underneath: PDFium derives a
+        /// character's box from the contour extents, so a 1x1-unit contour yields a hit target
+        /// thousands of times smaller than the visible artwork.
+        /// </summary>
+        private byte[] BuildInvisibleSelectionGlyph(int glyphId)
+        {
+            int unitsPerEm = head.unitsPerEm;
+
+            int width = unitsPerEm;
+            if (hmtx?.Metrics is { Length: > 0 } metrics)
+            {
+                // Past numberOfHMetrics every remaining glyph repeats the last advance - see
+                // OpenTypeDescriptor.GlyphIndexToWidth, which clamps the same way.
+                int metricIndex = Math.Clamp(glyphId, 0, metrics.Length - 1);
+                if (metrics[metricIndex].advanceWidth > 0)
+                    width = metrics[metricIndex].advanceWidth;
+            }
+
+            int top = hhea?.ascender ?? 0;
+            int bottom = hhea?.descender ?? 0;
+            if (top <= bottom)
+            {
+                // A font with unusable vertical metrics still needs a non-degenerate box.
+                top = unitsPerEm;
+                bottom = 0;
+            }
+
+            // Every coordinate lands in an sfnt FWord, so halving the int16 range here keeps both the
+            // absolute values and the top-to-bottom delta written below inside a short.
+            width = Math.Clamp(width, 1, short.MaxValue / 2);
+            top = Math.Clamp(top, short.MinValue / 2, short.MaxValue / 2);
+            bottom = Math.Clamp(bottom, short.MinValue / 2, short.MaxValue / 2);
+
+            // Four on-curve points, counter-clockwise from the bottom-left. The flags deliberately set
+            // only ON_CURVE_POINT, so each coordinate is a plain int16 delta from the previous point -
+            // the short/same-value encodings cannot express a full-size box. The resulting length is
+            // even, which keeps the glyph valid when the source font uses short loca offsets.
+            byte[] glyphData = new byte[34];
+            int offset = 0;
+
+            void WriteInt16(int value)
+            {
+                glyphData[offset++] = (byte)(value >> 8);
+                glyphData[offset++] = (byte)value;
+            }
+
+            WriteInt16(1);      // numberOfContours
+            WriteInt16(0);      // xMin
+            WriteInt16(bottom); // yMin
+            WriteInt16(width);  // xMax
+            WriteInt16(top);    // yMax
+            WriteInt16(3);      // endPtsOfContours[0] - four points
+            WriteInt16(0);      // instructionLength
+
+            for (int i = 0; i < 4; i++)
+                glyphData[offset++] = 0x01; // ON_CURVE_POINT
+
+            WriteInt16(0);      // x deltas, reaching (0, bottom)
+            WriteInt16(width);  //                    (width, bottom)
+            WriteInt16(0);      //                    (width, top)
+            WriteInt16(-width); //                    (0, top)
+
+            WriteInt16(bottom); // y deltas for the same four points
+            WriteInt16(0);
+            WriteInt16(top - bottom);
+            WriteInt16(0);
+
+            return glyphData;
         }
 
         /// <summary>

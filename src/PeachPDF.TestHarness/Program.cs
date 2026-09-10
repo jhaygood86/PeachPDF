@@ -6803,9 +6803,9 @@ await SaveShowcaseAsync("unicode_range", "Fonts & Text", "@font-face unicode-ran
     unicodeRangeHtml, pdfConfig);
 
 // Emoji / astral (supplementary-plane, codepoint > U+FFFF) rendering. Nearly all emoji live above
-// U+FFFF and are reached through the font's cmap format-12 subtable; a monochrome emoji font (here a
-// subset of Noto Emoji) renders its glyf outlines. Color-glyph tables (COLR/CBDT/sbix) are not
-// composited - outlines only.
+// U+FFFF and are reached through the font's cmap format-12 subtable; this showcase deliberately uses
+// a monochrome subset of Noto Emoji to demonstrate ordinary glyf text. The separate color-font
+// showcase below demonstrates supported COLR/CPAL rendering.
 var emojiFontUri = "data:font/truetype;base64," +
     Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoEmoji-Regular.ttf")));
 var emojiRow = string.Join(" ", new[] { 0x1F600, 0x1F60A, 0x1F602, 0x1F44D, 0x1F389, 0x1F680, 0x2764 }
@@ -6829,14 +6829,14 @@ var emojiHtml = $$"""
         <h1>Emoji (astral codepoints)</h1>
         <p class="demo">{{emojiRow}}</p>
         <p class="note">Every glyph above U+FFFF (e.g. {{grinning}} = U+1F600) is resolved through the
-        font's cmap format-12 subtable and rendered from its monochrome outline. Color emoji fonts
-        (COLR/CBDT/sbix) are not composited.</p>
+        font's cmap format-12 subtable and rendered from this font's monochrome outline. The separate
+        Color Fonts showcase demonstrates COLR/CPAL color emoji.</p>
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("emoji", "Fonts & Text", "Emoji (astral codepoints)",
-    "Supplementary-plane (astral, U+FFFF+) glyph rendering: emoji resolve through the font's cmap format-12 subtable and render as monochrome outlines from a bundled subset of Noto Emoji. Color-glyph tables (COLR/CBDT/sbix) are not composited.",
+    "Supplementary-plane (astral, U+FFFF+) glyph rendering: emoji resolve through the font's cmap format-12 subtable and render as monochrome outlines from a bundled subset of Noto Emoji; the separate Color Fonts showcase covers COLR/CPAL.",
     emojiHtml, pdfConfig);
 
 // clip-path with CSS basic shapes (polygon/inset/circle/ellipse). The shape is parsed once by the
@@ -8170,8 +8170,9 @@ var colorEmojiHtml =
     ".css { font-size: 7pt; color: #666 }" +
     "</style></head><body>" +
     "<h1>Color fonts (COLR / CPAL)</h1>" +
-    "<p class=\"intro\">COLR/CPAL color-glyph fonts are rendered as native PDF vector content — no font " +
-    "program is embedded for these glyphs; each is drawn as vector fills. The row below is the real " +
+    "<p class=\"intro\">COLR/CPAL color-glyph fonts render their visible artwork as native PDF vector " +
+    "content. An embedded subset supplies invisible selectable/searchable text, while per-glyph " +
+    "<code>/ActualText</code> preserves exact emoji sequences when copied. The row below is the real " +
     "COLR&nbsp;v1 build of Noto Color Emoji (gradients, transforms, compositing all handled).</p>" +
     "<div class=\"emoji\">\U0001F600 ❤ \U0001F44D \U0001F680 \U0001F308 ⭐ \U0001F525 \U0001F642</div>" +
     "<h2>COLR paint features</h2>" +
@@ -8211,7 +8212,7 @@ var colorEmojiHtml =
 await SaveShowcaseAsync("color_emoji", "Text &amp; Fonts", "Color Fonts (COLR/CPAL)",
     "COLR/CPAL color-glyph fonts — including the real COLR v1 build of Noto Color Emoji — rendered as " +
     "native PDF vector content: layered palette colors, gradients, transforms, and blend-mode " +
-    "compositing. Glyphs are drawn as vectors, not embedded font programs.",
+    "compositing, with an invisible embedded subset for searchable, selectable, exact-copy text.",
     colorEmojiHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // CSS font-palette: selecting among a color font's CPAL palettes, defining custom palettes via

@@ -257,8 +257,11 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
         public void RealizeBrush(XBrush brush, PdfColorMode colorMode, int renderingMode, double fontEmSize, bool isForPen = false)
         {
-            // Rendering mode 2 is used for bold simulation.
+            // Rendering mode 2 is used for bold simulation; mode 3 paints no ink and therefore has no
+            // brush to realize (color-font vector glyphs use it solely for selectable extraction text).
             // Reference: TABLE 5.3  Text rendering modes / Page 402
+            if (renderingMode == 3)
+                return;
 
             XSolidBrush solidBrush = brush as XSolidBrush;
             if (solidBrush != null)
@@ -379,7 +382,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         {
             const string format = Config.SignificantFigures3;
 
-            // So far rendering mode 0 (fill text) and 2 (fill, then stroke text) only.
+            // Modes 0 (fill), 2 (fill then stroke), and 3 (neither: invisible extraction text).
             RealizeBrush(brush, _renderer._colorMode, renderingMode, font.Size); // _renderer.page.document.Options.ColorMode);
 
             // Realize rendering mode.
@@ -392,7 +395,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             // Realize character spacing. CSS `letter-spacing` maps directly onto the PDF `Tc` operator
             // (TABLE 5.2, Page 398) - it applies additively to every glyph shown by a subsequent Tj/TJ,
             // so a single text-showing operation still suffices; no need to draw character-by-character.
-            if (_realizedRenderingMode == 0)
+            if (_realizedRenderingMode != 2)
             {
                 if (_realizedCharSpace != letterSpacing)
                 {
@@ -400,7 +403,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     _realizedCharSpace = letterSpacing;
                 }
             }
-            else  // _realizedRenderingMode is 2.
+            else
             {
                 // Bold-emphasis simulation already uses Tc for its own purpose (thickening strokes) -
                 // letter-spacing adds on top of that, rather than overriding it.

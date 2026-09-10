@@ -2,6 +2,7 @@ using PeachPDF;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.Tests.TestSupport;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,8 +19,7 @@ namespace PeachPDF.Tests.Integration
     /// matching through to <c>XGraphicsPdfRenderer</c>'s already-existing fill+stroke (bold) / X-offset
     /// shear (italic) rendering. Verified via the PDF content stream's text render-mode operator (<c>Tr</c>)
     /// per PDF spec Table 5.2 - mode 2 is "fill, then stroke text," the exact, unambiguous signal bold
-    /// simulation is engaged (comment in <c>PdfGraphicsState.RealizeFont</c> confirms 0/2 are the only two
-    /// modes this renderer ever emits), not a fuzzy content-stream substring guess.
+    /// simulation is engaged, not a fuzzy content-stream substring guess.
     /// </summary>
     public class FontSynthesisIntegrationTests
     {
@@ -92,8 +92,8 @@ body {{ font-family: 'TestSynthOblique'; font-size: 14pt; font-style: oblique 10
             var doc = await generator.GeneratePdf(html, config);
             var pdfText = GetPdfText(doc);
 
-            var expectedSkew = Math.Sin(10.0 * Math.PI / 180.0).ToString("0.####");
-            var defaultSkew = Math.Sin(20.0 * Math.PI / 180.0).ToString("0.####");
+            var expectedSkew = Math.Sin(10.0 * Math.PI / 180.0).ToString("0.####", CultureInfo.InvariantCulture);
+            var defaultSkew = Math.Sin(20.0 * Math.PI / 180.0).ToString("0.####", CultureInfo.InvariantCulture);
 
             Assert.Contains(expectedSkew, pdfText);
             Assert.DoesNotContain(defaultSkew, pdfText);
