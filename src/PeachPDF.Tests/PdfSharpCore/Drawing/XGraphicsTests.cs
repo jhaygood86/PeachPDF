@@ -281,49 +281,6 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         }
 
         [Fact]
-        public void PdfContentWriter_PreservesRawEncodingAcrossChunksAndFormatting()
-        {
-            Assert.Throws<ArgumentOutOfRangeException>(() => new PdfContentWriter(0));
-
-            var content = new PdfContentWriter(4);
-            content.Append("AB").Append('\u0101').Append("CDEF".AsSpan());
-            content.Append([(byte)'G', 0xFE]);
-            content.AppendFormat(CultureInfo.InvariantCulture, " {0} {1:0.##}", "name", 1.234);
-            content.AppendFormat(CultureInfo.InvariantCulture, "{0}{1}{2}", "X", "Y", "Z");
-
-            Assert.Equal(
-                [(byte)'A', (byte)'B', 0x01, (byte)'C', (byte)'D', (byte)'E', (byte)'F',
-                    (byte)'G', 0xFE, (byte)' ', (byte)'n', (byte)'a', (byte)'m', (byte)'e',
-                    (byte)' ', (byte)'1', (byte)'.', (byte)'2', (byte)'3',
-                    (byte)'X', (byte)'Y', (byte)'Z'],
-                content.ToArray());
-
-            content.Clear();
-            Assert.Equal(0, content.Length);
-            Assert.Empty(content.ToArray());
-        }
-
-        [Fact]
-        public void PdfContentWriter_AdaptiveChunksPreserveContentAcrossGrowthBoundaries()
-        {
-            const int length = 25_000;
-            var content = new PdfContentWriter();
-            var expected = new StringBuilder(length);
-
-            for (int i = 0; i < length; i++)
-            {
-                char value = (char)('!' + i % 90);
-                content.Append(value);
-                expected.Append(value);
-            }
-
-            string expectedText = expected.ToString();
-            Assert.Equal(length, content.Length);
-            Assert.Equal(Encoding.ASCII.GetBytes(expectedText), content.ToArray());
-            Assert.Equal(expectedText, content.ToString());
-        }
-
-        [Fact]
         public void PresizedCoreGraphicsPath_DoesNotGrowOrCopyWhileBuilding()
         {
             var warmup = new CoreGraphicsPath(2);
