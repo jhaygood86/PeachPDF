@@ -14,7 +14,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BorderBottomWidth",
         "invalidates": "InvalidateBorderBottomWidth",
@@ -85,7 +85,7 @@
       "initialValue": "auto",
       "cssDataType": "keyword",
       "supportedValues": ["auto", "always", "avoid", "left", "right"],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "aliasOf": "break-after",
       "html": {
         "propertyPath": "BreakAfter",
@@ -329,7 +329,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BorderLeftWidth",
         "invalidates": "InvalidateBorderLeftWidth",
@@ -348,7 +348,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BorderRightWidth",
         "invalidates": "InvalidateBorderRightWidth",
@@ -367,7 +367,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BorderTopWidth",
         "invalidates": "InvalidateBorderTopWidth",
@@ -573,7 +573,7 @@
       "initialValue": "currentcolor",
       "cssDataType": ["color", "current-color", "keyword"],
       "supportedValues": ["invert"],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "OutlineColor",
         "invalidates": "InvalidateOutlineColor",
@@ -605,7 +605,7 @@
       "initialValue": "medium",
       "cssDataType": ["length", "keyword"],
       "supportedValues": ["thin", "medium", "thick"],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "OutlineWidth",
         "invalidates": "InvalidateOutlineWidth",
@@ -1163,7 +1163,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "Width",
         "csharpDataType": "string",
@@ -1181,7 +1181,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "MaxWidth",
         "csharpDataType": "string",
@@ -1199,7 +1199,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "MinWidth",
         "csharpDataType": "string",
@@ -1217,7 +1217,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "Height",
         "csharpDataType": "string",
@@ -1235,7 +1235,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "MaxHeight",
         "csharpDataType": "string",
@@ -1253,7 +1253,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "MinHeight",
         "csharpDataType": "string",
@@ -1280,7 +1280,7 @@
         "column",
         "region"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "auto",
@@ -1313,7 +1313,7 @@
         "avoid-column",
         "avoid-region"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "auto",
@@ -1347,7 +1347,7 @@
         "column",
         "region"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "supportsDataType": "keyword",
       "supportsSupportedValues": [
         "auto",
@@ -1374,7 +1374,7 @@
       "initialValue": "auto",
       "cssDataType": "keyword",
       "supportedValues": ["auto", "always", "avoid", "left", "right"],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "aliasOf": "break-before",
       "html": {
         "propertyPath": "BreakBefore",
@@ -1390,7 +1390,7 @@
       "initialValue": "auto",
       "cssDataType": "keyword",
       "supportedValues": ["auto", "avoid"],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "aliasOf": "break-inside",
       "html": {
         "propertyPath": "BreakInside",
@@ -1514,7 +1514,7 @@
         "fixed",
         "local"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BackgroundAttachment",
         "csharpDataType": "string",
@@ -1533,7 +1533,7 @@
         "none",
         "scale-down"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "ObjectFit",
         "csharpDataType": "string",
@@ -1743,7 +1743,7 @@
         "collapse",
         "separate"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BorderCollapse",
         "csharpDataType": "string",
@@ -1771,7 +1771,7 @@
         "show",
         "hide"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "EmptyCells",
         "csharpDataType": "string",
@@ -1787,7 +1787,7 @@
         "top",
         "bottom"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "CaptionSide",
         "csharpDataType": "string",
@@ -1804,7 +1804,7 @@
         "auto",
         "fixed"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "TableLayout",
         "csharpDataType": "string",
@@ -2339,7 +2339,7 @@
       "initialValue": "solid",
       "cssDataType": "keyword",
       "supportedValues": ["solid", "double", "dotted", "dashed", "wavy"],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "TextDecorationStyle",
         "csharpDataType": "string",
@@ -2400,7 +2400,7 @@
       "initialValue": "normal",
       "cssDataType": "keyword",
       "supportedValues": ["normal", "small-caps", "all-small-caps", "petite-caps", "all-petite-caps", "unicase", "titling-caps"],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "FontVariantCaps",
         "csharpDataType": "string",
@@ -2426,7 +2426,7 @@
       "initialValue": "auto",
       "cssDataType": "keyword",
       "supportedValues": ["auto", "normal", "none"],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "FontKerning",
         "csharpDataType": "string",
@@ -2530,7 +2530,7 @@
         "inside",
         "outside"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "ListStylePosition",
         "csharpDataType": "string",
@@ -3007,7 +3007,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "ColumnRuleWidth",
         "csharpDataType": "string",
@@ -3310,7 +3310,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BorderBlockStartWidth",
         "csharpDataType": "string?",
@@ -3387,7 +3387,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BorderBlockEndWidth",
         "csharpDataType": "string?",
@@ -3464,7 +3464,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BorderInlineStartWidth",
         "csharpDataType": "string?",
@@ -3541,7 +3541,7 @@
       "supportedValues": [
         "auto"
       ],
-      "keywordComparison": "invariant-ignore-case",
+      "keywordComparison": "ordinal-ignore-case",
       "html": {
         "propertyPath": "BorderInlineEndWidth",
         "csharpDataType": "string?",

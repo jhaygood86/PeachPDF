@@ -243,9 +243,16 @@ namespace PeachPDF.SourceGenerators.Emit
             var values = supportedValues ?? Array.Empty<string>();
             if (values.Count == 0) return "value";
 
-            var comparison = keywordComparison == KeywordComparison.OrdinalIgnoreCase
-                ? "global::System.StringComparison.OrdinalIgnoreCase"
-                : "global::System.StringComparison.InvariantCultureIgnoreCase";
+            // Ordinal, never a culture-aware comparison. CSS defines keyword matching as ASCII
+            // case-insensitive (css-values-4 §4.1 "Pre-defined Keywords"), and every declared
+            // keyword is ASCII, so InvariantCultureIgnoreCase bought nothing and cost
+            // correctness: linguistic comparison gives zero weight to format characters, so
+            // "in\u00ADvert" (soft hyphen), "in\u200Bvert" (ZWSP) and "invert\u200D" (ZWJ) all
+            // compared EQUAL to the keyword "invert" and were canonicalised to it. Ordinal
+            // rejects them, which is what the spec asks for. It is also far cheaper - a sampled
+            // CPU profile of a 26-document corpus put 6.3% of all engine work in
+            // CompareInfo.Compare, 90% of it under one generated setter.
+            const string comparison = "global::System.StringComparison.OrdinalIgnoreCase";
 
             var chain = string.Concat(values.Select(v =>
                 $"value.Equals({StringLiteral(v)}, {comparison}) ? {StringLiteral(v)} : "));

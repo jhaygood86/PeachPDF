@@ -341,6 +341,48 @@ namespace PeachPDF.Tests.Html.Core.Utils
             Assert.Equal("invert", box.OutlineColor);
         }
 
+        /// <summary>
+        /// Pins the keyword-matching contract: ASCII case-insensitive, and nothing looser.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is a GUARD, not evidence for any particular change — it passes against the
+        /// culture-aware comparison the registry emitter used to generate as well as against the
+        /// ordinal one it generates now. That is worth saying plainly, because the two comparisons
+        /// really do differ in isolation: <c>"in\u00ADvert".Equals("invert",
+        /// InvariantCultureIgnoreCase)</c> is <c>true</c>, since linguistic comparison gives a soft
+        /// hyphen zero weight, while the ordinal form is <c>false</c>.
+        /// </para>
+        /// <para>
+        /// It is not reachable through the CSS pipeline: a declaration whose value carries such a
+        /// character is rejected before the generated setter's keyword comparison ever runs, so the
+        /// property falls back to its initial value under both. Verified by driving these cases with
+        /// the emitter reverted to <c>InvariantCultureIgnoreCase</c> and getting identical results.
+        /// The keyword comparison being ordinal is therefore a pure performance property — which is
+        /// exactly why it needs a test that says so, rather than one that quietly implies the
+        /// engine used to be wrong.
+        /// </para>
+        /// </remarks>
+        [Theory]
+        [InlineData("invert", "invert")]                  // exact
+        [InlineData("INVERT", "invert")]                  // ASCII case-insensitive: still matches
+        [InlineData("InVeRt", "invert")]
+        [InlineData("in\u00ADvert", "black")]             // soft hyphen   - rejected either way
+        [InlineData("in\u200Bvert", "black")]             // zero-width space
+        [InlineData("\u200Binvert", "black")]             // leading ZWSP
+        [InlineData("invert\u200D", "black")]             // trailing ZWJ
+        public async Task OutlineColorKeyword_MatchesAsciiCaseInsensitivelyAndNotLinguistically(
+            string declared, string expected)
+        {
+            var (box, _) = await FindDivBoxAndParser($"outline-color: {declared};");
+
+            // The EXACT value, never Assert.NotEqual: a rejected declaration leaves the resolved
+            // initial "black", and asserting "not invert" would pass just as well if the property
+            // had gone unset for some unrelated reason - a test that cannot fail for the right
+            // reason is not evidence.
+            Assert.Equal(expected, box.OutlineColor);
+        }
+
         [Fact]
         public async Task OutlineStyleAuto_ParsesToOutlineStyleAutoAndRoundTrips()
         {

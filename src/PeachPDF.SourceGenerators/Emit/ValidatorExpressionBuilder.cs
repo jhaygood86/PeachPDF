@@ -96,9 +96,10 @@ namespace PeachPDF.SourceGenerators.Emit
                 return $"value is {pattern}";
             }
 
-            var comparison = keywordComparison == KeywordComparison.OrdinalIgnoreCase
-                ? "global::System.StringComparison.OrdinalIgnoreCase"
-                : "global::System.StringComparison.InvariantCultureIgnoreCase";
+            // Ordinal - see RegistryEmitter.BuildKeywordCanonicalizationExpression's remarks on
+            // why a culture-aware keyword match is both wrong and expensive. Validation and
+            // canonicalisation must agree, or a value could validate and then not canonicalise.
+            const string comparison = "global::System.StringComparison.OrdinalIgnoreCase";
 
             return string.Join(" || ", values.Select(v => $"value.Equals(\"{Escape(v)}\", {comparison})"));
         }
