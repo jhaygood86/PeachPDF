@@ -393,13 +393,13 @@ namespace PeachPDF.Fonts.OpenType
             // remember only the selected empty bases so the embedded, mode-3-only subset can give them
             // a valid contour. Embedding the real layer closure would not help: no Tj references those
             // layer CIDs, and their outlines are already emitted directly as PDF vector paths.
-            Dictionary<int, byte[]> syntheticSelectionGlyphs = [];
+            HashSet<int>? syntheticSelectionGlyphs = null;
             if (colr != null)
             {
                 foreach (int glyphId in glyphs.Keys)
                 {
-                    if (colr.HasColorGlyph(glyphId) && HasNoContours(glyf.GetGlyphData(glyphId)))
-                        syntheticSelectionGlyphs[glyphId] = BuildInvisibleSelectionGlyph(glyphId);
+                    if (colr.HasColorGlyph(glyphId) && glyf.HasNoContours(glyphId))
+                        (syntheticSelectionGlyphs ??= []).Add(glyphId);
                 }
             }
 
@@ -417,8 +417,8 @@ namespace PeachPDF.Fonts.OpenType
             for (int idx = 0; idx < glyphCount; idx++)
             {
                 int glyphId = glyphArray[idx];
-                size += syntheticSelectionGlyphs.TryGetValue(glyphId, out byte[]? synthetic)
-                    ? synthetic.Length
+                size += syntheticSelectionGlyphs?.Contains(glyphId) == true
+                    ? InvisibleSelectionGlyphSize
                     : glyf.GetGlyphSize(glyphId);
             }
             glyfNew.DirectoryEntry.Length = size;
@@ -439,14 +439,19 @@ namespace PeachPDF.Fonts.OpenType
                 if (glyphIndex < glyphCount && glyphArray[glyphIndex] == idx)
                 {
                     glyphIndex++;
-                    byte[] bytes = syntheticSelectionGlyphs.TryGetValue(idx, out byte[]? synthetic)
-                        ? synthetic
-                        : glyf.GetGlyphData(idx);
-                    int length = bytes.Length;
-                    if (length > 0)
+                    if (syntheticSelectionGlyphs?.Contains(idx) == true)
                     {
-                        Buffer.BlockCopy(bytes, 0, glyfNew.GlyphTable, glyphOffset, length);
-                        glyphOffset += length;
+                        WriteInvisibleSelectionGlyph(idx, glyfNew.GlyphTable, glyphOffset);
+                        glyphOffset += InvisibleSelectionGlyphSize;
+                    }
+                    else
+                    {
+                        ReadOnlySpan<byte> glyphData = glyf.GetGlyphData(idx);
+                        if (!glyphData.IsEmpty)
+                        {
+                            glyphData.CopyTo(glyfNew.GlyphTable.AsSpan(glyphOffset));
+                            glyphOffset += glyphData.Length;
+                        }
                     }
                 }
             }
@@ -458,17 +463,10 @@ namespace PeachPDF.Fonts.OpenType
             return fontData;
         }
 
-        private static bool HasNoContours(byte[] glyphData)
-        {
-            if (glyphData.Length < 2)
-                return true;
-
-            short numberOfContours = (short)((glyphData[0] << 8) | glyphData[1]);
-            return numberOfContours == 0;
-        }
+        private const int InvisibleSelectionGlyphSize = 34;
 
         /// <summary>
-        /// Builds the stand-in outline embedded for one empty COLR base glyph: a single on-curve
+        /// Writes the stand-in outline embedded for one empty COLR base glyph: a single on-curve
         /// rectangle spanning that glyph's own advance width and the font's ascent/descent. It exists
         /// only in a PDF's embedded color-font subset and is shown exclusively with text rendering
         /// mode 3, so it paints no ink - it exists purely so a viewer has glyph geometry to select.
@@ -477,7 +475,7 @@ namespace PeachPDF.Fonts.OpenType
         /// character's box from the contour extents, so a 1x1-unit contour yields a hit target
         /// thousands of times smaller than the visible artwork.
         /// </summary>
-        private byte[] BuildInvisibleSelectionGlyph(int glyphId)
+        private void WriteInvisibleSelectionGlyph(int glyphId, byte[] destination, int destinationOffset)
         {
             int unitsPerEm = head.unitsPerEm;
 
@@ -510,13 +508,12 @@ namespace PeachPDF.Fonts.OpenType
             // only ON_CURVE_POINT, so each coordinate is a plain int16 delta from the previous point -
             // the short/same-value encodings cannot express a full-size box. The resulting length is
             // even, which keeps the glyph valid when the source font uses short loca offsets.
-            byte[] glyphData = new byte[34];
-            int offset = 0;
+            int offset = destinationOffset;
 
             void WriteInt16(int value)
             {
-                glyphData[offset++] = (byte)(value >> 8);
-                glyphData[offset++] = (byte)value;
+                destination[offset++] = (byte)(value >> 8);
+                destination[offset++] = (byte)value;
             }
 
             WriteInt16(1);      // numberOfContours
@@ -528,7 +525,7 @@ namespace PeachPDF.Fonts.OpenType
             WriteInt16(0);      // instructionLength
 
             for (int i = 0; i < 4; i++)
-                glyphData[offset++] = 0x01; // ON_CURVE_POINT
+                destination[offset++] = 0x01; // ON_CURVE_POINT
 
             WriteInt16(0);      // x deltas, reaching (0, bottom)
             WriteInt16(width);  //                    (width, bottom)
@@ -539,8 +536,6 @@ namespace PeachPDF.Fonts.OpenType
             WriteInt16(0);
             WriteInt16(top - bottom);
             WriteInt16(0);
-
-            return glyphData;
         }
 
         /// <summary>

@@ -1,9 +1,12 @@
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Utils;
 using PeachPDF.Tests.TestSupport;
 
 using PeachPDF.Fonts;
+using System.Globalization;
+using System.Text;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
 {
@@ -184,6 +187,79 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
             using var stream = new MemoryStream();
             document.Save(stream);
             Assert.True(stream.Length > 0);
+        }
+
+        [Fact]
+        public void DrawPath_WritesInvariantCoordinatesWithExistingPrecision()
+        {
+            var (document, page) = NewPage();
+            document.Options.CompressContentStreams = false;
+
+#pragma warning disable CS0618
+            using (var gfx = XGraphics.FromPdfPage(page, XPageDirection.Upwards))
+#pragma warning restore CS0618
+            {
+                var path = new XGraphicsPath();
+                path.AddMove(1.23456, 2.34567);
+                path.AddBezier(
+                    1.23456, 2.34567,
+                    3.45678, 4.56789,
+                    5.67891, 6.78912,
+                    7.89123, 8.91234);
+                path.CloseFigure();
+                gfx.DrawPath(XBrushes.Black, path);
+            }
+
+            using var stream = new MemoryStream();
+            document.Save(stream);
+            string pdf = Encoding.Latin1.GetString(stream.ToArray());
+
+            Assert.Contains(
+                "1.2346 -2.3457 m\n3.4568 -4.5679 5.6789 -6.7891 7.8912 -8.9123 c\nh\n",
+                pdf);
+        }
+
+        [Fact]
+        public void AppendPdfNumber_UsesAllocationFreeFastPathAndPreservesFallbackFormatting()
+        {
+            var content = new StringBuilder(100_000);
+            XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
+            content.Clear();
+
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 10_000; i++)
+                XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            Assert.Equal(string.Concat(Enumerable.Repeat("1.2346", 10_000)), content.ToString());
+            Assert.True(allocated < 1_024,
+                $"Formatting 10,000 ordinary coordinates allocated {allocated:N0} bytes.");
+
+            content.Clear();
+            XGraphicsPdfRenderer.AppendPdfNumber(content, double.MaxValue, "0.####");
+            Assert.Equal(double.MaxValue.ToString("0.####", CultureInfo.InvariantCulture), content.ToString());
+        }
+
+        [Fact]
+        public void PresizedCoreGraphicsPath_DoesNotGrowOrCopyWhileBuilding()
+        {
+            var warmup = new CoreGraphicsPath(2);
+            warmup.MoveTo(0, 0);
+            warmup.LineTo(1, 1, false);
+
+            var path = new CoreGraphicsPath(1_000);
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            path.MoveTo(0, 0);
+            for (int i = 1; i < 1_000; i++)
+                path.LineTo(i, i, false);
+            ReadOnlySpan<XPoint> points = path.PathPointsSpan;
+            ReadOnlySpan<byte> types = path.PathTypesSpan;
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            Assert.Equal(1_000, points.Length);
+            Assert.Equal(points.Length, types.Length);
+            Assert.Equal(new XPoint(999, 999), points[^1]);
+            Assert.Equal(0, allocated);
         }
 
         [Fact]

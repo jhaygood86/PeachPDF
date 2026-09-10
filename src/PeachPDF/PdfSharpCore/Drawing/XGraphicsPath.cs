@@ -45,6 +45,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
             _corePath = new CoreGraphicsPath();
         }
 
+        internal XGraphicsPath(int pointCapacity)
+        {
+            _corePath = new CoreGraphicsPath(pointCapacity);
+        }
+
         /// <summary>
         /// Clones this instance.
         /// </summary>

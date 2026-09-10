@@ -29,6 +29,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace PeachPDF.PdfSharpCore.Drawing
 {
@@ -45,7 +46,16 @@ namespace PeachPDF.PdfSharpCore.Drawing
         const byte PathPointTypeCloseSubpath = 0x80;  // closed flag
 
         public CoreGraphicsPath()
-        { }
+        {
+            _points = new List<XPoint>();
+            _types = new List<byte>();
+        }
+
+        public CoreGraphicsPath(int capacity)
+        {
+            _points = new List<XPoint>(capacity);
+            _types = new List<byte>(capacity);
+        }
 
         public CoreGraphicsPath(CoreGraphicsPath path)
         {
@@ -316,7 +326,11 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// </summary>
         public byte[] PathTypes { get { return _types.ToArray(); } }
 
-        readonly List<XPoint> _points = new List<XPoint>();
-        readonly List<byte> _types = new List<byte>();
+        internal ReadOnlySpan<XPoint> PathPointsSpan => CollectionsMarshal.AsSpan(_points);
+
+        internal ReadOnlySpan<byte> PathTypesSpan => CollectionsMarshal.AsSpan(_types);
+
+        readonly List<XPoint> _points;
+        readonly List<byte> _types;
     }
 }
