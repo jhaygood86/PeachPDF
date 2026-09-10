@@ -49,11 +49,12 @@ namespace PeachPDF.Tests.Integration
         private const int Large = 600;
 
         /// <summary>
-        /// Measured: <b>1.88x</b> with the fast path and <b>2.87x</b> without — repeatable to three
-        /// decimal places — so the bound sits between them with 25% of margin below and 18% above.
-        /// Stable both in isolation and with the whole suite running in parallel around it, but only
-        /// because the measurement is per-thread; see <see cref="MarginalKbPerItem"/> for what that is
-        /// guarding against.
+        /// Measured: <b>2.36x</b> with the fast path and direct byte content writer, and <b>2.87x</b>
+        /// without the fast path. Removing the renderer's common UTF-16 content buffer lowers the plain
+        /// block slope more than the list slope, so the ratio rose from its former 1.88x even though both
+        /// shapes allocate less. The bound remains between the working and regressed measurements.
+        /// The result is stable because the measurement is per-thread; see
+        /// <see cref="MarginalKbPerItem"/> for what that is guarding against.
         ///
         /// The item text is one character on purpose. The saving is a fixed cost per list item, so the
         /// longer the text the more font work dilutes it: at 200 items of a full sentence the same
@@ -64,7 +65,7 @@ namespace PeachPDF.Tests.Integration
         /// It is a ratchet, not a law — if a change makes lists legitimately dearer, move it in the
         /// same commit and say why.
         /// </summary>
-        private const double MaxListOverhead = 2.35;
+        private const double MaxListOverhead = 2.55;
 
         [Fact]
         public void AListItemCostsLittleMoreThanAPlainBlock()

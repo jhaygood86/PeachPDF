@@ -30,6 +30,7 @@
 #nullable disable warnings
 
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 
 //using Fixed = System.Int32;
@@ -124,36 +125,35 @@ namespace PeachPDF.Fonts.OpenType
         /// <summary>
         /// If the specified glyph is a composite glyph add the glyphs it is made of to the glyph table.
         /// </summary>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.Synchronized)]
         void AddCompositeGlyphs(Dictionary<int, object> glyphs, int glyph)
         {
-            //int start = fontData.loca.GetOffset(glyph);
-            int start = GetOffset(glyph);
-            // Has no contour?
-            if (start == GetOffset(glyph + 1))
+            ReadOnlySpan<byte> glyphData = GetGlyphData(glyph);
+            if (glyphData.IsEmpty)
                 return;
-            _fontData.Position = start;
-            int numContours = _fontData.ReadShort();
-            // Is not a composite glyph?
+
+            int numContours = BinaryPrimitives.ReadInt16BigEndian(glyphData);
             if (numContours >= 0)
                 return;
-            _fontData.SeekOffset(8);
+
+            int offset = 10;
             for (; ; )
             {
-                int flags = _fontData.ReadUFWord();
-                int cGlyph = _fontData.ReadUFWord();
+                int flags = BinaryPrimitives.ReadUInt16BigEndian(glyphData[offset..]);
+                int cGlyph = BinaryPrimitives.ReadUInt16BigEndian(glyphData[(offset + 2)..]);
+                offset += 4;
+
                 if (!glyphs.ContainsKey(cGlyph))
                     glyphs.Add(cGlyph, null);
                 if ((flags & MORE_COMPONENTS) == 0)
                     return;
-                int offset = (flags & ARG_1_AND_2_ARE_WORDS) == 0 ? 2 : 4;
+
+                offset += (flags & ARG_1_AND_2_ARE_WORDS) == 0 ? 2 : 4;
                 if ((flags & WE_HAVE_A_SCALE) != 0)
                     offset += 2;
                 else if ((flags & WE_HAVE_AN_X_AND_Y_SCALE) != 0)
                     offset += 4;
                 if ((flags & WE_HAVE_A_TWO_BY_TWO) != 0)
                     offset += 8;
-                _fontData.SeekOffset(offset);
             }
         }
 

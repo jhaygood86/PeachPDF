@@ -278,6 +278,30 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
                 + "byte array per glyph.");
         }
 
+        [Fact]
+        public void CompositeGlyphClosure_DoesNotMoveSharedFontCursor()
+        {
+            var bytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var face = new OpenTypeFontface(XFontSource.CreateCompiledFont(bytes));
+            int compositeGlyph = -1;
+            for (int glyph = 0; glyph < face.maxp.numGlyphs; glyph++)
+            {
+                if (NumberOfContours(face.glyf.GetGlyphData(glyph)) < 0)
+                {
+                    compositeGlyph = glyph;
+                    break;
+                }
+            }
+
+            Assert.NotEqual(-1, compositeGlyph);
+            var selected = new Dictionary<int, object> { [compositeGlyph] = null! };
+            face.Position = 17;
+
+            face.glyf.CompleteGlyphClosure(selected);
+
+            Assert.Equal(17, face.Position);
+        }
+
         private static void AssertColor(CpalTable cpal, int entry, byte r, byte g, byte b, byte a)
         {
             Assert.True(cpal.TryGetColor(0, entry, out var color));
