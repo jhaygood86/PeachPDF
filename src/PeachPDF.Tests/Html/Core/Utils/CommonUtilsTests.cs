@@ -19,6 +19,20 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Theory]
+        [InlineData(0x61, false)]
+        [InlineData(0x00A9, false)]
+        [InlineData(0x270C, true)]
+        [InlineData(0x2768, false)]
+        [InlineData(0x1F600, true)]
+        [InlineData(0x1FAF8, true)]
+        [InlineData(0x1FAFF, false)]
+        [InlineData(0x1FB00, false)]
+        public void IsEmojiLineBreakCharacter_ChecksEmojiRanges(int codepoint, bool expected)
+        {
+            Assert.Equal(expected, CommonUtils.IsEmojiLineBreakCharacter(new System.Text.Rune(codepoint)));
+        }
+
+        [Theory]
         [InlineData('5', false, true)]
         [InlineData('a', false, false)]
         [InlineData('a', true, true)]

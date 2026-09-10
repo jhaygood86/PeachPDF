@@ -80,6 +80,18 @@ namespace PeachPDF.Html.Core.Entities
         public bool CurrentLineHyphenated { get; set; }
 
         /// <summary>
+        /// Number of consecutive regional indicators at the end of the current line. UAX #14 LB30a
+        /// uses its parity to keep each flag pair together while permitting a break between pairs.
+        /// </summary>
+        public int TrailingRegionalIndicatorCount { get; set; }
+
+        /// <summary>
+        /// The final extended grapheme cluster, possibly incomplete at an inline-owner boundary.
+        /// Retained so UAX #29 rules such as extended-pictographic + ZWJ can span several owners.
+        /// </summary>
+        public string TrailingGraphemeContext { get; set; } = string.Empty;
+
+        /// <summary>
         /// How many lines immediately before the one currently being built ended in a hyphenation split —
         /// what <c>hyphenate-limit-lines</c> (CSS Text 4 §6.3.5) gates against. Resets to 0 the first time
         /// a line closes without a hyphen. Unlike the rest of this per-pass state, this does <b>not</b>

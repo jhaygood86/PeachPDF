@@ -26,6 +26,43 @@ namespace PeachPDF.Html.Core.Utils
     /// </summary>
     internal static class CommonUtils
     {
+        // UTS #51 Emoji codepoints whose Unicode 17 Line_Break class is ID or EB, plus RI (paired into
+        // flag graphemes by StringInfo). Emoji membership alone is not a wrap opportunity: keycaps are
+        // NU/CM, © is AL, and ❨ is OP.
+        private static readonly (int Start, int End)[] _emojiLineBreakRanges =
+        [
+            (0x231A, 0x231B), (0x23F0, 0x23F3), (0x2600, 0x2603), (0x2614, 0x2615),
+            (0x2618, 0x2618), (0x261D, 0x261D), (0x2639, 0x263A), (0x2668, 0x2668),
+            (0x267F, 0x267F), (0x26BD, 0x26BE), (0x26C4, 0x26C5), (0x26C8, 0x26C8),
+            (0x26CF, 0x26CF), (0x26D1, 0x26D1), (0x26D3, 0x26D4), (0x26EA, 0x26EA),
+            (0x26F1, 0x26F5), (0x26F7, 0x26FA), (0x26FD, 0x26FD), (0x2702, 0x2702),
+            (0x2708, 0x270D), (0x2764, 0x2764), (0x3030, 0x3030), (0x303D, 0x303D),
+            (0x3297, 0x3297), (0x3299, 0x3299), (0x1F004, 0x1F004), (0x1F0CF, 0x1F0CF),
+            (0x1F1E6, 0x1F1FF),
+            (0x1F201, 0x1F202), (0x1F21A, 0x1F21A), (0x1F22F, 0x1F22F),
+            (0x1F232, 0x1F23A), (0x1F250, 0x1F251), (0x1F300, 0x1F321),
+            (0x1F324, 0x1F393), (0x1F396, 0x1F397), (0x1F399, 0x1F39B),
+            (0x1F39E, 0x1F3B4), (0x1F3B7, 0x1F3BB), (0x1F3BD, 0x1F3F0),
+            (0x1F3F3, 0x1F3F5), (0x1F3F7, 0x1F3FA), (0x1F400, 0x1F49F),
+            (0x1F4A1, 0x1F4A1), (0x1F4A3, 0x1F4A3), (0x1F4A5, 0x1F4AE),
+            (0x1F4B0, 0x1F4B0), (0x1F4B3, 0x1F4FD), (0x1F4FF, 0x1F4FF),
+            (0x1F507, 0x1F516), (0x1F525, 0x1F531), (0x1F54A, 0x1F54E),
+            (0x1F550, 0x1F567), (0x1F56F, 0x1F570), (0x1F573, 0x1F57A),
+            (0x1F587, 0x1F587), (0x1F58A, 0x1F58D), (0x1F590, 0x1F590),
+            (0x1F595, 0x1F596), (0x1F5A4, 0x1F5A5), (0x1F5A8, 0x1F5A8),
+            (0x1F5B1, 0x1F5B2), (0x1F5BC, 0x1F5BC), (0x1F5C2, 0x1F5C4),
+            (0x1F5D1, 0x1F5D3), (0x1F5DC, 0x1F5DE), (0x1F5E1, 0x1F5E1),
+            (0x1F5E3, 0x1F5E3), (0x1F5E8, 0x1F5E8), (0x1F5EF, 0x1F5EF),
+            (0x1F5F3, 0x1F5F3), (0x1F5FA, 0x1F64F), (0x1F680, 0x1F6C5),
+            (0x1F6CB, 0x1F6D2), (0x1F6D5, 0x1F6D8), (0x1F6DC, 0x1F6E5),
+            (0x1F6E9, 0x1F6E9), (0x1F6EB, 0x1F6EC), (0x1F6F0, 0x1F6F0),
+            (0x1F6F3, 0x1F6FC), (0x1F7E0, 0x1F7EB), (0x1F7F0, 0x1F7F0),
+            (0x1F90C, 0x1F93A), (0x1F93C, 0x1F945), (0x1F947, 0x1F9FF),
+            (0x1FA70, 0x1FA7C), (0x1FA80, 0x1FA8A), (0x1FA8E, 0x1FAC6),
+            (0x1FAC8, 0x1FAC8), (0x1FACD, 0x1FADC), (0x1FADF, 0x1FAEA),
+            (0x1FAEF, 0x1FAF8)
+        ];
+
         /// <summary>
         /// Table to convert numbers into roman digits
         /// </summary>
@@ -255,6 +292,31 @@ namespace PeachPDF.Html.Core.Utils
         public static bool IsAsianCharacter(Rune rune)
         {
             return rune.Value >= 0x4e00 && rune.Value <= 0xFA2D;
+        }
+
+        /// <summary>
+        /// Whether a codepoint starts an emoji cluster that Unicode 17 permits to break ordinarily:
+        /// an ideographic or emoji-base character, or a regional indicator paired into a flag grapheme.
+        /// Callers still advance by an extended grapheme cluster so variation selectors, modifiers,
+        /// regional-indicator pairs, and ZWJ sequences are never split internally.
+        /// </summary>
+        public static bool IsEmojiLineBreakCharacter(Rune rune)
+        {
+            var low = 0;
+            var high = _emojiLineBreakRanges.Length - 1;
+            while (low <= high)
+            {
+                var middle = low + (high - low) / 2;
+                var range = _emojiLineBreakRanges[middle];
+                if (rune.Value < range.Start)
+                    high = middle - 1;
+                else if (rune.Value > range.End)
+                    low = middle + 1;
+                else
+                    return true;
+            }
+
+            return false;
         }
 
         /// <summary>

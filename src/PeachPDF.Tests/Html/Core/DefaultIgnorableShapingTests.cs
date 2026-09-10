@@ -60,6 +60,25 @@ namespace PeachPDF.Tests.Html.Core
             Assert.DoesNotContain(NotdefGlyph, glyphs);
         }
 
+        [Theory]
+        [InlineData(0x180B)]
+        [InlineData(0x180D)]
+        [InlineData(0x180F)]
+        [InlineData(0xFE00)]
+        [InlineData(0xFE0F)]
+        [InlineData(0xE0100)]
+        [InlineData(0xE01EF)]
+        public void VariationSelectorRanges_AreRecognized(int codepoint)
+        {
+            Assert.True(UnicodeDefaultIgnorables.IsVariationSelector(codepoint));
+        }
+
+        [Fact]
+        public void MongolianVowelSeparator_IsNotAVariationSelector()
+        {
+            Assert.False(UnicodeDefaultIgnorables.IsVariationSelector(0x180E));
+        }
+
         [Fact]
         public void HiddenIgnorableBetweenComponents_DoesNotBlockTheLigature()
         {

@@ -45,5 +45,15 @@ namespace PeachPDF.Text
             >= 0xE0000 and <= 0xE0FFF => true,       // LANGUAGE TAG, the TAG characters, VARIATION SELECTOR-17..256, reserved
             _ => false
         };
+
+        /// <summary>
+        /// Whether <paramref name="codepoint"/> is a Unicode variation selector. A selector never has an
+        /// independent advance: it modifies the preceding character through cmap format 14 or shaping,
+        /// or is hidden when the font does not consume it.
+        /// </summary>
+        public static bool IsVariationSelector(int codepoint) =>
+            codepoint is >= 0x180B and <= 0x180D or 0x180F
+                or >= 0xFE00 and <= 0xFE0F
+                or >= 0xE0100 and <= 0xE01EF;
     }
 }
