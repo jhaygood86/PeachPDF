@@ -21,6 +21,14 @@ namespace PeachPDF.CSS
 
         public IEnumerable<IStylesheetNode> Children => _children.AsEnumerable();
 
+        /// <summary>
+        /// The same children, indexable. <see cref="Children"/> hands the list back as
+        /// <see cref="IEnumerable{T}"/>, so a LINQ query or a <c>foreach</c> over it boxes an
+        /// enumerator every time — which matters for lookups that run per box per rule. Indexing
+        /// this allocates nothing.
+        /// </summary>
+        protected IReadOnlyList<IStylesheetNode> ChildList => _children;
+
         public abstract void ToCss(TextWriter writer, IStyleFormatter formatter);
 
         public void AppendChild(IStylesheetNode child)
