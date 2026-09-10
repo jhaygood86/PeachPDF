@@ -102,11 +102,14 @@ p {{ width: 400px; }}
         [Fact]
         public async Task NoRegisteredFontCoversTheCharacter_StillFallsBackToTheDeclaredFont()
         {
-            // U+FDD0 is a Unicode noncharacter - permanently guaranteed unassigned, so no conformant font
-            // (registered here or already on the host) maps a real glyph to it. Without any covering
-            // font anywhere, resolution must still end up on the box's own declared/default font exactly
-            // as it did before this feature existed - proving the last-resort scan doesn't change
-            // behavior for a character truly nothing can render.
+            // U+10FFFF (the very last Unicode codepoint) is a permanently-guaranteed-unassigned
+            // noncharacter, in the supplementary plane specifically - not the BMP, where GNU Unifont
+            // (bundled on Ubuntu CI runners) turned out to genuinely map a "here's an undefined
+            // codepoint" glyph even to a BMP noncharacter like U+FDD0, defeating that as a "nothing
+            // covers this" probe. Without any covering font anywhere, resolution must still end up on
+            // the box's own declared/default font exactly as it did before this feature existed -
+            // proving the last-resort scan doesn't change behavior for a character truly nothing can
+            // render.
             var latinFamily = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
 
             var html = $@"<!DOCTYPE html>
@@ -115,12 +118,12 @@ p {{ width: 400px; }}
 body {{ font-family: 'Latin'; font-size: 14pt; }}
 p {{ width: 400px; }}
 </style></head>
-<body><p>&#xFDD0;</p></body>
+<body><p>&#x10FFFF;</p></body>
 </html>";
 
             var p = await LayoutParagraph(html);
             var owner = WordsOf(p)[0].OwnerBox;
-            var codepoint = new Rune(0xFDD0);
+            var codepoint = new Rune(0x10FFFF);
 
             var resolvedFont = owner.ActualFontForCodepoint(codepoint);
 

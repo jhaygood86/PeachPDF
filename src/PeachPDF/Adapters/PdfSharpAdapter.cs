@@ -383,8 +383,22 @@ namespace PeachPDF.Adapters
                 return null;
 
             var fontStyle = (XFontStyle)((int)style);
-            var xFont = new XFont(fallbackFamily, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, codepoint, _fontResolver);
-            return new FontAdapter(xFont, PixelsPerPoint);
+
+            try
+            {
+                var xFont = new XFont(fallbackFamily, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, codepoint, _fontResolver);
+                return new FontAdapter(xFont, PixelsPerPoint);
+            }
+            catch
+            {
+                // A candidate that passed the cmap-coverage pre-check can still fail to actually load -
+                // e.g. a system font (reached here for the first time, since only the last-resort scan
+                // ever attempts EVERY installed font) whose file PeachPDF's own OpenType parser can't
+                // fully read. Treat exactly like "no candidate found" - the caller falls back to the
+                // box's own default font - rather than letting the failure propagate through ordinary
+                // text layout.
+                return null;
+            }
         }
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontResolver.HasExplicitRanges(family);
