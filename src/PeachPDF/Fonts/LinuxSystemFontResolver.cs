@@ -1,6 +1,7 @@
 #nullable disable warnings
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -28,6 +29,29 @@ namespace PeachPDF.Fonts
         [LibraryImport(libfontconfig)] private static partial IntPtr FcInitLoadConfigAndFonts();
 
         static readonly Lazy<IntPtr> fcConfig = new Lazy<IntPtr>(FcInitLoadConfigAndFonts);
+
+        /// <summary>
+        /// One fontconfig answer per generic family, for the life of the process.
+        /// </summary>
+        /// <remarks>
+        /// The answer cannot change while the process runs: <see cref="fcConfig"/> loads fontconfig's
+        /// configuration exactly once, so every later query is asked of the same immutable config and
+        /// returns the same family. Caching therefore changes no result, only how often the round trip
+        /// through native code is paid.
+        /// <para>
+        /// It was being paid a great deal. <c>PdfGenerator</c> holds its <c>PdfSharpAdapter</c> as an
+        /// instance field, that adapter's constructor resolves every generic family plus
+        /// <c>system-ui</c>, and callers construct a <c>PdfGenerator</c> per document - so a run of
+        /// N documents made 7N identical fontconfig round trips. A sampled CPU profile put 2.7% of all
+        /// engine work in <c>FcConfigSubstitute</c> and <c>FcFontMatch</c> under this one method.
+        /// </para>
+        /// </remarks>
+        static readonly ConcurrentDictionary<string, string?> GenericFamilyCache = new(StringComparer.Ordinal);
+
+        // Cached rather than written inline at the GetOrAdd call: a method-group conversion allocates a
+        // fresh delegate on every call, which would put back a per-call allocation while removing a
+        // per-call native round trip.
+        static readonly Func<string, string?> ResolveGenericFamilyUncachedDelegate = ResolveGenericFamilyUncached;
 
 
         [LibraryImport(libfontconfig)] public static partial FcPatternHandle FcPatternCreate();
@@ -169,7 +193,11 @@ namespace PeachPDF.Fonts
         /// Returns null if <c>libfontconfig.so.1</c> isn't available or resolution otherwise fails, so the
         /// caller can fall back to a reasonable hardcoded substitute.
         /// </summary>
-        public static string? ResolveGenericFamily(string genericFamily)
+        public static string? ResolveGenericFamily(string genericFamily) =>
+            GenericFamilyCache.GetOrAdd(genericFamily, ResolveGenericFamilyUncachedDelegate);
+
+        /// <inheritdoc cref="ResolveGenericFamily"/>
+        private static string? ResolveGenericFamilyUncached(string genericFamily)
         {
             try
             {
