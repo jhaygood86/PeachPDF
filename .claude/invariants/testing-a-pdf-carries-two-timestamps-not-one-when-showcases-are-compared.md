@@ -20,3 +20,10 @@ every PDF, before the first object. They are not `/CreationDate`, so a normalize
 above misses them — and because *every* showcase has the header, the comparison reports **69 of 69
 differing** rather than a plausible handful, which reads like a real regression rather than a broken
 normalizer. Normalize both lines before believing any showcase diff.
+
+**And in a third place: the XMP metadata packet.** A showcase rendered with PDF/A conformance (or any
+document carrying XMP) writes `<xmp:CreateDate>` and `<xmp:ModifyDate>` inside an uncompressed
+metadata stream. These are neither `/CreationDate` nor `/M`, so a normalizer built from the two lists
+above still reports `pdf_a_conformance` as differing on a `main`-versus-`main` run — one lone
+showcase, which reads exactly like a real PDF/A regression. It is not. Normalize those two elements
+too before believing any showcase diff.

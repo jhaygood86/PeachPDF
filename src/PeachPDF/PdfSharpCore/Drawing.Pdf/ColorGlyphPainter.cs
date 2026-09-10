@@ -80,7 +80,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
                 // GPOS positioning (kerning's XOffset, mark attachment's XOffset/YOffset) shifts where
                 // this glyph paints without changing its own outline shape - see GposPositioner.
-                PaintGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale);
+                // The artwork itself is identical wherever the glyph lands, so it is drawn once into a
+                // Form XObject and referenced here; only when that cannot apply is it inlined.
+                if (!TryPaintGlyphFromForm(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale))
+                    PaintGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale);
 
                 penX += (_descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
             }
@@ -297,6 +300,12 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             if (!_descriptor.TryGetGlyphOutline(glyphId, out GlyphOutline outline) || outline.IsEmpty)
                 return;
 
+            if (_measuring)
+            {
+                IncludeInMeasuredBounds(WorldBounds(outline, transform));
+                return;
+            }
+
             _gfx.DrawPath(new XSolidBrush(color), BuildPath(outline, transform));
         }
 
@@ -375,7 +384,13 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
 
             if (alpha < 1.0)
-                color = XColor.FromArgb((int)System.Math.Round(color.A * alpha), color.R, color.G, color.B);
+            {
+                // XColor.A is a 0..1 double, but FromArgb's alpha argument is a 0..255 byte - scale, or
+                // every COLR paint alpha under 0.5 rounds to a fully transparent 0 and everything above
+                // it to 1/255, which is why alpha'd COLR content used to be invisible.
+                int scaledAlpha = (int)System.Math.Round(color.A * alpha * 255.0, MidpointRounding.AwayFromZero);
+                color = XColor.FromArgb(System.Math.Clamp(scaledAlpha, 0, 255), color.R, color.G, color.B);
+            }
             return color;
         }
     }

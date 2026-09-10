@@ -313,6 +313,34 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain("/ActualText", pdf);
         }
 
+        [Fact]
+        public async Task ColrPaintAlpha_ReachesTheContentStreamAsAConstantAlpha()
+        {
+            // Noto's flag glyphs outline themselves with a #1A1A1A layer at alpha 0.2 - the light grey
+            // border in the reference rendering. That alpha used to be scaled as though XColor.A were a
+            // 0..255 byte when it is a 0..1 double, so it rounded to a fully transparent 0 (or, above
+            // 0.5, to 1/255) and every non-opaque COLR paint was effectively invisible.
+            string pdf = await RenderWithColorFont(BundledFonts.ColorEmojiSequences, "\U0001F1EF\U0001F1F5");
+
+            var alphas = Regex.Matches(pdf, @"/ca ([0-9.]+)")
+                .Select(m => double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture))
+                .ToList();
+
+            Assert.Contains(alphas, a => Math.Abs(a - 0.2) < 0.01);
+            Assert.DoesNotContain(alphas, a => a == 0); // the old bug's signature: alpha collapsed to nothing
+
+            // ...and it is that border layer's own fill which carries it. A "/ca 0.2 appears somewhere"
+            // assertion would pass on a file where the alpha state is set but never in force where the
+            // ink happens, so resolve the ExtGState's resource name and require the two to be adjacent.
+            var alphaObject = Regex.Match(pdf, @"(\d+) 0 obj(?:(?!\d+ 0 obj).)*?/ca 0\.2\b", RegexOptions.Singleline);
+            Assert.True(alphaObject.Success, "expected an ExtGState object carrying the layer's 0.2 alpha");
+
+            var resourceName = Regex.Match(pdf, @"/(GS\d+) " + alphaObject.Groups[1].Value + @" 0 R");
+            Assert.True(resourceName.Success, "the alpha ExtGState should be reachable by name from the resources");
+
+            Assert.Matches(@"0\.102 0\.102 0\.102 rg\s*/" + resourceName.Groups[1].Value + @" gs", pdf);
+        }
+
         private static bool Approx((double R, double G, double B) c, double r, double g, double b)
             => Math.Abs(c.R - r) < 0.02 && Math.Abs(c.G - g) < 0.02 && Math.Abs(c.B - b) < 0.02;
     }

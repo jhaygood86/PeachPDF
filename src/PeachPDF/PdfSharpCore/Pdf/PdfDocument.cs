@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Internal;
 using PeachPDF.PdfSharpCore.Pdf.IO;
@@ -650,6 +651,17 @@ namespace PeachPDF.PdfSharpCore.Pdf
             get { return _formTable ?? (_formTable = new PdfFormXObjectTable(this)); }
         }
         PdfFormXObjectTable _formTable = null!;
+
+        /// <summary>
+        /// Gets the document color-glyph table that holds the Form XObject rendered for each distinct
+        /// COLR/CPAL glyph used in the current document, so a repeated color glyph is drawn once and
+        /// referenced thereafter.
+        /// </summary>
+        internal ColorGlyphFormCache ColorGlyphTable
+        {
+            get { return _colorGlyphTable ?? (_colorGlyphTable = new ColorGlyphFormCache()); }
+        }
+        ColorGlyphFormCache _colorGlyphTable = null!;
 
         /// <summary>
         /// Gets the document ExtGState table that holds all form state objects used in the current document.
