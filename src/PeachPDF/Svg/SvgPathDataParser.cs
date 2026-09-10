@@ -17,17 +17,47 @@ namespace PeachPDF.Svg
 {
     /// <summary>
     /// Parses the SVG <c>d</c> path data mini-language (<c>M/L/H/V/C/S/Q/T/A/Z</c>, upper or lower
-    /// case) into a normalized list of <see cref="PathSegment"/>s. Malformed/truncated input stops
-    /// parsing early and returns whatever was successfully read so far, rather than throwing.
+    /// case) into a normalized list of <see cref="PathSegment"/>s. <see cref="Parse"/> is lenient:
+    /// malformed/truncated input stops parsing early and returns whatever was successfully read so
+    /// far, rather than throwing (this is what SVG's own <c>d</c>-attribute error recovery calls
+    /// for). <see cref="TryParse"/> additionally reports whether the string was well-formed, for
+    /// callers (CSS <c>path()</c>) that must treat a malformed or empty result as fully invalid.
+    /// Both share one single-pass scan (<see cref="ParseCore"/>) - the string is walked exactly
+    /// once regardless of which entry point is called.
     /// </summary>
     internal static class SvgPathDataParser
     {
         public static IReadOnlyList<PathSegment> Parse(string? d)
         {
-            var segments = new List<PathSegment>();
+            ParseCore(d, out var segments);
+            return segments;
+        }
+
+        /// <summary>
+        /// Parses <paramref name="d"/> and reports whether it was well-formed SVG 1.1 path data
+        /// that describes a non-empty path - <c>false</c> for a malformed/truncated string, or one
+        /// that parses cleanly but yields no segments (e.g. empty/whitespace-only).
+        /// </summary>
+        public static bool TryParse(string? d, out IReadOnlyList<PathSegment> segments)
+        {
+            var wellFormed = ParseCore(d, out var list);
+            segments = list;
+            return wellFormed && list.Count > 0;
+        }
+
+        /// <summary>
+        /// The single scan over <paramref name="d"/> shared by <see cref="Parse"/> and
+        /// <see cref="TryParse"/>. Returns <c>true</c> only when the string is consumed to its
+        /// natural end with every command well-formed along the way; returns <c>false</c> (while
+        /// still populating <paramref name="segments"/> with whatever was read before the error,
+        /// for <see cref="Parse"/>'s lenient callers) at the first malformed command.
+        /// </summary>
+        private static bool ParseCore(string? d, out List<PathSegment> segments)
+        {
+            segments = new List<PathSegment>();
 
             if (string.IsNullOrWhiteSpace(d))
-                return segments;
+                return false;
 
             var pos = 0;
             char? currentCommand = null;
@@ -47,7 +77,7 @@ namespace PeachPDF.Svg
                 SvgNumberScanner.SkipSeparators(d, ref pos);
 
                 if (pos >= d.Length)
-                    break;
+                    return true;
 
                 char command;
 
@@ -69,7 +99,7 @@ namespace PeachPDF.Svg
                 }
                 else
                 {
-                    break;
+                    return false;
                 }
 
                 var isRelative = char.IsAsciiLetterLower(command);
@@ -84,7 +114,7 @@ namespace PeachPDF.Svg
                         ok = SvgNumberScanner.TryReadNumber(d, ref pos, out x)
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out y);
 
-                        if (!ok) goto stop;
+                        if (!ok) return false;
 
                         if (isRelative) { x += curX; y += curY; }
 
@@ -99,7 +129,7 @@ namespace PeachPDF.Svg
                         ok = SvgNumberScanner.TryReadNumber(d, ref pos, out x)
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out y);
 
-                        if (!ok) goto stop;
+                        if (!ok) return false;
 
                         if (isRelative) { x += curX; y += curY; }
 
@@ -111,7 +141,7 @@ namespace PeachPDF.Svg
                     case 'H':
                     {
                         ok = SvgNumberScanner.TryReadNumber(d, ref pos, out x);
-                        if (!ok) goto stop;
+                        if (!ok) return false;
 
                         curX = isRelative ? curX + x : x;
                         segments.Add(PathSegment.LineTo(curX, curY));
@@ -121,7 +151,7 @@ namespace PeachPDF.Svg
                     case 'V':
                     {
                         ok = SvgNumberScanner.TryReadNumber(d, ref pos, out y);
-                        if (!ok) goto stop;
+                        if (!ok) return false;
 
                         curY = isRelative ? curY + y : y;
                         segments.Add(PathSegment.LineTo(curX, curY));
@@ -137,7 +167,7 @@ namespace PeachPDF.Svg
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out x)
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out y);
 
-                        if (!ok) goto stop;
+                        if (!ok) return false;
 
                         if (isRelative)
                         {
@@ -159,7 +189,7 @@ namespace PeachPDF.Svg
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out x)
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out y);
 
-                        if (!ok) goto stop;
+                        if (!ok) return false;
 
                         if (lastCommandUpper is 'C' or 'S')
                         {
@@ -193,7 +223,7 @@ namespace PeachPDF.Svg
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out x)
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out y);
 
-                        if (!ok) goto stop;
+                        if (!ok) return false;
 
                         if (isRelative)
                         {
@@ -212,7 +242,7 @@ namespace PeachPDF.Svg
                         ok = SvgNumberScanner.TryReadNumber(d, ref pos, out x)
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out y);
 
-                        if (!ok) goto stop;
+                        if (!ok) return false;
 
                         double qx, qy;
 
@@ -248,7 +278,7 @@ namespace PeachPDF.Svg
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out x)
                              && SvgNumberScanner.TryReadNumber(d, ref pos, out y);
 
-                        if (!ok) goto stop;
+                        if (!ok) return false;
 
                         if (isRelative) { x += curX; y += curY; }
 
@@ -267,15 +297,12 @@ namespace PeachPDF.Svg
                     }
 
                     default:
-                        goto stop;
+                        return false;
                 }
 
                 currentCommand = command;
                 lastCommandUpper = upper;
             }
-
-            stop:
-            return segments;
         }
 
         /// <summary>

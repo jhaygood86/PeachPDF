@@ -6876,9 +6876,11 @@ await SaveShowcaseAsync("emoji", "Fonts & Text", "Emoji (astral codepoints)",
     "Supplementary-plane (astral, U+FFFF+) glyph rendering: emoji resolve through the font's cmap format-12 subtable and render as monochrome outlines from a bundled subset of Noto Emoji; the separate Color Fonts showcase covers COLR/CPAL.",
     emojiHtml, pdfConfig);
 
-// clip-path with CSS basic shapes (polygon/inset/circle/ellipse). The shape is parsed once by the
-// shared BasicShapeGrammar and resolved against the element's border-box, then pushed as a PDF clip
-// region around the whole element rendering (background + content).
+// clip-path with CSS basic shapes (polygon/inset/circle/ellipse/path). The shape is parsed once by
+// the shared BasicShapeGrammar and resolved against the element's border-box, then pushed as a PDF
+// clip region around the whole element rendering (background + content). path() reuses the same
+// SVG path-data parser <path d="..."> uses (SvgPathDataParser), so its heart shape below exercises
+// cubic Beziers through the identical parse-once-resolve-at-paint-time pipeline as the other shapes.
 var clipPathHtml = """
     <html>
     <head>
@@ -6893,25 +6895,29 @@ var clipPathHtml = """
         .inset { clip-path: inset(12% 8% round 14px); background: linear-gradient(135deg, #4dabf7, #1971c2); }
         .circ { clip-path: circle(50% at center); background: linear-gradient(135deg, #69db7c, #2f9e44); }
         .ell { clip-path: ellipse(50% 34% at center); background: linear-gradient(135deg, #da77f2, #9c36b5); }
+        .path { clip-path: path("M65 20 C46 0 0 0 0 46 C0 79 33 105 65 130 C97 105 130 79 130 46 C130 0 84 0 65 20 Z");
+                background: linear-gradient(135deg, #ffa94d, #e8590c); }
     </style>
     </head>
     <body>
         <h1>clip-path basic shapes</h1>
         <p>A single <code>clip-path</code> value clips the whole element (here a gradient fill) to a
-        <code>polygon()</code>, <code>inset()</code>, <code>circle()</code>, or <code>ellipse()</code>,
-        resolved against the border-box.</p>
+        <code>polygon()</code>, <code>inset()</code>, <code>circle()</code>, <code>ellipse()</code>, or
+        <code>path()</code>, resolved against the border-box. <code>path()</code> takes a string of SVG
+        path data, mapped 1 unit = 1px onto the border-box's top-left corner.</p>
         <div class="row">
             <div class="cell"><div class="shape poly"></div>polygon()</div>
             <div class="cell"><div class="shape inset"></div>inset()</div>
             <div class="cell"><div class="shape circ"></div>circle()</div>
             <div class="cell"><div class="shape ell"></div>ellipse()</div>
+            <div class="cell"><div class="shape path"></div>path()</div>
         </div>
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("clip_path", "Backgrounds & Borders", "clip-path basic shapes",
-    "CSS clip-path with basic shapes: polygon(), inset(), circle(), and ellipse() clip an element (here a gradient fill) to a shape resolved against its border-box. A shared basic-shape grammar validates the value at parse time and the resolved region is pushed as a PDF clip path.",
+    "CSS clip-path with basic shapes: polygon(), inset(), circle(), ellipse(), and path() clip an element (here a gradient fill) to a shape resolved against its border-box. A shared basic-shape grammar validates the value at parse time (path() by parsing its SVG path-data string with the same parser <path d=\"...\"> uses) and the resolved region is pushed as a PDF clip path.",
     clipPathHtml, pdfConfig);
 
 // ─── legacy clip: rect() showcase ────────────────────────────────────────────

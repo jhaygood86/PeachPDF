@@ -3,6 +3,7 @@ using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
 
@@ -51,7 +52,7 @@ namespace PeachPDF.Html.Core.Utils
             switch (shape.Kind)
             {
                 case BasicShapeGrammar.BasicShapeKind.Polygon:
-                    useEvenOdd = shape.PolygonFillRule == BasicShapeGrammar.FillRule.Evenodd;
+                    useEvenOdd = shape.PolygonFillRule == BasicShapeGrammar.FillRule.EvenOdd;
                     BuildPolygon(path, shape, referenceBox, box, ppp);
                     break;
                 case BasicShapeGrammar.BasicShapeKind.Inset:
@@ -62,6 +63,10 @@ namespace PeachPDF.Html.Core.Utils
                     break;
                 case BasicShapeGrammar.BasicShapeKind.Ellipse:
                     BuildEllipse(path, shape, referenceBox, box, ppp);
+                    break;
+                case BasicShapeGrammar.BasicShapeKind.Path:
+                    useEvenOdd = shape.PathFillRule == BasicShapeGrammar.FillRule.EvenOdd;
+                    BuildPath(path, shape, referenceBox, ppp);
                     break;
                 default:
                     path.Dispose();
@@ -132,6 +137,47 @@ namespace PeachPDF.Html.Core.Utils
             var ry = ResolveAxisRadius(shape.RadiusY, cy - referenceBox.Y, referenceBox.Height, referenceBox.Height, box);
 
             AppendEllipse(path, cx / ppp, cy / ppp, rx / ppp, ry / ppp);
+        }
+
+        /// <summary>
+        /// Resolves <c>path()</c>'s already-parsed <see cref="PathSegment"/>s (produced up front by
+        /// <see cref="BasicShapeGrammar.ParsePath"/> - no re-parsing of path data happens here) into
+        /// <paramref name="path"/>. Per CSS Shapes Level 1, a path-data coordinate is a unitless number
+        /// interpreted as a CSS pixel, with the path's own (0,0) origin coincident with the reference
+        /// box's top-left corner - unlike every other basic shape, there is no percentage/axis scaling
+        /// against <paramref name="referenceBox"/>'s width/height, just a translation.
+        /// </summary>
+        private static void BuildPath(RGraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, RRect referenceBox, double ppp)
+        {
+            const double px = Length.PointsPerPx;
+
+            foreach (var segment in shape.PathSegments)
+            {
+                switch (segment.Kind)
+                {
+                    case PathSegmentKind.MoveTo:
+                        path.AddMove((referenceBox.X + segment.X * px) / ppp, (referenceBox.Y + segment.Y * px) / ppp);
+                        break;
+                    case PathSegmentKind.LineTo:
+                        path.LineTo((referenceBox.X + segment.X * px) / ppp, (referenceBox.Y + segment.Y * px) / ppp);
+                        break;
+                    case PathSegmentKind.CubicBezierTo:
+                        path.AddBezierTo(
+                            (referenceBox.X + segment.X1 * px) / ppp, (referenceBox.Y + segment.Y1 * px) / ppp,
+                            (referenceBox.X + segment.X2 * px) / ppp, (referenceBox.Y + segment.Y2 * px) / ppp,
+                            (referenceBox.X + segment.X * px) / ppp, (referenceBox.Y + segment.Y * px) / ppp);
+                        break;
+                    case PathSegmentKind.ArcTo:
+                        path.AddArc(
+                            (referenceBox.X + segment.X * px) / ppp, (referenceBox.Y + segment.Y * px) / ppp,
+                            segment.RadiusX * px / ppp, segment.RadiusY * px / ppp,
+                            segment.RotationAngle, segment.IsLargeArc, segment.SweepClockwise);
+                        break;
+                    case PathSegmentKind.ClosePath:
+                        path.CloseFigure();
+                        break;
+                }
+            }
         }
 
         /// <summary>
