@@ -376,6 +376,31 @@ namespace PeachPDF.Adapters
             return new FontAdapter(xFont, PixelsPerPoint);
         }
 
+        protected override RFont? CreateSystemFallbackFontForCodepointInt(double size, RFontStyle style, int weight, int stretch, double? obliqueSkewSinus, System.Text.Rune codepoint)
+        {
+            var fallbackFamily = _fontResolver.FindFamilyCoveringCodepoint(codepoint);
+            if (fallbackFamily is null)
+                return null;
+
+            var fontStyle = (XFontStyle)((int)style);
+
+            try
+            {
+                var xFont = new XFont(fallbackFamily, size / PixelsPerPoint, fontStyle, new XPdfFontOptions(PdfFontEncoding.Unicode), weight, stretch, obliqueSkewSinus, codepoint, _fontResolver);
+                return new FontAdapter(xFont, PixelsPerPoint);
+            }
+            catch
+            {
+                // A candidate that passed the cmap-coverage pre-check can still fail to actually load -
+                // e.g. a system font (reached here for the first time, since only the last-resort scan
+                // ever attempts EVERY installed font) whose file PeachPDF's own OpenType parser can't
+                // fully read. Treat exactly like "no candidate found" - the caller falls back to the
+                // box's own default font - rather than letting the failure propagate through ordinary
+                // text layout.
+                return null;
+            }
+        }
+
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontResolver.HasExplicitRanges(family);
 
         protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, int? weightOverride = null, bool? isItalicOverride = null, int? stretchOverride = null, IReadOnlyList<RuneRange>? unicodeRanges = null)

@@ -202,7 +202,12 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(el);
             Assert.Equal(TextTransform.FullWidth, el!.TextTransform.Value);
-            Assert.Equal("Ｈｉ！", FindFirstWord(el)!.Text);
+            // Concatenate across every word rather than asserting a single one: the fullwidth forms of
+            // 'H'/'i'/'!' aren't guaranteed to all resolve to the same font (last-resort system fallback,
+            // issue #172, can legitimately pick a different font per character), which can split them
+            // into separate per-codepoint fragments depending on what's installed on the host.
+            var combined = string.Concat(AllWords(el!).Select(w => w.Text));
+            Assert.Equal("Ｈｉ！", combined);
         }
 
         [Fact]

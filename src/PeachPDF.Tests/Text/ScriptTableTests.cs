@@ -41,5 +41,31 @@ namespace PeachPDF.Tests.Text
             var rune = new System.Text.Rune(0x4E00);
             Assert.Equal(ScriptTable.Of(0x4E00), ScriptTable.Of(rune));
         }
+
+        [Fact]
+        public void RangesForScript_KnownScript_AgreesWithOf_AndExcludesOtherScripts()
+        {
+            var ranges = ScriptTable.RangesForScript("Cuneiform");
+
+            Assert.NotEmpty(ranges);
+            Assert.Contains(ranges, r => r.Contains(new System.Text.Rune(0x12000))); // CUNEIFORM SIGN A
+            Assert.DoesNotContain(ranges, r => r.Contains(new System.Text.Rune(0x0041))); // LATIN CAPITAL A
+        }
+
+        [Fact]
+        public void RangesForScript_ReturnsSortedNonOverlappingRanges()
+        {
+            var ranges = ScriptTable.RangesForScript("Han");
+            Assert.NotEmpty(ranges);
+
+            for (var i = 1; i < ranges.Count; i++)
+                Assert.True(ranges[i].Start.Value > ranges[i - 1].End.Value);
+        }
+
+        [Fact]
+        public void RangesForScript_UnknownScriptName_ReturnsEmpty()
+        {
+            Assert.Empty(ScriptTable.RangesForScript("NotARealUnicodeScript"));
+        }
     }
 }

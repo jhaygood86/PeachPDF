@@ -477,10 +477,19 @@ namespace PeachPDF.Tests.Integration
         public async Task MissingGlyph_NoFallbackCoversCharacter_ThrowsPdfAConformanceException()
         {
             // ISO 19005-2 §6.2.11.8 (present in every PDF/A part): a text-showing operator must never
-            // reference the .notdef glyph (glyph index 0). A character with no glyph in the font and
-            // no fallback font covering it - e.g. an emoji with no font-family fallback - used to be
-            // shaped straight through to a Tj operator referencing .notdef.
-            var html = "<html><body><p style=\"font-family: 'Source Sans 3';\">\U0001F600</p></body></html>";
+            // reference the .notdef glyph (glyph index 0). A character with no glyph in the font and no
+            // fallback font covering it is shaped straight through to a Tj operator referencing .notdef.
+            // U+10FFFF (the very last Unicode codepoint) is a permanently-guaranteed-unassigned
+            // noncharacter, so it stays uncovered by every real font (declared or last-resort system
+            // fallback, see issue #172) and by construction can never gain coverage from a future
+            // font/feature change - an emoji would no longer prove this guard now that last-resort
+            // fallback can legitimately find and use a real emoji font instead of hitting .notdef.
+            // Astral (supplementary-plane) specifically, not a BMP noncharacter like U+FDD0: GNU
+            // Unifont (bundled on Ubuntu CI runners) turned out to genuinely map a "here's an undefined
+            // codepoint" glyph even to a BMP noncharacter, defeating that as a "nothing covers this"
+            // probe; Unifont's own astral coverage (the separate "Unifont Upper" font) is not present
+            // on that image.
+            var html = "<html><body><p style=\"font-family: 'Source Sans 3';\">\U0010FFFF</p></body></html>";
             var config = new PdfGenerateConfig
             {
                 PageSize = PageSize.A4,

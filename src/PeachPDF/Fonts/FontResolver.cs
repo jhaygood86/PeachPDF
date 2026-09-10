@@ -5,6 +5,7 @@ using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Internal;
+using PeachPDF.Text;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -48,6 +49,14 @@ namespace PeachPDF.Fonts
         /// with this resolver and never shared across <c>PdfGenerator</c> instances.
         /// </summary>
         private readonly Dictionary<string, IReadOnlyList<RuneRange>> _coverageCache = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Last-resort system-fallback cache (codepoint value → winning family key, or null when no
+        /// registered family covers it at all) populated by <see cref="FindFamilyCoveringCodepoint"/>.
+        /// Instance-scoped for the same reason as <see cref="_coverageCache"/> - never shared across
+        /// <c>PdfGenerator</c> instances/threads.
+        /// </summary>
+        private readonly Dictionary<int, string?> _systemFallbackCache = new();
 
         /// <summary>
         /// This instance's own typeface-key-keyed glyph-typeface cache, used only for custom
@@ -517,11 +526,16 @@ namespace PeachPDF.Fonts
         /// <c>unicode-range</c> if it has one, else inside what its font's cmap actually covers (computed
         /// lazily and cached per face, so only faces of an actually-requested family are ever scanned).
         /// </summary>
-        private bool FaceCovers(FontFaceEntry entry, Rune rune)
-        {
-            var ranges = entry.ExplicitRanges ?? GetOrComputeCoverage(entry.Description.FontNameInvariantCulture);
-            return CMapCoverage.Contains(ranges, rune);
-        }
+        private bool FaceCovers(FontFaceEntry entry, Rune rune) => CMapCoverage.Contains(EffectiveCoverage(entry), rune);
+
+        /// <summary>
+        /// A face's effective coverage for matching purposes: its explicit <c>unicode-range</c> when it
+        /// has one, else whatever its font's <c>cmap</c> actually covers - the same definition
+        /// <see cref="FaceCovers"/> uses for a single codepoint, exposed separately so
+        /// <see cref="PickScriptAwareWinner"/> can score a whole face's coverage rather than test one rune.
+        /// </summary>
+        private IReadOnlyList<RuneRange> EffectiveCoverage(FontFaceEntry entry) =>
+            entry.ExplicitRanges ?? GetOrComputeCoverage(entry.Description.FontNameInvariantCulture);
 
         private IReadOnlyList<RuneRange> GetOrComputeCoverage(string faceName)
         {
@@ -541,6 +555,121 @@ namespace PeachPDF.Fonts
 
             _coverageCache[faceName] = coverage;
             return coverage;
+        }
+
+        /// <summary>
+        /// The last-resort system-fallback step of CSS Fonts 4 §5's font matching algorithm: when no
+        /// family declared in a box's own <c>font-family</c> stack covers a codepoint,
+        /// <see cref="Html.Core.Utils.FontFamilyResolver"/> calls here to search every OTHER family this
+        /// resolver knows about (system-discovered fonts plus anything added via
+        /// <see cref="AddFont(Stream, string)"/>) for one that does. Returns the winning family's
+        /// <see cref="InstalledFonts"/> key, or null when nothing registered covers this codepoint either
+        /// (the caller then keeps today's <c>.notdef</c>/tofu-box behavior). Cached per codepoint - see
+        /// <see cref="_systemFallbackCache"/> - since a document missing coverage for one character often
+        /// repeats it many times.
+        /// </summary>
+        internal string? FindFamilyCoveringCodepoint(Rune codepoint)
+        {
+            if (_systemFallbackCache.TryGetValue(codepoint.Value, out var cached))
+                return cached;
+
+            var candidates = new List<string>();
+            foreach (var (key, family) in InstalledFonts)
+            {
+                if (family.Faces.Any(f => FaceCovers(f, codepoint)))
+                    candidates.Add(key);
+            }
+
+            string? winner;
+            if (candidates.Count == 0)
+            {
+                winner = null;
+            }
+            else if (candidates.Count == 1)
+            {
+                winner = candidates[0];
+            }
+            else
+            {
+                candidates.Sort(StringComparer.Ordinal);
+                winner = PickScriptAwareWinner(candidates, codepoint);
+            }
+
+            _systemFallbackCache[codepoint.Value] = winner;
+            return winner;
+        }
+
+        /// <summary>
+        /// Among several families that all cover <paramref name="codepoint"/>, prefers the one whose own
+        /// coverage most overlaps the codepoint's Unicode <c>Script</c> property (UAX #24) - a font whose
+        /// coverage is mostly "the Arabic block" is a better fallback for an Arabic character than one
+        /// that merely happens to include a single incidental glyph inside it. <paramref name="candidates"/>
+        /// must already be sorted (ordinally) - that order is both the tie-break and the result for a
+        /// codepoint with no real script of its own (punctuation, digits, unassigned codepoints), since
+        /// there is nothing meaningful to score against.
+        /// </summary>
+        private string PickScriptAwareWinner(List<string> candidates, Rune codepoint)
+        {
+            var script = ScriptTable.Of(codepoint);
+            if (script is ScriptTable.Common or ScriptTable.Inherited or ScriptTable.Unknown)
+                return candidates[0];
+
+            // Non-empty by construction: Of only ever returns a script name that came from a real Run in
+            // the same table RangesForScript reads, so that name always has at least that one range.
+            var scriptRanges = ScriptTable.RangesForScript(script);
+
+            var best = candidates[0];
+            var bestOverlap = -1L;
+
+            foreach (var key in candidates)
+            {
+                var family = InstalledFonts[key];
+                var coveringFace = family.Faces.First(f => FaceCovers(f, codepoint));
+                var overlap = OverlapLength(EffectiveCoverage(coveringFace), scriptRanges);
+
+                if (overlap > bestOverlap)
+                {
+                    bestOverlap = overlap;
+                    best = key;
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// Counts codepoints common to two <see cref="RuneRange"/> lists via a linear two-pointer sweep
+        /// over each sorted ascending by start. <see cref="ScriptTable.RangesForScript"/>'s own
+        /// script-partitioned runs already are, but <c>ExplicitRanges</c> is not guaranteed to be - it can
+        /// be a caller-supplied list from the public <see cref="AddFont(Stream, string, int?, bool?, int?, IReadOnlyList{RuneRange}?)"/>
+        /// API, or <see cref="Html.Core.Utils.UnicodeRangeParser.Parse"/> output, which preserves the
+        /// <c>unicode-range</c> descriptor's own declaration order (e.g. <c>U+61-7A, U+41-5A</c> stays in
+        /// that order, not ascending) - so both inputs are sorted defensively here rather than trusted.
+        /// </summary>
+        private static long OverlapLength(IReadOnlyList<RuneRange> a, IReadOnlyList<RuneRange> b)
+        {
+            var sortedA = a.OrderBy(r => r.Start.Value).ToList();
+            var sortedB = b.OrderBy(r => r.Start.Value).ToList();
+
+            long total = 0;
+            var i = 0;
+            var j = 0;
+
+            while (i < sortedA.Count && j < sortedB.Count)
+            {
+                var start = Math.Max(sortedA[i].Start.Value, sortedB[j].Start.Value);
+                var end = Math.Min(sortedA[i].End.Value, sortedB[j].End.Value);
+
+                if (start <= end)
+                    total += end - start + 1;
+
+                if (sortedA[i].End.Value < sortedB[j].End.Value)
+                    i++;
+                else
+                    j++;
+            }
+
+            return total;
         }
 
         /// <summary>

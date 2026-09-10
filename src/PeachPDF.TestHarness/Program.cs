@@ -6802,6 +6802,43 @@ await SaveShowcaseAsync("unicode_range", "Fonts & Text", "@font-face unicode-ran
     "Per-character font matching: a monospaced webfont declared only for the digit range (U+0030-0039) supplies the digits, while letters in the same text run fall back to serif - each character resolved to the family whose unicode-range (or glyph coverage) covers it.",
     unicodeRangeHtml, pdfConfig);
 
+// Last-resort system-fallback font matching (issue #172): when NO declared family covers a character,
+// PeachPDF now searches every OTHER font registered with the document before giving up to a
+// missing-glyph box - the final step of the CSS Fonts 4 matching algorithm. The body here declares only
+// 'serif' (no Arabic coverage), and nothing ever lists 'RegisteredArabic' in a font-family value either -
+// it is only registered via @font-face - yet the Arabic word still renders correctly.
+var systemFallbackArabicUri = "data:font/truetype;base64," +
+    Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoSansArabicSubset.ttf")));
+var systemFallbackHtml = $$"""
+    <html>
+    <head>
+    <style>
+        @font-face {
+            font-family: 'RegisteredArabic';
+            src: url('{{systemFallbackArabicUri}}') format('truetype');
+        }
+        body { font-family: serif; margin: 40px; }
+        h1 { font-size: 20pt; }
+        .demo { font-size: 26pt; line-height: 1.6; }
+        .note { color: #666; font-size: 11pt; }
+    </style>
+    </head>
+    <body>
+        <h1>Last-resort system font fallback</h1>
+        <p class="demo">House &mdash; بيت</p>
+        <p class="note"><code>body</code> declares only <code>font-family: serif</code>, which has no
+        Arabic glyphs, and "RegisteredArabic" is never referenced by any font-family value - it is
+        registered on the page purely via @font-face. Because no declared family covers "&#1576;&#1610;&#1578;",
+        PeachPDF searches every OTHER font it knows about and finds it there, instead of drawing
+        missing-glyph boxes.</p>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("system_fallback_font", "Fonts & Text", "Last-Resort System Font Fallback",
+    "The final step of the CSS Fonts 4 matching algorithm: when no font in the declared font-family stack covers a character, PeachPDF searches every OTHER font registered with the document - here a Noto Sans Arabic subset registered but never referenced in any font-family - instead of drawing a missing-glyph box.",
+    systemFallbackHtml, pdfConfig);
+
 // Emoji / astral (supplementary-plane, codepoint > U+FFFF) rendering. Nearly all emoji live above
 // U+FFFF and are reached through the font's cmap format-12 subtable; this showcase deliberately uses
 // a monochrome subset of Noto Emoji to demonstrate ordinary glyf text. The separate color-font
