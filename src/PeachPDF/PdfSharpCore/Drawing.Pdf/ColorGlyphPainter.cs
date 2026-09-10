@@ -19,7 +19,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Text;
@@ -70,9 +69,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// The vector paths remain the only visible ink; the text show adds selection geometry and
         /// <c>/ActualText</c> preserves the exact per-occurrence Unicode sequence.
         /// </summary>
-        public void Paint(string text, TextShapingFeatures features, string? logicalText = null)
+        public void Paint(string text, IReadOnlyList<ShapedGlyph> glyphs, string? logicalText = null)
         {
-            IReadOnlyList<ShapedGlyph> glyphs = _descriptor.Shape(text, features);
             string?[] actualTextByGlyph = BuildActualTextByGlyph(text, logicalText, glyphs);
             double penX = 0;
             for (int i = 0; i < glyphs.Count; i++)
@@ -156,31 +154,60 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
 
             // A ligature span can overlap a separately-painted skipped mark. Let the widest span own
             // those characters first; the mark then contributes its vector ink without duplicating text.
-            var sourceBearingGlyphs = new List<int>(glyphs.Count);
+            // Shaped runs almost always have disjoint clusters, so claim those directly and only allocate
+            // and sort an index list when an overlap proves that precedence is actually needed.
+            bool hasOverlappingClusters = false;
             for (int i = 0; i < glyphs.Count; i++)
             {
-                if (glyphs[i].ClusterLength > 0)
-                    sourceBearingGlyphs.Add(i);
-            }
-            sourceBearingGlyphs.Sort((left, right) =>
-            {
-                int byLength = glyphs[right].ClusterLength.CompareTo(glyphs[left].ClusterLength);
-                if (byLength != 0)
-                    return byLength;
+                ShapedGlyph glyph = glyphs[i];
+                if (glyph.ClusterLength <= 0)
+                    continue;
 
-                int byStart = glyphs[left].ClusterStart.CompareTo(glyphs[right].ClusterStart);
-                return byStart != 0 ? byStart : left.CompareTo(right);
-            });
-
-            foreach (int glyphIndex in sourceBearingGlyphs)
-            {
-                ShapedGlyph glyph = glyphs[glyphIndex];
                 int start = Math.Clamp(glyph.ClusterStart, 0, text.Length);
                 int end = Math.Clamp(glyph.ClusterStart + glyph.ClusterLength, start, text.Length);
                 for (int codeUnit = start; codeUnit < end; codeUnit++)
                 {
-                    if (ownerByCodeUnit[codeUnit] < 0)
-                        ownerByCodeUnit[codeUnit] = glyphIndex;
+                    if (ownerByCodeUnit[codeUnit] >= 0)
+                    {
+                        hasOverlappingClusters = true;
+                    }
+                    else
+                    {
+                        ownerByCodeUnit[codeUnit] = i;
+                    }
+                }
+            }
+
+            if (hasOverlappingClusters)
+            {
+                Array.Fill(ownerByCodeUnit, -1);
+                var sourceBearingGlyphs = new List<int>(glyphs.Count);
+                for (int i = 0; i < glyphs.Count; i++)
+                {
+                    if (glyphs[i].ClusterLength > 0)
+                        sourceBearingGlyphs.Add(i);
+                }
+
+                sourceBearingGlyphs.Sort((left, right) =>
+                {
+                    int byLength = glyphs[right].ClusterLength.CompareTo(glyphs[left].ClusterLength);
+                    if (byLength != 0)
+                        return byLength;
+
+                    int byStart = glyphs[left].ClusterStart.CompareTo(glyphs[right].ClusterStart);
+                    return byStart != 0 ? byStart : left.CompareTo(right);
+                });
+
+                foreach (int glyphIndex in sourceBearingGlyphs)
+                {
+                    ShapedGlyph glyph = glyphs[glyphIndex];
+                    int start = Math.Clamp(glyph.ClusterStart, 0, text.Length);
+                    int end = Math.Clamp(glyph.ClusterStart + glyph.ClusterLength, start, text.Length);
+                    for (int codeUnit = start; codeUnit < end; codeUnit++)
+                    {
+                        if (ownerByCodeUnit[codeUnit] < 0)
+                            ownerByCodeUnit[codeUnit] = glyphIndex;
+                    }
                 }
             }
 
@@ -213,19 +240,28 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 gapStart = gapEnd;
             }
 
-            var builders = new StringBuilder?[glyphs.Count];
-            for (int codeUnit = 0; codeUnit < source.Length; codeUnit++)
+            // Ownership normally consists of one contiguous source range per glyph, so take that range
+            // directly instead of allocating a StringBuilder for every glyph.
+            int rangeStart = 0;
+            while (rangeStart < source.Length)
             {
-                int owner = ownerByCodeUnit[codeUnit];
+                int owner = ownerByCodeUnit[rangeStart];
                 if (owner < 0)
+                {
+                    rangeStart++;
                     continue;
+                }
 
-                builders[owner] ??= new StringBuilder();
-                builders[owner]!.Append(source[codeUnit]);
+                int rangeEnd = rangeStart + 1;
+                while (rangeEnd < source.Length && ownerByCodeUnit[rangeEnd] == owner)
+                    rangeEnd++;
+
+                string ownedText = source.Substring(rangeStart, rangeEnd - rangeStart);
+                result[owner] = result[owner] is null
+                    ? ownedText
+                    : string.Concat(result[owner], ownedText);
+                rangeStart = rangeEnd;
             }
-
-            for (int i = 0; i < builders.Length; i++)
-                result[i] = builders[i]?.ToString();
 
             return result;
         }

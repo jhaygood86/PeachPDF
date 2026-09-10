@@ -255,6 +255,29 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.Null(face.cpal);
         }
 
+        [Fact]
+        public void FullFontSubset_DoesNotAllocateOneTemporaryArrayPerGlyph()
+        {
+            OpenTypeFontface face = Face(BundledFonts.Ttf);
+            var selected = new Dictionary<int, object>();
+            for (int glyph = 0; glyph < face.maxp.numGlyphs; glyph++)
+                selected[glyph] = null!;
+
+            for (int i = 0; i < 3; i++)
+                face.CreateFontSubSet(selected, cidFont: true);
+
+            const int passes = 10;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < passes; i++)
+                face.CreateFontSubSet(selected, cidFont: true);
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            Assert.True(allocated < 13_000_000,
+                $"Creating {passes:N0} full-font subsets allocated {allocated:N0} bytes. Glyph data "
+                + "should copy directly from the source font into the subset, without one temporary "
+                + "byte array per glyph.");
+        }
+
         private static void AssertColor(CpalTable cpal, int entry, byte r, byte g, byte b, byte a)
         {
             Assert.True(cpal.TryGetColor(0, entry, out var color));

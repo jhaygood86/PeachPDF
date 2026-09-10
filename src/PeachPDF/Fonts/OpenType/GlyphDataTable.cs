@@ -71,17 +71,13 @@ namespace PeachPDF.Fonts.OpenType
         }
 
         /// <summary>
-        /// Gets the data of the specified glyph.
+        /// Gets a non-owning view of the specified glyph's bytes in the source font.
         /// </summary>
-        public byte[] GetGlyphData(int glyph)
+        public ReadOnlySpan<byte> GetGlyphData(int glyph)
         {
-            IndexToLocationTable loca = _fontData.loca;
             int start = GetOffset(glyph);
-            int next = GetOffset(glyph + 1);
-            int count = next - start;
-            byte[] bytes = new byte[count];
-            Buffer.BlockCopy(_fontData.FontSource.Bytes, start, bytes, 0, count);
-            return bytes;
+            int count = GetOffset(glyph + 1) - start;
+            return _fontData.FontSource.Bytes.AsSpan(start, count);
         }
 
         /// <summary>
@@ -91,6 +87,16 @@ namespace PeachPDF.Fonts.OpenType
         {
             IndexToLocationTable loca = _fontData.loca;
             return GetOffset(glyph + 1) - GetOffset(glyph);
+        }
+
+        /// <summary>Returns whether the glyph has no contours without copying its table bytes.</summary>
+        public bool HasNoContours(int glyph)
+        {
+            ReadOnlySpan<byte> glyphData = GetGlyphData(glyph);
+            if (glyphData.Length < 2)
+                return true;
+
+            return (short)((glyphData[0] << 8) | glyphData[1]) == 0;
         }
 
         /// <summary>

@@ -418,7 +418,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             double lineSpace = font.GetHeight();
             double cyAscent = lineSpace * font.CellAscent / font.CellSpace;
             double cyDescent = lineSpace * font.CellDescent / font.CellSpace;
-            double width = _gfx.MeasureString(s, font, features).Width;
 
             //bool bold = (font.Style & XFontStyle.Bold) != 0;
             //bool italic = (font.Style & XFontStyle.Italic) != 0;
@@ -433,6 +432,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             // Merely reading the descriptor does not realize/embed the color font below.
             OpenTypeDescriptor descriptor = font.Descriptor;
             bool isColorFont = font.Unicode && descriptor.IsColorFont;
+            IReadOnlyList<ShapedGlyph>? colorGlyphs = isColorFont ? descriptor.Shape(s, features) : null;
+            double width = colorGlyphs is not null && CanMeasureAsSingleShapedRun(s)
+                ? MeasureShapedRunWidth(s, font, descriptor, colorGlyphs)
+                : _gfx.MeasureString(s, font, features).Width;
 
             if (!isColorFont)
                 Realize(font, brush, boldSimulation ? 2 : 0, letterSpacing);
@@ -509,7 +512,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                 int paletteIndex = fontPalette?.BasePaletteIndex ?? 0;
                 var colorPainter = new ColorGlyphPainter(this, descriptor, font, brush, x, y,
                     letterSpacing, Gfx.PageDirection, paletteIndex, fontPalette?.Overrides);
-                colorPainter.Paint(s, features, logicalText);
+                colorPainter.Paint(s, colorGlyphs!, logicalText);
             }
             else
             {
@@ -631,6 +634,39 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
                     : y + strikeoutPosition - strikeoutSize;
                 DrawRectangle(null, brush, x, strikeoutRectY, width, strikeoutSize);
             }
+        }
+
+        private static bool CanMeasureAsSingleShapedRun(string text)
+        {
+            foreach (Rune rune in text.EnumerateRunes())
+            {
+                if (rune.Value < 32)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static double MeasureShapedRunWidth(string text, XFont font, OpenTypeDescriptor descriptor,
+            IReadOnlyList<ShapedGlyph> glyphs)
+        {
+            int designWidth = 0;
+            for (int i = 0; i < glyphs.Count; i++)
+            {
+                ShapedGlyph glyph = glyphs[i];
+                designWidth += (int)Math.Round(descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta);
+            }
+
+            double width = designWidth * font.Size / descriptor.UnitsPerEm;
+            if ((font.GlyphTypeface.StyleSimulations & XStyleSimulations.BoldSimulation) != 0)
+            {
+                int characterCount = 0;
+                foreach (Rune _ in text.EnumerateRunes())
+                    characterCount++;
+                width += characterCount * font.Size * Const.BoldEmphasis;
+            }
+
+            return width;
         }
 
         /// <summary>
@@ -1617,8 +1653,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         {
             Debug.Assert(_streamMode == StreamMode.Text);
 
-            string value = PdfEncoders.ToHexStringLiteral(actualText, PdfStringEncoding.Unicode);
-            _content.Append($"/Span<</ActualText {value}>>BDC\n");
+            _content.Append("/Span<</ActualText <FEFF");
+            for (int i = 0; i < actualText.Length; i++)
+                AppendHexCodeUnit(actualText[i]);
+            _content.Append(">>>BDC\n");
         }
 
         /// <summary>Begins the shared rendering-mode-3 text object for one color-glyph run.</summary>
@@ -1652,11 +1690,21 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             XPoint pos = WorldToView(new XPoint(x, y));
             AdjustTdOffset(ref pos, 0, null);
 
-            byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
-            bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
-            string glyphText = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
-            AppendFormatArgs("{0:" + Config.SignificantFigures4 + "} {1:" + Config.SignificantFigures4 + "} Td {2} Tj\n",
-                pos.X, pos.Y, glyphText);
+            _content.AppendFormat(CultureInfo.InvariantCulture, "{0:0.####} {1:0.####} Td <", pos.X, pos.Y);
+            AppendHexCodeUnit((char)glyph.GlyphIndex);
+            _content.Append("> Tj\n");
+        }
+
+        private static ReadOnlySpan<char> HexDigits => "0123456789ABCDEF";
+
+        private void AppendHexCodeUnit(char value)
+        {
+            Span<char> buffer = stackalloc char[4];
+            buffer[0] = HexDigits[(value >> 12) & 0xF];
+            buffer[1] = HexDigits[(value >> 8) & 0xF];
+            buffer[2] = HexDigits[(value >> 4) & 0xF];
+            buffer[3] = HexDigits[value & 0xF];
+            _content.Append(buffer);
         }
 
         /// <summary>

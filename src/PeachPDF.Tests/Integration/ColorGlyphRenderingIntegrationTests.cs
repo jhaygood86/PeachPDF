@@ -152,8 +152,8 @@ namespace PeachPDF.Tests.Integration
             Assert.True(Count(pdf, "\nf\n") >= 1, "emoji should paint vector fills");
             Assert.Contains("/ShadingType", pdf);        // real Noto emoji use gradients
             Assert.Contains("/FontFile2", pdf);
-            Assert.Contains("/ActualText <FEFFD83DDE00>", pdf); // grin
-            Assert.Contains("/ActualText <FEFFD83CDF08>", pdf); // rainbow
+            Assert.Contains("/ActualText <FEFFD83DDE00>>>BDC", pdf); // grin
+            Assert.Contains("/ActualText <FEFFD83CDF08>>>BDC", pdf); // rainbow
         }
 
         [Fact]
@@ -201,6 +201,57 @@ namespace PeachPDF.Tests.Integration
             string?[] actualText = ColorGlyphPainter.BuildActualTextByGlyph("(BA)", ")BA(", glyphs);
 
             Assert.Equal(new string?[] { ")", "B", "A", "(" }, actualText);
+        }
+
+        [Fact]
+        public void ActualTextOwnership_DisjointClusters_DoesNotAllocatePerGlyphBuildersOrSortState()
+        {
+            const int glyphCount = 200;
+            var glyphs = new ShapedGlyph[glyphCount];
+            for (int i = 0; i < glyphs.Length; i++)
+                glyphs[i] = new ShapedGlyph(i + 1, i, 1);
+            string text = new('A', glyphCount);
+
+            for (int i = 0; i < 3; i++)
+                ColorGlyphPainter.BuildActualTextByGlyph(text, null, glyphs);
+
+            const int passes = 100;
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < passes; i++)
+                ColorGlyphPainter.BuildActualTextByGlyph(text, null, glyphs);
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            Assert.True(allocated < 1_200_000,
+                $"Mapping {passes * glyphCount:N0} disjoint clusters allocated {allocated:N0} bytes. "
+                + "The common path should not allocate a sort list, comparison closure, or one "
+                + "StringBuilder per glyph.");
+        }
+
+        [Fact]
+        public void ActualTextOwnership_OverlappingClusterPrefersWidestSourceSpan()
+        {
+            ShapedGlyph[] glyphs =
+            [
+                new(1, 1, 1),
+                new(2, 0, 3),
+            ];
+
+            string?[] actualText = ColorGlyphPainter.BuildActualTextByGlyph("ABC", null, glyphs);
+
+            Assert.Equal(new string?[] { null, "ABC" }, actualText);
+        }
+
+        [Fact]
+        public void ActualTextOwnership_AttachesDeletedCharactersToAdjacentCluster()
+        {
+            ShapedGlyph[] trailingGap = [new(1, 0, 1)];
+            ShapedGlyph[] leadingGap = [new(1, 1, 1)];
+
+            string?[] trailingActualText = ColorGlyphPainter.BuildActualTextByGlyph("A\uFE0F", null, trailingGap);
+            string?[] leadingActualText = ColorGlyphPainter.BuildActualTextByGlyph("\u200DA", null, leadingGap);
+
+            Assert.Equal(new string?[] { "A\uFE0F" }, trailingActualText);
+            Assert.Equal(new string?[] { "\u200DA" }, leadingActualText);
         }
 
         [Fact]
