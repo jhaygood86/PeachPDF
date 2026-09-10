@@ -328,13 +328,11 @@ namespace PeachPDF.Fonts.OpenType
 
         /// <summary>
         /// Deletes every glyph <see cref="GsubShaper.MapToGlyphs"/> flagged
-        /// <see cref="ShapedGlyph.IsHiddenIgnorable"/> - the missing-glyph placeholder (<c>.notdef</c>)
-        /// standing in for a codepoint Unicode declares <c>Default_Ignorable_Code_Point</c>: a variation
-        /// selector, ZWJ/ZWNJ, a bidi control, a language tag character. Those codepoints have no visible
-        /// rendering of their own, so a font is <i>expected</i> to have no glyph for them; letting one fall
-        /// through to <c>.notdef</c> paints a tofu box where the document asked for nothing at all - the
-        /// symptom that found this was <c>&amp;#10084;&amp;#65039;</c> (a heart plus VARIATION SELECTOR-16)
-        /// rendering as a heart followed by a box in a COLR emoji font, in both PDFium and MuPDF.
+        /// <see cref="ShapedGlyph.IsHiddenIgnorable"/>: every variation selector, plus the missing-glyph
+        /// placeholder (<c>.notdef</c>) standing in for another codepoint Unicode declares
+        /// <c>Default_Ignorable_Code_Point</c>, such as ZWJ/ZWNJ, a bidi control, or a language tag
+        /// character. Those codepoints have no visible rendering of their own. Letting an unmapped one
+        /// fall through paints tofu; letting a mapped variation selector through can add a false advance.
         /// </summary>
         /// <remarks>
         /// Runs <b>after</b> GSUB and GPOS, never before: an ignorable is load-bearing <i>during</i>
@@ -343,9 +341,10 @@ namespace PeachPDF.Fonts.OpenType
         /// This mirrors how a real shaping engine (HarfBuzz's <c>hide_default_ignorables</c>) sequences the
         /// same job.
         ///
-        /// Only a glyph index of 0 is ever flagged, so a font that ships a real (blank, zero-advance) glyph
-        /// for an ignorable is honored as authored rather than second-guessed - which is also what keeps a
-        /// soft hyphen (U+00AD, itself default-ignorable, and drawn as a visible hyphen by most fonts when
+        /// Variation selectors are always flagged because they modify the preceding character and never
+        /// contribute an independent advance. For other default ignorables, only glyph index 0 is flagged,
+        /// so a font that ships a real glyph is honored as authored - which is also what keeps a soft hyphen
+        /// (U+00AD, itself default-ignorable, and drawn as a visible hyphen by most fonts when
         /// <c>hyphens: none</c> leaves it in the text) behaving exactly as it did before.
         ///
         /// <see cref="ShapedGlyph.AttachedToIndex"/> is a <i>glyph-list</i> index, so removal has to remap

@@ -23,6 +23,7 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Text;
 using PeachPDF.Text.Bidi;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -544,6 +545,8 @@ namespace PeachPDF.Html.Core.Dom
             double maxInlineExtentUsed = 0;
             var consecutiveHyphenatedColumns = 0;
             var currentColumnHyphenated = false;
+            var trailingRegionalIndicatorCount = 0;
+            var trailingGraphemeContext = string.Empty;
             var effectiveWrapLimit = ComputeEffectiveWrapLimit(blockBox, frame, clientTop, wrapLimit, 0);
 
             // Whether blockBox's own white-space permits a column break anywhere in its content at all -
@@ -565,6 +568,8 @@ namespace PeachPDF.Html.Core.Dom
                 blockOffset += lineThickness;
                 inlineOffset = 0;
                 lineThickness = 0;
+                trailingRegionalIndicatorCount = 0;
+                trailingGraphemeContext = string.Empty;
                 line = new CssLineBox(blockBox);
                 effectiveWrapLimit = ComputeEffectiveWrapLimit(blockBox, frame, clientTop, wrapLimit, blockOffset);
             }
@@ -588,6 +593,12 @@ namespace PeachPDF.Html.Core.Dom
                 var wordRectInline = naturalWidth; // the word's own glyph footprint, no trailing space
                 var wordAdvance = naturalWidth + word.ActualWordSpacing; // + spacing, what the next word's placement clears
                 var wordBlock = naturalHeight; // natural line-height - the line's own cross-axis thickness
+                var previousWord = line.Words.Count > 0 ? line.Words[^1] : null;
+                var isGraphemeBoundary = IsGraphemeBoundaryBefore(
+                    previousWord, word, trailingRegionalIndicatorCount, trailingGraphemeContext);
+                var hasOrdinaryWrapBefore = HasOrdinaryWrapOpportunityBefore(
+                    previousWord, word, precedingRegionalIndicatorCount: trailingRegionalIndicatorCount,
+                    precedingGraphemeContext: trailingGraphemeContext);
 
                 // white-space: nowrap/pre on word's own owning box must never register as "doesn't fit" -
                 // the direct counterpart of FlowBox's own `overflows` exclusion (issue #844: this exclusion
@@ -648,8 +659,8 @@ namespace PeachPDF.Html.Core.Dom
                     currentColumnHyphenated = true;
                 }
 
-                if (wordDoesNotFit && inlineOffset == 0 &&
-                    TryOverflowWrapWord(g, word, effectiveWrapLimit, out var overflowPrefix,
+                if (wordDoesNotFit && (inlineOffset == 0 || !hasOrdinaryWrapBefore) &&
+                    TryOverflowWrapWord(g, word, effectiveWrapLimit - inlineOffset, out var overflowPrefix,
                         out var overflowSuffix))
                 {
                     ReplaceCollectedWordWithOverflowWrapSplit(words, i, word, overflowPrefix!, overflowSuffix!);
@@ -694,14 +705,14 @@ namespace PeachPDF.Html.Core.Dom
                 // guard FlowBox's own wrap check already applies. inlineOffset > 0 (a real word already
                 // placed in this column) avoids wrapping a column that is still empty - the same
                 // unavoidable-overflow fallback FlowBox's own first-word-of-a-line case gets.
-                var startedNewLine = !word.SuppressWrapBefore && inlineOffset > 0
-                                     && (wordDoesNotFit || wrapsWholeNoWrapRun);
+                var startedNewLine = inlineOffset > 0
+                    && ((hasOrdinaryWrapBefore && wordDoesNotFit)
+                        || (!hasOrdinaryWrapBefore && wordDoesNotFit
+                            && isGraphemeBoundary && AllowsOverflowWrapAtBoundary(previousWord, word))
+                        || (!word.SuppressWrapBefore && wrapsWholeNoWrapRun));
                 if (startedNewLine)
                     StartNewLine();
 
-                // The normal opportunity before the word wins on a non-empty column. Only after moving
-                // the whole token to a fresh column do the lower-priority overflow-wrap opportunities
-                // become eligible.
                 if (startedNewLine && naturalWidth > effectiveWrapLimit &&
                     TryOverflowWrapWord(g, word, effectiveWrapLimit, out overflowPrefix,
                         out overflowSuffix))
@@ -720,6 +731,8 @@ namespace PeachPDF.Html.Core.Dom
                 word.Width = physical.Width;
                 word.Height = physical.Height;
                 line.ReportExistanceOf(word);
+                (trailingRegionalIndicatorCount, trailingGraphemeContext) = UpdateTrailingTextState(
+                    word, trailingRegionalIndicatorCount, trailingGraphemeContext);
 
                 inlineOffset += wordAdvance;
                 lineThickness = Math.Max(lineThickness, wordBlock);
@@ -2825,7 +2838,8 @@ namespace PeachPDF.Html.Core.Dom
 
                     // The space belongs before b's first word. If that word was placed in an earlier
                     // fragmentainer, so was the space.
-                    if (childOpensHere && DomUtils.IsBoxHasWhitespace(b))
+                    var childHasLeadingWhitespace = childOpensHere && DomUtils.IsBoxHasWhitespace(b);
+                    if (childHasLeadingWhitespace)
                         coordinates.CurrentX += box.ActualWordSpacing;
 
                     for (var wordIndex = 0; wordIndex < b.Words.Count; wordIndex++)
@@ -2870,6 +2884,16 @@ namespace PeachPDF.Html.Core.Dom
                         // hyphenate-limit-zone (only bother when skipping the hyphen would otherwise
                         // leave more than the zone's worth of unfilled space on this line).
                         var availableWidth = actualLimitRight - coordinates.CurrentX - rightSpacing - clonedTrailing;
+                        var previousWord = coordinates.Line.Words.Count > 0
+                            ? coordinates.Line.Words[^1]
+                            : null;
+                        var hasOrdinaryWrapBefore = HasOrdinaryWrapOpportunityBefore(
+                            previousWord, word, childHasLeadingWhitespace && wordIndex == 0,
+                            coordinates.TrailingRegionalIndicatorCount,
+                            coordinates.TrailingGraphemeContext);
+                        var isGraphemeBoundary = IsGraphemeBoundaryBefore(
+                            previousWord, word, coordinates.TrailingRegionalIndicatorCount,
+                            coordinates.TrailingGraphemeContext);
 
                         if (!word.SuppressWrapBefore && overflows && !word.IsLineBreak && !wrapNoWrapBox &&
                             word.HyphenationCandidates is { Count: > 0 } &&
@@ -2884,11 +2908,8 @@ namespace PeachPDF.Html.Core.Dom
                             coordinates.CurrentLineHyphenated = true;
                         }
 
-                        // overflow-wrap is an emergency opportunity, not an ordinary one. If this line is
-                        // already empty there is no earlier normal opportunity to prefer, so split the word
-                        // in place at the last grapheme that fits instead of manufacturing another empty
-                        // line and overflowing the whole token there.
-                        if (overflows && !wrapNoWrapBox && coordinates.Line.Words.Count == 0 &&
+                        if (overflows && !wrapNoWrapBox &&
+                            (coordinates.Line.Words.Count == 0 || !hasOrdinaryWrapBefore) &&
                             TryOverflowWrapWord(g, word, availableWidth, out var overflowPrefix,
                                 out var overflowSuffix))
                         {
@@ -2900,7 +2921,12 @@ namespace PeachPDF.Html.Core.Dom
 
                         // A resumed flow's opening line is empty, so there is nothing to wrap away from;
                         // honouring the wrap would leave a blank line at the top of the fragmentainer.
-                        var wrapping = !word.SuppressWrapBefore && (overflows || word.IsLineBreak || wrapNoWrapBox);
+                        var emergencyBoundaryWrap = overflows && coordinates.Line.Words.Count > 0
+                            && !hasOrdinaryWrapBefore && isGraphemeBoundary
+                            && AllowsOverflowWrapAtBoundary(previousWord, word);
+                        var wrapping = (!word.SuppressWrapBefore
+                                && (word.IsLineBreak || wrapNoWrapBox || (overflows && hasOrdinaryWrapBefore)))
+                            || emergencyBoundaryWrap;
 
                         if (wrapping && coordinates is { SuppressLeadingWrap: true, Line.Words.Count: 0 })
                         {
@@ -2953,6 +2979,8 @@ namespace PeachPDF.Html.Core.Dom
                             };
                             coordinates.LineStartOrdinal = wordOrdinal;
                             coordinates.Line.StartOrdinal = wordOrdinal;
+                            coordinates.TrailingRegionalIndicatorCount = 0;
+                            coordinates.TrailingGraphemeContext = string.Empty;
 
                             // Never the block's first formatted line (that's the seed line CreateLineBoxes
                             // creates) - only `each-line`/`hanging` (CSS Text 3 §3) can select this line.
@@ -3079,6 +3107,9 @@ namespace PeachPDF.Html.Core.Dom
                         }
 
                         coordinates.Line.ReportExistanceOf(word);
+                        (coordinates.TrailingRegionalIndicatorCount, coordinates.TrailingGraphemeContext) =
+                            UpdateTrailingTextState(word, coordinates.TrailingRegionalIndicatorCount,
+                                coordinates.TrailingGraphemeContext);
 
                         lastLeftIntersectingFloatBox = DomUtils.GetLastLeftIntersectingFloatBox(box, coordinates);
 
@@ -3566,6 +3597,146 @@ namespace PeachPDF.Html.Core.Dom
             word is CssRectWord { IsLineBreak: false }
             && word.OwnerBox.OverflowWrap.Value != OverflowWrap.Normal
             && word.OwnerBox.WhiteSpacePermitsWrapping;
+
+        private static bool AllowsOverflowWrapAtBoundary(CssRect? previous, CssRect word) =>
+            AllowsOverflowWrap(word) || previous is not null && AllowsOverflowWrap(previous);
+
+        /// <summary>
+        /// Whether the boundary before <paramref name="word"/> is an ordinary soft-wrap opportunity.
+        /// Inline element boundaries are ignored: adjacent text split only by markup remains one
+        /// unbreakable token, while the parser's real whitespace, hyphen, CJK, and break-all boundaries
+        /// retain their existing behavior.
+        /// </summary>
+        internal static bool HasOrdinaryWrapOpportunityBefore(
+            CssRect? previous, CssRect word, bool hasWhitespaceBefore = false,
+            int precedingRegionalIndicatorCount = 0, string? precedingGraphemeContext = null)
+        {
+            if (word.SuppressWrapBefore || previous is null)
+                return false;
+
+            if (previous is not CssRectWord previousWord || word is not CssRectWord currentWord)
+                return true;
+
+            Rune.DecodeLastFromUtf16(previousWord.Text.AsSpan(), out var previousRune, out _);
+            Rune.DecodeFromUtf16(currentWord.Text.AsSpan(), out var currentRune, out _);
+            if (!IsGraphemeBoundaryBefore(previousWord, currentWord, precedingRegionalIndicatorCount,
+                    precedingGraphemeContext)
+                || ProhibitsLineBreakAfter(previousRune) || ProhibitsLineBreakBefore(currentRune))
+                return false;
+
+            if (previousWord.BidiLevel != currentWord.BidiLevel)
+                return true;
+
+            if (hasWhitespaceBefore || HasInterElementWhitespaceBefore(currentWord) || previousWord.IsSpaces
+                || previousWord.HasSpaceAfter || currentWord.HasSpaceBefore
+                || previousWord.OwnerBox.WordBreak.Value == WordBreak.BreakAll
+                || currentWord.OwnerBox.WordBreak.Value == WordBreak.BreakAll)
+                return true;
+
+            return previousRune.Value == '-'
+                || CommonUtils.IsAsianCharacter(previousRune)
+                || CommonUtils.IsAsianCharacter(currentRune)
+                || CommonUtils.IsEmojiLineBreakCharacter(previousRune)
+                || CommonUtils.IsEmojiLineBreakCharacter(currentRune);
+        }
+
+        internal static bool IsGraphemeBoundaryBefore(
+            CssRect? previous, CssRect word, int precedingRegionalIndicatorCount = 0,
+            string? precedingGraphemeContext = null)
+        {
+            if (previous is not CssRectWord previousWord || word is not CssRectWord currentWord)
+                return true;
+
+            Rune.DecodeFromUtf16(currentWord.Text.AsSpan(), out var currentRune, out _);
+            if (IsRegionalIndicator(currentRune) && precedingRegionalIndicatorCount % 2 != 0)
+                return false;
+
+            if (ReferenceEquals(previousWord.OwnerBox, currentWord.OwnerBox)
+                && !currentWord.SuppressWrapBefore
+                && currentWord.OwnerBox.WordBreak.Value != WordBreak.BreakAll)
+                return true;
+
+            var context = string.IsNullOrEmpty(precedingGraphemeContext)
+                ? previousWord.Text
+                : precedingGraphemeContext;
+            var combined = string.Concat(context, currentWord.Text);
+            var boundary = context.Length;
+            return Array.BinarySearch(StringInfo.ParseCombiningCharacters(combined), boundary) >= 0;
+        }
+
+        private static bool ProhibitsLineBreakAfter(Rune rune) =>
+            Rune.GetUnicodeCategory(rune) is UnicodeCategory.OpenPunctuation
+                or UnicodeCategory.InitialQuotePunctuation
+            || IsPrefixNumericLineBreakCharacter(rune);
+
+        private static bool ProhibitsLineBreakBefore(Rune rune) =>
+            Rune.GetUnicodeCategory(rune) is UnicodeCategory.ClosePunctuation
+                or UnicodeCategory.FinalQuotePunctuation
+            || rune.Value is '!' or ',' or '.' or '/' or ':' or ';' or '?'
+            || IsPostfixNumericLineBreakCharacter(rune);
+
+        private static bool IsPrefixNumericLineBreakCharacter(Rune rune) => rune.Value switch
+        {
+            0x0024 or 0x002B or 0x005C or >= 0x00A3 and <= 0x00A5 or 0x00B1 or 0x058F
+                or >= 0x07FE and <= 0x07FF or 0x09FB or 0x0AF1 or 0x0BF9 or 0x0E3F or 0x17DB
+                or >= 0x20A0 and <= 0x20A6 or >= 0x20A8 and <= 0x20B5
+                or >= 0x20B7 and <= 0x20BA or >= 0x20BC and <= 0x20BD or 0x20BF
+                or >= 0x20C1 and <= 0x20CF or 0x2116 or >= 0x2212 and <= 0x2213
+                or 0xFE69 or 0xFF04 or 0xFFE1 or >= 0xFFE5 and <= 0xFFE6 or 0x1E2FF => true,
+            _ => false
+        };
+
+        private static bool IsPostfixNumericLineBreakCharacter(Rune rune) => rune.Value switch
+        {
+            0x0025 or 0x00A2 or 0x00B0 or >= 0x0609 and <= 0x060B or 0x066A
+                or >= 0x09F2 and <= 0x09F3 or 0x09F9 or 0x0D79 or >= 0x2030 and <= 0x2037
+                or 0x2057 or 0x20A7 or 0x20B6 or 0x20BB or 0x20BE or 0x20C0 or 0x2103
+                or 0x2109 or 0xA838 or 0xFDFC or 0xFE6A or 0xFF05 or 0xFFE0
+                or >= 0x11FDD and <= 0x11FE0 or 0x1ECAC or 0x1ECB0 => true,
+            _ => false
+        };
+
+        internal static bool IsRegionalIndicator(Rune rune) => rune.Value is >= 0x1F1E6 and <= 0x1F1FF;
+
+        internal static int UpdateTrailingRegionalIndicatorCount(int precedingCount, ReadOnlySpan<char> text)
+        {
+            var count = 0;
+            while (!text.IsEmpty
+                && Rune.DecodeLastFromUtf16(text, out var rune, out var charsConsumed) == OperationStatus.Done
+                && IsRegionalIndicator(rune))
+            {
+                count++;
+                text = text[..^charsConsumed];
+            }
+
+            return text.IsEmpty ? precedingCount + count : count;
+        }
+
+        internal static string UpdateTrailingGraphemeContext(string precedingContext, string text)
+        {
+            var combined = string.Concat(precedingContext, text);
+            if (combined.Length == 0)
+                return string.Empty;
+
+            var boundaries = StringInfo.ParseCombiningCharacters(combined);
+            return combined[boundaries[^1]..];
+        }
+
+        private static (int RegionalIndicatorCount, string GraphemeContext) UpdateTrailingTextState(
+            CssRect word, int regionalIndicatorCount, string graphemeContext)
+        {
+            if (word is not CssRectWord textWord || string.IsNullOrEmpty(textWord.Text))
+                return (0, string.Empty);
+
+            regionalIndicatorCount = UpdateTrailingRegionalIndicatorCount(
+                regionalIndicatorCount, textWord.Text.AsSpan());
+            graphemeContext = UpdateTrailingGraphemeContext(graphemeContext, textWord.Text);
+            return (regionalIndicatorCount, graphemeContext);
+        }
+
+        private static bool HasInterElementWhitespaceBefore(CssRectWord word) =>
+            DomUtils.PrecedingBoxAcrossFirstChildChain(word.OwnerBox)?.Text is { } text
+            && HtmlUtils.IsNullOrCollapsibleWhitespace(text);
 
         /// <summary>
         /// Splits an overflowing word at the last extended-grapheme-cluster boundary whose prefix fits.

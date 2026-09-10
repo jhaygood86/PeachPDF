@@ -120,6 +120,30 @@ namespace PeachPDF.Tests.Text
             Assert.Equal([3, 4], glyphs[2].LigatureComponentClusterStarts!);
         }
 
+        [Fact]
+        public void MappedHiddenSelector_CanBeAnExplicitLigatureComponent()
+        {
+            byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            byte[] gsubBytes = BuildLigatureGsub();
+            int gsubStart = fontBytes.Length;
+            var face = XFontSource.GetOrCreateFrom(Concat(fontBytes, gsubBytes)).Fontface;
+            var lookup = new GsubTable(face, gsubStart).GetLigatureLookup(0);
+            Assert.NotNull(lookup);
+
+            var glyphs = new List<ShapedGlyph>
+            {
+                new(400, 0, 1),
+                new(401, 1, 1, IsHiddenIgnorable: true)
+            };
+
+            GsubShaper.ApplyLigatureLookup(lookup, glyphs, gdef: null);
+
+            var ligature = Assert.Single(glyphs);
+            Assert.Equal(450, ligature.GlyphIndex);
+            Assert.False(ligature.IsHiddenIgnorable);
+            Assert.Equal([0, 1], Assert.IsType<int[]>(ligature.LigatureComponentClusterStarts));
+        }
+
         /// <summary>
         /// A ligature applied as a <b>nested</b> lookup, invoked by a Type 5 contextual rule rather
         /// than by the run walk. That path reaches <c>ApplyLigatureAt</c> for a single position and so

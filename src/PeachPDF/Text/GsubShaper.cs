@@ -40,10 +40,10 @@ namespace PeachPDF.Text
     /// </summary>
     /// <remarks>
     /// <see cref="IsHiddenIgnorable"/> marks a glyph that came out of <see cref="GsubShaper.MapToGlyphs"/>
-    /// as the missing-glyph placeholder (<c>.notdef</c>) for a codepoint Unicode declares
-    /// <c>Default_Ignorable_Code_Point</c> - a variation selector, ZWJ/ZWNJ, a bidi control. It is decided
-    /// once, at map time, where the source codepoint is already in hand; every later stage reads the flag
-    /// instead of re-decoding the text. Such a glyph is invisible by definition and is deleted at the very
+    /// for a codepoint Unicode declares invisible: every variation selector, or the missing-glyph
+    /// placeholder (<c>.notdef</c>) for another <c>Default_Ignorable_Code_Point</c> such as ZWJ/ZWNJ or
+    /// a bidi control. It is decided once, at map time, where the source codepoint is already in hand;
+    /// every later stage reads the flag instead of re-decoding the text. The glyph is deleted at the very
     /// end of <see cref="OpenTypeDescriptor.Shape"/>, but it still occupies a list slot throughout
     /// GSUB/GPOS so a lookup that genuinely matches on it (a font that maps ZWJ and ligates through it)
     /// still sees it - see <see cref="OpenTypeDescriptor.Shape"/>'s own remarks on the ordering.
@@ -448,9 +448,11 @@ namespace PeachPDF.Text
 
                 int glyphIndex = descriptor.CharCodeToGlyphIndex(lookup);
 
-                // A Default_Ignorable_Code_Point the font has no glyph for is flagged here rather than
-                // rediscovered later: this is the one place the codepoint and its glyph are both in hand.
-                var hiddenIgnorable = glyphIndex == 0 && UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value);
+                // A variation selector never contributes an independent glyph advance, even when a font
+                // maps it in its ordinary cmap. Other default ignorables are hidden when unmapped; a real
+                // mapped glyph remains available to GSUB (notably for ZWJ-driven emoji composition).
+                var hiddenIgnorable = UnicodeDefaultIgnorables.IsVariationSelector(rune.Value)
+                    || glyphIndex == 0 && UnicodeDefaultIgnorables.IsDefaultIgnorable(rune.Value);
 
                 result.Add(new ShapedGlyph(glyphIndex, clusterStart, utf16Length, IsHiddenIgnorable: hiddenIgnorable));
                 clusterStart += utf16Length;
@@ -941,24 +943,22 @@ namespace PeachPDF.Text
 
                     while (compIdx < ligature.ComponentGlyphIds.Length && pos < glyphs.Count)
                     {
-                        // A hidden default-ignorable is stepped over rather than matched against. It can
-                        // never be a component (a component glyph id is a real glyph, never .notdef), so
-                        // without this it would break the run and the ligature would simply not form -
-                        // which is exactly how U+1F3F3 U+FE0F U+200D U+1F308 failed to ligate into the
-                        // rainbow-flag glyph in a font whose ligature reads flag + ZWJ + rainbow and
-                        // never mentions the variation selector at all. Real shaping engines do the same
-                        // (HarfBuzz's SKIP_MAYBE). The glyph is carried in `skipped`, so it is re-inserted
-                        // after the merged ligature and deleted with every other hidden ignorable at the
-                        // end of OpenTypeDescriptor.Shape.
-                        if (glyphs[pos].IsHiddenIgnorable
-                            || !GlyphSequenceFilter.Participates((ushort)glyphs[pos].GlyphIndex, lookup.LookupFlag, gdef, markFilteringSet))
+                        var candidate = glyphs[pos];
+                        var participates = GlyphSequenceFilter.Participates(
+                            (ushort)candidate.GlyphIndex, lookup.LookupFlag, gdef, markFilteringSet);
+                        // An unmapped hidden ignorable is stepped over so it cannot block a ligature that
+                        // omits it. A mapped variation selector may instead be an explicit component in
+                        // the font's rule; give that exact match priority, while still honoring GDEF
+                        // filtering. A residual selector that no rule consumed is removed after shaping.
+                        if (!participates || candidate.IsHiddenIgnorable
+                            && candidate.GlyphIndex != ligature.ComponentGlyphIds[compIdx])
                         {
                             skipped.Add(pos - index);
                             pos++;
                             continue;
                         }
 
-                        if (glyphs[pos].GlyphIndex != ligature.ComponentGlyphIds[compIdx])
+                        if (candidate.GlyphIndex != ligature.ComponentGlyphIds[compIdx])
                             break;
 
                         matched.Add(pos);

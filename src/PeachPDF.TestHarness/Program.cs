@@ -6847,6 +6847,7 @@ var emojiFontUri = "data:font/truetype;base64," +
     Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "NotoEmoji-Regular.ttf")));
 var emojiRow = string.Join(" ", new[] { 0x1F600, 0x1F60A, 0x1F602, 0x1F44D, 0x1F389, 0x1F680, 0x2764 }
     .Select(char.ConvertFromUtf32));
+var wrappedEmojiRow = string.Concat(Enumerable.Repeat(emojiRow.Replace(" ", ""), 3));
 var grinning = char.ConvertFromUtf32(0x1F600);
 var emojiHtml = $$"""
     <html>
@@ -6859,6 +6860,9 @@ var emojiHtml = $$"""
         body { font-family: serif; margin: 40px; }
         h1 { font-size: 20pt; }
         .demo { font-family: 'Emoji'; font-size: 40pt; line-height: 1.4; }
+        .wrap { box-sizing: border-box; width: 330px; padding: 8px; border: 1px solid #bbb;
+                font-size: 18px; font-weight: bold; overflow-wrap: anywhere; white-space: pre-wrap; }
+        .wrap .emoji-run { font-family: 'Emoji'; font-size: 28px; font-weight: normal; }
         .note { color: #666; font-size: 11pt; }
     </style>
     </head>
@@ -6868,12 +6872,17 @@ var emojiHtml = $$"""
         <p class="note">Every glyph above U+FFFF (e.g. {{grinning}} = U+1F600) is resolved through the
         font's cmap format-12 subtable and rendered from this font's monochrome outline. The separate
         Color Fonts showcase demonstrates COLR/CPAL color emoji.</p>
+        <h1>Grapheme-aware wrapping</h1>
+        <div class="wrap">Northline Office B.V. <span class="emoji-run">{{wrappedEmojiRow}}</span> following-unbreakable-token</div>
+        <p class="note">Adjacent emoji wrap between complete grapheme clusters without requiring spaces.
+        Inline markup does not itself create a break, and the authored space before the final token takes
+        priority over <code>overflow-wrap</code>'s emergency opportunities.</p>
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("emoji", "Fonts & Text", "Emoji (astral codepoints)",
-    "Supplementary-plane (astral, U+FFFF+) glyph rendering: emoji resolve through the font's cmap format-12 subtable and render as monochrome outlines from a bundled subset of Noto Emoji; the separate Color Fonts showcase covers COLR/CPAL.",
+    "Supplementary-plane glyph rendering and grapheme-aware wrapping: adjacent emoji resolve through a bundled Noto Emoji subset and wrap as complete clusters; the separate Color Fonts showcase covers COLR/CPAL.",
     emojiHtml, pdfConfig);
 
 // clip-path with CSS basic shapes (polygon/inset/circle/ellipse). The shape is parsed once by the

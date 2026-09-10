@@ -1283,11 +1283,16 @@ namespace PeachPDF.Html.Core.Dom
             // for the whole box, from its own resolved Direction, is the correct behavior for that text
             // anyway (a lone line-break/space has nothing to bidi-split).
             var fallbackLevel = Direction.Value == DirectionMode.Rtl ? (byte)1 : (byte)0;
+            var trailingRegionalIndicatorCount = CountPrecedingRegionalIndicators(this);
 
             while (startIdx < text.Length)
             {
+                var segmentStart = startIdx;
                 while (startIdx < text.Length && text[startIdx] == '\r')
                     startIdx++;
+                if (startIdx > segmentStart)
+                    trailingRegionalIndicatorCount = 0;
+                segmentStart = startIdx;
 
                 if (startIdx < text.Length)
                 {
@@ -1328,7 +1333,9 @@ namespace PeachPDF.Html.Core.Dom
                         {
                             Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
                             if (HtmlUtils.IsCollapsibleWhitespace(text[endIdx]) || text[endIdx] == '-'
-                                || WordBreak.Value == PeachPDF.CSS.WordBreak.BreakAll || CommonUtils.IsAsianCharacter(rune))
+                                || WordBreak.Value == PeachPDF.CSS.WordBreak.BreakAll
+                                || CommonUtils.IsAsianCharacter(rune)
+                                || CommonUtils.IsEmojiLineBreakCharacter(rune))
                                 break;
                             endIdx += runeLength;
                         }
@@ -1336,7 +1343,15 @@ namespace PeachPDF.Html.Core.Dom
                         if (endIdx < text.Length)
                         {
                             Rune.DecodeFromUtf16(text.AsSpan(endIdx), out var rune, out var runeLength);
-                            if (text[endIdx] == '-' || WordBreak.Value == PeachPDF.CSS.WordBreak.BreakAll || CommonUtils.IsAsianCharacter(rune))
+                            if (CommonUtils.IsEmojiLineBreakCharacter(rune))
+                            {
+                                endIdx += CssLayoutEngine.IsRegionalIndicator(rune)
+                                    && trailingRegionalIndicatorCount % 2 != 0
+                                        ? runeLength
+                                        : StringInfo.GetNextTextElementLength(text.AsSpan(endIdx));
+                            }
+                            else if (text[endIdx] == '-' || WordBreak.Value == PeachPDF.CSS.WordBreak.BreakAll
+                                || CommonUtils.IsAsianCharacter(rune))
                                 endIdx += runeLength;
                         }
 
@@ -1434,9 +1449,46 @@ namespace PeachPDF.Html.Core.Dom
                             Words.Add(new CssRectWord(this, "\n", false, false) { BidiLevel = newlineBidiLevel });
                     }
 
+                    trailingRegionalIndicatorCount = CssLayoutEngine.UpdateTrailingRegionalIndicatorCount(
+                        trailingRegionalIndicatorCount, text.AsSpan(segmentStart, endIdx - segmentStart));
                     startIdx = endIdx;
                 }
             }
+        }
+
+        private static int CountPrecedingRegionalIndicators(CssBox box)
+        {
+            var count = 0;
+            for (var previous = DomUtils.PrecedingBoxAcrossFirstChildChain(box); previous is not null;
+                 previous = DomUtils.PrecedingBoxAcrossFirstChildChain(previous))
+            {
+                if (previous.DerivedStyle.ActualDisplay != Keywords.Inline)
+                    break;
+
+                if (!CountTrailingRegionalIndicatorsIn(previous, ref count))
+                    break;
+            }
+
+            return count;
+        }
+
+        private static bool CountTrailingRegionalIndicatorsIn(CssBox box, ref int count)
+        {
+            for (var i = box.Boxes.Count - 1; i >= 0; i--)
+            {
+                if (!CountTrailingRegionalIndicatorsIn(box.Boxes[i], ref count))
+                    return false;
+            }
+
+            if (box.Boxes.Count > 0)
+                return true;
+
+            if (box.Text is not { Length: > 0 } text)
+                return box.Words.Count == 0;
+
+            var trailing = CssLayoutEngine.UpdateTrailingRegionalIndicatorCount(0, text.AsSpan());
+            count += trailing;
+            return trailing * 2 == text.Length;
         }
 
         /// <summary>
@@ -6796,9 +6848,15 @@ namespace PeachPDF.Html.Core.Dom
             // Nothing precedes the first word measured, so its own leading space is at the
             // start of a line and is removed -- see the word loop in GetMinMaxSumWords.
             var atLineStart = true;
+            CssRect? previousWord = null;
+            double unbreakableRunWidth = 0;
+            var trailingRegionalIndicatorCount = 0;
+            var trailingGraphemeContext = string.Empty;
 
             GetMinMaxSumWords(g, this, ref min, ref maxSum, ref paddingSum, ref marginSum, ref widestLine,
-                ref trailingSpace, ref atLineStart);
+                ref trailingSpace, ref atLineStart, ref previousWord, ref unbreakableRunWidth,
+                ref trailingRegionalIndicatorCount, ref trailingGraphemeContext);
+            min = Math.Max(min, unbreakableRunWidth);
 
             maxWidth = paddingSum + Math.Max(maxSum, widestLine);
             minWidth = paddingSum + (min < 90999 ? min : 0);
@@ -6867,10 +6925,15 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="widestLine">the widest line closed by a &lt;br&gt; anywhere in the subtree.</param>
         /// <param name="trailingSpace">the hanging trailing space of the last word measured.</param>
         /// <param name="atLineStart">whether nothing has been measured onto the current line yet.</param>
+        /// <param name="previousWord">the preceding word in the flat inline walk.</param>
+        /// <param name="unbreakableRunWidth">the accumulated min-content width since the last soft-wrap opportunity.</param>
+        /// <param name="trailingRegionalIndicatorCount">regional indicators ending the current unbroken line.</param>
+        /// <param name="trailingGraphemeContext">the final grapheme context across inline owners.</param>
         /// <returns></returns>
         private static void GetMinMaxSumWords(RGraphics g, CssBox box, ref double min, ref double maxSum,
             ref double paddingSum, ref double marginSum, ref double widestLine, ref double trailingSpace,
-            ref bool atLineStart)
+           ref bool atLineStart, ref CssRect? previousWord, ref double unbreakableRunWidth,
+           ref int trailingRegionalIndicatorCount, ref string trailingGraphemeContext)
         {
             double? oldSum = null;
             // paddingSum must be scoped per "line" the same way maxSum is (see the oldSum save/restore
@@ -6887,6 +6950,11 @@ namespace PeachPDF.Html.Core.Dom
             // not inline (block) boxes start a new line so we need to reset the max sum
             if (StartsNewLine(box))
             {
+                min = Math.Max(min, unbreakableRunWidth);
+                unbreakableRunWidth = 0;
+                previousWord = null;
+                trailingRegionalIndicatorCount = 0;
+                trailingGraphemeContext = string.Empty;
                 oldSum = maxSum;
                 maxSum = marginSum;
                 oldPaddingSum = paddingSum;
@@ -6975,6 +7043,11 @@ namespace PeachPDF.Html.Core.Dom
                         maxSum = marginSum;
                         trailingSpace = 0;
                         atLineStart = true;
+                        min = Math.Max(min, unbreakableRunWidth);
+                        unbreakableRunWidth = 0;
+                        previousWord = null;
+                        trailingRegionalIndicatorCount = 0;
+                        trailingGraphemeContext = string.Empty;
                         continue;
                     }
 
@@ -6997,7 +7070,37 @@ namespace PeachPDF.Html.Core.Dom
                         ? word.OverflowWrapMinWidth ??=
                             CssLayoutEngine.MeasureOverflowWrapMinWidth(g, anywhereWord)
                         : word.Width;
-                    min = Math.Max(min, wordMinWidth);
+                    var previousAnywhereAffectsMinContent = previousWord is not null
+                        && previousWord.OwnerBox.OverflowWrap.Value == PeachPDF.CSS.OverflowWrap.Anywhere
+                        && previousWord.OwnerBox.WhiteSpacePermitsWrapping;
+                    var isGraphemeBoundary = CssLayoutEngine.IsGraphemeBoundaryBefore(
+                        previousWord, word, trailingRegionalIndicatorCount, trailingGraphemeContext);
+                    if ((anywhereAffectsMinContent || previousAnywhereAffectsMinContent)
+                            && isGraphemeBoundary
+                        || CssLayoutEngine.HasOrdinaryWrapOpportunityBefore(
+                            previousWord, word,
+                            precedingRegionalIndicatorCount: trailingRegionalIndicatorCount,
+                            precedingGraphemeContext: trailingGraphemeContext))
+                    {
+                        min = Math.Max(min, unbreakableRunWidth);
+                        unbreakableRunWidth = 0;
+                    }
+
+                    unbreakableRunWidth += wordMinWidth;
+                    min = Math.Max(min, unbreakableRunWidth);
+                    previousWord = word;
+                    if (word is CssRectWord textWord && !string.IsNullOrEmpty(textWord.Text))
+                    {
+                        trailingRegionalIndicatorCount = CssLayoutEngine.UpdateTrailingRegionalIndicatorCount(
+                            trailingRegionalIndicatorCount, textWord.Text.AsSpan());
+                        trailingGraphemeContext = CssLayoutEngine.UpdateTrailingGraphemeContext(
+                            trailingGraphemeContext, textWord.Text);
+                    }
+                    else
+                    {
+                        trailingRegionalIndicatorCount = 0;
+                        trailingGraphemeContext = string.Empty;
+                    }
                     trailingSpace = word.ActualWordSpacing;
                     atLineStart = false;
                 }
@@ -7032,7 +7135,9 @@ namespace PeachPDF.Html.Core.Dom
 
                     var maxSumBeforeChild = maxSum;
                     GetMinMaxSumWords(g, childBox, ref min, ref maxSum, ref paddingSum, ref marginSum,
-                        ref widestLine, ref trailingSpace, ref atLineStart);
+                        ref widestLine, ref trailingSpace, ref atLineStart, ref previousWord,
+                       ref unbreakableRunWidth, ref trailingRegionalIndicatorCount,
+                       ref trailingGraphemeContext);
 
                     // This walk otherwise never consults a box's own explicit CSS `width` at all - only
                     // literal word/text content. That's usually fine (explicit width constrains layout
@@ -7087,6 +7192,11 @@ namespace PeachPDF.Html.Core.Dom
             // max sum (and its matching padding contribution) is the max of all the lines in the box
             if (oldSum.HasValue)
             {
+                min = Math.Max(min, unbreakableRunWidth);
+                unbreakableRunWidth = 0;
+                previousWord = null;
+                trailingRegionalIndicatorCount = 0;
+                trailingGraphemeContext = string.Empty;
                 maxSum = Math.Max(maxSum, oldSum.Value);
                 paddingSum = Math.Max(paddingSum, oldPaddingSum!.Value);
             }
