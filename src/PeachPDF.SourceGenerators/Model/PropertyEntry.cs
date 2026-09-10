@@ -21,7 +21,6 @@ namespace PeachPDF.SourceGenerators.Model
     {
         Ordinal,
         OrdinalIgnoreCase,
-        InvariantIgnoreCase,
     }
 
     internal sealed class LogicalTarget

@@ -350,8 +350,14 @@ namespace PeachPDF.SourceGenerators.Tests
                 generated);
         }
 
+        /// <summary>
+        /// <c>invariant-ignore-case</c> is still accepted in the JSON and now emits an ORDINAL
+        /// comparison, like every other keyword match. It is mapped rather than rejected because
+        /// falling through to the <c>Ordinal</c> default would make the keyword match only its
+        /// exact declared casing - a worse regression than the culture-awareness being removed.
+        /// </summary>
         [Fact]
-        public void Emits_Keyword_Storage_Canonicalized_To_Declared_Casing_For_InvariantIgnoreCase()
+        public void Emits_Keyword_Storage_Canonicalized_Ordinally_Even_For_The_Legacy_InvariantIgnoreCase_Spelling()
         {
             var json = """
                 {
@@ -369,9 +375,12 @@ namespace PeachPDF.SourceGenerators.Tests
                 .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
 
             Assert.Contains(
-                "box.Transform = value.Equals(\"border-box\", global::System.StringComparison.InvariantCultureIgnoreCase) ? \"border-box\" : " +
-                "value.Equals(\"content-box\", global::System.StringComparison.InvariantCultureIgnoreCase) ? \"content-box\" : value;",
+                "box.Transform = value.Equals(\"border-box\", global::System.StringComparison.OrdinalIgnoreCase) ? \"border-box\" : " +
+                "value.Equals(\"content-box\", global::System.StringComparison.OrdinalIgnoreCase) ? \"content-box\" : value;",
                 generated);
+
+            // The whole point: no culture-aware comparison survives anywhere in the output.
+            Assert.DoesNotContain("InvariantCultureIgnoreCase", generated);
         }
 
         [Fact]

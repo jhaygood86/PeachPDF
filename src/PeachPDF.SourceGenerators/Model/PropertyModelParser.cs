@@ -274,7 +274,11 @@ namespace PeachPDF.SourceGenerators.Model
             return value.StringValue switch
             {
                 "ordinal-ignore-case" => KeywordComparison.OrdinalIgnoreCase,
-                "invariant-ignore-case" => KeywordComparison.InvariantIgnoreCase,
+                // Still accepted, deliberately mapped to ordinal rather than dropped. Falling
+                // through to Ordinal would turn a keyword that matched case-insensitively into
+                // one that only matches its exact declared casing, which is a much worse
+                // regression than the culture-awareness this removes.
+                "invariant-ignore-case" => KeywordComparison.OrdinalIgnoreCase,
                 _ => KeywordComparison.Ordinal,
             };
         }
