@@ -45,6 +45,35 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Path_PushesResolvedClipPath_BracketingThePaint()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                """<div id='el' style='clip-path: path("M0 0 L40 0 L20 40 Z"); width: 40pt; height: 30pt; background: red'>x</div>"""));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            Assert.Single(g.ClipPaths);
+            var pushIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.PushClipCall);
+            var popIndex = g.Log.FindIndex(c => c is TestRecordingGraphics.PopClipCall);
+            Assert.True(pushIndex >= 0 && popIndex > pushIndex, "clip must be pushed then later popped");
+
+            // path() coordinates are unitless px (1px = 0.75pt), translated onto the border-box's
+            // origin - unlike polygon()/inset()/etc. there is no percentage scaling against the
+            // box's own width/height.
+            var b = el.Bounds;
+            var pts = g.ClipPaths[0].Points;
+            Assert.Equal(3, pts.Count);
+            Assert.Equal(b.X, pts[0].X, 1);
+            Assert.Equal(b.Y, pts[0].Y, 1);
+            Assert.Equal(b.X + 30, pts[1].X, 1);  // 40px * 0.75
+            Assert.Equal(b.Y, pts[1].Y, 1);
+            Assert.Equal(b.X + 15, pts[2].X, 1);  // 20px * 0.75
+            Assert.Equal(b.Y + 30, pts[2].Y, 1);  // 40px * 0.75
+        }
+
+        [Fact]
         public async Task Inset_PushesRectangularClip_InsetFromBorderBox()
         {
             var (root, container) = await BuildAndLayout(Wrap(
@@ -101,6 +130,22 @@ namespace PeachPDF.Tests.Integration
             // `banana` is not a valid basic shape; Layer A drops the declaration, so nothing clips.
             var (root, container) = await BuildAndLayout(Wrap(
                 "<div id='el' style='clip-path: banana; width: 40pt; height: 30pt; background: red'>x</div>"));
+            var el = FindById(root, "el")!;
+            Assert.Equal("none", el.ClipPath);
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+            Assert.Empty(g.ClipPaths);
+        }
+
+        [Fact]
+        public async Task InvalidPath_IsDroppedAtParse_AndPushesNoClip()
+        {
+            // A path-data string that doesn't conform to SVG 1.1's grammar makes the whole path()
+            // (and thus the whole clip-path value) invalid, dropped by Layer A - same outcome as
+            // InvalidClipPath_IsDroppedAtParse_AndPushesNoClip above, for path()'s own failure mode.
+            var (root, container) = await BuildAndLayout(Wrap(
+                """<div id='el' style='clip-path: path("not valid path data"); width: 40pt; height: 30pt; background: red'>x</div>"""));
             var el = FindById(root, "el")!;
             Assert.Equal("none", el.ClipPath);
 

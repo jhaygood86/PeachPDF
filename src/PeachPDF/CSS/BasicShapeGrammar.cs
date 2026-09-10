@@ -1,5 +1,6 @@
 #nullable disable
 
+using PeachPDF.Svg;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -8,18 +9,24 @@ namespace PeachPDF.CSS
     /// <summary>
     /// Shared, layer-agnostic grammar for the CSS <c>&lt;basic-shape&gt;</c> function values used by
     /// <c>clip-path</c> (CSS Masking Level 1 / CSS Shapes Level 1): <c>polygon()</c>, <c>inset()</c>,
-    /// <c>circle()</c> and <c>ellipse()</c>. Like <see cref="BackgroundPositionGrammar"/> /
+    /// <c>circle()</c>, <c>ellipse()</c> and <c>path()</c>. Like <see cref="BackgroundPositionGrammar"/> /
     /// <see cref="BackgroundSizeGrammar"/>, it validates the grammar and captures the value's structure
     /// as <b>raw component strings / enums</b> (never resolved numbers), so both Layer A (the CSS-OM
     /// converter, which only needs to accept/reject and preserve the authored text) and Layer B (the
     /// render-time resolver in <c>PeachPDF.Html.Core</c>, which resolves each component against the
     /// element's reference box) share a single parser rather than re-implementing the grammar twice.
+    /// <c>path()</c> is the one exception to "raw component strings": its argument is itself the SVG
+    /// path-data mini-language, not a CSS length/percentage/keyword, so it is fully parsed here (via
+    /// <see cref="SvgPathDataParser.TryParse"/>, the same parser <c>&lt;path d="..."&gt;</c> uses) into
+    /// <see cref="PathSegment"/>s rather than deferred as text - per spec, a path string that doesn't
+    /// conform to SVG 1.1's grammar (or that conforms but is empty) makes the whole <c>path()</c>
+    /// invalid, which can only be checked by actually parsing it up front.
     /// </summary>
     internal static class BasicShapeGrammar
     {
-        internal enum BasicShapeKind { Polygon, Inset, Circle, Ellipse }
+        internal enum BasicShapeKind { Polygon, Inset, Circle, Ellipse, Path }
 
-        internal enum FillRule { Nonzero, Evenodd }
+        internal enum FillRule { NonZero, EvenOdd }
 
         internal enum ShapeRadiusKind { LengthPercentage, ClosestSide, FarthestSide }
 
@@ -88,6 +95,12 @@ namespace PeachPDF.CSS
             /// <summary>Center y, same convention as <see cref="CenterX"/>.</summary>
             public string CenterY { get; private init; }
 
+            // --- path() ---
+            /// <summary>The parsed SVG path-data segments (already validated non-empty/well-formed
+            /// by <see cref="SvgPathDataParser.TryParse"/>), in the path's own coordinate system.</summary>
+            public IReadOnlyList<PathSegment> PathSegments { get; private init; }
+            public FillRule PathFillRule { get; private init; }
+
             internal static ParsedBasicShape Polygon(FillRule fillRule, IReadOnlyList<Point> points) => new()
             {
                 Kind = BasicShapeKind.Polygon,
@@ -119,6 +132,13 @@ namespace PeachPDF.CSS
                 CenterX = centerX,
                 CenterY = centerY,
             };
+
+            internal static ParsedBasicShape Path(FillRule fillRule, IReadOnlyList<PathSegment> segments) => new()
+            {
+                Kind = BasicShapeKind.Path,
+                PathFillRule = fillRule,
+                PathSegments = segments,
+            };
         }
 
         /// <summary>
@@ -140,6 +160,7 @@ namespace PeachPDF.CSS
             if (function.Data.Isi(FunctionNames.Inset)) return ParseInset(args);
             if (function.Data.Isi(FunctionNames.Circle)) return ParseCircle(args);
             if (function.Data.Isi(FunctionNames.Ellipse)) return ParseEllipse(args);
+            if (function.Data.Isi(FunctionNames.Path)) return ParsePath(args);
 
             return null;
         }
@@ -149,7 +170,7 @@ namespace PeachPDF.CSS
             var groups = SplitByComma(args);
             if (groups.Count == 0) return null;
 
-            var fillRule = FillRule.Nonzero;
+            var fillRule = FillRule.NonZero;
             var firstGroup = 0;
 
             // An optional leading fill-rule ident is its own comma-separated group: "polygon(evenodd, x y, ...)".
@@ -249,6 +270,36 @@ namespace PeachPDF.CSS
             return ParsedBasicShape.Ellipse(rx, ry, centerX, centerY);
         }
 
+        /// <summary>
+        /// Parses <c>path( [&lt;fill-rule&gt;,]? &lt;string&gt; )</c>. Per CSS Shapes Level 1, the
+        /// string must be well-formed, non-empty SVG 1.1 path data or the whole <c>path()</c> - and
+        /// therefore the whole <c>clip-path</c> value - is invalid; that conformance is checked here,
+        /// up front, by actually running <see cref="SvgPathDataParser.TryParse"/> rather than
+        /// deferring it, since a raw component string can't distinguish "well-formed" from
+        /// "malformed" the way a length-percentage's calc() text can.
+        /// </summary>
+        private static ParsedBasicShape ParsePath(IReadOnlyList<Token> args)
+        {
+            var groups = SplitByComma(args);
+            if (groups.Count is not (1 or 2)) return null;
+
+            var fillRule = FillRule.NonZero;
+            var stringGroupIndex = 0;
+
+            if (groups.Count == 2)
+            {
+                if (groups[0].Count != 1 || !TryFillRule(groups[0][0], out fillRule)) return null;
+                stringGroupIndex = 1;
+            }
+
+            var stringGroup = groups[stringGroupIndex];
+            if (stringGroup.Count != 1 || stringGroup[0].Type != TokenType.String) return null;
+
+            return SvgPathDataParser.TryParse(stringGroup[0].Data, out var segments)
+                ? ParsedBasicShape.Path(fillRule, segments)
+                : null;
+        }
+
         /// <summary>Resolves the optional <c>at &lt;position&gt;</c> tail (via the shared
         /// <see cref="BackgroundPositionGrammar"/>) to center-x/center-y component strings; defaults to
         /// <c>50% 50%</c> when absent.</summary>
@@ -344,11 +395,11 @@ namespace PeachPDF.CSS
         {
             if (token.Type == TokenType.Ident)
             {
-                if (token.Data.Isi(Keywords.Nonzero)) { fillRule = FillRule.Nonzero; return true; }
-                if (token.Data.Isi(Keywords.Evenodd)) { fillRule = FillRule.Evenodd; return true; }
+                if (token.Data.Isi(Keywords.Nonzero)) { fillRule = FillRule.NonZero; return true; }
+                if (token.Data.Isi(Keywords.Evenodd)) { fillRule = FillRule.EvenOdd; return true; }
             }
 
-            fillRule = FillRule.Nonzero;
+            fillRule = FillRule.NonZero;
             return false;
         }
 

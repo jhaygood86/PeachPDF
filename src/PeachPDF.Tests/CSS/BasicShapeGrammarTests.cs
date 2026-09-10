@@ -1,5 +1,6 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Parse;
+using PeachPDF.Svg;
 using System.Linq;
 using Xunit;
 
@@ -7,7 +8,7 @@ namespace PeachPDF.Tests.CSS
 {
     /// <summary>
     /// Tests for the shared <see cref="BasicShapeGrammar"/> (Layer-agnostic parse of the
-    /// <c>polygon()/inset()/circle()/ellipse()</c> basic-shape grammar) and the <c>clip-path</c>
+    /// <c>polygon()/inset()/circle()/ellipse()/path()</c> basic-shape grammar) and the <c>clip-path</c>
     /// Layer-A converter (<see cref="ClipPathValueConverter"/>) that accepts/rejects and preserves it.
     /// </summary>
     public class BasicShapeGrammarTests : CssConstructionFunctions
@@ -24,7 +25,7 @@ namespace PeachPDF.Tests.CSS
 
             Assert.NotNull(shape);
             Assert.Equal(BasicShapeGrammar.BasicShapeKind.Polygon, shape.Kind);
-            Assert.Equal(BasicShapeGrammar.FillRule.Nonzero, shape.PolygonFillRule);
+            Assert.Equal(BasicShapeGrammar.FillRule.NonZero, shape.PolygonFillRule);
             Assert.Equal(3, shape.PolygonPoints.Count);
             Assert.Equal(("0", "0"), (shape.PolygonPoints[0].X, shape.PolygonPoints[0].Y));
             Assert.Equal(("100%", "0"), (shape.PolygonPoints[1].X, shape.PolygonPoints[1].Y));
@@ -39,7 +40,7 @@ namespace PeachPDF.Tests.CSS
             var shape = Parse(value);
 
             Assert.NotNull(shape);
-            var expected = expectEvenodd ? BasicShapeGrammar.FillRule.Evenodd : BasicShapeGrammar.FillRule.Nonzero;
+            var expected = expectEvenodd ? BasicShapeGrammar.FillRule.EvenOdd : BasicShapeGrammar.FillRule.NonZero;
             Assert.Equal(expected, shape.PolygonFillRule);
             Assert.Equal(3, shape.PolygonPoints.Count);
         }
@@ -253,6 +254,58 @@ namespace PeachPDF.Tests.CSS
             Assert.Null(Parse(value));
         }
 
+        // ─── path() ────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void Path_SimpleString_ParsesSegmentsWithDefaultNonzeroFill()
+        {
+            var shape = Parse("""path("M0 0 L10 0 L5 10 Z")""");
+
+            Assert.NotNull(shape);
+            Assert.Equal(BasicShapeGrammar.BasicShapeKind.Path, shape.Kind);
+            Assert.Equal(BasicShapeGrammar.FillRule.NonZero, shape.PathFillRule);
+            Assert.Equal(4, shape.PathSegments.Count);
+            Assert.Equal(PathSegmentKind.MoveTo, shape.PathSegments[0].Kind);
+            Assert.Equal(PathSegmentKind.ClosePath, shape.PathSegments[3].Kind);
+        }
+
+        [Theory]
+        [InlineData("""path(evenodd, "M0 0 L10 0 L5 10 Z")""", true)]
+        [InlineData("""path(nonzero, "M0 0 L10 0 L5 10 Z")""", false)]
+        public void Path_ExplicitFillRule_IsCaptured(string value, bool expectEvenodd)
+        {
+            var shape = Parse(value);
+
+            Assert.NotNull(shape);
+            var expected = expectEvenodd ? BasicShapeGrammar.FillRule.EvenOdd : BasicShapeGrammar.FillRule.NonZero;
+            Assert.Equal(expected, shape.PathFillRule);
+            Assert.Equal(4, shape.PathSegments.Count);
+        }
+
+        [Fact]
+        public void Path_CurvesAndArcs_ArePreservedAsSegments()
+        {
+            var shape = Parse("""path("M0 0 C1 2 3 4 5 6 A5 5 0 00 5 5")""");
+
+            Assert.NotNull(shape);
+            Assert.Equal(3, shape.PathSegments.Count);
+            Assert.Equal(PathSegmentKind.CubicBezierTo, shape.PathSegments[1].Kind);
+            Assert.Equal(PathSegmentKind.ArcTo, shape.PathSegments[2].Kind);
+        }
+
+        [Theory]
+        [InlineData("path()")]                                 // no argument
+        [InlineData("path(42)")]                                // not a string
+        [InlineData("""path(evenodd "M0 0 L10 10 Z")""")]       // missing comma before the string
+        [InlineData("""path("M0 0 L10 10 Z", "extra")""")]      // extra argument
+        [InlineData("""path("")""")]                            // empty path data - "defines an empty path"
+        [InlineData("""path("not valid path data")""")]         // doesn't conform to SVG 1.1 grammar
+        [InlineData("""path("M10 10 L")""")]                    // truncated/malformed command
+        public void Path_Malformed_ReturnsNull(string value)
+        {
+            Assert.Null(Parse(value));
+        }
+
         // ─── top-level rejection ────────────────────────────────────────────────
 
         [Theory]
@@ -273,6 +326,7 @@ namespace PeachPDF.Tests.CSS
         [InlineData("inset(10px 20px round 4px)")]
         [InlineData("circle(50px at center)")]
         [InlineData("ellipse(closest-side farthest-side)")]
+        [InlineData("""path("M0 0 L10 0 L5 10 Z")""")]
         public void ClipPath_ValidValue_SurvivesParsing(string value)
         {
             var property = ParseDeclaration($"clip-path: {value}");
@@ -288,6 +342,7 @@ namespace PeachPDF.Tests.CSS
         [InlineData("banana")]
         [InlineData("polygon(0)")]
         [InlineData("circle(10px 20px)")]
+        [InlineData("""path("not valid path data")""")]
         public void ClipPath_InvalidValue_IsDropped(string value)
         {
             var property = ParseDeclaration($"clip-path: {value}");

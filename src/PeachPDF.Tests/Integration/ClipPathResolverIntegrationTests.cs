@@ -146,10 +146,79 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(90, points.Max(p => p.Y), 3);   // 50 + 40
         }
 
+        [Fact]
+        public async Task Path_ResolvesPxCoordinatesAgainstReferenceBoxOrigin_NoAxisScaling()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics();
+            var reference = new RRect(100, 200, 300, 400);
+
+            // path() coordinates are unitless CSS pixels (1px = 0.75pt via Length.PointsPerPx),
+            // translated (not scaled) so the path's own (0,0) lands on the reference box's origin.
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, """path("M0 0 L100 0 L0 100 Z")""", reference, box, out var path, out var useEvenOdd);
+
+            Assert.True(built);
+            Assert.False(useEvenOdd);
+            var points = ((TestGraphicsPath)path!).Points;
+
+            Assert.Equal(3, points.Count); // M, L, L - Z closes without adding a point
+            Assert.Equal(100, points[0].X, 3);
+            Assert.Equal(200, points[0].Y, 3);
+            Assert.Equal(175, points[1].X, 3);  // 100 + 100px*0.75
+            Assert.Equal(200, points[1].Y, 3);
+            Assert.Equal(100, points[2].X, 3);
+            Assert.Equal(275, points[2].Y, 3);  // 200 + 100px*0.75
+        }
+
+        [Fact]
+        public async Task Path_Evenodd_SetsUseEvenOdd()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics();
+            var reference = new RRect(0, 0, 100, 100);
+
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, """path(evenodd, "M0 0 L10 0 L0 10 Z")""", reference, box, out var path, out var useEvenOdd);
+
+            Assert.True(built);
+            Assert.True(useEvenOdd);
+            Assert.Equal(RFillMode.EvenOdd, path!.FillMode);
+        }
+
+        [Fact]
+        public async Task Path_CubicAndArcCommands_ProduceMatchingRGraphicsPathCalls()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics();
+            var reference = new RRect(0, 0, 100, 100);
+
+            // A diametrically-opposed (180°) arc: this is the shape that previously exposed a bug
+            // where direction must come from the sweep flag alone, not endpoint geometry (see
+            // .claude/invariants/svg-diametric-arc-direction-comes-from-sweep-flag.md) - full
+            // sweep-direction correctness is verified visually via the showcase/rasterization, but
+            // this locks in that the arc's endpoint is translated/scaled the same as every other
+            // command.
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, """path("M0 0 C4 0 4 4 0 4 A2 2 0 0 1 0 0")""", reference, box, out var path, out _);
+
+            Assert.True(built);
+            var points = ((TestGraphicsPath)path!).Points;
+
+            // M(0,0) -> (0,0); C's three points at 4px*0.75=3pt; A's endpoint back at (0,0).
+            Assert.Equal(5, points.Count);
+            Assert.Equal(0, points[0].X, 3); Assert.Equal(0, points[0].Y, 3);
+            Assert.Equal(3, points[1].X, 3); Assert.Equal(0, points[1].Y, 3);
+            Assert.Equal(3, points[2].X, 3); Assert.Equal(3, points[2].Y, 3);
+            Assert.Equal(0, points[3].X, 3); Assert.Equal(3, points[3].Y, 3);
+            Assert.Equal(0, points[4].X, 3); Assert.Equal(0, points[4].Y, 3);
+        }
+
         [Theory]
         [InlineData("none")]
         [InlineData("banana")]
         [InlineData("")]
+        [InlineData("""path("not valid path data")""")]
         public async Task InvalidOrNone_ReturnsFalse(string value)
         {
             var box = await BuildBoxAsync();
@@ -237,6 +306,30 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(75, points.Max(p => p.X), 3);
             Assert.Equal(0, points.Min(p => p.Y), 3);
             Assert.Equal(50, points.Max(p => p.Y), 3);
+        }
+
+        [Fact]
+        public async Task Path_NonDefaultPixelsPerPoint_DividesFinalCoordinates()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
+            var reference = new RRect(100, 200, 300, 400);
+
+            // Halved coordinates of Path_ResolvesPxCoordinatesAgainstReferenceBoxOrigin_NoAxisScaling's
+            // (100,200)/(175,200)/(100,275).
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, """path("M0 0 L100 0 L0 100 Z")""", reference, box, out var path, out _);
+
+            Assert.True(built);
+            var points = ((TestGraphicsPath)path!).Points;
+
+            Assert.Equal(3, points.Count);
+            Assert.Equal(50, points[0].X, 3);
+            Assert.Equal(100, points[0].Y, 3);
+            Assert.Equal(87.5, points[1].X, 3);
+            Assert.Equal(100, points[1].Y, 3);
+            Assert.Equal(50, points[2].X, 3);
+            Assert.Equal(137.5, points[2].Y, 3);
         }
     }
 }

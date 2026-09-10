@@ -229,5 +229,42 @@ namespace PeachPDF.Tests.Svg
 
             Assert.Equal(2, segments.Count);
         }
+
+        [Fact]
+        public void TryParse_WellFormedMultiCommandString_ReturnsTrueWithSameSegmentsAsParse()
+        {
+            const string d = "M0 0 L10 10 C1 2 3 4 5 6 A5 5 0 00 5 5 Z";
+
+            var ok = SvgPathDataParser.TryParse(d, out var segments);
+
+            Assert.True(ok);
+            Assert.Equal(SvgPathDataParser.Parse(d), segments);
+        }
+
+        [Theory]
+        [InlineData("M10 10 L")] // truncated command
+        [InlineData("10 10")] // leading token isn't a command letter
+        [InlineData("M0 0 X10 10")] // unrecognized command letter
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void TryParse_MalformedOrEmptyInput_ReturnsFalse(string? d)
+        {
+            var ok = SvgPathDataParser.TryParse(d, out var segments);
+
+            Assert.False(ok);
+        }
+
+        [Fact]
+        public void TryParse_WhitespaceOnlyInput_ReturnsFalseWithNoSegments()
+        {
+            // Whitespace-only "d" reaches the natural end of the string with zero commands read -
+            // syntactically it doesn't hit any error path, but it still describes an empty path,
+            // which the spec calls out as its own invalidity condition distinct from malformed input.
+            var ok = SvgPathDataParser.TryParse("   ", out var segments);
+
+            Assert.False(ok);
+            Assert.Empty(segments);
+        }
     }
 }

@@ -18,6 +18,7 @@ namespace PeachPDF.CSS
         public const string Circle = "circle";
         public const string Ellipse = "ellipse";
         public const string Inset = "inset";
+        public const string Path = "path";
         public const string Repeat = "repeat";
         public const string Minmax = "minmax";
         public const string FitContent = "fit-content";
