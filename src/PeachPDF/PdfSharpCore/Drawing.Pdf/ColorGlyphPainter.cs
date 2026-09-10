@@ -1,8 +1,9 @@
 #region PeachPDF - A .NET library for rendering HTML to PDF
 //
 // Paints color-font (COLR/CPAL) glyphs as vector fills into the PDF content
-// stream, instead of embedding the font program and showing CID text. Driven
-// from XGraphicsPdfRenderer.DrawString for fonts that report IsColorFont.
+// stream. A small embedded subset is used only for invisible selectable text;
+// it never supplies the visible glyph artwork. Driven from
+// XGraphicsPdfRenderer.DrawString for fonts that report IsColorFont.
 //
 //   - COLR v0: each base glyph is a stack of (layer glyph, palette color)
 //     outlines painted bottom-to-top (this file).
@@ -16,7 +17,9 @@
 //
 #endregion
 
+using System;
 using System.Collections.Generic;
+using System.Text;
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Text;
@@ -30,6 +33,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         private readonly XGraphicsPdfRenderer _renderer;
         private readonly XGraphics _gfx;
         private readonly OpenTypeDescriptor _descriptor;
+        private readonly XFont _font;
+        private readonly XBrush _textBrush;
         private readonly double _scale;         // design units -> world units
         private readonly double _letterSpacing; // world units
         private readonly bool _pageDownwards;
@@ -47,6 +52,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _renderer = renderer;
             _gfx = renderer.Gfx;
             _descriptor = descriptor;
+            _font = font;
+            _textBrush = brush;
             _scale = font.Size / descriptor.UnitsPerEm;
             _letterSpacing = letterSpacing;
             _pageDownwards = pageDirection == XPageDirection.Downwards;
@@ -57,17 +64,170 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _baselineY = baselineY;
         }
 
-        /// <summary>Paints every shaped glyph of the run, advancing the pen by each glyph's advance width.</summary>
-        public void Paint(string text, TextShapingFeatures features)
+        /// <summary>
+        /// Paints every shaped glyph of the run as vectors, then emits one shared rendering-mode-3 text
+        /// object whose source-bearing glyphs are individually wrapped in Unicode <c>/ActualText</c>.
+        /// The vector paths remain the only visible ink; the text show adds selection geometry and
+        /// <c>/ActualText</c> preserves the exact per-occurrence Unicode sequence.
+        /// </summary>
+        public void Paint(string text, TextShapingFeatures features, string? logicalText = null)
         {
+            IReadOnlyList<ShapedGlyph> glyphs = _descriptor.Shape(text, features);
+            string?[] actualTextByGlyph = BuildActualTextByGlyph(text, logicalText, glyphs);
             double penX = 0;
-            foreach (ShapedGlyph glyph in _descriptor.Shape(text, features))
+            for (int i = 0; i < glyphs.Count; i++)
             {
+                ShapedGlyph glyph = glyphs[i];
+                double glyphX = _baselineX + penX + glyph.XOffset * _scale;
+
                 // GPOS positioning (kerning's XOffset, mark attachment's XOffset/YOffset) shifts where
                 // this glyph paints without changing its own outline shape - see GposPositioner.
-                PaintGlyph(glyph.GlyphIndex, _baselineX + penX + glyph.XOffset * _scale, glyph.YOffset * _scale);
+                PaintGlyph(glyph.GlyphIndex, glyphX, glyph.YOffset * _scale);
+
                 penX += (_descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
             }
+
+            bool hasSelectableGlyph = false;
+            for (int i = 0; i < actualTextByGlyph.Length; i++)
+                hasSelectableGlyph |= actualTextByGlyph[i] is { Length: > 0 };
+            if (!hasSelectableGlyph)
+                return;
+
+            // Paths force graphic mode, so paint all visible artwork first and then share one BT/ET pair
+            // across the run. /ActualText remains per glyph because the same CID can represent distinct
+            // source sequences at different occurrences (for example heart with and without VS16).
+            _renderer.BeginInvisibleTextRun(_font, _textBrush);
+            try
+            {
+                penX = 0;
+                for (int i = 0; i < glyphs.Count; i++)
+                {
+                    ShapedGlyph glyph = glyphs[i];
+                    if (actualTextByGlyph[i] is { Length: > 0 } actualText)
+                    {
+                        double glyphX = _baselineX + penX + glyph.XOffset * _scale;
+                        double glyphY = _pageDownwards
+                            ? _baselineY - glyph.YOffset * _scale
+                            : _baselineY + glyph.YOffset * _scale;
+
+                        _renderer.BeginActualText(actualText);
+                        try
+                        {
+                            _renderer.DrawInvisibleGlyph(_font, glyph, actualText, glyphX, glyphY);
+                        }
+                        finally
+                        {
+                            _renderer.EndMarkedContent();
+                        }
+                    }
+
+                    // A GSUB Multiple Substitution's second and later output glyphs deliberately own no
+                    // source characters: the first output carries the original cluster once, rather than
+                    // every painted expansion glyph making extraction repeat it.
+                    penX += (_descriptor.GlyphIndexToWidth(glyph.GlyphIndex) + glyph.XAdvanceDelta) * _scale + _letterSpacing;
+                }
+            }
+            finally
+            {
+                _renderer.EndInvisibleTextRun();
+            }
+        }
+
+        /// <summary>
+        /// Assigns every UTF-16 code unit in the original run to exactly one surviving shaped glyph.
+        /// Besides the ordinary one-character and ligature cases, this keeps default-ignorables that
+        /// shaping consumed or deleted (VS16, ZWJ, emoji tag characters, bidi controls) in the copied
+        /// text even though they correctly have no painted glyph of their own.
+        /// </summary>
+        internal static string?[] BuildActualTextByGlyph(string text, string? logicalText, IReadOnlyList<ShapedGlyph> glyphs)
+        {
+            var result = new string?[glyphs.Count];
+            if (text.Length == 0 || glyphs.Count == 0)
+                return result;
+
+            // Matches CMapInfo.AddShapedText's contract: logicalText differs only when it is a
+            // positionally-aligned source for an already bidi-transformed display string.
+            string source = logicalText != null && logicalText.Length == text.Length && logicalText != text
+                ? logicalText
+                : text;
+
+            var ownerByCodeUnit = new int[text.Length];
+            Array.Fill(ownerByCodeUnit, -1);
+
+            // A ligature span can overlap a separately-painted skipped mark. Let the widest span own
+            // those characters first; the mark then contributes its vector ink without duplicating text.
+            var sourceBearingGlyphs = new List<int>(glyphs.Count);
+            for (int i = 0; i < glyphs.Count; i++)
+            {
+                if (glyphs[i].ClusterLength > 0)
+                    sourceBearingGlyphs.Add(i);
+            }
+            sourceBearingGlyphs.Sort((left, right) =>
+            {
+                int byLength = glyphs[right].ClusterLength.CompareTo(glyphs[left].ClusterLength);
+                if (byLength != 0)
+                    return byLength;
+
+                int byStart = glyphs[left].ClusterStart.CompareTo(glyphs[right].ClusterStart);
+                return byStart != 0 ? byStart : left.CompareTo(right);
+            });
+
+            foreach (int glyphIndex in sourceBearingGlyphs)
+            {
+                ShapedGlyph glyph = glyphs[glyphIndex];
+                int start = Math.Clamp(glyph.ClusterStart, 0, text.Length);
+                int end = Math.Clamp(glyph.ClusterStart + glyph.ClusterLength, start, text.Length);
+                for (int codeUnit = start; codeUnit < end; codeUnit++)
+                {
+                    if (ownerByCodeUnit[codeUnit] < 0)
+                        ownerByCodeUnit[codeUnit] = glyphIndex;
+                }
+            }
+
+            // Any unowned interval came from a source character which left no surviving glyph. Attach
+            // an interior/trailing interval to its preceding cluster (heart + VS16 is the canonical
+            // case), or a leading interval to the following cluster.
+            int gapStart = 0;
+            while (gapStart < ownerByCodeUnit.Length)
+            {
+                if (ownerByCodeUnit[gapStart] >= 0)
+                {
+                    gapStart++;
+                    continue;
+                }
+
+                int gapEnd = gapStart + 1;
+                while (gapEnd < ownerByCodeUnit.Length && ownerByCodeUnit[gapEnd] < 0)
+                    gapEnd++;
+
+                int owner = gapStart > 0 ? ownerByCodeUnit[gapStart - 1] : -1;
+                if (owner < 0 && gapEnd < ownerByCodeUnit.Length)
+                    owner = ownerByCodeUnit[gapEnd];
+
+                if (owner >= 0)
+                {
+                    for (int codeUnit = gapStart; codeUnit < gapEnd; codeUnit++)
+                        ownerByCodeUnit[codeUnit] = owner;
+                }
+
+                gapStart = gapEnd;
+            }
+
+            var builders = new StringBuilder?[glyphs.Count];
+            for (int codeUnit = 0; codeUnit < source.Length; codeUnit++)
+            {
+                int owner = ownerByCodeUnit[codeUnit];
+                if (owner < 0)
+                    continue;
+
+                builders[owner] ??= new StringBuilder();
+                builders[owner]!.Append(source[codeUnit]);
+            }
+
+            for (int i = 0; i < builders.Length; i++)
+                result[i] = builders[i]?.ToString();
+
+            return result;
         }
 
         private void PaintGlyph(int glyphId, double originX, double originYOffset = 0)

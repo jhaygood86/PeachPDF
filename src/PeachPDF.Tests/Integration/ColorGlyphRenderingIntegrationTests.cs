@@ -8,15 +8,17 @@ using System.Threading.Tasks;
 using PeachPDF;
 using PeachPDF.Fonts;
 using PeachPDF.PdfSharpCore;
+using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.Tests.TestSupport;
+using PeachPDF.Text;
 using Xunit;
 
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// End-to-end tests that a COLR/CPAL color font renders its glyphs as layered vector fills in
-    /// the content stream (multiple solid fills per glyph, in the palette colors) instead of an
-    /// embedded-font Tj text show.
+    /// the content stream (multiple solid fills per glyph, in the palette colors), with an invisible
+    /// embedded-font text show solely for selection/search/copy geometry.
     /// </summary>
     public class ColorGlyphRenderingIntegrationTests
     {
@@ -58,13 +60,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ColrV0Glyph_PaintsLayeredSolidFills_AndNoTextShow()
+        public async Task ColrV0Glyph_PaintsLayeredSolidFills_AndInvisibleTextShow()
         {
             // 'A' is authored as a red box under a green triangle.
             string pdf = await RenderWithColorFont(BundledFonts.ColorV0, "A");
 
-            // No CID text show for a color glyph - it is drawn as vector fills.
-            Assert.Equal(0, Count(pdf, " Tj"));
+            // The CID text show is rendering mode 3 (invisible); vector fills remain the visible ink.
+            Assert.Contains("3 Tr", pdf);
+            Assert.Equal(1, Count(pdf, " Tj"));
+            Assert.Equal(1, Count(pdf, "BT\n"));
+            Assert.Equal(1, Count(pdf, "ET\n"));
+            Assert.Contains("/FontFile2", pdf);
 
             var fills = FillColors(pdf);
             // Two layers -> two distinct solid fills.
@@ -80,7 +86,7 @@ namespace PeachPDF.Tests.Integration
             // 'X' maps to the plain 'box' outline (no COLR record): drawn once in the text color.
             string pdf = await RenderWithColorFont(BundledFonts.ColorV0, "X");
 
-            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Equal(1, Count(pdf, " Tj"));
             var fills = FillColors(pdf);
             Assert.Contains(fills, c => Approx(c, 0, 0, 0)); // black text color
         }
@@ -91,7 +97,7 @@ namespace PeachPDF.Tests.Integration
             // 'A' in the v1 font is PaintColrLayers of two PaintGlyph->PaintSolid layers.
             string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "A");
 
-            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Equal(1, Count(pdf, " Tj"));
             var fills = FillColors(pdf);
             Assert.Contains(fills, c => Approx(c, 1, 0, 0));   // red box layer
             Assert.Contains(fills, c => Approx(c, 0, 0.5, 0)); // green triangle layer
@@ -105,7 +111,7 @@ namespace PeachPDF.Tests.Integration
             // 'G' is PaintGlyph(box) -> PaintLinearGradient (red -> blue).
             string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "G");
 
-            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Equal(1, Count(pdf, " Tj"));
             Assert.Contains("/ShadingType 2", pdf);            // axial (linear) gradient shading
             Assert.True(Count(pdf, "W n") >= 1, "the gradient is clipped to the glyph outline");
         }
@@ -116,7 +122,7 @@ namespace PeachPDF.Tests.Integration
             // 'M' is PaintComposite(source=blue tri, MULTIPLY, backdrop=yellow box).
             string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "M");
 
-            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Equal(1, Count(pdf, " Tj"));
             Assert.Contains("/BM", pdf);
             Assert.Contains("/Multiply", pdf);
         }
@@ -127,7 +133,7 @@ namespace PeachPDF.Tests.Integration
             // 'F' is a REFLECT-extend linear gradient; the stops are tiled/mirrored across periods.
             string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "F");
 
-            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Equal(1, Count(pdf, " Tj"));
             Assert.Contains("/ShadingType 2", pdf);
             // The reflect expansion produces more than the two authored stops (a multi-bound stitching
             // function), unlike a plain 2-stop pad gradient.
@@ -135,16 +141,66 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task RealNotoColorEmoji_RendersAsVectorFillsWithGradients_NoTextShow()
+        public async Task RealNotoColorEmoji_RendersAsVectorFillsWithGradients_AndInvisibleSelectableText()
         {
             // End-to-end against the real COLR v1 Noto Color Emoji subset: an emoji run must paint as
-            // vector content (fills + gradient shadings), with no CID text show and no embedded font.
+            // vector content (fills + gradient shadings), while invisible CID text supplies selection.
             string pdf = await RenderWithColorFont(BundledFonts.ColorEmoji, "\U0001F600\U0001F308"); // grin, rainbow
 
-            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Equal(2, Count(pdf, " Tj"));
+            Assert.Contains("3 Tr", pdf);
             Assert.True(Count(pdf, "\nf\n") >= 1, "emoji should paint vector fills");
             Assert.Contains("/ShadingType", pdf);        // real Noto emoji use gradients
-            Assert.DoesNotContain("/FontFile2", pdf);     // the color font is not embedded
+            Assert.Contains("/FontFile2", pdf);
+            Assert.Contains("/ActualText <FEFFD83DDE00>", pdf); // grin
+            Assert.Contains("/ActualText <FEFFD83CDF08>", pdf); // rainbow
+        }
+
+        [Fact]
+        public async Task ColorEmojiSequence_CarriesItsWholeSourceAsActualText()
+        {
+            // Noto composes this six-UTF-16-unit sequence to one COLR glyph. Its vector paint must be
+            // represented by one exact replacement string, including the otherwise-deleted VS16 and ZWJ.
+            string pdf = await RenderWithColorFont(BundledFonts.ColorEmojiSequences,
+                "\U0001F3F3\uFE0F\u200D\U0001F308"); // rainbow flag
+
+            Assert.Equal(1, Count(pdf, " Tj"));
+            Assert.Contains("3 Tr", pdf);
+            Assert.Contains("/FontFile2", pdf);
+            Assert.Contains("/ActualText <FEFFD83CDFF3FE0F200DD83CDF08>", pdf);
+        }
+
+        [Fact]
+        public async Task SameGlyphWithAndWithoutTrailingVariationSelector_KeepsPerOccurrenceActualText()
+        {
+            // This font deliberately has no cmap glyph for VS16. Shape deletes its flagged .notdef at
+            // the end, but the source code unit still belongs to the preceding visible heart for copy.
+            // The two occurrences resolve to the same glyph ID, which is why a glyph-keyed /ToUnicode
+            // map could not preserve both spellings while per-occurrence /ActualText can.
+            string pdf = await RenderWithColorFont(BundledFonts.ColorEmojiSequences, "\u2764 \u2764\uFE0F");
+
+            Assert.Equal(2, Count(pdf, " Tj"));
+            Assert.Contains("/ActualText <FEFF2764>", pdf);
+            Assert.Contains("/ActualText <FEFF2764FE0F>", pdf);
+        }
+
+        [Fact]
+        public void ActualTextOwnership_UsesPositionallyAlignedLogicalTextForBidiTransformedRun()
+        {
+            // Mirrors CMapInfo.AddShapedText's contract. The displayed RTL run was reversed/mirrored
+            // from source "(AB)" into "(BA)"; ReverseRunes(source) = ")BA(" is the logical source
+            // aligned position-for-position with the displayed glyphs.
+            ShapedGlyph[] glyphs =
+            [
+                new(1, 0, 1),
+                new(2, 1, 1),
+                new(3, 2, 1),
+                new(4, 3, 1)
+            ];
+
+            string?[] actualText = ColorGlyphPainter.BuildActualTextByGlyph("(BA)", ")BA(", glyphs);
+
+            Assert.Equal(new string?[] { ")", "B", "A", "(" }, actualText);
         }
 
         [Fact]
@@ -153,7 +209,7 @@ namespace PeachPDF.Tests.Integration
             // R = radial, S = sweep, C/O/K/W/D/E/H/I/J = every transform variant, L = colr-glyph reference.
             string pdf = await RenderWithColorFont(BundledFonts.ColorV1, "RSCOKWLDEHIJ");
 
-            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Equal(12, Count(pdf, " Tj"));
             Assert.Contains("/ShadingType 3", pdf);   // radial gradient
             Assert.Contains("/ShadingType 4", pdf);   // sweep (conic) gradient mesh
             // Transform and colr-glyph paints still fill palette colors within glyph clips.
@@ -178,7 +234,7 @@ namespace PeachPDF.Tests.Integration
             doc.Save(ms);
             var pdf = Encoding.Latin1.GetString(ms.ToArray());
 
-            Assert.Equal(0, Count(pdf, " Tj"));
+            Assert.Equal(1, Count(pdf, " Tj"));
             // The color glyph still paints (its layers fill), and generating the PDF exercises the
             // shared underline/strikeout decoration path on the color-font branch without error.
             Assert.True(Count(pdf, "\nf\n") >= 2, "the color glyph's layers should fill");
@@ -202,6 +258,8 @@ namespace PeachPDF.Tests.Integration
             var pdf = Encoding.Latin1.GetString(ms.ToArray());
 
             Assert.True(Count(pdf, " Tj") >= 1, "ordinary text should still emit a Tj show");
+            Assert.DoesNotContain("3 Tr", pdf);
+            Assert.DoesNotContain("/ActualText", pdf);
         }
 
         private static bool Approx((double R, double G, double B) c, double r, double g, double b)

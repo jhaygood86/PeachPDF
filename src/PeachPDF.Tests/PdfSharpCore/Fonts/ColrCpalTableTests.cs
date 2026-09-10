@@ -214,6 +214,40 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
         }
 
         [Fact]
+        public void FontSubset_SelectedEmptyColrBaseGetsSyntheticContour_WithoutEmbeddingItsLayers()
+        {
+            OpenTypeFontface face = Face(BundledFonts.ColorV0);
+            int baseGlyph = Gid(face, 'A');
+            int boxLayer = Gid(face, 'X');
+            int triangleLayer = Gid(face, 'Y');
+
+            Assert.Equal(0, NumberOfContours(face.glyf.GetGlyphData(baseGlyph)));
+
+            var selected = new Dictionary<int, object> { [baseGlyph] = null! };
+            OpenTypeFontface subset = face.CreateFontSubSet(selected, cidFont: true);
+
+            int baseStart = subset.loca.LocaTable[baseGlyph];
+            int baseLength = subset.loca.LocaTable[baseGlyph + 1] - baseStart;
+            ReadOnlySpan<byte> synthetic = subset.glyf.GlyphTable.AsSpan(baseStart, baseLength);
+            Assert.Equal(1, NumberOfContours(synthetic));
+
+            // The stand-in outline spans the glyph's real box. A viewer derives the character's
+            // selection rectangle from these extents, so a token contour would leave a search hit or a
+            // mouse drag with a hit target far smaller than the color artwork painted over it.
+            Assert.Equal(0, (int)Int16At(synthetic, 2));                                    // xMin
+            Assert.Equal((int)face.hhea.descender, (int)Int16At(synthetic, 4));                  // yMin
+            // Past numberOfHMetrics the last advance repeats, which is how the subset builder reads it.
+            int metricIndex = Math.Min(baseGlyph, face.hmtx.Metrics.Length - 1);
+            Assert.Equal((int)face.hmtx.Metrics[metricIndex].advanceWidth, (int)Int16At(synthetic, 6)); // xMax
+            Assert.Equal((int)face.hhea.ascender, (int)Int16At(synthetic, 8));                   // yMax
+
+            // The invisible Tj references only the base CID. Its COLR layer outlines are painted from
+            // the original in-memory font as PDF paths and therefore do not belong in the PDF subset.
+            Assert.Equal(0, subset.loca.LocaTable[boxLayer + 1] - subset.loca.LocaTable[boxLayer]);
+            Assert.Equal(0, subset.loca.LocaTable[triangleLayer + 1] - subset.loca.LocaTable[triangleLayer]);
+        }
+
+        [Fact]
         public void OrdinaryFont_HasNoColorTables()
         {
             OpenTypeFontface face = Face(BundledFonts.Ttf);
@@ -226,5 +260,11 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.True(cpal.TryGetColor(0, entry, out var color));
             Assert.Equal((r, g, b, a), color);
         }
+
+        private static short NumberOfContours(ReadOnlySpan<byte> glyphData)
+            => glyphData.Length < 2 ? (short)0 : Int16At(glyphData, 0);
+
+        private static short Int16At(ReadOnlySpan<byte> glyphData, int offset)
+            => (short)((glyphData[offset] << 8) | glyphData[offset + 1]);
     }
 }

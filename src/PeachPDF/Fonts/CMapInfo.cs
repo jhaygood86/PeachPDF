@@ -143,6 +143,19 @@ namespace PeachPDF.Fonts
             }
         }
 
+        /// <summary>
+        /// Registers one already-shaped glyph for font subsetting and maps its CID back to the source
+        /// text it represents. Used by color-font vector painting's invisible text show, where shaping
+        /// has already happened and repeating it merely to populate the PDF font would risk divergence.
+        /// Per-occurrence <c>/ActualText</c> remains authoritative when the same glyph ID represents
+        /// more than one source sequence in a document.
+        /// </summary>
+        public void AddShapedGlyph(int glyphIndex, string sourceText)
+        {
+            GlyphIndices[glyphIndex] = null;
+            LigatureGlyphToText[glyphIndex] = sourceText;
+        }
+
         public int[] GetGlyphIndices()
         {
             int[] indices = new int[GlyphIndices.Count];
