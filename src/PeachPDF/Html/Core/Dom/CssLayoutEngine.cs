@@ -3735,8 +3735,36 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         private static bool HasInterElementWhitespaceBefore(CssRectWord word) =>
-            DomUtils.PrecedingBoxAcrossFirstChildChain(word.OwnerBox)?.Text is { } text
-            && HtmlUtils.IsNullOrCollapsibleWhitespace(text);
+            DomUtils.PrecedingBoxAcrossFirstChildChain(word.OwnerBox) is { } predecessor
+            && EndsWithCollapsibleWhitespace(predecessor);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> ends in collapsible inter-element whitespace, descending to the
+        /// last text-bearing leaf rather than reading <see cref="CssBox.Text"/> off <paramref name="box"/>
+        /// itself - a structural container's own Text is always null, since its content lives in its
+        /// children. Reading only the immediate predecessor's Text hides whitespace nested inside a
+        /// non-leaf inline sibling (<c>&lt;span&gt;A&lt;/span&gt;&lt;b&gt;&lt;i&gt; &lt;/i&gt;&lt;/b&gt;&lt;span&gt;B&lt;/span&gt;</c>),
+        /// welding the text on either side into one unbreakable token. Mirrors the same descent the
+        /// regional-indicator parity walk in <see cref="CssBox"/> makes for the same reason.
+        /// </summary>
+        private static bool EndsWithCollapsibleWhitespace(CssBox box)
+        {
+            for (var i = box.Boxes.Count - 1; i >= 0; i--)
+            {
+                var child = box.Boxes[i];
+                if (EndsWithCollapsibleWhitespace(child))
+                    return true;
+
+                // Real content between that whitespace and this boundary ends the search; a child that
+                // contributed nothing at all (an empty inline) is skipped over to the one before it.
+                if (child.Text is not null || child.Words.Count > 0)
+                    return false;
+            }
+
+            return box.Boxes.Count == 0
+                && box.Text is { } text
+                && HtmlUtils.IsNullOrCollapsibleWhitespace(text);
+        }
 
         /// <summary>
         /// Splits an overflowing word at the last extended-grapheme-cluster boundary whose prefix fits.

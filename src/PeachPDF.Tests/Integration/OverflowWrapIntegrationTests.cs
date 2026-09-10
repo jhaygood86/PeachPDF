@@ -67,6 +67,38 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Normal_WhitespaceNestedInsideAPrecedingInlineIsAWrapOpportunity()
+        {
+            // The collapsible space lives two levels below the preceding sibling <b>, so the
+            // predecessor box found by walking the first-child chain carries no Text of its own.
+            // It is still real inter-element whitespace, and still a soft-wrap opportunity.
+            var html = LayoutHarness.Wrap("""
+                <p id="flat" style="width:55pt; font-size:16pt"><span>abcdefgh</span> <span>ijklmnop</span></p>
+                <p id="nested" style="width:55pt; font-size:16pt"><span>abcdefgh</span><b><i> </i></b><span>ijklmnop</span></p>
+                <p id="trailing" style="width:55pt; font-size:16pt"><span>abcdefgh</span><b><i> </i><u></u></b><span>ijklmnop</span></p>
+                <p id="text" style="width:55pt; font-size:16pt"><span>abcd</span><b><i>efgh</i></b><span>ijklmnop</span></p>
+                """);
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var flat = LayoutHarness.FindById(root, "flat")!;
+            var nested = LayoutHarness.FindById(root, "nested")!;
+            var trailing = LayoutHarness.FindById(root, "trailing")!;
+            var text = LayoutHarness.FindById(root, "text")!;
+
+            Assert.Equal(2, LinesWithText(flat));
+            Assert.Equal(LinesWithText(flat), LinesWithText(nested));
+
+            // An empty inline after the whitespace contributes nothing, so the descent skips past it.
+            Assert.Equal(LinesWithText(flat), LinesWithText(trailing));
+
+            // Nested *text* is not whitespace: the boundary stays welded exactly as it does for a flat
+            // predecessor, and the overlong token is left to overflow.
+            Assert.Equal(1, LinesWithText(text));
+            Assert.Contains(text.LineBoxes.SelectMany(line => line.Words),
+                word => word.Right > text.ClientRight + 0.5);
+        }
+
+        [Fact]
         public async Task InlineMarkup_PreservesBidiLevelWrapOpportunity()
         {
             var html = LayoutHarness.Wrap("""

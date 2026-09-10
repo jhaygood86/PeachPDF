@@ -45,5 +45,20 @@ moves that grapheme to a fresh line/column rather than overflowing the current o
   keeps the following long token off the final emoji line.
 - Horizontal and vertical adjacent-inline tests, no-grapheme-fits and min-content tests, plus
   whitespace, hyphen, bidi, emoji-sequence, and per-codepoint font-fallback contrast tests.
-- Full net8.0 suite green: 10,621 passed, 9 platform-specific skips. Diff coverage is 99% over 299
+- Full net8.0 suite green: 10,643 passed, 9 platform-specific skips. Diff coverage is 99% over 299
   changed production lines. Whole-solution rebuild completed with zero warnings and zero errors.
+
+## The trap this shipped with once
+
+`HasInterElementWhitespaceBefore` originally read `.Text` off the box
+`DomUtils.PrecedingBoxAcrossFirstChildChain` returned, and nothing else. `CssBox.Text` is only ever
+set on a *leaf* text box - a structural container's Text is null, because its content lives in its
+children - so whitespace nested any deeper than one level below the preceding sibling was invisible
+to the check. `<span>A</span><b><i> </i></b><span>B</span>` returned the `<b>` box, whose own Text is
+null, and "AB" became one unbreakable token: a regression against the pre-change behaviour where
+every inline boundary was unconditionally a wrap opportunity.
+
+The fix descends to the last text-bearing leaf (`EndsWithCollapsibleWhitespace`), the same descent
+`CssBox.CountTrailingRegionalIndicatorsIn` already makes for regional-indicator parity for exactly
+this reason. The general rule this leaves behind outlives this entry and is recorded in
+[.claude/invariants/dom-only-a-leaf-box-carries-text-so-a-boundary-check-must-recurse.md](../invariants/dom-only-a-leaf-box-carries-text-so-a-boundary-check-must-recurse.md).
