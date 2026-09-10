@@ -222,22 +222,85 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
         [Fact]
         public void AppendPdfNumber_UsesAllocationFreeFastPathAndPreservesFallbackFormatting()
         {
-            var content = new StringBuilder(100_000);
+            var content = new PdfContentWriter(100_000);
+            content.Append('x');
             XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
-            content.Clear();
 
             long before = GC.GetAllocatedBytesForCurrentThread();
             for (int i = 0; i < 10_000; i++)
                 XGraphicsPdfRenderer.AppendPdfNumber(content, 1.23456, "0.####");
             long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
-            Assert.Equal(string.Concat(Enumerable.Repeat("1.2346", 10_000)), content.ToString());
+            Assert.Equal("x1.2346" + string.Concat(Enumerable.Repeat("1.2346", 10_000)), content.ToString());
             Assert.True(allocated < 1_024,
                 $"Formatting 10,000 ordinary coordinates allocated {allocated:N0} bytes.");
 
+            var fallback = new PdfContentWriter();
+            XGraphicsPdfRenderer.AppendPdfNumber(fallback, double.MaxValue, "0.####");
+            Assert.Equal(double.MaxValue.ToString("0.####", CultureInfo.InvariantCulture), fallback.ToString());
+        }
+
+        [Fact]
+        public void AppendPdfNumber_MatchesInvariantCustomFormatting()
+        {
+            string[] formats = ["0.##", "0.###", "0.####", "0.#######", "0.##########"];
+            var expected = new StringBuilder();
+            var actual = new PdfContentWriter(128);
+            var random = new Random(42);
+
+            foreach (string format in formats)
+            {
+                double[] boundaryValues =
+                [
+                    -0.0,
+                    0,
+                    0.00004,
+                    0.00005,
+                    -0.00005,
+                    1.23445,
+                    1.23455,
+                    double.NaN,
+                    double.NegativeInfinity,
+                    double.PositiveInfinity,
+                ];
+                foreach (double value in boundaryValues)
+                    AppendExpectedAndActual(value, format);
+
+                for (int i = 0; i < 1_000; i++)
+                    AppendExpectedAndActual((random.NextDouble() - 0.5) * 1_000_000, format);
+            }
+
+            Assert.Equal(expected.ToString(), actual.ToString());
+
+            void AppendExpectedAndActual(double value, string format)
+            {
+                expected.Append(value.ToString(format, CultureInfo.InvariantCulture)).Append('\n');
+                XGraphicsPdfRenderer.AppendPdfNumber(actual, value, format);
+                actual.Append('\n');
+            }
+        }
+
+        [Fact]
+        public void PdfContentWriter_PreservesRawEncodingAcrossChunksAndFormatting()
+        {
+            Assert.Throws<ArgumentOutOfRangeException>(() => new PdfContentWriter(0));
+
+            var content = new PdfContentWriter(4);
+            content.Append("AB").Append('\u0101').Append("CDEF".AsSpan());
+            content.Append([(byte)'G', 0xFE]);
+            content.AppendFormat(CultureInfo.InvariantCulture, " {0} {1:0.##}", "name", 1.234);
+            content.AppendFormat(CultureInfo.InvariantCulture, "{0}{1}{2}", "X", "Y", "Z");
+
+            Assert.Equal(
+                [(byte)'A', (byte)'B', 0x01, (byte)'C', (byte)'D', (byte)'E', (byte)'F',
+                    (byte)'G', 0xFE, (byte)' ', (byte)'n', (byte)'a', (byte)'m', (byte)'e',
+                    (byte)' ', (byte)'1', (byte)'.', (byte)'2', (byte)'3',
+                    (byte)'X', (byte)'Y', (byte)'Z'],
+                content.ToArray());
+
             content.Clear();
-            XGraphicsPdfRenderer.AppendPdfNumber(content, double.MaxValue, "0.####");
-            Assert.Equal(double.MaxValue.ToString("0.####", CultureInfo.InvariantCulture), content.ToString());
+            Assert.Equal(0, content.Length);
+            Assert.Empty(content.ToArray());
         }
 
         [Fact]

@@ -60,7 +60,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _colorMode = page._document.Options.ColorMode;
             _options = options;
             _gfx = gfx;
-            _content = new StringBuilder();
+            _content = new PdfContentWriter();
             page.RenderContent._pdfRenderer = this;
             _gfxState = new PdfGraphicsState(this);
         }
@@ -70,7 +70,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _form = form;
             _colorMode = form.Owner.Options.ColorMode;
             _gfx = gfx;
-            _content = new StringBuilder();
+            _content = new PdfContentWriter();
             form.PdfRenderer = this;
             _gfxState = new PdfGraphicsState(this);
         }
@@ -78,10 +78,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// <summary>
         /// Gets the content created by this renderer.
         /// </summary>
-        string GetContent()
+        byte[] GetContent()
         {
             EndPage();
-            return _content.ToString();
+            return _content.ToArray();
         }
 
         public XGraphicsPdfPageOptions PageOptions
@@ -94,7 +94,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             if (_page != null)
             {
                 PdfContent content2 = _page.RenderContent;
-                content2.CreateStream(PdfEncoders.RawEncoding.GetBytes(GetContent()));
+                content2.CreateStream(GetContent());
+                _content.Clear();
 
                 _gfx = null;
                 _page.RenderContent._pdfRenderer = null;
@@ -103,7 +104,8 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
             else if (_form != null)
             {
-                _form._pdfForm.CreateStream(PdfEncoders.RawEncoding.GetBytes(GetContent()));
+                _form._pdfForm.CreateStream(GetContent());
+                _content.Clear();
                 _gfx = null;
                 _form.PdfRenderer = null;
                 _form = null;
@@ -1467,7 +1469,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             _content.Append(" cm ");
         }
 
-        internal static void AppendPdfNumber(StringBuilder content, double value, string format)
+        internal static void AppendPdfNumber(PdfContentWriter content, double value, string format)
         {
             Span<char> buffer = stackalloc char[64];
             if (value.TryFormat(buffer, out int written, format.AsSpan(), CultureInfo.InvariantCulture))
@@ -2173,7 +2175,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         internal PdfColorMode _colorMode;
         XGraphicsPdfPageOptions _options;
         XGraphics _gfx;
-        readonly StringBuilder _content;
+        readonly PdfContentWriter _content;
 
         /// <summary>
         /// The q/Q nesting level is 0.
