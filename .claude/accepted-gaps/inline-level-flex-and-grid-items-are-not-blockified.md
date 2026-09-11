@@ -27,4 +27,4 @@ through layout.
 first. Blockifying without that trades a spec deviation nobody can see for one that breaks every image in
 a flex container.
 
-Filed as issue **#TODO** — replace with the tracking issue number once it is opened.
+Filed as [issue #1003](https://github.com/jhaygood86/PeachPDF/issues/1003).
