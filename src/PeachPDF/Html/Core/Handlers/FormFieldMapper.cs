@@ -162,9 +162,9 @@ namespace PeachPDF.Html.Core.Handlers
             var type = box.GetAttribute("type", Keywords.Text).ToLowerInvariant();
             return type switch
             {
-                Keywords.Text or "search" or "tel" or "url" or "email" or "password" => true,
+                Keywords.Text or "search" or "tel" or "url" or "email" or "password" or "number" => true,
                 "hidden" or "date" or "month" or "week" or "time" or "datetime-local"
-                    or "number" or "range" or "color" or "checkbox" or "radio" or "file"
+                    or "range" or "color" or "checkbox" or "radio" or "file"
                     or "submit" or "image" or "reset" or "button" => false,
                 // HTML's missing and invalid value defaults are both the Text state.
                 _ => true

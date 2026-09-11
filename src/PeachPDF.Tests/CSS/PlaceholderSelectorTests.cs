@@ -20,7 +20,7 @@ public class PlaceholderSelectorTests
     [InlineData("<input id='field' type='not-a-real-type' placeholder='hint'>", true)]
     [InlineData("<input id='field' placeholder='hint' value='filled'>", false)]
     [InlineData("<input id='field'>", false)]
-    [InlineData("<input id='field' type='number' placeholder='hint'>", false)]
+    [InlineData("<input id='field' type='number' placeholder='hint'>", true)]
     [InlineData("<input id='field' type='checkbox' placeholder='hint'>", false)]
     [InlineData("<select id='field' placeholder='hint'><option>One</option></select>", false)]
     public async Task PlaceholderShown_MatchesTheStandardGenerationTimeState(string control, bool shouldMatch)
