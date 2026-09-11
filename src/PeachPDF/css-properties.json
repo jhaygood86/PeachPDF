@@ -840,6 +840,18 @@
       }
     },
     {
+      "name": "-peachpdf-pdf-form-field-placeholder",
+      "comment": "PeachPDF extension with no W3C or Prince counterpart - when auto, a generated text field with no value of its own draws its element's HTML placeholder attribute as greyed hint text inside the ISO 32000-1 12.7.3.3 /Tx marked-content sequence, so a reader replaces it the moment the user types. Deliberately opt-in and none by default: a drawn hint makes an unfilled field look filled, while /V stays empty either way, so the form still submits nothing for it. The placeholder attribute becomes the field's /TU tooltip regardless of this property. Only meaningful when the element also classifies to a text field. cssDataType 'cssom-grammar' calls Converters.PdfFormFieldPlaceholderConverter.Convert directly instead of the full cssom round trip.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.PdfFormFieldPlaceholderConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfFormFieldPlaceholder",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
       "name": "bookmark-level",
       "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-level). String-stored, like -peachpdf-pdf-tag-type - BookmarkOutlineBuilder parses the raw none/<integer> string itself (mirroring StructureTagMapper.Classify's own re-parse of PdfTagType). cssDataType 'cssom-grammar' calls Converters.BookmarkLevelConverter.Convert directly (already .OrNone()-composed) instead of the full cssom round trip. h1-h6 default to 1-6 via CssDefaults.cs's UA stylesheet, everything else defaults to none (this property's own initial value), which is itself the zero-config \"no bookmarks\" state.",
       "inherited": false,

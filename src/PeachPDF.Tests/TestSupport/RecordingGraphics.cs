@@ -225,6 +225,8 @@ namespace PeachPDF.Tests.TestSupport
         public override void BeginMarkedContent(string structureType, int mcid) { }
         public override void EndMarkedContent() { }
         public override void BeginArtifact() { }
+        public override void BeginVariableText() { }
+        public override void EndVariableText() { }
         public override void Dispose() { }
     }
 

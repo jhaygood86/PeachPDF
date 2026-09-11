@@ -1935,6 +1935,21 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
         }
 
         /// <summary>
+        /// Begins the "/Tx" marked-content sequence around a form field's variable text - see
+        /// <see cref="XGraphicsPdfRenderer.BeginVariableText"/>.
+        /// </summary>
+        internal void BeginVariableText()
+        {
+            (_renderer as XGraphicsPdfRenderer)?.BeginVariableText();
+        }
+
+        /// <summary>Closes the sequence <see cref="BeginVariableText"/> opened.</summary>
+        internal void EndVariableText()
+        {
+            (_renderer as XGraphicsPdfRenderer)?.EndVariableText();
+        }
+
+        /// <summary>
         /// Provides access to internal data structures of the XGraphics class.
         /// </summary>
         internal class XGraphicsInternals

@@ -578,6 +578,8 @@ body {{ font-family: 'CJK'; margin: 0 }}
             public override void BeginMarkedContent(string structureType, int mcid) { }
             public override void EndMarkedContent() { }
             public override void BeginArtifact() { }
+            public override void BeginVariableText() { }
+            public override void EndVariableText() { }
 
             // Deterministic, non-zero, length-proportional - PaintUprightVerticalRun uses this to
             // position/advance each character, so a constant-zero stub (fine for tests that only care

@@ -1572,9 +1572,37 @@ input[type=text] {
 }
 ```
 
-`input`/`select` get a plain default appearance (a thin solid black border, white background, small horizontal/vertical padding) from PeachPDF's own UA stylesheet when the author sets none of these — the same look every field had before per-field styling existed. A checkbox/radio's circular shape and check-mark/dot glyph are fixed (not stylable via `border-radius` or similar); its border/background/glyph color still follow `border`/`background-color`/`color`.
+`input`/`select` get a plain default appearance (a thin solid black border, white background, small horizontal/vertical padding) from PeachPDF's own UA stylesheet when the author sets none of these — the same look every field had before per-field styling existed. A checkbox or radio takes no padding from that default (a browser's own UA stylesheet zeroes it there too) and gets a small margin instead, so an unstyled one is a 13×13px square — or circle — with room around it, the way a browser draws it. `width`/`height` size the *content* box like any other element, so the drawn control is that size plus its own border and padding; give a checkbox or radio equal `width` and `height` and it stays square. A checkbox/radio's circular shape and check-mark/dot glyph are fixed (not stylable via `border-radius` or similar); its border/background/glyph color still follow `border`/`background-color`/`color`.
+
+The value a text or combo-box field draws is enclosed in the `/Tx` marked-content sequence ISO 32000-1 §12.7.3.3 defines for variable text, so a reader that regenerates the field replaces exactly that region and keeps the CSS border and background around it. This is what makes editing a field behave: the previous value disappears instead of staying visible behind the new one, and clearing a field leaves an empty box rather than a ghost of what was there.
 
 Once a user actually starts typing into a text/select field, a reader regenerates its look from `/DA` (PDF's own "default appearance" string) rather than the baked-in widget appearance above — `/DA` always uses the PDF standard Helvetica font (Latin-1/WinAnsi only), regardless of the field's own `font-family`. This is deliberate: PeachPDF, like most PDF generators, embeds only the glyphs a document's text actually used, so a custom embedded font has no glyph ready for a character the user types that never appeared in the original value — Helvetica's complete, no-embedding-needed WinAnsi coverage avoids that failure mode for live editing. A field's *initial* appearance (what the PDF shows before anyone edits it) always uses the real font, including for non-Latin-1 text.
+
+### Form-control attributes
+
+These HTML attributes map to their PDF equivalents on the generated field, with no CSS involved:
+
+| HTML | PDF | Effect in a reader |
+|---|---|---|
+| `readonly` | `/Ff` ReadOnly | The value can be seen but not changed. |
+| `disabled` | `/Ff` ReadOnly + NoExport | Not editable, and not included when the form is submitted — HTML defines a disabled control as both. |
+| `required` | `/Ff` Required | The reader flags the field as one that must be filled in before submitting. |
+| `maxlength` | `/MaxLen` | Caps how many characters can be typed. Ignored when it is absent, zero, or not a valid integer. |
+| `type="password"` | `/Ff` Password | Typing is echoed unreadably, and a prefilled `value` is drawn as asterisks rather than legible text. |
+| `placeholder` | `/TU` | The field's tooltip on hover, and the name assistive technology reads in place of the `name` attribute. |
+
+A `maxlength` that disagrees with [`-peachpdf-pdf-form-field-comb`](#text-field-sub-settings)
+loses to it: a comb field's cell count *is* its maximum length, so the two cannot both be honoured.
+
+`required` is worth one warning, because it looks like a bug the first time you see it: Adobe Acrobat
+and Reader draw a **red outline around every required field and keep it there**, filled in or not.
+That is the reader's own "Required Fields Highlight Color" preference marking the field as required,
+not a validation error about its current value, and it is under each viewer's control rather than the
+document's. Use `required` when the field genuinely must be filled in, not as a styling hint.
+
+`type="password"` masks the field's *appearance* only — the `value` attribute still becomes the
+field's real `/V`, in readable form, because the document asked for the field to be prefilled with
+it. A password that should not be in the PDF should not be in the HTML either.
 
 ### `-peachpdf-pdf-form-field`
 
@@ -1615,9 +1643,11 @@ Three more longhand properties, meaningful only on a field that resolves to `tex
 - **`-peachpdf-pdf-form-field-auto-font-size: auto \| none`** — when `auto`, the field's font size auto-fits its box height instead of using a fixed size.
 - **`-peachpdf-pdf-form-field-comb: none \| <integer>`** — divides the field into the given number of evenly spaced character cells (ISO 32000-1's "comb" field), the classic boxed layout for things like a one-character-per-box confirmation code input.
 - **`-peachpdf-pdf-form-field-do-not-scroll: auto \| none`** — when `auto`, tells the PDF reader not to scroll the field's text when it overflows the box.
+- **`-peachpdf-pdf-form-field-placeholder: auto \| none`** — when `auto`, a field with no value of its own draws its `placeholder` attribute as greyed hint text, the way a browser does. Off by default, because a drawn hint makes an unfilled field *look* filled while the field still submits nothing. The hint is drawn inside the field's `/Tx` region, so it disappears on the first keystroke rather than sitting behind what the user types, and it is drawn in the field's own `color` at half opacity so it follows the page's palette. A `placeholder` becomes the field's tooltip either way — see [Form-control attributes](#form-control-attributes).
 
 ```css
 input.confirmation-code { -peachpdf-pdf-form-field-comb: 6; }
+input.hinted { -peachpdf-pdf-form-field-placeholder: auto; }
 ```
 
 ### Default field-kind inference

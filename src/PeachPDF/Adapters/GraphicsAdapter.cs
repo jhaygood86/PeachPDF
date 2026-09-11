@@ -327,6 +327,16 @@ namespace PeachPDF.Adapters
             _g.BeginArtifact();
         }
 
+        public override void BeginVariableText()
+        {
+            _g.BeginVariableText();
+        }
+
+        public override void EndVariableText()
+        {
+            _g.EndVariableText();
+        }
+
         public override void Dispose()
         {
             if (_releaseGraphics)

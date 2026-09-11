@@ -1008,7 +1008,8 @@ namespace PeachPDF.Html.Core.Dom
                 .SetPropertyValue(generatedContent.PdfFormField, parentStyle.GeneratedContent.PdfFormField, static (a, v) => a with { PdfFormField = v })
                 .SetPropertyValue(generatedContent.PdfFormFieldAutoFontSize, parentStyle.GeneratedContent.PdfFormFieldAutoFontSize, static (a, v) => a with { PdfFormFieldAutoFontSize = v })
                 .SetPropertyValue(generatedContent.PdfFormFieldComb, parentStyle.GeneratedContent.PdfFormFieldComb, static (a, v) => a with { PdfFormFieldComb = v })
-                .SetPropertyValue(generatedContent.PdfFormFieldDoNotScroll, parentStyle.GeneratedContent.PdfFormFieldDoNotScroll, static (a, v) => a with { PdfFormFieldDoNotScroll = v });
+                .SetPropertyValue(generatedContent.PdfFormFieldDoNotScroll, parentStyle.GeneratedContent.PdfFormFieldDoNotScroll, static (a, v) => a with { PdfFormFieldDoNotScroll = v })
+                .SetPropertyValue(generatedContent.PdfFormFieldPlaceholder, parentStyle.GeneratedContent.PdfFormFieldPlaceholder, static (a, v) => a with { PdfFormFieldPlaceholder = v });
             _computedStyle = _computedStyle.AdoptArea(generatedContent, newGeneratedContent, static (s, a) => s with { GeneratedContent = a });
         }
     }

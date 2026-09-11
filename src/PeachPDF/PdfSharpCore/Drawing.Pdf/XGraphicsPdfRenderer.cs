@@ -1765,6 +1765,42 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         }
 
         /// <summary>
+        /// Begins the "/Tx" marked-content sequence that ISO 32000-1 §12.7.3.3 requires around the
+        /// value a variable-text form field's appearance stream draws, and
+        /// <see cref="EndVariableText"/> closes it.
+        /// </summary>
+        /// <remarks>
+        /// This is not cosmetic structure: it is the contract by which a conforming reader updates a
+        /// field the user edits. A reader regenerating the appearance keeps everything before "/Tx
+        /// BMC" and after "EMC" - the field's own border and background - and replaces only what lies
+        /// between them. A stream with no such sequence gives the reader no region to replace, so it
+        /// appends the new value instead and the generated value stays visible underneath it: the
+        /// old text, the new text, and (once the reader falls back to its own "/DA" font for codes
+        /// written against an embedded subset) mojibake, all at once.
+        /// <para>
+        /// Both operators are emitted in graphic mode: §14.6 forbids a marked-content sequence from
+        /// straddling a text object's BT/ET boundary, and the caller's own text drawing between them
+        /// opens its own. This is why the pair exists rather than reusing
+        /// <see cref="EndMarkedContent"/>, whose one other caller (<c>ColorGlyphPainter</c>) is
+        /// deliberately inside a text object - the legal "BT BDC ... EMC ET" nesting - and would be
+        /// cut short by forcing graphic mode there.
+        /// </para>
+        /// </remarks>
+        internal void BeginVariableText()
+        {
+            BeginPage();
+            BeginGraphicMode();
+            _content.Append("/Tx BMC\n");
+        }
+
+        /// <summary>Closes the sequence <see cref="BeginVariableText"/> opened.</summary>
+        internal void EndVariableText()
+        {
+            BeginGraphicMode();
+            _content.Append("EMC\n");
+        }
+
+        /// <summary>
         /// Makes the specified pen and brush to the current graphics objects.
         /// </summary>
         private void Realize(XPen pen, XBrush brush)

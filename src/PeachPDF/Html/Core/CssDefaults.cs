@@ -222,8 +222,19 @@ namespace PeachPDF.Html.Core
                or not EnableInteractivePdfForms is on - a form field is an ordinary static box
                otherwise. A checkbox/radio's own circular shape and check-mark/dot glyph are drawn
                in code (FormFieldChrome), not CSS, so no radius/glyph rule belongs here. Author
-               stylesheets may override any of this like any other UA default. */
+               stylesheets may override any of this like any other UA default.
+
+               A checkbox/radio is a square widget, not a text field, so it takes none of that
+               text-field padding - every browser's own UA sheet zeroes it there for the same reason
+               (Chrome/Firefox: `padding: initial`), and with 1pt 2pt applied a 13x13px control comes
+               out visibly wider than it is tall, which for a radio button means a visibly elliptical
+               ring. The margin is in the same few-pixels-around-the-widget range every browser's UA
+               sheet uses (they do not agree on the exact value, and no spec states one), so a bare
+               `<input type=checkbox> Label` gets browser-like breathing room rather than sitting
+               flush against the label text. */
             input, select   { border: 0.75pt solid black; background-color: white; padding: 1pt 2pt; }
+            input[type=checkbox],
+            input[type=radio] { padding: 0; margin: 3px 3px 3px 4px; }
         """;
 
         /// <summary>

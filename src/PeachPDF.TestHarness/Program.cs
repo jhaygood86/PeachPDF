@@ -9114,10 +9114,31 @@ var interactiveFormsHtml = "<!DOCTYPE html><html><head>" + InteractiveFormsCss +
     "border: 2pt dashed #8a2be2; background-color: #f5e9ff; color: #4b0082; " +
     "padding: 4pt 8pt; font: italic 12pt Georgia, serif; width: 180pt\" /></div>" +
 
+    // The HTML attributes that become PDF field entries rather than CSS - see
+    // docs/html-css-support.md#form-control-attributes. Worth a showcase of its own because every
+    // one of them is invisible in a static render and only shows up in a real reader: the password
+    // field must echo asterisks rather than its value, the read-only field must refuse the caret,
+    // and the required one must be flagged before the form submits.
+    "<h2>Attributes (readonly, required, maxlength, password, placeholder)</h2>" +
+    "<div class=\"field\"><label for=\"pw\">Password</label>" +
+    "<input type=\"password\" id=\"pw\" name=\"password\" value=\"hunter2\" /></div>" +
+    "<div class=\"field\"><label for=\"initials\">Initials (max 3)</label>" +
+    "<input type=\"text\" id=\"initials\" name=\"initials\" maxlength=\"3\" /></div>" +
+    "<div class=\"field\"><label for=\"ref\">Reference (read-only)</label>" +
+    "<input type=\"text\" id=\"ref\" name=\"reference\" value=\"INV-2026-0042\" readonly /></div>" +
+    "<div class=\"field\"><label for=\"email\">Email (required)</label>" +
+    "<input type=\"email\" id=\"email\" name=\"email\" required placeholder=\"you@example.com\" /></div>" +
+
+    "<h2>Drawn placeholder (-peachpdf-pdf-form-field-placeholder: auto)</h2>" +
+    "<div class=\"field\"><label for=\"hint\">Company</label>" +
+    "<input type=\"text\" id=\"hint\" name=\"company\" placeholder=\"Acme Corporation\" " +
+    "style=\"-peachpdf-pdf-form-field-placeholder: auto\" /></div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("interactive_pdf_forms", "Interactivity", "Interactive PDF Forms",
-    "Real, fillable AcroForm text/checkbox/radio/select fields generated from ordinary <input>/<select> markup via EnableInteractivePdfForms.",
+    "Real, fillable AcroForm text/checkbox/radio/select fields generated from ordinary <input>/<select> markup via "
+    + "EnableInteractivePdfForms - including readonly/required/maxlength/password/placeholder, and a drawn placeholder hint.",
     interactiveFormsHtml, new PdfGenerateConfig
     {
         PageSize = PageSize.A4,

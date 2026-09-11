@@ -70,6 +70,34 @@ namespace PeachPDF.Html.Core.Handlers
             string.IsNullOrEmpty(declaredValue) || declaredValue == "Off" ? "Yes" : declaredValue;
 
         /// <summary>
+        /// The ISO 32000-1 Table 221 flag bits every field type shares, from the HTML attributes that
+        /// mean the same thing: <c>readonly</c> (or <c>disabled</c>) to ReadOnly, <c>required</c> to
+        /// Required, and <c>disabled</c> additionally to NoExport, since HTML defines a disabled
+        /// control as one that is not submitted. Returned as a starting value for each field's own
+        /// type-specific flags to build on, so the two can never be assigned over one another.
+        /// </summary>
+        static int SharedFieldFlags(FormFieldAttributes a)
+        {
+            var flags = 0;
+            if (a.ReadOnly) flags |= PdfAcroField.ReadOnlyFlag;
+            if (a.Required) flags |= PdfAcroField.RequiredFlag;
+            if (a.NoExport) flags |= PdfAcroField.NoExportFlag;
+            return flags;
+        }
+
+        /// <summary>
+        /// Gives a field the tooltip/accessible name its element's <c>placeholder</c> supplies, if
+        /// any. "/TU" is the closest durable PDF home for it: a reader shows it on hover and
+        /// assistive technology reads it in place of the machine-oriented field name, and unlike a
+        /// drawn hint it can never be mistaken for the field's value.
+        /// </summary>
+        static void ApplyAlternateName(PdfAcroField field, FormFieldAttributes a)
+        {
+            if (a.Placeholder is { Length: > 0 } placeholder)
+                field.AlternateFieldName = placeholder;
+        }
+
+        /// <summary>
         /// Creates the AcroForm field/widget for one classified form-control box and places it on
         /// <paramref name="page"/> at <paramref name="rect"/> (already resolved to page-space PDF
         /// points by <c>PdfGenerator.HandleFormFields</c>).
@@ -104,18 +132,29 @@ namespace PeachPDF.Html.Core.Handlers
                 Value = c.Value ?? string.Empty,
             };
 
-            var flags = 0;
+            var flags = SharedFieldFlags(c.Attributes);
             if (c.DoNotScroll) flags |= PdfTextField.DoNotScrollFlag;
+            if (c.Attributes.Password) flags |= PdfTextField.PasswordFlag;
             if (c.Comb is > 0)
             {
+                // A comb field's cell count IS its "/MaxLen" (ISO 32000-1 Table 228), so the comb
+                // declaration wins over a maxlength attribute that disagrees with it - the field is
+                // drawn with exactly this many cells, and a longer maximum would let the user type
+                // past the last one.
                 flags |= PdfTextField.CombFlag;
                 field.MaxLen = c.Comb.Value;
             }
+            else if (c.Attributes.MaxLength is { } maxLength)
+            {
+                field.MaxLen = maxLength;
+            }
             field.FieldFlags = flags;
+            ApplyAlternateName(field, c.Attributes);
 
+            var (drawnText, isPlaceholder) = DrawnText(c);
             var appearance = FormFieldAppearanceBuilder.BuildTextAppearance(
-                Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height, c.Value ?? string.Empty,
-                c.AutoFontSize, c.Comb, out var fontSizePt);
+                Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height,
+                drawnText, c.AutoFontSize, c.Comb, isPlaceholder, out var fontSizePt);
 
             // "/DA" (as opposed to the baked "/AP /N" appearance above) is what a reader uses to
             // regenerate this field's appearance once the user actually edits it - "0 Tf" is PDF's
@@ -133,6 +172,34 @@ namespace PeachPDF.Html.Core.Handlers
             acroForm.AddField(field);
         }
 
+        /// <summary>
+        /// What a text field's appearance stream actually draws. Normally the value itself; for a
+        /// <c>type=password</c> field, one asterisk per character instead - the same unreadable echo
+        /// ISO 32000-1 Table 228's Password flag requires of a reader, applied to the initial
+        /// appearance the flag says nothing about, so a prefilled password is not simply legible on
+        /// the page. When the field has no value but its element carries a <c>placeholder</c> and
+        /// <c>-peachpdf-pdf-form-field-placeholder: auto</c> asked for it, the placeholder is drawn
+        /// as a hint instead (see <c>FormFieldAppearanceBuilder.BuildTextAppearance</c>'s
+        /// <c>isPlaceholder</c>, which is what greys it).
+        /// </summary>
+        /// <remarks>
+        /// The masking is presentation only: "/V" still carries the real value, because the author
+        /// wrote it into the element's own <c>value</c> attribute and the field is genuinely
+        /// prefilled with it. A password an author does not want in the file should not be in the
+        /// HTML either - see docs/html-css-support.md.
+        /// </remarks>
+        static (string Text, bool IsPlaceholder) DrawnText(FormFieldClassification c)
+        {
+            if (c.Value is not { Length: > 0 } value)
+            {
+                return c.ShowPlaceholder && c.Attributes.Placeholder is { Length: > 0 } placeholder
+                    ? (placeholder, true)
+                    : (string.Empty, false);
+            }
+
+            return (c.Attributes.Password ? new string('*', value.Length) : value, false);
+        }
+
         void AddCheckboxField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, CssBox box, FormFieldClassification c)
         {
             var onValue = ResolveOnValue(c.Value);
@@ -143,7 +210,10 @@ namespace PeachPDF.Html.Core.Handlers
                 PartialFieldName = ResolveFieldName(c.Name),
                 Value = c.Checked ? "/" + onValue : "/Off",
                 AppearanceState = c.Checked ? "/" + onValue : "/Off",
+                FieldFlags = SharedFieldFlags(c.Attributes),
             };
+
+            ApplyAlternateName(field, c.Attributes);
 
             var onAppearance = FormFieldAppearanceBuilder.BuildCheckboxOnAppearance(Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height);
             var offAppearance = FormFieldAppearanceBuilder.BuildCheckboxOffAppearance(Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height);
@@ -160,14 +230,23 @@ namespace PeachPDF.Html.Core.Handlers
 
             if (!_radioGroupsByName.TryGetValue(groupKey, out var group))
             {
+                // The group, not the widget, is the field - so the shared flags and the tooltip
+                // belong on it. Unlike the group's own name (which can only come from one button),
+                // they accumulate across the group below: the HTML Standard makes a radio group
+                // required when ANY member carries `required`, so taking only the first button's
+                // attributes would silently drop it from every other spelling of the same form.
                 group = new PdfRadioButtonField(Document)
                 {
                     PartialFieldName = ResolveFieldName(c.Name),
                     Value = "/Off",
+                    FieldFlags = PdfRadioButtonField.RadioFlag,
                 };
                 _radioGroupsByName[groupKey] = group;
                 acroForm.AddField(group);
             }
+
+            group.FieldFlags |= SharedFieldFlags(c.Attributes);
+            ApplyAlternateName(group, c.Attributes);
 
             var widget = new PdfWidgetAnnotation(Document)
             {
@@ -197,7 +276,10 @@ namespace PeachPDF.Html.Core.Handlers
                 Rectangle = rect,
                 PartialFieldName = ResolveFieldName(c.Name),
                 Value = selectedValue,
+                FieldFlags = PdfComboBoxField.ComboFlag | SharedFieldFlags(c.Attributes),
             };
+
+            ApplyAlternateName(field, c.Attributes);
 
             var options = new List<(string Value, string Label)>();
             foreach (var option in c.Options)
@@ -206,7 +288,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             var appearance = FormFieldAppearanceBuilder.BuildTextAppearance(
                 Document, Adapter, PixelsPerPoint, box, rect.Width, rect.Height, selectedLabel,
-                autoFontSize: false, combCells: null, out _);
+                autoFontSize: false, combCells: null, isPlaceholder: false, out _);
             SetNormalAppearance(field, appearance);
 
             page.Annotations.Add(field);
