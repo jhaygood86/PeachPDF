@@ -3058,6 +3058,19 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                 foreach (var child in draft.Children)
                 {
+                    // An out-of-flow child is not this box's content: CSS 2.1 §10.6.3 sizes a box from its
+                    // in-flow content alone, and an absolutely-positioned box is explicitly excluded from
+                    // that (§9.3.1 - it is taken out of the flow entirely, and "has no impact on later
+                    // siblings" or on its parent's own box). Counting one here dragged the box's painted
+                    // border box down to wherever the positioned child happened to land, which is a place
+                    // the child is often put on purpose: Charts.css's axis labels are `position: absolute`
+                    // with `margin-block-start: auto` and a negative block-end margin precisely so they sit
+                    // *below* their row, and that pulled the row's own `border-block-end` - the chart's
+                    // primary axis - 16.5pt down with them, under the labels instead of above them. The
+                    // same inflated rect is the background positioning area, so the repeating grid-line
+                    // background was sized from it too and its last line no longer met the axis.
+                    if (child.Box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) continue;
+
                     bottom = Math.Max(bottom, RectOf(child).Bottom + child.OriginY);
                 }
 

@@ -316,6 +316,10 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal RunningElement? RegisteredRunningElement { get; set; }
 
+        // The used auto block-start margin currently translated into this positioned box's geometry.
+        // A content-sized containing block can revise the provisional answer after its own height settles.
+        private double _appliedPositionedAutoMarginTop;
+
         /// <summary>
         /// Is the box is of "br" element.
         /// </summary>
@@ -5892,6 +5896,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (child.Position.Value is PositionMode.Absolute)
                 {
+                    child._appliedPositionedAutoMarginTop = 0;
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(child);
 
                     // CSS 2.1 §10.3.7: `left`/`top` on an absolutely positioned box are measured
@@ -5914,6 +5919,7 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (child.Position.Value is PositionMode.Fixed)
                 {
+                    child._appliedPositionedAutoMarginTop = 0;
                     // Like every other positioning scheme (see the Absolute branch above, fixed for
                     // the same omission), the box's own margin still applies on top of the left/top
                     // offset - previously dropped entirely here. Acid2's own
@@ -6019,6 +6025,18 @@ namespace PeachPDF.Html.Core.Dom
                 // and stays fixed.
                 CssLayoutEngine.FinalizeVerticalLineBoxes(this, WritingModeFrame.For(this), ClientTop, ClientBottom);
                 _pendingVerticalInlineFinalize = false;
+            }
+
+            // An absolutely-positioned box resolves §10.6.4 from its own epilogue, at which point an
+            // auto-height containing block has not yet applied its own height - its children, this box
+            // included, are what determine it. So that first answer can be computed against a height of
+            // zero, which sends a `margin: auto 0` box above the container instead of centring it in it.
+            // Now that this box's used height IS final, revise every such descendant against it. The
+            // second pass is the authoritative one; the first exists because a box that never reaches
+            // here (its containing block is the page) still needs an answer.
+            if (IsPositioned || IsRoot)
+            {
+                ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
             }
 
             CssLayoutEngine.ApplyParentHeight(this);
@@ -6180,6 +6198,12 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            // CSS 2.1 §10.6.4's auto block-axis margins. Deliberately outside the `Absolute` branch above:
+            // a fixed box is laid out by the same absolute-positioning model (§9.6.1) and obeys the same
+            // equation, it just resolves against the page area instead of an ancestor's padding box.
+            // The answer can be provisional here - see ResolvePositionedAutoBlockMargins.
+            ResolvePositionedAutoBlockMargins();
+
             // Named-page registration tail: block containers already registered before child layout
             // (see the early registration above the layout-engine dispatch); everything else (e.g. a
             // box that never entered the block branch) registers here, after every branch above that
@@ -6233,6 +6257,105 @@ namespace PeachPDF.Html.Core.Dom
 
             var actualWidth = Math.Max(GetMinimumWidth() + GetWidthMarginDeep(this), Size.Width < 90999 ? ActualRight - HtmlContainer!.Root!.Location.X : 0);
             HtmlContainer!.ActualSize = CommonUtils.Max(HtmlContainer.ActualSize, new RSize(actualWidth, ActualBottom - HtmlContainer!.Root!.Location.Y));
+        }
+
+        /// <summary>
+        /// Revises the auto block-axis margins of absolutely-positioned descendants whose containing block
+        /// is this box, now that this box's content-driven height is final.
+        /// </summary>
+        private void ResolveAbsolutelyPositionedDescendantAutoBlockMargins()
+        {
+            VisitStaticDescendants(this);
+
+            void VisitStaticDescendants(CssBox parent)
+            {
+                foreach (var child in parent.Boxes)
+                {
+                    if (child.Position.Value == PositionMode.Absolute)
+                    {
+                        child.ResolvePositionedAutoBlockMargins(ActualHeight);
+                    }
+
+                    // A positioned descendant establishes the containing block for anything below it and
+                    // resolves that subtree from its own epilogue. Only static ancestors are transparent to
+                    // this containing-block walk.
+                    if (!child.IsPositioned)
+                    {
+                        VisitStaticDescendants(child);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Resolves the used block-start auto margin for an absolute or fixed box
+        /// (<see href="https://www.w3.org/TR/CSS21/visudet.html#abs-non-replaced-height">CSS 2.1
+        /// §10.6.4</see>): with <c>top</c>, <c>height</c> and <c>bottom</c> all non-auto, a single
+        /// <c>auto</c> margin absorbs the whole remainder and two split it evenly.
+        /// </summary>
+        /// <remarks>
+        /// Idempotent by construction. The translation it applied last is kept in
+        /// <see cref="_appliedPositionedAutoMarginTop"/> and only the difference is offset, so the
+        /// containing block's own epilogue can re-run this with a final height over a provisional answer
+        /// without the two stacking. <c>CommitBlockChildOffset</c> clears the record whenever it re-places
+        /// the box, since the stored translation describes a <see cref="Location"/> that no longer exists.
+        /// </remarks>
+        /// <param name="finalizedAncestorBorderBoxHeight">
+        /// The already-finalized border-box height supplied by this absolute box's containing-block epilogue;
+        /// null while the child is making its initial, possibly provisional calculation.
+        /// </param>
+        private void ResolvePositionedAutoBlockMargins(double? finalizedAncestorBorderBoxHeight = null)
+        {
+            // §10.6.4 solves for an `auto` margin only when `top`, `height` AND `bottom` are all non-auto.
+            // With an auto height the spec says the opposite: the auto margins are treated as 0 and the
+            // HEIGHT is what the equation is solved for, so the box fills the space between the two insets
+            // (GetBoxHeight's own absolute branch already does that). Running the margin path there solved
+            // the same equation a second time, against the box's content height before the fill had been
+            // applied - a `top: 0; bottom: 0; margin-top: auto` box with no height was pushed its
+            // containing block's whole height past the bottom of it instead of filling it exactly.
+            if (Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)
+                || !Top.Value.IsValue || !Bottom.Value.IsValue
+                || !CssLayoutEngine.HasDefiniteHeight(this)
+                || (!MarginTop.Value.IsKeyword && !MarginBottom.Value.IsKeyword))
+            {
+                return;
+            }
+
+            double containingBlockHeight;
+            if (Position.Value == PositionMode.Fixed)
+            {
+                containingBlockHeight = HtmlContainer!.PageGeometry.GetPage(0).BandHeight;
+            }
+            else
+            {
+                var ancestor = DomUtils.GetNearestPositionedAncestor(this);
+                var ancestorBorderBoxHeight = finalizedAncestorBorderBoxHeight
+                    ?? CssLayoutEngine.GetBoxHeight(ancestor)
+                    ?? ancestor.ActualHeight;
+
+                // An absolute containing block formed by a block box is its padding box (§10.1).
+                containingBlockHeight = Math.Max(0, ancestorBorderBoxHeight
+                    - ancestor.ActualBorderTopWidth - ancestor.ActualBorderBottomWidth);
+            }
+
+            var top = CssValueParser.ParseLength(Top.Value.Value!.Value, containingBlockHeight, this);
+            var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, containingBlockHeight, this);
+            var leftover = containingBlockHeight - top - bottom - ActualHeight
+                           - ActualMarginTop - ActualMarginBottom;
+
+            // A single auto start margin takes all remaining space; two auto margins divide it. An auto
+            // end margin changes the solved equation but does not move the border box from its start inset.
+            var resolvedMarginTop = MarginTop.Value.IsKeyword
+                ? MarginBottom.Value.IsKeyword ? leftover / 2 : leftover
+                : 0;
+            var delta = resolvedMarginTop - _appliedPositionedAutoMarginTop;
+
+            if (Math.Abs(delta) > 0.01)
+            {
+                OffsetTop(delta);
+            }
+
+            _appliedPositionedAutoMarginTop = resolvedMarginTop;
         }
 
         /// <summary>

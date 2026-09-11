@@ -41,14 +41,28 @@ namespace PeachPDF.Adapters
             get { return _image; }
         }
 
+        /// <summary>
+        /// This image's natural size. A raster <see cref="XImage"/> reports its pixel count, which the
+        /// caller converts; an <see cref="XForm"/> — a vector Form XObject, as
+        /// <see cref="GraphicsAdapter.CreateTile"/> produces — has no pixels at all, so it reports the exact
+        /// point size it was created at.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="XImage.PixelWidth"/>/<see cref="XImage.PixelHeight"/> are <c>(int)</c> casts of a
+        /// form's own view box, so reading them truncated a tile to whole points. A background tile is
+        /// repeated at its natural size, so that error did not stay sub-point: it accumulated once per tile.
+        /// Charts.css's grid lines are a <c>background-size: 100% calc(100% / 4)</c> tile, and at 32.65pt a
+        /// truncation to 32pt walked the fourth line 2.6pt clear of the axis it is supposed to sit under.
+        /// </remarks>
         public override double Width
         {
-            get { return _image.PixelWidth; }
+            get { return _image is XForm form ? form.PointWidth : _image.PixelWidth; }
         }
 
+        /// <inheritdoc cref="Width"/>
         public override double Height
         {
-            get { return _image.PixelHeight; }
+            get { return _image is XForm form ? form.PointHeight : _image.PixelHeight; }
         }
 
         public override bool Interpolate

@@ -118,12 +118,17 @@ namespace PeachPDF.Html.Core.Dom
             _gridBox.ActualBottom = _gridBox.Location.Y;
 
             // Pre-apply a definite height so ClientBottom is valid for percentage row tracks / alignment.
-            var hasDefiniteHeight = CssValueParser.IsValidLength(_gridBox.Height)
-                                    || CssLayoutEngine.TryGetAspectRatioHeight(_gridBox, out _);
+            // Definite means the height resolved, not merely that one was declared - see
+            // CssLayoutEngineFlex's own copy of this for the percentage-against-an-indefinite-basis case
+            // (CSS Box Sizing 4 §5) that a `?? 0` fallback silently turned into a zero-height container.
+            var resolvedHeight = CssValueParser.IsValidLength(_gridBox.Height)
+                                 || CssLayoutEngine.TryGetAspectRatioHeight(_gridBox, out _)
+                ? CssLayoutEngine.GetBoxHeight(_gridBox)
+                : null;
+            var hasDefiniteHeight = resolvedHeight is not null;
             if (hasDefiniteHeight)
             {
-                var fullHeight = CssLayoutEngine.GetBoxHeight(_gridBox) ?? 0;
-                _gridBox.ActualBottom = _gridBox.Location.Y + fullHeight;
+                _gridBox.ActualBottom = _gridBox.Location.Y + resolvedHeight!.Value;
             }
 
             // A position: running() child (css-gcpm-3) never becomes a grid item - it is excluded from
@@ -136,8 +141,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var items = _gridBox.Boxes
-                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsExcludedFromFlow
-                            && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
+                .Where(DomUtils.GeneratesFlexOrGridItem)
                 .ToList();
 
             if (items.Count == 0)
