@@ -112,6 +112,149 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task GeometryBox_PaddingBox_ShrinksReferenceBoxInsideTheBorder()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='clip-path: inset(0) padding-box; width: 40pt; height: 30pt; border: 5pt solid black; background: red'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            Assert.Single(g.ClipPaths);
+            var b = el.Bounds;
+            var pts = g.ClipPaths[0].Points;
+            Assert.Equal(b.X + 5, pts.Min(p => p.X), 1);
+            Assert.Equal(b.X + b.Width - 5, pts.Max(p => p.X), 1);
+            Assert.Equal(b.Y + 5, pts.Min(p => p.Y), 1);
+            Assert.Equal(b.Y + b.Height - 5, pts.Max(p => p.Y), 1);
+        }
+
+        [Fact]
+        public async Task GeometryBox_MarginBox_ExpandsReferenceBoxOutsideTheBorder()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='clip-path: inset(0) margin-box; width: 40pt; height: 30pt; margin: 8pt; background: red'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            Assert.Single(g.ClipPaths);
+            var b = el.Bounds;
+            var pts = g.ClipPaths[0].Points;
+            Assert.Equal(b.X - 8, pts.Min(p => p.X), 1);
+            Assert.Equal(b.X + b.Width + 8, pts.Max(p => p.X), 1);
+            Assert.Equal(b.Y - 8, pts.Min(p => p.Y), 1);
+            Assert.Equal(b.Y + b.Height + 8, pts.Max(p => p.Y), 1);
+        }
+
+        [Fact]
+        public async Task GeometryBox_ContentBox_BeforeOrAfterTheShape_ResolvesTheSameBox()
+        {
+            var beforeHtml = Wrap(
+                "<div id='el' style='clip-path: content-box inset(0); width: 40pt; height: 30pt; border: 4pt solid black; padding: 3pt; background: red'>x</div>");
+            var afterHtml = Wrap(
+                "<div id='el' style='clip-path: inset(0) content-box; width: 40pt; height: 30pt; border: 4pt solid black; padding: 3pt; background: red'>x</div>");
+
+            var (rootBefore, containerBefore) = await BuildAndLayout(beforeHtml);
+            var (rootAfter, containerAfter) = await BuildAndLayout(afterHtml);
+
+            var gBefore = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(containerBefore, FindById(rootBefore, "el")!, gBefore);
+            var gAfter = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(containerAfter, FindById(rootAfter, "el")!, gAfter);
+
+            var b = FindById(rootBefore, "el")!.Bounds;
+            var ptsBefore = gBefore.ClipPaths[0].Points;
+            var ptsAfter = gAfter.ClipPaths[0].Points;
+
+            // border(4) + padding(3) = 7 inset from the border-box on every side.
+            Assert.Equal(b.X + 7, ptsBefore.Min(p => p.X), 1);
+            Assert.Equal(ptsBefore.Min(p => p.X), ptsAfter.Min(p => p.X), 1);
+            Assert.Equal(ptsBefore.Max(p => p.X), ptsAfter.Max(p => p.X), 1);
+            Assert.Equal(ptsBefore.Min(p => p.Y), ptsAfter.Min(p => p.Y), 1);
+            Assert.Equal(ptsBefore.Max(p => p.Y), ptsAfter.Max(p => p.Y), 1);
+        }
+
+        [Fact]
+        public async Task GeometryBox_BareBorderBox_HonorsTheBoxsOwnBorderRadius()
+        {
+            // A bare <geometry-box> (no shape function) clips to that box's own shape - which, per CSS
+            // Backgrounds/Borders' corner-clipping rules, includes its own declared border-radius for
+            // border-box, not a sharp rectangle.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='clip-path: border-box; width: 40pt; height: 30pt; border-radius: 8pt; background: red'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            Assert.Single(g.ClipPaths);
+            // A sharp rectangle would record exactly 4 points; a rounded one records extra arc endpoints
+            // (RenderUtils.GetRoundRect: Start + 4x(LineTo + ArcTo) when every corner is rounded).
+            Assert.True(g.ClipPaths[0].Points.Count > 4);
+        }
+
+        [Fact]
+        public async Task GeometryBox_BareMarginBox_StaysASharpRectangle()
+        {
+            // margin-box has no CSS-defined outward radius growth - documented simplification.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='clip-path: margin-box; width: 40pt; height: 30pt; margin: 8pt; border-radius: 8pt; background: red'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            Assert.Single(g.ClipPaths);
+            Assert.Equal(4, g.ClipPaths[0].Points.Count);
+        }
+
+        [Fact]
+        public async Task Url_ReferencesClipPathInAHiddenDefsOnlySvg_ClipsToItsGeometry()
+        {
+            // The <svg style="display:none"> defs-only pattern: it never itself paints (skipped by
+            // layout entirely), but its <clipPath> must still be discoverable document-wide by an
+            // unrelated HTML element's clip-path: url(#id) - see SvgClipPathRegistry's own remarks.
+            var (root, container) = await BuildAndLayout(Wrap(
+                """
+                <svg style="display:none"><clipPath id="c"><circle cx="20" cy="15" r="10"/></clipPath></svg>
+                <div id='el' style='clip-path: url(#c); width: 40pt; height: 30pt; background: red'>x</div>
+                """));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            Assert.Single(g.ClipPaths);
+            var pts = g.ClipPaths[0].Points;
+            Assert.NotEmpty(pts);
+
+            // userSpaceOnUse (the default): unitless SVG numbers are CSS pixels (1px = 0.75pt),
+            // translated onto the border-box's origin - circle(cx=20,cy=15,r=10) -> center
+            // (b.X+15, b.Y+11.25), radius 7.5.
+            var b = el.Bounds;
+            Assert.Equal(b.X + 15 - 7.5, pts.Min(p => p.X), 1);
+            Assert.Equal(b.X + 15 + 7.5, pts.Max(p => p.X), 1);
+            Assert.Equal(b.Y + 11.25 - 7.5, pts.Min(p => p.Y), 1);
+            Assert.Equal(b.Y + 11.25 + 7.5, pts.Max(p => p.Y), 1);
+        }
+
+        [Fact]
+        public async Task Url_UnknownId_PushesNoClip()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='el' style='clip-path: url(#missing); width: 40pt; height: 30pt; background: red'>x</div>"));
+            var el = FindById(root, "el")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, el, g);
+
+            Assert.Empty(g.ClipPaths);
+        }
+
+        [Fact]
         public async Task NoClipPath_PushesNoClip()
         {
             var (root, container) = await BuildAndLayout(Wrap(

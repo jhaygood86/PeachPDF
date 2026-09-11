@@ -484,9 +484,12 @@ namespace PeachPDF.Html.Core.Dom
         /// applied uniformly to every corner's x AND y radius. Shared by <see cref="ComputeRadii"/> (the
         /// box's own declared radii) and <see cref="ComputeInnerRadii"/> (an already inner-reduced set of
         /// radii, re-clamped against the smaller inner rectangle) so the two never derive their own,
-        /// possibly-drifting copy of the same reduction.
+        /// possibly-drifting copy of the same reduction. Also called directly by
+        /// <see cref="Utils.CssClipPathResolver"/> for an <c>inset(... round &lt;border-radius&gt;)</c>
+        /// clip shape's own corner radii, which need the identical reduction against the inset
+        /// rectangle but aren't a box's declared <c>border-radius</c> at all.
         /// </summary>
-        private static BorderRadii ApplyCornerOverlap(RRect rect,
+        internal static BorderRadii ApplyCornerOverlap(RRect rect,
             double tlX, double tlY, double trX, double trY,
             double brX, double brY, double blX, double blY)
         {

@@ -109,18 +109,74 @@ namespace PeachPDF.Tests.CSS
             Assert.NotNull(shape);
             Assert.Equal(BasicShapeGrammar.BasicShapeKind.Inset, shape.Kind);
             Assert.Equal([top, right, bottom, left], shape.InsetEdges);
-            Assert.False(shape.InsetHasRound);
+            Assert.Null(shape.InsetRoundRadii);
         }
 
         [Fact]
-        public void Inset_WithRound_CapturesRadiusButFlagsRound()
+        public void Inset_WithRound_CapturesUniformRadiusOnEveryCorner()
         {
             var shape = Parse("inset(10px round 5px)");
 
             Assert.NotNull(shape);
             Assert.Equal(["10px", "10px", "10px", "10px"], shape.InsetEdges);
-            Assert.True(shape.InsetHasRound);
-            Assert.NotEmpty(shape.InsetRoundRadius);
+            Assert.NotNull(shape.InsetRoundRadii);
+            var radii = shape.InsetRoundRadii.Value;
+            Assert.Equal("5px", radii.TLX);
+            Assert.Equal("5px", radii.TLY);
+            Assert.Equal("5px", radii.TRX);
+            Assert.Equal("5px", radii.TRY);
+            Assert.Equal("5px", radii.BRX);
+            Assert.Equal("5px", radii.BRY);
+            Assert.Equal("5px", radii.BLX);
+            Assert.Equal("5px", radii.BLY);
+        }
+
+        [Fact]
+        public void Inset_RoundWithFourValues_ExpandsToTopRightBottomLeftCorners()
+        {
+            var shape = Parse("inset(0 round 1px 2px 3px 4px)");
+
+            Assert.NotNull(shape);
+            var radii = shape.InsetRoundRadii!.Value;
+            Assert.Equal("1px", radii.TLX);
+            Assert.Equal("2px", radii.TRX);
+            Assert.Equal("3px", radii.BRX);
+            Assert.Equal("4px", radii.BLX);
+            // No "/" - vertical radii mirror the horizontal ones per corner.
+            Assert.Equal("1px", radii.TLY);
+            Assert.Equal("2px", radii.TRY);
+            Assert.Equal("3px", radii.BRY);
+            Assert.Equal("4px", radii.BLY);
+        }
+
+        [Fact]
+        public void Inset_RoundWithSlash_SplitsHorizontalAndVerticalRadii()
+        {
+            var shape = Parse("inset(0 round 1px 2px / 3px 4px)");
+
+            Assert.NotNull(shape);
+            var radii = shape.InsetRoundRadii!.Value;
+            // Horizontal "1px 2px" expands to (TL=1px, TR=2px, BR=1px, BL=2px).
+            Assert.Equal("1px", radii.TLX);
+            Assert.Equal("2px", radii.TRX);
+            Assert.Equal("1px", radii.BRX);
+            Assert.Equal("2px", radii.BLX);
+            // Vertical "3px 4px" expands to (TL=3px, TR=4px, BR=3px, BL=4px).
+            Assert.Equal("3px", radii.TLY);
+            Assert.Equal("4px", radii.TRY);
+            Assert.Equal("3px", radii.BRY);
+            Assert.Equal("4px", radii.BLY);
+        }
+
+        [Theory]
+        [InlineData("inset(10px round banana)")]         // invalid radius token
+        [InlineData("inset(10px round -5px)")]           // negative radius literal
+        [InlineData("inset(10px round 1px 2px 3px 4px 5px)")] // more than 4 horizontal radii
+        [InlineData("inset(10px round 1px /)")]          // "/" with nothing after it
+        [InlineData("inset(10px round 1px / 2px 3px 4px 5px 6px)")] // more than 4 vertical radii
+        public void Inset_InvalidRoundRadius_InvalidatesWholeValue(string value)
+        {
+            Assert.Null(Parse(value));
         }
 
         [Fact]
@@ -311,9 +367,78 @@ namespace PeachPDF.Tests.CSS
         [Theory]
         [InlineData("none")]
         [InlineData("banana")]
-        [InlineData("url(#clip)")]
         [InlineData("rect(0 0 0 0)")]
         public void NonBasicShape_ReturnsNull(string value)
+        {
+            Assert.Null(Parse(value));
+        }
+
+        // ─── <geometry-box> ────────────────────────────────────────────────────
+
+        [Theory]
+        [InlineData("border-box", "BorderBox")]
+        [InlineData("padding-box", "PaddingBox")]
+        [InlineData("content-box", "ContentBox")]
+        [InlineData("margin-box", "MarginBox")]
+        [InlineData("fill-box", "FillBox")]
+        [InlineData("stroke-box", "StrokeBox")]
+        [InlineData("view-box", "ViewBox")]
+        public void GeometryBox_Alone_ParsesAsNoneKindWithThatBox(string keyword, string expectedKindName)
+        {
+            var shape = Parse(keyword);
+
+            Assert.NotNull(shape);
+            Assert.Equal(BasicShapeGrammar.BasicShapeKind.None, shape.Kind);
+            Assert.Equal(expectedKindName, shape.GeometryBox.ToString());
+        }
+
+        [Fact]
+        public void GeometryBox_DefaultsToBorderBox_WhenAbsent()
+        {
+            var shape = Parse("circle(50%)");
+
+            Assert.NotNull(shape);
+            Assert.Equal(BasicShapeGrammar.GeometryBoxKind.BorderBox, shape.GeometryBox);
+        }
+
+        [Theory]
+        [InlineData("circle(50%) padding-box")]
+        [InlineData("padding-box circle(50%)")]
+        public void GeometryBox_CombinesWithShape_EitherOrder(string value)
+        {
+            var shape = Parse(value);
+
+            Assert.NotNull(shape);
+            Assert.Equal(BasicShapeGrammar.BasicShapeKind.Circle, shape.Kind);
+            Assert.Equal(BasicShapeGrammar.GeometryBoxKind.PaddingBox, shape.GeometryBox);
+        }
+
+        [Theory]
+        [InlineData("padding-box margin-box")]           // two geometry-box keywords
+        [InlineData("padding-box circle(50%) margin-box")] // two geometry-box keywords, shape between
+        [InlineData("padding-box banana")]                // geometry-box plus junk
+        public void GeometryBox_Malformed_ReturnsNull(string value)
+        {
+            Assert.Null(Parse(value));
+        }
+
+        // ─── url() ─────────────────────────────────────────────────────────────
+
+        [Fact]
+        public void Url_FragmentReference_ExtractsIdWithoutHash()
+        {
+            var shape = Parse("url(#myClip)");
+
+            Assert.NotNull(shape);
+            Assert.Equal(BasicShapeGrammar.BasicShapeKind.Url, shape.Kind);
+            Assert.Equal("myClip", shape.UrlId);
+        }
+
+        [Theory]
+        [InlineData("url(#clip) padding-box")] // url() doesn't combine with <geometry-box>
+        [InlineData("padding-box url(#clip)")]
+        [InlineData("url(#clip) circle(50%)")] // url() doesn't combine with a shape either
+        public void Url_CombinedWithAnythingElse_ReturnsNull(string value)
         {
             Assert.Null(Parse(value));
         }

@@ -9,7 +9,6 @@ using PeachPDF.Tests.TestSupport;
 
 using PeachPDF.Fonts;
 using System.Globalization;
-using System.Text;
 
 namespace PeachPDF.Tests.PdfSharpCoreTests.Drawing
 {

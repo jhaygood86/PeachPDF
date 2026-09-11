@@ -24,11 +24,44 @@ namespace PeachPDF.CSS
     /// </summary>
     internal static class BasicShapeGrammar
     {
-        internal enum BasicShapeKind { Polygon, Inset, Circle, Ellipse, Path }
+        internal enum BasicShapeKind { None, Polygon, Inset, Circle, Ellipse, Path, Url }
 
         internal enum FillRule { NonZero, EvenOdd }
 
         internal enum ShapeRadiusKind { LengthPercentage, ClosestSide, FarthestSide }
+
+        /// <summary>
+        /// The <c>&lt;geometry-box&gt;</c> keyword (CSS Masking Level 1 §6.1) selecting which box a
+        /// basic shape resolves against; defaults to <see cref="BorderBox"/> when absent.
+        /// <see cref="FillBox"/>/<see cref="StrokeBox"/>/<see cref="ViewBox"/> are only meaningfully
+        /// distinct from <see cref="BorderBox"/> for an element with an associated SVG bounding box;
+        /// for a plain HTML box (the only kind <c>CssClipPathResolver</c> resolves against) CSS
+        /// Masking 1 §7 itself specifies they compute to the used value of <see cref="BorderBox"/>.
+        /// </summary>
+        internal enum GeometryBoxKind { BorderBox, PaddingBox, ContentBox, MarginBox, FillBox, StrokeBox, ViewBox }
+
+        /// <summary>The eight corner radii of an <c>inset(... round &lt;border-radius&gt;)</c> clause,
+        /// each an authored length-percentage component string, in the same per-corner X/Y layout as
+        /// <c>border-radius</c> itself (top-left, top-right, bottom-right, bottom-left).</summary>
+        internal readonly struct CornerRadii
+        {
+            public string TLX { get; }
+            public string TLY { get; }
+            public string TRX { get; }
+            public string TRY { get; }
+            public string BRX { get; }
+            public string BRY { get; }
+            public string BLX { get; }
+            public string BLY { get; }
+
+            public CornerRadii(string tlx, string tly, string trx, string try_, string brx, string bry, string blx, string bly)
+            {
+                TLX = tlx; TLY = tly;
+                TRX = trx; TRY = try_;
+                BRX = brx; BRY = bry;
+                BLX = blx; BLY = bly;
+            }
+        }
 
         /// <summary>A <c>&lt;shape-radius&gt;</c>: either an explicit length-percentage (component string
         /// in <see cref="Length"/>) or one of the <c>closest-side</c>/<c>farthest-side</c> keywords.</summary>
@@ -65,9 +98,15 @@ namespace PeachPDF.CSS
             }
         }
 
-        internal sealed class ParsedBasicShape
+        internal sealed record ParsedBasicShape
         {
             public BasicShapeKind Kind { get; private init; }
+
+            /// <summary>The <c>&lt;geometry-box&gt;</c> keyword the shape resolves against (CSS Masking
+            /// Level 1 §6.1); defaults to <see cref="GeometryBoxKind.BorderBox"/> when the value has no
+            /// explicit keyword. Meaningful for every kind, including <see cref="BasicShapeKind.None"/>
+            /// (a bare geometry-box with no additional shape function).</summary>
+            public GeometryBoxKind GeometryBox { get; init; } = GeometryBoxKind.BorderBox;
 
             // --- polygon() ---
             public FillRule PolygonFillRule { get; private init; }
@@ -78,11 +117,10 @@ namespace PeachPDF.CSS
             /// each an authored length-percentage component string.</summary>
             public IReadOnlyList<string> InsetEdges { get; private init; }
 
-            /// <summary>Whether an <c>inset(... round &lt;border-radius&gt;)</c> corner radius was present.
-            /// The radius itself is captured in <see cref="InsetRoundRadius"/> but not rendered - inset is
-            /// drawn as a rectangle (see the resolver / docs).</summary>
-            public bool InsetHasRound { get; private init; }
-            public IReadOnlyList<Token> InsetRoundRadius { get; private init; }
+            /// <summary>The validated <c>&lt;border-radius&gt;</c> from an <c>inset(... round ...)</c>
+            /// clause, or <see langword="null"/> when no <c>round</c> was present (the resolver draws a
+            /// plain rectangle in that case).</summary>
+            public CornerRadii? InsetRoundRadii { get; private init; }
 
             // --- circle() / ellipse() ---
             /// <summary>circle: the single radius. ellipse: the x-radius.</summary>
@@ -101,6 +139,17 @@ namespace PeachPDF.CSS
             public IReadOnlyList<PathSegment> PathSegments { get; private init; }
             public FillRule PathFillRule { get; private init; }
 
+            // --- url() ---
+            /// <summary>The fragment id (without the leading <c>#</c>) of a <c>url(#id)</c> clip source
+            /// referencing an SVG <c>&lt;clipPath&gt;</c> element.</summary>
+            public string UrlId { get; private init; }
+
+            internal static ParsedBasicShape None(GeometryBoxKind geometryBox) => new()
+            {
+                Kind = BasicShapeKind.None,
+                GeometryBox = geometryBox,
+            };
+
             internal static ParsedBasicShape Polygon(FillRule fillRule, IReadOnlyList<Point> points) => new()
             {
                 Kind = BasicShapeKind.Polygon,
@@ -108,12 +157,11 @@ namespace PeachPDF.CSS
                 PolygonPoints = points,
             };
 
-            internal static ParsedBasicShape Inset(IReadOnlyList<string> edges, bool hasRound, IReadOnlyList<Token> roundRadius) => new()
+            internal static ParsedBasicShape Inset(IReadOnlyList<string> edges, CornerRadii? roundRadii) => new()
             {
                 Kind = BasicShapeKind.Inset,
                 InsetEdges = edges,
-                InsetHasRound = hasRound,
-                InsetRoundRadius = roundRadius,
+                InsetRoundRadii = roundRadii,
             };
 
             internal static ParsedBasicShape Circle(ShapeRadius radius, string centerX, string centerY) => new()
@@ -139,6 +187,12 @@ namespace PeachPDF.CSS
                 PathFillRule = fillRule,
                 PathSegments = segments,
             };
+
+            internal static ParsedBasicShape Url(string urlId) => new()
+            {
+                Kind = BasicShapeKind.Url,
+                UrlId = urlId,
+            };
         }
 
         /// <summary>
@@ -146,23 +200,70 @@ namespace PeachPDF.CSS
         /// null when the value is not a valid basic shape - <b>including the literal <c>none</c></b>,
         /// which callers treat as "no clip". (Layer A therefore accepts <c>none</c> separately, since a
         /// null result here can't distinguish <c>none</c> from an invalid value.)
+        /// <para>
+        /// Per CSS Masking Level 1, the grammar is <c>&lt;clip-source&gt; | [ &lt;basic-shape&gt; ||
+        /// &lt;geometry-box&gt; ] | none</c>: a <c>url(#id)</c> clip source (<see cref="BasicShapeKind.Url"/>)
+        /// is its own alternative and never combines with a <c>&lt;geometry-box&gt;</c>; a basic-shape
+        /// function and a <c>&lt;geometry-box&gt;</c> keyword may each appear alone or together, in
+        /// either order (<c>||</c> is the "one or both, any order" combinator).
+        /// </para>
         /// </summary>
         internal static ParsedBasicShape TryParse(IReadOnlyList<Token> tokens)
         {
             var significant = tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
 
-            if (significant.Length != 1) return null;
-            if (significant[0] is not { Type: TokenType.Function } function) return null;
+            if (significant.Length == 0) return null;
+
+            if (significant is [{ Type: TokenType.Url } urlToken])
+                return ParsedBasicShape.Url(urlToken.Data.TrimStart('#'));
+
+            GeometryBoxKind geometryBox = GeometryBoxKind.BorderBox;
+            var foundGeometryBox = false;
+            var remaining = new List<Token>(significant.Length);
+
+            foreach (var token in significant)
+            {
+                if (token.Type == TokenType.Ident && TryGeometryBox(token, out var kind))
+                {
+                    if (foundGeometryBox) return null; // at most one <geometry-box> keyword
+                    geometryBox = kind;
+                    foundGeometryBox = true;
+                }
+                else
+                {
+                    remaining.Add(token);
+                }
+            }
+
+            if (remaining.Count == 0)
+                return foundGeometryBox ? ParsedBasicShape.None(geometryBox) : null;
+
+            if (remaining is not [{ Type: TokenType.Function } function]) return null;
 
             var args = function.ArgumentTokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
 
-            if (function.Data.Isi(FunctionNames.Polygon)) return ParsePolygon(args);
-            if (function.Data.Isi(FunctionNames.Inset)) return ParseInset(args);
-            if (function.Data.Isi(FunctionNames.Circle)) return ParseCircle(args);
-            if (function.Data.Isi(FunctionNames.Ellipse)) return ParseEllipse(args);
-            if (function.Data.Isi(FunctionNames.Path)) return ParsePath(args);
+            ParsedBasicShape shape = null;
+            if (function.Data.Isi(FunctionNames.Polygon)) shape = ParsePolygon(args);
+            else if (function.Data.Isi(FunctionNames.Inset)) shape = ParseInset(args);
+            else if (function.Data.Isi(FunctionNames.Circle)) shape = ParseCircle(args);
+            else if (function.Data.Isi(FunctionNames.Ellipse)) shape = ParseEllipse(args);
+            else if (function.Data.Isi(FunctionNames.Path)) shape = ParsePath(args);
 
-            return null;
+            return shape is null ? null : shape with { GeometryBox = geometryBox };
+        }
+
+        private static bool TryGeometryBox(Token token, out GeometryBoxKind kind)
+        {
+            if (token.Data.Isi(Keywords.BorderBox)) { kind = GeometryBoxKind.BorderBox; return true; }
+            if (token.Data.Isi(Keywords.PaddingBox)) { kind = GeometryBoxKind.PaddingBox; return true; }
+            if (token.Data.Isi(Keywords.ContentBox)) { kind = GeometryBoxKind.ContentBox; return true; }
+            if (token.Data.Isi(Keywords.MarginBox)) { kind = GeometryBoxKind.MarginBox; return true; }
+            if (token.Data.Isi(Keywords.FillBox)) { kind = GeometryBoxKind.FillBox; return true; }
+            if (token.Data.Isi(Keywords.StrokeBox)) { kind = GeometryBoxKind.StrokeBox; return true; }
+            if (token.Data.Isi(Keywords.ViewBox)) { kind = GeometryBoxKind.ViewBox; return true; }
+
+            kind = default;
+            return false;
         }
 
         private static ParsedBasicShape ParsePolygon(IReadOnlyList<Token> args)
@@ -197,29 +298,69 @@ namespace PeachPDF.CSS
         {
             if (args.Count == 0) return null;
 
-            var roundIndex = -1;
-            for (var i = 0; i < args.Count; i++)
+            // SplitAtKeyword returns false when "round" is found with nothing after it - the same
+            // "keyword with no following radius" malformation ParseCircle/ParseEllipse already reject
+            // for "at" via this same helper.
+            if (!SplitAtKeyword(args, Keywords.Round, out var lengthTokens, out var hasRound, out var roundTokens))
+                return null;
+
+            if (lengthTokens.Count is < 1 or > 4) return null;
+            if (lengthTokens.Any(t => !IsLengthPercentage(t))) return null;
+
+            CornerRadii? radii = null;
+            if (hasRound)
             {
-                if (args[i].Type == TokenType.Ident && args[i].Data.Isi(Keywords.Round))
+                radii = ParseBorderRadius(roundTokens);
+                // An invalid <border-radius> (wrong arity, invalid/negative token, stray "/") invalidates
+                // the whole inset() - and therefore the whole clip-path value - per CSS Shapes Level 1,
+                // the same as any other malformed component (issue #217 gap: this used to only check
+                // "round" wasn't followed by nothing, silently accepting e.g. "round banana").
+                if (radii is null) return null;
+            }
+
+            var values = lengthTokens.Select(t => t.ToValue()).ToArray();
+            var (top, right, bottom, left) = ExpandFourValues(values);
+
+            return ParsedBasicShape.Inset([top, right, bottom, left], radii);
+        }
+
+        /// <summary>
+        /// Parses an <c>inset(... round &lt;border-radius&gt;)</c> clause's radius tokens as a real
+        /// <c>&lt;border-radius&gt;</c> value: <c>&lt;length-percentage [0,∞]&gt;{1,4} [ / &lt;length-percentage
+        /// [0,∞]&gt;{1,4} ]?</c>, via <see cref="ExpandFourValues"/> - the same 1-4-value expansion
+        /// algorithm the <c>border-radius</c> shorthand's own grammar defines (just with corner rather
+        /// than edge labels), reimplemented at the raw-token level here rather than routed through
+        /// <c>BorderRadiusConverter</c>/<c>PeriodicValueConverter</c>, which return CSS-OM
+        /// <c>IPropertyValue</c>s built for the full property-cascade pipeline clip-path's own grammar
+        /// deliberately bypasses (see this file's own class doc comment).
+        /// </summary>
+        private static CornerRadii? ParseBorderRadius(IReadOnlyList<Token> tokens)
+        {
+            var slashIndex = -1;
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                if (tokens[i].Type == TokenType.Delim && tokens[i].Data.Is("/"))
                 {
-                    roundIndex = i;
+                    slashIndex = i;
                     break;
                 }
             }
 
-            var lengthTokens = roundIndex >= 0 ? args.Take(roundIndex).ToArray() : args.ToArray();
-            Token[] roundTokens = roundIndex >= 0 ? args.Skip(roundIndex + 1).ToArray() : [];
+            var horizontalTokens = slashIndex >= 0 ? tokens.Take(slashIndex).ToArray() : tokens.ToArray();
+            var verticalTokens = slashIndex >= 0 ? tokens.Skip(slashIndex + 1).ToArray() : null;
 
-            if (lengthTokens.Length is < 1 or > 4) return null;
-            if (lengthTokens.Any(t => !IsLengthPercentage(t))) return null;
+            if (horizontalTokens.Length is < 1 or > 4) return null;
+            if (verticalTokens is { Length: < 1 or > 4 }) return null;
+            if (!horizontalTokens.All(IsNonNegativeLengthPercentage)) return null;
+            if (verticalTokens != null && !verticalTokens.All(IsNonNegativeLengthPercentage)) return null;
 
-            // "round" with no radius following it is malformed.
-            if (roundIndex >= 0 && roundTokens.Length == 0) return null;
+            var hValues = horizontalTokens.Select(t => t.ToValue()).ToArray();
+            var (htl, htr, hbr, hbl) = ExpandFourValues(hValues);
 
-            var values = lengthTokens.Select(t => t.ToValue()).ToArray();
-            var (top, right, bottom, left) = ExpandBox(values);
+            var vValues = verticalTokens != null ? verticalTokens.Select(t => t.ToValue()).ToArray() : hValues;
+            var (vtl, vtr, vbr, vbl) = ExpandFourValues(vValues);
 
-            return ParsedBasicShape.Inset([top, right, bottom, left], roundIndex >= 0, roundTokens);
+            return new CornerRadii(htl, vtl, htr, vtr, hbr, vbr, hbl, vbl);
         }
 
         private static ParsedBasicShape ParseCircle(IReadOnlyList<Token> args)
@@ -383,7 +524,13 @@ namespace PeachPDF.CSS
             return groups.Any(g => g.Count == 0) && tokens.Count > 0 ? [] : groups;
         }
 
-        private static (string top, string right, string bottom, string left) ExpandBox(IReadOnlyList<string> values) => values.Count switch
+        /// <summary>
+        /// The CSS "1 to 4 values" box-expansion algorithm shared by <c>inset()</c>'s edges (labelled
+        /// top/right/bottom/left below) and an <c>inset(... round &lt;border-radius&gt;)</c> clause's
+        /// corners (<see cref="ParseBorderRadius"/> reuses this same expansion, just with corner rather
+        /// than edge labels - it is the identical 1/2/3/4-value algorithm either way).
+        /// </summary>
+        private static (string top, string right, string bottom, string left) ExpandFourValues(IReadOnlyList<string> values) => values.Count switch
         {
             1 => (values[0], values[0], values[0], values[0]),
             2 => (values[0], values[1], values[0], values[1]),
@@ -443,5 +590,15 @@ namespace PeachPDF.CSS
             // Unitless zero is a valid length.
             return token is { Type: TokenType.Number, Value: 0f };
         }
+
+        /// <summary>A <c>&lt;length-percentage [0,∞]&gt;</c> - the grammar for a <c>border-radius</c>
+        /// component (used by <see cref="ParseBorderRadius"/>): a literal negative <c>Dimension</c>/
+        /// <c>Percentage</c>/<c>Number</c> is rejected, same as <see cref="TryShapeRadius"/>'s
+        /// non-negative check for a circle/ellipse radius; a negative <c>calc()</c> can't be statically
+        /// rejected here and is left to the render-time resolver, same existing precedent.</summary>
+        private static bool IsNonNegativeLengthPercentage(Token token) =>
+            IsLengthPercentage(token) && token is not (
+                { Type: TokenType.Dimension or TokenType.Percentage, Value: < 0f } or
+                { Type: TokenType.Number, Value: < 0f });
     }
 }

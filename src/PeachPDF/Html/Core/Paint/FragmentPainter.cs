@@ -134,8 +134,10 @@ namespace PeachPDF.Html.Core.Paint
                     // clip-path clips the entire element rendering (background, border, content, children).
                     // It is established inside the transform push so the clip and the content it clips are
                     // transformed together (CSS Masking 1: the clip is in the element's local coordinate
-                    // system, which any `transform` then maps). The reference box is the border-box (the
-                    // default) of the whole box, for the same reason as the transform pivot above.
+                    // system, which any `transform` then maps). The whole (unfragmented) border box is
+                    // passed for the same reason as the transform pivot above; CssClipPathResolver itself
+                    // resolves the actual reference box from there, honoring an optional `<geometry-box>`
+                    // keyword in the value (border-box is only the default when one isn't present).
                     var clipped = false;
                     if (box.ClipPath != Keywords.None && !string.IsNullOrEmpty(box.ClipPath))
                     {
