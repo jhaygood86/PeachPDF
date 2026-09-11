@@ -175,6 +175,10 @@
         public const string BorderBox = "border-box";
         public const string PaddingBox = "padding-box";
         public const string ContentBox = "content-box";
+        public const string MarginBox = "margin-box";
+        public const string FillBox = "fill-box";
+        public const string StrokeBox = "stroke-box";
+        public const string ViewBox = "view-box";
         public const string Reverse = "reverse";
         public const string Alternate = "alternate";
         public const string AlternateReverse = "alternate-reverse";

@@ -379,6 +379,27 @@ namespace PeachPDF.Svg
             var rootFont = ComputeFontContext(root, FontContext.Default with { Language = root.DocumentLanguageFallback });
             _rootFontSize = rootFont.Size;
 
+            // Unlike gradients/markers/patterns/masks (built eagerly above, inside CollectDefinitions
+            // itself, since each is "self-contained" enough not to need the full id registry first), a
+            // <clipPath> was historically only ever resolved lazily - ResolveClipPath is memoized and
+            // "safe to call any time during pass 2" (its own doc comment), triggered whenever something
+            // inside *this* subtree referenced it via clip-path:url(#id) (ApplyCommon). That left a
+            // <clipPath> with no such in-subtree reference (e.g. a document-wide `<svg style="display:
+            // none">` used purely as a defs resource for an unrelated HTML element's own clip-path:
+            // url(#id), see SvgClipPathRegistry) never resolved into SvgDocument.ClipPaths at all. Every
+            // clipPath id is now resolved here unconditionally, right after the id registry is complete -
+            // ResolveClipPath's own memoization makes this a no-op for one already resolved during pass 2.
+            // Must run after _rootFontSize is set above (not just after CollectDefinitions): ResolveClipPath
+            // builds its children via BuildElement, and a rem-unit length inside a clipPath shape (e.g. a
+            // nested <text font-size="2rem">) resolves against the _rootFontSize field directly - resolving
+            // it too early would permanently bake in the wrong (UA-default) root size, since ResolveClipPath's
+            // own memoization would then make the later, correctly-timed lazy call from ApplyCommon a no-op.
+            foreach (var (id, node) in _nodesById)
+            {
+                if (node.Name == "clipPath")
+                    ResolveClipPath(id);
+            }
+
             foreach (var child in root.Children)
             {
                 var element = BuildElement(child, InheritedPaint.Initial, rootFont);

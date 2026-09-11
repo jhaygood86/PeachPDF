@@ -2598,7 +2598,17 @@ namespace PeachPDF.Svg
             return graphicsPath;
         }
 
-        private static RGraphicsPath? BuildClipPath(RGraphics g, SvgClipPath clipPath, RMatrix? unitsMatrix)
+        /// <summary>
+        /// Builds a clip path from a resolved <see cref="SvgClipPath"/>'s shapes, mapped through
+        /// <paramref name="unitsMatrix"/>. Internal (not private) so <c>CssClipPathResolver</c> can
+        /// reuse it for an HTML element's <c>clip-path: url(#id)</c> - every coordinate is baked
+        /// directly into the returned path via <see cref="AppendClipShapeGeometry"/>/<see cref="AppendClipLeaf"/>
+        /// rather than relying on any ambient <see cref="RGraphics"/> transform still being pushed, so
+        /// the caller can supply a synthetic matrix (translating/scaling into its own box-geometry
+        /// space, already divided by <see cref="RGraphics.PixelsPerPoint"/>) instead of the SVG-internal
+        /// <c>objectBoundingBox</c>/<c>userSpaceOnUse</c> mapping <see cref="RenderElement"/> builds.
+        /// </summary>
+        internal static RGraphicsPath? BuildClipPath(RGraphics g, SvgClipPath clipPath, RMatrix? unitsMatrix)
         {
             var path = g.GetGraphicsPath();
             path.FillMode = clipPath.ClipRule;
