@@ -35,7 +35,8 @@
 	<ItemGroup>
 		<PackageReference Include="DefaultDocumentation" Version="1.2.5" PrivateAssets="all" IncludeAssets="build" />
 		<PackageReference Include="MimeKit" Version="4.17.0" />
-		<PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
+		<!-- System.IO.Pipelines package reference can be removed completely once .NET 8 support is dropped -->
+		<PackageReference Include="System.IO.Pipelines" Version="10.0.12" />
 	</ItemGroup>
 	<!--
 		Raster image decode/encode (PdfSharpCore/Utils/PeachImageSource.cs). Replaced
