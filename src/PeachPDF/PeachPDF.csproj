@@ -35,7 +35,12 @@
 	<ItemGroup>
 		<PackageReference Include="DefaultDocumentation" Version="1.2.5" PrivateAssets="all" IncludeAssets="build" />
 		<PackageReference Include="MimeKit" Version="4.17.0" />
-		<PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
+		<!--
+			System.IO.Pipelines ships as part of the net10.0+ shared-framework reference assemblies
+			(Microsoft.NETCore.App.Ref), but not net8.0's - only net8.0 needs the standalone package
+			to resolve PipeReader in CSS/Model/CssStreamLoader.cs.
+		-->
+		<PackageReference Include="System.IO.Pipelines" Version="8.0.0" Condition="'$(TargetFramework)' == 'net8.0'" />
 	</ItemGroup>
 	<!--
 		Raster image decode/encode (PdfSharpCore/Utils/PeachImageSource.cs). Replaced
