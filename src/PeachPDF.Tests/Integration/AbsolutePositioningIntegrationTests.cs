@@ -326,6 +326,63 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(expectedTop, fixedBox.Location.Y, 1.5);
         }
 
+        [Fact]
+        public async Task AbsoluteBothInsets_AutoHeight_FillsTheContainingBlock_RatherThanSolvingTheMargin()
+        {
+            // §10.6.4 solves for an `auto` margin only when top, height AND bottom are all non-auto. With an
+            // auto height the rule is the opposite: the auto margins are treated as 0 and the height is what
+            // the equation solves for. Running the margin path here solved the same equation twice - against
+            // the box's content height, before the fill was applied - and pushed the box its containing
+            // block's whole height past the bottom of it.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='cb' style='position:relative; width:200pt; height:100pt;" +
+                " margin:0; padding:0; border:0;'>" +
+                "<div id='abs' style='position:absolute; top:0; bottom:0;" +
+                " margin-top:auto; margin-bottom:0;'>x</div></div>"), margin: 20);
+
+            var cb = LayoutHarness.FindById(root, "cb")!;
+            var abs = LayoutHarness.FindById(root, "abs")!;
+
+            Assert.Equal(cb.ClientTop, abs.Location.Y, 1.5);
+            Assert.Equal(100, abs.ActualBottom - abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteBothInsets_IndefinitePercentageHeight_IsTreatedAsAuto()
+        {
+            // A percentage height against a containing block with no definite height of its own behaves as
+            // automatic (CSS Box Sizing 4 §5), so it takes the auto-height arm above, not the margin one.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='outer' style='width:200pt;'>" +
+                "<div id='cb' style='position:relative; margin:0; padding:0; border:0;'>" +
+                "<div style='height:100pt;'></div>" +
+                "<div id='abs' style='position:absolute; top:0; bottom:0; height:50%;" +
+                " margin-top:auto; margin-bottom:0;'>x</div></div></div>"), margin: 20);
+
+            var cb = LayoutHarness.FindById(root, "cb")!;
+            var abs = LayoutHarness.FindById(root, "abs")!;
+
+            Assert.Equal(cb.ClientTop, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task FixedBothInsets_PercentageHeight_ResolvesAgainstThePageAndSolvesTheMargin()
+        {
+            // A fixed box's percentage height resolves against the page area, which always has a definite
+            // height - so this one IS the margin-solving case, unlike the absolute box above whose
+            // containing block is auto-height.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='fixed' style='position:fixed; top:0; bottom:0; height:50%;" +
+                " margin-top:auto; margin-bottom:auto;'>x</div>"), margin: 20);
+
+            var fixedBox = LayoutHarness.FindById(root, "fixed")!;
+            var band = container.PageBandHeightOf(0);
+
+            // Half the band, centred by the two auto margins: a quarter of the band above it.
+            Assert.Equal(band / 2, fixedBox.ActualBottom - fixedBox.Location.Y, 1.5);
+            Assert.Equal(band / 4, fixedBox.Location.Y, 1.5);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

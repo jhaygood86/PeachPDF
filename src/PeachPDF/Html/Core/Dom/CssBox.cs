@@ -6306,8 +6306,16 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         private void ResolvePositionedAutoBlockMargins(double? finalizedAncestorBorderBoxHeight = null)
         {
+            // §10.6.4 solves for an `auto` margin only when `top`, `height` AND `bottom` are all non-auto.
+            // With an auto height the spec says the opposite: the auto margins are treated as 0 and the
+            // HEIGHT is what the equation is solved for, so the box fills the space between the two insets
+            // (GetBoxHeight's own absolute branch already does that). Running the margin path there solved
+            // the same equation a second time, against the box's content height before the fill had been
+            // applied - a `top: 0; bottom: 0; margin-top: auto` box with no height was pushed its
+            // containing block's whole height past the bottom of it instead of filling it exactly.
             if (Position.Value is not (PositionMode.Absolute or PositionMode.Fixed)
                 || !Top.Value.IsValue || !Bottom.Value.IsValue
+                || !CssLayoutEngine.HasDefiniteHeight(this)
                 || (!MarginTop.Value.IsKeyword && !MarginBottom.Value.IsKeyword))
             {
                 return;

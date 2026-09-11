@@ -1995,13 +1995,19 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal static bool HasDefiniteHeight(CssBox box)
         {
-            // Its one caller, TryGetAspectRatioWidth, only runs for PositionMode.Absolute boxes (see
-            // GetBoxWidth's auto-width branch), so - unlike GetBoxHeight's own isFixedToPage treatment -
-            // there is no reachable Fixed case here to special-case; PercentageBase(box) already covers
-            // every box this function is actually called for.
             if (!CssValueParser.IsValidLength(box.Height)) return false;
-            if (box.Height.EndsWith('%')) return PercentageBase(box).IsHeightCalculated;
-            return true;
+            if (!box.Height.EndsWith('%')) return true;
+
+            // A fixed box's percentage height resolves against the page area (CSS 2.1 §10.1: the initial
+            // containing block), which always has a definite height - the same basis GetBoxHeight's own
+            // isFixedToPage branch uses. PercentageBase would instead hand back the nearest in-flow block
+            // container, which says nothing about what a fixed box actually resolves against. This case
+            // became reachable when CssBox.ResolvePositionedAutoBlockMargins started asking (§10.6.4 is
+            // written for absolute and fixed alike); TryGetAspectRatioWidth, the original caller, only ever
+            // runs for absolute boxes.
+            if (box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null) return true;
+
+            return PercentageBase(box).IsHeightCalculated;
         }
 
         /// <summary>
