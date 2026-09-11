@@ -113,19 +113,18 @@ namespace PeachPDF.Fonts.OpenType
         /// </summary>
         public void CompleteGlyphClosure(Dictionary<int, object> glyphs)
         {
-            int count = glyphs.Count;
-            int[] glyphArray = new int[glyphs.Count];
-            glyphs.Keys.CopyTo(glyphArray, 0);
             if (!glyphs.ContainsKey(0))
                 glyphs.Add(0, null);
-            for (int idx = 0; idx < count; idx++)
-                AddCompositeGlyphs(glyphs, glyphArray[idx]);
+
+            var pendingGlyphs = new Queue<int>(glyphs.Keys);
+            while (pendingGlyphs.Count > 0)
+                AddCompositeGlyphs(glyphs, pendingGlyphs, pendingGlyphs.Dequeue());
         }
 
         /// <summary>
         /// If the specified glyph is a composite glyph add the glyphs it is made of to the glyph table.
         /// </summary>
-        void AddCompositeGlyphs(Dictionary<int, object> glyphs, int glyph)
+        void AddCompositeGlyphs(Dictionary<int, object> glyphs, Queue<int> pendingGlyphs, int glyph)
         {
             ReadOnlySpan<byte> glyphData = GetGlyphData(glyph);
             if (glyphData.IsEmpty)
@@ -143,7 +142,10 @@ namespace PeachPDF.Fonts.OpenType
                 offset += 4;
 
                 if (!glyphs.ContainsKey(cGlyph))
+                {
                     glyphs.Add(cGlyph, null);
+                    pendingGlyphs.Enqueue(cGlyph);
+                }
                 if ((flags & MORE_COMPONENTS) == 0)
                     return;
 
