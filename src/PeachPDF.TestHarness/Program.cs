@@ -6885,11 +6885,15 @@ await SaveShowcaseAsync("emoji", "Fonts & Text", "Emoji (astral codepoints)",
     "Supplementary-plane glyph rendering and grapheme-aware wrapping: adjacent emoji resolve through a bundled Noto Emoji subset and wrap as complete clusters; the separate Color Fonts showcase covers COLR/CPAL.",
     emojiHtml, pdfConfig);
 
-// clip-path with CSS basic shapes (polygon/inset/circle/ellipse/path). The shape is parsed once by
-// the shared BasicShapeGrammar and resolved against the element's border-box, then pushed as a PDF
-// clip region around the whole element rendering (background + content). path() reuses the same
-// SVG path-data parser <path d="..."> uses (SvgPathDataParser), so its heart shape below exercises
-// cubic Beziers through the identical parse-once-resolve-at-paint-time pipeline as the other shapes.
+// clip-path with CSS basic shapes (polygon/inset/circle/ellipse/path/url), a <geometry-box>
+// reference-box keyword, and inset()'s round <border-radius>. The shape is parsed once by the
+// shared BasicShapeGrammar and resolved - against the element's border-box by default, or another
+// box a <geometry-box> keyword selects - then pushed as a PDF clip region around the whole element
+// rendering (background + content). path() reuses the same SVG path-data parser <path d="..."> uses
+// (SvgPathDataParser), so its heart shape below exercises cubic Beziers through the identical
+// parse-once-resolve-at-paint-time pipeline as the other shapes; url() reuses the same clipPath
+// shape-to-path geometry an inline <svg>'s own clip-path: url(#id) uses (SvgRenderer.BuildClipPath),
+// referencing a <clipPath> defined in a hidden, defs-only <svg> elsewhere in this same document.
 var clipPathHtml = """
     <html>
     <head>
@@ -6898,7 +6902,7 @@ var clipPathHtml = """
         h1 { font-size: 20pt; }
         .row { display: flex; gap: 24px; margin-top: 16px; }
         .cell { text-align: center; font-size: 10pt; color: #555; }
-        .shape { width: 130px; height: 130px; margin-bottom: 6px; }
+        .shape { width: 130px; height: 130px; margin-bottom: 6px; box-sizing: border-box; }
         .poly { clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
                 background: linear-gradient(135deg, #ff6b6b, #c92a2a); }
         .inset { clip-path: inset(12% 8% round 14px); background: linear-gradient(135deg, #4dabf7, #1971c2); }
@@ -6906,27 +6910,39 @@ var clipPathHtml = """
         .ell { clip-path: ellipse(50% 34% at center); background: linear-gradient(135deg, #da77f2, #9c36b5); }
         .path { clip-path: path("M65 20 C46 0 0 0 0 46 C0 79 33 105 65 130 C97 105 130 79 130 46 C130 0 84 0 65 20 Z");
                 background: linear-gradient(135deg, #ffa94d, #e8590c); }
+        .box { clip-path: circle(50%) padding-box; border: 10px solid #495057;
+               background: linear-gradient(135deg, #ffd43b, #f08c00); }
+        .url { clip-path: url(#showcaseStarClip); background: linear-gradient(135deg, #63e6be, #0ca678); }
     </style>
     </head>
     <body>
         <h1>clip-path basic shapes</h1>
         <p>A single <code>clip-path</code> value clips the whole element (here a gradient fill) to a
-        <code>polygon()</code>, <code>inset()</code>, <code>circle()</code>, <code>ellipse()</code>, or
-        <code>path()</code>, resolved against the border-box. <code>path()</code> takes a string of SVG
-        path data, mapped 1 unit = 1px onto the border-box's top-left corner.</p>
+        <code>polygon()</code>, <code>inset()</code>, <code>circle()</code>, <code>ellipse()</code>,
+        <code>path()</code>, or <code>url(#id)</code>, resolved against the border-box by default or
+        another box a <code>&lt;geometry-box&gt;</code> keyword selects. <code>path()</code> takes a
+        string of SVG path data, mapped 1 unit = 1px onto the resolved reference box's top-left
+        corner.</p>
+        <svg style="display:none">
+            <clipPath id="showcaseStarClip">
+                <polygon points="65,10 79,48 120,48 87,72 100,112 65,88 30,112 43,72 10,48 51,48" />
+            </clipPath>
+        </svg>
         <div class="row">
             <div class="cell"><div class="shape poly"></div>polygon()</div>
-            <div class="cell"><div class="shape inset"></div>inset()</div>
+            <div class="cell"><div class="shape inset"></div>inset() round</div>
             <div class="cell"><div class="shape circ"></div>circle()</div>
             <div class="cell"><div class="shape ell"></div>ellipse()</div>
             <div class="cell"><div class="shape path"></div>path()</div>
+            <div class="cell"><div class="shape box"></div>circle() padding-box</div>
+            <div class="cell"><div class="shape url"></div>url(#id)</div>
         </div>
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("clip_path", "Backgrounds & Borders", "clip-path basic shapes",
-    "CSS clip-path with basic shapes: polygon(), inset(), circle(), ellipse(), and path() clip an element (here a gradient fill) to a shape resolved against its border-box. A shared basic-shape grammar validates the value at parse time (path() by parsing its SVG path-data string with the same parser <path d=\"...\"> uses) and the resolved region is pushed as a PDF clip path.",
+    "CSS clip-path with basic shapes: polygon(), inset() (including a round <border-radius>), circle(), ellipse(), path(), and url(#id) clip an element (here a gradient fill) to a shape resolved against its border-box by default, or another box a <geometry-box> keyword (e.g. padding-box) selects. A shared basic-shape grammar validates the value at parse time (path() by parsing its SVG path-data string with the same parser <path d=\"...\"> uses; url() by referencing a <clipPath> defined in a hidden, defs-only <svg> elsewhere in the document) and the resolved region is pushed as a PDF clip path.",
     clipPathHtml, pdfConfig);
 
 // ─── legacy clip: rect() showcase ────────────────────────────────────────────

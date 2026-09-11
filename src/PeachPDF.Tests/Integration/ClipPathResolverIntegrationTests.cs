@@ -102,6 +102,77 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Inset_OverConstrainedEdges_AreProportionallyReduced()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics();
+            var reference = new RRect(0, 0, 100, 50);
+
+            // left(40) + right(80) = 120 > width(100): CSS Shapes 1 §3.1 scales both by 100/120 = 5/6,
+            // preserving their 1:2 ratio and reducing the inset rectangle's width to exactly 0 rather
+            // than an inverted/negative one. top/bottom are well within height(50), so unaffected.
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, "inset(5pt 80pt 5pt 40pt)", reference, box, out var path, out _);
+
+            Assert.True(built);
+            var points = ((TestGraphicsPath)path!).Points;
+
+            var expectedLeft = 40 * (100.0 / 120.0);
+            var expectedRight = 80 * (100.0 / 120.0);
+            Assert.Equal(expectedLeft, points[0].X, 3);
+            Assert.Equal(100 - expectedRight, points[1].X, 3);
+            Assert.Equal(points[0].X, points[3].X, 3);
+            Assert.Equal(5, points[0].Y, 3);
+            Assert.Equal(50 - 5, points[2].Y, 3);
+        }
+
+        [Fact]
+        public async Task Inset_Round_BuildsRoundedRectangleViaGetRoundRect()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics();
+            var reference = new RRect(0, 0, 200, 100);
+
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, "inset(10pt round 5pt)", reference, box, out var path, out _);
+
+            Assert.True(built);
+            var points = ((TestGraphicsPath)path!).Points;
+
+            // RenderUtils.GetRoundRect: Start + 4×(LineTo + ArcTo) when every corner is rounded = 9
+            // points, versus the plain 4-point rectangle a non-rounded inset() produces - the extra
+            // points are exactly the arc endpoints.
+            Assert.Equal(9, points.Count);
+
+            // The overall bounds still match the plain (unrounded) inset rectangle: (10,10)..(190,90).
+            Assert.Equal(10, points.Min(p => p.X), 3);
+            Assert.Equal(190, points.Max(p => p.X), 3);
+            Assert.Equal(10, points.Min(p => p.Y), 3);
+            Assert.Equal(90, points.Max(p => p.Y), 3);
+        }
+
+        [Fact]
+        public async Task Inset_RoundRadiusTooLarge_IsOverlapReduced()
+        {
+            var box = await BuildBoxAsync();
+            var g = new TestRecordingGraphics();
+            // A 40x20 inset rectangle with a 30pt round radius on every corner: the top edge's two
+            // 30pt radii would sum to 60 > 40, so CSS Backgrounds 3 §4's corner-overlap factor
+            // (40/60 = 2/3) must be applied uniformly - reduced radius = 20pt.
+            var reference = new RRect(0, 0, 40, 20);
+
+            var built = CssClipPathResolver.TryBuildClipPath(
+                g, "inset(0 round 30pt)", reference, box, out var path, out _);
+
+            Assert.True(built);
+            // The reduced 20pt radius exactly reaches the rectangle's own half-width/half-height, so
+            // the shape is a full stadium/circle: every point stays within the 0..40 / 0..20 bounds.
+            var points = ((TestGraphicsPath)path!).Points;
+            Assert.All(points, p => Assert.InRange(p.X, -0.01, 40.01));
+            Assert.All(points, p => Assert.InRange(p.Y, -0.01, 20.01));
+        }
+
+        [Fact]
         public async Task Circle_ClosestSide_UsesMinCenterToEdgeDistance()
         {
             var box = await BuildBoxAsync();

@@ -760,6 +760,15 @@ namespace PeachPDF.Html.Core
         /// </summary>
         internal CssBox? Root { get; private set; }
 
+        private SvgClipPathRegistry? _svgClipPathRegistry;
+
+        /// <summary>
+        /// The document-wide <c>&lt;clipPath&gt;</c> id index an HTML element's <c>clip-path: url(#id)</c>
+        /// (<see cref="CssClipPathResolver"/>) resolves against - see <see cref="SvgClipPathRegistry"/>'s
+        /// own remarks for why this needs to be document-wide rather than per-<c>&lt;svg&gt;</c>.
+        /// </summary>
+        internal SvgClipPathRegistry SvgClipPaths => _svgClipPathRegistry ??= new SvgClipPathRegistry(this);
+
         /// <summary>
         /// The document's root (<c>&lt;html&gt;</c>) element's own resolved <c>writing-mode</c>, defaulting
         /// to the CSS initial <see cref="WritingMode.HorizontalTb"/> when there is no document yet. Set
@@ -918,6 +927,9 @@ namespace PeachPDF.Html.Core
             // until the next document happens to read through it.
             _documentBase = null;
             _documentBaseRoot = null;
+            // Keyed to the (now-disposed) Root it indexed - a stale registry would resolve clip-path:
+            // url(#id) against the previous document's clipPath ids instead of the new one's.
+            _svgClipPathRegistry = null;
             ClearNamedStrings();
             ClearRunningElements();
             ClearNamedPageElements();
