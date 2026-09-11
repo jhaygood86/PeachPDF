@@ -229,6 +229,103 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(120, abs.Size.Width, 1.5);
         }
 
+        // ─── §10.6.4 auto block-axis margins ─────────────────────────────────────
+
+        [Fact]
+        public async Task AbsoluteBothInsets_SingleAutoBlockMargin_AbsorbsTheLeftoverSpace()
+        {
+            // top/height/bottom all non-auto and one auto margin: the equation is solved for that margin,
+            // so it takes all 60pt of leftover space and the box lands against the bottom inset.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='cb' style='position:relative; height:100pt; margin:0; padding:0; border:0;'>" +
+                "<div id='abs' style='position:absolute; top:0; bottom:0; height:40pt;" +
+                " margin-top:auto; margin-bottom:0;'></div></div>"), margin: 20);
+
+            var cb = LayoutHarness.FindById(root, "cb")!;
+            var abs = LayoutHarness.FindById(root, "abs")!;
+
+            Assert.Equal(cb.ClientTop + 60, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteBothInsets_BothAutoBlockMargins_CentreTheBox()
+        {
+            // Both margins auto: the leftover space is split evenly - the classic vertical centring of an
+            // absolutely positioned box.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='cb' style='position:relative; height:100pt; margin:0; padding:0; border:0;'>" +
+                "<div id='abs' style='position:absolute; top:0; bottom:0; height:40pt;" +
+                " margin-top:auto; margin-bottom:auto;'></div></div>"), margin: 20);
+
+            var cb = LayoutHarness.FindById(root, "cb")!;
+            var abs = LayoutHarness.FindById(root, "abs")!;
+
+            Assert.Equal(cb.ClientTop + 30, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteBothInsets_AutoStartMarginWithNegativeEndMargin_PlacesBoxBelowContainingBlock()
+        {
+            // The Charts.css column/area/line label: `inset: 0`, a fixed height, `margin-block-start: auto`
+            // and a negative end margin that pulls the box out below its containing block entirely -
+            // margin-top = 100 - 0 - 40 - 0 - (-40) = 100, so the label's top edge sits on the container's
+            // bottom edge rather than across the top of the chart.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='cb' style='position:relative; height:100pt; margin:0; padding:0; border:0;'>" +
+                "<div id='abs' style='position:absolute; inset:0; height:40pt;" +
+                " margin-block-start:auto; margin-block-end:-40pt;'></div></div>"), margin: 20);
+
+            var cb = LayoutHarness.FindById(root, "cb")!;
+            var abs = LayoutHarness.FindById(root, "abs")!;
+
+            Assert.Equal(cb.ClientTop + 100, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteSingleInset_AutoBlockMargin_StaysAtTheTopInset()
+        {
+            // §10.6.4 only solves for an auto margin when top, height and bottom are all non-auto. With
+            // `bottom: auto` there is no leftover to absorb, so the auto margin is 0 and the box stays put.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='cb' style='position:relative; height:100pt; margin:0; padding:0; border:0;'>" +
+                "<div id='abs' style='position:absolute; top:10pt; height:40pt;" +
+                " margin-top:auto;'></div></div>"), margin: 20);
+
+            var cb = LayoutHarness.FindById(root, "cb")!;
+            var abs = LayoutHarness.FindById(root, "abs")!;
+
+            Assert.Equal(cb.ClientTop + 10, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteAutoMargins_UseTheFinalHeightOfAnAutoHeightContainingBlock()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='cb' style='position:relative; margin:0; padding:0; border:0;'>" +
+                "<div style='height:100pt;'></div>" +
+                "<div id='abs' style='position:absolute; inset:0; height:40pt; margin:auto 0;'></div>" +
+                "</div>"), margin: 20);
+
+            var cb = LayoutHarness.FindById(root, "cb")!;
+            var abs = LayoutHarness.FindById(root, "abs")!;
+
+            Assert.Equal(100, cb.ActualHeight, 0.5);
+            Assert.Equal(cb.ClientTop + 30, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task FixedBothInsets_BothAutoBlockMargins_CentreTheBoxInThePageArea()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='fixed' style='position:fixed; inset:0; height:40pt; margin:auto 0;'></div>"),
+                margin: 20);
+
+            var fixedBox = LayoutHarness.FindById(root, "fixed")!;
+            var expectedTop = (container.PageBandHeightOf(0) - fixedBox.ActualHeight) / 2;
+
+            Assert.Equal(expectedTop, fixedBox.Location.Y, 1.5);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>

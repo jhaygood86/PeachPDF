@@ -974,6 +974,24 @@ namespace PeachPDF.Html.Core
                     return DoesSelectorMatch(pseudoElementSelector, box);
                 }
 
+                // A pseudo-element is generated on an *element* (Selectors 4 §3.3: "pseudo-elements
+                // represent abstractions about the document tree beyond those specified by the document
+                // language"; every one of them is defined as a child of its originating element). A box
+                // with no HtmlTag at this point in the pipeline is an anonymous text box - the box a raw
+                // text node became - which is not an element and cannot originate one. The universal
+                // selector reaches those boxes here (DoesSelectorMatch(AllSelector) is deliberately
+                // structural rather than element-only), so a blanket "* ::before" - Charts.css's own
+                // ".charts-css *::before { box-sizing: border-box }" is the case that found this - would
+                // otherwise hang an empty ::before/::after box off every text box in the document.
+                //
+                // That is not cosmetic: it leaves a box holding BOTH its own words and child boxes, and
+                // CssLayoutEngine.FlowBox flows a box's own words only when it has no child boxes
+                // (`if (boxes.Count is 0 && box.Words.Count > 0) boxes = [box]`), so the text was never
+                // positioned by any inline flow again. It kept whatever coordinates an earlier pass had
+                // left on it and stayed flagged CssRect.AwaitsTheNextFragmentainer, which made
+                // FragmentEmitter drop the word entirely - the text simply disappeared from the PDF.
+                if (box.HtmlTag is null) return false;
+
                 switch (pseudoElementSelector.Name)
                 {
                     case PseudoElementNames.Before when !box.Boxes.Any(b => b.IsBeforePseudoElement):

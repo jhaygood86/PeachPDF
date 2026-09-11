@@ -525,6 +525,37 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Whether <paramref name="box"/>, a child of a flex or grid container, becomes an item of it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Per <see href="https://www.w3.org/TR/css-flexbox-1/#flex-items">css-flexbox-1 §4</see> (and
+        /// <see href="https://www.w3.org/TR/css-grid-2/#grid-items">css-grid-2 §6</see>, which repeats it
+        /// verbatim): each in-flow child becomes an item, "each contiguous sequence of child text runs is
+        /// wrapped in an anonymous block container", and a text run "that contains only white space … is
+        /// not rendered". <b>Generated content is explicitly not in that exclusion</b> — both specs say the
+        /// container's own <c>::before</c> and <c>::after</c> pseudo-elements generate items.
+        /// </para>
+        /// <para>
+        /// A pseudo-element box has no <see cref="CssBox.HtmlTag"/>, so the plain "anonymous and empty"
+        /// test drops the very common <c>content: ""</c> spacer — a generated box that carries no text but
+        /// is sized entirely by its own <c>width</c>/<c>height</c>. Charts.css's area and line charts are
+        /// built on one (<c>td::after { content: ""; height: calc(100% * var(--end)) }</c> is what lifts
+        /// each data label to its data point), and without it every label collapsed onto the chart's
+        /// baseline.
+        /// </para>
+        /// </remarks>
+        internal static bool GeneratesFlexOrGridItem(CssBox box) =>
+            box.DerivedStyle.ActualDisplay != Keywords.None
+            // A left/right float is an item, not an exclusion (css-flexbox-1 §4: float has no effect on a
+            // flex item). Nothing is needed here for that: DomParser.NormalizeFlexOrGridItem has already
+            // coerced such a child's own `float` to `none`, so IsExcludedFromFlow sees only the genuinely
+            // out-of-flow ones - absolute, fixed, running, and a css-gcpm-3 footnote body.
+            && !box.IsExcludedFromFlow
+            && (box.HtmlTag is not null || box.IsBeforePseudoElement || box.IsAfterPseudoElement
+                || !box.IsSpaceOrEmpty);
+
+        /// <summary>
         /// This returns the nearest positioned ancestor, or the root if none is found
         /// </summary>
         /// <param name="box">The box to use for locating</param>

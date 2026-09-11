@@ -850,6 +850,12 @@ namespace PeachPDF.Html.Core.Parse
             // fill relies on exactly this blockification).
             BlockifyPositionedBox(box);
 
+            // 11. Normalize a flex/grid item's own computed style (css-flexbox-1 §4 / css-grid-2 §6):
+            // blockify a layout-internal display, and drop `float`, which has no effect on an item. The
+            // parent's own cascade — including step 10 above — has already finished by the time this box is
+            // reached, so its display is final and can be asked about here.
+            NormalizeFlexOrGridItem(box);
+
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
 
@@ -894,6 +900,79 @@ namespace PeachPDF.Html.Core.Parse
                     CssProperty<DisplayMode>.FromValue(Keywords.Table, DisplayMode.Table),
                 _ => box.Display
             };
+        }
+
+        /// <summary>
+        /// Brings an in-flow child of a flex or grid container — a flex/grid item — into the shape those
+        /// formatting contexts require of one: a blockified <c>display</c>
+        /// (<see href="https://www.w3.org/TR/css-display-3/#blockify">CSS Display 3 §2.7</see>, as required
+        /// by <see href="https://www.w3.org/TR/css-flexbox-1/#flex-items">css-flexbox-1 §4</see> and
+        /// css-grid-2 §6) and no <c>float</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The <c>display</c> half is scoped to the <b>layout-internal</b> set (css-display-3 §2.6's
+        /// table-internal displays), which
+        /// become <c>block</c>: a <c>table-row</c> child of a flex container is not a table part, it is a
+        /// flex item, and leaving it as one meant the box was handed to a table engine that never ran over
+        /// it — its whole subtree laid out at the origin and its text was silently dropped. A
+        /// <c>&lt;tbody style="display:flex"&gt;</c> of ordinary <c>&lt;tr&gt;</c>s rendered completely
+        /// blank.
+        /// </para>
+        /// <para>
+        /// Doing this in the cascade rather than at layout time is what makes it stick: the anonymous
+        /// block/inline restructuring passes further down <c>GenerateCssTree</c> run afterwards and read
+        /// this value.
+        /// </para>
+        /// <para>
+        /// Out-of-flow children are skipped: they are not items at all, and
+        /// <see cref="BlockifyPositionedBox"/> has already blockified them for their own reason.
+        /// </para>
+        /// <para>
+        /// <b>Inline-level items are left alone here</b>, even though the spec blockifies them too: the
+        /// flex and grid engines already lay every item out blockified
+        /// (<c>CssLayoutEngineFlex.PerformLayoutBlockified</c>), so an inline item's own
+        /// <c>width</c>/<c>height</c> already apply, and coercing the computed value as well would change
+        /// how a <i>replaced</i> item is sized — a replaced box takes its size from the phantom word
+        /// carrying its content, which only reaches the box through inline flow, so as a block-level box it
+        /// would instead fill its containing block (CSS 2.1 §10.3.4's intrinsic width for block-level
+        /// replaced content is not implemented). What actually broke without a rule here was the box tree,
+        /// not the computed value, and <see cref="CorrectInlineBoxesParent"/> owns that.
+        /// </para>
+        /// </remarks>
+        private static void NormalizeFlexOrGridItem(CssBox box)
+        {
+            if (box.ParentBox is not { } parent) return;
+
+            if (parent.Display.Value is not (DisplayMode.Flex or DisplayMode.InlineFlex
+                or DisplayMode.Grid or DisplayMode.InlineGrid))
+            {
+                return;
+            }
+
+            if (box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) return;
+
+            box.Display = box.Display.Value switch
+            {
+                DisplayMode.TableCaption or DisplayMode.TableCell
+                    or DisplayMode.TableColumn or DisplayMode.TableColumnGroup
+                    or DisplayMode.TableFooterGroup or DisplayMode.TableHeaderGroup
+                    or DisplayMode.TableRow or DisplayMode.TableRowGroup =>
+                    CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
+                _ => box.Display
+            };
+
+            // `float` has no effect on a flex/grid item (css-flexbox-1 §4). Coerced to `none` here rather
+            // than merely ignored by the item-collection filter, because IsFloated is read all over layout
+            // - CssLayoutEngine.FloatBox, sibling walks, line-box wrap-around - and a box that is an item
+            // *and* still answers "yes, I float" gets both treatments: the item was collected, then
+            // displaced by the float machinery, landing on its own row with a hole beside it.
+            // Floating.Footnote is deliberately not touched: css-gcpm-3 pulls a footnote body out of the
+            // flow entirely, so it is not an item at all, which is what IsExcludedFromFlow already says.
+            if (box.Float.Value is Floating.Left or Floating.Right)
+            {
+                box.Float = CssProperty<Floating>.FromValue(Keywords.None, Floating.None);
+            }
         }
 
         /// <summary>
@@ -2320,7 +2399,26 @@ namespace PeachPDF.Html.Core.Parse
             // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
             // (and restructure) them. See CssBoxSvg / issue #159.
             if (box is CssBoxSvg) return;
-            if (ContainsVariantBoxes(box))
+
+            // A flex or grid container establishes no inline formatting context, so CSS 2.1 §9.2.1.1's
+            // anonymous block box — a *block container* rule — must not be created inside one. Each child
+            // becomes an item instead (css-flexbox-1 §4 / css-grid-2 §6), and only a contiguous run of
+            // child *text* gets an anonymous wrapper, which WrapFlexOrGridTextSequences produces below.
+            //
+            // Wrapping here silently swallowed an item: a container mixing block-level and inline-level
+            // children put the inline ones inside an auto-sized anonymous block, and that wrapper — not the
+            // child — became the item, so the child's own width/height sized nothing. Charts.css's area and
+            // line charts are exactly that shape (an inline `td::after` spacer beside a `display: flex`
+            // `.data` label), and every data label collapsed onto the chart baseline instead of sitting at
+            // its data point. Recursion below is unaffected: the children's own subtrees still normalize.
+            var isFlexOrGridContainer = box.Display.Value is DisplayMode.Flex or DisplayMode.InlineFlex
+                or DisplayMode.Grid or DisplayMode.InlineGrid;
+
+            if (isFlexOrGridContainer)
+            {
+                WrapFlexOrGridTextSequences(box);
+            }
+            else if (ContainsVariantBoxes(box))
             {
                 for (int i = 0; i < box.Boxes.Count; i++)
                 {
@@ -2343,6 +2441,49 @@ namespace PeachPDF.Html.Core.Parse
                 }
             }
         }
+
+        /// <summary>
+        /// Joins each contiguous sequence of <b>two or more</b> direct child text runs into one anonymous
+        /// block, so the sequence becomes a single flex/grid item
+        /// (<see href="https://www.w3.org/TR/css-flexbox-1/#flex-items">css-flexbox-1 §4</see>: "each
+        /// contiguous sequence of child text runs is wrapped in an anonymous block container flex item").
+        /// Element and generated-content boxes remain items in their own right.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>A lone text run is already that anonymous item</b> — the HTML parser gives every text node its
+        /// own tagless <see cref="CssBox"/> — so it is deliberately left alone. Wrapping it anyway puts an
+        /// auto-sized box between the container and the text, and <i>that</i> box becomes the item: the
+        /// measured width is then the wrapper's rather than the text's, and a flex item inheriting
+        /// <c>overflow-wrap: anywhere</c> breaks mid-word at the seam. Charts.css's axis labels turned into
+        /// "Q"/"1" and "Ma"/"r" on two lines — the same "the wrapper, not the child, became the item" shape
+        /// <see cref="CorrectInlineBoxesParent"/>'s own flex/grid guard exists to avoid.
+        /// </para>
+        /// <para>
+        /// So this runs only where a wrapper genuinely changes the item count: adjacent text nodes, which
+        /// the parser produces when something that generates no box separates them — a comment, or an
+        /// element the tree builder dropped. <c>A&lt;!--x--&gt;B</c> is one text sequence, hence one item.
+        /// </para>
+        /// </remarks>
+        private static void WrapFlexOrGridTextSequences(CssBox box)
+        {
+            for (var i = 0; i < box.Boxes.Count; i++)
+            {
+                if (!IsAnonymousTextRun(box.Boxes[i])) continue;
+
+                // A single run is already its own anonymous item - see the remarks above.
+                if (i + 1 >= box.Boxes.Count || !IsAnonymousTextRun(box.Boxes[i + 1])) continue;
+
+                var wrapper = CssBox.CreateBlock(box, null, box.Boxes[i++]);
+                while (i < box.Boxes.Count && IsAnonymousTextRun(box.Boxes[i]))
+                {
+                    box.Boxes[i].ParentBox = wrapper;
+                }
+            }
+        }
+
+        private static bool IsAnonymousTextRun(CssBox box) =>
+            box.HtmlTag is null && !box.IsPseudoElement && box.Text is not null;
 
         /// <summary>
         /// Whether <paramref name="box"/> is one of the inline boxes an anonymous block is created to hold.

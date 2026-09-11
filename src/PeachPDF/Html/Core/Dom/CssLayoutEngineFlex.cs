@@ -145,13 +145,20 @@ namespace PeachPDF.Html.Core.Dom
             // here: TryGetAspectRatioWidth exists but is documented as unsafe for a stretch-fit box (which a
             // block-level flex container's own auto width already is via GetBoxWidth above), so this stays
             // scoped to the physical-Y case only - a narrow, defensible boundary, not an oversight.
+            // "Definite" has to mean the height actually resolved, not merely that one was declared:
+            // GetBoxHeight returns null for a *percentage* height whose containing block is not itself
+            // height-calculated, which CSS Box Sizing 4 §5 says behaves as automatic. Treating that as
+            // definite-with-a-0-fallback gave the container a main size of 0, and a column container then
+            // stacked every item at its content origin - all of them drawn on top of each other.
             bool hasExplicitHeight = CssValueParser.IsValidLength(_flexBox.Height);
-            bool hasDefiniteHeight = hasExplicitHeight
-                || CssLayoutEngine.TryGetAspectRatioHeight(_flexBox, out _);
+            double? resolvedHeight =
+                hasExplicitHeight || CssLayoutEngine.TryGetAspectRatioHeight(_flexBox, out _)
+                    ? CssLayoutEngine.GetBoxHeight(_flexBox)
+                    : null;
+            bool hasDefiniteHeight = resolvedHeight is not null;
             if (hasDefiniteHeight)
             {
-                var fullHeight = CssLayoutEngine.GetBoxHeight(_flexBox) ?? 0;
-                _flexBox.ActualBottom = _flexBox.Location.Y + fullHeight;
+                _flexBox.ActualBottom = _flexBox.Location.Y + resolvedHeight!.Value;
             }
 
             double mainSize = _mainAxisIsPhysicalX
@@ -178,11 +185,10 @@ namespace PeachPDF.Html.Core.Dom
                 runningChild.RegisterAsRunningElement(_flexBox);
             }
 
-            // Phase 1: collect and order flex items.
-            // Anonymous whitespace-only boxes between flex items must be discarded per CSS spec.
+            // Phase 1: collect and order flex items (which children become items:
+            // DomUtils.GeneratesFlexOrGridItem).
             var rawItems = _flexBox.Boxes
-                .Where(b => b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsExcludedFromFlow
-                            && (b.HtmlTag != null || !b.IsSpaceOrEmpty))
+                .Where(DomUtils.GeneratesFlexOrGridItem)
                 .OrderBy(ParseOrder)
                 .ThenBy(b => _flexBox.Boxes.IndexOf(b))
                 .ToList();

@@ -17,11 +17,14 @@ namespace PeachPDF.Tests.Integration
     /// Root cause, confirmed empirically (see the two fixes below) and independently against a second,
     /// fully-diagnosed report of the same bug:
     /// <list type="number">
-    /// <item><c>DomParser.CorrectInlineBoxesParent</c> wraps a run of inline content in an anonymous
-    /// block (<c>CssBox.CreateBlock</c>) whenever a flex container mixes inline-level and block-level
-    /// children (<c>ContainsVariantBoxes</c>) - standard CSS anonymous-box generation, and also correct
-    /// per CSS Flexbox §4 (contiguous inline content becomes its own anonymous flex item). The
-    /// <c>&lt;img&gt;</c>/<c>&lt;span&gt;</c> becomes the sole child of this wrapper.</item>
+    /// <item><c>DomParser.CorrectInlineBoxesParent</c> wrapped a run of inline content in an anonymous
+    /// block (<c>CssBox.CreateBlock</c>) whenever a flex container mixed inline-level and block-level
+    /// children (<c>ContainsVariantBoxes</c>) - standard CSS anonymous-box generation for a *block*
+    /// container. The <c>&lt;img&gt;</c>/<c>&lt;span&gt;</c> became the sole child of this wrapper.
+    /// (That wrapper is no longer created inside a flex or grid container: css-flexbox-1 §4 wraps only a
+    /// contiguous sequence of child <i>text runs</i>, so an inline <i>element</i> is an item in its own
+    /// right. These tests assert recorded paint calls rather than which box flex sized, so they hold
+    /// either way - which is what makes them worth keeping.)</item>
     /// <item><see cref="CssLayoutEngineFlex"/>'s own item-collection filter (and
     /// <c>CssLayoutEngineColumns</c>'s identical one, for multicol) discards anonymous
     /// (<c>HtmlTag == null</c>) boxes considered "space or empty", via <see cref="CssBox.IsSpaceOrEmpty"/>
@@ -157,10 +160,10 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task SvgInline_WithBlockSibling_InFlexRow_GetsIntrinsicSize()
         {
-            // With a block sibling present, the svg itself is nested inside the anonymous wrapper flex
-            // assigns geometry to (see this class's own doc comment) - ActualBoxSizingWidth read
-            // directly off the nested svg isn't the property flex layout actually resolves, so this
-            // asserts the same way the img/span tests above do: an actual recorded paint call.
+            // Whether the svg is the flex item itself or sits inside an anonymous wrapper that is (see
+            // this class's own doc comment - it used to be the latter), ActualBoxSizingWidth read off the
+            // svg is not necessarily the property flex layout resolved, so this asserts the same way the
+            // img/span tests above do: an actual recorded paint call.
             var html = Wrap("""
                 <div style='display:flex'>
                     <svg id='s' width='40' height='30'><rect width='40' height='30' fill='red'/></svg>
