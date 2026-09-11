@@ -177,10 +177,10 @@ namespace PeachPDF.Html.Core.Handlers
         /// <c>type=password</c> field, one asterisk per character instead - the same unreadable echo
         /// ISO 32000-1 Table 228's Password flag requires of a reader, applied to the initial
         /// appearance the flag says nothing about, so a prefilled password is not simply legible on
-        /// the page. When the field has no value but its element carries a <c>placeholder</c> and
-        /// <c>-peachpdf-pdf-form-field-placeholder: auto</c> asked for it, the placeholder is drawn
-        /// as a hint instead (see <c>FormFieldAppearanceBuilder.BuildTextAppearance</c>'s
-        /// <c>isPlaceholder</c>, which is what greys it).
+        /// the page. When the field has no value and its element's standard HTML
+        /// <c>placeholder</c> applies, that hint is drawn instead. See
+        /// <c>FormFieldAppearanceBuilder.BuildTextAppearance</c>'s <c>isPlaceholder</c>, which applies
+        /// the independently-cascaded <c>::placeholder</c> style.
         /// </summary>
         /// <remarks>
         /// The masking is presentation only: "/V" still carries the real value, because the author
@@ -192,7 +192,7 @@ namespace PeachPDF.Html.Core.Handlers
         {
             if (c.Value is not { Length: > 0 } value)
             {
-                return c.ShowPlaceholder && c.Attributes.Placeholder is { Length: > 0 } placeholder
+                return c.PlaceholderShown && c.Attributes.Placeholder is { Length: > 0 } placeholder
                     ? (placeholder, true)
                     : (string.Empty, false);
             }

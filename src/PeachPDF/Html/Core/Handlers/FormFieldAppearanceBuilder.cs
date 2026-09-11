@@ -5,7 +5,6 @@ using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Paint.Content;
-using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -111,10 +110,11 @@ namespace PeachPDF.Html.Core.Handlers
         /// </summary>
         /// <remarks>
         /// <c>isPlaceholder</c> says the text is a placeholder hint rather than the field's value, in
-        /// which case it is drawn muted (see <see cref="PlaceholderColor"/>) the way a browser greys
-        /// one. It still goes inside the <c>/Tx</c> marked-content sequence, which is exactly what
-        /// makes a drawn hint safe: a reader regenerating the field replaces the whole sequence, so
-        /// the hint disappears on the first keystroke instead of sitting behind what is typed.
+        /// which case font, color and opacity come from the independently cascaded
+        /// <c>::placeholder</c> style. It still goes inside the <c>/Tx</c> marked-content sequence,
+        /// which is exactly what makes a drawn hint safe: a reader regenerating the field replaces
+        /// the whole sequence, so the hint disappears on the first keystroke instead of sitting
+        /// behind what is typed.
         /// </remarks>
         internal static PdfFormXObject BuildTextAppearance(PdfDocument document, RAdapter adapter, double pixelsPerPoint,
             CssBox box, double widthPt, double heightPt, string text, bool autoFontSize, int? combCells,
@@ -124,7 +124,8 @@ namespace PeachPDF.Html.Core.Handlers
 
             var layoutRect = LayoutRect(widthPt, heightPt, pixelsPerPoint);
             var contentRect = ContentRect(box, layoutRect);
-            var font = ResolveTextFont(box, contentRect, pixelsPerPoint, autoFontSize);
+            var textStyle = isPlaceholder ? box.ResolvedPlaceholderStyle ?? box : box;
+            var font = ResolveTextFont(textStyle, contentRect, pixelsPerPoint, autoFontSize);
             resolvedFontSizePt = font.Size;
 
             return CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
@@ -151,12 +152,14 @@ namespace PeachPDF.Html.Core.Handlers
 
                 if (drawable)
                 {
-                    var color = isPlaceholder ? PlaceholderColor(box) : box.ActualColor;
+                    var color = isPlaceholder
+                        ? ApplyOpacity(textStyle.ActualColor, textStyle.ActualOpacity)
+                        : box.ActualColor;
 
                     if (combCells is > 0)
                         DrawCombCharacters(g, color, contentRect, font, text, combCells.Value);
                     else
-                        DrawSingleLine(g, box, color, contentRect, font, text);
+                        DrawSingleLine(g, textStyle, color, contentRect, font, text);
                 }
 
                 g.EndVariableText();
@@ -164,26 +167,15 @@ namespace PeachPDF.Html.Core.Handlers
         }
 
         /// <summary>
-        /// The muted colour a placeholder hint is drawn in: the field's own resolved <c>color</c>
-        /// mixed half and half with what sits behind it, so the hint follows an author's palette
-        /// rather than pinning every field to one hard-coded grey.
+        /// Applies a text style's CSS <c>opacity</c> to its color. A placeholder contains only this
+        /// text, so multiplying the fill alpha is visually equivalent to compositing a separate
+        /// opacity group while letting the normal PDF graphics path enforce PDF/A's transparency
+        /// rules for an author-specified translucent <c>::placeholder</c> style.
         /// </summary>
-        /// <remarks>
-        /// Mixed to an OPAQUE colour rather than drawn at half alpha, which is the obvious way to do
-        /// this and the wrong one: a fill with alpha below 1 trips <c>PdfATransparencyGuard</c>, so
-        /// merely opting into the hint would make PDF/A output throw - with a message about fill
-        /// opacity that names neither placeholders nor the property that asked for one. Nothing else
-        /// about interactive forms is barred under PDF/A, so the hint should not be the thing that
-        /// bars it. The blend target is the field's own <c>background-color</c> when it has a visible
-        /// one, and white otherwise, matching the page it will be composited onto.
-        /// </remarks>
-        static RColor PlaceholderColor(CssBox box)
+        static RColor ApplyOpacity(RColor color, double opacity)
         {
-            var color = box.ActualColor;
-            var behind = RenderUtils.IsColorVisible(box.ActualBackgroundColor) ? box.ActualBackgroundColor : RColor.White;
-
-            static byte Mix(byte a, byte b) => (byte)((a + b) / 2);
-            return RColor.FromArgb(color.A, Mix(color.R, behind.R), Mix(color.G, behind.G), Mix(color.B, behind.B));
+            var alpha = (int)Math.Round(color.A * Math.Clamp(opacity, 0, 1));
+            return RColor.FromArgb(alpha, color.R, color.G, color.B);
         }
 
         static void DrawSingleLine(RGraphics g, CssBox box, RColor color, RRect contentRect, RFont font, string text)

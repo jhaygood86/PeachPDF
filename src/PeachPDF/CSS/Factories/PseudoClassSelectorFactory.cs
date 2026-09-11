@@ -26,6 +26,7 @@ namespace PeachPDF.CSS
                     PseudoClassNames.Link,
                     PseudoClassNames.AnyLink,
                     PseudoClassNames.Empty,
+                    PseudoClassNames.PlaceholderShown,
                 }
                 .Union(UnmatchableSelectors.PseudoClasses, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(x => x, PseudoClassSelector.Create, StringComparer.OrdinalIgnoreCase);

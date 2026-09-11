@@ -9077,6 +9077,8 @@ const string InteractiveFormsCss = """
     .field { margin: 0 0 0.6em }
     label { display: inline-block; width: 130pt }
     input[type=text] { width: 160pt }
+    input.styled-placeholder:placeholder-shown { border-color: #8a2be2; background-color: #f8f1ff }
+    input.styled-placeholder::placeholder { color: #6b21a8; font-style: italic }
     </style>
     """;
 
@@ -9129,10 +9131,10 @@ var interactiveFormsHtml = "<!DOCTYPE html><html><head>" + InteractiveFormsCss +
     "<div class=\"field\"><label for=\"email\">Email (required)</label>" +
     "<input type=\"email\" id=\"email\" name=\"email\" required placeholder=\"you@example.com\" /></div>" +
 
-    "<h2>Drawn placeholder (-peachpdf-pdf-form-field-placeholder: auto)</h2>" +
+    "<h2>Placeholder (standard attribute and selectors)</h2>" +
     "<div class=\"field\"><label for=\"hint\">Company</label>" +
-    "<input type=\"text\" id=\"hint\" name=\"company\" placeholder=\"Acme Corporation\" " +
-    "style=\"-peachpdf-pdf-form-field-placeholder: auto\" /></div>" +
+    "<input class=\"styled-placeholder\" type=\"text\" id=\"hint\" name=\"company\" " +
+    "placeholder=\"Acme Corporation\" /></div>" +
 
     "</body></html>";
 

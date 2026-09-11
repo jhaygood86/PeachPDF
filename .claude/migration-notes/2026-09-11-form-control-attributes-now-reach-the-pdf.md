@@ -10,7 +10,8 @@ the page and whose typing the reader echoed in clear text.
 
 **Now:** each maps to its PDF equivalent — `readonly` to `/Ff` ReadOnly, `disabled` to ReadOnly plus
 NoExport, `required` to Required, `maxlength` to `/MaxLen`, `type="password"` to the Password flag
-with asterisks drawn in place of the value, and `placeholder` to the field's `/TU` tooltip.
+with asterisks drawn in place of the value, and `placeholder` to the field's `/TU` tooltip plus the
+drawn hint shown while the generation-time value is empty.
 
 Documents already using these attributes will see their generated fields change behaviour in a
 reader. Two worth knowing about:
@@ -20,6 +21,7 @@ reader. Two worth knowing about:
   Remove `required` from any control that was carrying it decoratively.
 - A `disabled` control is no longer submitted with the form, matching what HTML already said about it.
 
-A new opt-in property, `-peachpdf-pdf-form-field-placeholder: auto`, additionally draws a field's
-`placeholder` as greyed hint text when the field has no value of its own. It is `none` by default, so
-no existing document changes appearance because of it.
+The standard `placeholder` attribute is the only switch: no PeachPDF-specific property is required.
+`::placeholder` styles the hint through the normal cascade, and `:placeholder-shown` matches the
+empty control at generation time so it can style the field itself. That state cannot update after a
+reader edits the AcroForm field because PDF has no mechanism that re-runs CSS.

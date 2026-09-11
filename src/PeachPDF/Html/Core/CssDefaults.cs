@@ -233,6 +233,7 @@ namespace PeachPDF.Html.Core
                `<input type=checkbox> Label` gets browser-like breathing room rather than sitting
                flush against the label text. */
             input, select   { border: 0.75pt solid black; background-color: white; padding: 1pt 2pt; }
+            input::placeholder { color: #7f7f7f; }
             input[type=checkbox],
             input[type=radio] { padding: 0; margin: 3px 3px 3px 4px; }
         """;

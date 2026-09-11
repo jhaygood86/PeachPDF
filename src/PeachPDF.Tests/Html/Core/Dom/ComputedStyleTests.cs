@@ -247,8 +247,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
                 PdfFormField = "checkbox",
                 PdfFormFieldAutoFontSize = "auto",
                 PdfFormFieldComb = "6",
-                PdfFormFieldDoNotScroll = "auto",
-                PdfFormFieldPlaceholder = "auto"
+                PdfFormFieldDoNotScroll = "auto"
             };
             var clone = new CssBox(null, null);
 
@@ -258,7 +257,6 @@ namespace PeachPDF.Tests.Html.Core.Dom
             Assert.Equal("auto", clone.PdfFormFieldAutoFontSize);
             Assert.Equal("6", clone.PdfFormFieldComb);
             Assert.Equal("auto", clone.PdfFormFieldDoNotScroll);
-            Assert.Equal("auto", clone.PdfFormFieldPlaceholder);
         }
 
         [Fact]

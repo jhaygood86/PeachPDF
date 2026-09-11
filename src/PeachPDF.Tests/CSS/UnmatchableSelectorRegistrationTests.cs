@@ -69,7 +69,6 @@ public class UnmatchableSelectorRegistrationTests
     [InlineData(":host-context(.theme)")]
     [InlineData(":state(--loaded)")]
     // Ident-form pseudo-elements.
-    [InlineData("::placeholder")]
     [InlineData("::backdrop")]
     [InlineData("::file-selector-button")]
     [InlineData("::details-content")]
@@ -114,7 +113,6 @@ public class UnmatchableSelectorRegistrationTests
     [InlineData(":host(.theme)")]
     [InlineData(":defined")]
     [InlineData(":-moz-focusring")]
-    [InlineData("::placeholder")]
     [InlineData("::backdrop")]
     [InlineData("::part(label)")]
     [InlineData("::-webkit-file-upload-button")]
@@ -134,7 +132,7 @@ public class UnmatchableSelectorRegistrationTests
         // ::before/::after/::marker/::first-letter synthesize a real child box when matched. A
         // registered-but-unmatchable pseudo-element must not reach that synthesis at all.
         var html = Html(
-            "p::placeholder { content: 'X'; color: #0000ff; }",
+            "p::backdrop { content: 'X'; color: #0000ff; }",
             "<p id='p'>text</p>");
         var box = await Box(html, "p");
         Assert.DoesNotContain(box.Boxes, b => b.IsPseudoElement);
@@ -260,7 +258,8 @@ public class UnmatchableSelectorRegistrationTests
     public async Task TailwindPreflightShape_ParsesAndTheSurroundingRulesApply()
     {
         // The verbatim construct Tailwind v4's preflight emits unconditionally - a nested @supports
-        // inside a ::placeholder rule, itself inside @layer + @supports.
+        // inside a ::placeholder rule, itself inside @layer + @supports. ::placeholder now has a
+        // real detached style target for an empty input, while remaining irrelevant to this <p>.
         var html = Html(
             """
             @layer base {

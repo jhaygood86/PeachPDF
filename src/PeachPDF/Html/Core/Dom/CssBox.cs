@@ -332,6 +332,14 @@ namespace PeachPDF.Html.Core.Dom
         public bool IsAfterPseudoElement { get; set; }
 
         /// <summary>
+        /// Marks a detached, fully-cascaded <c>::placeholder</c> style box. Unlike generated-content
+        /// pseudo-elements this box is never inserted into its parent's <see cref="Boxes"/>: its
+        /// text belongs only in an interactive field's replaceable PDF appearance stream, not in
+        /// normal HTML layout.
+        /// </summary>
+        internal bool IsPlaceholderPseudoElement { get; set; }
+
+        /// <summary>
         /// Is this box a synthesized <c>::marker</c> pseudo-element (see <see cref="CssData"/>'s
         /// selector-matching synthesis, and <c>DomParser.EnsureListItemMarkers</c> for the computed-
         /// <c>Display: list-item</c> case selector matching can't cover). It is always a
@@ -433,6 +441,16 @@ namespace PeachPDF.Html.Core.Dom
         internal CssBox? ResolvedFirstLineStyle { get; set; }
 
         /// <summary>
+        /// The computed style of this form control's <c>::placeholder</c>, resolved through the normal
+        /// cascade into a detached pseudo-element box. Null unless the control is showing a
+        /// placeholder at PDF-generation time.
+        /// </summary>
+        internal CssBox? ResolvedPlaceholderStyle { get; set; }
+
+        /// <summary>Idempotency guard for <see cref="ResolvedPlaceholderStyle"/> resolution.</summary>
+        internal bool PlaceholderStyleProcessed { get; set; }
+
+        /// <summary>
         /// Idempotency guard for <see cref="ResolvedFirstLineStyle"/>'s resolution, since a box's own
         /// cascade phase (where it's set) can run more than once is never expected in practice, but
         /// this mirrors <see cref="FirstLetterProcessed"/>'s defensive convention.
@@ -489,7 +507,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         internal bool HasOwnBackground => RenderUtils.IsColorVisible(ActualBackgroundColor) || BackgroundImages is { Count: > 0 };
 
-        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement || IsFirstLetterPseudoElement
+        public bool IsPseudoElement => IsBeforePseudoElement || IsAfterPseudoElement || IsMarkerPseudoElement || IsPlaceholderPseudoElement || IsFirstLetterPseudoElement
             || IsFootnoteCallPseudoElement || IsFootnoteMarkerPseudoElement;
 
         /// <summary>

@@ -18,7 +18,7 @@ stream and the reader was never told to mask typing.
 | `required` | `/Ff` bit 2 Required |
 | `maxlength` | `/MaxLen` |
 | `type=password` | `/Ff` bit 14 Password, plus asterisks in the drawn appearance |
-| `placeholder` | `/TU`, and optionally drawn hint text |
+| `placeholder` | `/TU`, and drawn hint text by default |
 
 Read once per box into a `FormFieldAttributes` struct on `FormFieldClassification`, so the three
 Table 221 bits reach *every* field kind rather than only text. Two traps that cost a compile each:
@@ -36,14 +36,19 @@ so the shared flags have to be OR'd in, never assigned over.
   bullet would depend on the embedded subset's coverage.
 - **Comb beats `maxlength`.** A comb field's cell count IS its `/MaxLen` (Table 228), so honouring a
   larger `maxlength` would let the user type past the last drawn cell.
-- **A drawn placeholder is opt-in** (`-peachpdf-pdf-form-field-placeholder: auto`, initial `none`),
-  while `/TU` is unconditional. A drawn hint makes an unfilled field *look* filled while `/V` stays
-  empty, so it is a deliberate choice rather than a default. It is only safe at all because of the
-  `/Tx BMC` fix: the hint lives inside the replaceable region, so a reader wipes it on the first
-  keystroke instead of leaving it behind the typed text.
-- **Hint colour is the field's own `color` at half alpha**, not a hard-coded grey — it follows the
-  author's palette and needs no new colour knob. Supporting `::placeholder` properly would have meant
-  new pseudo-element parsing/cascade work for a colour.
+- **The standard `placeholder` attribute is the only switch.** A second proprietary
+  `-peachpdf-pdf-form-field-placeholder` property made unchanged HTML render differently from a
+  browser and gave authors a second name to learn for behavior HTML already defines, so it was
+  removed. `/V` stays empty, and the `/Tx BMC` fix puts the automatically drawn hint inside the
+  replaceable region so a reader wipes it on the first keystroke instead of leaving it behind the
+  typed text. `/TU` remains unconditional.
+- **Placeholder styling uses the standard selectors.** `::placeholder` resolves through the normal
+  cascade into a detached style box (never inserted into layout) and supplies the hint's color,
+  opacity and font. The UA default is opaque `#7f7f7f`, so an unstyled placeholder remains PDF/A-1
+  safe. If an author explicitly supplies translucent `color` or `opacity`, the ordinary PDF fill-
+  alpha path and `PdfATransparencyGuard` apply rather than silently ignoring it. The separately
+  implemented `:placeholder-shown` matches the empty source state at generation time and can style
+  the field itself; PDF has no live CSS state after the user edits it.
 
 ## Not a defect, confirmed by the reporter's own device
 
@@ -84,16 +89,16 @@ Worth recording, because three of these were introduced *by* the change and none
 - The `RadioGroup` test masked `/Ff` down to `Required`, so losing the `Radio` bit (bit 16 - without
   it a `/FT /Btn` group reads as checkboxes and mutual exclusion is gone) would have passed. It now
   asserts the whole value, like its `Select` twin already did.
-- `PlaceholderColor` returned a half-alpha fill, which trips `PdfATransparencyGuard` - so merely
-  opting into a hint would make PDF/A output throw, with a message naming neither placeholders nor
-  the property. It now mixes to an opaque colour against the field's background.
+- The first placeholder color implementation returned a half-alpha fill, which tripped
+  `PdfATransparencyGuard` for every unstyled hint. The default now comes from the UA
+  `input::placeholder` rule as an opaque color; only author-requested alpha uses transparency.
 - Also: `maxlength` parsed with culture-sensitive defaults (now `NumberStyles.None` + invariant), a
   paywalled `iso.org` link and a dead anchor in `docs/**`, and 23 files given a spurious UTF-8 BOM by
   the editing script.
 
 ## Evidence
 
-- Full suite 10 806 passed / 0 failed (net8.0); generator suite 119; CLI suite 96; solution rebuild 0 warnings.
+- Full suite 10 822 passed / 0 failed (net8.0); generator suite 119; CLI suite 96; solution rebuild 0 warnings.
 - 100% diff coverage on every changed library line.
 - The `interactive_pdf_forms` showcase gained an attributes section and a drawn-placeholder section,
   re-rendered through MuPDF and PDFium.

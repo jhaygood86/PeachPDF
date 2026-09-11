@@ -87,11 +87,11 @@ namespace PeachPDF.Html.Core.Handlers
         public bool DoNotScroll { get; }
 
         /// <summary>
-        /// <c>-peachpdf-pdf-form-field-placeholder</c>'s resolved value - whether the element's
-        /// <c>placeholder</c> should also be DRAWN as hint text (it always becomes the field's
-        /// <c>/TU</c> tooltip regardless). Only meaningful for <see cref="FormFieldKind.Text"/>.
+        /// Whether the standard HTML <c>placeholder</c> is shown for this empty control at PDF-
+        /// generation time. It also becomes the field's <c>/TU</c> tooltip. Only meaningful for
+        /// <see cref="FormFieldKind.Text"/>.
         /// </summary>
-        public bool ShowPlaceholder { get; }
+        public bool PlaceholderShown { get; }
 
         /// <summary>
         /// The HTML attributes that become PDF field entries rather than a kind or a value. The
@@ -101,7 +101,7 @@ namespace PeachPDF.Html.Core.Handlers
 
         FormFieldClassification(FormFieldKind kind, string? name, string? value, bool @checked,
             IReadOnlyList<FormFieldOption> options, bool autoFontSize, int? comb, bool doNotScroll,
-            bool showPlaceholder, FormFieldAttributes attributes)
+            bool placeholderShown, FormFieldAttributes attributes)
         {
             Kind = kind;
             Name = name;
@@ -111,15 +111,15 @@ namespace PeachPDF.Html.Core.Handlers
             AutoFontSize = autoFontSize;
             Comb = comb;
             DoNotScroll = doNotScroll;
-            ShowPlaceholder = showPlaceholder;
+            PlaceholderShown = placeholderShown;
             Attributes = attributes;
         }
 
         public static readonly FormFieldClassification None =
             new(FormFieldKind.None, null, null, false, Array.Empty<FormFieldOption>(), false, null, false, false, FormFieldAttributes.None);
 
-        public static FormFieldClassification Text(string? name, string? value, bool autoFontSize, int? comb, bool doNotScroll, bool showPlaceholder, FormFieldAttributes attributes) =>
-            new(FormFieldKind.Text, name, value, false, Array.Empty<FormFieldOption>(), autoFontSize, comb, doNotScroll, showPlaceholder, attributes);
+        public static FormFieldClassification Text(string? name, string? value, bool autoFontSize, int? comb, bool doNotScroll, bool placeholderShown, FormFieldAttributes attributes) =>
+            new(FormFieldKind.Text, name, value, false, Array.Empty<FormFieldOption>(), autoFontSize, comb, doNotScroll, placeholderShown, attributes);
 
         public static FormFieldClassification Checkbox(string? name, string? value, bool @checked, FormFieldAttributes attributes) =>
             new(FormFieldKind.Checkbox, name, value, @checked, Array.Empty<FormFieldOption>(), false, null, false, false, attributes);
@@ -142,6 +142,35 @@ namespace PeachPDF.Html.Core.Handlers
     /// </summary>
     internal static class FormFieldMapper
     {
+        /// <summary>
+        /// Whether an input is showing its standard HTML placeholder at generation time: the
+        /// attribute is present, the value is empty, and the input state supports placeholders.
+        /// This is shared by form appearance generation and <c>:placeholder-shown</c> matching so
+        /// the two cannot disagree. The state is necessarily static in a PDF; AcroForm has no live
+        /// CSS-selector equivalent after the user edits a field.
+        /// </summary>
+        internal static bool IsPlaceholderShown(CssBox box)
+        {
+            if (box is not CssBoxFormField || box.HtmlTag is not { } tag
+                || !tag.Name.Equals(HtmlConstants.Input, StringComparison.OrdinalIgnoreCase)
+                || !tag.HasAttribute("placeholder")
+                || !string.IsNullOrEmpty(box.GetAttribute("value", null)))
+            {
+                return false;
+            }
+
+            var type = box.GetAttribute("type", Keywords.Text).ToLowerInvariant();
+            return type switch
+            {
+                Keywords.Text or "search" or "tel" or "url" or "email" or "password" => true,
+                "hidden" or "date" or "month" or "week" or "time" or "datetime-local"
+                    or "number" or "range" or "color" or "checkbox" or "radio" or "file"
+                    or "submit" or "image" or "reset" or "button" => false,
+                // HTML's missing and invalid value defaults are both the Text state.
+                _ => true
+            };
+        }
+
         public static FormFieldClassification Classify(CssBox box)
         {
             if (box is not CssBoxFormField || box.HtmlTag is null)
@@ -229,8 +258,8 @@ namespace PeachPDF.Html.Core.Handlers
             var autoFontSize = string.Equals(box.PdfFormFieldAutoFontSize, Keywords.Auto, StringComparison.OrdinalIgnoreCase);
             var doNotScroll = string.Equals(box.PdfFormFieldDoNotScroll, Keywords.Auto, StringComparison.OrdinalIgnoreCase);
             int? comb = int.TryParse(box.PdfFormFieldComb, out var cells) && cells > 0 ? cells : null;
-            var showPlaceholder = string.Equals(box.PdfFormFieldPlaceholder, Keywords.Auto, StringComparison.OrdinalIgnoreCase);
-            return FormFieldClassification.Text(name, value, autoFontSize, comb, doNotScroll, showPlaceholder, ReadAttributes(box));
+            return FormFieldClassification.Text(name, value, autoFontSize, comb, doNotScroll,
+                IsPlaceholderShown(box), ReadAttributes(box));
         }
 
         static FormFieldClassification ClassifyCheckbox(CssBox box)

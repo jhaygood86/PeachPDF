@@ -233,7 +233,6 @@ namespace PeachPDF.CSS
         public static readonly string PdfFormFieldAutoFontSize = "-peachpdf-pdf-form-field-auto-font-size";
         public static readonly string PdfFormFieldComb = "-peachpdf-pdf-form-field-comb";
         public static readonly string PdfFormFieldDoNotScroll = "-peachpdf-pdf-form-field-do-not-scroll";
-        public static readonly string PdfFormFieldPlaceholder = "-peachpdf-pdf-form-field-placeholder";
         /// <summary>Hidden, undocumented compat shorthand for Prince's own
         /// -prince-pdf-form-field-settings spelling - see PrincePdfFormFieldSettingsProperty. Expands
         /// into PdfFormField/PdfFormFieldAutoFontSize/PdfFormFieldComb/PdfFormFieldDoNotScroll at parse

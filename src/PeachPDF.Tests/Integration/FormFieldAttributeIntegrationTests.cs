@@ -2,6 +2,7 @@ using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.AcroForms;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Annotations;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -158,22 +159,24 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Placeholder_IsNotDrawnUnlessTheCssPropertyAsksForIt()
+        public async Task Placeholder_IsDrawnByDefault()
         {
-            // Opt-in by design: a drawn hint makes an unfilled field look filled. Without the
-            // property the /Tx sequence is empty, so the appearance matches a field with no
-            // placeholder at all.
             var withHint = await AppearanceStream("<input name='f' placeholder='Your name' />");
             var bare = await AppearanceStream("<input name='f' />");
 
-            Assert.Equal(bare, withHint);
+            // Standard HTML behavior: an empty text control displays its placeholder without a
+            // second, proprietary opt-in. The PDF field's /V remains empty; only
+            // the replaceable /Tx appearance differs.
+            Assert.NotEqual(bare, withHint);
+            Assert.Contains("Tj", withHint);
+            Assert.Equal(string.Empty, (await Field("<input name='f' placeholder='Your name' />"))
+                .Elements.GetString(PdfAcroField.Keys.V));
         }
 
         [Fact]
-        public async Task Placeholder_IsDrawnMuted_WhenTheCssPropertyAsksForIt()
+        public async Task Placeholder_IsDrawnMutedByDefault()
         {
-            var hint = await AppearanceStream(
-                "<input name='f' placeholder='Your name' style='-peachpdf-pdf-form-field-placeholder: auto' />");
+            var hint = await AppearanceStream("<input name='f' placeholder='Your name' />");
             var value = await AppearanceStream("<input name='f' value='Your name' />");
 
             // Same text, drawn - so the hint is not the empty appearance...
@@ -184,10 +187,48 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Placeholder_UsesItsPseudoElementStyle()
+        {
+            var styled = await AppearanceStream(
+                "<style>input::placeholder { color: #ff0000; font-style: italic; }</style>" +
+                "<input name='f' placeholder='Your name' />");
+            var unstyled = await AppearanceStream("<input name='f' placeholder='Your name' />");
+
+            Assert.NotEqual(unstyled, styled);
+            Assert.Contains("1 0 0 rg", styled);
+        }
+
+        [Fact]
+        public async Task Placeholder_UsesItsPseudoElementFontStyle()
+        {
+            var italic = await AppearanceStream(
+                "<style>input::placeholder { font-style: italic; }</style>" +
+                "<input name='f' placeholder='Your name' />");
+            var normal = await AppearanceStream("<input name='f' placeholder='Your name' />");
+
+            Assert.NotEqual(normal, italic);
+        }
+
+        [Fact]
+        public async Task DefaultPlaceholder_IsPdfA1Safe()
+        {
+            await RenderPdfAAsync("<input name='f' placeholder='Your name' />");
+        }
+
+        [Theory]
+        [InlineData("color: rgba(255, 0, 0, .5)")]
+        [InlineData("opacity: .5")]
+        public async Task TransparentPlaceholderStyle_UnderPdfA1_UsesTheNormalConformanceGuard(string declaration)
+        {
+            await Assert.ThrowsAnyAsync<InvalidOperationException>(() => RenderPdfAAsync(
+                $"<style>input::placeholder {{ {declaration}; }}</style>" +
+                "<input name='f' placeholder='Your name' />"));
+        }
+
+        [Fact]
         public async Task AValue_WinsOverAPlaceholder()
         {
-            var both = await AppearanceStream(
-                "<input name='f' value='Jane' placeholder='Your name' style='-peachpdf-pdf-form-field-placeholder: auto' />");
+            var both = await AppearanceStream("<input name='f' value='Jane' placeholder='Your name' />");
             var valueOnly = await AppearanceStream("<input name='f' value='Jane' />");
 
             Assert.Equal(valueOnly, both);
@@ -204,6 +245,21 @@ namespace PeachPDF.Tests.Integration
                 CompressContentStreams = false,
                 EnableInteractivePdfForms = true
             })).PdfDocument;
+        }
+
+        static async Task RenderPdfAAsync(string bodyHtml)
+        {
+            var html = $"<!DOCTYPE html><html><body>{bodyHtml}</body></html>";
+            await new PdfGenerator().GeneratePdf(html, new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                EnableInteractivePdfForms = true,
+                PdfAConformance = PdfAConformance.PdfA1B,
+                Metadata = new PdfDocumentMetadata
+                {
+                    CreationDate = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero)
+                }
+            });
         }
 
         /// <summary>The document's one field. A radio group is the field, not its widget kids.</summary>
