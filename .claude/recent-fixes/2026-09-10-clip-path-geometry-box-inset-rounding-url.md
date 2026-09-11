@@ -38,11 +38,14 @@ effect on an already-referenced clipPath's behavior.
 A new `SvgClipPathRegistry` (owned lazily by `HtmlContainerInt`, built once on first use during
 paint) walks the *whole* box tree unfiltered by `display:none` and force-calls
 `CssBoxSvg.EnsureDocument()` on every inline `<svg>` to collect every clipPath id document-wide.
-**Deliberately not done:** a `display:none` SVG never runs the async `<image>`-prefetch step that
-normally precedes `EnsureDocument()`, so a raster `<image>` nested inside such a hidden SVG's
-`<clipPath>` won't resolve - basic shapes (the overwhelmingly common `<clipPath>` content) are
-unaffected; tracked as [issue #999](https://github.com/jhaygood86/PeachPDF/issues/999) and
-`.claude/accepted-gaps/clip-path-url-hidden-svg-image-prefetch.md`.
+A `display:none` SVG never runs the async `<image>`-prefetch step that normally precedes
+`EnsureDocument()`, so a raster `<image>` nested inside such a hidden SVG's `<clipPath>` never gets
+its bytes fetched - initially filed as [issue #999](https://github.com/jhaygood86/PeachPDF/issues/999),
+but investigation found this isn't an actual gap: `SvgRenderer.AppendClipShapeGeometry` has no case
+for `SvgImageElement` at all, so an `<image>` inside *any* `<clipPath>` - hidden SVG or visible one,
+prefetched or not - already contributes zero clip geometry, matching the spec (`clip-path`/`<clipPath>`
+is geometry-only; raster/luminance-driven clipping is `mask`'s job, already implemented separately).
+Closed as not-planned; no accepted-gap file needed since there's no observable gap to track.
 
 `CssClipPathResolver.BuildUrl` reuses `SvgRenderer.BuildClipPath`/`AppendClipShapeGeometry`
 (changed from `private` to `internal`) directly rather than writing a second shape-to-path
