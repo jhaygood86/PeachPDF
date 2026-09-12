@@ -56,9 +56,10 @@ phantom space produced.
   spacing is zero, because cancelling the phantom term was its only job. Removed, with a note in its
   place saying why it must *not* simply be inverted to hang a real trailing space: this walk carries
   one running `maxSum` across a whole subtree, so a box's last word is not the line's last word when
-  a sibling follows it there (`<span>AB </span><span>CD</span>`). The residual §4.1.2 gap is recorded
-  in [.claude/accepted-gaps/final-line-trailing-space-counted-in-max-content-width.md](../accepted-gaps/final-line-trailing-space-counted-in-max-content-width.md)
-  (#1014).
+  a sibling follows it there (`<span>AB </span><span>CD</span>`). The residual §4.1.2 gap was filed
+  as #1014 and has since been closed — see
+  [2026-09-12-final-line-trailing-space-hangs.md](2026-09-12-final-line-trailing-space-hangs.md),
+  which applies the rule at the two points where a line is known to have ended rather than per box.
 - **`text-align: justify` still opens a gap where there is no white space** — it spreads its
   expansion over every word boundary rather than over justification opportunities, so on a justified
   line `A<span>B</span>` measures 6.186pt apart where left alignment renders it flush. Pre-existing
