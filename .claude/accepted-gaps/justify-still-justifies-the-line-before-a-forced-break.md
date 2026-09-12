@@ -1,8 +1,6 @@
 # `text-align: justify` still justifies the last line before a forced break
 
-> **Tracking issue not yet filed** — the `gh` CLI was not available on the machine this was found on.
-> File it with the title *"text-align: justify justifies the last line before a forced break"* and the
-> body below, then replace this block with the usual `Tracked as **#NNN**.` line.
+Tracked as **#1021**.
 
 Found while reading css-text-3 in full for issue #1013 (see
 [../recent-fixes/2026-09-12-justify-expands-at-opportunities-not-word-boundaries.md](../recent-fixes/2026-09-12-justify-expands-at-opportunities-not-word-boundaries.md));
