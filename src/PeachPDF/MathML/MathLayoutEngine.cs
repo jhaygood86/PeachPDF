@@ -247,9 +247,16 @@ namespace PeachPDF.MathML
             // placed relative to the content it encloses.
             var axis = metrics.AxisHeight(sizePt);
 
+            // The chosen glyph's own real advance width - not the base/unstretched glyph's, since what
+            // gets drawn is whichever size variant (or assembled shape) SelectVerticalVariant picked to
+            // match the target height, and that glyph is a different, generally wider glyph.
+            var inlineSize = chosen.AdvanceWidthDesignUnits > 0
+                ? chosen.AdvanceWidthDesignUnits * scale
+                : metrics.Graphics.MeasureString(token.Text, font).Width; // no descriptor - unchanged fallback
+
             return new MathBox
             {
-                InlineSize = metrics.Graphics.MeasureString(token.Text, font).Width,
+                InlineSize = inlineSize,
                 Ascent = axis + half,
                 Descent = half - axis,
                 Children = [],
@@ -277,9 +284,15 @@ namespace PeachPDF.MathML
         /// <summary>The result of MathML Core's §5.3.2 "shape a stretchy glyph" algorithm for one glyph:
         /// either a single pre-sized <c>MathVariants</c> glyph (<see cref="IsAssembly"/> false, exactly
         /// one part at offset 0) or an assembled sequence of <c>GlyphAssembly</c> parts
-        /// (<see cref="IsAssembly"/> true) - see <see cref="MathGlyphAssemblyShaper"/>.</summary>
+        /// (<see cref="IsAssembly"/> true) - see <see cref="MathGlyphAssemblyShaper"/>.
+        /// <see cref="AdvanceWidthDesignUnits"/> is these parts' own real <c>hmtx</c> horizontal advance
+        /// (the largest, if more than one part) - the actual space the chosen/assembled glyph needs when
+        /// drawn, as opposed to <see cref="SizeDesignUnits"/> (the vertical growth-direction extent
+        /// <c>MathVariants</c> itself measures). Resolved once here, at selection time, so every caller
+        /// of this method gets a structurally correct width instead of each re-deriving it.</summary>
         readonly record struct StretchedGlyphResult(
-            IReadOnlyList<MathGlyphAssemblyShaper.ShapedPart> Parts, double SizeDesignUnits, bool IsAssembly);
+            IReadOnlyList<MathGlyphAssemblyShaper.ShapedPart> Parts, double SizeDesignUnits, bool IsAssembly,
+            int AdvanceWidthDesignUnits);
 
         /// <summary>Finds or builds a vertical variant of <paramref name="glyphId"/> covering
         /// <paramref name="targetExtent"/> (working-unit-space height to match), per MathML Core
@@ -299,20 +312,27 @@ namespace PeachPDF.MathML
             var referenceFont = metrics.ResolveFont(sizePt);
             var targetDesignUnits = targetExtent / sizePt * referenceFont.FontUnitsPerEm / metrics.PixelsPerPoint;
 
+            int AdvanceWidthOf(IReadOnlyList<MathGlyphAssemblyShaper.ShapedPart> parts) =>
+                parts.Max(p => referenceFont.GetGlyphAdvanceWidthDesignUnits(p.GlyphId));
+
             var fit = construction.Variants.FirstOrDefault(v => v.AdvanceMeasurement >= targetDesignUnits);
             if (fit != default)
-                return new StretchedGlyphResult([new MathGlyphAssemblyShaper.ShapedPart(fit.GlyphId, 0)], fit.AdvanceMeasurement, IsAssembly: false);
+            {
+                MathGlyphAssemblyShaper.ShapedPart[] fitParts = [new(fit.GlyphId, 0)];
+                return new StretchedGlyphResult(fitParts, fit.AdvanceMeasurement, IsAssembly: false, AdvanceWidthOf(fitParts));
+            }
 
             if (construction.Assembly is { } assembly &&
                 MathGlyphAssemblyShaper.Shape(assembly, mathTable.Variants.MinConnectorOverlap, targetDesignUnits) is { } shaped)
             {
-                return new StretchedGlyphResult(shaped.Parts, shaped.SizeDesignUnits, IsAssembly: true);
+                return new StretchedGlyphResult(shaped.Parts, shaped.SizeDesignUnits, IsAssembly: true, AdvanceWidthOf(shaped.Parts));
             }
 
             if (construction.Variants.Count > 0)
             {
                 var largest = construction.Variants[^1];
-                return new StretchedGlyphResult([new MathGlyphAssemblyShaper.ShapedPart(largest.GlyphId, 0)], largest.AdvanceMeasurement, IsAssembly: false);
+                MathGlyphAssemblyShaper.ShapedPart[] largestParts = [new(largest.GlyphId, 0)];
+                return new StretchedGlyphResult(largestParts, largest.AdvanceMeasurement, IsAssembly: false, AdvanceWidthOf(largestParts));
             }
 
             return null;
@@ -376,21 +396,16 @@ namespace PeachPDF.MathML
             var gap = metrics.RadicalVerticalGap(sizePt);
             var extraAscender = metrics.RadicalExtraAscender(sizePt);
 
-            // The radical sign's own reserved width - a fixed fraction of the current size, rather than
-            // the glyph's own true (per-variant) advance width, which MathVariants doesn't expose
-            // directly (only the vertical AdvanceMeasurement, the growth-direction extent) - see this
-            // file's header. The vinculum above the radicand is still a real, correctly measured rule.
-            var signWidth = sizePt * 0.75;
-
             var ascent = radicand.Ascent + gap + ruleThickness + extraAscender;
             var descent = radicand.Descent;
-            var width = signWidth + radicand.InlineSize;
 
             // The radical sign itself (U+221A), stretched via the same MathVariants mechanism
             // StretchToken uses for fences, placed at the radicand's own baseline. Silently omitted
-            // (blank reserved space only) when the font has no MATH table or no vertical construction
-            // for U+221A - matches this box's own PaintKind.Rule vinculum-only fallback.
+            // (blank reserved space only, sized by a flat fraction of the current size) when the font
+            // has no MATH table or no vertical construction for U+221A - matches this box's own
+            // PaintKind.Rule vinculum-only fallback.
             MathBox? signBox = null;
+            var signWidth = sizePt * 0.75;
             var signFont = metrics.ResolveFont(sizePt);
             if (signFont.MathTable is { } signMathTable && System.Text.Rune.TryCreate(0x221A, out var radicalRune))
             {
@@ -398,6 +413,9 @@ namespace PeachPDF.MathML
                 if (SelectVerticalVariant(signMathTable, signGlyphId, ascent + descent, sizePt, metrics) is { } signVariant)
                 {
                     var signScale = sizePt / signFont.FontUnitsPerEm * metrics.PixelsPerPoint;
+                    if (signVariant.AdvanceWidthDesignUnits > 0)
+                        signWidth = signVariant.AdvanceWidthDesignUnits * signScale;
+
                     signBox = new MathBox
                     {
                         InlineSize = signWidth,
@@ -411,6 +429,8 @@ namespace PeachPDF.MathML
                     };
                 }
             }
+
+            var width = signWidth + radicand.InlineSize;
 
             // Everything from here on (radicand + sign) shifts right by groupX to make room for the
             // index, when present (MathML 3 §3.3.4's kernBeforeDegree/kernAfterDegree).

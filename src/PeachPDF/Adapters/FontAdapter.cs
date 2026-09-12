@@ -222,5 +222,7 @@ namespace PeachPDF.Adapters
         public override double FontUnitsPerEm => Font.Descriptor?.UnitsPerEm ?? 0;
 
         public override int GetGlyphIndex(System.Text.Rune rune) => Font.Descriptor?.CharCodeToGlyphIndex(rune) ?? 0;
+
+        public override int GetGlyphAdvanceWidthDesignUnits(int glyphIndex) => Font.Descriptor?.GlyphIndexToWidth(glyphIndex) ?? 0;
     }
 }

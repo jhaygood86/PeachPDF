@@ -166,5 +166,15 @@ namespace PeachPDF.Html.Adapters
         /// a glyph up in <see cref="MathTable"/>'s per-glyph tables (italics correction, top-accent
         /// attachment, stretchy variants) by id rather than by character.</summary>
         public virtual int GetGlyphIndex(System.Text.Rune rune) => 0;
+
+        /// <summary>This glyph's real horizontal advance width, in font design units (see
+        /// <see cref="FontUnitsPerEm"/> for the scale) - the font's own <c>hmtx</c> table, as opposed to
+        /// a <see cref="MathTable"/> <c>MathVariants</c> entry's <c>AdvanceMeasurement</c> (the vertical
+        /// growth-direction extent only, not width). Needed because a stretched glyph - a pre-sized
+        /// size variant, or an assembled shape's parts - is a different, wider glyph than the base
+        /// character <see cref="MathTable"/> was looked up by, so its own <c>hmtx</c> advance is the only
+        /// source for the actual space it needs when drawn. 0 when this font can't resolve one (no
+        /// descriptor).</summary>
+        public virtual int GetGlyphAdvanceWidthDesignUnits(int glyphIndex) => 0;
     }
 }
