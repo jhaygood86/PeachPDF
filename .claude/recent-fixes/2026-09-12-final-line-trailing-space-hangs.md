@@ -112,7 +112,10 @@ excludes any box with `white-space: nowrap`, so two block-level siblings under a
 have their lines summed instead of competing: `<div>AB CD</div><div>EF</div>` measures 46.1836pt
 where Chromium measures 32.9883pt. Confirmed pre-existing (identical on unmodified `main`) and
 untouched here — this change strictly improves it, since the second block's trailing space is now
-hung rather than added on top. Needs a tracking issue and an accepted-gap note of its own.
+hung rather than added on top. Filed as #1017 and recorded in
+[.claude/accepted-gaps/nowrap-block-does-not-start-a-new-line-in-the-intrinsic-walk.md](../accepted-gaps/nowrap-block-does-not-start-a-new-line-in-the-intrinsic-walk.md),
+which carries the measurements showing that deleting the `nowrap` clause on its own makes two
+inline-level cases worse — `StartsNewLine` is wrong in a second way that the clause masks.
 
 ## The trap to know
 
