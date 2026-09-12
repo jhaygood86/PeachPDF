@@ -114,12 +114,14 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task AMarginlessControl_ReservesNoGapBeforeWhatFollowsIt()
         {
-            // CssRect.ActualWordSpacing gives any IsImage word one extra space's width after itself.
-            // A form field's phantom word answers IsImage for the box-model arithmetic above, but it
-            // has no source whitespace to stand in for, so it must opt out (CssRectFormField
-            // .ReservesTrailingSpace) - otherwise making it IsImage silently inserts a whole space
-            // between a checkbox and a label written immediately after it, which no browser does and
-            // which `margin: 0` could not remove.
+            // A form field's phantom word answers IsImage for the box-model arithmetic above, and
+            // CssRect.ActualWordSpacing used to give any IsImage word one extra space's width after
+            // itself - which inserted a whole space between a checkbox and a label written
+            // immediately after it, no browser does that, and `margin: 0` could not remove it. The
+            // field originally opted out of that term by itself (CssRectFormField
+            // .ReservesTrailingSpace); issue #1011 removed the term outright, since no atomic inline
+            // should reserve one - see AtomicInlineSpacingIntegrationTests. This stays as the
+            // form-control-shaped statement of the same rule.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div style='font: 16px monospace'>"
                 + "<input id='f' type='checkbox' style='margin:0;padding:0;border:0' /><span id='after'>X</span>"
@@ -156,11 +158,6 @@ namespace PeachPDF.Tests.Integration
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// The one line rectangle a field box resolves to — the exact value
-        /// <c>PdfGenerator.HandleFormFields</c> reads (<c>box.Rectangles</c>' first entry) and the
-        /// one <c>Fragment.PrimaryRect</c> hands the painter.
-        /// </summary>
-        /// <summary>
         /// The first word anywhere under <paramref name="box"/> - an inline element's own text can
         /// sit on an anonymous child rather than on the element's box.
         /// </summary>
@@ -176,6 +173,11 @@ namespace PeachPDF.Tests.Integration
             return null!;
         }
 
+        /// <summary>
+        /// The one line rectangle a field box resolves to — the exact value
+        /// <c>PdfGenerator.HandleFormFields</c> reads (<c>box.Rectangles</c>' first entry) and the
+        /// one <c>Fragment.PrimaryRect</c> hands the painter.
+        /// </summary>
         static async Task<RRect> FieldRect(string inputHtml)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(inputHtml));

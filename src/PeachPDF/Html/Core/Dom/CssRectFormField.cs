@@ -32,14 +32,6 @@ namespace PeachPDF.Html.Core.Dom
         public override bool IsImage => true;
 
         /// <summary>
-        /// False, unlike every other <see cref="IsImage"/> word. See
-        /// <see cref="CssRect.ReservesTrailingSpace"/>: a field has no source whitespace of its own
-        /// to stand in for, and reserving one would put a whole space's width between a checkbox and
-        /// the label written immediately after it.
-        /// </summary>
-        public override bool ReservesTrailingSpace => false;
-
-        /// <summary>
         /// Empty, not null - defensive only. <c>FragmentPainter.PaintWords</c> skips any
         /// <see cref="IsImage"/> word before it reaches <c>DrawString</c>, and
         /// <c>FormFieldFragmentPainter</c> handles this box's content anyway, but a null

@@ -1762,8 +1762,9 @@ namespace PeachPDF.Html.Core.Dom
                 if (word.IsSpaces && !word.IsLineBreak) { pending += word.FullWidth; continue; }
                 width += pending + word.FullWidth;
                 pending = 0;
-                // CssRect.FullWidth adds a word space unconditionally, so the last word on the line
-                // carries one that nothing follows.
+                // CssRect.FullWidth folds in the word's own trailing space, which on the last word
+                // of the line is one nothing follows (css-text-3 §4.1.2) - zero when the line's last
+                // word had no source space after it, in which case this subtracts nothing.
                 trailingSpacing = word.ActualWordSpacing;
             }
             return Math.Max(0, width - trailingSpacing);

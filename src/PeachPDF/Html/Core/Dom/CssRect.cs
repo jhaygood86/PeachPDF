@@ -126,6 +126,7 @@ namespace PeachPDF.Html.Core.Dom
         /// and a <c>::first-line</c> rule overrides <c>word-spacing</c>/<c>letter-spacing</c>.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Includes one <c>letter-spacing</c> unit alongside <c>word-spacing</c>: a real UA applies
         /// letter-spacing at every adjacent-character transition in a run, including the space
         /// character's own leading/trailing edges - since this engine never paints the space character
@@ -133,25 +134,29 @@ namespace PeachPDF.Html.Core.Dom
         /// that extra unit has to be folded in here for the inter-word gap to widen proportionally with
         /// letter-spacing the same way a real browser's does, instead of staying pinned to plain
         /// word-spacing regardless of how large letter-spacing gets.
+        /// </para>
+        /// <para>
+        /// It is keyed on <see cref="HasSpaceAfter"/> alone - a word gets an inter-word gap when the
+        /// source actually had white space after it, and never otherwise. In particular an atomic
+        /// inline (<see cref="IsImage"/>: an image, an inline <c>&lt;svg&gt;</c>, a form control)
+        /// reserves nothing on its own: per
+        /// <see href="https://www.w3.org/TR/css-text-3/#white-space-phase-1">css-text-3 §4.1.1</see>
+        /// white space is the only thing that produces an advance between two adjacent inline-level
+        /// boxes, and <c>&lt;img&gt;text</c> is as contiguous as
+        /// <c>&lt;span&gt;Y&lt;/span&gt;&lt;span&gt;X&lt;/span&gt;</c> is. This engine used to add an
+        /// unconditional extra word space after every such word, which put one phantom space after
+        /// every image and inline SVG and two after an image followed by real white space (issue
+        /// #1011). This is the natural gap only - <c>text-align: justify</c> separately spreads its
+        /// expansion over every word boundary on a justified line rather than over justification
+        /// opportunities, so it can still open a gap where there is no white space (see
+        /// <c>.claude/accepted-gaps/justify-expands-at-every-word-boundary.md</c>, issue #1013).
+        /// </para>
         /// </remarks>
         public double ActualWordSpacing =>
-            (HasSpaceAfter ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) + (FirstLineStyle?.ActualLetterSpacing ?? OwnerBox.ActualLetterSpacing) : 0) +
-            (ReservesTrailingSpace ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) : 0);
-
-        /// <summary>
-        /// Whether this word reserves one space's width after itself on top of whatever a trailing
-        /// space already contributes - a long-standing gap this engine has always given replaced
-        /// content, which is why it keys off <see cref="IsImage"/> by default.
-        /// </summary>
-        /// <remarks>
-        /// It exists as its own question because <see cref="IsImage"/> answers a different one - "is
-        /// this an atomic, non-text word carrying its owner box's replaced geometry", which is what
-        /// the box-model arithmetic in <c>CssLineBox.UpdateRectangle</c> needs. A form field is that
-        /// kind of word and must say so, but it never reserved this extra space and must not start:
-        /// a bare <c>&lt;input type=checkbox&gt; Label</c> would otherwise gain a whole space's worth
-        /// of gap it had no source whitespace for.
-        /// </remarks>
-        public virtual bool ReservesTrailingSpace => IsImage;
+            HasSpaceAfter
+                ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing)
+                  + (FirstLineStyle?.ActualLetterSpacing ?? OwnerBox.ActualLetterSpacing)
+                : 0;
 
         /// <summary>
         /// When set, this word lands on its block's first formatted line and a <c>::first-line</c>
