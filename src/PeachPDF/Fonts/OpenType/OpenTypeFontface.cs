@@ -158,6 +158,7 @@ namespace PeachPDF.Fonts.OpenType
         internal GlyphPositioningTable gpos = null!; // optional - absent on many fonts
         internal ColrTable colr = null!;
         internal CpalTable cpal = null!;
+        internal GlyphMathTable math = null!; // optional - only dedicated math fonts carry one
         internal VerticalHeaderTable vhea = null!; // optional - absent on purely-horizontal fonts
         internal VerticalMetricsTable vmtx = null!; // optional - absent on purely-horizontal fonts
         internal VerticalOriginTable vorg = null!; // optional - mainly CFF-flavored CJK fonts
@@ -334,6 +335,11 @@ namespace PeachPDF.Fonts.OpenType
 
                 if (TableDictionary.ContainsKey(TableTagNames.GPOS))
                     gpos = new GlyphPositioningTable(this);
+
+                // Optional MATH table (mathematical typesetting). Absent on almost all fonts - only
+                // dedicated math fonts (e.g. STIX Two Math, Latin Modern Math) carry one.
+                if (TableDictionary.ContainsKey(TableTagNames.Math))
+                    math = new GlyphMathTable(this);
 
                 // Optional vertical-writing-mode tables. Absent on purely-horizontal fonts. Unlike
                 // COLR/CPAL above (which self-position from their own DirectoryEntry.Offset), these read

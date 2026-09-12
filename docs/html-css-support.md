@@ -189,6 +189,7 @@ Example:
 | `iframe` | [iframe](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe) | Rendered as a placeholder box with a gray border. For YouTube and Vimeo embed URLs, a video thumbnail image is displayed |
 | `video` | [video](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/video) | Video playback isn't possible in a static PDF, so the element renders its `poster` image (the frame browsers show before playback) as a replaced element — exactly like `img`, honoring [`object-fit`/`object-position`](#box-model). With no `poster` (or if it fails to load), the element falls back to being an ordinary container laying out any fallback DOM content |
 | `svg` | [svg](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/svg) | Inline SVG renders as real vector PDF content, not a rasterized bitmap — see [Supported SVG Features](supported-svg-features.md) for the full SVG compatibility matrix |
+| `math` | [math](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/math) | Inline MathML renders as real vector PDF content (glyphs, fraction bars, radicals, stretchy operators), not a rasterized bitmap — see [Supported MathML Features](supported-mathml-features.md) for the full MathML compatibility matrix. Tagged as a `Formula` structure element by default when [tagged PDF output](#tagged-pdf-pdfua-support) is enabled, with the original MathML source attached as a PDF 2.0 Associated File — see [MathML Associated Files](#mathml-associated-files) |
 
 ### Forms
 
@@ -1546,6 +1547,7 @@ This property only has an effect when `EnableTaggedPdf` is `true` — with taggi
 | `article` | `Art` |
 | `section`, `nav`, `aside` | `Sect` |
 | `hr` | `Artifact` |
+| `math` | `Formula` |
 | `code`, `kbd`, `samp`, `var` | `Code` |
 | `a[href]` | `Link` (a bare `<a>` with no `href` is not a hyperlink and does not default to `Link`) |
 | `html`, `body` | `none` (transparent — children attach to the synthetic document root) |
@@ -1555,6 +1557,29 @@ Any tag not listed here (e.g. `<cite>`, `<mark>`, `<time>`) falls through to the
 #### Known limitation — anonymous (CSS-generated) table structure cannot be tag-overridden
 
 A table assembled purely through CSS (`display: table` / `table-row` / `table-cell` on arbitrary elements, rather than real `<table>`/`<tr>`/`<td>` markup) gets its row/cell/group tagging (`TR`/`TH`-or-`TD`/`THead`/`TBody`/`TFoot`) from a hardcoded fallback based on the computed `display` value, **not** from `-peachpdf-pdf-tag-type` — the synthesized anonymous boxes PeachPDF creates to complete the table model have no source HTML element for any selector, author or default stylesheet, to match against. Authors who need override control over table structure tagging (e.g. distinguishing header cells from data cells, which the anonymous fallback cannot do — it always tags anonymous cells `TD`) must use real `<table>`/`<tr>`/`<th>`/`<td>`/etc. markup rather than relying on CSS's table display model to synthesize the structure implicitly.
+
+### MathML Associated Files
+
+When [tagged PDF output](#tagged-pdf-pdfua-support) is enabled, a `<math>` element's own `Formula`
+structure element additionally carries the element's original MathML source as a PDF 2.0
+([ISO 32000-2](https://www.iso.org/standard/75839.html)) Associated File (`/AF`, §14.13) — the standard
+mechanism accessible-math tooling and assistive technology use to recover the exact semantic markup
+behind a rendered formula, rather than trying to reconstruct it from drawn glyph positions. The
+associated file is:
+
+- Named `formula.mml`, with MIME type `application/mathml+xml`.
+- Marked `/AFRelationship /Supplement` — the ISO 32000-2 relationship value for content that supplements
+  (rather than replaces) the structure element's own visible content.
+- Attached both on the `Formula` structure element itself and indexed in the document's catalog-level
+  `/AF` array.
+
+This works regardless of which [`PdfVersion`](usage-examples.md#pdf-20-output) the document targets, but
+is only fully spec-conformant under `PdfVersion.Pdf20` — `/AF` on a structure element is a PDF 2.0
+addition to ISO 32000-1's structure element dictionary. If an author retargets `<math>`'s own
+`-peachpdf-pdf-tag-type` away from `Formula` (e.g. to `P`), the MathML source is still attached to
+whichever structure element the override produces. No `/Alt` or `/ActualText` (a spoken-math description)
+is synthesized — generating one requires real math-to-speech, which is out of scope; the attached exact
+MathML source is itself a complete, spec-conformant accessible representation on its own.
 
 ---
 

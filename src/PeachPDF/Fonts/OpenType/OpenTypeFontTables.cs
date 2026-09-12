@@ -1315,4 +1315,35 @@ namespace PeachPDF.Fonts.OpenType
             }
         }
     }
+
+    /// <summary>Locator for the optional `MATH` (mathematical typesetting) table - mirrors
+    /// <see cref="GlyphSubstitutionTable"/>'s shape. Absent on almost all fonts (only dedicated math
+    /// fonts carry one), so unlike GSUB this is constructed only when present (see
+    /// <c>OpenTypeFontface.Read</c>'s `ContainsKey` guard).</summary>
+    internal class GlyphMathTable : OpenTypeFontTable
+    {
+        public const string Tag = TableTagNames.Math;
+
+        public GlyphMathTable(OpenTypeFontface fontData)
+            : base(fontData, Tag)
+        {
+            DirectoryEntry.Tag = TableTagNames.Math;
+            DirectoryEntry = fontData.TableDictionary[TableTagNames.Math];
+            Read();
+        }
+
+        public MathTable? Table { get; private set; }
+
+        public void Read()
+        {
+            try
+            {
+                Table = new MathTable(_fontData, DirectoryEntry.Offset);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(PSSR.ErrorReadingFontData, ex);
+            }
+        }
+    }
 }

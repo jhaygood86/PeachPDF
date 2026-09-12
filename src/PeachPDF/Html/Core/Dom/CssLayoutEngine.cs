@@ -264,7 +264,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (possibly <c>PixelsPerInch</c>-inflated) internal coordinate space, the same catch-up
         /// <see cref="Parse.CssValueParser.ParseLength(Length, double, CssBox)"/> applies (issue #814).
         /// </summary>
-        private static bool TryResolveAbsolute(CssLength length, double pixelsPerPoint, out double layoutUnits)
+        internal static bool TryResolveAbsolute(CssLength length, double pixelsPerPoint, out double layoutUnits)
         {
             layoutUnits = 0;
             if (length.HasError || length.IsPercentage || !(length.Number > 0))

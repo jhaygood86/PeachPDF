@@ -189,6 +189,8 @@ Words are collected into `CssLineBox` instances during layout. After layout, eac
 | Subtype | Purpose |
 |---|---|
 | `CssBoxImage` | `<img>` — manages an `ImageLoadHandler` to load and decode the image |
+| `CssBoxSvg` | `<svg>` — foreign content; see [SVG Rendering](#svg-rendering) below |
+| `CssBoxMath` | `<math>` — foreign content; see [MathML Rendering](#mathml-rendering) below |
 | `CssBoxFrame` | `<iframe>` |
 | `CssBoxHr` | `<hr>` — renders as a horizontal rule |
 | `CssSpacingBox` | Anonymous spacing boxes injected into inline formatting contexts |
@@ -734,6 +736,125 @@ An `<a>` element becomes a real PDF link annotation, reusing the same annotation
 ### Coverage
 
 See [Supported SVG Features](supported-svg-features.md) for the complete element/attribute compatibility matrix, including the reasoning behind each deliberately-excluded SVG feature (SMIL animation, scripting, `filter`, `foreignObject`, legacy SVG fonts, `textPath`, and others).
+
+---
+
+## MathML Rendering
+
+**Key types:** `MathTreeBuilder` ([MathML/MathTreeBuilder.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathTreeBuilder.cs)), `MathLayoutEngine` ([MathML/MathLayoutEngine.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathLayoutEngine.cs)), `MathRenderer` ([MathML/MathRenderer.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathRenderer.cs)), `MathNode`/`MathBox` ([MathML/MathNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathNode.cs), [MathML/MathBox.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathBox.cs)), `IMathSourceNode` ([MathML/IMathSourceNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/IMathSourceNode.cs)), `CssBoxMath` ([Html/Core/Dom/CssBoxMath.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Html/Core/Dom/CssBoxMath.cs))
+
+PeachPDF renders inline `<math>` elements as real vector PDF content — glyphs through the ordinary text
+pipeline, fraction bars/radical rules as native path/fill operators, stretchy operators (parentheses,
+radical signs, ...) built from the resolved font's own OpenType `MATH` table glyph data. Like SVG, this
+is a cross-cutting subsystem built on the same foreign-content pattern SVG established, not a pipeline
+phase of its own; unlike SVG, it needs only one entry point (inline `<math>` — there is no
+`<img src="x.mml">`-equivalent standalone-MathML-by-reference case) and no CSS-property-registry
+involvement (MathML's own attributes — `mathvariant`, `displaystyle`, `scriptlevel`, `stretchy`, ... —
+are plain XML attributes, not CSS properties; genuine CSS properties that do apply to math content —
+`color`, `font-family`, `font-size` — reach it for free through the ordinary HTML cascade, the same way
+they reach SVG). For the full element/attribute compatibility matrix, see
+[Supported MathML Features](supported-mathml-features.md).
+
+### Foreign-content boundary
+
+`CssBoxMath` mirrors `CssBoxSvg` exactly: `HtmlConstants.Math`/`CssBox.CreateBox`'s tag-name switch
+constructs one for every `<math>` element, its descendant `CssBox` tree (built for free by the ordinary
+HTML parser) is read once as a plain tag/attribute/already-cascaded-style data source, and
+`DomParser`'s structural-normalization passes (`Correct*`) are guarded to never descend into one — the
+same `if (box is CssBoxSvg or CssBoxMath) return;` checks, extended from the single-purpose SVG guards a
+real regression (issue #159) already forced into existence. `CascadeApplyStyles` is deliberately *not*
+guarded, so `color`/`font-family`/`font-size` cascade into `<math>` descendants normally.
+
+### Source abstraction — `IMathSourceNode`
+
+Mirrors `ISvgSourceNode`'s shape (`Name`, `GetAttribute(name)`, `Children`, `GetTextContent()`), plus
+`Color`/`FontSizePt`/`GetFontAtSize(sizePt)` accessors that read a node's already-cascaded CSS state
+directly (SVG needs no such accessors on its own source-node interface, since it re-derives paint
+properties itself via `SvgPropertyRegistry`). Only one implementation exists today —
+`CssBoxMathSourceNode`, wrapping the live `CssBox` subtree — but the interface seam is kept for symmetry
+with the SVG precedent and so unit tests can build a tree from a lightweight fake.
+
+### Build phase — `MathTreeBuilder`
+
+`MathTreeBuilder.Build(IMathSourceNode mathRoot, RAdapter adapter)` is a single recursive pass — unlike
+`SvgTreeBuilder`, no id-collection pre-pass is needed, since MathML has no forward-reference id system
+like SVG's `url(#id)`. It produces a `MathDocument`: a `MathNode` presentation tree (`MathRowNode`,
+`MathTokenNode`, `MathFractionNode`, `MathRadicalNode`, `MathScriptNode`, `MathUnderOverNode`,
+`MathMultiscriptsNode`, `MathTableNode`/`MathTableRowNode`/`MathTableCellNode`, and others — see
+[MathML/MathNode.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/MathML/MathNode.cs))
+plus a `ResolveFont(sizePt)` delegate the layout engine uses for every distinct scriptlevel-scaled size
+a formula needs. `displaystyle`/`scriptlevel` are resolved to concrete values at build time, following
+MathML Core §3.3.4's per-schema inheritance rules (e.g. a fraction's numerator/denominator are always
+laid out one scriptlevel deeper and never in displaystyle, regardless of the fraction's own). MathML
+3-only elements MathML Core dropped get best-effort handling here: `mfenced` desugars into a plain row
+of synthesized fence/separator `mo` tokens, `maction` builds only its selected (or first) child, and
+`<semantics>` builds only its first (presentation-markup) child.
+
+### Layout phase — `MathLayoutEngine`
+
+`MathLayoutEngine.Layout(MathDocument document, RGraphics g)` implements
+[MathML Core](https://w3c.github.io/mathml-core/)'s layout algorithm — the W3C/browser-vendor
+specification that gives MathML 3's presentation markup a concrete box model, since MathML 3 itself
+leaves layout implementation-defined. Every structural measurement (fraction rule thickness, radical
+gaps, script shift/scale, stack spacing) comes from the resolved math font's OpenType `MATH` table
+constants (`MathTable.cs`'s `MathConstantsTable`), scaled by `sizePt / unitsPerEm * g.PixelsPerPoint` —
+the same formula `FontAdapter.ScaleDesignUnits` already uses for vertical metrics, so `MathBox` geometry
+lands in the same working unit space as everything else `RGraphics` measures/draws in. A font with no
+`MATH` table (`MathMetrics`'s fallback path) uses fixed, TeX-book-derived approximate ratios instead of
+refusing to lay the formula out — MathML Core's own documented strategy for this case. Inter-element
+spacing/stretchiness/large-operator defaults for an `mo` with no explicit attribute come from
+`MathOperatorDictionary` — MathML Core Appendix B's own category-based operator dictionary, transcribed
+from the spec's compact (Content, Form) → category classification rather than a flat approximation.
+
+The result is a `MathBox` tree: computed inline size/ascent/descent per node, with positioned children
+(`MathPositionedBox`) and, for a leaf, the paint data needed to draw it (`MathPaintKind.Text` for
+ordinary token glyphs via `DrawString`, `.Rule` for a fraction bar/radical vinculum via a filled
+rectangle, `.Glyphs` for a stretchy operator's glyph(s) via the raw-glyph-index `RGraphics.DrawGlyphs`
+primitive below — either a single `MathVariants` pre-sized variant, or, when none is tall/wide enough, a
+full MathML Core §5.3.2 `GlyphAssembly` construction: `MathGlyphAssemblyShaper` repeats the construction's
+extender part(s) and distributes connector overlap to reach the target size, the same algorithm real
+browsers use). Like SVG's `SvgDocument` scene graph, `MathBox` is an entirely separate model, opaque to
+`FragmentTree`/`BoxFragment` — `CssBoxMath` is one ordinary, monolithic (never-fragmented) box in the
+fragment tree (see §6), but everything inside it is painted as a single opaque blob from the fragment
+tree's point of view. Unlike an actual replaced element (`<img>`/`<svg>`), an explicit CSS `width`/
+`height` resizes only `CssBoxMath`'s own outer box (`MeasureWordsSize`) — MathML Core doesn't
+characterize `<math>` as replaced, so its content is never rescaled to fit, and can overflow a
+smaller-than-natural box or leave extra space in a larger one.
+
+### Paint phase — `MathRenderer`
+
+`MathRenderer.RenderInto(RGraphics g, MathBox root, RRect destination)` walks the positioned `MathBox`
+tree issuing ordinary `RGraphics` calls — the same abstraction §6's HTML/CSS painting and SVG's
+`SvgRenderer` both use. A stretchy operator's assembled/variant glyphs are addressed directly by font
+glyph index via `RGraphics.DrawGlyphs` (`GlyphPlacement`), a new primitive alongside the existing
+character-based `DrawString`: unlike ordinary text, a `MATH`-table size-variant glyph frequently has no
+Unicode codepoint of its own to shape through cmap, so it has to be drawn by raw glyph id instead.
+`XGraphicsPdfRenderer.DrawGlyphsAtPositions` implements it by generalizing the existing (previously
+private, GPOS-delta-only) per-glyph `Td`+`Tj` emission `DrawString` already used internally, and — since
+nothing else registers these glyphs for font subsetting the way `DrawString`'s own shaping path does —
+explicitly calls `PdfFont.AddShapedGlyph` for each one before drawing, or the embedded font's subset
+would omit them entirely.
+
+### PDF 2.0: tagged `Formula` + Associated Files
+
+A `<math>` element defaults to the `Formula` tagged-PDF structure type (`-peachpdf-pdf-tag-type`, see
+§8's [Tagged PDF (PDF/UA) structure tree](#tagged-pdf-pdfua-structure-tree)). When tagging is enabled,
+`StructureTagBuilder.AttachMathMlSource` re-serializes the element's original MathML markup
+(`MathMlSerializer`, reading the `IMathSourceNode` tree directly — the author's own markup, not this
+engine's internal, already-desugared `MathNode` interpretation of it) and attaches it as a PDF 2.0
+([ISO 32000-2](https://www.iso.org/standard/75839.html) §14.13) Associated File
+(`/AF`, `/AFRelationship /Supplement`) on the structure element, using `PdfFileSpecification`/
+`PdfEmbeddedFile` — two low-level PDF object primitives that existed, unused, before this feature (the
+same "pre-existing-but-uncalled primitive" pattern `XForm`/`PdfSoftMask` followed for other features).
+See [MathML Associated Files](html-css-support.md#mathml-associated-files) for the user-facing mechanism
+and [PDF 2.0 output](usage-examples.md#pdf-20-output) for `PdfGenerateConfig.PdfVersion`.
+
+### Coverage
+
+See [Supported MathML Features](supported-mathml-features.md) for the complete element/attribute
+compatibility matrix, including the reasoning behind each deliberately-scoped-out MathML capability
+(elementary math, Content MathML, and others — all confirmed absent from MathML Core itself, not just
+unimplemented here).
 
 ---
 

@@ -195,6 +195,14 @@ namespace PeachPDF.Tests.TestSupport
         internal static string GsubTestLookup3 => Path.Combine(AppContext.BaseDirectory, "gsubtest-lookup3.otf");
 
         /// <summary>
+        /// STIX Two Math Regular (see StixTwoMath.LICENSE.txt): a real production OpenType math font
+        /// with a full <c>MATH</c> table (MathConstants/MathGlyphInfo/MathVariants) - PeachPDF's default
+        /// math typeface for MathML rendering, and what proves the <c>MATH</c>-table reader and the math
+        /// layout/paint pipeline against real font data rather than a synthetic byte-blob table.
+        /// </summary>
+        internal static string Math => Path.Combine(AppContext.BaseDirectory, "StixTwoMath-Regular.ttf");
+
+        /// <summary>
         /// A real font file path: the first one the host OS reports, or the bundled TTF
         /// if the host reports none.
         /// </summary>

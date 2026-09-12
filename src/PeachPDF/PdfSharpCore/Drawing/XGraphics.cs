@@ -1241,6 +1241,22 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
                 _renderer.DrawString(text, font, brush, layoutRectangle, format, letterSpacing, fontPalette, features ?? TextShapingFeatures.Default, logicalText);
         }
 
+        /// <summary>
+        /// Draws each glyph in <paramref name="glyphs"/> at its own explicit position, addressed
+        /// directly by font glyph index - see <see cref="PeachPDF.Html.Adapters.RGraphics.DrawGlyphs"/>'s
+        /// own remarks for why this exists alongside the ordinary character-based <c>DrawString</c>.
+        /// </summary>
+        public void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, XBrush brush)
+        {
+            if (font == null)
+                throw new ArgumentNullException("font");
+            if (brush == null)
+                throw new ArgumentNullException("brush");
+
+            if (_renderer != null)
+                _renderer.DrawGlyphsAtPositions(glyphs, font, brush);
+        }
+
         // ----- MeasureString ------------------------------------------------------------------------
 
         /// <summary>

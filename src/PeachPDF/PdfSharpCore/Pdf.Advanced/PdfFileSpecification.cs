@@ -56,6 +56,18 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>
+        /// The relationship between this file specification and the object it's associated with
+        /// ("/AFRelationship", PDF 2.0 / ISO 32000-2 §14.13) - e.g. "/Supplement" for a &lt;math&gt;
+        /// element's original MathML markup attached to its "Formula" structure element, or "/Source"
+        /// for the LaTeX/TeX an equation was authored from.
+        /// </summary>
+        public string AssociatedFileRelationship
+        {
+            get { return Elements.GetName(Keys.AFRelationship); }
+            set { Elements.SetName(Keys.AFRelationship, value); }
+        }
+
+        /// <summary>
         /// Predefined keys of this embedded file.
         /// </summary>
         internal class Keys : KeysBase
@@ -95,6 +107,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             /// </summary>
             [KeyInfo(KeyType.Dictionary | KeyType.Optional)]
             public const string EF = "/EF";
+
+            /// <summary>
+            /// (Optional; PDF 2.0) The relationship between this file specification's file and the
+            /// object it's associated with - one of /Source, /Data, /Alternative, /Supplement,
+            /// /EncryptedPayload, /FormData, /Schema, or /Unspecified (ISO 32000-2 Table 43).
+            /// </summary>
+            [KeyInfo(KeyType.Name | KeyType.Optional)]
+            public const string AFRelationship = "/AFRelationship";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.

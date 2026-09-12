@@ -233,6 +233,40 @@ namespace PeachPDF
                 document.PdfDocument.Version = 17;
             }
 
+            // PeachPDF implements no PDF/A level defined against PDF 2.0 (there is no PDF/A-4 support),
+            // and every level it does implement is defined against PDF 1.4 or 1.7 - so requesting both
+            // is a contradiction the caller needs to resolve, not something to silently pick a winner for.
+            if (config.PdfVersion == PdfVersion.Pdf20 && config.PdfAConformance != PdfAConformance.None)
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfAConformance is also set to a " +
+                    "level other than None. PeachPDF does not implement PDF/A-4 (the PDF-2.0-based PDF/A " +
+                    "level); request PdfVersion.Pdf17 (or leave PdfVersion at its default) when requesting " +
+                    "PdfAConformance.");
+            }
+
+            // Same "a PDF file has exactly one header version" reasoning as the PdfAConformance guard
+            // above - a second AddPdfPages call on the same document requesting a different PdfVersion
+            // than the first would leave the file's already-written header disagreeing with how some of
+            // its pages/structure elements were painted.
+            if (document.PdfDocument.Options.PdfVersionEstablished
+                && document.PdfDocument.Options.PdfVersion != config.PdfVersion)
+            {
+                throw new InvalidOperationException(
+                    $"PdfGenerateConfig.PdfVersion must be the same on every AddPdfPages call for a given " +
+                    $"document - this document was already established as '{document.PdfDocument.Options.PdfVersion}' " +
+                    $"by an earlier call, and this call specifies '{config.PdfVersion}'. A single PDF file " +
+                    "can only have one header version.");
+            }
+
+            document.PdfDocument.Options.PdfVersion = config.PdfVersion;
+            document.PdfDocument.Options.PdfVersionEstablished = true;
+
+            if (config.PdfVersion == PdfVersion.Pdf20)
+            {
+                document.PdfDocument.Version = 20;
+            }
+
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;
             _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;

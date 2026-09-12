@@ -2208,10 +2208,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectReplacedElementBoxes(CssBox box)
         {
-            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
-            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
-            // (and restructure) them. See CssBoxSvg / issue #159.
-            if (box is CssBoxSvg) return;
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg or CssBoxMath) return;
             for (int i = box.Boxes.Count - 1; i >= 0; i--)
             {
                 var childBox = box.Boxes[i];
@@ -2237,10 +2237,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectLineBreaksBlocks(CssBox box)
         {
-            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
-            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
-            // (and restructure) them. See CssBoxSvg / issue #159.
-            if (box is CssBoxSvg) return;
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg or CssBoxMath) return;
             foreach (var childBox in box.Boxes)
             {
                 CorrectLineBreaksBlocks(childBox);
@@ -2272,10 +2272,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectBlockInsideInline(CssBox box)
         {
-            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
-            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
-            // (and restructure) them. See CssBoxSvg / issue #159.
-            if (box is CssBoxSvg) return;
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg or CssBoxMath) return;
             try
             {
                 if (DomUtils.ContainsInlinesOnly(box) && !ContainsInlinesOnlyDeep(box))
@@ -2421,10 +2421,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box">the current box to correct its sub-tree</param>
         private static void CorrectInlineBoxesParent(CssBox box)
         {
-            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
-            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
-            // (and restructure) them. See CssBoxSvg / issue #159.
-            if (box is CssBoxSvg) return;
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg or CssBoxMath) return;
 
             // A flex or grid container establishes no inline formatting context, so CSS 2.1 §9.2.1.1's
             // anonymous block box — a *block container* rule — must not be created inside one. Each child
@@ -2531,10 +2531,10 @@ namespace PeachPDF.Html.Core.Parse
 
         private static void CorrectAbsolutelyPositionedInlineElements(CssBox box)
         {
-            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
-            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
-            // (and restructure) them. See CssBoxSvg / issue #159.
-            if (box is CssBoxSvg) return;
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg or CssBoxMath) return;
             if (box is { DerivedStyle.ActualDisplay: Keywords.Inline, Position.Value: PositionMode.Absolute })
             {
                 var blockBox = new CssBox(box.ParentBox, null);
@@ -2564,10 +2564,10 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box"></param>
         private static void CorrectAnonymousTables(CssBox box)
         {
-            // Inline <svg> is foreign content: its descendants are read directly by SvgTreeBuilder
-            // and are never laid out as HTML boxes, so HTML box-tree normalization must not descend into
-            // (and restructure) them. See CssBoxSvg / issue #159.
-            if (box is CssBoxSvg) return;
+            // Inline <svg>/<math> are foreign content: their descendants are read directly by
+            // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
+            // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
+            if (box is CssBoxSvg or CssBoxMath) return;
             // 1. Remove irrelevant boxes
             CorrectAnonymousTablesRemoveIrrelevantBoxes(box);
 

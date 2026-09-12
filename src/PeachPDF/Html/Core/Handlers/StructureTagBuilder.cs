@@ -1,10 +1,12 @@
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.PdfSharpCore.Pdf;
+using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Annotations;
 using PeachPDF.PdfSharpCore.Pdf.Structure;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace PeachPDF.Html.Core.Handlers
 {
@@ -29,6 +31,12 @@ namespace PeachPDF.Html.Core.Handlers
         readonly Dictionary<CssBox, PdfStructureElement> _lbodyElementsByBox = new();
 
         readonly Stack<PdfStructureElement> _parentStack = new();
+
+        // Guards AttachMathMlSource against attaching the same <math> element's source more than once -
+        // OpenContentElement's own element cache already returns the same PdfStructureElement for a
+        // box painted again (e.g. a formula whose line spans a page break via CssRectMath's own
+        // /MCR handling), but nothing else stops this method's own caller from running per-occurrence.
+        readonly HashSet<CssBox> _mathMlAttached = new();
 
         // Per-StructParents-key (i.e. per page) ordered list of parent-tree entries, index == MCID.
         readonly List<List<PdfItem>> _parentTreeEntriesByKey = new();
@@ -136,6 +144,36 @@ namespace PeachPDF.Html.Core.Handlers
             // reading the struct element's own /S name back out, not from the caller's raw tag text).
             g.BeginMarkedContent(element.StructureType, mcid);
             return new EndMarkedContentScope(g);
+        }
+
+        /// <summary>
+        /// Attaches a &lt;math&gt; element's original MathML markup to its own (already-opened, via
+        /// <see cref="OpenContentElement"/>) <c>Formula</c> structure element as a PDF 2.0 Associated
+        /// File (ISO 32000-2 §14.13, <c>/AFRelationship /Supplement</c>) - the accessible-math
+        /// mechanism this repo's docs describe under the <c>-peachpdf-pdf-tag-type: Formula</c>
+        /// mapping. Also indexes it in the document-level <c>/AF</c> array
+        /// (<see cref="PdfCatalog.AddAssociatedFile"/>). No-op if <paramref name="box"/> was never
+        /// tagged (classification resolved to something other than <c>Formula</c>, or tagging is
+        /// off), or if this box's source has already been attached (a formula spanning a page break
+        /// paints more than once).
+        /// </summary>
+        public void AttachMathMlSource(CssBox box, string mathMlSource)
+        {
+            if (!_mathMlAttached.Add(box))
+                return;
+
+            if (!_elementsByBox.TryGetValue(box, out var element))
+                return;
+
+            var bytes = Encoding.UTF8.GetBytes(mathMlSource);
+            var embeddedFile = new PdfEmbeddedFile(_document, bytes) { MimeType = "application/mathml+xml" };
+            var fileSpec = new PdfFileSpecification(_document, "formula.mml", embeddedFile)
+            {
+                AssociatedFileRelationship = "/Supplement",
+            };
+
+            element.AppendAssociatedFile(fileSpec);
+            _document.Catalog.AddAssociatedFile(fileSpec);
         }
 
         /// <summary>

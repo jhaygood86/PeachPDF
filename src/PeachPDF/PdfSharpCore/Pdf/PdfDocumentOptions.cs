@@ -162,5 +162,27 @@ namespace PeachPDF.PdfSharpCore.Pdf
             set { _pdfAConformanceEstablished = value; }
         }
         bool _pdfAConformanceEstablished;
+
+        /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.PdfVersion"/> - see there for behavior.
+        /// </summary>
+        public PdfVersion PdfVersion
+        {
+            get { return _pdfVersion; }
+            set { _pdfVersion = value; }
+        }
+        PdfVersion _pdfVersion = PdfVersion.Pdf17;
+
+        /// <summary>
+        /// Whether <see cref="PdfVersion"/> has already been established by a prior
+        /// <c>PdfGenerator.AddPdfPages</c> call on this document - same "a document's file header is a
+        /// whole-document property" reasoning as <see cref="PdfAConformanceEstablished"/>.
+        /// </summary>
+        public bool PdfVersionEstablished
+        {
+            get { return _pdfVersionEstablished; }
+            set { _pdfVersionEstablished = value; }
+        }
+        bool _pdfVersionEstablished;
     }
 }

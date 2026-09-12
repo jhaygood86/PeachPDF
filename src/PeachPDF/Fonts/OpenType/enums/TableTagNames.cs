@@ -173,6 +173,12 @@ namespace PeachPDF.Fonts.OpenType
         /// </summary>
         public const string JSTF = "JSTF";
 
+        /// <summary>
+        /// Mathematical typesetting data (constants, per-glyph italics correction/top-accent
+        /// attachment, and stretchy glyph variants/assemblies).
+        /// </summary>
+        public const string Math = "MATH";
+
         // --- Other OpenType Tables ---
 
         /// <summary>

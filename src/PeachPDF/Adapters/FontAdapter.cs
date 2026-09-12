@@ -211,5 +211,16 @@ namespace PeachPDF.Adapters
             var glyphIndex = descriptor.CharCodeToGlyphIndex(rune);
             return Font.Size * designUnits(descriptor, glyphIndex) / descriptor.UnitsPerEm * PixelsPerPoint;
         }
+
+        // ---- MATH table query surface -----------------------------------------------------------
+        // Backed by the font's OpenTypeDescriptor's real MATH table parsing (see MathTable.cs).
+
+        public override bool HasMathTable => Font.Descriptor?.HasMathTable ?? false;
+
+        public override MathTable? MathTable => Font.Descriptor?.MathTable;
+
+        public override double FontUnitsPerEm => Font.Descriptor?.UnitsPerEm ?? 0;
+
+        public override int GetGlyphIndex(System.Text.Rune rune) => Font.Descriptor?.CharCodeToGlyphIndex(rune) ?? 0;
     }
 }

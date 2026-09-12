@@ -197,6 +197,7 @@ namespace PeachPDF.Html.Core
             section, nav,
             aside           { -peachpdf-pdf-tag-type: Sect }
             hr              { -peachpdf-pdf-tag-type: Artifact }
+            math            { -peachpdf-pdf-tag-type: Formula }
             code, kbd,
             samp, var       { -peachpdf-pdf-tag-type: Code }
             a[href]         { -peachpdf-pdf-tag-type: Link }

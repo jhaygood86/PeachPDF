@@ -303,7 +303,21 @@ namespace PeachPDF.Html.Core.Paint
 
                 case StructureTagKind.Content:
                     using (builder.OpenContentElement(g, box, classification.StructureType!, classification.AltText))
+                    {
+                        // Attach the original MathML source as a PDF 2.0 Associated File on this
+                        // formula's own structure element - see StructureTagBuilder.AttachMathMlSource
+                        // and the -peachpdf-pdf-tag-type: Formula mapping in docs/html-css-support.md.
+                        // Gated on the box actually resolving to a tagged content element (not just
+                        // "is a CssBoxMath") - an author who suppresses tagging entirely
+                        // (-peachpdf-pdf-tag-type: none, StructureTagKind.None) never reaches this
+                        // case at all. An author who retargets the type to something other than
+                        // Formula still gets the source attached to whatever element they chose - the
+                        // source is still accurate supplementary content for it either way.
+                        if (box is CssBoxMath mathBox && mathBox.SerializedSource is { } mathMl)
+                            builder.AttachMathMlSource(box, mathMl);
+
                         PaintContent(g, fragment);
+                    }
                     break;
 
                 default:

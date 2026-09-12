@@ -18,7 +18,8 @@ namespace PeachPDF.Tests.TestSupport
         PopClip,
         PushTransform,
         PopTransform,
-        DrawString
+        DrawString,
+        DrawGlyphs
     }
 
     /// <summary>One paint call, in the order it happened - the single ordered log <see cref="RecordingGraphics.Log"/> keeps, per this repo's own preference (CLAUDE.md's testing conventions) for one ordered log over parallel per-call-type counts/lists when order across different call types matters. <see cref="Matrix"/> is set only for <see cref="PaintOpKind.PushTransform"/>, <see cref="Text"/> (and optionally <see cref="LogicalText"/>) only for <see cref="PaintOpKind.DrawString"/>.</summary>
@@ -196,6 +197,12 @@ namespace PeachPDF.Tests.TestSupport
         {
             DrawnStrings.Add((str, point.Y));
             Log.Add(new PaintOp(PaintOpKind.DrawString, new RRect(point.X, point.Y, size.Width, size.Height), Text: str, LogicalText: logicalText));
+        }
+
+        public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color)
+        {
+            foreach (var glyph in glyphs)
+                Log.Add(new PaintOp(PaintOpKind.DrawGlyphs, new RRect(glyph.X, glyph.Y, 0, 0)));
         }
 
         public override void DrawRectangle(RPen pen, double x, double y, double width, double height) { }

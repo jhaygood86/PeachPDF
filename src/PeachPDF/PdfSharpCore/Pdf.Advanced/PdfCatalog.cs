@@ -204,6 +204,27 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>
+        /// Appends a file specification to the document-level <c>/AF</c> (Associated Files) array
+        /// (ISO 32000-2 §14.13), creating the array on first call - the catalog-level index of every
+        /// file embedded anywhere in the document (e.g. MathML source attached to a <c>Formula</c>
+        /// structure element - see <see cref="PdfStructureElement.AppendAssociatedFile"/> for the
+        /// structure-element-level counterpart). Only ever called when such a file is embedded -
+        /// untouched, no <c>/AF</c> entry is added at all.
+        /// </summary>
+        internal void AddAssociatedFile(PdfFileSpecification fileSpecification)
+        {
+            Owner.Internals.AddObject(fileSpecification);
+
+            var array = Elements.GetArray(Keys.AF);
+            if (array == null)
+            {
+                array = new PdfArray(Owner);
+                Elements[Keys.AF] = array;
+            }
+            array.Elements.Add(fileSpecification.Reference);
+        }
+
+        /// <summary>
         /// Sets the document's XMP metadata stream (<c>/Metadata</c>, see <see cref="PdfMetadataStream"/>) -
         /// only ever called when <see cref="PeachPDF.PdfGenerateConfig.EnableXmpMetadata"/> or
         /// <see cref="PeachPDF.PdfGenerateConfig.PdfAConformance"/> requests one. Untouched, no
@@ -380,11 +401,18 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             public const string Perms = "/Perms";
 
             /// <summary>
-            /// (Optional; PDF 1.5) A dictionary containing attestations regarding the content of a 
+            /// (Optional; PDF 1.5) A dictionary containing attestations regarding the content of a
             /// PDF document, as it relates to the legality of digital signatures.
             /// </summary>
             [KeyInfo("1.5", KeyType.Dictionary | KeyType.Optional)]
             public const string Legal = "/Legal";
+
+            /// <summary>
+            /// (Optional; PDF 2.0) An array of file specification dictionaries denoting the associated
+            /// files for the entire document (ISO 32000-2 §14.13, "Associated files").
+            /// </summary>
+            [KeyInfo("2.0", KeyType.Array | KeyType.Optional)]
+            public const string AF = "/AF";
 
             /// <summary>
             /// Gets the KeysMeta for these keys.
