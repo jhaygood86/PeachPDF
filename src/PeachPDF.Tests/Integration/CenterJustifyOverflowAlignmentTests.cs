@@ -11,6 +11,17 @@ namespace PeachPDF.Tests.Integration
     /// (always left-to-right-flowing) layout placed it instead of actively centering/justifying it
     /// around the overflow.
     /// </summary>
+    /// <remarks>
+    /// <c>center</c> still works that way. <c>justify</c> no longer does, and deliberately: issue #1013
+    /// read the rule the other way round out of the spec itself -
+    /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">css-text-3 §6.1</see> says an
+    /// overflowing line's contents "are start-aligned: any content that doesn't fit overflows the line
+    /// box's end edge", and Chromium does exactly that. The difference is real rather than an
+    /// inconsistency: centering an overflowing line is a shift with no correct alternative, while
+    /// justifying one would have to distribute negative space, which the spec makes optional and no
+    /// browser does. The multi-word case below is unaffected either way - #840's floor-at-natural-
+    /// spacing walk already reproduced natural placement exactly.
+    /// </remarks>
     public class CenterJustifyOverflowAlignmentTests
     {
         [Fact]
@@ -39,11 +50,17 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Justify_SingleUnbreakableWord_OnNonLastLine_StaysFlushRight_SpillsPastLeftEdge()
+        public async Task Justify_SingleUnbreakableWord_OnNonLastLine_IsStartAligned_SpillsPastRightEdge()
         {
-            // A justified line's own words already handle a lone overflowing word correctly (it's both
-            // first and last, so the last-word flush override has no earlier sibling to overlap) - this
-            // guards that against regressing while the multi-word case below is fixed.
+            // A lone word is a line with no justification opportunity at all, which css-text-3 §6.4.3
+            // calls unexpandable text: it aligns as text-align-last, whose initial `auto` under
+            // `text-align: justify` is start. §6.1 says the same thing about the overflow itself - "if
+            // the inline contents of a line box are too long to fit within it, then the contents are
+            // start-aligned: any content that doesn't fit overflows the line box's end edge".
+            //
+            // This test used to assert the opposite (flush to the *end* edge, spilling past the start),
+            // which is what the pre-#1013 unconditional last-word override produced. Chromium, measured
+            // through Playwright on this same fixture, puts the word at x=0 - the line's start edge.
             var (root, _) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap(
                     "<div id='d' style='margin:0;width:60pt;text-align:justify;font-size:14pt'>" +
@@ -57,10 +74,10 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(word.Width > d.ClientRight - d.ClientLeft,
                 "fixture must actually overflow the container for this test to be meaningful");
-            Assert.Equal(d.ClientRight, word.Right, 1);
-            Assert.True(word.Left < d.ClientLeft,
-                $"expected the overflowing justified line to spill past the left edge (word.Left={word.Left:F2} " +
-                $"should be < ClientLeft={d.ClientLeft:F2})");
+            Assert.Equal(d.ClientLeft, word.Left, 1);
+            Assert.True(word.Right > d.ClientRight,
+                $"expected the overflowing justified line to spill past the right edge (word.Right={word.Right:F2} " +
+                $"should be > ClientRight={d.ClientRight:F2})");
         }
 
         [Fact]
