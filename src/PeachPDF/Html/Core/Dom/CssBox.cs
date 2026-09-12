@@ -7175,11 +7175,12 @@ namespace PeachPDF.Html.Core.Dom
                     if (word.IsLineBreak)
                     {
                         // The space that ended the line hangs and is not part of the line's width
-                        // (css-text-3 §4.1.2), the same rule the last-word subtraction below applies
-                        // to a box's final line. CssRect.FullWidth adds one unconditionally, so
-                        // without this every <br>-separated line measured one space too wide -- 2.6pt
-                        // on that five-line address block, enough to over-subscribe its flex row and wrap
-                        // the heading beside it.
+                        // (css-text-3 §4.1.2). A <br> is the only point in this walk where the line is
+                        // known to have ended, so it is the only place the rule can be applied - see
+                        // the note where the old last-word subtraction used to sit, below. Without
+                        // this every <br>-separated line measured one space too wide -- 2.6pt on that
+                        // five-line address block, enough to over-subscribe its flex row and wrap the
+                        // heading beside it.
                         widestLine = Math.Max(widestLine, maxSum - trailingSpace);
                         maxSum = marginSum;
                         trailingSpace = 0;
@@ -7246,9 +7247,20 @@ namespace PeachPDF.Html.Core.Dom
                     atLineStart = false;
                 }
 
-                // remove the last word padding
-                if (box.Words.Count > 0 && !box.Words[^1].HasSpaceAfter)
-                    maxSum -= box.Words[^1].ActualWordSpacing;
+                // No trailing-space subtraction here. There used to be one, guarded on
+                // `!HasSpaceAfter`, and its only job was to cancel the phantom word space
+                // CssRect.ActualWordSpacing gave every IsImage word; issue #1011 removed that term, so
+                // the guard now selects exactly the words whose ActualWordSpacing is provably zero.
+                //
+                // It cannot simply be inverted to hang a *real* trailing space (css-text-3 §4.1.2) the
+                // way the <br> branch above does: this walk carries ONE running maxSum across a whole
+                // subtree, so `box`'s last word is not the line's last word whenever a sibling's
+                // content follows it on the same line. In `<span>AB </span><span>CD</span>` that space
+                // is an ordinary inter-word gap, and subtracting it would undercount the line. A
+                // <br> is the one point in the walk where the line is known to have ended, which is
+                // why only that branch can do it - a block's own final line still measures one space
+                // wide when it ends in white space (issue #1014, and
+                // .claude/accepted-gaps/final-line-trailing-space-counted-in-max-content-width.md).
             }
             else
             {

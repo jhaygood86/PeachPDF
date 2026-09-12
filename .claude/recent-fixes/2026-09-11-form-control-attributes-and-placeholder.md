@@ -74,11 +74,14 @@ Worth recording, because three of these were introduced *by* the change and none
 - **A form field gained a phantom trailing word-space.** `CssRect.ActualWordSpacing` adds a whole
   space's width for any `IsImage` word, so making `CssRectFormField.IsImage` true silently inserted
   one between a checkbox and the label after it - measured at 6.5977pt for 16px monospace, and
-  `margin: 0` could not remove it. Fixed by splitting the question: `CssRect.ReservesTrailingSpace`
-  (virtual, defaults to `IsImage`) is overridden false for a field. Measured after: gap 0 with
-  `margin: 0`, and exactly one space plus the UA margin otherwise, which is what a browser does.
-  **Images still over-reserve** (`<img> X` gets two spaces where a browser gives one) - pre-existing,
-  untouched here, and not covered by any accepted-gap file.
+  `margin: 0` could not remove it. Fixed at the time by splitting the question: `CssRect
+  .ReservesTrailingSpace` (virtual, defaulting to `IsImage`) was overridden false for a field.
+  Measured after: gap 0 with `margin: 0`, and exactly one space plus the UA margin otherwise, which
+  is what a browser does. It was also noted here that **images still over-reserve** (`<img> X` got
+  two spaces where a browser gives one). **Superseded:** issue #1011 deleted the phantom term and the
+  `ReservesTrailingSpace` property outright, since no atomic inline should reserve one - the field
+  now gets this behaviour from the base class. Don't go looking for that property; see
+  [2026-09-12-phantom-trailing-space-after-replaced-content.md](2026-09-12-phantom-trailing-space-after-replaced-content.md).
 - **The `/Tx` sequence was skipped when a field had no drawable content box.** An early return on a
   degenerate `contentRect` sat *above* `BeginVariableText`, so a field whose padding and border
   consume its box got no replaceable region - the exact append-instead-of-replace bug the sequence
