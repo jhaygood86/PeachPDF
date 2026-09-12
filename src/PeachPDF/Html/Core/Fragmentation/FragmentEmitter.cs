@@ -2408,21 +2408,39 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// content top (<see href="https://github.com/jhaygood86/PeachPDF/issues/446">#446</see>).
         /// </para>
         /// <para>
-        /// <b>A line layout never had the chance to move is a different case, and the reason the tie-break is
-        /// conditional.</b> A flex or grid item's content is laid out under
-        /// <see cref="HtmlContainerInt.SuppressWordPageBreaks"/> and never revisited when
-        /// <c>AssignLocations</c> translates it, and <c>MonolithicContent.FitsNoFragmentainer</c> keeps
-        /// anything taller than the band exactly where it is — so such a line can overhang by many points,
-        /// with no fragmentainer of its own to be whole in. Both bands must keep it: the earlier one shows
-        /// the sliver that fits, the later one the remainder, and that second claim is the only reason the
-        /// content survives the boundary at all. Applied unconditionally, the tie-break deleted it — measured
-        /// at 45 words, one line per break, on a four-page flex document
-        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/477">#477</see>).
-        /// <see cref="HtmlContainerInt.FallsPast"/> is the "layout could not fix this" test, in the same
-        /// tolerance as the rest — though deliberately a looser form of it than layout's own: the emitter
-        /// drops <c>MonolithicContent.ClonedBlockInsets</c>' bottom inset, and asks the page band even
-        /// inside a column, where layout asks the column's. Both only ever make it fire more readily, which
-        /// is safe because it is intersected with the region test and so can still only remove claims.
+        /// <b>A line layout never had the chance to move used to be a second reason the tie-break was
+        /// conditional; one of its two cases is now historical.</b> A flex or grid item's content used to be
+        /// laid out under <see cref="HtmlContainerInt.SuppressWordPageBreaks"/> and never revisited when
+        /// <c>AssignLocations</c> translated it, which could leave a line overhanging by many points with no
+        /// fragmentainer of its own to be whole in — both bands had to keep it, or the tie-break deleted it
+        /// outright (measured at 45 words, one line per break, on a four-page flex document,
+        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/477">#477</see>). <c>CssLayoutEngineGrid</c>
+        /// and <c>CssLayoutEngineFlex</c> now commit their items'/lines' content live once it sits at its
+        /// final position, so that path's straddle check runs for real and this arm has nothing left to do
+        /// for it — kept in mind here only so a future regression in that commit-live behavior is recognized
+        /// as reopening this case, not treated as new.
+        /// </para>
+        /// <para>
+        /// <b>The one case left: <c>MonolithicContent.FitsNoFragmentainer</c> keeps anything taller than the
+        /// band exactly where it is</b> — layout never asks it to move, because moving would only repeat the
+        /// question on the next fragmentainer. That content is <i>clipped</i> to the first fragmentainer it
+        /// starts in, not repeated in every later one it geometrically overlaps
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/484">#484</see>): the extra claim is
+        /// gated on <c>!MonolithicContent.FitsNoFragmentainer</c> as well as
+        /// <see cref="HtmlContainerInt.FallsPast"/>, so it survives only for content that could, in
+        /// principle, have fit some fragmentainer and simply wasn't asked to move there — a case
+        /// <see cref="HtmlContainerInt.FallsPast"/> alone cannot distinguish, since it only sees that a word's
+        /// bottom has overhung the band its own top started in, not <i>why</i>. With the flex/grid case above
+        /// now closed at the source, that leaves no live case that reaches the extra claim at all — the arm
+        /// stays rather than being deleted outright, both to keep the "can only remove a claim, never invent
+        /// one" shape intact for whatever reaches it next, and because <see cref="HtmlContainerInt.FallsPast"/>
+        /// is deliberately a looser test than layout's own here: the emitter drops
+        /// <c>MonolithicContent.ClonedBlockInsets</c>' bottom inset, and asks the page band even inside a
+        /// column, where layout asks the column's. That looseness only ever makes <c>FallsPast</c> fire more
+        /// readily than layout's own straddle check would, never less — safe on its own because it is
+        /// intersected with the region test, and now additionally intersected with the "could this ever fit
+        /// anywhere" question so it cannot grant a claim <c>FitsNoFragmentainer</c> says should be clipped
+        /// instead.
         /// </para>
         /// <para>
         /// It is a <i>tie-break on top of</i> the region test rather than a replacement for it, and that is
@@ -2442,7 +2460,8 @@ namespace PeachPDF.Html.Core.Fragmentation
             region.Contains(rect)
             && (isFixed
                 || container.SlotStartingAt(rect.Top) == slotIndex
-                || HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top)));
+                || (HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top))
+                    && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container)));
 
         /// <summary>
         /// <paramref name="rect"/> where a displacement puts it — the rectangle every membership question
