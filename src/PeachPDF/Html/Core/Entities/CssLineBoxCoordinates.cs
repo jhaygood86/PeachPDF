@@ -100,5 +100,14 @@ namespace PeachPDF.Html.Core.Entities
         /// hyphenated lines keeps counting across the page/column boundary instead.
         /// </summary>
         public int ConsecutiveHyphenatedLines { get; set; }
+
+        /// <summary>
+        /// Whether the cursor has advanced past a word separator since the last word was placed - the
+        /// running state behind <see cref="CssRect.PrecededByWordSeparator"/>. Carried here rather than
+        /// read back off the previous word because one of its sources belongs to no word at all: an
+        /// inline box holding only white space (<c>&lt;span&gt;AA&lt;/span&gt; &lt;span&gt;BB&lt;/span&gt;</c>)
+        /// advances the cursor by a word space of its own.
+        /// </summary>
+        public bool PendingWordSeparator { get; set; }
     }
 }

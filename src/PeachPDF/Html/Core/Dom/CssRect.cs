@@ -107,6 +107,26 @@ namespace PeachPDF.Html.Core.Dom
         internal bool AwaitsTheNextFragmentainer { get; set; }
 
         /// <summary>
+        /// Whether a <i>word separator</i> - source white space, the thing
+        /// <see href="https://www.w3.org/TR/css-text-3/#justification">css-text-3 §6.4.1</see> calls a
+        /// justification opportunity - sits between this word and the one placed before it. Recorded by
+        /// the flow (<see cref="CssLayoutEngine.FlowBox"/> and its vertical counterpart) at the moment
+        /// the word is positioned, because that is the only place all three sources of an inter-word
+        /// advance are visible at once: this word's own <see cref="HasSpaceBefore"/>, the previous
+        /// word's <see cref="HasSpaceAfter"/>, and - the one no word carries at all - an inline box
+        /// holding nothing but white space between two others
+        /// (<c>&lt;span&gt;AA&lt;/span&gt; &lt;span&gt;BB&lt;/span&gt;</c>, whose space is an advance
+        /// <c>FlowBox</c> adds for the box rather than for either neighbouring word).
+        /// </summary>
+        /// <remarks>
+        /// Assigned (never accumulated) each time the word is placed, so a repeated layout pass over the
+        /// same box tree re-derives it rather than compounding it. Meaningless for the first word on a
+        /// line - a line's leading white space is trimmed, and justification only ever asks about the
+        /// boundaries <i>between</i> the words it holds.
+        /// </remarks>
+        internal bool PrecededByWordSeparator { get; set; }
+
+        /// <summary>
         /// Width of the rectangle
         /// </summary>
         public double Width
@@ -146,10 +166,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>&lt;span&gt;Y&lt;/span&gt;&lt;span&gt;X&lt;/span&gt;</c> is. This engine used to add an
         /// unconditional extra word space after every such word, which put one phantom space after
         /// every image and inline SVG and two after an image followed by real white space (issue
-        /// #1011). This is the natural gap only - <c>text-align: justify</c> separately spreads its
-        /// expansion over every word boundary on a justified line rather than over justification
-        /// opportunities, so it can still open a gap where there is no white space (see
-        /// <c>.claude/accepted-gaps/justify-expands-at-every-word-boundary.md</c>, issue #1013).
+        /// #1011). This is the natural gap only; the expansion <c>text-align: justify</c> adds on top
+        /// of it obeys the same rule, distributing only over real justification opportunities (see
+        /// <see cref="CssLayoutEngine.IsJustificationOpportunity"/>, issue #1013) - so the rule holds
+        /// under every alignment.
         /// </para>
         /// </remarks>
         public double ActualWordSpacing =>

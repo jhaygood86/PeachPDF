@@ -574,6 +574,8 @@ namespace PeachPDF.Html.Core.Dom
                 effectiveWrapLimit = ComputeEffectiveWrapLimit(blockBox, frame, clientTop, wrapLimit, blockOffset);
             }
 
+            var pendingWordSeparator = false;
+
             for (var i = 0; i < words.Count; i++)
             {
                 var word = words[i];
@@ -730,6 +732,14 @@ namespace PeachPDF.Html.Core.Dom
                 word.Top = physical.Y;
                 word.Width = physical.Width;
                 word.Height = physical.Height;
+
+                // The horizontal counterpart of FlowBox's own assignment - see
+                // CssRect.PrecededByWordSeparator. This flow walks one flat word list rather than
+                // recursing through inline boxes, so it never adds a whitespace-only box's own advance
+                // and the two word-level sources are all there is.
+                word.PrecededByWordSeparator = pendingWordSeparator || word.HasSpaceBefore;
+                pendingWordSeparator = word.HasSpaceAfter;
+
                 line.ReportExistanceOf(word);
                 (trailingRegionalIndicatorCount, trailingGraphemeContext) = UpdateTrailingTextState(
                     word, trailingRegionalIndicatorCount, trailingGraphemeContext);
@@ -1205,7 +1215,7 @@ namespace PeachPDF.Html.Core.Dom
         /// fragmentation break, and <c>text-align: justify</c> is the one caller that has to know: a line
         /// that ends at a break is <b>not</b> the block's last line — the block continues in the next
         /// fragmentainer — so
-        /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">CSS Text §7.3</see>'s
+        /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">css-text-3 §6.1</see>'s
         /// "except the last line" exemption does not apply to it. Reading it off the list alone justified
         /// nothing at a page boundary, because the line the pass stopped on is the last one the list holds.
         /// </param>
@@ -2456,6 +2466,12 @@ namespace PeachPDF.Html.Core.Dom
             if (opensHere && box.Text is { Length: > 0 } && string.IsNullOrWhiteSpace(box.Text) && !box.IsImage && box.IsInline && box.Boxes.Count == 0 && box.Words.Count == 0)
             {
                 coordinates.CurrentX += box.ActualWordSpacing;
+
+                // This advance belongs to no word at all - neither neighbour records it in its own
+                // HasSpaceAfter/HasSpaceBefore - so the next word placed would otherwise read as
+                // contiguous with the previous one. It is a real word separator, and
+                // `<span>AA</span> <span>BB</span>` is exactly the common markup that produces it.
+                coordinates.PendingWordSeparator = true;
             }
 
             // Finalize what was captured at entry, now that this box's content has actually been placed
@@ -2853,7 +2869,10 @@ namespace PeachPDF.Html.Core.Dom
                     // fragmentainer, so was the space.
                     var childHasLeadingWhitespace = childOpensHere && DomUtils.IsBoxHasWhitespace(b);
                     if (childHasLeadingWhitespace)
+                    {
                         coordinates.CurrentX += box.ActualWordSpacing;
+                        coordinates.PendingWordSeparator = true;
+                    }
 
                     for (var wordIndex = 0; wordIndex < b.Words.Count; wordIndex++)
                     {
@@ -3165,6 +3184,13 @@ namespace PeachPDF.Html.Core.Dom
 
                         word.Left = coordinates.CurrentX;
                         word.Top = coordinates.CurrentY;
+
+                        // Assigned, never accumulated: this box tree can be laid out again (a
+                        // shrink-to-fit ancestor's provisional pass, a variable-page-width reflow), and
+                        // each pass re-derives the flag from the same three sources rather than
+                        // compounding the last pass's answer. See CssRect.PrecededByWordSeparator.
+                        word.PrecededByWordSeparator = coordinates.PendingWordSeparator || word.HasSpaceBefore;
+                        coordinates.PendingWordSeparator = word.HasSpaceAfter;
 
                         // A fixed box repeats at the same page-box position on every page (CSS 2.1
                         // §13.3.1), so a boundary means nothing to its words. A *table cell* used to be
@@ -4085,7 +4111,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </param>
         private static void ApplyHorizontalAlignment(CssLineBox lineBox, bool blockFinished)
         {
-            // text-align's initial/logical values, start/end (CSS Text 3 §7.1), resolve against the
+            // text-align's initial/logical values, start/end (css-text-3 §6.1), resolve against the
             // owning box's own direction - the CSS-OM-visible value (box.TextAlign) stays exactly as
             // authored/defaulted; only this *used*-value resolution is direction-aware.
             var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
@@ -4376,65 +4402,57 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// <c>text-align: justify</c> for a vertical box: spreads the column's words evenly across the
-        /// box's own physical top-to-bottom extent, walking in document order from the column's own
-        /// inline-start edge - the direct counterpart of <see cref="ApplyJustifyAlignment"/>'s own
-        /// currentX walk. The block's last column is exempt (CSS Text §7.3) - always exact here, unlike
-        /// horizontal's <c>blockFinished</c>-gated check, since <c>CreateVerticalLineBoxes</c> is always a
-        /// single monolithic pass with no fragmentation break to leave an ambiguous "last" line behind.
+        /// <c>text-align: justify</c> for a vertical box: the inline-axis counterpart of
+        /// <see cref="ApplyJustifyAlignment"/>, distributing the column's leftover extent over its
+        /// <see cref="IsJustificationOpportunity">justification opportunities</see> only. The block's
+        /// last column is exempt (css-text-3 §6.1) - always exact here, unlike horizontal's
+        /// <c>blockFinished</c>-gated check, since <c>CreateVerticalLineBoxes</c> is always a single
+        /// monolithic pass with no fragmentation break to leave an ambiguous "last" line behind.
         /// <c>text-indent</c> is not implemented for vertical content at all yet, so no indent is applied
         /// here (compare <see cref="ApplyJustifyAlignment"/>'s own <c>GetLineTextIndent</c> call). See
         /// <see cref="ApplyVerticalFlushAlignment"/>'s own remarks for why the edges are parameters.
         /// </summary>
+        /// <remarks>
+        /// Anchors the column at its own inline-start edge before distributing, which horizontal has no
+        /// counterpart to: an auto-height vertical box lays its words out against a placeholder far
+        /// edge and only learns the real one afterwards (see <see cref="ApplyVerticalFlushAlignment"/>'s
+        /// own remarks, issue #797), so - unlike a horizontal line, which the flow always leaves flush
+        /// against the edge it started from - a pure progressive shift would justify the column in the
+        /// wrong place entirely.
+        /// </remarks>
         private static void ApplyVerticalJustifyAlignment(CssLineBox lineBox, WritingModeFrame finalFrame,
             bool isLastColumn, double clientTop, double clientBottom)
         {
             if (isLastColumn) return;
             if (lineBox.Words.Count == 0) return;
 
-            var availableExtent = clientBottom - clientTop;
+            var opportunities = CountJustificationOpportunities(lineBox);
 
-            var textSum = 0d;
-            var wordCount = 0d;
-            foreach (var w in lineBox.Words)
+            // §6.4.3, as in ApplyJustifyAlignment: unexpandable text aligns as text-align-last, whose
+            // initial `auto` resolves to start - which ApplyVerticalTextAlignment's own `left`/`right`
+            // cases would have produced, and which the flow already produced for LTR.
+            if (opportunities == 0) return;
+
+            var (contentTop, contentBottom) = GetColumnContentExtent(lineBox);
+            var leftover = clientBottom - clientTop - (contentBottom - contentTop);
+
+            // §6.1: an overflowing column is start-aligned and spills past the end edge.
+            if (leftover <= 0) return;
+
+            // Inline-start is physical bottom under direction: rtl, and the walk runs toward physical
+            // top from there - so both the anchor and the distributed share change sign together.
+            var inlineStartIsBottom = finalFrame.InlineStartIsBottom;
+            var anchor = inlineStartIsBottom ? clientBottom - contentBottom : clientTop - contentTop;
+            var towardInlineEnd = inlineStartIsBottom ? -1d : 1d;
+
+            var seen = 0;
+
+            for (var i = 0; i < lineBox.Words.Count; i++)
             {
-                textSum += w.Height;
-                wordCount += 1d;
-            }
+                if (i > 0 && IsJustificationOpportunity(lineBox.Words[i - 1], lineBox.Words[i]))
+                    seen++;
 
-            if (wordCount <= 0d) return;
-
-            // See ApplyJustifyAlignment's own remarks (issue #840/#843) - the horizontal counterpart of
-            // this same overflow shape: a nested `white-space: nowrap` run of more than one word can
-            // overflow a non-last column's own available extent, and an unconditional per-word `spacing`/
-            // last-word flush can push a later word backward past an earlier one's own trailing edge
-            // (overlapping/garbled text) instead of spilling coherently past the column's edge. Floors each
-            // overflowing gap at that word's own natural `ActualWordSpacing` (0 when nothing follows it, not
-            // a flat zero) rather than the shared `spacing`, so a real space in the source still renders as
-            // one instead of the words rendering flush against each other.
-            var spacing = (availableExtent - textSum) / wordCount;
-            var overflowsColumn = textSum > availableExtent;
-            var cursor = finalFrame.InlineStartIsBottom ? clientBottom : clientTop;
-
-            foreach (var word in lineBox.Words)
-            {
-                var gap = overflowsColumn ? Math.Max(spacing, word.ActualWordSpacing) : spacing;
-
-                if (finalFrame.InlineStartIsBottom)
-                {
-                    word.Top = cursor - word.Height;
-                    cursor -= word.Height + gap;
-                }
-                else
-                {
-                    word.Top = cursor;
-                    cursor += word.Height + gap;
-                }
-
-                if (word == lineBox.Words[^1] && (wordCount == 1d || !overflowsColumn))
-                {
-                    word.Top = finalFrame.InlineStartIsBottom ? clientTop : clientBottom - word.Height;
-                }
+                lineBox.Words[i].Top += anchor + towardInlineEnd * leftover * seen / opportunities;
             }
         }
 
@@ -4711,85 +4729,167 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>
         /// Spreads the words of <paramref name="lineBox"/> to fill its measure, per
-        /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">CSS Text §7.3</see>'s
-        /// <c>justify</c>.
+        /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">css-text-3 §6.1</see>'s
+        /// <c>justify</c>: the leftover width is distributed over the line's
+        /// <see cref="IsJustificationOpportunity">justification opportunities</see> only - never over
+        /// every word boundary, which opens a gap where the source has no white space at all
+        /// (<c>A&lt;span&gt;B&lt;/span&gt;</c>, an <c>&lt;img&gt;</c> with nothing around it).
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Shifts each word progressively rather than re-walking the line from its start edge (the same
+        /// approach <see cref="ApplyLeaderFill"/> takes, and for the same reason): every natural advance
+        /// the flow computed - <c>word-spacing</c>, <c>letter-spacing</c>, a float-narrowed line start,
+        /// an inline box's own padding, a whitespace-only inline box - is preserved exactly, and
+        /// §6.4.1's "space distributed by justification is <i>in addition to</i> the spacing defined by
+        /// letter-spacing or word-spacing" is then true by construction. A from-scratch walk has to
+        /// re-derive each of those, and the one it used to re-derive (a flat per-word share) is what
+        /// this fixes.
+        /// </para>
+        /// <para>
+        /// Two shapes deliberately do nothing, both of which used to be actively re-positioned. A line
+        /// with no justification opportunity at all is §6.4.3's <i>unexpandable text</i>: it aligns as
+        /// <c>text-align-last</c> says, whose initial <c>auto</c> under <c>text-align: justify</c> is
+        /// start - which is where the flow already left it. A line whose content is too long for its
+        /// measure is §6.1's overflowing line, also explicitly start-aligned ("any content that doesn't
+        /// fit overflows the line box's end edge"). Both were confirmed against Chromium, which leaves
+        /// a lone overflowing word on a justified non-last line at the line's start edge.
+        /// </para>
+        /// </remarks>
         /// <param name="lineBox">the line to justify</param>
         /// <param name="blockFinished">
         /// whether the flow reached the end of the owning block's content, which is what decides whether
-        /// the last line in the list is §7.3's exempt <i>last line of the block</i> — see
+        /// the last line in the list is §6.1's exempt <i>last line of the block</i> — see
         /// <see cref="FinalizeLineBoxes"/>.
         /// </param>
         private static void ApplyJustifyAlignment(CssLineBox lineBox, bool blockFinished)
         {
-            // The block's last line is exempt (CSS Text §7.3) - but only a block whose flow actually
+            // The block's last line is exempt (css-text-3 §6.1) - but only a block whose flow actually
             // finished has one. A pass that stopped at a fragmentation break leaves the line it stopped on
             // at the end of the list without it being the end of the block.
             if (blockFinished && lineBox.Equals(lineBox.OwnerBox.LineBoxes[^1]))
                 return;
 
+            var opportunities = CountJustificationOpportunities(lineBox);
+
+            // §6.4.3: text that cannot be stretched aligns as text-align-last, whose initial `auto`
+            // resolves to start under `justify` - the position the flow already assigned.
+            if (opportunities == 0)
+                return;
+
             var indent = GetLineTextIndent(lineBox.OwnerBox, lineBox.Equals(lineBox.OwnerBox.LineBoxes[0]),
                 lineBox.FollowsForcedBreak);
-            var textSum = 0d;
-            var words = 0d;
-            var availWidth = lineBox.ContentRight - lineBox.ContentLeft - indent;
 
-            // Gather text sum
-            foreach (var w in lineBox.Words)
-            {
-                textSum += w.Width;
-                words += 1d;
-            }
-
-            if (words <= 0d)
-                return; //Avoid Zero division
-
-            // A line whose own words already sum wider than availWidth (an overflowing non-last line -
-            // reachable when a nested nowrap run, not just a single unbreakable word, is what doesn't fit,
-            // see issue #840) must not get *negative* spacing: unlike ApplyCenterAlignment/
-            // ApplyRightAlignment's single uniform shift (which can never overlap words, since every word
-            // moves by the same amount and their relative order is preserved), spacing here is added
-            // between each pair of words individually - a large negative value pulls a later word back
-            // past an earlier one's own trailing edge, producing overlapping/garbled text instead of an
-            // overflowing-but-coherent line. This is the actively-justified (not silently-left-natural)
-            // behaviour issue #840 asks for - it isn't enough to floor the shared spacing at zero, though:
-            // `white-space: nowrap` forbids *breaking*, not collapsing a real space to nothing, so an
-            // overflowing gap floors at that specific pair's own natural gap (word.ActualWordSpacing, 0 when
-            // the word has no space after it) rather than a flat zero, keeping the walk monotonic (each
-            // word's Left is never less than the previous word's Right) while still rendering with the
-            // space the source actually has.
-            var spacing = (availWidth - textSum) / words; //Spacing that will be used
-            var overflowsLine = textSum > availWidth;
-
-            // text-indent belongs on the line-start side (CSS Text 3 §3), which is the physical right
-            // under RTL - so the indent moves from the leading `currentX` offset to the trailing forced-
-            // flush edge instead (mirroring ApplyRightAlignment's own direction handling below, including
-            // why FlowBox's RTL wrap-boundary narrowing has to agree with this: the words this line holds
-            // were already wrapped assuming the reduced measure `availWidth` computes above). This
-            // runs before ApplyBidiReordering, which only reflects positions within the span these two
-            // edges bound - it never moves the span itself - so which edge carries the indent here is
-            // what decides which physical side it ends up on after mirroring.
+            // text-indent belongs on the line-start side (css-text-3 §3), which is the physical right
+            // under RTL - and FlowBox reserves it there by narrowing the *wrap boundary* rather than by
+            // moving the start position, so RTL's end edge is inset by the indent here while LTR's is
+            // not (LTR's indent is already baked into where the flow started the line). This runs before
+            // ApplyBidiReordering, which only reflects positions within the span these two edges bound -
+            // it never moves the span itself - so which edge carries the indent here is what decides
+            // which physical side it ends up on after mirroring.
             var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
-            var currentX = lineBox.ContentLeft + (isRtl ? 0 : indent);
+            var lineEnd = lineBox.ContentRight - (isRtl ? indent : 0);
+            var leftover = lineEnd - lineBox.Words[^1].Right;
 
-            foreach (var word in lineBox.Words)
+            // §6.1: an overflowing line is start-aligned and spills past the end edge. Distributing the
+            // negative leftover instead would pull each word back through the previous one's trailing
+            // edge - overlapping, garbled text rather than a coherent overflowing line (issue #840).
+            if (leftover <= 0)
+                return;
+
+            // Scaled from the running opportunity count rather than accumulated per gap, so the final
+            // word lands exactly on the end edge instead of a rounding error short of it.
+            var seen = 0;
+
+            for (var i = 1; i < lineBox.Words.Count; i++)
             {
-                word.Left = currentX;
-                currentX = word.Right + (overflowsLine ? Math.Max(spacing, word.ActualWordSpacing) : spacing);
+                if (IsJustificationOpportunity(lineBox.Words[i - 1], lineBox.Words[i]))
+                    seen++;
 
-                // A lone word standing as both the line's first and last has no earlier sibling to
-                // overlap, so it is always actively flushed to the target edge even when that means
-                // spilling past the *other* edge (mirrors ApplyRightAlignment's own overflow fix). A line
-                // with more than one word only gets the same hard flush when it isn't overflowing - the
-                // walk above (with each overflowing gap floored at its own natural word-spacing) already
-                // leaves it at the coherent, non-overlapping position that an overflowing multi-word line
-                // should keep.
-                if (word == lineBox.Words[^1] && (lineBox.Words.Count == 1 || !overflowsLine))
-                {
-                    word.Left = lineBox.ContentRight - word.Width - (isRtl ? indent : 0);
-                }
+                lineBox.Words[i].Left += leftover * seen / opportunities;
             }
         }
+
+        /// <summary>
+        /// How many <see cref="IsJustificationOpportunity">justification opportunities</see> sit between
+        /// the words of <paramref name="lineBox"/>, in logical order. Zero for a line holding one word,
+        /// and for one whose words are all contiguous in the source.
+        /// </summary>
+        private static int CountJustificationOpportunities(CssLineBox lineBox)
+        {
+            var opportunities = 0;
+
+            for (var i = 1; i < lineBox.Words.Count; i++)
+            {
+                if (IsJustificationOpportunity(lineBox.Words[i - 1], lineBox.Words[i]))
+                    opportunities++;
+            }
+
+            return opportunities;
+        }
+
+        /// <summary>
+        /// Whether the boundary between <paramref name="previous"/> and <paramref name="word"/> - two
+        /// words adjacent on one line, in logical order - is a justification opportunity, per
+        /// <see href="https://www.w3.org/TR/css-text-3/#justify-algos">css-text-3 §6.4.5</see>'s minimum
+        /// requirements for <c>text-justify: auto</c> (the only method PeachPDF implements): a word
+        /// separator, or the boundary between a typographic character unit of a block script and any
+        /// other one. §6.4.5's third bullet - the same rule for <i>clustered</i> (South-East Asian)
+        /// scripts - has nothing to apply to: this engine has no clustered-script line breaking at all,
+        /// so such a run is never split into the words an opportunity would sit between.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Block scripts are approximated by <see cref="CommonUtils.IsAsianCharacter"/> - deliberately
+        /// the same predicate <c>CssBox.ParseToWords</c> uses to split CJK text one character per word,
+        /// so the opportunities recognized here are exactly the word boundaries that split produces and
+        /// no others. A Latin word has no internal boundary to see (the whole word is one
+        /// <see cref="CssRect"/>), and the boundary a hyphen or a <c>word-break: break-all</c> /
+        /// <c>overflow-wrap</c> split leaves behind is deliberately not one either - §6.4.5 lists word
+        /// separators and block/clustered-script letters, not every soft wrap opportunity.
+        /// </para>
+        /// <para>
+        /// Tying the model to that split does cost one boundary §6.4.5 would grant. The split breaks
+        /// <i>after</i> the first ideograph it meets, so a Latin run immediately followed by one comes
+        /// out as a single word (<c>AB書</c>) and the Latin-to-ideograph boundary inside it is invisible
+        /// to every layer, not only to this one - Chromium does expand there. Widening it would mean
+        /// changing <c>ParseToWords</c>, which is line-breaking infrastructure, so it stays as it is;
+        /// the ideograph-to-Latin direction (<c>書AB</c>) is unaffected and does get its opportunity.
+        /// </para>
+        /// <para>
+        /// Verified against Chromium, which gives a word separator and a CJK letter boundary the same
+        /// expansion on one mixed line (0.297px each at <c>font: 16px monospace</c> on
+        /// <c>一二AB三四 CD 五六…</c>) - the equal-priority treatment §6.4.1 describes, and the
+        /// reason a single count and a single share are enough here.
+        /// </para>
+        /// <para>
+        /// <see cref="CssRect.PrecededByWordSeparator"/> only ever sees <i>collapsible</i> white space,
+        /// which is the only kind the flow turns into an advance rather than into a word of its own.
+        /// Preserved white space (<c>white-space: pre</c>/<c>pre-wrap</c>) arrives as a real
+        /// <see cref="CssRect.IsSpaces"/> word instead, and is just as much a word separator - §6.1 does
+        /// permit a UA to treat non-collapsible white space as offering no opportunity at all, but that
+        /// would stop a <c>pre-wrap</c> block justifying entirely, which is neither what a browser does
+        /// nor what this engine did before. The opportunity is taken to sit <i>after</i> the run, so a
+        /// space between two words contributes one opportunity and not two.
+        /// </para>
+        /// </remarks>
+        private static bool IsJustificationOpportunity(CssRect previous, CssRect word) =>
+            word.PrecededByWordSeparator
+            || previous.IsSpaces
+            || EndsWithBlockScriptLetter(previous)
+            || StartsWithBlockScriptLetter(word);
+
+        /// <summary>Whether <paramref name="word"/>'s last character belongs to a block script.</summary>
+        private static bool EndsWithBlockScriptLetter(CssRect word) =>
+            word.Text is { Length: > 0 } text
+            && Rune.DecodeLastFromUtf16(text.AsSpan(), out var rune, out _) == OperationStatus.Done
+            && CommonUtils.IsAsianCharacter(rune);
+
+        /// <summary>Whether <paramref name="word"/>'s first character belongs to a block script.</summary>
+        private static bool StartsWithBlockScriptLetter(CssRect word) =>
+            word.Text is { Length: > 0 } text
+            && Rune.DecodeFromUtf16(text.AsSpan(), out var rune, out _) == OperationStatus.Done
+            && CommonUtils.IsAsianCharacter(rune);
 
         /// <summary>
         /// Applies centered alignment to the text on the line-box

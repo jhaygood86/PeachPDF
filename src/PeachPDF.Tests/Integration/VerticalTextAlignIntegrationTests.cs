@@ -178,14 +178,15 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalRl_TextAlignJustify_SingleOverflowingWordOnNonLastColumn_StaysFlushToBottom()
+        public async Task VerticalRl_TextAlignJustify_SingleOverflowingWordOnNonLastColumn_IsStartAligned()
         {
-            // Regression coverage for issue #843: ApplyVerticalJustifyAlignment's own overflow-guard fix
-            // (the vertical counterpart of #840's horizontal ApplyJustifyAlignment fix). A lone word that
-            // is both a non-last column's first and only word has no earlier sibling to overlap, so it
-            // must still be actively flushed to the column's target (bottom) edge even though that means
-            // spilling past the top edge - not left un-shifted at its natural, un-overflowing position the
-            // way the pre-#843 unconditional-`spacing`-but-no-active-overflow-handling code would leave it.
+            // The vertical counterpart of CenterJustifyOverflowAlignmentTests's own
+            // Justify_SingleUnbreakableWord_OnNonLastLine_IsStartAligned_SpillsPastRightEdge, and it
+            // changed for the same reason (#1013): a lone word offers no justification opportunity, so
+            // css-text-3 §6.4.3 aligns the column as text-align-last - start - and §6.1 start-aligns an
+            // overflowing line regardless. `vertical-rl` with the default direction:ltr makes
+            // inline-start the physical top, so the word sits at ClientTop and spills past ClientBottom.
+            // It used to be flushed to the bottom edge instead (the pre-#1013 last-word override).
             var html = LayoutHarness.Wrap("""
                 <div id="el" style="margin:0;writing-mode: vertical-rl; width: 200pt; height: 40pt; font-size: 14pt; text-align: justify">aa bb ccccccccccccccccccccccccccccccccccccccccccccc dd ee</div>
                 """);
@@ -199,10 +200,10 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(word.Height > el.ClientBottom - el.ClientTop,
                 "fixture must actually overflow the column for this test to be meaningful");
-            Assert.Equal(el.ClientBottom, word.Bottom, 1);
-            Assert.True(word.Top < el.ClientTop,
-                $"expected the overflowing justified column to spill past the top edge (word.Top={word.Top:F2} " +
-                $"should be < ClientTop={el.ClientTop:F2})");
+            Assert.Equal(el.ClientTop, word.Top, 1);
+            Assert.True(word.Bottom > el.ClientBottom,
+                $"expected the overflowing justified column to spill past the bottom edge (word.Bottom={word.Bottom:F2} " +
+                $"should be > ClientBottom={el.ClientBottom:F2})");
         }
 
         [Fact]
