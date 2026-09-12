@@ -211,6 +211,21 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Radical_SignWidth_MatchesChosenVariantsRealAdvanceWidth_NotFlatApproximation()
+        {
+            // At this test's 20pt font-size, a single "x" radicand's height selects STIX Two Math's
+            // uni221A.s1 (glyph 1658, real hmtx advance 1041 design units - independently confirmed with
+            // fontTools) for the radical sign, not the base uni221A glyph the old sizePt*0.75 flat
+            // approximation had no relation to at all: 1041/1000*20 = 20.82pt, not 20*0.75 = 15pt.
+            var sqrt = await LayoutMath("<math><msqrt><mi>x</mi></msqrt></math>");
+
+            var signChild = sqrt.Children.Single(c => c.X == 0);
+            Assert.Equal(MathPaintKind.Glyphs, signChild.Box.PaintKind);
+            Assert.Equal([1658], signChild.Box.Glyphs!.Select(g => g.GlyphIndex));
+            Assert.Equal(20.82, signChild.Box.InlineSize, 2);
+        }
+
+        [Fact]
         public async Task Mroot_HasIndexPositionedAboveAndLeftOfRadicand()
         {
             var box = await LayoutMath("<math><mroot><mi>x</mi><mn>3</mn></mroot></math>");
@@ -275,6 +290,65 @@ namespace PeachPDF.Tests.Integration
             var ys = openParen.Glyphs!.Select(g => g.Y).ToList();
             for (int i = 1; i < ys.Count; i++)
                 Assert.True(ys[i] < ys[i - 1]);
+        }
+
+        [Fact]
+        public async Task StretchyFence_InlineSize_MatchesChosenVariantsRealAdvanceWidth_NotBaseGlyphs()
+        {
+            // The showcase's 2x2 identity matrix: at this test's 20pt font-size, SelectVerticalVariant
+            // picks STIX Two Math's parenleft.s8 (glyph 1308, real hmtx advance 542 design units) to
+            // cover the table's height - not the base "(" glyph's own 357 design units. Independently
+            // confirmed with fontTools (357/1000*20 = 7.14pt base vs. 542/1000*20 = 10.84pt real - the
+            // reserved InlineSize before this fix always matched the smaller, wrong figure).
+            var stretched = await LayoutMath(
+                "<math><mrow><mo stretchy=\"true\">(</mo><mtable>" +
+                "<mtr><mtd><mn>1</mn></mtd><mtd><mn>0</mn></mtd></mtr>" +
+                "<mtr><mtd><mn>0</mn></mtd><mtd><mn>1</mn></mtd></mtr>" +
+                "</mtable><mo stretchy=\"true\">)</mo></mrow></math>");
+
+            Assert.True(stretched.Children.Count >= 3);
+            var openParen = stretched.Children[0].Box;
+            Assert.Equal(MathPaintKind.Glyphs, openParen.PaintKind);
+            Assert.Equal([1308], openParen.Glyphs!.Select(g => g.GlyphIndex));
+            Assert.Equal(10.84, openParen.InlineSize, 2);
+        }
+
+        [Fact]
+        public async Task StretchyFence_Assembled_InlineSize_UsesAssemblyPartsRealAdvanceWidth()
+        {
+            // Same 30-row setup as StretchyFence_TallerThanLargestPresizedVariant_AssemblesFromParts,
+            // forcing the glyph-assembly path (not a single pre-sized variant). STIX Two Math's three
+            // parenleft assembly parts (gids 4862/4861/4860 - top cap, extender, bottom cap) each carry
+            // the same real hmtx advance, 484 design units (9.68pt @ 20pt) - independently confirmed
+            // with fontTools - which is what SelectVerticalVariant's Max(...) should resolve to, still
+            // wider than the base "(" glyph's own 357 units (7.14pt).
+            var rows = string.Concat(Enumerable.Range(0, 30).Select(_ => "<mtr><mtd><mn>1</mn></mtd></mtr>"));
+            var stretched = await LayoutMath(
+                $"<math><mrow><mo stretchy=\"true\">(</mo><mtable>{rows}</mtable><mo stretchy=\"true\">)</mo></mrow></math>");
+
+            Assert.True(stretched.Children.Count >= 3);
+            var openParen = stretched.Children[0].Box;
+            Assert.Equal(MathPaintKind.Glyphs, openParen.PaintKind);
+            Assert.True(openParen.Glyphs!.Count > 1); // assembled, not a single pre-sized variant
+            Assert.Equal(9.68, openParen.InlineSize, 2);
+        }
+
+        [Fact]
+        public async Task StretchyFence_NoAssemblyData_ClampsToLargestVariantsRealAdvanceWidth()
+        {
+            // "/" (slash) is a real STIX Two Math glyph with pre-sized vertical variants but no
+            // GlyphAssembly data at all - SelectVerticalVariant's final "nothing covers the target, use
+            // the largest available" fallback (matching MathML Core §5.3.2's own last-resort clamp),
+            // distinct from both the pre-sized-fit and assembled-shape branches the other StretchyFence_*
+            // tests exercise. Its largest variant (slash.s4, glyph 1384) has a real hmtx advance of 1340
+            // design units (26.8pt @ 20pt) - independently confirmed with fontTools.
+            var rows = string.Concat(Enumerable.Range(0, 10).Select(_ => "<mtr><mtd><mn>1</mn></mtd></mtr>"));
+            var stretched = await LayoutMath($"<math><mrow><mo stretchy=\"true\">/</mo><mtable>{rows}</mtable></mrow></math>");
+
+            var slash = stretched.Children[0].Box;
+            Assert.Equal(MathPaintKind.Glyphs, slash.PaintKind);
+            Assert.Equal([1384], slash.Glyphs!.Select(g => g.GlyphIndex)); // clamped, not assembled
+            Assert.Equal(26.8, slash.InlineSize, 2);
         }
 
         [Fact]

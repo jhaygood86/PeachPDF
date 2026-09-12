@@ -38,5 +38,21 @@ namespace PeachPDF.Tests.Html.Adapters
 
             Assert.Equal(1.2 * font.Size, font.NormalLineHeight);
         }
+
+        /// <summary>
+        /// <see cref="PeachPDF.Html.Adapters.RFont.GetGlyphAdvanceWidthDesignUnits"/> follows the same
+        /// pattern as the MATH-table query surface it sits alongside (<c>GetGlyphIndex</c>,
+        /// <c>FontUnitsPerEm</c>): a font with no real <c>hmtx</c> data to consult (no descriptor) has
+        /// nothing sensible to return, so the default is 0 - <c>MathLayoutEngine</c>'s stretchy-glyph
+        /// width resolution falls back to its own pre-existing <c>MeasureString</c> approximation
+        /// whenever this comes back non-positive.
+        /// </summary>
+        [Fact]
+        public void GlyphAdvanceWidthDesignUnitsDefault_IsZero()
+        {
+            var font = new TestFont(20);
+
+            Assert.Equal(0, font.GetGlyphAdvanceWidthDesignUnits(glyphIndex: 42));
+        }
     }
 }
