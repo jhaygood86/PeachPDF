@@ -9,12 +9,14 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// A line layout <i>could not</i> move off a page boundary is claimed by both pages, and must be
-    /// (issue #477). It is the counter-case to the single-claim rule
-    /// <see cref="BandMembershipToleranceTests"/> covers: there layout answered "it fits" and kept the line
-    /// deliberately, so the line is wholly the earlier page's; here layout never had the chance to answer,
-    /// so the line genuinely spans the boundary and the later page's copy is the only thing that renders
-    /// its remainder.
+    /// A line layout <i>could not</i> move off a page boundary is clipped to the first page it starts in,
+    /// not repeated on every page it geometrically overlaps (issue #484 — before the fix, issue #477's own
+    /// restore kept a second, duplicate copy on every later page). It is the counter-case to the
+    /// single-claim rule <see cref="BandMembershipToleranceTests"/> covers: there layout answered "it fits"
+    /// and kept the line deliberately, so the line is wholly the earlier page's; here layout never had the
+    /// chance to answer at all, so the line genuinely spans the boundary — but with nowhere it could ever
+    /// have fit, the later page(s) simply don't render the part that falls off the first one, rather than
+    /// showing it a second time.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -38,7 +40,9 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// A word taller than the whole band — <c>MonolithicContent.FitsNoFragmentainer</c>'s case. No
         /// fragmentainer can hold it, so breaking to a fresh one would only repeat the problem forever;
-        /// layout leaves it where it is and it covers more than one band by construction.
+        /// layout leaves it where it is, and it covers more than one band by construction, but only the
+        /// first of those bands claims it — the rest let it overflow uncleaned rather than drawing it
+        /// again.
         /// </summary>
         /// <remarks>
         /// The word's own rectangle is what straddles here, and its height comes from the font rather than
@@ -46,7 +50,7 @@ namespace PeachPDF.Tests.Integration
         /// which would grow the line box while leaving the word small enough to fit.
         /// </remarks>
         [Fact]
-        public async Task AWordTallerThanTheBand_IsClaimedByEveryBandItCovers()
+        public async Task AWordTallerThanTheBand_IsClippedToItsFirstBandOnly()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("<p style='font-size:1800pt;line-height:1;margin:0'>T</p>"),
@@ -58,8 +62,8 @@ namespace PeachPDF.Tests.Integration
             Assert.True(word.Height > container.PageBottomOf(band) - container.PageTopOf(band),
                 $"the fixture must produce a word taller than the band, not {word.Height}");
 
-            // Every band the word covers, from the grid's own coordinates — "claimed by band + 1" alone
-            // would still pass if a taller word silently lost the bands below its second.
+            // Every band the word geometrically covers, from the grid's own coordinates — proves the
+            // fixture is a genuine multi-band straddle, not merely a within-tolerance overhang.
             var covered = container.FragmentTree!.Fragmentainers
                 .Select(f => f.SlotIndex)
                 .Where(slot => word.Bottom > container.PageTopOf(slot)
@@ -67,7 +71,10 @@ namespace PeachPDF.Tests.Integration
                 .ToList();
 
             Assert.True(covered.Count > 2, $"the fixture must span more than two bands, not {covered.Count}");
-            Assert.Equal(covered, SlotsClaiming(container, word));
+
+            // Only the band the word's own top starts in claims it - the rest are left to clip the
+            // overflow rather than repeat it (issue #484).
+            Assert.Equal([band], SlotsClaiming(container, word));
         }
 
         /// <summary>
