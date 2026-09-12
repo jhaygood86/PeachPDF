@@ -142,5 +142,29 @@ namespace PeachPDF.Html.Adapters
         /// overrides the property instead.
         /// </summary>
         public virtual double NormalLineHeight => 1.2 * Size;
+
+        // ---- MATH table query surface (mathematical typesetting fonts) ------------------------
+        // Lets MathLayoutEngine/MathRenderer read a font's OpenType MATH table (constants, per-glyph
+        // italics correction/top-accent attachment, stretchy glyph variants) without depending on the
+        // concrete PDF backend, mirroring the CPAL/vertical-metrics query surfaces above. A font
+        // without one (almost all fonts - only dedicated math fonts carry a MATH table) reports none;
+        // the defaults below make every non-math RFont a no-op, so only the OpenType-descriptor-backed
+        // adapter overrides them.
+
+        /// <summary>Whether this font carries a MATH table.</summary>
+        public virtual bool HasMathTable => false;
+
+        /// <summary>This font's parsed MATH table, or null if it has none.</summary>
+        public virtual Fonts.OpenType.MathTable? MathTable => null;
+
+        /// <summary>This font's design-units-per-em (e.g. 1000 or 2048) - <see cref="MathTable"/>'s
+        /// design-unit values need scaling by <c>Size / FontUnitsPerEm</c> to become points. 0 when
+        /// this font has no <see cref="MathTable"/> (nothing to scale).</summary>
+        public virtual double FontUnitsPerEm => 0;
+
+        /// <summary>This rune's glyph index in this font (0/<c>.notdef</c> if unmapped) - needed to look
+        /// a glyph up in <see cref="MathTable"/>'s per-glyph tables (italics correction, top-accent
+        /// attachment, stretchy variants) by id rather than by character.</summary>
+        public virtual int GetGlyphIndex(System.Text.Rune rune) => 0;
     }
 }

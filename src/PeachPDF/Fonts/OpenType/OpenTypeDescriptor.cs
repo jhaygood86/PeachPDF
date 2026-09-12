@@ -557,6 +557,13 @@ namespace PeachPDF.Fonts.OpenType
         /// <summary>The font's CPAL palette, or null if it has none.</summary>
         public CpalTable ColorPalette => FontFace.cpal;
 
+        /// <summary>True when this font carries a MATH table (mathematical typesetting data) - only
+        /// dedicated math fonts (e.g. STIX Two Math, Latin Modern Math) do.</summary>
+        public bool HasMathTable => FontFace.math?.Table != null;
+
+        /// <summary>The font's MATH table, or null if it has none.</summary>
+        public MathTable? MathTable => FontFace.math?.Table;
+
         /// <summary>Decodes a glyph's outline (glyf contours) into drawable vector segments.</summary>
         public bool TryGetGlyphOutline(int glyphIndex, out GlyphOutline outline)
             => GlyphOutlineDecoder.TryGetGlyphOutline(FontFace, glyphIndex, out outline);

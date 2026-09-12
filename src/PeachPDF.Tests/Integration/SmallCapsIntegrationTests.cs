@@ -306,6 +306,7 @@ body {{ font-family: 'SCP'; width: 400px; }}
 
             public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null)
                 => DrawStringCalls.Add((str, font, point));
+            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
 
             public override void PushTransform(RMatrix matrix) { }
             public override void PopTransform() { }

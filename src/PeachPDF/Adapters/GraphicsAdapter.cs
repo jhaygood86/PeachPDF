@@ -183,6 +183,20 @@ namespace PeachPDF.Adapters
             _g.DrawString(str, ((FontAdapter)font).Font, xBrush, xPoint.X, xPoint.Y, _stringFormat, xLetterSpacing, ToGlyphPalette(fontPalette), features ?? TextShapingFeatures.Default, logicalText);
         }
 
+        public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color)
+        {
+            var xBrush = ((BrushAdapter)_adapter.GetSolidBrush(color)).Brush;
+            var positioned = new (int GlyphIndex, double X, double Y)[glyphs.Count];
+            for (var i = 0; i < glyphs.Count; i++)
+            {
+                var glyph = glyphs[i];
+                var point = Utils.Convert(new RPoint(glyph.X, glyph.Y), PixelsPerPoint);
+                positioned[i] = (glyph.GlyphIndex, point.X, point.Y);
+            }
+
+            _g.DrawGlyphsAtPositions(positioned, ((FontAdapter)font).Font, xBrush);
+        }
+
         /// <summary>
         /// Converts a resolved <see cref="RFontPalette"/> (adapter layer, <see cref="RColor"/> overrides) into the
         /// backend <see cref="XGlyphPalette"/> (<see cref="XColor"/> overrides). Null passes straight through.

@@ -66,6 +66,26 @@ namespace PeachPDF.PdfSharpCore.Pdf.Structure
         }
 
         /// <summary>
+        /// Appends a file specification to this structure element's "/AF" (Associated Files) array
+        /// (ISO 32000-2 §14.13, a PDF 2.0 addition to Table 323) - e.g. the original MathML markup
+        /// attached to a "Formula" structure element for a &lt;math&gt; element. Creates the array on
+        /// first call.
+        /// </summary>
+        public void AppendAssociatedFile(PdfFileSpecification fileSpecification)
+        {
+            if (!fileSpecification.IsIndirect)
+                Owner.Internals.AddObject(fileSpecification);
+
+            var array = Elements.GetArray(Keys.AF);
+            if (array == null)
+            {
+                array = new PdfArray(Owner);
+                Elements[Keys.AF] = array;
+            }
+            array.Elements.Add(fileSpecification.Reference);
+        }
+
+        /// <summary>
         /// Appends a kid (a child PdfStructureElement, a bare MCID integer, a
         /// PdfMarkedContentReference, or a PdfObjectReference) to this element's "/K" array.
         /// </summary>
@@ -171,6 +191,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.Structure
 
             [KeyInfo(KeyType.TextString | KeyType.Optional)]
             public const string ActualText = "/ActualText";
+
+            // PDF 2.0 addition (ISO 32000-2 §14.13, "Associated files") - not in ISO 32000-1 Table 323.
+            [KeyInfo(KeyType.Array | KeyType.Optional)]
+            public const string AF = "/AF";
 
             public static DictionaryMeta Meta => _meta ??= CreateMeta(typeof(Keys));
 

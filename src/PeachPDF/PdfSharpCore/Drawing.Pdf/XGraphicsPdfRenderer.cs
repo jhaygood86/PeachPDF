@@ -738,6 +738,48 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
         }
 
+        /// <summary>
+        /// Draws each glyph in <paramref name="glyphs"/> at its own explicit world-space position,
+        /// addressed directly by font glyph index - the same per-glyph <c>Td</c>+<c>Tj</c> emission
+        /// <see cref="DrawPositionedGlyphs"/> already uses, generalized to take already-absolute
+        /// positions instead of shaped-run deltas relative to a pen, and to realize the font/brush
+        /// itself (its one caller, <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, TextShapingFeatures, string)"/>,
+        /// already did that before ever reaching <see cref="DrawPositionedGlyphs"/>). No bold/italic
+        /// simulation, underline, or strikeout handling - this exists for MathML's stretchy-operator
+        /// glyph assemblies (see <c>MathRenderer</c>), which are never any of those.
+        /// </summary>
+        public void DrawGlyphsAtPositions(IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, XBrush brush)
+        {
+            if (glyphs.Count == 0)
+                return;
+
+            Realize(font, brush, 0, 0);
+
+            // Unlike DrawString (which calls realizedFont.AddShapedText over the whole run before its
+            // own draw loop), these glyphs never go through shaping at all - nothing else registers
+            // them with the embedded font's subsetter/CID map. Without this, each glyph index drawn
+            // below would reference a glyph the subset font never actually includes, rendering blank.
+            // No real source text exists for these (a stretchy-operator assembly part/size variant
+            // has no Unicode meaning of its own), so ToUnicode gets an empty mapping per glyph - the
+            // glyph itself still renders correctly, only copy/paste extraction is affected.
+            PdfFont realizedFont = _gfxState._realizedFont;
+            foreach (var glyph in glyphs)
+                realizedFont?.AddShapedGlyph(glyph.GlyphIndex, "");
+
+            const string format2 = Config.SignificantFigures4;
+            foreach (var glyph in glyphs)
+            {
+                XPoint pos = WorldToView(new XPoint(glyph.X, glyph.Y));
+                AdjustTdOffset(ref pos, 0, null);
+
+                byte[] bytes = PdfEncoders.RawUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
+                bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
+                string glyphText = PdfEncoders.RawEncoding.GetString(bytes, 0, bytes.Length);
+
+                AppendFormatArgs("{0:" + format2 + "} {1:" + format2 + "} Td {2} Tj\n", pos.X, pos.Y, glyphText);
+            }
+        }
+
         // ----- DrawImage ----------------------------------------------------------------------------
 
         //public void DrawImage(Image image, Point point);

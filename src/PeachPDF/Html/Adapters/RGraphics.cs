@@ -408,6 +408,21 @@ namespace PeachPDF.Html.Adapters
             DrawString(str, font, color, point, size, letterSpacing, fontPalette, features);
 
         /// <summary>
+        /// Draws each of <paramref name="glyphs"/> at its own explicit position, addressed directly by
+        /// font glyph index rather than by Unicode character - unlike
+        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>,
+        /// this never re-shapes/re-maps through cmap/GSUB, so it can draw a glyph with no Unicode
+        /// mapping at all (e.g. an OpenType MATH table's stretchy-operator assembly parts or
+        /// pre-sized size variants, which are reached only via <c>MathVariantsTable</c> glyph ids, not
+        /// through any character). Each <see cref="GlyphPlacement"/>'s X/Y is that glyph's own baseline
+        /// origin (not a bounding-box corner), in the same working unit space as
+        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>'s
+        /// own <c>point</c> parameter - unlike that method, there is no separate ascent-relative
+        /// adjustment, since every glyph here already carries its own exact target baseline position.
+        /// </summary>
+        public abstract void DrawGlyphs(System.Collections.Generic.IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color);
+
+        /// <summary>
         /// Builds the vector outline of a glyph run as a fillable/strokeable <see cref="RGraphicsPath"/>,
         /// with the text baseline at <paramref name="baselineOrigin"/> (user-space units) and glyphs
         /// advancing left-to-right. Unlike <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>

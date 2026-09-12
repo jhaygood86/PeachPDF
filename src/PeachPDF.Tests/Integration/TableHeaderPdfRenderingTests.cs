@@ -302,6 +302,7 @@ namespace PeachPDF.Tests.Integration
                 : base(adapter, new RRect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) => DrawnStrings.Add(str);
+            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
 
             public override void BeginMarkedContent(string structureType, int mcid) { }
             public override void EndMarkedContent() { }

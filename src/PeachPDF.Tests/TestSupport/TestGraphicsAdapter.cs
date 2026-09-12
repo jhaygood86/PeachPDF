@@ -242,6 +242,8 @@ namespace PeachPDF.Tests.TestSupport
             Log.Add(call);
         }
 
+        public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
+
         /// <summary>See <see cref="RGraphics.DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?, string?)"/>'s
         /// own remarks for <paramref name="logicalText"/>. Dispatches through the virtual 8-arg overload
         /// first (rather than recording independently) so a subclass that overrides only that one (e.g.

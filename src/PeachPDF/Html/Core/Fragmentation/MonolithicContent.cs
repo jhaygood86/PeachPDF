@@ -53,7 +53,7 @@ namespace PeachPDF.Html.Core.Fragmentation
         {
             // Also matches CssBoxVideo, which resolves its poster through the same <object> machinery.
             CssBoxObject o => o.IsReplaced,
-            CssBoxImage or CssBoxSvg or CssBoxFrame or CssBoxFormField => true,
+            CssBoxImage or CssBoxSvg or CssBoxMath or CssBoxFrame or CssBoxFormField => true,
             _ => false
         };
 

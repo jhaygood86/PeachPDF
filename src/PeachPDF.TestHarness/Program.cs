@@ -9149,6 +9149,53 @@ await SaveShowcaseAsync("interactive_pdf_forms", "Interactivity", "Interactive P
         EnableInteractivePdfForms = true
     });
 
+// MathML: fractions, radicals, sub/superscripts, stretchy fences, and matrices rendered as real
+// vector PDF content using STIX Two Math's own OpenType MATH table.
+var stixTwoMathB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "StixTwoMath-Regular.ttf")));
+string MathPanel(string title, string mathml) =>
+    "<div class=\"mpanel\">" +
+    $"<div class=\"mtitle\">{title}</div>" +
+    $"<div class=\"mformula\">{mathml}</div>" +
+    "</div>";
+var mathHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "@page { size: a4; margin: 15mm }" +
+    $"@font-face {{ font-family: 'STIX Two Math'; src: url('data:font/truetype;base64,{stixTwoMathB64}') format('truetype'); }}" +
+    "body { font: 10pt Arial, sans-serif; margin: 0; color: #222 }" +
+    "h1 { font-size: 16pt; margin: 0 0 0.2em }" +
+    "p.intro { margin: 0 0 1em; color: #555 }" +
+    "math { font-family: 'STIX Two Math' }" +
+    ".grid { display: flex; flex-wrap: wrap; gap: 14px }" +
+    ".mpanel { flex: 1 1 46%; border: 1px solid #ddd; border-radius: 6px; padding: 12px 14px; background: #fafafa }" +
+    ".mtitle { font-size: 9pt; font-weight: bold; color: #444; margin-bottom: 8px }" +
+    ".mformula { font-size: 16pt; text-align: center; padding: 6px 0 }" +
+    "</style></head><body>" +
+    "<h1>MathML</h1>" +
+    "<p class=\"intro\">Inline &lt;math&gt; rendered as real vector PDF content - fraction bars, radical " +
+    "signs, and stretchy fences built from the font's own OpenType MATH table, never rasterized.</p>" +
+    "<div class=\"grid\">" +
+    MathPanel("Quadratic formula",
+        "<math display=\"block\"><mi>x</mi><mo>=</mo><mfrac>" +
+        "<mrow><mo>-</mo><mi>b</mi><mo>&#177;</mo><msqrt><mrow><msup><mi>b</mi><mn>2</mn></msup><mo>-</mo><mn>4</mn><mi>a</mi><mi>c</mi></mrow></msqrt></mrow>" +
+        "<mrow><mn>2</mn><mi>a</mi></mrow></mfrac></math>") +
+    MathPanel("Pythagorean theorem",
+        "<math display=\"block\"><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup><mo>=</mo><msup><mi>c</mi><mn>2</mn></msup></math>") +
+    MathPanel("2&#215;2 identity matrix (stretchy fences)",
+        "<math display=\"block\"><mrow><mo stretchy=\"true\">(</mo><mtable>" +
+        "<mtr><mtd><mn>1</mn></mtd><mtd><mn>0</mn></mtd></mtr>" +
+        "<mtr><mtd><mn>0</mn></mtd><mtd><mn>1</mn></mtd></mtr>" +
+        "</mtable><mo stretchy=\"true\">)</mo></mrow></math>") +
+    MathPanel("Binomial coefficient (nested scripts)",
+        "<math display=\"block\"><mo stretchy=\"true\">(</mo><mfrac linethickness=\"0\"><mi>n</mi><mi>k</mi></mfrac><mo stretchy=\"true\">)</mo>" +
+        "<mo>=</mo><mfrac><mrow><mi>n</mi><mo>!</mo></mrow><mrow><mi>k</mi><mo>!</mo><mo>(</mo><mi>n</mi><mo>-</mo><mi>k</mi><mo>)</mo><mo>!</mo></mrow></mfrac></math>") +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("mathml", "Math", "MathML",
+    "Inline &lt;math&gt; formulas rendered as true vector PDF content: fraction bars, radical signs, " +
+    "sub/superscripts, and MATH-table stretchy fences, using STIX Two Math's own OpenType MATH table.",
+    mathHtml, pdfConfig);
+
 if (benchmarkMode)
 {
     PrintBenchmarkReport();

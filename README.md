@@ -6,6 +6,8 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 ## Features
 
 - Native vector SVG rendering (inline `<svg>`, standalone `<img src="x.svg">`/`data:image/svg+xml`, and as a `background-image`/`list-style-image` source) — never rasterized
+- Native vector MathML rendering (inline `<math>`, targeting the [MathML Core](https://w3c.github.io/mathml-core/) layout algorithm) — fraction bars, radicals, and stretchy operators built from the font's own OpenType `MATH` table, never rasterized
+- Optional PDF 2.0 (ISO 32000-2) output (see `PdfGenerateConfig.PdfVersion`), with `<math>` formulas tagged as accessible `Formula` structure elements carrying their original MathML source as a PDF 2.0 Associated File
 - CSS custom properties (`--foo`) and `var()`, including fallbacks and inheritance
 - CSS math functions: `calc()`, `min()`, `max()`, `clamp()`
 - 2D and 3D CSS transforms (`translate`, `scale`, `rotate`, `skew`, `matrix`, and their variants)
@@ -19,7 +21,7 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 - Automatic PDF outline (bookmark sidebar) generation from headings, with full CSS control via `bookmark-level`/`bookmark-label`/`bookmark-state` (CSS Generated Content Module Level 3) — no configuration required
 - Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery — with per-character font matching (`@font-face` `unicode-range` and coverage-based fallback across the `font-family` stack), supplementary-plane text via `cmap` format-12, and searchable/selectable `COLR`/`CPAL` color emoji rendered as native PDF vectors
 
-See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the full compatibility matrix, and [Supported SVG Features](https://peachpdf.net/supported-svg-features.html) for the full SVG compatibility matrix.
+See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the full compatibility matrix, [Supported SVG Features](https://peachpdf.net/supported-svg-features.html) for the full SVG compatibility matrix, and [Supported MathML Features](https://peachpdf.net/supported-mathml-features.html) for the full MathML compatibility matrix.
 
 > **Breaking change — spec-correct CSS pixels:** `px` lengths now resolve at the CSS-specified physical ratio (`1px = 1/96in = 0.75pt`) everywhere — layout, borders, images, and `@page` geometry — matching browser print output. Earlier versions treated `1px` as `1pt` for non-font lengths, rendering px-sized content 33% larger than its true CSS size; px-derived lengths shrink by ×0.75 when upgrading. Absolute units (`pt`/`mm`/`cm`/`in`/`pc`) and px font sizes (which already used the correct ratio) are unaffected. See [Length units](https://peachpdf.net/html-css-support.html#length-units).
 

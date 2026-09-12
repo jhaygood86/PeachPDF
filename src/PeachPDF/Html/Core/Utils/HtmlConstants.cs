@@ -62,6 +62,7 @@ namespace PeachPDF.Html.Core.Utils
         //        public const string LEGEND = "LEGEND";
         public const string Li = "li";
 
+        public const string Math = "math";
         public const string Middle = "middle";
         //        public const string LINK = "LINK";
         //        public const string MAP = "MAP";

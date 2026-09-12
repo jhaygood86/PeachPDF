@@ -138,6 +138,15 @@ namespace PeachPDF.PdfSharpCore.Drawing
         void DrawString(string s, XFont font, XBrush brush, XRect layoutRectangle, XStringFormat format, double letterSpacing, XGlyphPalette? fontPalette, TextShapingFeatures features, string? logicalText = null);
 
         /// <summary>
+        /// Draws each glyph in <paramref name="glyphs"/> at its own explicit world-space position,
+        /// addressed directly by font glyph index rather than by Unicode character - see
+        /// <see cref="PeachPDF.Html.Adapters.RGraphics.DrawGlyphs"/>'s own remarks for why this exists
+        /// (an OpenType MATH table's stretchy-operator glyphs, which have no Unicode mapping to shape
+        /// through the ordinary <see cref="DrawString(string, XFont, XBrush, XRect, XStringFormat, double, XGlyphPalette?, TextShapingFeatures, string)"/> path).
+        /// </summary>
+        void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, XFont font, XBrush brush);
+
+        /// <summary>
         /// Draws an image.
         /// </summary>
         void DrawImage(XImage image, double x, double y, double width, double height);

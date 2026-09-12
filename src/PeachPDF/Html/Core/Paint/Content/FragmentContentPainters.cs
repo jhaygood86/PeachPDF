@@ -12,6 +12,7 @@ namespace PeachPDF.Html.Core.Paint.Content
         private static readonly ImageFragmentPainter ImagePainter = new();
         private static readonly ObjectFragmentPainter ObjectPainter = new();
         private static readonly SvgFragmentPainter SvgPainter = new();
+        private static readonly MathFragmentPainter MathPainter = new();
         private static readonly FrameFragmentPainter FramePainter = new();
         private static readonly HrFragmentPainter HrPainter = new();
         private static readonly MarkerFragmentPainter MarkerPainter = new();
@@ -27,6 +28,7 @@ namespace PeachPDF.Html.Core.Paint.Content
             // Also matches CssBoxVideo, which resolves its poster through the same <object> machinery.
             CssBoxObject => ObjectPainter,
             CssBoxSvg => SvgPainter,
+            CssBoxMath => MathPainter,
             CssBoxFrame => FramePainter,
             CssBoxHr => HrPainter,
             CssBoxMarker => MarkerPainter,

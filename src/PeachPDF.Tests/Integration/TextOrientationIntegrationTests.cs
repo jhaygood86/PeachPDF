@@ -559,6 +559,8 @@ body {{ font-family: 'CJK'; margin: 0 }}
                 Log.Add(call);
             }
 
+            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
+
             public override void PushTransform(RMatrix matrix) => PushTransformCount++;
             public override void PopTransform() => PopTransformCount++;
             public override void PushBlendMode(RBlendMode mode) { }

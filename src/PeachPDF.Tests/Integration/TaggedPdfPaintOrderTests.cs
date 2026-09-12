@@ -164,6 +164,7 @@ namespace PeachPDF.Tests.Integration
             public override void BeginVariableText() => Log.Add(("BeginVariableText", null));
             public override void EndVariableText() => Log.Add(("EndVariableText", null));
             public override void DrawString(string str, RFont font, RColor color, RPoint point, RSize size, double letterSpacing = 0, RFontPalette? fontPalette = null, TextShapingFeatures? features = null) => Log.Add(("DrawString", str));
+            public override void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, RFont font, RColor color) { }
 
             public override void PushTransform(RMatrix matrix) { }
             public override void PopTransform() { }

@@ -426,6 +426,9 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
         /// <summary>
         /// Gets or sets the PDF version number. Return value 14 e.g. means PDF 1.4 / Acrobat 5 etc.
+        /// PDF has no 1.8/1.9 - the only value above 17 this accepts is 20, meaning PDF 2.0
+        /// (ISO 32000-2); see <see cref="PeachPDF.PdfVersion"/>/<see cref="PeachPDF.PdfGenerateConfig.PdfVersion"/>
+        /// for the public API that sets this.
         /// </summary>
         public int Version
         {
@@ -434,7 +437,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
             {
                 if (!CanModify)
                     throw new InvalidOperationException(PSSR.CannotModify);
-                if (value < 12 || value > 17) // TODO not really implemented
+                if (value < 12 || (value > 17 && value != 20))
                     throw new ArgumentException(PSSR.InvalidVersionNumber, "value");
                 _version = value;
             }

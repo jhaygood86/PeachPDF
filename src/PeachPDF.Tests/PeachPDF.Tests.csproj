@@ -81,6 +81,9 @@
     <None Include="..\..\assets\fonts\gsubtest-lookup3.otf" Link="gsubtest-lookup3.otf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\assets\fonts\StixTwoMath-Regular.ttf" Link="StixTwoMath-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!--

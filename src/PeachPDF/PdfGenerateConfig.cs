@@ -247,6 +247,15 @@ namespace PeachPDF
         public PdfAConformance PdfAConformance { get; set; } = PdfAConformance.None;
 
         /// <summary>
+        /// The PDF version to target. Defaults to <see cref="PeachPDF.PdfVersion.Pdf17"/> - PeachPDF's
+        /// long-standing output version. Set to <see cref="PeachPDF.PdfVersion.Pdf20"/> to emit a real
+        /// PDF 2.0 (ISO 32000-2) file header. Incompatible with requesting any
+        /// <see cref="PdfAConformance"/> level other than <see cref="PeachPDF.PdfAConformance.None"/> -
+        /// generation throws if both are set on the same call.
+        /// </summary>
+        public PdfVersion PdfVersion { get; set; } = PdfVersion.Pdf17;
+
+        /// <summary>
         /// When set to <c>true</c>, PeachPDF emits an XMP metadata stream (the document catalog's
         /// <c>/Metadata</c> entry) alongside the classic Document Information dictionary - useful for
         /// digital-asset-management/archival pipelines that read XMP directly. This is independent of

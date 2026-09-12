@@ -1149,6 +1149,7 @@ namespace PeachPDF.Html.Core.Dom
                 HtmlConstants.Iframe => new CssBoxFrame(parent, tag),
                 HtmlConstants.Hr => new CssBoxHr(parent, tag),
                 HtmlConstants.Svg => new CssBoxSvg(parent, tag),
+                HtmlConstants.Math => new CssBoxMath(parent, tag),
                 HtmlConstants.Object => new CssBoxObject(parent, tag),
                 HtmlConstants.Video => new CssBoxVideo(parent, tag),
                 HtmlConstants.Input => new CssBoxFormField(parent, tag),

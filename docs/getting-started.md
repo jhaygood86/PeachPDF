@@ -45,6 +45,7 @@ PeachPDF is built to be **trimming-safe and [Native AOT](https://learn.microsoft
 - **[Architecture](architecture.md)** — how PeachPDF converts HTML to PDF: the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
 - **[HTML & CSS Support](html-css-support.md)** — the full compatibility matrix of supported HTML elements, CSS properties, selectors, and at-rules, including notes on gaps and PeachPDF-specific extensions.
 - **[Supported SVG Features](supported-svg-features.md)** — the full compatibility matrix for inline and standalone SVG, rendered as real vector PDF content rather than rasterized bitmaps.
+- **[Supported MathML Features](supported-mathml-features.md)** — the full compatibility matrix for inline `<math>` formulas, rendered as real vector PDF content using the font's own OpenType `MATH` table.
 - **[How PeachPDF Is Tested](testing.md)** — the automated test suite, the CI matrix, the diff-coverage gate, and the two-renderer rasterization checks that verify output actually renders correctly.
 - **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, fonts, tagged PDF (PDF/UA) output, PDF/A-conformant output, and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
 - **[Command-Line Tool](cli.md)** — the standalone `peachpdf` CLI (a self-contained Native AOT binary) for rendering HTML to PDF from the shell, without writing any code.

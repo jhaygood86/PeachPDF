@@ -21,7 +21,9 @@ using PeachPDF.Network;
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
 - [Detecting text that was clipped away](#detecting-text-that-was-clipped-away)
 - [Fonts](#fonts)
+- [Rendering MathML formulas](#rendering-mathml-formulas)
 - [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
+- [PDF 2.0 output](#pdf-20-output)
 - [Enabling interactive PDF forms](#enabling-interactive-pdf-forms)
 - [ASP.NET Core controller endpoint](#aspnet-core-controller-endpoint)
 - [ASP.NET Core Minimal API endpoint](#aspnet-core-minimal-api-endpoint)
@@ -365,6 +367,42 @@ Web fonts loaded via `@font-face` (`url()`, with a comma-separated fallback list
 
 We support TrueType, CFF, WOFF, and WOFF2 font formats.
 
+## Rendering MathML formulas
+
+MathML embedded directly in HTML renders as real vector PDF content — no configuration needed:
+
+```csharp
+var html = @"
+<html><body>
+  <p>The quadratic formula:</p>
+  <math display=""block"">
+    <mi>x</mi><mo>=</mo>
+    <mfrac>
+      <mrow><mo>-</mo><mi>b</mi><mo>&#177;</mo>
+        <msqrt><mrow><msup><mi>b</mi><mn>2</mn></msup><mo>-</mo><mn>4</mn><mi>a</mi><mi>c</mi></mrow></msqrt>
+      </mrow>
+      <mrow><mn>2</mn><mi>a</mi></mrow>
+    </mfrac>
+  </math>
+</body></html>";
+
+var generator = new PdfGenerator();
+var document = await generator.GeneratePdf(html, PageSize.A4);
+```
+
+A formula renders in the `font-family` its `<math>` element resolves to via ordinary CSS — for correct
+fraction bars, radicals, and stretchy operator sizing, that font should carry a real OpenType `MATH`
+table (e.g. [STIX Two Math](https://github.com/stipub/stixfonts), Latin Modern Math, or any other
+dedicated math font); a font without one still renders structurally correctly using approximate
+fallback metrics. See [Fonts](#fonts) above for how to register a custom font, and
+[Supported MathML Features](supported-mathml-features.md) for the full compatibility matrix.
+
+```csharp
+using var fontStream = File.OpenRead("STIXTwoMath-Regular.ttf");
+await generator.AddFontFromStream(fontStream);
+// html's <math> elements then use font-family: "STIX Two Math";
+```
+
 ## Enabling tagged PDF (PDF/UA) output
 
 PeachPDF can optionally produce a *tagged* PDF — one with a logical structure tree (`/StructTreeRoot`) exposing the document's headings, paragraphs, lists, tables, links, and images to assistive technology (e.g. screen readers). Tagging is **off by default**; enable it with:
@@ -389,6 +427,21 @@ When `EnableTaggedPdf` is left at its default (`false`), none of this runs — o
 The HTML-tag → structure-type mapping is CSS-driven and author-overridable via the `-peachpdf-pdf-tag-type` custom property — see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support) in HTML & CSS Support for the property's accepted values, the full default mapping table, and known limitations.
 
 PDF outline (bookmark) generation is a separate, always-on feature — no `PdfGenerateConfig` flag needed — driven purely by the `bookmark-level`/`bookmark-label`/`bookmark-state` CSS properties; see [PDF Bookmarks (Outline) Support](html-css-support.md#pdf-bookmarks-outline-support) in HTML & CSS Support.
+
+## PDF 2.0 output
+
+PeachPDF defaults to PDF 1.7 output. Set `PdfVersion` to target a real PDF 2.0 ([ISO 32000-2](https://www.iso.org/standard/75839.html)) file header instead:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PdfVersion = PdfVersion.Pdf20
+};
+```
+
+This is needed for full spec conformance when combined with `EnableTaggedPdf` on a document containing `<math>` elements: the `/AF` (Associated Files) array PeachPDF attaches to a `Formula` structure element to carry the original MathML source (see [MathML Associated Files](html-css-support.md#mathml-associated-files)) is a PDF 2.0 addition to the structure element dictionary. `/AF` is still written under `PdfVersion.Pdf17` (the default) and tolerated by most real-world readers, but only `Pdf20` makes the file's own header agree with the features it uses.
+
+`PdfVersion.Pdf20` is incompatible with `PdfAConformance` set to anything other than `PdfAConformance.None` — PeachPDF doesn't implement PDF/A-4 (the PDF-2.0-based PDF/A level), and every PDF/A level it does implement is defined against PDF 1.4 or 1.7. Requesting both throws.
 
 ## Enabling interactive PDF forms
 
