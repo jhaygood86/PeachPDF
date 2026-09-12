@@ -13,6 +13,7 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using System;
@@ -1167,6 +1168,15 @@ namespace PeachPDF.Html.Core
                 return node is CssBox { IsClickable: true };
             }
 
+            // :placeholder-shown is the one form-control state a generated PDF can answer: it is
+            // fixed by the source attributes at generation time. It deliberately does not try to
+            // model the live state after a reader edits the AcroForm field; PDF has no selector or
+            // appearance-state equivalent for that transition.
+            if (name == PseudoClassNames.PlaceholderShown)
+            {
+                return node is CssBox box && FormFieldMapper.IsPlaceholderShown(box);
+            }
+
             return false;
         }
 
@@ -1183,6 +1193,7 @@ namespace PeachPDF.Html.Core
                 case PseudoElementNames.Before when box.IsBeforePseudoElement:
                 case PseudoElementNames.After when box.IsAfterPseudoElement:
                 case PseudoElementNames.Marker when box.IsMarkerPseudoElement:
+                case PseudoElementNames.Placeholder when box.IsPlaceholderPseudoElement:
                 case PseudoElementNames.FirstLetter when box.IsFirstLetterPseudoElement:
                 case PseudoElementNames.FootnoteCall when box.IsFootnoteCallPseudoElement:
                 case PseudoElementNames.FootnoteMarker when box.IsFootnoteMarkerPseudoElement:

@@ -168,6 +168,8 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             public override void BeginMarkedContent(string structureType, int mcid) => Log.Add($"BeginMarkedContent:{structureType}");
             public override void EndMarkedContent() => Log.Add("EndMarkedContent");
             public override void BeginArtifact() => Log.Add("BeginArtifact");
+            public override void BeginVariableText() => Log.Add("BeginVariableText");
+            public override void EndVariableText() => Log.Add("EndVariableText");
 
             public override void PushTransform(RMatrix matrix) { }
             public override void PopTransform() { }

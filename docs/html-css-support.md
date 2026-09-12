@@ -835,7 +835,7 @@ A selector list is only as valid as its least-understood member: per [CSS Select
 :root, :host { --brand: #2563eb; --spacing: .25rem; }
 ```
 
-This covers the state-based pseudo-classes a static PDF has no state for (`:hover`, `:focus`, `:visited`, `:checked`, `:disabled`, `:enabled`, `:valid`, `:user-invalid`, `:autofill`, `:target`, `:open`, `:popover-open`, `:modal`, `:fullscreen`, `:picture-in-picture`, the media-playback set `:playing`/`:paused`/`:seeking`/`:buffering`/`:stalled`/`:muted`/`:volume-locked`, …), the Shadow DOM selectors PeachPDF builds no shadow trees for (`:host`, `:host()`, `:host-context()`, `:defined`, `:state()`, `::part()`, `::slotted()`), the pseudo-elements it generates no box for (`::placeholder`, `::backdrop`, `::file-selector-button`, `::details-content`, `::selection`, `::target-text`, `::spelling-error`, `::grammar-error`, `::cue`, `::highlight()`, `::view-transition*`), and **any vendor extension** — a leading hyphen ([CSS Syntax 3 §2](https://www.w3.org/TR/css-syntax-3/)) marks a UA-internal box or state, so `::-webkit-file-upload-button`, `::-moz-focus-inner`, `::-webkit-input-placeholder`, `:-moz-focusring` and their kin are all accepted wholesale. `:-webkit-any()`/`:-moz-any()` are the legacy vendor spellings of `:is()` and behave exactly like it.
+This covers the state-based pseudo-classes a static PDF has no state for (`:hover`, `:focus`, `:visited`, `:checked`, `:disabled`, `:enabled`, `:valid`, `:user-invalid`, `:autofill`, `:target`, `:open`, `:popover-open`, `:modal`, `:fullscreen`, `:picture-in-picture`, the media-playback set `:playing`/`:paused`/`:seeking`/`:buffering`/`:stalled`/`:muted`/`:volume-locked`, …), the Shadow DOM selectors PeachPDF builds no shadow trees for (`:host`, `:host()`, `:host-context()`, `:defined`, `:state()`, `::part()`, `::slotted()`), the pseudo-elements it generates no box for (`::backdrop`, `::file-selector-button`, `::details-content`, `::selection`, `::target-text`, `::spelling-error`, `::grammar-error`, `::cue`, `::highlight()`, `::view-transition*`), and **any vendor extension** — a leading hyphen ([CSS Syntax 3 §2](https://www.w3.org/TR/css-syntax-3/)) marks a UA-internal box or state, so `::-webkit-file-upload-button`, `::-moz-focus-inner`, `::-webkit-input-placeholder`, `:-moz-focusring` and their kin are all accepted wholesale. `:-webkit-any()`/`:-moz-any()` are the legacy vendor spellings of `:is()` and behave exactly like it.
 
 Pseudo-class and pseudo-element names are matched ASCII case-insensitively, so `:HOVER` and `::Before` are recognized too.
 
@@ -891,7 +891,7 @@ A nested selector is resolved against its parent (`&` takes the parent's specifi
 
 ### Pseudo-elements
 
-`::before`, `::after`, `::marker`, `::first-letter`, `::first-line`, and (css-gcpm-3's) `::footnote-call`/`::footnote-marker` are supported. All other pseudo-elements are parsed but have no effect — see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for which names are recognized and why that matters for the rest of their selector list.
+`::before`, `::after`, `::marker`, `::first-letter`, `::first-line`, `::placeholder`, and (css-gcpm-3's) `::footnote-call`/`::footnote-marker` are supported. All other pseudo-elements are parsed but have no effect — see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for which names are recognized and why that matters for the rest of their selector list.
 
 | Pseudo-element | Notes |
 |----------------|-------|
@@ -900,6 +900,7 @@ A nested selector is resolved against its parent (`&` takes the parent's specifi
 | `::marker` | Full support for every property the spec allows on markers — see below |
 | `::first-letter` | Full support — see below |
 | `::first-line` | Full support for every property CSS2.1 allows — see below |
+| `::placeholder` | Styles the hint in an empty interactive text field — see below |
 | `::footnote-call` | The in-flow numbered footnote reference; see [Footnotes](#footnotes-float-footnote) |
 | `::footnote-marker` | The leading number inside a footnote's own body; see [Footnotes](#footnotes-float-footnote) |
 | All others | Parsed but ignored |
@@ -943,9 +944,15 @@ p.lede::first-line { font-weight: bold; color: darkslateblue; font-variant: smal
 
 Known narrowing: a `background-image` layer (as opposed to a solid `background-color`) set via `::first-line` is not first-line-aware and paints using the element's own normal background instead.
 
+**`::placeholder`** styles the hint drawn in an empty interactive PDF text field. `color`, `opacity`, and font properties such as `font-family`, `font-size`, `font-style`, and `font-weight` affect the baked hint appearance; box-model properties have no useful target because the hint is text inside the field's PDF appearance stream, not an independently laid-out box. PeachPDF's UA style gives an unstyled hint an opaque grey (`#7f7f7f`). Author-specified alpha in `color` or `opacity` uses the normal PDF transparency path: it works in ordinary PDF output and is rejected by `PdfATransparencyGuard` for PDF/A-1, just like translucent text anywhere else, rather than being silently discarded.
+
+```css
+input::placeholder { color: #64748b; font-style: italic; }
+```
+
 ### Pseudo-classes
 
-Because PeachPDF renders a static PDF with no interactive or dynamic state, state-based pseudo-classes are parsed but not evaluated and will not match any elements. The structural pseudo-classes (which depend only on an element's position in the document, not on interactive state) are fully supported, including the CSS "An+B" formula.
+Because PeachPDF renders a static PDF with no live browsing state, most state-based pseudo-classes are parsed but not evaluated. `:placeholder-shown` is the useful exception: its answer is fixed by the control's source state when the PDF is generated. Structural pseudo-classes are fully supported, including the CSS "An+B" formula.
 
 | Pseudo-class | Notes |
 |--------------|-------|
@@ -954,6 +961,7 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 | `:root` | Matches the document's root element (the `<html>` element) |
 | `:scope` | With no scoping root in play, this is the document's root element — the same element `:root` matches ([Selectors 4 §6.6](https://www.w3.org/TR/selectors-4/#the-scope-pseudo)), so `:scope p` and `:root p` behave identically |
 | `:empty` | Matches an element with no children other than white-space-only text. Comments do not count as children, and neither does generated content — an element with a `::before`/`::after`/`::marker` box is still `:empty`. A non-breaking space (`&nbsp;`) *is* content, so it is not. Also evaluated for SVG, in both an inline `<svg>` and a standalone one |
+| `:placeholder-shown` | Matches a placeholder-capable `<input>` when the `placeholder` attribute is present and its generation-time `value` is empty. It can style the field itself (for example, a lighter border while empty). The result is not live after the PDF is generated: AcroForm has no selector state that can re-run CSS when the user types. |
 | `:lang(C)` | [CSS 2.1 §5.11.4](https://www.w3.org/TR/CSS21/selector.html#lang). Matches an element whose language — the `lang` attribute of the nearest element that has one, checking the element itself before any ancestor — is `C`, or has `C` as an ASCII-case-insensitive hyphen-delimited prefix (`:lang(en)` matches `lang="en"` and `lang="en-US"`, but not `lang="english"`). Only the HTML `lang` attribute is consulted; XML's `xml:lang` is not. Also evaluated for SVG (both inline and standalone) — an inline `<svg>` still sees an enclosing HTML ancestor's `lang` |
 | `:first-child`, `:last-child` | Equivalent to `:nth-child(1)` / `:nth-last-child(1)` |
 | `:only-child` | Matches an element with no other element siblings |
@@ -972,7 +980,7 @@ Because PeachPDF renders a static PDF with no interactive or dynamic state, stat
 
 Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
-State-based pseudo-classes other than `:link`/`:any-link` (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
+State-based pseudo-classes other than `:link`/`:any-link` and the generation-time `:placeholder-shown` state (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
 
 ### Cascade & Specificity
 
@@ -1572,9 +1580,46 @@ input[type=text] {
 }
 ```
 
-`input`/`select` get a plain default appearance (a thin solid black border, white background, small horizontal/vertical padding) from PeachPDF's own UA stylesheet when the author sets none of these — the same look every field had before per-field styling existed. A checkbox/radio's circular shape and check-mark/dot glyph are fixed (not stylable via `border-radius` or similar); its border/background/glyph color still follow `border`/`background-color`/`color`.
+`input`/`select` get a plain default appearance (a thin solid black border, white background, small horizontal/vertical padding) from PeachPDF's own UA stylesheet when the author sets none of these — the same look every field had before per-field styling existed. A checkbox or radio takes no padding from that default (a browser's own UA stylesheet zeroes it there too) and gets a small margin instead, so an unstyled one is a 13×13px square — or circle — with room around it, the way a browser draws it. `width`/`height` size the *content* box like any other element, so the drawn control is that size plus its own border and padding; give a checkbox or radio equal `width` and `height` and it stays square. A checkbox/radio's circular shape and check-mark/dot glyph are fixed (not stylable via `border-radius` or similar); its border/background/glyph color still follow `border`/`background-color`/`color`.
+
+The value a text or combo-box field draws is enclosed in the `/Tx` marked-content sequence ISO 32000-1 §12.7.3.3 defines for variable text, so a reader that regenerates the field replaces exactly that region and keeps the CSS border and background around it. This is what makes editing a field behave: the previous value disappears instead of staying visible behind the new one, and clearing a field leaves an empty box rather than a ghost of what was there.
 
 Once a user actually starts typing into a text/select field, a reader regenerates its look from `/DA` (PDF's own "default appearance" string) rather than the baked-in widget appearance above — `/DA` always uses the PDF standard Helvetica font (Latin-1/WinAnsi only), regardless of the field's own `font-family`. This is deliberate: PeachPDF, like most PDF generators, embeds only the glyphs a document's text actually used, so a custom embedded font has no glyph ready for a character the user types that never appeared in the original value — Helvetica's complete, no-embedding-needed WinAnsi coverage avoids that failure mode for live editing. A field's *initial* appearance (what the PDF shows before anyone edits it) always uses the real font, including for non-Latin-1 text.
+
+### Form-control attributes
+
+These HTML attributes map to their PDF equivalents on the generated field, with no CSS involved:
+
+| HTML | PDF | Effect in a reader |
+|---|---|---|
+| `readonly` | `/Ff` ReadOnly | The value can be seen but not changed. |
+| `disabled` | `/Ff` ReadOnly + NoExport | Not editable, and not included when the form is submitted — HTML defines a disabled control as both. |
+| `required` | `/Ff` Required | The reader flags the field as one that must be filled in before submitting. |
+| `maxlength` | `/MaxLen` | Caps how many characters can be typed. Ignored when it is absent, zero, or not a valid integer. |
+| `type="password"` | `/Ff` Password | Typing is echoed unreadably, and a prefilled `value` is drawn as asterisks rather than legible text. |
+| `placeholder` | `/TU` and the empty field's appearance | Drawn automatically as hint text while the field is empty, matching HTML without a CSS opt-in, and used as the tooltip on hover and the name assistive technology reads in place of the `name` attribute. Style the hint with [`::placeholder`](#pseudo-elements) and the empty field itself with [`:placeholder-shown`](#pseudo-classes). |
+
+A `maxlength` that disagrees with [`-peachpdf-pdf-form-field-comb`](#text-field-sub-settings)
+loses to it: a comb field's cell count *is* its maximum length, so the two cannot both be honoured.
+
+`required` is worth one warning, because it looks like a bug the first time you see it: Adobe Acrobat
+and Reader draw a **red outline around every required field and keep it there**, filled in or not.
+That is the reader's own "Required Fields Highlight Color" preference marking the field as required,
+not a validation error about its current value, and it is under each viewer's control rather than the
+document's. Use `required` when the field genuinely must be filled in, not as a styling hint.
+
+`type="password"` masks the field's *appearance* only — the `value` attribute still becomes the
+field's real `/V`, in readable form, because the document asked for the field to be prefilled with
+it. A password that should not be in the PDF should not be in the HTML either.
+
+An applicable `placeholder` is drawn automatically when the field's generation-time value is empty,
+as [HTML defines](https://html.spec.whatwg.org/multipage/input.html#the-placeholder-attribute); no
+PeachPDF-specific CSS switch is required. The hint is appearance only: `/V` stays empty, so the field
+still submits as unfilled. It lives inside the field's replaceable `/Tx` region, which lets a PDF
+reader remove it on the first keystroke instead of leaving it behind the user's text. Use
+[`::placeholder`](#pseudo-elements) to style the hint and
+[`:placeholder-shown`](#pseudo-classes) to style the empty control itself; the latter is evaluated
+once during generation because AcroForm cannot re-run CSS after an edit.
 
 ### `-peachpdf-pdf-form-field`
 

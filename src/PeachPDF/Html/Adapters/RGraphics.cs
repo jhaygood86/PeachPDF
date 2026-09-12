@@ -307,6 +307,20 @@ namespace PeachPDF.Html.Adapters
         public abstract void BeginArtifact();
 
         /// <summary>
+        /// Begins the <c>/Tx</c> marked-content sequence ISO 32000-1 §12.7.3.3 requires around the
+        /// value drawn into an interactive form field's appearance stream, and
+        /// <see cref="EndVariableText"/> closes it. It is what tells a PDF reader which part of the
+        /// generated appearance to replace when the user edits the field - without it the reader
+        /// draws the new value over the generated one instead of in place of it. Deliberately a pair
+        /// of its own rather than reusing <see cref="EndMarkedContent"/>: these two must sit outside
+        /// any text object, while that one has a caller that is legitimately inside one.
+        /// </summary>
+        public abstract void BeginVariableText();
+
+        /// <summary>Closes the sequence <see cref="BeginVariableText"/> opened.</summary>
+        public abstract void EndVariableText();
+
+        /// <summary>
         /// Measure the width and height of string <paramref name="str"/> when drawn on device context HDC
         /// using the given font <paramref name="font"/>.
         /// </summary>

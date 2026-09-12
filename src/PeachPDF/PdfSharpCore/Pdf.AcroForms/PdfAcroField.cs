@@ -27,6 +27,15 @@ namespace PeachPDF.PdfSharpCore.Pdf.AcroForms
             set { Elements.SetName(Keys.FT, value); }
         }
 
+        /// <summary>Bit 1 (ISO 32000-1 Table 221) - the user may not change the field's value. Shared by every field type.</summary>
+        internal const int ReadOnlyFlag = 1 << 0;
+
+        /// <summary>Bit 2 (ISO 32000-1 Table 221) - the field shall have a value when the form is submitted. Shared by every field type.</summary>
+        internal const int RequiredFlag = 1 << 1;
+
+        /// <summary>Bit 3 (ISO 32000-1 Table 221) - the field shall not be exported when the form is submitted. Shared by every field type.</summary>
+        internal const int NoExportFlag = 1 << 2;
+
         /// <summary>The field's partial name ("/T") - this field's <c>name</c> attribute, or a generated fallback.</summary>
         public string PartialFieldName
         {
@@ -39,6 +48,17 @@ namespace PeachPDF.PdfSharpCore.Pdf.AcroForms
         {
             get { return Elements.GetInteger(Keys.Ff); }
             set { Elements.SetInteger(Keys.Ff, value); }
+        }
+
+        /// <summary>
+        /// The field's alternate name ("/TU", ISO 32000-1 Table 220) - the human-readable description
+        /// a reader shows as the field's tooltip, and the accessible name assistive technology reads
+        /// in place of the machine-oriented <see cref="PartialFieldName"/>.
+        /// </summary>
+        public string AlternateFieldName
+        {
+            get { return Elements.GetString(Keys.TU); }
+            set { Elements.SetString(Keys.TU, value, PdfStringEncoding.Unicode); }
         }
 
         /// <summary>The default appearance string ("/DA") - font/size/color operators for generating a text-like appearance.</summary>
@@ -69,6 +89,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.AcroForms
 
             [KeyInfo(KeyType.Array | KeyType.Optional)]
             public const string Kids = "/Kids";
+
+            [KeyInfo(KeyType.String | KeyType.Optional)]
+            public const string TU = "/TU";
 
             [KeyInfo(KeyType.Integer | KeyType.Optional)]
             public const string Ff = "/Ff";

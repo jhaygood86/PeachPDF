@@ -7,6 +7,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.AcroForms
     /// </summary>
     internal sealed class PdfTextField : PdfAcroField
     {
+        /// <summary>Bit 14 (ISO 32000-1 Table 228) - the field's text is not echoed as the user types, and its value is not stored in the file when the form is saved.</summary>
+        internal const int PasswordFlag = 1 << 13;
+
         /// <summary>Bit 24 (ISO 32000-1 Table 228) - the field does not scroll to accommodate more text than fits in its rect.</summary>
         internal const int DoNotScrollFlag = 1 << 23;
 
@@ -27,7 +30,10 @@ namespace PeachPDF.PdfSharpCore.Pdf.AcroForms
             set { Elements.SetString(Keys.V, value ?? string.Empty, PdfStringEncoding.WinAnsiEncoding); }
         }
 
-        /// <summary>The comb cell count ("/MaxLen") - only meaningful together with <see cref="CombFlag"/>.</summary>
+        /// <summary>
+        /// The maximum length of the field's text in characters ("/MaxLen"). Doubles as the cell
+        /// count when <see cref="CombFlag"/> is set, which is why a comb field requires it.
+        /// </summary>
         public int MaxLen
         {
             get { return Elements.GetInteger(Keys.MaxLen); }

@@ -108,42 +108,110 @@ namespace PeachPDF.Html.Core.Handlers
         /// centered in its own evenly divided cell (ISO 32000-1 §12.7.4.3's "comb" field), with
         /// divider lines between cells drawn in the field's own border color/width.
         /// </summary>
+        /// <remarks>
+        /// <c>isPlaceholder</c> says the text is a placeholder hint rather than the field's value, in
+        /// which case font, color and opacity come from the independently cascaded
+        /// <c>::placeholder</c> style. It still goes inside the <c>/Tx</c> marked-content sequence,
+        /// which is exactly what makes a drawn hint safe: a reader regenerating the field replaces
+        /// the whole sequence, so the hint disappears on the first keystroke instead of sitting
+        /// behind what is typed.
+        /// </remarks>
         internal static PdfFormXObject BuildTextAppearance(PdfDocument document, RAdapter adapter, double pixelsPerPoint,
             CssBox box, double widthPt, double heightPt, string text, bool autoFontSize, int? combCells,
-            out double resolvedFontSizePt)
+            bool isPlaceholder, out double resolvedFontSizePt)
         {
             text ??= string.Empty;
 
             var layoutRect = LayoutRect(widthPt, heightPt, pixelsPerPoint);
             var contentRect = ContentRect(box, layoutRect);
-            var font = ResolveTextFont(box, contentRect, pixelsPerPoint, autoFontSize);
+            var textStyle = isPlaceholder ? box.ResolvedPlaceholderStyle ?? box : box;
+            var font = ResolveTextFont(textStyle, contentRect, pixelsPerPoint, autoFontSize);
             resolvedFontSizePt = font.Size;
 
             return CreateForm(document, adapter, pixelsPerPoint, widthPt, heightPt, (g, rect) =>
             {
+                // Everything a reader must KEEP when the user edits the field goes before the "/Tx
+                // BMC" below and after the matching "EMC" - see RGraphics.BeginVariableText. A comb
+                // field's cell dividers are chrome too, so they are drawn here with the border
+                // rather than alongside the characters they separate.
                 FormFieldChrome.PaintBorderAndBackground(g, box, rect);
 
-                if (contentRect is not { Width: > 0, Height: > 0 }) return;
+                var drawable = contentRect is { Width: > 0, Height: > 0 };
 
-                if (combCells is > 0)
-                    DrawComb(g, box, rect, contentRect, font, text, combCells.Value);
-                else
-                    DrawSingleLine(g, box, contentRect, font, text);
+                if (drawable && combCells is > 0)
+                    DrawCombDividers(g, box, rect, contentRect, combCells.Value);
+
+                // ...and the value itself - the only part a reader regenerates - goes inside.
+                // Opened unconditionally: the sequence is what gives the reader a region to replace,
+                // so a field with an empty value needs one just as much as a filled one, and so does
+                // a field whose padding and border leave no content box to draw into at all.
+                // Returning early for either would reintroduce exactly the append-instead-of-replace
+                // bug this sequence exists to prevent, in the two cases hardest to notice before
+                // someone actually types into the field.
+                g.BeginVariableText();
+
+                if (drawable)
+                {
+                    var color = isPlaceholder
+                        ? ApplyOpacity(textStyle.ActualColor, textStyle.ActualOpacity)
+                        : box.ActualColor;
+
+                    if (combCells is > 0)
+                        DrawCombCharacters(g, color, contentRect, font, text, combCells.Value);
+                    else
+                        DrawSingleLine(g, textStyle, color, contentRect, font, text);
+                }
+
+                g.EndVariableText();
             });
         }
 
-        static void DrawSingleLine(RGraphics g, CssBox box, RRect contentRect, RFont font, string text)
+        /// <summary>
+        /// Applies a text style's CSS <c>opacity</c> to its color. A placeholder contains only this
+        /// text, so multiplying the fill alpha is visually equivalent to compositing a separate
+        /// opacity group while letting the normal PDF graphics path enforce PDF/A's transparency
+        /// rules for an author-specified translucent <c>::placeholder</c> style.
+        /// </summary>
+        static RColor ApplyOpacity(RColor color, double opacity)
+        {
+            var alpha = (int)Math.Round(color.A * Math.Clamp(opacity, 0, 1));
+            return RColor.FromArgb(alpha, color.R, color.G, color.B);
+        }
+
+        static void DrawSingleLine(RGraphics g, CssBox box, RColor color, RRect contentRect, RFont font, string text)
         {
             var y = contentRect.Y + Math.Max((contentRect.Height - font.Height) / 2, 0);
             // letter-spacing is deliberately not read here: CssBox.ActualLetterSpacing is only
             // populated by the normal word-measurement pass (DerivedStyle.MeasureLetterSpacing),
             // which a form-field box's own replaced-element sizing (CssBoxFormField.MeasureWordsSize)
             // never runs - reading it here would hit its NaN-sentinel default instead.
-            g.DrawString(text, font, box.ActualColor, new RPoint(contentRect.X, y),
+            g.DrawString(text, font, color, new RPoint(contentRect.X, y),
                 new RSize(contentRect.Width, font.Height), fontPalette: box.ActualFontPalette, features: box.ActualTextShapingFeatures);
         }
 
-        static void DrawComb(RGraphics g, CssBox box, RRect fieldRect, RRect contentRect, RFont font, string text, int cells)
+        /// <summary>
+        /// A comb field's cell divider lines, in the field's own border color/width - chrome, drawn
+        /// with the border rather than with the characters, so a reader regenerating the value keeps
+        /// them (see <see cref="BuildTextAppearance"/>).
+        /// </summary>
+        static void DrawCombDividers(RGraphics g, CssBox box, RRect fieldRect, RRect contentRect, int cells)
+        {
+            if (cells <= 1 || box.ActualBorderLeftWidth <= 0) return;
+
+            var cellWidth = contentRect.Width / cells;
+            var pen = g.GetPen(box.ActualBorderLeftColor);
+            pen.Width = box.ActualBorderLeftWidth;
+            var top = fieldRect.Y + box.ActualBorderTopWidth;
+            var bottom = fieldRect.Y + fieldRect.Height - box.ActualBorderBottomWidth;
+            for (var i = 1; i < cells; i++)
+            {
+                var x = fieldRect.X + box.ActualBorderLeftWidth + i * cellWidth;
+                g.DrawLine(pen, x, top, x, bottom);
+            }
+        }
+
+        /// <summary>Each character centered in its own evenly divided cell (ISO 32000-1 §12.7.4.3's "comb" field).</summary>
+        static void DrawCombCharacters(RGraphics g, RColor color, RRect contentRect, RFont font, string text, int cells)
         {
             var cellWidth = contentRect.Width / cells;
             var y = contentRect.Y + Math.Max((contentRect.Height - font.Height) / 2, 0);
@@ -153,19 +221,7 @@ namespace PeachPDF.Html.Core.Handlers
                 var ch = text[i].ToString();
                 var chWidth = g.MeasureString(ch, font).Width;
                 var x = contentRect.X + i * cellWidth + Math.Max((cellWidth - chWidth) / 2, 0);
-                g.DrawString(ch, font, box.ActualColor, new RPoint(x, y), new RSize(cellWidth, font.Height));
-            }
-
-            if (cells <= 1 || box.ActualBorderLeftWidth <= 0) return;
-
-            var pen = g.GetPen(box.ActualBorderLeftColor);
-            pen.Width = box.ActualBorderLeftWidth;
-            var top = fieldRect.Y + box.ActualBorderTopWidth;
-            var bottom = fieldRect.Y + fieldRect.Height - box.ActualBorderBottomWidth;
-            for (var i = 1; i < cells; i++)
-            {
-                var x = fieldRect.X + box.ActualBorderLeftWidth + i * cellWidth;
-                g.DrawLine(pen, x, top, x, bottom);
+                g.DrawString(ch, font, color, new RPoint(x, y), new RSize(cellWidth, font.Height));
             }
         }
 

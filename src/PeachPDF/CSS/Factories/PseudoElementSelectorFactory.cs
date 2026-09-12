@@ -22,12 +22,13 @@ namespace PeachPDF.CSS
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     // ::before/::after/::marker/::first-line/::first-letter/::footnote-call/
-                    // ::footnote-marker are the ones that generate a real box; ::selection and
-                    // ::content parse and paint nothing, like everything in
-                    // UnmatchableSelectors.PseudoElements below them.
+                    // ::footnote-marker generate a real box; ::placeholder gets a detached style
+                    // box for AcroForm appearance painting; ::selection and ::content parse and
+                    // paint nothing, like everything in UnmatchableSelectors.PseudoElements below.
                     PseudoElementNames.Before,
                     PseudoElementNames.After,
                     PseudoElementNames.Marker,
+                    PseudoElementNames.Placeholder,
                     PseudoElementNames.Selection,
                     PseudoElementNames.FirstLine,
                     PseudoElementNames.FirstLetter,

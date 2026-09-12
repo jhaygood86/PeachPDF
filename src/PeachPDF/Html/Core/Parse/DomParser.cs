@@ -859,6 +859,12 @@ namespace PeachPDF.Html.Core.Parse
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
 
+            if (!box.PlaceholderStyleProcessed)
+            {
+                box.PlaceholderStyleProcessed = true;
+                ResolvePlaceholderStyle(valueParser, box, cssData, media, containerSizes);
+            }
+
             // CSS Logical Properties: resolve any of the 24 logical margin/padding/inset/border
             // longhands cascaded onto this box (CssBox.LogicalProperties.cs) to their physical edge, now
             // that this box's own Direction/WritingMode are fully resolved.
@@ -874,6 +880,26 @@ namespace PeachPDF.Html.Core.Parse
             {
                 CascadeApplyStyles(valueParser, childBox, cssData, media, containerSizes);
             }
+        }
+
+        /// <summary>
+        /// Resolves an empty input's <c>::placeholder</c> through the ordinary cascade into a detached
+        /// style box. The pseudo-element is not inserted into the layout tree because its text is
+        /// painted only inside the AcroForm widget's replaceable <c>/Tx</c> appearance region.
+        /// </summary>
+        private static void ResolvePlaceholderStyle(CssValueParser valueParser, CssBox box, CssData cssData,
+            MediaQueryContext media, ContainerQuerySizes? containerSizes)
+        {
+            if (!FormFieldMapper.IsPlaceholderShown(box)) return;
+
+            var placeholderBox = new CssBox(box, null)
+            {
+                IsPlaceholderPseudoElement = true
+            };
+            box.Boxes.Remove(placeholderBox);
+
+            CascadeApplyStyles(valueParser, placeholderBox, cssData, media, containerSizes);
+            box.ResolvedPlaceholderStyle = placeholderBox;
         }
 
         /// <summary>

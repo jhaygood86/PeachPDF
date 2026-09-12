@@ -136,7 +136,22 @@ namespace PeachPDF.Html.Core.Dom
         /// </remarks>
         public double ActualWordSpacing =>
             (HasSpaceAfter ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) + (FirstLineStyle?.ActualLetterSpacing ?? OwnerBox.ActualLetterSpacing) : 0) +
-            (IsImage ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) : 0);
+            (ReservesTrailingSpace ? (FirstLineStyle?.ActualWordSpacing ?? OwnerBox.ActualWordSpacing) : 0);
+
+        /// <summary>
+        /// Whether this word reserves one space's width after itself on top of whatever a trailing
+        /// space already contributes - a long-standing gap this engine has always given replaced
+        /// content, which is why it keys off <see cref="IsImage"/> by default.
+        /// </summary>
+        /// <remarks>
+        /// It exists as its own question because <see cref="IsImage"/> answers a different one - "is
+        /// this an atomic, non-text word carrying its owner box's replaced geometry", which is what
+        /// the box-model arithmetic in <c>CssLineBox.UpdateRectangle</c> needs. A form field is that
+        /// kind of word and must say so, but it never reserved this extra space and must not start:
+        /// a bare <c>&lt;input type=checkbox&gt; Label</c> would otherwise gain a whole space's worth
+        /// of gap it had no source whitespace for.
+        /// </remarks>
+        public virtual bool ReservesTrailingSpace => IsImage;
 
         /// <summary>
         /// When set, this word lands on its block's first formatted line and a <c>::first-line</c>

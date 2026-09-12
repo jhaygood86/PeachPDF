@@ -374,6 +374,8 @@ namespace PeachPDF.Tests.TestSupport
         public override void BeginMarkedContent(string structureType, int mcid) { }
         public override void EndMarkedContent() { }
         public override void BeginArtifact() { }
+        public override void BeginVariableText() { }
+        public override void EndVariableText() { }
         public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new((str?.Length ?? 0) * font.Size * 0.6, font.Height);
         public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
         public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)

@@ -55,6 +55,7 @@ public class SelectorsTests
         PseudoElementNames.Content,
         PseudoElementNames.FirstLetter,
         PseudoElementNames.FirstLine,
+        PseudoElementNames.Placeholder,
         PseudoElementNames.Selection
     };
 

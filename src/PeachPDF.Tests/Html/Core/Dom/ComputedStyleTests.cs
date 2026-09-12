@@ -235,6 +235,31 @@ namespace PeachPDF.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public void InheritStyle_Everything_CopiesTheFormFieldProperties()
+        {
+            // Same reasoning as box-sizing above: a structural duplicate of the SAME source box - a
+            // form control cloned into a repeated table header/footer via CssProxyBox - is a fragment
+            // of one element, so its own resolved form-field settings have to carry over rather than
+            // reverting to the CSS initial "auto"/"none". Every longhand is asserted, since each is
+            // one hand-written line in InheritStyle that a newly added sibling is easy to omit from.
+            var source = new CssBox(null, null)
+            {
+                PdfFormField = "checkbox",
+                PdfFormFieldAutoFontSize = "auto",
+                PdfFormFieldComb = "6",
+                PdfFormFieldDoNotScroll = "auto"
+            };
+            var clone = new CssBox(null, null);
+
+            clone.InheritStyle(source, everything: true);
+
+            Assert.Equal("checkbox", clone.PdfFormField);
+            Assert.Equal("auto", clone.PdfFormFieldAutoFontSize);
+            Assert.Equal("6", clone.PdfFormFieldComb);
+            Assert.Equal("auto", clone.PdfFormFieldDoNotScroll);
+        }
+
+        [Fact]
         public void InheritStyle_Everything_DoesNotCopyBookmarkProperties()
         {
             // Unlike PdfTagType/box-sizing above, bookmark-level/-label/-state/-target deliberately do

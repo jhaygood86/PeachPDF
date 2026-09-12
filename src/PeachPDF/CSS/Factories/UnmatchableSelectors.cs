@@ -6,8 +6,9 @@ namespace PeachPDF.CSS
 {
     /// <summary>
     /// The selectors PeachPDF <em>recognizes</em> but does not match: there is no shadow tree, no form
-    /// control state, no interaction, no media playback and no browsing history in a static PDF, so a
-    /// selector naming one of those has nothing to select.
+    /// control state (apart from the generation-time <c>:placeholder-shown</c> answer), no interaction,
+    /// no media playback and no browsing history in a static PDF, so a selector naming one of those
+    /// has nothing to select.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -60,7 +61,6 @@ namespace PeachPDF.CSS
                 PseudoClassNames.Checked,
                 PseudoClassNames.Unchecked,
                 PseudoClassNames.Indeterminate,
-                PseudoClassNames.PlaceholderShown,
                 PseudoClassNames.Valid,
                 PseudoClassNames.Invalid,
                 PseudoClassNames.UserValid,
@@ -114,12 +114,11 @@ namespace PeachPDF.CSS
 
         /// <summary>
         /// Ident-form pseudo-elements that parse and never match — none of them names a box PeachPDF
-        /// generates. <c>::placeholder</c> is the one Tailwind v4's preflight emits unconditionally.
+        /// generates.
         /// </summary>
         public static readonly FrozenSet<string> PseudoElements =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                PseudoElementNames.Placeholder,
                 PseudoElementNames.Backdrop,
                 PseudoElementNames.FileSelectorButton,
                 PseudoElementNames.DetailsContent,
