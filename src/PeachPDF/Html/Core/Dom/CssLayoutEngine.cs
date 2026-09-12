@@ -4834,7 +4834,9 @@ namespace PeachPDF.Html.Core.Dom
         /// <see href="https://www.w3.org/TR/css-text-3/#justify-algos">css-text-3 §6.4.5</see>'s minimum
         /// requirements for <c>text-justify: auto</c> (the only method PeachPDF implements): a word
         /// separator, or the boundary between a typographic character unit of a block script and any
-        /// other one.
+        /// other one. §6.4.5's third bullet - the same rule for <i>clustered</i> (South-East Asian)
+        /// scripts - has nothing to apply to: this engine has no clustered-script line breaking at all,
+        /// so such a run is never split into the words an opportunity would sit between.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -4845,6 +4847,14 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="CssRect"/>), and the boundary a hyphen or a <c>word-break: break-all</c> /
         /// <c>overflow-wrap</c> split leaves behind is deliberately not one either - §6.4.5 lists word
         /// separators and block/clustered-script letters, not every soft wrap opportunity.
+        /// </para>
+        /// <para>
+        /// Tying the model to that split does cost one boundary §6.4.5 would grant. The split breaks
+        /// <i>after</i> the first ideograph it meets, so a Latin run immediately followed by one comes
+        /// out as a single word (<c>AB書</c>) and the Latin-to-ideograph boundary inside it is invisible
+        /// to every layer, not only to this one - Chromium does expand there. Widening it would mean
+        /// changing <c>ParseToWords</c>, which is line-breaking infrastructure, so it stays as it is;
+        /// the ideograph-to-Latin direction (<c>書AB</c>) is unaffected and does get its opportunity.
         /// </para>
         /// <para>
         /// Verified against Chromium, which gives a word separator and a CJK letter boundary the same
