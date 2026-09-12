@@ -6999,6 +6999,14 @@ namespace PeachPDF.Html.Core.Dom
                 ref trailingRegionalIndicatorCount, ref trailingGraphemeContext);
             min = Math.Max(min, unbreakableRunWidth);
 
+            // The document runs out here, so the line in progress ends here too and its trailing
+            // white space hangs (css-text-3 §4.1.2). A no-op whenever the walk already applied the
+            // rule - the epilogue and the <br> branch both zero trailingSpace as they do - and it
+            // covers the box kinds that never reach the epilogue at all because StartsNewLine is
+            // false for them: a table cell (measured by the table engine one cell at a time), a
+            // white-space: nowrap block, and an inline box measured directly.
+            maxSum -= trailingSpace;
+
             maxWidth = paddingSum + Math.Max(maxSum, widestLine);
             minWidth = paddingSum + (min < 90999 ? min : 0);
 
@@ -7159,6 +7167,15 @@ namespace PeachPDF.Html.Core.Dom
 
                 maxSum += rowMax;
                 min = Math.Max(min, rowMin);
+
+                // The row lands on the line AFTER whatever was measured onto it, so a space that
+                // was trailing is now an ordinary inter-word gap with content on both sides, and
+                // nothing hangs off the end of maxSum any more: each item's own width came back
+                // from its own top-level GetMinMaxWidth, which already hung its own final line's
+                // space. Left stale, the epilogue below would take a real gap back off - reached
+                // by an inline-level flex row on a line that is not reset before it, i.e. under
+                // white-space: nowrap (which inherits, so the row need not declare it).
+                trailingSpace = 0;
             }
             else if (box.Words.Count > 0)
             {
@@ -7247,20 +7264,13 @@ namespace PeachPDF.Html.Core.Dom
                     atLineStart = false;
                 }
 
-                // No trailing-space subtraction here. There used to be one, guarded on
-                // `!HasSpaceAfter`, and its only job was to cancel the phantom word space
-                // CssRect.ActualWordSpacing gave every IsImage word; issue #1011 removed that term, so
-                // the guard now selects exactly the words whose ActualWordSpacing is provably zero.
-                //
-                // It cannot simply be inverted to hang a *real* trailing space (css-text-3 §4.1.2) the
-                // way the <br> branch above does: this walk carries ONE running maxSum across a whole
-                // subtree, so `box`'s last word is not the line's last word whenever a sibling's
-                // content follows it on the same line. In `<span>AB </span><span>CD</span>` that space
-                // is an ordinary inter-word gap, and subtracting it would undercount the line. A
-                // <br> is the one point in the walk where the line is known to have ended, which is
-                // why only that branch can do it - a block's own final line still measures one space
-                // wide when it ends in white space (issue #1014, and
-                // .claude/accepted-gaps/final-line-trailing-space-counted-in-max-content-width.md).
+                // No trailing-space subtraction here, deliberately. This walk carries ONE running
+                // maxSum across a whole subtree, so `box`'s last word is not the LINE's last word
+                // whenever a sibling's content follows it there: in `<span>AB </span><span>CD</span>`
+                // that space is an ordinary inter-word gap, and hanging it here would undercount the
+                // line by a space. css-text-3 §4.1.2 is applied at the two points where the line is
+                // known to have ended instead - the <br> branch above, and the block-boundary
+                // epilogue at the bottom of this method (issue #1014).
             }
             else
             {
@@ -7332,9 +7342,22 @@ namespace PeachPDF.Html.Core.Dom
                     {
                         var explicitContentWidth = CssValueParser.ParseLength(childBox.Width, 0, childBox);
                         var childStartsNewLine = StartsNewLine(childBox);
-                        maxSum = childStartsNewLine
+                        var withExplicitWidth = childStartsNewLine
                             ? Math.Max(maxSum, explicitContentWidth)
                             : Math.Max(maxSum, maxSumBeforeChild + explicitContentWidth);
+
+                        // An explicit width that RAISES the line total has replaced the measured
+                        // tail with a number that has no trailing space in it, so there is nothing
+                        // left hanging off the end of maxSum for the epilogue below to take back
+                        // off - and taking one off anyway swallows a real inter-word gap. Where the
+                        // measured total still wins, its own trailing word is still the end of the
+                        // line and its space still hangs.
+                        if (withExplicitWidth > maxSum)
+                        {
+                            trailingSpace = 0;
+                        }
+
+                        maxSum = withExplicitWidth;
                         min = Math.Max(min, explicitContentWidth);
                     }
 
@@ -7350,7 +7373,19 @@ namespace PeachPDF.Html.Core.Dom
                 previousWord = null;
                 trailingRegionalIndicatorCount = 0;
                 trailingGraphemeContext = string.Empty;
-                maxSum = Math.Max(maxSum, oldSum.Value);
+                // This box opened a line of its own at the top of this call, so that line ENDS
+                // here - the second point in the walk (with a <br>) where the line is known to
+                // have ended, and so where css-text-3 §4.1.2's hanging trailing space can be
+                // applied. What makes the subtraction safe is not that maxSum holds one line (it
+                // need not - a white-space: nowrap child does not reset, so its line is summed
+                // onto the one before it) but that trailingSpace is only ever non-zero while the
+                // most recently MEASURED WORD is still the tail of maxSum: every path that puts
+                // something else on the line after it zeroes trailingSpace, and the <br> branch
+                // and the block reset zero it when the line ends. So the space taken off is always
+                // one that is currently in maxSum. oldSum is a different, already-closed line and
+                // keeps its own width.
+                maxSum = Math.Max(maxSum - trailingSpace, oldSum.Value);
+                trailingSpace = 0;
                 paddingSum = Math.Max(paddingSum, oldPaddingSum!.Value);
             }
         }

@@ -1753,7 +1753,14 @@ namespace PeachPDF.Html.Core.Dom
 
             if (box.Words.Count > 0)
             {
-                width = box.Words.Sum(x => x.FullWidth);
+                // FullWidth carries each word's own trailing inter-word gap, which is right for
+                // every word but the last: nothing of this box follows it, so that gap is the space
+                // that ends the box's content and it hangs (css-text-3 §4.1.2) rather than widening
+                // the box. Counted, an inline run measured one space wider than it draws, and
+                // because GetLargestChildWidth folds this into a shrink-to-fit box's fit-content
+                // size, every float/inline-block/absolute over a run ending in white space inherited
+                // the extra space - the other half of issue #1014.
+                width = box.Words.Sum(x => x.FullWidth) - box.Words[^1].ActualWordSpacing;
             }
 
             // Per CSS2.1 10.3.3, `width` has no effect on a non-replaced inline-level box - a
