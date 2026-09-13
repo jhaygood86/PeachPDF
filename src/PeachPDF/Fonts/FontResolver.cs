@@ -95,6 +95,15 @@ namespace PeachPDF.Fonts
 
         public static string[] SupportedFonts { get; }
 
+        /// <summary>
+        /// The display name (<see cref="FontFamilyModel.Name"/>) of every system font family already
+        /// discovered and parsed once into <see cref="_systemFamilies"/> at process start. Lets a caller
+        /// that only needs the family names (e.g. <see cref="PeachPDF.Adapters.PdfSharpAdapter"/>
+        /// registering them with <c>RAdapter.AddFontFamily</c>) avoid re-opening and re-parsing every
+        /// font file on disk purely to recompute a name this static constructor already produced.
+        /// </summary>
+        internal static IEnumerable<string> SystemFamilyDisplayNames => _systemFamilies.Values.Select(f => f.Name);
+
         private static readonly string[] FontExtensions = ["*.ttf", "*.otf"];
 
         private static string[] GetFontFiles(string dir)

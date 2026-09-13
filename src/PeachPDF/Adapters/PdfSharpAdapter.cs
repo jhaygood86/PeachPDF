@@ -46,19 +46,15 @@ namespace PeachPDF.Adapters
 
             _fontResolver = new FontResolver();
 
-            foreach (var fontPath in FontResolver.SupportedFonts)
+            // FontResolver's static constructor already opened and parsed every system font file once,
+            // process-wide, into _systemFamilies (including filtering out any file that failed to parse) -
+            // registering family names here from that cache instead of re-reading every file avoids paying
+            // that cost again on every single PdfSharpAdapter construction (see the fontconfig-caching fix
+            // in .claude/recent-fixes/2026-09-10-fontconfig-is-asked-once-per-family.md for the same shape
+            // of bug one loop earlier in this constructor).
+            foreach (var familyName in FontResolver.SystemFamilyDisplayNames)
             {
-                try
-                {
-                    var fontDesc = TtfFontDescription.LoadDescription(fontPath);
-                    AddFontFamily(new FontFamilyAdapter(new XFontFamily(fontDesc.FontFamilyInvariantCulture)));
-                }
-                catch (Exception)
-                {
-#if DEBUG
-                    Console.Error.WriteLine($"Failed to load font from path: {fontPath}");
-#endif
-                }
+                AddFontFamily(new FontFamilyAdapter(new XFontFamily(familyName)));
             }
 
             // "Arial" itself isn't installed on most Linux distros; fall back to whatever
