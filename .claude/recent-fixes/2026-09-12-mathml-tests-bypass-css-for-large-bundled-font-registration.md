@@ -88,7 +88,8 @@ All 179 previously-affected tests, net8.0, single-threaded:
 | Duration | 39s | 1s |
 | Passed / Failed | 179 / 0 | 179 / 0 |
 
-Full `PeachPDF.Tests` suite, net8.0, single-threaded (`xunit.runner.json` `maxParallelThreads: 1`),
+Full `PeachPDF.Tests` suite, net8.0, single-threaded
+(`dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 -- xunit.maxParallelThreads=1`),
 same machine, combined with the unrelated font-cache fix in
 [2026-09-12-pdfsharpadapter-reuses-cached-system-font-names.md](2026-09-12-pdfsharpadapter-reuses-cached-system-font-names.md):
 

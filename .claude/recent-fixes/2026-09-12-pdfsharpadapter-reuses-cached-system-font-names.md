@@ -42,8 +42,9 @@ registered, only how many times the underlying files get opened and parsed to ar
 
 ## Evidence
 
-Full `PeachPDF.Tests` suite, net8.0, single-threaded (`PeachPDF.Tests/xunit.runner.json` pins
-`maxParallelThreads: 1`), same machine, immediately before/after (`git stash` isolating just this change):
+Full `PeachPDF.Tests` suite, net8.0, single-threaded
+(`dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 -- xunit.maxParallelThreads=1`),
+same machine, immediately before/after (`git stash` isolating just this change):
 
 | | before | after |
 | --- | ---: | ---: |

@@ -114,7 +114,7 @@ now pins today's actual output rather than silently asserting nothing.
 - `dotnet build PeachPDF.slnx -t:Rebuild`: 0 warnings, 0 errors, across every project and TFM
   (`PeachPDF`, `PeachPDF.Tests`, `PeachPDF.Cli`, `PeachPDF.Cli.Tests`, `PeachPDF.SourceGenerators`,
   `PeachPDF.SourceGenerators.Tests`, `PeachPDF.TestHarness`, `PeachPDF.Demo.BlazorWasm`).
-- `dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0` (single-threaded, per
-  `xunit.runner.json`): 11025 passed, 0 failed, 9 skipped, ~46s — consistent with the ~43s baseline from
+- `dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 -- xunit.maxParallelThreads=1`
+  (single-threaded): 11025 passed, 0 failed, 9 skipped, ~46s — consistent with the ~43s baseline from
   [2026-09-12-bidi-resolver-skips-display-none-subtrees.md](2026-09-12-bidi-resolver-skips-display-none-subtrees.md),
   confirming this change is allocation-neutral-to-slightly-positive on wall-clock as well as bytes.

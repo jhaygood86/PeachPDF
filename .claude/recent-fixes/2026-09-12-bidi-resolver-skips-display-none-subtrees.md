@@ -57,7 +57,8 @@ pure performance change.
 
 ## Evidence
 
-Full `PeachPDF.Tests` suite, net8.0, single-threaded (`xunit.runner.json` `maxParallelThreads: 1`),
+Full `PeachPDF.Tests` suite, net8.0, single-threaded
+(`dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 -- xunit.maxParallelThreads=1`),
 same machine, on top of the two font-related fixes already landed today:
 
 | | before this fix | after this fix |
