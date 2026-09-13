@@ -61,6 +61,17 @@ namespace PeachPDF.Html.Core.Dom
         public bool FollowsForcedBreak { get; internal set; }
 
         /// <summary>
+        /// The mirror image: whether a forced-break word ended <i>this</i> line, i.e. this is the last line
+        /// before a forced break. Set by <c>CssLayoutEngine.FlowBox</c>/<c>CreateVerticalLineBoxes</c> at the
+        /// moment the break closes the line, not derived by looking ahead at the next one - so it survives a
+        /// fragmentation break that discards the line the break opened, and costs no per-line scan.
+        /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">css-text-3 §6.1</see> ends a
+        /// paragraph here as much as at the block's last line, so this line aligns per <c>text-align-last</c>
+        /// (§6.3) rather than being stretched by <c>text-align: justify</c>.
+        /// </summary>
+        public bool PrecedesForcedBreak { get; internal set; }
+
+        /// <summary>
         /// The content-box right edge this line was wrapped against — css-break-3 §5.1's per-fragmentainer
         /// measure, resolved at the moment this line started (<c>CssLayoutEngine.FlowBox</c>), not
         /// <c>OwnerBox.ClientRight</c>, which names only the measure of the page the box <i>started</i> on.

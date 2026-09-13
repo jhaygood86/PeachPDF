@@ -582,6 +582,9 @@ namespace PeachPDF.Html.Core.Dom
 
                 if (word.IsLineBreak)
                 {
+                    // See CssLineBox.PrecedesForcedBreak: the column this break closes is the last one of
+                    // its paragraph, so text-align-last governs it (css-text-3 §6.1/§6.3).
+                    line.PrecedesForcedBreak = true;
                     StartNewLine();
                     continue;
                 }
@@ -1212,12 +1215,13 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="firstLine">the first line this pass produced; everything below it is already done</param>
         /// <param name="blockFinished">
         /// whether the flow reached the end of the block's content. False when it stopped at a
-        /// fragmentation break, and <c>text-align: justify</c> is the one caller that has to know: a line
+        /// fragmentation break, and <see cref="EndsAParagraph"/> is the one thing that has to know: a line
         /// that ends at a break is <b>not</b> the block's last line — the block continues in the next
         /// fragmentainer — so
         /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">css-text-3 §6.1</see>'s
-        /// "except the last line" exemption does not apply to it. Reading it off the list alone justified
-        /// nothing at a page boundary, because the line the pass stopped on is the last one the list holds.
+        /// "except the last line" rule does not hand it to <c>text-align-last</c>. Reading it off the list
+        /// alone justified nothing at a page boundary, because the line the pass stopped on is the last one
+        /// the list holds.
         /// </param>
         private static void FinalizeLineBoxes(CssBox blockBox, int firstLine, bool blockFinished = true)
         {
@@ -2977,6 +2981,15 @@ namespace PeachPDF.Html.Core.Dom
                                 coordinates.CurrentLineHyphenated ? coordinates.ConsecutiveHyphenatedLines + 1 : 0;
                             coordinates.CurrentLineHyphenated = false;
 
+                            // The mirror of the new line's FollowsForcedBreak just below, recorded on the
+                            // line being closed while the reason it is closing is still in hand. css-text-3
+                            // §6.1 ends a paragraph at a forced break, so this line aligns per
+                            // text-align-last - and stating it here rather than looking ahead is what makes
+                            // it survive a fragmentation break that discards the line the <br> opened.
+                            // Assigned, not or-ed: a line is closed exactly once, and a re-run layout pass
+                            // over the same box tree must re-derive this rather than compound it.
+                            coordinates.Line.PrecedesForcedBreak = word.IsLineBreak;
+
                             // b's content straddles the line-1/2 boundary: its words were measured
                             // using blockBox's first-line style (above), but word (and everything after
                             // it in b) is wrapping off line 1 right now, so it/they are no longer
@@ -4106,8 +4119,8 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         /// <param name="lineBox">the line to align</param>
         /// <param name="blockFinished">
-        /// whether the flow reached the end of the owning block's content — see
-        /// <see cref="FinalizeLineBoxes"/>, whose parameter this is.
+        /// whether the flow reached the end of the owning block's content, which is what
+        /// <see cref="EndsAParagraph"/> needs — see <see cref="FinalizeLineBoxes"/>, whose parameter this is.
         /// </param>
         private static void ApplyHorizontalAlignment(CssLineBox lineBox, bool blockFinished)
         {
@@ -4115,12 +4128,13 @@ namespace PeachPDF.Html.Core.Dom
             // owning box's own direction - the CSS-OM-visible value (box.TextAlign) stays exactly as
             // authored/defaulted; only this *used*-value resolution is direction-aware.
             var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
-            var textAlign = lineBox.OwnerBox.TextAlign.Value switch
-            {
-                HorizontalAlignment.Start => isRtl ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                HorizontalAlignment.End => isRtl ? HorizontalAlignment.Left : HorizontalAlignment.Right,
-                var other => other
-            };
+            var towardStart = isRtl ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+            var towardEnd = isRtl ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+
+            var declared = ResolveLogicalAlignment(lineBox.OwnerBox.TextAlign.Value, towardStart, towardEnd);
+
+            var (textAlign, opportunities) = ResolveUsedAlignment(lineBox,
+                EndsAParagraph(lineBox, blockFinished), declared, towardStart, towardEnd);
 
             switch (textAlign)
             {
@@ -4131,10 +4145,117 @@ namespace PeachPDF.Html.Core.Dom
                     ApplyCenterAlignment(lineBox);
                     break;
                 case HorizontalAlignment.Justify:
-                    ApplyJustifyAlignment(lineBox, blockFinished);
+                    ApplyJustifyAlignment(lineBox, opportunities);
                     break;
             }
         }
+
+        /// <summary>
+        /// Resolves <c>text-align</c>'s logical <c>start</c>/<c>end</c> keywords (css-text-3 §6.1) to the
+        /// physical pair the caller supplies - which is the box's own <c>direction</c> for horizontal flow
+        /// and the column's inline-start edge for vertical flow, hence the parameters rather than a bool.
+        /// Every other value is already physical and passes through.
+        /// </summary>
+        private static HorizontalAlignment ResolveLogicalAlignment(HorizontalAlignment value,
+            HorizontalAlignment towardStart, HorizontalAlignment towardEnd) => value switch
+            {
+                HorizontalAlignment.Start => towardStart,
+                HorizontalAlignment.End => towardEnd,
+                var other => other
+            };
+
+        /// <summary>
+        /// Whether <paramref name="lineBox"/> is a line that ends a paragraph, which
+        /// <see href="https://www.w3.org/TR/css-text-3/#text-align-property">css-text-3 §6.1</see> aligns
+        /// per <c>text-align-last</c> instead of per <c>text-align</c>: the block's own last line, and the
+        /// last line before a forced line break.
+        /// </summary>
+        /// <remarks>
+        /// The block only <i>has</i> a last line once its flow actually finished - a pass that stopped at a
+        /// fragmentation break leaves the line it stopped on at the end of the list without it being the end
+        /// of the block, which is what <paramref name="blockFinished"/> distinguishes. The forced-break half
+        /// needs no such care: <see cref="CssLineBox.PrecedesForcedBreak"/> is stated by the flow when the
+        /// break closes the line, so it is already correct on a line finalized by an earlier pass.
+        /// </remarks>
+        private static bool EndsAParagraph(CssLineBox lineBox, bool blockFinished) =>
+            lineBox.PrecedesForcedBreak
+            || (blockFinished && lineBox.Equals(lineBox.OwnerBox.LineBoxes[^1]));
+
+        /// <summary>
+        /// The alignment <paramref name="lineBox"/> is actually laid out with, and - when that is
+        /// <see cref="HorizontalAlignment.Justify"/> - how many
+        /// <see cref="IsJustificationOpportunity">justification opportunities</see> it has to spread the
+        /// leftover over. Shared by the horizontal and vertical dispatchers, which differ only in the
+        /// physical pair <paramref name="towardStart"/>/<paramref name="towardEnd"/> and in how
+        /// <paramref name="endsAParagraph"/> is decided.
+        /// </summary>
+        /// <remarks>
+        /// Two css-text-3 rules meet here. §6.1/§6.3: a line that ends a paragraph is aligned by
+        /// <c>text-align-last</c>, not by <c>text-align</c>.
+        /// <see href="https://www.w3.org/TR/css-text-3/#justify-algos">§6.4.3</see>: a line whose contents
+        /// "cannot be stretched to the full width of the line box" - here, a justified line with no
+        /// justification opportunity at all - "must be aligned as specified by the
+        /// <c>text-align-last</c> property", so it too is handed to <c>text-align-last</c>.
+        /// <para>
+        /// <b>Deliberate deviation.</b> §6.4.3 continues "(If <c>text-align-last</c> is <c>justify</c>,
+        /// then they must be aligned as for <c>center</c>.)" This resolves that case to <b>start</b>
+        /// instead, because Chromium, Gecko and WebKit all do - none implements the parenthetical - and a
+        /// renderer that centred there would disagree with every engine an author checks against. See
+        /// <c>.claude/accepted-gaps/unexpandable-justified-line-starts-rather-than-centres.md</c>.
+        /// </para>
+        /// <para>
+        /// Resolving it to start rather than leaving the line alone is what matters under RTL, where the
+        /// start edge is not where the flow left the line: without this step,
+        /// <c>text-align-last: justify</c> on an RTL paragraph stranded its closing line against the
+        /// physical left edge - worse than leaving the property out.
+        /// </para>
+        /// </remarks>
+        private static (HorizontalAlignment Alignment, int Opportunities) ResolveUsedAlignment(
+            CssLineBox lineBox, bool endsAParagraph, HorizontalAlignment textAlign,
+            HorizontalAlignment towardStart, HorizontalAlignment towardEnd)
+        {
+            var used = endsAParagraph
+                ? ResolveLastLineAlignment(lineBox.OwnerBox, textAlign, towardStart, towardEnd)
+                : textAlign;
+
+            // The opportunity walk is O(words), so it runs once and only for a line being justified.
+            if (used != HorizontalAlignment.Justify) return (used, 0);
+
+            var opportunities = CountJustificationOpportunities(lineBox);
+            if (opportunities > 0) return (used, opportunities);
+
+            // towardStart, not Center: §6.4.3's parenthetical says centre, no browser implements it, and
+            // this follows the browsers - see the remarks above and the accepted-gap file they name.
+            var fallback = ResolveLastLineAlignment(lineBox.OwnerBox, textAlign, towardStart, towardEnd);
+            return (fallback == HorizontalAlignment.Justify ? towardStart : fallback, 0);
+        }
+
+        /// <summary>
+        /// The used alignment of a line <see cref="EndsAParagraph">ending a paragraph</see>, per
+        /// <see href="https://www.w3.org/TR/css-text-3/#text-align-last-property">css-text-3 §6.3</see>'s
+        /// <c>text-align-last</c>. Its initial <c>auto</c> defers to <paramref name="textAlign"/> - the
+        /// already-logical-resolved <c>text-align</c> - except under <c>justify</c>, where §6.3 makes it
+        /// start instead, which is why an ordinary justified paragraph's last line is ragged.
+        /// </summary>
+        /// <remarks>
+        /// PeachPDF treats <c>text-align-last</c> as an independent inherited longhand, the way every
+        /// shipping browser does, rather than as one half of a <c>text-align</c> shorthand over
+        /// <c>text-align-all</c>/<c>text-align-last</c> - see
+        /// <c>.claude/accepted-gaps/text-align-is-not-a-shorthand-of-text-align-all-and-last.md</c>.
+        /// </remarks>
+        private static HorizontalAlignment ResolveLastLineAlignment(CssBox blockBox, HorizontalAlignment textAlign,
+            HorizontalAlignment towardStart, HorizontalAlignment towardEnd) =>
+            blockBox.TextAlignLast.Value switch
+            {
+                TextAlignLast.Start => towardStart,
+                TextAlignLast.End => towardEnd,
+                TextAlignLast.Left => HorizontalAlignment.Left,
+                TextAlignLast.Right => HorizontalAlignment.Right,
+                TextAlignLast.Center => HorizontalAlignment.Center,
+                TextAlignLast.Justify => HorizontalAlignment.Justify,
+                // auto
+                _ => textAlign == HorizontalAlignment.Justify ? towardStart : textAlign
+            };
 
         /// <summary>
         /// UAX#9 L2 (visual reordering) + L4 (mirroring), applied at word granularity - each word is one
@@ -4295,12 +4416,18 @@ namespace PeachPDF.Html.Core.Dom
         private static void ApplyVerticalTextAlignment(CssLineBox lineBox, WritingModeFrame finalFrame,
             bool isLastColumn, double clientTop, double clientBottom)
         {
-            var textAlign = lineBox.OwnerBox.TextAlign.Value switch
-            {
-                HorizontalAlignment.Start => finalFrame.InlineStartIsBottom ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                HorizontalAlignment.End => finalFrame.InlineStartIsBottom ? HorizontalAlignment.Left : HorizontalAlignment.Right,
-                var other => other
-            };
+            // A vertical column's inline-start edge is physical bottom under direction:rtl, so that is the
+            // pair start/end - and text-align-last's own start/end - resolve against here.
+            var towardStart = finalFrame.InlineStartIsBottom ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+            var towardEnd = finalFrame.InlineStartIsBottom ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+
+            var declared = ResolveLogicalAlignment(lineBox.OwnerBox.TextAlign.Value, towardStart, towardEnd);
+
+            // isLastColumn rather than EndsAParagraph's blockFinished-gated check: CreateVerticalLineBoxes is
+            // always a single monolithic pass with no fragmentation break to leave an ambiguous "last" column
+            // behind, so the last entry in the list genuinely is the block's last column.
+            var (textAlign, opportunities) = ResolveUsedAlignment(lineBox,
+                isLastColumn || lineBox.PrecedesForcedBreak, declared, towardStart, towardEnd);
 
             switch (textAlign)
             {
@@ -4314,7 +4441,7 @@ namespace PeachPDF.Html.Core.Dom
                     ApplyVerticalCenterAlignment(lineBox, clientTop, clientBottom);
                     break;
                 case HorizontalAlignment.Justify:
-                    ApplyVerticalJustifyAlignment(lineBox, finalFrame, isLastColumn, clientTop, clientBottom);
+                    ApplyVerticalJustifyAlignment(lineBox, finalFrame, opportunities, clientTop, clientBottom);
                     break;
             }
         }
@@ -4404,10 +4531,11 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>
         /// <c>text-align: justify</c> for a vertical box: the inline-axis counterpart of
         /// <see cref="ApplyJustifyAlignment"/>, distributing the column's leftover extent over its
-        /// <see cref="IsJustificationOpportunity">justification opportunities</see> only. The block's
-        /// last column is exempt (css-text-3 §6.1) - always exact here, unlike horizontal's
-        /// <c>blockFinished</c>-gated check, since <c>CreateVerticalLineBoxes</c> is always a single
-        /// monolithic pass with no fragmentation break to leave an ambiguous "last" line behind.
+        /// <see cref="IsJustificationOpportunity">justification opportunities</see> only. Which columns
+        /// reach here is <see cref="ApplyVerticalTextAlignment"/>'s decision - a column ending a paragraph
+        /// (the block's last, or one a forced break closed) and one with nothing to expand at have both
+        /// already been routed to <c>text-align-last</c> instead, exactly as in
+        /// <see cref="ApplyHorizontalAlignment"/>.
         /// <c>text-indent</c> is not implemented for vertical content at all yet, so no indent is applied
         /// here (compare <see cref="ApplyJustifyAlignment"/>'s own <c>GetLineTextIndent</c> call). See
         /// <see cref="ApplyVerticalFlushAlignment"/>'s own remarks for why the edges are parameters.
@@ -4421,18 +4549,8 @@ namespace PeachPDF.Html.Core.Dom
         /// wrong place entirely.
         /// </remarks>
         private static void ApplyVerticalJustifyAlignment(CssLineBox lineBox, WritingModeFrame finalFrame,
-            bool isLastColumn, double clientTop, double clientBottom)
+            int opportunities, double clientTop, double clientBottom)
         {
-            if (isLastColumn) return;
-            if (lineBox.Words.Count == 0) return;
-
-            var opportunities = CountJustificationOpportunities(lineBox);
-
-            // §6.4.3, as in ApplyJustifyAlignment: unexpandable text aligns as text-align-last, whose
-            // initial `auto` resolves to start - which ApplyVerticalTextAlignment's own `left`/`right`
-            // cases would have produced, and which the flow already produced for LTR.
-            if (opportunities == 0) return;
-
             var (contentTop, contentBottom) = GetColumnContentExtent(lineBox);
             var leftover = clientBottom - clientTop - (contentBottom - contentTop);
 
@@ -4747,36 +4865,22 @@ namespace PeachPDF.Html.Core.Dom
         /// this fixes.
         /// </para>
         /// <para>
-        /// Two shapes deliberately do nothing, both of which used to be actively re-positioned. A line
-        /// with no justification opportunity at all is §6.4.3's <i>unexpandable text</i>: it aligns as
-        /// <c>text-align-last</c> says, whose initial <c>auto</c> under <c>text-align: justify</c> is
-        /// start - which is where the flow already left it. A line whose content is too long for its
-        /// measure is §6.1's overflowing line, also explicitly start-aligned ("any content that doesn't
-        /// fit overflows the line box's end edge"). Both were confirmed against Chromium, which leaves
-        /// a lone overflowing word on a justified non-last line at the line's start edge.
+        /// A line whose content is too long for its measure is not stretched at all: it is §6.1's
+        /// overflowing line, explicitly start-aligned ("any content that doesn't fit overflows the line
+        /// box's end edge"). Confirmed against Chromium, which leaves a lone overflowing word on a
+        /// justified non-last line at the line's start edge. §6.4.3's <i>unexpandable text</i> - a line
+        /// with no justification opportunity at all - never reaches here in the first place; see
+        /// <see cref="ResolveUsedAlignment"/>.
         /// </para>
         /// </remarks>
         /// <param name="lineBox">the line to justify</param>
-        /// <param name="blockFinished">
-        /// whether the flow reached the end of the owning block's content, which is what decides whether
-        /// the last line in the list is §6.1's exempt <i>last line of the block</i> — see
-        /// <see cref="FinalizeLineBoxes"/>.
+        /// <param name="opportunities">
+        /// how many justification opportunities the line has, already counted by
+        /// <see cref="ResolveUsedAlignment"/> - which is also what decided this line is to be stretched at
+        /// all, so it is always positive here.
         /// </param>
-        private static void ApplyJustifyAlignment(CssLineBox lineBox, bool blockFinished)
+        private static void ApplyJustifyAlignment(CssLineBox lineBox, int opportunities)
         {
-            // The block's last line is exempt (css-text-3 §6.1) - but only a block whose flow actually
-            // finished has one. A pass that stopped at a fragmentation break leaves the line it stopped on
-            // at the end of the list without it being the end of the block.
-            if (blockFinished && lineBox.Equals(lineBox.OwnerBox.LineBoxes[^1]))
-                return;
-
-            var opportunities = CountJustificationOpportunities(lineBox);
-
-            // §6.4.3: text that cannot be stretched aligns as text-align-last, whose initial `auto`
-            // resolves to start under `justify` - the position the flow already assigned.
-            if (opportunities == 0)
-                return;
-
             var indent = GetLineTextIndent(lineBox.OwnerBox, lineBox.Equals(lineBox.OwnerBox.LineBoxes[0]),
                 lineBox.FollowsForcedBreak);
 
@@ -4794,8 +4898,14 @@ namespace PeachPDF.Html.Core.Dom
             // §6.1: an overflowing line is start-aligned and spills past the end edge. Distributing the
             // negative leftover instead would pull each word back through the previous one's trailing
             // edge - overlapping, garbled text rather than a coherent overflowing line (issue #840).
+            // For LTR the start edge is where the flow already left the line, so nothing is done; for RTL
+            // it is the physical right one, and reaching it from an overflowing natural position is
+            // exactly ApplyRightAlignment's own negative-diff case.
             if (leftover <= 0)
+            {
+                if (isRtl) ApplyRightAlignment(lineBox);
                 return;
+            }
 
             // Scaled from the running opportunity count rather than accumulated per gap, so the final
             // word lands exactly on the end edge instead of a rounding error short of it.
