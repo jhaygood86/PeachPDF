@@ -45,5 +45,5 @@ or continuing to accept the gap. Narrower still in practice than before: needs b
 content-empty gap *and* a page-side override whose two sides genuinely differ in resolved width or
 height in the same document.
 
-Tracked as [issue #148](https://github.com/jhaygood86/PeachPDF/issues/148) (left open for the
-residual above).
+The common case above was closed by #1039 (issue #148, now closed). The residual is tracked as
+[issue #1041](https://github.com/jhaygood86/PeachPDF/issues/1041).
