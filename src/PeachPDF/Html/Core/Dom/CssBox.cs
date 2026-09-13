@@ -499,6 +499,22 @@ namespace PeachPDF.Html.Core.Dom
         internal bool IsTableGridDecorationBox { get; set; }
 
         /// <summary>
+        /// True on the anonymous block box <c>DomParser.CorrectInlineBoxesParent</c> generates around a
+        /// run of inline siblings when their parent also holds a block-level child (CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/visuren.html#anonymous-block-level">&#167;9.2.1.1</see>),
+        /// and never set anywhere else - the marker that says "the content inside me is one run of the
+        /// parent's own inline content", which nothing else about the box records.
+        /// <para>
+        /// Read by the intrinsic-width walk (<see cref="StartsNewLine"/>): a <c>float</c> is blockified
+        /// (CSS 2.1 §9.7) and so forces one of these wrappers around the inline content it sits beside,
+        /// but the float is out of flow and is *placed* on that content's line (§9.5) rather than on one
+        /// of its own. Without this marker the walk cannot tell such a wrapper from a real in-flow block
+        /// sibling, and measured the two as competing lines (issue #1033).
+        /// </para>
+        /// </summary>
+        internal bool IsInlineRunWrapper { get; set; }
+
+        /// <summary>
         /// Whether this box declares any background of its own (a visible <c>background-color</c> and/or
         /// at least one <c>background-image</c>/gradient layer) - used by
         /// <c>PdfGenerator.ResolveCanvasBackground</c> to decide, per CSS2.1 §14.2, whether
@@ -6972,7 +6988,27 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
         /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>
         /// <param name="maxWidth">The total width the content can take without line wrapping (with padding).</param>
-        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth)
+        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth) =>
+            GetMinMaxWidth(g, out minWidth, out maxWidth, out _);
+
+        /// <summary>
+        /// <see cref="GetMinMaxWidth(RGraphics, out double, out double)"/>, additionally reporting the
+        /// border/padding component of the two widths.
+        /// </summary>
+        /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
+        /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>
+        /// <param name="maxWidth">The total width the content can take without line wrapping (with padding).</param>
+        /// <param name="decoration">
+        /// The border/padding total <c>GetMinMaxSumWords</c> resolved for this subtree - see its own
+        /// <c>oldPaddingSum</c> save/restore, which combines a nested box's with its ancestor's by
+        /// <see cref="Math.Max(double,double)"/> rather than by addition. A caller measuring a box in
+        /// isolation, in place of the recursive descent that would otherwise have folded this into ITS
+        /// running total, needs this to fold it the same way and keep the accounting identical
+        /// (issue #1033). It is not a well-defined "outer width minus content" and must not be used as
+        /// one - see the accepted-gap note
+        /// <c>intrinsic-padding-total-is-not-the-winning-lines-own-padding.md</c>.
+        /// </param>
+        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth, out double decoration)
         {
             double min = 0f;
             double maxSum = 0f;
@@ -7008,6 +7044,7 @@ namespace PeachPDF.Html.Core.Dom
             // inline-level box measured directly.
             maxSum -= trailingSpace;
 
+            decoration = paddingSum;
             maxWidth = paddingSum + Math.Max(maxSum, widestLine);
             minWidth = paddingSum + (min < 90999 ? min : 0);
 
@@ -7062,7 +7099,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <para>
         /// <c>table-cell</c> is excluded because the cells of a row sit side by side, so their widths
         /// add up on the row's line rather than competing - and a cell measured on its own account is
-        /// measured by the table engine's own top-level <see cref="GetMinMaxWidth"/> call, which needs
+        /// measured by the table engine's own top-level
+        /// <see cref="GetMinMaxWidth(RGraphics, out double, out double)"/> call, which needs
         /// no reset. A box blockified by its <c>float</c> or by <c>position: absolute</c>/<c>fixed</c>
         /// reaches this with an already-blockified <see cref="DerivedStyle.ActualDisplay"/>, so it is
         /// correctly seen as block-level; a flex or grid ITEM does not, which is what
@@ -7070,15 +7108,84 @@ namespace PeachPDF.Html.Core.Dom
         /// </para>
         /// </summary>
         private static bool StartsNewLine(CssBox box) =>
+            // The float exception first, because it is decided by a field read that is false for
+            // every box that is not one of §9.2.1.1's anonymous wrappers.
+            !SharesItsLineWithAFloat(box)
             // Own display first, parent second, so the parent's ActualDisplay (recomputed per call,
             // not cached) is consulted only where the box's own display reads as inline-level. Worth
             // knowing before optimising this on instinct: that is NOT the rare case - measured over
             // the test suite, 138k of 148k calls reach the second operand, because the walk descends
             // through every inline box in the tree. The ordering is free, not a significant saving.
-            box.DerivedStyle.ActualDisplay is not (Keywords.Inline or Keywords.InlineBlock
-                or Keywords.InlineTable or Keywords.InlineFlex or Keywords.InlineGrid
-                or Keywords.TableCell)
-            || IsFlexOrGridItem(box);
+            && (box.DerivedStyle.ActualDisplay is not (Keywords.Inline or Keywords.InlineBlock
+                    or Keywords.InlineTable or Keywords.InlineFlex or Keywords.InlineGrid
+                    or Keywords.TableCell)
+                || IsFlexOrGridItem(box));
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is an <see cref="IsInlineRunWrapper">anonymous wrapper</see>
+        /// that only exists because a <c>float</c> sibling is blockified (CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/visuren.html#floats">&#167;9.5</see>/&#167;9.7), so the
+        /// line it holds is the very line that float is placed on rather than one of its own.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Deliberately requires that the wrapper's parent hold <em>no</em> in-flow block-level child
+        /// besides other wrappers: where a real block sibling is also there, the wrapper's line genuinely
+        /// does end at the wrapper, and merging it into the next one would be the error issue #1017 was
+        /// about. <see cref="FloatsShareTheLine"/> is the same question asked from the float's side.
+        /// </para>
+        /// <para>
+        /// This answers "does the running line total carry on through this box", and <b>only</b> that -
+        /// what keeps a second run of inline content after the float on the same line as the first. It
+        /// deliberately does <em>not</em> answer "has the line ended for white space purposes", which
+        /// is the other thing a line boundary decides: a float is out of flow, and
+        /// <see href="https://www.w3.org/TR/css-text-3/#text-processing">css-text-3 §1.5</see> ignores
+        /// out-of-flow elements for that adjacency, so the space before a float still hangs. The float
+        /// branch of <see cref="GetMinMaxSumWords"/> hangs it explicitly for exactly this reason.
+        /// </para>
+        /// </remarks>
+        private static bool SharesItsLineWithAFloat(CssBox box) =>
+            box.IsInlineRunWrapper && box.ParentBox is { } parent && FloatsShareTheLine(parent);
+
+        /// <summary>
+        /// Whether a floated child of <paramref name="box"/> is placed beside <paramref name="box"/>'s
+        /// own inline content, and so ADDS its width to that content's line for max-content sizing,
+        /// rather than opening a competing line of its own.
+        /// <para>
+        /// True when every in-flow child is inline-level content - an inline box, or the anonymous block
+        /// CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visuren.html#anonymous-block-level">&#167;9.2.1.1</see>
+        /// generates around a run of them (<see cref="IsInlineRunWrapper"/>) - because a float is taken
+        /// out of the flow but is still placed beside the inline content of the block it is in (§9.5).
+        /// Vacuously true for a box whose children are all floats, which do sit side by side.
+        /// </para>
+        /// <para>
+        /// False as soon as one in-flow child is genuinely block-level: a float between two block-level
+        /// siblings is not on either one's line, and the lines still compete for "widest line wins".
+        /// An out-of-flow <c>position: absolute</c>/<c>fixed</c> child is neither - it contributes
+        /// nothing to its containing block's intrinsic size (CSS 2.1 §10.3.7) - so it is skipped.
+        /// </para>
+        /// </summary>
+        private static bool FloatsShareTheLine(CssBox box)
+        {
+            var hasFloat = false;
+
+            foreach (var child in box.Boxes)
+            {
+                if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                if (child.IsFloated)
+                {
+                    hasFloat = true;
+                    continue;
+                }
+
+                if (child.IsOutOfFlow) continue;
+
+                if (!child.IsInline && !child.IsInlineRunWrapper) return false;
+            }
+
+            return hasFloat;
+        }
 
         /// <summary>
         /// Whether this box is a flex or grid ITEM, and so blockified by the formatting context it
@@ -7146,6 +7253,10 @@ namespace PeachPDF.Html.Core.Dom
             // words but their own borders) summed all three siblings' unrelated border/padding into one
             // box's shrink-to-fit width instead of using only the widest line's own padding, inflating
             // position:absolute ".eyes"'s auto width well past its actual content.
+            //
+            // Worth knowing before reading anything else into it: it is NOT a well-defined
+            // "outer width minus content" and no caller may treat it as one - see the accepted-gap
+            // note `intrinsic-padding-total-is-not-the-winning-lines-own-padding.md`.
             double? oldPaddingSum = null;
 
             // not inline (block) boxes start a new line so we need to reset the max sum
@@ -7326,10 +7437,88 @@ namespace PeachPDF.Html.Core.Dom
             }
             else
             {
+                // Asked at most once per box, and only once a floated child is actually reached -
+                // every other box pays nothing for it.
+                bool? floatsShareTheLine = null;
+
                 // recursively on all the child boxes
                 foreach (var childBox in box.Boxes)
                 {
                     if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                    // A float is out of flow but is still placed BESIDE the inline content of the block
+                    // it is in (CSS 2.1 §9.5), so its width adds to that content's line. The flat walk
+                    // cannot express that by descending into it: §9.7 blockifies a float, so
+                    // StartsNewLine correctly reads it as block-level and would have it open a line of
+                    // its own, competing with the text beside it instead of adding to it (issue #1033).
+                    // Measured in isolation and added, exactly as the flex-row branch above measures an
+                    // item.
+                    if (childBox.IsFloated && (floatsShareTheLine ??= FloatsShareTheLine(box)))
+                    {
+                        childBox.GetMinMaxWidth(g, out var floatMin, out var floatMax,
+                            out var floatDecoration);
+
+                        // paddingSum is a SEPARATE running total from maxSum, combined down a chain of
+                        // boxes by Math.Max rather than by addition (see the oldPaddingSum save and
+                        // restore above). The isolated measurement folded the float's decoration into
+                        // the widths it returned, so the whole of them cannot go on the line: that
+                        // ADDS what the recursive descent would have MAXed. Split back out and folded
+                        // in the way the descent folded it, so this branch changes only WHERE the
+                        // float's content lands - on the line rather than competing with it - and
+                        // nothing about the padding accounting. Acid2's own ".smile div div" (a
+                        // shrink-to-fit absolute box with a 1em border around one 1em-bordered float)
+                        // is the shape that catches the difference: 108pt against its real 90pt, drawn
+                        // over the mouth beside it. The accounting itself is separately wrong — see
+                        // .claude/accepted-gaps/intrinsic-padding-total-is-not-the-winning-lines-own-padding.md
+                        // — but wrong identically before and after this change, which is the point.
+                        floatMin -= floatDecoration;
+                        floatMax -= floatDecoration;
+                        paddingSum = Math.Max(paddingSum, floatDecoration);
+
+                        // This walk otherwise never consults a box's own explicit CSS `width` - the fold
+                        // further down does it for a child on the recursive path, which this one leaves.
+                        // A float declaring one is the ordinary case, not an exotic one, and unlike that
+                        // fold's floor this REPLACES the measured width: a non-auto width IS the float's
+                        // used width (CSS 2.1 §10.3.5), so content narrower than it does not shrink the
+                        // float and content wider than it overflows instead of widening it. A declared
+                        // width is a CONTENT width, and so is what is added to the line here - the
+                        // float's decoration has just been split out into paddingSum above.
+                        if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%'))
+                        {
+                            floatMax = floatMin = CssValueParser.ParseLength(childBox.Width, 0, childBox);
+                        }
+
+                        var floatMargins = childBox.ActualMarginLeft + childBox.ActualMarginRight;
+
+                        // The float is an unbreakable unit on the line and the run of words before it
+                        // ends there, so min-content takes the WIDER of the two rather than continuing
+                        // the run through it.
+                        min = Math.Max(min, unbreakableRunWidth);
+                        unbreakableRunWidth = 0;
+                        previousWord = null;
+                        trailingRegionalIndicatorCount = 0;
+                        trailingGraphemeContext = string.Empty;
+                        min = Math.Max(min, floatMin + floatMargins);
+
+                        // A float is out of flow, and
+                        // <see href="https://www.w3.org/TR/css-text-3/#text-processing">css-text-3
+                        // §1.5</see> says "intervening inline box boundaries and out-of-flow elements
+                        // must be ignored" - so landing on the line does NOT make the float content
+                        // following the space before it. That space is still the end of the line's own
+                        // in-flow content, and §4.1.2 hangs it. This is the one place the two questions
+                        // this branch answers come apart: the float's WIDTH joins the line (above),
+                        // while for whitespace the float is transparent and the line has ended (here).
+                        // Treated as an ordinary inter-word gap instead, `XY <span style="float:left">
+                        // ZZZZ</span>` measured 46.1836pt where Chromium and Firefox both give
+                        // 39.5859pt - one space too wide.
+                        maxSum -= trailingSpace;
+                        trailingSpace = 0;
+
+                        maxSum += floatMax + floatMargins;
+
+                        atLineStart = false;
+                        continue;
+                    }
 
                     marginSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
 
