@@ -67,11 +67,15 @@ hung its space and left `trailingSpace` at 0 — and it would be wrong for anyth
 selects that does not in fact end the line before it. Since issue #1017 that predicate decides
 block-level-ness from `display` — its own, plus the PARENT's via `IsFlexOrGridItem`, because a flex or
 grid item is blockified by its formatting context and its own computed value still says otherwise here.
-It is not a perfect proxy for "ends the line": a **float** is selected (CSS 2.1 §9.7 blockifies it) and
-does not in fact end the line before it. Since issue #1033 a float never reaches that predicate on the
-recursive path at all where it shares the line — `GetMinMaxSumWords`' child loop measures it in
-isolation and adds it, zeroing `trailingSpace` as it lands, exactly as the flex-row branch does — so
-the space before a float is now kept as the ordinary inter-word gap it is.
+A **float** is selected (CSS 2.1 §9.7 blockifies it), and since issue #1033 it never reaches the
+predicate on the recursive path at all where it shares the line: `GetMinMaxSumWords`' child loop
+measures it in isolation and adds it. That branch is the one place the rule's two halves come apart.
+It hangs the space (`maxSum -= trailingSpace`) rather than zeroing it the way the flex-row branch
+does, because a float is **out of flow** and
+[css-text-3 §1.5](https://www.w3.org/TR/css-text-3/#text-processing) ignores out-of-flow elements for
+this adjacency: the space really is at the end of the line's own in-flow content, even though the
+float's width lands on that line. Zeroing it instead measured
+`XY <span style="float:left">ZZZZ</span>` at 46.1836pt where Chromium and Firefox both give 39.5859.
 
 **Subtracting after the epilogue's `Math.Max`** rather than before it: `maxSum` is then the widest of
 two *different* lines, and the space belongs to only one of them.

@@ -11,9 +11,11 @@ to their **sum**, because a float is placed beside the inline content of the blo
 <div style="float: left; font: 16px monospace">XY <span style="float: left">ZZZZ</span></div>
 ```
 
-was 26.3906pt wide — the float alone — and is now 46.1836pt, the seven characters it actually holds.
-The same applies to two floats with nothing between them: `AAA` + `BBB` used to size the container to
-one of them, so the second wrapped underneath; both now fit side by side.
+was 26.3906pt wide — the float alone — and is now 39.5859pt: `XY` plus `ZZZZ`. The space between them
+is not counted, because a float is out of flow and css-text-3 §1.5 ignores out-of-flow elements when
+deciding adjacency, so that space is still at the end of the line's own in-flow content and hangs
+(§4.1.2). The same applies to two floats with nothing between them: `AAA` + `BBB` used to size the
+container to one of them, so the second wrapped underneath; both now fit side by side.
 
 Documents that relied on the old, narrower size will see such a box grow, and content that used to be
 pushed onto a second line inside it may now fit on one. Boxes with no float among their inline content

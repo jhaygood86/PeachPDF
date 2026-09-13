@@ -11,16 +11,17 @@ where the answer is `text + float`.
 
 Float widths at `font: 16px monospace` (one character advances 6.5977pt):
 
-| markup inside `<div style="float:left">` | before | after |
-|---|---|---|
-| `XY <span style="float:left">ZZZZ</span>` | 26.3906 | **46.1836** |
-| …the same under `white-space: nowrap` | 26.3906 | **46.1836** |
-| `<span style="float:left">AAA</span><span style="float:left">BBB</span>` | 19.7930 | **39.5859** |
-| `<p>AB CD</p><span style="float:left">EF</span>` | 32.9883 | 32.9883 (unchanged, and must be) |
+| markup inside `<div style="float:left">` | before | after | Chromium + Firefox |
+|---|---|---|---|
+| `XY <span style="float:left">ZZZZ</span>` | 26.3906 | **39.5859** | 39.5859 |
+| …the same under `white-space: nowrap` | 26.3906 | **39.5859** | 39.5859 |
+| `<span style="float:left">AAA</span><span style="float:left">BBB</span>` | 19.7930 | **39.5859** | 39.5859 |
+| `<p>AB CD</p><span style="float:left">EF</span>` | 32.9883 | 32.9883 | 32.9883 (unchanged, and must be) |
 
-46.1836 is `"XY" + space + "ZZZZ"`, the same seven characters as one plain run. The `nowrap` row was a
-regression from issue #1017 — the old predicate excused any `nowrap` box from opening a line, so the
-float was summed onto it for a reason that had nothing to do with floats.
+39.5859 is `"XY" + "ZZZZ"` — six characters, **without** the space between them, for the reason in the
+next section. The `nowrap` row was a regression from issue #1017: the old predicate excused any
+`nowrap` box from opening a line, so the float was summed onto it for a reason that had nothing to do
+with floats.
 
 ## The load-bearing idea: the walk needed to know it was in an IFC, and the marker for that was missing
 
@@ -38,16 +39,38 @@ predicates read it:
   those wrappers), so a float child is beside it. Vacuously true for a box whose children are all
   floats, which is right: they do sit side by side.
 - `SharesItsLineWithAFloat(box)` — the same question from the wrapper's side, so `StartsNewLine`
-  returns false for it and the line is *not* closed at the float. **This is what keeps the space**:
-  without it the wrapper's epilogue hangs `XY `'s trailing space (css-text-3 §4.1.2) and the answer is
-  39.5859, one space short, because the wrapper wrongly believes its line ended.
+  returns false for it and the running line total carries on THROUGH the float. That is what keeps a
+  second run of inline content after the float on the first run's line instead of competing with it.
 
 The float itself is then measured in isolation via its own top-level `GetMinMaxWidth` and added, which
-is the mechanism `IsFlexRow` already uses per flex item — no new machinery, and the same
-`trailingSpace = 0` that branch does (see
-[.claude/invariants/intrinsic-a-trailing-space-may-only-hang-where-a-line-is-known-to-end.md](../invariants/intrinsic-a-trailing-space-may-only-hang-where-a-line-is-known-to-end.md)).
-`min` takes `Math.Max` with the float's own min-content and ends the unbreakable run at it, because a
-float is a wrap opportunity and an unbreakable unit, which is what Blink does too.
+is the mechanism `IsFlexRow` already uses per flex item — no new machinery. It differs from that branch
+in exactly one way, and the next section is about why: a flex row zeroes `trailingSpace` (it is in-flow
+content following the space), while the float branch *hangs* it. `min` takes `Math.Max` with the
+float's own min-content and ends the unbreakable run at it, because a float is a wrap opportunity and
+an unbreakable unit, which is what Blink does too.
+
+## The two questions a line boundary answers are not the same question
+
+The first version of this let `SharesItsLineWithAFloat` decide **both** "does the running total carry
+on" and "has the line ended for white space purposes", and so suppressed the trailing-space hang
+before a float: `XY <span style="float:left">ZZZZ</span>` measured 46.1836pt. That is one space too
+wide. A float is out of flow, and
+[css-text-3 §1.5](https://www.w3.org/TR/css-text-3/#text-processing) says "intervening inline box
+boundaries and **out-of-flow elements** must be ignored" for that adjacency — so the space at the end
+of `XY ` really is at the end of the line's own in-flow content, and §4.1.2 hangs it (under `normal`
+and `nowrap` alike). Landing the float's *width* on the line does not make the float *content* that
+follows the space.
+
+So the float branch hangs the space explicitly (`maxSum -= trailingSpace`) rather than treating it as
+an ordinary inter-word gap the way the flex-row branch does — a flex row is in-flow and genuinely is
+content following the space; a float is not. `InlineContentEitherSideOfAFloat_StaysOnOneLine` is what
+keeps the other half honest: delete `SharesItsLineWithAFloat` entirely and the headline case still
+measures 39.5859, but a second run after the float drops off the line.
+
+**This was caught in review, against real browsers.** 46.1836 was derived from reading Blink's
+`ComputeInlinePreferredLogicalWidths` from memory, and the accepted-gap file this change deleted had
+already flagged that number as reported-but-never-independently-measured. It should have been measured
+before it was built on.
 
 ## What running it turned up
 
@@ -94,11 +117,17 @@ reason: it is a box-tree change, and this issue was about the measurement.
 
 ## Evidence
 
-`IntrinsicWidthWalkTests`, 36 fixtures. Six are new: the float beside inline content (plain and
-`nowrap`), the geometry consequence, consecutive floats, the block-level-sibling contrast case, the
-float's declared width and margins (including its padding, and the declared width replacing rather
-than flooring), and an out-of-flow/`display:none` sibling not disturbing the gate. Five fail against
-the merge base; the sixth is the contrast case, which must keep passing and does.
+`IntrinsicWidthWalkTests`, 37 fixtures. Seven are new: the float beside inline content (plain and
+`nowrap`), inline content either side of a float staying on one line, the geometry consequence,
+consecutive floats, the block-level-sibling contrast case, the float's declared width and margins
+(including its padding, and the declared width replacing rather than flooring), and an
+out-of-flow/`display:none` sibling not disturbing the gate. Six fail against the merge base; the
+seventh is the contrast case, which must keep passing and does.
 
-Full suite green on net8.0 (11,077 passed / 0 failed / 9 skipped), solution rebuild with 0 warnings,
+Every expected value is either browser-measured (Chromium + Firefox, via the review pass) or built
+from the helpers out of character counts, with one exception called out in the fixture itself:
+`InlineContentEitherSideOfAFloat_StaysOnOneLine` is derived from css-text-3 §4.1.1's collapsing
+across an out-of-flow element and has not been measured against a browser.
+
+Full suite green on net8.0 (11,078 passed / 0 failed / 9 skipped), solution rebuild with 0 warnings,
 100% diff coverage on the changed production lines, all 115 showcases byte-identical.

@@ -361,17 +361,43 @@ namespace PeachPDF.Tests.Integration
             // A float is taken out of the flow but is still placed BESIDE the inline content of the
             // block it is in (CSS 2.1 §9.5), so for max-content sizing its width adds to that line.
             // The walk saw only that §9.7 blockifies it and had it open a competing line, measuring
-            // 26.3906pt — `max("XY " , "ZZZZ")` — against the 46.1836pt the same seven characters
-            // measure as one plain run. Run under `white-space: nowrap` too: that half is a
-            // regression from issue #1017, where the old predicate excused any `nowrap` box from
-            // opening a line and summed the float onto it for a reason that had nothing to do with
-            // floats (issue #1033).
+            // 26.3906pt — `max("XY ", "ZZZZ")` — against the 39.5859pt Chromium and Firefox both
+            // give (issue #1033).
+            //
+            // Compared against the six characters WITHOUT the space, not the seven with it: the
+            // float is out of flow, and css-text-3 §1.5 ignores out-of-flow elements when deciding
+            // adjacency, so the space still ends the line's own in-flow content and hangs (§4.1.2).
+            // Landing the float's width on the line does not make it content following that space.
+            //
+            // Run under `white-space: nowrap` too: that half is a regression from issue #1017, where
+            // the old predicate excused any `nowrap` box from opening a line and summed the float
+            // onto it for a reason that had nothing to do with floats. A `nowrap` line's trailing
+            // space hangs the same way (css-text-3 §4.1.2 hangs it under `normal` and `nowrap`
+            // alike), so the two agree.
             Assert.Equal(
-                await FloatWidthAsync("XY ZZZZ"),
+                await FloatWidthAsync("XYZZZZ"),
                 await FloatWidthAsync("XY <span style='float:left'>ZZZZ</span>"), 3);
             Assert.Equal(
-                await NowrapFloatWidthAsync("XY ZZZZ"),
+                await NowrapFloatWidthAsync("XYZZZZ"),
                 await NowrapFloatWidthAsync("XY <span style='float:left'>ZZZZ</span>"), 3);
+        }
+
+        [Fact]
+        public async Task InlineContentEitherSideOfAFloat_StaysOnOneLine()
+        {
+            // What `SharesItsLineWithAFloat` is for, now that hanging the space is decided separately:
+            // the running line total carries THROUGH the float, so a second run of inline content after
+            // it is still on the first run's line rather than competing with it. Without that, the two
+            // runs sit in separate §9.2.1.1 wrappers that each open a line and this measures 39.5859pt
+            // — the first run plus the float — while holding three things.
+            //
+            // Expected value is derived, not browser-measured: the two collapsible spaces around the
+            // float collapse to one (css-text-3 §4.1.1 collapses across the out-of-flow element, which
+            // §1.5 ignores for adjacency), and that one is interior to the line, so the text measures
+            // as the single run "XY more" and the float's width adds to it.
+            Assert.Equal(
+                await FloatWidthAsync("XY moreZZZZ"),
+                await FloatWidthAsync("XY <span style='float:left'>ZZZZ</span> more"), 3);
         }
 
         [Fact]
@@ -456,7 +482,7 @@ namespace PeachPDF.Tests.Integration
             // Neither a `position: absolute` sibling (which contributes nothing to its containing
             // block's intrinsic size, CSS 2.1 §10.3.7) nor a `display: none` one is in-flow
             // block-level content, so neither may make the float look like it sits between blocks.
-            var beside = await FloatWidthAsync("XY ZZZZ");
+            var beside = await FloatWidthAsync("XYZZZZ");
 
             Assert.Equal(beside, await FloatWidthAsync(
                 "XY <span style='float:left'>ZZZZ</span><span style='position:absolute'>Q</span>"), 3);

@@ -7128,10 +7128,21 @@ namespace PeachPDF.Html.Core.Dom
         /// line it holds is the very line that float is placed on rather than one of its own.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// Deliberately requires that the wrapper's parent hold <em>no</em> in-flow block-level child
         /// besides other wrappers: where a real block sibling is also there, the wrapper's line genuinely
         /// does end at the wrapper, and merging it into the next one would be the error issue #1017 was
         /// about. <see cref="FloatsShareTheLine"/> is the same question asked from the float's side.
+        /// </para>
+        /// <para>
+        /// This answers "does the running line total carry on through this box", and <b>only</b> that -
+        /// what keeps a second run of inline content after the float on the same line as the first. It
+        /// deliberately does <em>not</em> answer "has the line ended for white space purposes", which
+        /// is the other thing a line boundary decides: a float is out of flow, and
+        /// <see href="https://www.w3.org/TR/css-text-3/#text-processing">css-text-3 §1.5</see> ignores
+        /// out-of-flow elements for that adjacency, so the space before a float still hangs. The float
+        /// branch of <see cref="GetMinMaxSumWords"/> hangs it explicitly for exactly this reason.
+        /// </para>
         /// </remarks>
         private static bool SharesItsLineWithAFloat(CssBox box) =>
             box.IsInlineRunWrapper && box.ParentBox is { } parent && FloatsShareTheLine(parent);
@@ -7489,12 +7500,22 @@ namespace PeachPDF.Html.Core.Dom
                         trailingGraphemeContext = string.Empty;
                         min = Math.Max(min, floatMin + floatMargins);
 
+                        // A float is out of flow, and
+                        // <see href="https://www.w3.org/TR/css-text-3/#text-processing">css-text-3
+                        // §1.5</see> says "intervening inline box boundaries and out-of-flow elements
+                        // must be ignored" - so landing on the line does NOT make the float content
+                        // following the space before it. That space is still the end of the line's own
+                        // in-flow content, and §4.1.2 hangs it. This is the one place the two questions
+                        // this branch answers come apart: the float's WIDTH joins the line (above),
+                        // while for whitespace the float is transparent and the line has ended (here).
+                        // Treated as an ordinary inter-word gap instead, `XY <span style="float:left">
+                        // ZZZZ</span>` measured 46.1836pt where Chromium and Firefox both give
+                        // 39.5859pt - one space too wide.
+                        maxSum -= trailingSpace;
+                        trailingSpace = 0;
+
                         maxSum += floatMax + floatMargins;
 
-                        // The float lands on the line AFTER whatever was measured onto it, so a space
-                        // that was trailing is now an ordinary inter-word gap - the same reasoning (and
-                        // the same invariant) as the flex-row branch's own reset above.
-                        trailingSpace = 0;
                         atLineStart = false;
                         continue;
                     }
