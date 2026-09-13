@@ -137,8 +137,15 @@ namespace PeachPDF.CSS
             return ColorValidator.Convert(colorTokens) is not null;
         }
 
-        private static bool IsHexColor(string data) =>
-            data.Length is 3 or 4 or 6 or 8 && data.All(Uri.IsHexDigit);
+        private static bool IsHexColor(System.ReadOnlySpan<char> data)
+        {
+            if (data.Length is not (3 or 4 or 6 or 8)) return false;
+            foreach (var c in data)
+            {
+                if (!Uri.IsHexDigit(c)) return false;
+            }
+            return true;
+        }
 
         /// <summary>
         /// Merges a <c>#</c> delimiter followed by a number/dimension back into one hex-color token. The

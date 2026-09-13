@@ -755,7 +755,7 @@ namespace PeachPDF.Html.Core.Parse
 
             var urlToken = tokens.SingleOfTypeOrNull(TokenType.Url);
 
-            return urlToken is { } token ? new CssImage.Url(token.Data) : null;
+            return urlToken is { } token ? new CssImage.Url(token.Data.ToString()) : null;
         }
 
         /// <summary>
@@ -776,18 +776,18 @@ namespace PeachPDF.Html.Core.Parse
             var segment = new List<Token>();
 
             static string? FirstArgData(Token? functionToken) =>
-                functionToken is { } ft && ft.ArgumentTokens.Count > 0 ? ft.ArgumentTokens[0].Data : null;
+                functionToken is { } ft && ft.ArgumentTokens.Count > 0 ? ft.ArgumentTokens[0].Data.ToString() : null;
 
             void FlushSegment()
             {
                 if (segment.Count == 0) return;
 
                 var urlToken = segment.SingleOfTypeOrNull(TokenType.Url);
-                var formatToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data == "format");
-                var techToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data == "tech");
-                var localToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data == "local");
+                var formatToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data.Is("format"));
+                var techToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data.Is("tech"));
+                var localToken = segment.SingleOrNull(x => x.Type == TokenType.Function && x.Data.Is("local"));
 
-                result.Add(new CssFontFace(urlToken?.Data, FirstArgData(formatToken), FirstArgData(techToken), FirstArgData(localToken)));
+                result.Add(new CssFontFace(urlToken?.Data.ToString(), FirstArgData(formatToken), FirstArgData(techToken), FirstArgData(localToken)));
                 segment = [];
             }
 
@@ -864,7 +864,7 @@ namespace PeachPDF.Html.Core.Parse
 
             if (tokens is [{ Type: TokenType.String } stringToken])
             {
-                return stringToken.Data;
+                return stringToken.Data.ToString();
             }
 
             return propValue;
@@ -1094,10 +1094,10 @@ namespace PeachPDF.Html.Core.Parse
             return null;
         }
 
-        private static bool Named(string data, string functionName) =>
-            string.Equals(data, functionName, StringComparison.OrdinalIgnoreCase);
+        private static bool Named(ReadOnlySpan<char> data, string functionName) =>
+            data.Equals(functionName, StringComparison.OrdinalIgnoreCase);
 
-        private static bool IsRecognizedTransformFunctionName(string name) =>
+        private static bool IsRecognizedTransformFunctionName(ReadOnlySpan<char> name) =>
             Named(name, FunctionNames.Translate) || Named(name, FunctionNames.TranslateX) || Named(name, FunctionNames.TranslateY) ||
             Named(name, FunctionNames.TranslateZ) || Named(name, FunctionNames.Translate3d) ||
             Named(name, FunctionNames.Scale) || Named(name, FunctionNames.ScaleX) || Named(name, FunctionNames.ScaleY) ||
@@ -1351,14 +1351,14 @@ namespace PeachPDF.Html.Core.Parse
             {
                 List<Token> tokens = pooledTokens;
                 funcToken = tokens.FirstOrNull(t => t.Type == TokenType.Function &&
-                    (string.Equals(t.Data, FunctionNames.LinearGradient, StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(t.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase)));
+                    (t.Data.Isi(FunctionNames.LinearGradient) ||
+                     t.Data.Isi(FunctionNames.RepeatingLinearGradient)));
             }
 
             if (funcToken is not { } func)
                 return null;
 
-            bool isRepeating = string.Equals(func.Data, FunctionNames.RepeatingLinearGradient, StringComparison.OrdinalIgnoreCase);
+            bool isRepeating = func.Data.Isi(FunctionNames.RepeatingLinearGradient);
 
             var args = func.ArgumentTokens.ToList();
             if (args.Count == 0)
@@ -1368,7 +1368,7 @@ namespace PeachPDF.Html.Core.Parse
             int stopOffset = 0;
 
             var firstGroup = args[0];
-            var firstIdents = firstGroup.Where(t => t.Type == TokenType.Ident).Select(t => t.Data.ToLowerInvariant()).ToList();
+            var firstIdents = firstGroup.Where(t => t.Type == TokenType.Ident).Select(t => t.Data.ToLowerInvariantString()).ToList();
 
             // Phase D: detect "in <colorspace> [<hue-method>]"
             var (linearColorSpace, linearHueMethod, nextIdentIdx) = TryParseInColorSpace(firstIdents);
@@ -1384,7 +1384,7 @@ namespace PeachPDF.Html.Core.Parse
                 ColorInterpolationMethodGrammar.TryExtractInterpolationMethod(firstGroup, out var directionRemainder, out _))
                 directionTokens = directionRemainder;
 
-            var dirIdents = directionTokens.Where(t => t.Type == TokenType.Ident).Select(t => t.Data.ToLowerInvariant()).ToList();
+            var dirIdents = directionTokens.Where(t => t.Type == TokenType.Ident).Select(t => t.Data.ToLowerInvariantString()).ToList();
             if (dirIdents.Count > 0 && dirIdents[0] == "to")
             {
                 // keyword direction: "to right", "to bottom left", etc.
@@ -1477,14 +1477,14 @@ namespace PeachPDF.Html.Core.Parse
             {
                 List<Token> tokens = pooledTokens;
                 funcToken = tokens.FirstOrNull(t => t.Type == TokenType.Function &&
-                    (string.Equals(t.Data, FunctionNames.RadialGradient, StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(t.Data, FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase)));
+                    (t.Data.Isi(FunctionNames.RadialGradient) ||
+                     t.Data.Isi(FunctionNames.RepeatingRadialGradient)));
             }
 
             if (funcToken is not { } func)
                 return null;
 
-            bool isRepeating = string.Equals(func.Data, FunctionNames.RepeatingRadialGradient, StringComparison.OrdinalIgnoreCase);
+            bool isRepeating = func.Data.Isi(FunctionNames.RepeatingRadialGradient);
 
             var args = func.ArgumentTokens.ToList();
             if (args.Count == 0)
@@ -1499,7 +1499,7 @@ namespace PeachPDF.Html.Core.Parse
             var firstGroupItems = firstGroup.ToItems();
             var firstIdents = firstGroupItems.SelectMany(i => i)
                                             .Where(t => t.Type == TokenType.Ident)
-                                            .Select(t => t.Data.ToLowerInvariant())
+                                            .Select(t => t.Data.ToLowerInvariantString())
                                             .ToList();
 
             // Phase D: detect "in <colorspace> [<hue-method>]"
@@ -1509,31 +1509,31 @@ namespace PeachPDF.Html.Core.Parse
             // Guard: stop collecting once we see an ident that is not a known gradient modifier
             // keyword, because it must be a CSS color name (e.g. "red" in "red 0 8px" followed
             // by stop positions that would otherwise be misread as explicit radii).
-            static bool IsRadialModifierIdent(string id) =>
-                string.Equals(id, "circle", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "ellipse", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "in", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "closest-side", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "farthest-corner", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "closest-corner", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "farthest-side", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "srgb", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "srgb-linear", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "oklab", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "oklch", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "lab", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "lch", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "hsl", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "hwb", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "display-p3", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "xyz", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "xyz-d50", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "xyz-d65", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "shorter", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "longer", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "increasing", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "decreasing", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(id, "hue", StringComparison.OrdinalIgnoreCase);
+            static bool IsRadialModifierIdent(ReadOnlySpan<char> id) =>
+                id.Isi("circle") ||
+                id.Isi("ellipse") ||
+                id.Isi("in") ||
+                id.Isi("closest-side") ||
+                id.Isi("farthest-corner") ||
+                id.Isi("closest-corner") ||
+                id.Isi("farthest-side") ||
+                id.Isi("srgb") ||
+                id.Isi("srgb-linear") ||
+                id.Isi("oklab") ||
+                id.Isi("oklch") ||
+                id.Isi("lab") ||
+                id.Isi("lch") ||
+                id.Isi("hsl") ||
+                id.Isi("hwb") ||
+                id.Isi("display-p3") ||
+                id.Isi("xyz") ||
+                id.Isi("xyz-d50") ||
+                id.Isi("xyz-d65") ||
+                id.Isi("shorter") ||
+                id.Isi("longer") ||
+                id.Isi("increasing") ||
+                id.Isi("decreasing") ||
+                id.Isi("hue");
 
             var explicitSizeLengths = new List<Length>();
             bool seenNonModifierIdent = false;
@@ -1542,7 +1542,7 @@ namespace PeachPDF.Html.Core.Parse
                 if (item.Count == 1 && item[0].Type == TokenType.Ident)
                 {
                     var id = item[0].Data;
-                    if (id.Equals("at", StringComparison.OrdinalIgnoreCase)) break;
+                    if (id.Isi("at")) break;
                     if (!IsRadialModifierIdent(id)) seenNonModifierIdent = true;
                     continue;
                 }
@@ -1593,7 +1593,7 @@ namespace PeachPDF.Html.Core.Parse
                     {
                         if (item.Count == 1 && item[0].Type == TokenType.Ident)
                         {
-                            string ident = item[0].Data.ToLowerInvariant();
+                            string ident = item[0].Data.ToLowerInvariantString();
                             if (!inPosition)
                             {
                                 if (ident == "at") inPosition = true;
@@ -1706,14 +1706,14 @@ namespace PeachPDF.Html.Core.Parse
             {
                 List<Token> tokens = pooledTokens;
                 funcToken = tokens.FirstOrNull(t => t.Type == TokenType.Function &&
-                    (string.Equals(t.Data, FunctionNames.ConicGradient, StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(t.Data, FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase)));
+                    (t.Data.Isi(FunctionNames.ConicGradient) ||
+                     t.Data.Isi(FunctionNames.RepeatingConicGradient)));
             }
 
             if (funcToken is not { } func)
                 return null;
 
-            bool isRepeating = string.Equals(func.Data, FunctionNames.RepeatingConicGradient, StringComparison.OrdinalIgnoreCase);
+            bool isRepeating = func.Data.Isi(FunctionNames.RepeatingConicGradient);
 
             var args = func.ArgumentTokens.ToList();
             if (args.Count == 0)
@@ -1726,7 +1726,7 @@ namespace PeachPDF.Html.Core.Parse
             // First group: optionally "in <colorspace>", "from <angle>", and/or "at <x> <y>"
             var firstGroup = args[0];
             var firstIdents = firstGroup.Where(t => t.Type == TokenType.Ident)
-                                        .Select(t => t.Data.ToLowerInvariant()).ToList();
+                                        .Select(t => t.Data.ToLowerInvariantString()).ToList();
 
             // Phase D: detect "in <colorspace> [<hue-method>]"
             var (conicColorSpace, conicHueMethod, _) = TryParseInColorSpace(firstIdents);
@@ -1746,7 +1746,7 @@ namespace PeachPDF.Html.Core.Parse
                 {
                     if (item.Count == 1 && item[0].Type == TokenType.Ident)
                     {
-                        string kw = item[0].Data.ToLowerInvariant();
+                        string kw = item[0].Data.ToLowerInvariantString();
                         if (kw == "from") { inFrom = true; inAt = false; continue; }
                         if (kw == "at")   { inAt   = true; inFrom = false; continue; }
 
@@ -1864,7 +1864,7 @@ namespace PeachPDF.Html.Core.Parse
             }
 
             if (urlToken is { } url)
-                return new CssImage.Url(url.Data);
+                return new CssImage.Url(url.Data.ToString());
 
             if (funcToken is not { } func) return null;
 

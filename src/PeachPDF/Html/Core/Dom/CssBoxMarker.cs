@@ -124,7 +124,7 @@ namespace PeachPDF.Html.Core.Dom
                 List<Token> tokens = pooledTokens;
                 if (tokens.Count == 1 && tokens[0] is { Type: TokenType.String } literalMarker)
                 {
-                    Text = literalMarker.Data;
+                    Text = literalMarker.Data.ToString();
                     return;
                 }
             }

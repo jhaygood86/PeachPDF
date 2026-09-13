@@ -67,7 +67,7 @@ namespace PeachPDF.CSS
         }
 
         /// <summary>The requested slice of the shared source memory - the allocation-free backing for
-        /// <see cref="Token"/>'s <c>Data</c>/<c>DataSpan</c> in the common case. Callers must only use this
+        /// <see cref="Token"/>'s <c>Data</c> in the common case. Callers must only use this
         /// when nothing between <paramref name="start"/> and <paramref name="start"/> + <paramref
         /// name="length"/> could have diverged from a literal copy of the source (no escape sequence, no
         /// normalized <c>\r</c>); otherwise the accumulated buffer content is what must be used

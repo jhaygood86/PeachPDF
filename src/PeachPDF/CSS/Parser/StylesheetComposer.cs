@@ -101,7 +101,7 @@ namespace PeachPDF.CSS
             _nodes.Push(rule);
             ParseComments(ref token);
 
-            if (token.Type == TokenType.String) rule.CharacterSet = token.Data;
+            if (token.Type == TokenType.String) rule.CharacterSet = token.Data.ToString();
 
             JumpToEnd(ref token);
             rule.StylesheetText = CreateView(start, token.Position);
@@ -226,7 +226,7 @@ namespace PeachPDF.CSS
 
             if (token.Is(TokenType.String, TokenType.Url))
             {
-                rule.Href = token.Data;
+                rule.Href = token.Data.ToString();
                 token = NextToken();
                 ParseComments(ref token);
                 FillMediaList(rule.Media, TokenType.Semicolon, ref token);
@@ -430,7 +430,7 @@ namespace PeachPDF.CSS
                     case TokenType.Ident:
                         current.Append(token.Data);
                         break;
-                    case TokenType.Delim when token.Data == ".":
+                    case TokenType.Delim when token.Data.Is("."):
                         current.Append('.');
                         break;
                     case TokenType.Comma:
@@ -457,7 +457,7 @@ namespace PeachPDF.CSS
             rule.Prefix = GetRuleName(ref token);
             ParseComments(ref token);
 
-            if (token.Type == TokenType.Url) rule.NamespaceUri = token.Data;
+            if (token.Type == TokenType.Url) rule.NamespaceUri = token.Data.ToString();
 
             JumpToEnd(ref token);
             rule.StylesheetText = CreateView(start, token.Position);
@@ -562,7 +562,7 @@ namespace PeachPDF.CSS
             if (_parser.Options.IncludeUnknownRules)
             {
                 var token = NextToken();
-                var rule = new UnknownRule(current.Data, _parser);
+                var rule = new UnknownRule(current.Data.ToString(), _parser);
                 _nodes.Push(rule);
 
                 while (token.IsNot(TokenType.CurlyBracketOpen, TokenType.Semicolon, TokenType.EndOfFile))
@@ -713,7 +713,7 @@ namespace PeachPDF.CSS
 
                 if (token.Type == TokenType.Ident)
                 {
-                    name = token.Data;
+                    name = token.Data.ToString();
                     token = NextToken();
                 }
 
@@ -722,7 +722,7 @@ namespace PeachPDF.CSS
                     token = NextToken();
                     if (token.Type == TokenType.Ident)
                     {
-                        pseudo = token.Data;
+                        pseudo = token.Data.ToString();
                         token = NextToken();
                     }
                 }
@@ -805,7 +805,7 @@ namespace PeachPDF.CSS
                             //parentPageRule.AppendChild(genericAtRule);
                             // Rewind to capture the margin's @ symbol
 
-                            var marginToken = new Token(TokenType.Ident, token.Data.AsMemory(), token.Position);
+                            var marginToken = token.WithType(TokenType.Ident);
                             var marginStyle = CreateMarginStyle(ref marginToken);
                             parentPageRule.AppendChild(marginStyle);
                             // FillDeclarations inside CreateMarginStyle consumed through the closing }
@@ -1178,7 +1178,7 @@ namespace PeachPDF.CSS
 
             if (token.Type == TokenType.Ident)
             {
-                medium.Type = token.Data;
+                medium.Type = token.Data.ToString();
                 token = NextToken();
                 ParseComments(ref token);
 
@@ -1289,7 +1289,7 @@ namespace PeachPDF.CSS
                 if (preserveComments && token.Type == TokenType.Comment)
                 {
                     var current = _nodes.Peek();
-                    var comment = new Comment(token.Data);
+                    var comment = new Comment(token.Data.ToString());
                     var start = token.Position;
                     var end = start.After(token.ToValue());
                     comment.StylesheetText = CreateView(start, end);
@@ -1319,7 +1319,7 @@ namespace PeachPDF.CSS
             if (condition == null) return null;
 
             ParseComments(ref token);
-            var conjunction = token.Data;
+            var conjunction = token.Data.ToString();
             var creator = conjunction.GetCreator();
 
             if (creator != null)
@@ -1375,7 +1375,8 @@ namespace PeachPDF.CSS
 
         private IConditionFunction DeclarationCondition(ref Token token)
         {
-            var property = PropertyFactory.Instance.Create(token.Data) ?? new UnknownProperty(token.Data);
+            var propertyName = token.Data.ToString();
+            var property = PropertyFactory.Instance.Create(propertyName) ?? new UnknownProperty(propertyName);
             var declaration = default(DeclarationCondition);
             token = NextToken();
             ParseComments(ref token);
@@ -1492,7 +1493,7 @@ namespace PeachPDF.CSS
 
         private IStyleQueryCondition ExtractStyleDeclaration(List<Token> tokens, ref int index)
         {
-            var propertyName = tokens[index].Data;
+            var propertyName = tokens[index].Data.ToString();
             index++;
             SkipStyleWhitespace(tokens, ref index);
 
@@ -1511,7 +1512,7 @@ namespace PeachPDF.CSS
             return new StyleDeclarationCondition(propertyName, value);
         }
 
-        private List<IStyleQueryCondition> MultipleStyleConditions(List<Token> tokens, ref int index, IStyleQueryCondition condition, string connector)
+        private List<IStyleQueryCondition> MultipleStyleConditions(List<Token> tokens, ref int index, IStyleQueryCondition condition, ReadOnlySpan<char> connector)
         {
             var list = new List<IStyleQueryCondition> { condition };
 
@@ -1756,7 +1757,7 @@ namespace PeachPDF.CSS
 
             if (token.Type == TokenType.Ident)
             {
-                name = token.Data;
+                name = token.Data.ToString();
                 token = NextToken();
             }
 
@@ -1769,9 +1770,10 @@ namespace PeachPDF.CSS
             {
                 var start = token.Position;
                 var val = TokenValue.Empty;
+                var featureName = token.Data.ToString();
                 var feature = _parser.Options.AllowInvalidConstraints
-                    ? new UnknownMediaFeature(token.Data)
-                    : MediaFeatureFactory.Instance.Create(token.Data);
+                    ? new UnknownMediaFeature(featureName)
+                    : MediaFeatureFactory.Instance.Create(featureName);
 
                 token = NextToken();
                 ParseComments(ref token);

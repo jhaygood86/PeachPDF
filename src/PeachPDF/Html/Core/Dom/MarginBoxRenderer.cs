@@ -377,9 +377,9 @@ namespace PeachPDF.Html.Core.Dom
                             .ToArray();
                         if (args.Length > 0 && args[0] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken)
                         {
-                            var keyword = args.Length > 1 && args[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } kw ? kw.Data : "first";
+                            var keyword = args.Length > 1 && args[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } kw ? kw.Data.ToString() : "first";
                             var currentPageIndex = htmlContainer.SlotStartingAt(pageY);
-                            sb.Append(ResolveNamedString(nameToken.Data, keyword, currentPageIndex, htmlContainer.SlotStartingAt, namedStrings));
+                            sb.Append(ResolveNamedString(nameToken.Data.ToString(), keyword, currentPageIndex, htmlContainer.SlotStartingAt, namedStrings));
                         }
                         break;
                     }
@@ -416,14 +416,14 @@ namespace PeachPDF.Html.Core.Dom
             if (args.Length == 0 || args[0] is not { Type: TokenType.Ident } nameToken)
                 return false;
 
-            name = nameToken.Data;
+            name = nameToken.Data.ToString();
 
             if (args.Length > 1)
             {
                 if (args[1] is not { Type: TokenType.Ident } keywordToken)
                     return false;
 
-                keyword = keywordToken.Data;
+                keyword = keywordToken.Data.ToString();
             }
 
             return true;

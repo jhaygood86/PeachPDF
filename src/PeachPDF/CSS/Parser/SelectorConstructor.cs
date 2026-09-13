@@ -225,11 +225,11 @@ namespace PeachPDF.CSS
                     _ready = false;
                     break;
                 case TokenType.Hash:
-                    Insert(IdSelector.Create(token.Data));
+                    Insert(IdSelector.Create(token.Data.ToString()));
                     _ready = true;
                     break;
                 case TokenType.Ident:
-                    Insert(TypeSelector.Create(token.Data));
+                    Insert(TypeSelector.Create(token.Data.ToString()));
                     _ready = true;
                     break;
                 case TokenType.Whitespace:
@@ -258,7 +258,7 @@ namespace PeachPDF.CSS
             if (token.Type == TokenType.Ident || token.Type == TokenType.String)
             {
                 _state = State.AttributeOperator;
-                _attrName = token.Data;
+                _attrName = token.Data.ToString();
             }
             else if (token.Type == TokenType.Delim && token.Data.Is(Combinators.Pipe))
             {
@@ -312,7 +312,7 @@ namespace PeachPDF.CSS
                 token.Type == TokenType.Number)
             {
                 _state = State.AttributeEnd;
-                _attrValue = token.Data;
+                _attrValue = token.Data.ToString();
             }
             else
             {
@@ -358,7 +358,7 @@ namespace PeachPDF.CSS
                     break;
                 case TokenType.Ident:
                     {
-                        var sel = _pseudoClassSelector.Create(token.Data);
+                        var sel = _pseudoClassSelector.Create(token.Data.ToString());
                         if (sel != null)
                         {
                             Insert(sel);
@@ -378,13 +378,13 @@ namespace PeachPDF.CSS
 
             var sel = token.Type switch
             {
-                TokenType.Ident => _pseudoElementSelector.Create(token.Data),
+                TokenType.Ident => _pseudoElementSelector.Create(token.Data.ToString()),
                 // A functional pseudo-element PeachPDF recognizes but can never match (`::part()`,
                 // `::slotted()`, `::highlight()`, `::view-transition-*()`, any vendor extension). The
                 // argument belongs to the selector's identity, so the whole "part(foo)" text becomes the
                 // selector's name - which no branch of CssData's pseudo-element matcher answers, hence
                 // it selects nothing. See UnmatchableSelectors.
-                TokenType.Function when UnmatchableSelectors.IsFunctionalPseudoElement(token.Data) =>
+                TokenType.Function when UnmatchableSelectors.IsFunctionalPseudoElement(token.Data.ToString()) =>
                     PseudoElementSelector.Create(token.ToValue()),
                 _ => null
             };
@@ -404,7 +404,7 @@ namespace PeachPDF.CSS
             _state = State.Data;
             _ready = true;
             if (token.Type == TokenType.Ident)
-                Insert(ClassSelector.Create(token.Data));
+                Insert(ClassSelector.Create(token.Data.ToString()));
             else
                 _valid = false;
         }
@@ -557,13 +557,14 @@ namespace PeachPDF.CSS
 
         private ISelector GetPseudoFunction(Token arguments)
         {
-            if (!PseudoClassFunctions.TryGetValue(arguments.Data, out var creator))
+            var name = arguments.Data.ToString();
+            if (!PseudoClassFunctions.TryGetValue(name, out var creator))
             {
                 // A functional pseudo-class PeachPDF recognizes but can never match (`:host()`,
                 // `:state()`, any vendor extension). Its argument is kept verbatim in the selector's
                 // text - `arguments.ToValue()` is already "host(.a)" - and never interpreted, so there
                 // is no argument grammar to get wrong. See UnmatchableSelectors.
-                return UnmatchableSelectors.IsFunctionalPseudoClass(arguments.Data)
+                return UnmatchableSelectors.IsFunctionalPseudoClass(name)
                     ? PseudoClassSelector.Create(arguments.ToValue())
                     : null;
             }
@@ -723,7 +724,7 @@ namespace PeachPDF.CSS
             {
                 if (token.Type == TokenType.Ident)
                 {
-                    _value = token.Data;
+                    _value = token.Data.ToString();
                 }
                 else if (token.Type == TokenType.RoundBracketClose)
                 {
@@ -754,7 +755,7 @@ namespace PeachPDF.CSS
             {
                 if (token.Type is TokenType.Ident or TokenType.String)
                 {
-                    _value = token.Data;
+                    _value = token.Data.ToString();
                 }
                 else if (token.Type == TokenType.RoundBracketClose)
                 {
@@ -787,7 +788,7 @@ namespace PeachPDF.CSS
             {
                 if (token.Type is TokenType.Ident or TokenType.String)
                 {
-                    _value = token.Data;
+                    _value = token.Data.ToString();
                 }
                 else if (token.Type == TokenType.RoundBracketClose)
                 {
@@ -972,7 +973,7 @@ namespace PeachPDF.CSS
                         // compact form `10n+1` instead arrives as a single signed <number>, handled by the
                         // Number case below. Without this branch a spaced sign fell through to OnBeforeOf
                         // and invalidated the selector.
-                        _sign = token.Data == "-" ? -1 : 1;
+                        _sign = token.Data.Is("-") ? -1 : 1;
                         _state = ParseState.AfterOffsetSign;
                         return false;
                     case TokenType.Number:
@@ -991,7 +992,7 @@ namespace PeachPDF.CSS
                 {
                     case TokenType.Whitespace:
                         return false;
-                    case TokenType.Number when !token.Data.StartsWith('+') && !token.Data.StartsWith('-'):
+                    case TokenType.Number when !token.Data.StartsWith("+") && !token.Data.StartsWith("-"):
                         // The production requires a <signless-integer> here, defined as "a <number-token>
                         // with its type flag set to integer, and no sign character" (CSS Syntax 3 §6.2), so
                         // `10n + -1` and `10n + +1` are invalid - §6.1 lists `3n + -6` as an invalid example.
@@ -1026,7 +1027,7 @@ namespace PeachPDF.CSS
 
                 if (token.Type == TokenType.Delim && token.Data.IsOneOf("+", "-"))
                 {
-                    _sign = token.Data == "-" ? -1 : +1;
+                    _sign = token.Data.Is("-") ? -1 : +1;
                     _state = ParseState.AfterInitialSign;
                     return false;
                 }

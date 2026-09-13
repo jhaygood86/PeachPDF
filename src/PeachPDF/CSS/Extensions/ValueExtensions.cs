@@ -85,7 +85,7 @@ namespace PeachPDF.CSS
         {
             var element = value.OnlyOrDefault();
 
-            if (element is { Type: TokenType.Url } token) return token.Data;
+            if (element is { Type: TokenType.Url } token) return token.Data.ToString();
 
             return null;
         }
@@ -190,7 +190,7 @@ namespace PeachPDF.CSS
         {
             var element = value.OnlyOrDefault();
 
-            if (element is { Type: TokenType.String } token) return token.Data;
+            if (element is { Type: TokenType.String } token) return token.Data.ToString();
 
             return null;
         }
@@ -205,7 +205,7 @@ namespace PeachPDF.CSS
             {
                 if (value[i].Type != TokenType.Ident) return null;
 
-                elements.Add(value[i].Data);
+                elements.Add(value[i].Data.ToString());
 
                 i++;
                 if (i >= value.Count) break;
@@ -219,7 +219,7 @@ namespace PeachPDF.CSS
         {
             var element = value.OnlyOrDefault();
 
-            if (element is { Type: TokenType.Ident } token) return token.Data.ToLowerInvariant();
+            if (element is { Type: TokenType.Ident } token) return token.Data.ToLowerInvariantString();
 
             return null;
         }
@@ -228,7 +228,7 @@ namespace PeachPDF.CSS
         {
             var element = value.OnlyOrDefault();
 
-            if (element is { Type: TokenType.Ident } token) return token.Data;
+            if (element is { Type: TokenType.Ident } token) return token.Data.ToString();
 
             return null;
         }
@@ -556,11 +556,11 @@ namespace PeachPDF.CSS
         {
             var element = value.OnlyOrDefault();
 
-            if (element is { Type: TokenType.Ident } identToken) return Color.FromName(identToken.Data);
+            if (element is { Type: TokenType.Ident } identToken) return Color.FromName(identToken.Data.ToString());
 
             if (element is { Type: TokenType.Color } colorToken && !colorToken.IsValid)
             {
-                return Color.FromHex(colorToken.Data);
+                return Color.FromHex(colorToken.Data.ToString());
             }
 
             return null;

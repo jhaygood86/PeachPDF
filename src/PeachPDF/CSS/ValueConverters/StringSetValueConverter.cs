@@ -62,7 +62,7 @@ namespace PeachPDF.CSS
             if (tokens[0] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken || nameToken.Type != TokenType.Ident)
                 return null;
 
-            var name = nameToken.Data;
+            var name = nameToken.Data.ToString();
 
             // Remaining tokens form the content-list - split by whitespace
             var contentItems = tokens.GetRange(1, tokens.Count - 1).ToItems();

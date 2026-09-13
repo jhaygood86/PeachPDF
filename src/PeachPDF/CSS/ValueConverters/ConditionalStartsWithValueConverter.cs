@@ -27,10 +27,12 @@ namespace PeachPDF.CSS
                 //Empty on purpose.
             }
 
-            if (enumerator.Current.Type != TokenType.Ident || !_prefixKeywords.Contains(enumerator.Current.Data))
+            if (enumerator.Current.Type != TokenType.Ident)
                 return null;
 
-            var consumedPrefix = enumerator.Current.Data;
+            var consumedPrefix = _prefixKeywords.FindIs(enumerator.Current.Data);
+            if (consumedPrefix is null)
+                return null;
 
             var remainingTokens = new List<Token>();
 

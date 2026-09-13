@@ -133,7 +133,7 @@ namespace PeachPDF.Html.Core.Dom
                     case { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.Space }:
                         return (LeaderKind.Space, null);
                     case { Type: TokenType.String } stringToken:
-                        return (LeaderKind.Custom, stringToken.Data);
+                        return (LeaderKind.Custom, stringToken.Data.ToString());
                 }
             }
 
@@ -197,7 +197,7 @@ namespace PeachPDF.Html.Core.Dom
                                 var attrNameToken = attrFunctionToken.ArgumentTokens.FirstOrDefault();
                                 if (attrNameToken is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                                 {
-                                    var attrName = keywordToken.Data;
+                                    var attrName = keywordToken.Data.ToString();
                                     // Get attribute from parent element if this is a pseudo-element
                                     var sourceBox = cssBox.IsPseudoElement && cssBox.ParentBox != null
                                         ? cssBox.ParentBox
@@ -264,7 +264,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var style = arguments.Length > 2 && arguments[2] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken
-                ? styleToken.Data
+                ? styleToken.Data.ToString()
                 : Keywords.Decimal;
 
             if (counterNameToken.Data.Equals("page", StringComparison.OrdinalIgnoreCase))
@@ -295,7 +295,7 @@ namespace PeachPDF.Html.Core.Dom
                 return;
             }
 
-            var counterValue = CssCounterEngine.GetCounter(targetBox, counterNameToken.Data)?.Value ?? 1;
+            var counterValue = CssCounterEngine.GetCounter(targetBox, counterNameToken.Data.ToString())?.Value ?? 1;
             sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
         }
 
@@ -324,7 +324,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var mode = arguments.Length > 1 && arguments[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } modeToken
-                ? modeToken.Data.ToLowerInvariant()
+                ? TargetTextModes.FindIsi(modeToken.Data) // null when unrecognized - falls to the switch's own default below
                 : "content";
 
             return mode switch
@@ -336,6 +336,8 @@ namespace PeachPDF.Html.Core.Dom
                 _ => null
             };
         }
+
+        private static readonly string[] TargetTextModes = ["content", "before", "after", "first-letter"];
 
         /// <summary>
         /// Resolves <c>target-counter()</c>/<c>target-text()</c>'s shared <c>&lt;target&gt;</c> argument
@@ -357,8 +359,8 @@ namespace PeachPDF.Html.Core.Dom
 
             var id = targetToken switch
             {
-                { Type: TokenType.String } stringToken => stringToken.Data,
-                { Type: TokenType.Url } urlToken => string.IsNullOrEmpty(urlToken.Data) ? null : urlToken.Data,
+                { Type: TokenType.String } stringToken => stringToken.Data.ToString(),
+                { Type: TokenType.Url } urlToken => urlToken.Data.IsEmpty ? null : urlToken.Data.ToString(),
                 { Type: TokenType.Function, Data: "attr" } attrToken => ResolveTargetAttr(cssBox, attrToken),
                 _ => null
             };
@@ -384,7 +386,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var sourceBox = cssBox.IsPseudoElement && cssBox.ParentBox != null ? cssBox.ParentBox : cssBox;
-            var value = sourceBox.GetAttribute(nameToken.Data, "");
+            var value = sourceBox.GetAttribute(nameToken.Data.ToString(), "");
             return string.IsNullOrEmpty(value) ? null : value;
         }
 
@@ -409,10 +411,23 @@ namespace PeachPDF.Html.Core.Dom
         /// §7), so both places must agree on which function names count as image content rather than
         /// re-deriving the list independently.
         /// </summary>
-        internal static bool IsGradientFunctionName(string name) =>
-            name is "linear-gradient" or "repeating-linear-gradient"
-                 or "radial-gradient" or "repeating-radial-gradient"
-                 or "conic-gradient" or "repeating-conic-gradient";
+        private static readonly string[] GradientFunctionNames =
+        [
+            "linear-gradient", "repeating-linear-gradient",
+            "radial-gradient", "repeating-radial-gradient",
+            "conic-gradient", "repeating-conic-gradient",
+        ];
+
+        internal static bool IsGradientFunctionName(ReadOnlySpan<char> name)
+        {
+            // A lambda can't capture a ref struct like ReadOnlySpan<char>, so this can't be a LINQ
+            // Any() the way an ordinary string predicate would be - a plain loop instead.
+            for (var i = 0; i < GradientFunctionNames.Length; i++)
+            {
+                if (name.Is(GradientFunctionNames[i])) return true;
+            }
+            return false;
+        }
 
         /// <summary>
         /// Appends the value of a <c>counter(&lt;name&gt; [, &lt;style&gt;])</c> function to
@@ -434,7 +449,7 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var style = arguments.Length > 1 && arguments[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken
-                ? styleToken.Data
+                ? styleToken.Data.ToString()
                 : Keywords.Decimal;
 
             // The page and pages counters are UA magic, not document counters -
@@ -458,7 +473,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
-            var counterValue = CssCounterEngine.GetCounter(counterBox, counterName.Data)?.Value ?? 1;
+            var counterValue = CssCounterEngine.GetCounter(counterBox, counterName.Data.ToString())?.Value ?? 1;
 
             sb.Append(CssCounterEngine.FormatCounterValue(counterValue, style));
         }
@@ -689,7 +704,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <c>no-close-quote</c> that would take the depth negative is ignored per spec - the depth stays
         /// at 0 and nothing is appended, but the rest of the content list is still processed.
         /// </summary>
-        private static void AppendQuote(StringBuilder sb, IReadOnlyList<(string Open, string Close)> quotePairs, string quoteKeyword, ref int depth)
+        private static void AppendQuote(StringBuilder sb, IReadOnlyList<(string Open, string Close)> quotePairs, ReadOnlySpan<char> quoteKeyword, ref int depth)
         {
             switch (quoteKeyword)
             {
@@ -757,7 +772,7 @@ namespace PeachPDF.Html.Core.Dom
             var pairs = new (string, string)[tokens.Count / 2];
             for (var i = 0; i < pairs.Length; i++)
             {
-                pairs[i] = (tokens[i * 2].Data, tokens[i * 2 + 1].Data);
+                pairs[i] = (tokens[i * 2].Data.ToString(), tokens[i * 2 + 1].Data.ToString());
             }
             return pairs;
         }
@@ -779,14 +794,14 @@ namespace PeachPDF.Html.Core.Dom
                 return null;
             }
 
-            var stringName = nameToken.Data;
+            var stringName = nameToken.Data.ToString();
 
             // Second argument is the optional keyword (first, start, last, first-except)
             // Default is "first"
             var keyword = "first";
             if (arguments.Length > 1 && arguments[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
             {
-                keyword = keywordToken.Data.ToLowerInvariant();
+                keyword = keywordToken.Data.ToLowerInvariantString();
             }
 
             // Use the CssNamedStringEngine to retrieve the named string
@@ -849,6 +864,8 @@ namespace PeachPDF.Html.Core.Dom
             };
         }
 
+        private static readonly string[] ContentValueModes = ["text", "before", "after", "first-letter"];
+
         private static string? ExtractContentValue(CssBox cssBox, Token contentFunctionToken)
         {
             // Default mode is "text" if no argument provided
@@ -859,7 +876,7 @@ namespace PeachPDF.Html.Core.Dom
                 var argToken = contentFunctionToken.ArgumentTokens.FirstOrDefault();
                 if (argToken is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                 {
-                    mode = keywordToken.Data.ToLowerInvariant();
+                    mode = ContentValueModes.FindIsi(keywordToken.Data); // null when unrecognized - falls to the switch's own default below
                 }
             }
 
@@ -938,7 +955,7 @@ namespace PeachPDF.Html.Core.Dom
                                 var attrNameToken = attrFunctionToken.ArgumentTokens.FirstOrDefault();
                                 if (attrNameToken is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                                 {
-                                    var attrName = keywordToken.Data;
+                                    var attrName = keywordToken.Data.ToString();
                                     var targetBox = pseudoElement.IsPseudoElement && pseudoElement.ParentBox != null
                                         ? pseudoElement.ParentBox
                                         : pseudoElement;

@@ -37,9 +37,9 @@ namespace PeachPDF.CSS
             return properties.Guard<FontPaletteValue>();
         }
 
-        private static bool IsKeywordOrDashedIdent(string ident) =>
+        private static bool IsKeywordOrDashedIdent(System.ReadOnlySpan<char> ident) =>
             ident.Isi(Keywords.Normal) || ident.Isi("light") || ident.Isi("dark") ||
-            ident.StartsWith("--", System.StringComparison.Ordinal);
+            (ident.Length >= 2 && ident[0] == '-' && ident[1] == '-');
 
         private sealed class FontPaletteValue : IPropertyValue
         {

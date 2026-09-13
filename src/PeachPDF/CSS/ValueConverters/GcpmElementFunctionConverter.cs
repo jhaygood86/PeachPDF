@@ -34,7 +34,7 @@ namespace PeachPDF.CSS
             if (args.Length == 0 || args[0] is not { Type: TokenType.Ident } nameToken)
                 return null;
 
-            var name = nameToken.Data;
+            var name = nameToken.Data.ToString();
             var keyword = "first";
 
             if (args.Length > 1)
@@ -42,8 +42,8 @@ namespace PeachPDF.CSS
                 if (args[1] is not { Type: TokenType.Ident } keywordToken)
                     return null;
 
-                var kw = keywordToken.Data.ToLowerInvariant();
-                if (!GcpmSelectionKeywords.Values.Contains(kw))
+                var kw = GcpmSelectionKeywords.Values.FindIsi(keywordToken.Data);
+                if (kw is null)
                     return null;
 
                 keyword = kw;

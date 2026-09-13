@@ -15,7 +15,7 @@ namespace PeachPDF.CSS
         {
             var first = value.OnlyOrDefault();
 
-            if (first is not { Type: TokenType.Function } funcToken || !funcToken.Data.Equals("string", System.StringComparison.OrdinalIgnoreCase))
+            if (first is not { Type: TokenType.Function } funcToken || !funcToken.Data.Isi("string"))
                 return null;
 
             // First argument must be the string name (identifier)
@@ -24,7 +24,7 @@ namespace PeachPDF.CSS
             if (argToken is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } nameToken)
                 return null;
 
-            var name = nameToken.Data;
+            var name = nameToken.Data.ToString();
 
             // Default keyword is "first" if not specified
             var keyword = "first";
@@ -38,8 +38,8 @@ namespace PeachPDF.CSS
             {
                 if (args[1] is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                 {
-                    var kw = keywordToken.Data.ToLowerInvariant();
-                    if (!GcpmSelectionKeywords.Values.Contains(kw))
+                    var kw = GcpmSelectionKeywords.Values.FindIsi(keywordToken.Data);
+                    if (kw is null)
                         return null;
 
                     keyword = kw;

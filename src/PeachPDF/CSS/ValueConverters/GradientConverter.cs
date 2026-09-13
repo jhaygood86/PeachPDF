@@ -254,8 +254,7 @@ namespace PeachPDF.CSS
             if (first is { Type: TokenType.Ident } firstToken)
             {
                 var id = firstToken.Data;
-                if (!string.Equals(id, Keywords.From, System.StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(id, Keywords.At, System.StringComparison.OrdinalIgnoreCase))
+                if (!id.Isi(Keywords.From) && !id.Isi(Keywords.At))
                     return null;
             }
 
@@ -332,13 +331,13 @@ namespace PeachPDF.CSS
             if (first is { Type: TokenType.Ident } firstToken)
             {
                 var id = firstToken.Data;
-                if (!string.Equals(id, "circle", System.StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(id, "ellipse", System.StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(id, "at", System.StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(id, "closest-side", System.StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(id, "farthest-corner", System.StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(id, "closest-corner", System.StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(id, "farthest-side", System.StringComparison.OrdinalIgnoreCase))
+                if (!id.Isi("circle") &&
+                    !id.Isi("ellipse") &&
+                    !id.Isi("at") &&
+                    !id.Isi("closest-side") &&
+                    !id.Isi("farthest-corner") &&
+                    !id.Isi("closest-corner") &&
+                    !id.Isi("farthest-side"))
                     return null;
             }
 

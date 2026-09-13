@@ -21,7 +21,7 @@ namespace PeachPDF.CSS
             var first = value.OnlyOrDefault();
 
             if (first is not { Type: TokenType.Function } funcToken ||
-                !funcToken.Data.Equals(FunctionNames.TargetText, System.StringComparison.OrdinalIgnoreCase))
+                !funcToken.Data.Isi(FunctionNames.TargetText))
                 return null;
 
             var args = funcToken.ArgumentTokens
@@ -37,8 +37,8 @@ namespace PeachPDF.CSS
                 if (args[1] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } modeToken)
                     return null;
 
-                var kw = modeToken.Data.ToLowerInvariant();
-                if (!ValidModes.Contains(kw))
+                var kw = ValidModes.FindIsi(modeToken.Data);
+                if (kw is null)
                     return null;
 
                 mode = kw;
