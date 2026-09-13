@@ -1880,6 +1880,24 @@
       }
     },
     {
+      "name": "text-align-last",
+      "comment": "css-text-3 §6.3. Selects the alignment of a line that ends a paragraph - the block's last line, and the last line before a forced break (CssLineBox.PrecedesForcedBreak) - and, per §6.4.3, of any justified line with no justification opportunity to expand at. 'auto' means 'whatever text-align says, except that justify becomes start'. Treated as an independent inherited longhand rather than as half of a text-align shorthand, which is what every shipping browser does (none implements text-align-all); see .claude/accepted-gaps/text-align-is-not-a-shorthand-of-text-align-all-and-last.md.",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextAlignLast",
+        "keywordMap": "Map.TextAlignmentsLast",
+        "fallback": "TextAlignLast.Auto"
+      },
+      "html": {
+        "propertyPath": "TextAlignLast",
+        "csharpDataType": "CssProperty<TextAlignLast>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextAlignLast.ToString()"
+      }
+    },
+    {
       "name": "text-overflow",
       "comment": "Only 'clip'/'ellipsis' are recognized - CSS Overflow 3's ratified grammar is exactly these two keywords; the two-value edge syntax, '<string>' replacement, and 'fade()' are non-standard/Level-4-experimental (MDN) and out of scope. An unrecognized value falls back to the initial 'clip'. Applied at paint time (FragmentPainter.Text.cs), per overflowing line box, in whichever writing mode/direction the box uses.",
       "inherited": false,

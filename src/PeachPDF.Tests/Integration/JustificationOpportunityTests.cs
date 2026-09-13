@@ -227,8 +227,10 @@ namespace PeachPDF.Tests.Integration
         public async Task LineWithNoJustificationOpportunityAtAll_IsLeftStartAligned()
         {
             // §6.4.3 unexpandable text: with nothing to expand, the line aligns as text-align-last,
-            // whose initial `auto` under justify is start. A <br> makes line 0 a non-last line that holds
-            // one contiguous run - the shape that used to be flushed to the end edge instead.
+            // whose initial `auto` under justify is start - the shape that used to be flushed to the end
+            // edge instead. Issue #1021 later made the <br> here exempt the line a second way (it now
+            // ends a paragraph, css-text-3 §6.1), so the unexpandable rule on its own is covered by
+            // TextAlignLastTests, on a line no forced break touches.
             var d = await BlockOfAsync(MonoDoc("A<span>B</span><br>CD EF"));
             var line = d.LineBoxes[0];
 

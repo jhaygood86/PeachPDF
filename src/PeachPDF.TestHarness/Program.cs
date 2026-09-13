@@ -5801,6 +5801,50 @@ await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
     "text-indent's plain, hanging, and each-line forms (CSS Text 3), including their combination and interaction with text-align: center.",
     textIndentHtml, pdfConfig);
 
+// --- text-align / text-align-last showcase (CSS Text 3 §6.1, §6.3, §6.4.3) ---
+
+const string TextAlignLastCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Georgia, serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif; break-after: avoid }
+    p { margin: 0 0 0.8em; width: 360px; text-align: justify; background: #f4f2ee }
+    .last-justify { text-align-last: justify }
+    .last-center { text-align-last: center }
+    .last-right { text-align-last: right }
+    .rtl { direction: rtl }
+    </style>
+    """;
+
+var textAlignLastHtml = "<!DOCTYPE html><html><head>" + TextAlignLastCss + "</head><body>" +
+
+    "<h1>CSS Text 3 text-align: justify &amp; text-align-last</h1>" +
+
+    "<h2>A forced break ends a paragraph: every &lt;br&gt; line stays ragged</h2>" +
+    "<p>Peach State Technologies<br>1 Example Parkway, Suite 400<br>Atlanta, Georgia 30303<br>United States of America</p>" +
+
+    "<h2>Default: only the lines that end a paragraph are ragged</h2>" +
+    "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.<br>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>" +
+
+    "<h2>text-align-last: justify (the exemption declined - every line fills the measure)</h2>" +
+    "<p class=\"last-justify\">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.<br>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>" +
+
+    "<h2>text-align-last: center</h2>" +
+    "<p class=\"last-center\">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.<br>Ut enim ad minim veniam, quis nostrud exercitation.</p>" +
+
+    "<h2>text-align-last: right</h2>" +
+    "<p class=\"last-right\">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.<br>Ut enim ad minim veniam, quis nostrud exercitation.</p>" +
+
+    "<h2>direction: rtl - the default text-align-last: auto is <i>start</i>, which is the right edge</h2>" +
+    "<p class=\"rtl\">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("text_align_last", "Typography & Text", "Justification & text-align-last",
+    "text-align: justify leaves every line that ends a paragraph ragged - the block's last line and the last line before a <br> - and text-align-last (auto, justify, center, right) says how those lines are aligned instead.",
+    textAlignLastHtml, pdfConfig);
+
 // --- writing-mode (vertical-rl/vertical-lr) showcase ---
 // Real vertical line flow (issue #547): lines stack along the block axis (right-to-left for
 // vertical-rl, left-to-right for vertical-lr), text runs top-to-bottom within each line, and
