@@ -213,15 +213,19 @@ namespace PeachPDF.Tests.Integration
         {
             // A flex row's items are measured by their own top-level walk and added to the running
             // line as one number, not as words — so the space before the row stops being trailing
-            // the moment the row lands on the line, and the epilogue must not still hang it. Needs
-            // `white-space: nowrap` for the row to share the line at all (the walk otherwise treats
-            // an inline-level box as starting one of its own). Chromium: 43.9844px = 32.9883pt with
-            // the space, 35.1875px = 26.3906pt without.
+            // the moment the row lands on the line, and the epilogue must not still hang it.
+            // Chromium: 43.9844px = 32.9883pt with the space, 35.1875px = 26.3906pt without. Run
+            // with and without `white-space: nowrap`, because until issue #1017 the inherited
+            // `nowrap` was the only thing putting the row on the line at all — the shape this
+            // fixture is about was unreachable in a document that did not declare one.
             var space = await SpaceWidthAsync();
 
             Assert.Equal(
                 await NowrapFloatWidthAsync("AB<span style='display:inline-flex'>CD</span>") + space,
                 await NowrapFloatWidthAsync("AB <span style='display:inline-flex'>CD</span>"), 3);
+            Assert.Equal(
+                await FloatWidthAsync("AB<span style='display:inline-flex'>CD</span>") + space,
+                await FloatWidthAsync("AB <span style='display:inline-flex'>CD</span>"), 3);
         }
 
         [Theory]
@@ -238,6 +242,138 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(
                 await NowrapFloatWidthAsync($"AB<span style='display:{display};width:50pt'></span>") + space,
                 await NowrapFloatWidthAsync($"AB <span style='display:{display};width:50pt'></span>"), 3);
+            Assert.Equal(
+                await FloatWidthAsync($"AB<span style='display:{display};width:50pt'></span>") + space,
+                await FloatWidthAsync($"AB <span style='display:{display};width:50pt'></span>"), 3);
+        }
+
+        [Fact]
+        public async Task ANowrapBlockSibling_StillStartsItsOwnLine()
+        {
+            // `white-space` says whether a box's content wraps WITHIN a line; it says nothing about
+            // whether the box begins one, and a block-level box always does (CSS 2.1 §9.4.1). Read
+            // as "does not start a line", a `nowrap` sibling had its line ADDED to the previous
+            // sibling's instead of competing with it for "widest line wins": 46.1836pt against
+            // Chromium 148's 43.9844px = 32.9883pt, one whole sibling line too wide (issue #1017).
+            // Only the LATER sibling needs the `nowrap` to reach it.
+            Assert.Equal(
+                await FloatWidthAsync("<div>AB CD</div><div>EF</div>"),
+                await FloatWidthAsync("<div>AB CD</div><div style='white-space:nowrap'>EF</div>"), 3);
+        }
+
+        [Fact]
+        public async Task NowrapBlockSiblings_DoNotAccumulate_AsTheirCountGrows()
+        {
+            // The error was one whole sibling line each time, so it grew linearly with the sibling
+            // count — a third `<div>` took the same float from 46.1836pt to 59.3789pt while
+            // Chromium stayed at 32.9883pt. `white-space` inherits, so one declaration on the
+            // container puts every sibling in the shape.
+            Assert.Equal(
+                await FloatWidthAsync("AB CD"),
+                await NowrapFloatWidthAsync("<div>AB CD</div><div>EF</div><div>GH</div>"), 3);
+        }
+
+        [Fact]
+        public async Task ANowrapBlockSiblingsBorder_IsScopedToItsOwnLine()
+        {
+            // paddingSum loses its per-line scoping the same way and for the same reason —
+            // oldPaddingSum is saved in the branch this predicate guards, so a sibling that never
+            // opened a line never restored it either, and both siblings' borders summed into one
+            // float's width. That is the Acid2 `#eyes-a`/`#eyes-b`/`#eyes-c` regression the
+            // `oldPaddingSum` comment in GetMinMaxSumWords describes, reachable again whenever the
+            // siblings are `nowrap`: 56.1836pt for the second fixture against the first's 42.9883pt.
+            Assert.Equal(
+                await NowrapFloatWidthAsync("<div style='border-left:10pt solid'>AB CD</div>"),
+                await NowrapFloatWidthAsync(
+                    "<div style='border-left:10pt solid'>AB CD</div><div style='border-left:10pt solid'>EF</div>"), 3);
+        }
+
+        [Fact]
+        public async Task AnInlineFlexChild_SharesTheLine_WithoutNeedingNowrap()
+        {
+            // The other half of the same predicate: an inline-level box never begins a line, so it
+            // adds to the one in progress. The walk treated every inline-level display as opening
+            // one of its own, and an inherited `nowrap` was what accidentally put it back — the
+            // right answer for the wrong reason, and out of reach of a document that does not
+            // declare one. Without it this measured 19.7930pt, the row's own width alone, against
+            // Chromium's 43.9844px = 32.9883pt.
+            Assert.Equal(
+                await FloatWidthAsync("AB CD"),
+                await FloatWidthAsync("AB <span style='display:inline-flex'>CD</span>"), 3);
+        }
+
+        [Theory]
+        [InlineData("inline-block")]
+        [InlineData("inline-table")]
+        [InlineData("inline-grid")]
+        public async Task AnInlineLevelChildsExplicitWidth_LandsOnTheLine_WithoutNeedingNowrap(string display)
+        {
+            // Same through the explicit-width fold, the third call site that has to agree on the
+            // predicate: an inline-level child's width is added to the line in progress rather than
+            // competing with it. Chromium 148 gives 93.0469px = 69.7852pt; this measured the 50pt
+            // alone, and a shrink-to-fit box was sized to overlap the run beside it.
+            Assert.Equal(
+                await FloatWidthAsync("AB") + await SpaceWidthAsync() + 50,
+                await FloatWidthAsync($"AB <span style='display:{display};width:50pt'></span>"), 3);
+        }
+
+        [Fact]
+        public async Task AnInlineLevelBoxAfterABlockSibling_StillGetsItsOwnLine()
+        {
+            // The contrast case for the two above, and what they could plausibly have broken: an
+            // inline-level box FOLLOWING a block-level sibling is on a line of its own, so its width
+            // must not be added to that sibling's. It still is not — the parser wraps it in an
+            // anonymous block (CSS 2.1 §9.2.1.1), which is block-level and does open the line — but
+            // that is the only thing standing between these fixtures and 46.1836/82.9883pt.
+            Assert.Equal(
+                await FloatWidthAsync("AB CD"),
+                await FloatWidthAsync("<div>AB CD</div><span style='display:inline-block'>EF</span>"), 3);
+            Assert.Equal(
+                50,
+                await FloatWidthAsync("<div>AB CD</div><span style='display:inline-block;width:50pt'></span>"), 3);
+        }
+
+        [Theory]
+        [InlineData("inline-block")]
+        [InlineData("inline-flex")]
+        [InlineData("inline-table")]
+        [InlineData("inline-grid")]
+        [InlineData("inline")]
+        public async Task AFlexOrGridItem_StartsItsOwnLine_WhateverItsOwnDisplayIs(string display)
+        {
+            // A flex or grid item is blockified by the formatting context it is in (css-display-3 §2.7,
+            // as css-flexbox-1 §4 and css-grid-2 §6 require), so a single-line COLUMN of them is as
+            // wide as its widest item, not as wide as all of them laid end to end. PeachPDF
+            // deliberately leaves an inline-level item's COMPUTED display alone and blockifies at
+            // layout time instead (issue #1003), so `ActualDisplay` alone answers "inline-level" here
+            // and is the wrong oracle — `StartsNewLine` has to ask the PARENT. Without that, this
+            // measured 72.5742pt against the 39.5859pt the block-item control gives, and took the
+            // difference out of whatever sat beside it.
+            var control = await ColumnContainerWidthAsync("flex-column", "div", "");
+
+            Assert.Equal(control, await ColumnContainerWidthAsync("flex-column", "span", display), 3);
+            Assert.Equal(control, await ColumnContainerWidthAsync("grid", "span", display), 3);
+        }
+
+        /// <summary>
+        /// Lays out a left float that is a single-line flex column (or a one-column grid) holding two
+        /// items of differing width, built from <paramref name="tag"/> with an optional explicit
+        /// <paramref name="display"/>, and returns the container's used width. Single-line and
+        /// single-column on purpose: that is the shape whose max-content is the WIDEST item rather
+        /// than the sum, so a container measured as the sum is unmistakable.
+        /// </summary>
+        private static async Task<double> ColumnContainerWidthAsync(string kind, string tag, string display)
+        {
+            var containerStyle = kind == "grid"
+                ? "float:left; display:grid"
+                : "float:left; display:flex; flex-direction:column";
+            var itemStyle = display.Length > 0 ? $" style='display:{display}'" : "";
+            var html = LayoutHarness.Wrap(
+                $"<div style=\"font:16px monospace\"><div id='float' style=\"{containerStyle}\">"
+                + $"<{tag}{itemStyle}>AB CD</{tag}><{tag}{itemStyle}>EFGHIJ</{tag}></div></div>");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            return LayoutHarness.FindById(root, "float")!.ActualWidth;
         }
 
         /// <summary>
@@ -256,9 +392,10 @@ namespace PeachPDF.Tests.Integration
         private static Task<double> FloatWidthAsync(string body) => FloatWidthAsync(body, "");
 
         /// <summary>
-        /// <see cref="FloatWidthAsync(string)"/> under an inherited <c>white-space: nowrap</c>, which
-        /// is what makes an inline-level child share the line in this walk rather than be treated as
-        /// opening one of its own.
+        /// <see cref="FloatWidthAsync(string)"/> under an inherited <c>white-space: nowrap</c>. It no
+        /// longer changes whether an inline-level child shares the line — since issue #1017 that is
+        /// decided by the display alone — which is exactly why the fixtures below assert the two agree.
+        /// It is still what puts a <c>nowrap</c> block-level sibling in the shape that issue was about.
         /// </summary>
         private static Task<double> NowrapFloatWidthAsync(string body) =>
             FloatWidthAsync(body, "; white-space:nowrap");

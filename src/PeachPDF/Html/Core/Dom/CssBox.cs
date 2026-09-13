@@ -7004,8 +7004,8 @@ namespace PeachPDF.Html.Core.Dom
             // white space hangs (css-text-3 §4.1.2). A no-op whenever the walk already applied the
             // rule - the epilogue and the <br> branch both zero trailingSpace as they do - and it
             // covers the box kinds that never reach the epilogue at all because StartsNewLine is
-            // false for them: a table cell (measured by the table engine one cell at a time), a
-            // white-space: nowrap block, and an inline box measured directly.
+            // false for them: a table cell (measured by the table engine one cell at a time), and an
+            // inline-level box measured directly.
             maxSum -= trailingSpace;
 
             maxWidth = paddingSum + Math.Max(maxSum, widestLine);
@@ -7046,11 +7046,62 @@ namespace PeachPDF.Html.Core.Dom
         /// Whether this box begins a line of its own in the intrinsic walk, and so
         /// competes for "widest line wins" rather than adding to the line in progress. Named
         /// because three places need to agree on it.
+        /// <para>
+        /// The question is whether the box is block-level in flow (CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/visuren.html#block-formatting">&#167;9.4.1</see>) -
+        /// a block-level box always begins a line, an inline-level one never does. It is NOT a
+        /// question about <c>white-space</c>, which says whether a box's content wraps <em>within</em>
+        /// a line and nothing about whether the box opens one; reading it here added a
+        /// <c>white-space: nowrap</c> block-level sibling's line to the previous sibling's instead of
+        /// letting the two compete, one whole line too wide per sibling (issue #1017). That wrong
+        /// answer partly masked a second one - every inline-level display
+        /// (<c>inline-block</c>/<c>-flex</c>/<c>-table</c>/<c>-grid</c>) was also treated as opening a
+        /// line, and an inherited <c>nowrap</c> was what accidentally put it back on the one it shares.
+        /// Both are decided here, from the display alone.
+        /// </para>
+        /// <para>
+        /// <c>table-cell</c> is excluded because the cells of a row sit side by side, so their widths
+        /// add up on the row's line rather than competing - and a cell measured on its own account is
+        /// measured by the table engine's own top-level <see cref="GetMinMaxWidth"/> call, which needs
+        /// no reset. A box blockified by its <c>float</c> or by <c>position: absolute</c>/<c>fixed</c>
+        /// reaches this with an already-blockified <see cref="DerivedStyle.ActualDisplay"/>, so it is
+        /// correctly seen as block-level; a flex or grid ITEM does not, which is what
+        /// <see cref="IsFlexOrGridItem"/> is for.
+        /// </para>
         /// </summary>
         private static bool StartsNewLine(CssBox box) =>
-            box.DerivedStyle.ActualDisplay != Keywords.Inline
-            && box.DerivedStyle.ActualDisplay != Keywords.TableCell
-            && box.WhiteSpace.Value != Whitespace.NoWrap;
+            // Own display first, parent second, so the parent's ActualDisplay (recomputed per call,
+            // not cached) is consulted only where the box's own display reads as inline-level. Worth
+            // knowing before optimising this on instinct: that is NOT the rare case - measured over
+            // the test suite, 138k of 148k calls reach the second operand, because the walk descends
+            // through every inline box in the tree. The ordering is free, not a significant saving.
+            box.DerivedStyle.ActualDisplay is not (Keywords.Inline or Keywords.InlineBlock
+                or Keywords.InlineTable or Keywords.InlineFlex or Keywords.InlineGrid
+                or Keywords.TableCell)
+            || IsFlexOrGridItem(box);
+
+        /// <summary>
+        /// Whether this box is a flex or grid ITEM, and so blockified by the formatting context it
+        /// participates in
+        /// (<see href="https://www.w3.org/TR/css-display-3/#blockify">css-display-3 &#167;2.7</see>, as
+        /// required by <see href="https://www.w3.org/TR/css-flexbox-1/#flex-items">css-flexbox-1
+        /// &#167;4</see> and <see href="https://www.w3.org/TR/css-grid-2/#grid-items">css-grid-2
+        /// &#167;6</see>) whatever its own computed <c>display</c> says.
+        /// <para>
+        /// <see cref="DerivedStyle.ActualDisplay"/> is not a sufficient oracle for "is this box
+        /// block-level" on its own, because PeachPDF deliberately leaves an inline-level item's
+        /// COMPUTED display alone and blockifies it at layout time instead
+        /// (<c>DomParser.NormalizeFlexOrGridItem</c>, and
+        /// <c>.claude/accepted-gaps/inline-level-flex-and-grid-items-are-not-blockified.md</c>). Without
+        /// this, a single-line flex COLUMN of <c>inline-block</c> items measured as the SUM of its
+        /// items rather than the widest of them - 72.5742pt against the 39.5859pt the same container
+        /// gives for plain block items, at <c>font: 16px monospace</c> - and took that width out of the
+        /// table column beside it.
+        /// </para>
+        /// </summary>
+        private static bool IsFlexOrGridItem(CssBox box) =>
+            box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
+                or Keywords.Grid or Keywords.InlineGrid;
 
         /// <summary>
         /// Whether this box lays its children out along a horizontal flex line, so their
@@ -7378,8 +7429,8 @@ namespace PeachPDF.Html.Core.Dom
                 // here - the second point in the walk (with a <br>) where the line is known to
                 // have ended, and so where css-text-3 §4.1.2's hanging trailing space can be
                 // applied. What makes the subtraction safe is not that maxSum holds one line (it
-                // need not - a white-space: nowrap child does not reset, so its line is summed
-                // onto the one before it) but that trailingSpace is only ever non-zero while the
+                // need not - a table-cell child does not reset, so a row's cells are summed onto
+                // one running total) but that trailingSpace is only ever non-zero while the
                 // most recently MEASURED WORD is still the tail of maxSum: every path that puts
                 // something else on the line after it zeroes trailingSpace, and the <br> branch
                 // and the block reset zero it when the line ends. So the space taken off is always

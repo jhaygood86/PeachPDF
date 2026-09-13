@@ -12,10 +12,15 @@ on the same line, and there that space is an ordinary inter-word gap.
 path that ends the line does zero it. Only then is the amount taken off provably still in `maxSum`.
 
 Do **not** substitute the more intuitive-sounding justification "`maxSum` at the epilogue is this
-box's last line only" — that is false. A `white-space: nowrap` child does not reset the running line,
-so `<div>AB CD</div><div>EF</div>` under `nowrap` sums both lines into one `maxSum` (46.1836pt where
-Chromium says 32.9883 — a separate, pre-existing defect). The subtraction survives that because of the
-invariant above, not because of any claim about line counts.
+box's last line only" — that is false. `StartsNewLine` excludes `display: table-cell`, so the cells of
+a row are all summed into one running `maxSum` (correctly — they sit side by side) and the table's own
+epilogue closes a total that several boxes contributed to. The subtraction survives that because of
+the invariant above, not because of any claim about line counts.
+
+Until issue #1017 the same point was made by a `white-space: nowrap` block-level child, which also did
+not reset the running line — but that was a defect (one sibling's line ADDED to the previous
+sibling's) rather than a shape the walk is entitled to produce, and it is fixed: `StartsNewLine` now
+asks only whether the box is block-level in flow.
 
 The paths that had to be taught the invariant, each found only by measuring:
 
@@ -27,9 +32,11 @@ The paths that had to be taught the invariant, each found only by measuring:
   Zeroing unconditionally would throw away a legitimate hang in the case where the measured total
   still wins.
 
-Both are reachable only under `white-space: nowrap`, because that is what stops the walk treating an
-inline-level box as opening a line of its own — so a fixture without `nowrap` will not catch a
-regression here.
+Both are reached whenever an inline-level box (`inline-block`/`-flex`/`-table`/`-grid`) lands on a
+line that already has content on it — which, since issue #1017, is any such box at all. It used to
+take an inherited `white-space: nowrap` to get there, because that was the only thing stopping the
+walk treating an inline-level box as opening a line of its own; the fixtures named below now run both
+with and without it.
 
 An empty inline child's own horizontal margins (`maxSum += childBox.ActualMarginLeft + …`)
 deliberately do **not** zero it: Chromium hangs the space there too.
@@ -44,8 +51,8 @@ rule is applied at each:
    of the call and is closing it now;
 3. `GetMinMaxWidth`, after the walk — the document ran out. This one is a no-op whenever (1) or (2)
    already ran, since both zero `trailingSpace`, and exists for the box kinds `StartsNewLine`
-   excludes so they never reach (2): a `display: table-cell`, a `white-space: nowrap` block, and an
-   inline box measured directly.
+   excludes so they never reach (2): a `display: table-cell`, and an inline-level box measured
+   directly.
 
 ## The measured symptom of getting it wrong
 
@@ -56,8 +63,15 @@ fits. Chromium gives 43.9844px = 32.9883pt.
 
 **Hanging it at the top-of-call reset** (subtracting from `oldSum` when a box starts its own line):
 redundant for the ordinary block-sibling case, because the preceding block's own epilogue already
-hung its space and left `trailingSpace` at 0 — and wrong for an `inline-block`, which
-`StartsNewLine` selects but which does not end the line before it.
+hung its space and left `trailingSpace` at 0 — and it would be wrong for anything `StartsNewLine`
+selects that does not in fact end the line before it. Since issue #1017 that predicate decides
+block-level-ness from `display` — its own, plus the PARENT's via `IsFlexOrGridItem`, because a flex or
+grid item is blockified by its formatting context and its own computed value still says otherwise here.
+It is not a perfect proxy for "ends the line": a **float** is selected (CSS 2.1 §9.7 blockifies it) and
+does not in fact end the line before it, which is a real gap — see
+[.claude/accepted-gaps/a-float-does-not-contribute-to-the-line-in-the-intrinsic-walk.md](../accepted-gaps/a-float-does-not-contribute-to-the-line-in-the-intrinsic-walk.md).
+That gap makes the box measure too narrow; it does not make the trailing-space subtraction unsafe,
+because the invariant above is about `trailingSpace`'s own lifetime, not about who opened the line.
 
 **Subtracting after the epilogue's `Math.Max`** rather than before it: `maxSum` is then the widest of
 two *different* lines, and the space belongs to only one of them.
@@ -66,7 +80,7 @@ two *different* lines, and the space belongs to only one of them.
 
 **Leaving `trailingSpace` stale across a non-word addition to `maxSum`** (the two paths above): the
 epilogue then takes a real inter-word gap back off. `AB <span style='display:inline-flex'>CD</span>`
-under `nowrap` measures 26.3906pt where it draws — and Chromium measures — 32.9883.
+measures 26.3906pt where it draws — and Chromium measures — 32.9883.
 `AFlexRowLandingOnTheLineAfterASpace_DoesNotSwallowIt` and
 `AnExplicitChildWidthLandingOnTheLineAfterASpace_DoesNotSwallowIt` pin these.
 
