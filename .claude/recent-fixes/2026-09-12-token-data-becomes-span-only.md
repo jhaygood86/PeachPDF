@@ -97,17 +97,18 @@ Both bugs were caught before landing, not after — the full single-threaded `ne
 errors → 350 test failures → 142 test failures → 0 test failures across the two fixes, confirming each
 one's real effect rather than assuming the build succeeding meant the change was correct.
 
-## A third, unrelated, pre-existing defect found and characterized (not fixed here)
+## A third, unrelated, pre-existing defect found and characterized (fixed as a follow-up)
 
 Auditing `TokenDataSlicingTests.cs`'s escaped-line-continuation test (which previously asserted only
 `token.Data == token.DataSpan.ToString()`, an equivalence between two accessors that could both be
 wrong at once) with a real content assertion surfaced that the lexer does not actually strip an escaped
 line continuation (CSS Syntax 3 §4.3.7) from a string token — confirmed via `git stash` to reproduce
-identically on the unmodified `main` commit, so it is not a regression from this change. Filed as
-[issue #1024](https://github.com/jhaygood86/PeachPDF/issues/1024) and recorded as an accepted gap in
-[lexer-does-not-strip-escaped-line-continuations-in-strings.md](../accepted-gaps/lexer-does-not-strip-escaped-line-continuations-in-strings.md);
-the test was renamed to `String_ContainingEscapedLineContinuation_CharacterizesCurrentLexerOutput` and
-now pins today's actual output rather than silently asserting nothing.
+identically on the unmodified `main` commit, so it is not a regression from this change. Initially filed
+as [issue #1024](https://github.com/jhaygood86/PeachPDF/issues/1024) and recorded as an accepted gap on
+the assumption it could be deferred; that assumption didn't hold once the pinned-buggy-output test
+turned out to be platform-dependent and started failing CI on two of three OSes. Actually fixed in
+[2026-09-13-lexer-line-continuation-emits-environment-newline.md](2026-09-13-lexer-line-continuation-emits-environment-newline.md) —
+the accepted-gap file is deleted and #1024 is closed.
 
 ## Verification
 

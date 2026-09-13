@@ -50,18 +50,14 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
-        public void String_ContainingEscapedLineContinuation_CharacterizesCurrentLexerOutput()
+        public void String_ContainingEscapedLineContinuation_MaterializesWithoutTheEscapedNewline()
         {
             // A backslash immediately followed by a newline is a line continuation (CSS Syntax §4.3.7) -
-            // per spec the string should span the source line break without the escaped newline
-            // appearing in Data ("ab"). The lexer does not currently strip it (pre-existing, confirmed
-            // present before the Token.Data span migration - not a regression from it); this pins
-            // today's actual output rather than asserting the spec-correct value a future fix should
-            // change this to.
+            // the string spans the source line break without the escaped newline appearing in Data.
             var token = FirstToken("\"a\\\nb\"");
 
             Assert.Equal(TokenType.String, token.Type);
-            Assert.Equal("a\r\nb", token.Data.ToString());
+            Assert.Equal("ab", token.Data.ToString());
         }
 
         [Fact]

@@ -107,13 +107,15 @@ namespace PeachPDF.CSS
             return FlushBuffer().AsMemory();
         }
 
-        // CSS's string/url escaped-line-continuation feature ("\" followed by a newline consumes the
-        // newline without adding it to the value) - StringBuilder.AppendLine() appends the platform
-        // default line terminator, not the source's own newline character(s), so content that crosses
-        // this can never be represented as a literal source slice.
+        // A backslash immediately followed by a newline is a line continuation (CSS Syntax §4.3.7): fully
+        // consumed, contributes zero characters. GetNext() already advanced past whatever raw newline
+        // form was present - CRLF/lone-CR were already folded to a single logical LF by
+        // LexerBase.NormalizeForward before this method is ever reached - so no extra consumption logic
+        // is needed here. _mustMaterialize still has to be set: the run's length now diverges from a
+        // literal source slice (bytes were consumed from Source but nothing was added to the buffer), so
+        // EndContent() must keep returning the accumulated buffer rather than attempting a slice.
         private void AppendLineContinuation()
         {
-            StringBuffer.AppendLine();
             _mustMaterialize = true;
         }
 
