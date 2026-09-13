@@ -269,7 +269,12 @@ namespace PeachPDF.Html.Core.Parse
         /// <param name="box"></param>
         public static double ParseLength(Length length, double hundredPercent, CssBox box)
         {
-            var (containerWidthPt, containerHeightPt, containerInlinePt, containerBlockPt) = box.GetContainerRelativeUnitBasis();
+            // GetContainerRelativeUnitBasis walks every ancestor looking for the nearest eligible
+            // @container query container - real, non-trivial work worth skipping for the overwhelming
+            // majority of lengths, which don't use a cq* unit at all (see Length.IsContainerRelative).
+            var (containerWidthPt, containerHeightPt, containerInlinePt, containerBlockPt) = length.IsContainerRelative
+                ? box.GetContainerRelativeUnitBasis()
+                : (null, null, null, null);
             var (viewportWidthPt, viewportHeightPt, viewportInlinePt, viewportBlockPt) = box.GetViewportUnitBasis();
             var pixelsPerPoint = PixelsPerPointOf(box);
 
@@ -409,7 +414,15 @@ namespace PeachPDF.Html.Core.Parse
         /// <returns>the parsed length value with adjustments</returns>
         public static double ParseLength(string length, double hundredPercent, CssBox box)
         {
-            var (containerWidthPt, containerHeightPt, containerInlinePt, containerBlockPt) = box.GetContainerRelativeUnitBasis();
+            // Cheap, conservative pre-filter: every cq* unit's own suffix contains "cq" (cqw/cqh/cqi/cqb/
+            // cqmin/cqmax), so a length string that doesn't contain "cq" anywhere cannot possibly resolve
+            // to one - skip GetContainerRelativeUnitBasis's ancestor walk for the overwhelming majority of
+            // lengths (a false-positive match, e.g. inside a custom-property-derived string, only costs
+            // the walk it would have paid anyway - never a wrong answer).
+            var mightBeContainerRelative = length.Contains("cq", StringComparison.OrdinalIgnoreCase);
+            var (containerWidthPt, containerHeightPt, containerInlinePt, containerBlockPt) = mightBeContainerRelative
+                ? box.GetContainerRelativeUnitBasis()
+                : (null, null, null, null);
             var (viewportWidthPt, viewportHeightPt, viewportInlinePt, viewportBlockPt) = box.GetViewportUnitBasis();
             var pixelsPerPoint = PixelsPerPointOf(box);
 

@@ -85,6 +85,17 @@ namespace PeachPDF.CSS
             IsAbsolute || Type is Unit.Em or Unit.Rem or Unit.Ex or Unit.Ch;
 
         /// <summary>
+        /// Whether <see cref="ToPixels"/> actually reads its <c>containerWidthPt</c>/<c>containerHeightPt</c>/
+        /// <c>containerInlineSizePt</c>/<c>containerBlockSizePt</c> parameters - true only for the six
+        /// CSS Containment 3 §6.2 <c>cq*</c> units. Lets a caller skip
+        /// <see cref="Html.Core.Dom.CssBox.GetContainerRelativeUnitBasis"/>'s ancestor walk (which finds
+        /// the nearest <c>@container</c> query container) for the overwhelming majority of lengths, which
+        /// don't use a container-relative unit at all - see <c>CssValueParser.ParseLength</c>.
+        /// </summary>
+        internal bool IsContainerRelative =>
+            Type is Unit.Cqw or Unit.Cqh or Unit.Cqi or Unit.Cqb or Unit.Cqmin or Unit.Cqmax;
+
+        /// <summary>
         ///     Gets the type of the length.
         /// </summary>
         public Unit Type { get; }
