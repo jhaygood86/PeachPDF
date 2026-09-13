@@ -663,6 +663,62 @@ namespace PeachPDF.Html.Core.Dom
 
         internal void InvalidateOpacity() => _actualOpacityComputed = false;
 
+        private bool _filterFunctionsComputed;
+        private List<FilterGrammar.FilterFunction> _filterFunctions = [];
+
+        /// <summary>
+        /// Lazily parses the used value of the <c>filter</c> property (Filter Effects Level 1 §3) into its
+        /// ordered function list - empty for <c>none</c> or an unparsable value. Kept as the raw
+        /// <see cref="FilterGrammar.FilterFunction"/> list (never pre-resolved
+        /// <see cref="Adapters.Entities.ColorMatrix"/>es) for the same reason <see cref="BoxShadowGrammar"/>'s
+        /// own layers stay raw text: <c>drop-shadow()</c>'s lengths still need box-relative resolution via
+        /// <c>CssValueParser.ParseLength</c> against THIS box, which only the paint-time caller
+        /// (<c>FragmentPainter.PaintFilterDropShadows</c>) can do.
+        /// </summary>
+        public IReadOnlyList<FilterGrammar.FilterFunction> ActualFilterFunctions
+        {
+            get
+            {
+                if (!_filterFunctionsComputed)
+                {
+                    using (var pooledTokens = CssValueParser.GetCssTokensPooled(Style.VisualEffects.Filter))
+                    {
+                        List<Token> tokens = pooledTokens;
+                        _filterFunctions = FilterGrammar.TryParse(tokens) ?? [];
+                    }
+                    _filterFunctionsComputed = true;
+                }
+                return _filterFunctions;
+            }
+        }
+
+        internal void InvalidateFilter() => _filterFunctionsComputed = false;
+
+        private bool _actualMixBlendModeComputed;
+        private BlendMode _actualMixBlendMode;
+
+        /// <summary>
+        /// The used value of <c>mix-blend-mode</c>. <see cref="CssProperty{T}.Value"/> is
+        /// <see cref="BlendMode"/>, not <c>BlendMode?</c> - <c>CssProperty&lt;T&gt;</c>'s own <c>T?</c> is
+        /// erased to plain <c>T</c> for an unconstrained generic parameter (a real C# generics quirk: only
+        /// a <c>where T : struct</c> constraint would make it genuinely <c>Nullable&lt;T&gt;</c>), so the
+        /// CSS-wide-keyword/unresolved-<c>var()</c> case (where no real value was ever parsed) reads back
+        /// as <c>default(BlendMode)</c> - which is <see cref="BlendMode.Normal"/>, since it's declared
+        /// first - already the correct fail-open fallback with no explicit handling needed here.
+        /// </summary>
+        public BlendMode ActualMixBlendMode
+        {
+            get
+            {
+                if (!_actualMixBlendModeComputed)
+                {
+                    _actualMixBlendMode = Style.VisualEffects.MixBlendMode.Value;
+                    _actualMixBlendModeComputed = true;
+                }
+                return _actualMixBlendMode;
+            }
+        }
+
         #endregion
 
         #region Word/letter spacing, text-indent

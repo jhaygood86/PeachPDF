@@ -324,7 +324,10 @@ namespace PeachPDF.Tests.Integration
             public override RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null) => null;
             public override (RGraphics Graphics, RImage Image)? CreateTile(double width, double height) => null;
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) { }
-            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) { }
+            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) { }
+            public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix) { }
+            public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false) { }
+            public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode) { }
             public override RSize MeasureString(string str, RFont font, TextShapingFeatures? features = null) => new(str?.Length * 6 ?? 0, 12);
             public override int CountShapedGlyphs(string str, RFont font, TextShapingFeatures? features = null) => str?.Length ?? 0;
             public override void MeasureString(string str, RFont font, double maxWidth, out int charFit, out double charFitWidth)

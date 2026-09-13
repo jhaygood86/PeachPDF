@@ -46,5 +46,12 @@ namespace PeachPDF.Svg
 
         /// <summary>Mask definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
         public Dictionary<string, SvgMask> Masks { get; init; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Filter definitions keyed by <c>id</c> (ids are case-sensitive per XML). Only ever contains a
+        /// <c>&lt;filter&gt;</c> whose whole primitive graph is natively representable - see
+        /// <see cref="SvgFilter"/>'s remarks.
+        /// </summary>
+        public Dictionary<string, SvgFilter> Filters { get; init; } = new(StringComparer.Ordinal);
     }
 }

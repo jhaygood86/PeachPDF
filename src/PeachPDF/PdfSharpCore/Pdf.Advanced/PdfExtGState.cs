@@ -192,6 +192,21 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             set { Elements.SetReference(Keys.SMask, value); }
         }
 
+        /// <summary>
+        /// Sets the <c>/TR</c> transfer function - a Type 4 function (see <see cref="PdfType4Function"/>),
+        /// or an array of up to four (ISO 32000-1 §8.6.5.3). Plain element assignment rather than
+        /// <c>Elements.SetReference</c>: a single function is an indirect stream object and gets
+        /// converted to a reference automatically by the assignment itself (the same auto-conversion
+        /// <c>Elements[key] = value</c> already does for any indirect <see cref="PdfObject"/>), while an
+        /// array value is a direct object whose own elements already hold indirect references to the
+        /// functions inside it - <c>SetReference</c> would incorrectly demand the array itself be
+        /// indirect too.
+        /// </summary>
+        public PdfItem TransferFunction
+        {
+            set { Elements[Keys.TR] = value; }
+        }
+
         internal string Key
         {
             get { return _key; }
@@ -327,8 +342,25 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             [KeyInfo(KeyType.FunctionOrName | KeyType.Optional)]
             public const string UCR2 = "/UCR2";
 
-            //TR  function, array, or name
-            //TR2 function, array, or name
+            /// <summary>
+            /// (Optional) The transfer function, which maps the interval [0.0 1.0] to itself, applied to
+            /// each device colour component before it is halftoned/rendered. May be a single function
+            /// (applied identically to every colorant), an array of functions (one per colorant), or the
+            /// name Default. See <see cref="TransferFunction"/> and <see cref="PdfType4Function"/> -
+            /// crucially, this is a PER-COMPONENT function (it never sees more than one colorant's value
+            /// at a time), so it cannot express a cross-channel colour transform.
+            /// </summary>
+            [KeyInfo(KeyType.FunctionOrName | KeyType.Optional)]
+            public const string TR = "/TR";
+
+            /// <summary>
+            /// (Optional; PDF 1.3) Same as TR except that the value may also be the name Default,
+            /// denoting the transfer function that was in effect at the start of the page. If both TR
+            /// and TR2 are present in the same graphics state parameter dictionary, TR2 takes precedence.
+            /// </summary>
+            [KeyInfo(KeyType.FunctionOrName | KeyType.Optional)]
+            public const string TR2 = "/TR2";
+
             //HT  dictionary, stream, or name
             //FL  number
             //SM  number

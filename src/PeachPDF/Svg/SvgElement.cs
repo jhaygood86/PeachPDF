@@ -71,6 +71,15 @@ namespace PeachPDF.Svg
         /// <summary>Not inherited (like <see cref="ClipPathRef"/>). Id of a <c>&lt;mask&gt;</c> def (see <see cref="SvgDocument.Masks"/>), or null for none.</summary>
         public string? MaskRef { get; set; }
 
+        /// <summary>
+        /// Not inherited (like <see cref="ClipPathRef"/>/<see cref="MaskRef"/>). Id of a
+        /// <c>&lt;filter&gt;</c> def (see <see cref="SvgDocument.Filters"/>), or null for none. A
+        /// reference to an id that isn't in <see cref="SvgDocument.Filters"/> (never registered because
+        /// its primitive graph wasn't natively representable, or simply doesn't exist) renders this
+        /// element completely unfiltered, same as an unresolved <see cref="MaskRef"/>.
+        /// </summary>
+        public string? FilterRef { get; set; }
+
         public RMatrix? Transform { get; set; }
 
         /// <summary>Inherited. Id of a <c>&lt;marker&gt;</c> def (see <see cref="SvgDocument.Markers"/>), or null for none. Only consulted for shapes markers can attach to - see <see cref="SvgMarkerGeometry"/>.</summary>

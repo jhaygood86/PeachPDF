@@ -164,13 +164,19 @@ namespace PeachPDF.Html.Core.Paint
                         }
                     }
 
-                    if (box.IsOpaque)
+                    // The fast (untiled) path only applies when nothing needs group compositing: full
+                    // opacity, a normal blend mode, and no filter function that actually changes the
+                    // result (a filter list of only documented no-ops - grayscale()/hue-rotate()/etc. -
+                    // takes this path too, same as `filter: blur()` always has).
+                    var filter = FilterEffectResolver.Resolve(box.ActualFilterFunctions);
+                    if (box.IsOpaque && box.ActualMixBlendMode == BlendMode.Normal &&
+                        filter is { OpacityMultiplier: >= 1.0, HasColorMatrix: false })
                     {
                         PaintTagged(g, fragment);
                     }
                     else
                     {
-                        PaintWithOpacity(g, fragment);
+                        PaintWithOpacity(g, fragment, filter);
                     }
 
                     for (var i = 0; i < legacyClipPushed; i++)
@@ -223,11 +229,14 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>
         /// Paints a fragment (and, via <see cref="PaintTagged"/>, its whole subtree) into an offscreen
         /// tile sized to the current page's visible clip, then composites that tile onto
-        /// <paramref name="g"/> as a single flattened result at <c>ActualOpacity</c> - the CSS
-        /// <c>opacity</c> property is a group effect (it applies once to the element and everything
-        /// painted inside it, not to each descendant's own paint calls independently), and this is what
-        /// makes overlapping content within the box composite correctly instead of double-blending
-        /// where it overlaps.
+        /// <paramref name="g"/> as a single flattened result at <c>ActualOpacity</c> (further scaled by
+        /// <paramref name="filter"/>'s own <c>filter: opacity()</c> contribution), through
+        /// <c>ActualMixBlendMode</c>, and - when <paramref name="filter"/> carries a channel-independent
+        /// color matrix (<c>brightness()</c>/<c>contrast()</c>/<c>invert()</c>) - recolored first via a
+        /// second tile pass. The CSS <c>opacity</c> property is a group effect (it applies once to the
+        /// element and everything painted inside it, not to each descendant's own paint calls
+        /// independently), and this is what makes overlapping content within the box composite correctly
+        /// instead of double-blending where it overlaps.
         /// </summary>
         /// <remarks>
         /// The tile is sized to the whole current page-visible rect (not a tight bounding box of this
@@ -240,7 +249,7 @@ namespace PeachPDF.Html.Core.Paint
         /// automatically, since PDF's own <c>cm</c> operator concatenates - no separate
         /// transform-folding is needed here.
         /// </remarks>
-        private void PaintWithOpacity(RGraphics g, BoxFragment fragment)
+        private void PaintWithOpacity(RGraphics g, BoxFragment fragment, FilterEffectResolver.Resolved filter)
         {
             var clip = g.GetClip();
             var tileRect = new RRect(0, 0, clip.Right, clip.Bottom);
@@ -249,7 +258,7 @@ namespace PeachPDF.Html.Core.Paint
             if (tile is not { } t)
             {
                 // No page/document context to own a Form XObject in (e.g. a measure-only pass) -
-                // opacity has no visual effect there anyway, so just paint directly.
+                // opacity/blend-mode/filter have no visual effect there anyway, so just paint directly.
                 PaintTagged(g, fragment);
                 return;
             }
@@ -258,8 +267,54 @@ namespace PeachPDF.Html.Core.Paint
             PaintTagged(t.Graphics, fragment);
             t.Graphics.Dispose();
 
-            g.DrawImageWithOpacity(t.Image, tileRect, fragment.Box.ActualOpacity);
+            var image = t.Image;
+
+            // The color matrix is a separate ExtGState (/TR) from opacity/blend-mode's (/ca, /BM), so a
+            // filter list needing both goes through a second tile - correctness first, per this repo's own
+            // "don't over-optimize call count in this pass" note; most boxes need at most one of the two.
+            if (filter.HasColorMatrix)
+            {
+                var matrixTile = g.CreateTile(tileRect.Width, tileRect.Height);
+                if (matrixTile is { } mt)
+                {
+                    mt.Graphics.DrawImageWithColorMatrix(image, tileRect, filter.ColorMatrix);
+                    mt.Graphics.Dispose();
+                    image = mt.Image;
+                }
+            }
+
+            var opacity = fragment.Box.ActualOpacity * filter.OpacityMultiplier;
+            g.DrawImageWithOpacity(image, tileRect, opacity, ToRBlendMode(fragment.Box.ActualMixBlendMode));
         }
+
+        /// <summary>
+        /// Maps the CSS-namespace <see cref="BlendMode"/> (the enum-keyword source generator's
+        /// <c>enumType</c> codegen hardcodes <c>PeachPDF.CSS</c> as its namespace, so <c>mix-blend-mode</c>
+        /// can't bind directly to <see cref="RBlendMode"/> despite the two enums being identical in shape)
+        /// onto the <see cref="RBlendMode"/> the PDF-writing layer actually understands. The one call site
+        /// that needs this conversion, per CLAUDE.md's guidance to map at paint time rather than duplicate
+        /// <c>RBlendMode</c> a second time under a different name.
+        /// </summary>
+        private static RBlendMode ToRBlendMode(BlendMode mode) => mode switch
+        {
+            BlendMode.Normal => RBlendMode.Normal,
+            BlendMode.Multiply => RBlendMode.Multiply,
+            BlendMode.Screen => RBlendMode.Screen,
+            BlendMode.Overlay => RBlendMode.Overlay,
+            BlendMode.Darken => RBlendMode.Darken,
+            BlendMode.Lighten => RBlendMode.Lighten,
+            BlendMode.ColorDodge => RBlendMode.ColorDodge,
+            BlendMode.ColorBurn => RBlendMode.ColorBurn,
+            BlendMode.HardLight => RBlendMode.HardLight,
+            BlendMode.SoftLight => RBlendMode.SoftLight,
+            BlendMode.Difference => RBlendMode.Difference,
+            BlendMode.Exclusion => RBlendMode.Exclusion,
+            BlendMode.Hue => RBlendMode.Hue,
+            BlendMode.Saturation => RBlendMode.Saturation,
+            BlendMode.Color => RBlendMode.Color,
+            BlendMode.Luminosity => RBlendMode.Luminosity,
+            _ => RBlendMode.Normal,
+        };
 
         /// <summary>
         /// Paints one fragment's content, wrapped in tagged-PDF structure-tree/marked-content
@@ -441,6 +496,12 @@ namespace PeachPDF.Html.Core.Paint
                 // caption-inclusive rect, once at the decoration box's grid-only one).
                 if (!box.SuppressOwnBorderPaint && BoxDecorationGeometry.HasBoxShadow(box))
                     PaintBoxShadows(g, box, geometry, inset: false);
+
+                // filter: drop-shadow() paints at the same point box-shadow's own outset layers do -
+                // behind the box's background (CSS Backgrounds & Borders 3 §5's ordering, which this
+                // approximation borrows wholesale).
+                if (box.ActualFilterFunctions.Count > 0)
+                    PaintFilterDropShadows(g, box, geometry);
 
                 // A box whose background was "promoted" to fill the whole page canvas (see
                 // HtmlContainerInt.ResolveCanvasBackground / PaintCanvasBackground) already had it

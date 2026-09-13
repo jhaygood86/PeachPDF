@@ -71,30 +71,8 @@ namespace PeachPDF.CSS
 
         private static ShadowLayer ParseLayer(IReadOnlyList<Token> group)
         {
-            var insetSeen = false;
-            var lengths = new List<Token>();
-            var colorTokens = new List<Token>();
-            var lengthsClosed = false; // set once a non-length token appears after lengths have begun
-
-            foreach (var token in group)
-            {
-                if (IsInset(token))
-                {
-                    if (insetSeen) return null;          // "inset" at most once
-                    insetSeen = true;
-                    if (lengths.Count > 0) lengthsClosed = true;
-                }
-                else if (IsLength(token))
-                {
-                    if (lengthsClosed) return null;      // <length>{2,4} must be one contiguous run
-                    lengths.Add(token);
-                }
-                else
-                {
-                    if (lengths.Count > 0) lengthsClosed = true;
-                    colorTokens.Add(token);
-                }
-            }
+            if (!TryClassify(group, allowInset: true, out var inset, out var lengths, out var colorTokens))
+                return null;
 
             // Two to four lengths: offset-x, offset-y, [blur], [spread].
             if (lengths.Count is < 2 or > 4) return null;
@@ -112,13 +90,56 @@ namespace PeachPDF.CSS
 
             return new ShadowLayer
             {
-                Inset = insetSeen,
+                Inset = inset,
                 OffsetX = lengths[0].ToValue(),
                 OffsetY = lengths[1].ToValue(),
                 Blur = lengths.Count >= 3 ? lengths[2].ToValue() : "0",
                 Spread = lengths.Count >= 4 ? lengths[3].ToValue() : "0",
                 Color = color,
             };
+        }
+
+        /// <summary>
+        /// The <c>[ inset? &amp;&amp; &lt;length&gt;+ &amp;&amp; &lt;color&gt;? ]</c> trailing-group
+        /// classifier shared by <see cref="ParseLayer"/> and <c>FilterGrammar</c>'s <c>drop-shadow()</c>
+        /// argument parsing (CLAUDE.md's "one grammar per value shape" rule - both productions are shaped
+        /// identically, differing only in whether <c>inset</c> is grammatically legal and in how many
+        /// lengths the caller accepts). Splits <paramref name="group"/> into the leading <c>inset</c>
+        /// keyword (when present and <paramref name="allowInset"/> is true), a contiguous run of lengths,
+        /// and a trailing color - without validating the length count or color grammar itself, which
+        /// differ between callers. Returns false for a structurally invalid group: <c>inset</c> where
+        /// <paramref name="allowInset"/> is false, <c>inset</c> repeated, or a length appearing after the
+        /// length run has already been closed by a non-length token.
+        /// </summary>
+        internal static bool TryClassify(IReadOnlyList<Token> group, bool allowInset,
+            out bool inset, out List<Token> lengths, out List<Token> colorTokens)
+        {
+            inset = false;
+            lengths = new List<Token>();
+            colorTokens = new List<Token>();
+            var lengthsClosed = false; // set once a non-length token appears after lengths have begun
+
+            foreach (var token in group)
+            {
+                if (IsInset(token))
+                {
+                    if (!allowInset || inset) return false; // not legal here, or "inset" more than once
+                    inset = true;
+                    if (lengths.Count > 0) lengthsClosed = true;
+                }
+                else if (IsLength(token))
+                {
+                    if (lengthsClosed) return false;      // <length>+ must be one contiguous run
+                    lengths.Add(token);
+                }
+                else
+                {
+                    if (lengths.Count > 0) lengthsClosed = true;
+                    colorTokens.Add(token);
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -129,7 +150,7 @@ namespace PeachPDF.CSS
         /// yields a Color-typed <see cref="Token"/> the converter understands), so accept a well-formed hex token
         /// directly - otherwise a hex shadow color accepted by Layer A would be dropped at paint time.
         /// </summary>
-        private static bool IsValidColor(IReadOnlyList<Token> colorTokens)
+        internal static bool IsValidColor(IReadOnlyList<Token> colorTokens)
         {
             if (colorTokens is [{ Type: TokenType.Hash } hash])
                 return IsHexColor(hash.Data);
@@ -157,7 +178,7 @@ namespace PeachPDF.CSS
         /// accepted by Layer A (whose value-mode tokenizer yields a proper color token) would fail to re-parse
         /// at paint time and the shadow would silently vanish.
         /// </summary>
-        private static List<Token> NormalizeHexColorTokens(IReadOnlyList<Token> tokens)
+        internal static List<Token> NormalizeHexColorTokens(IReadOnlyList<Token> tokens)
         {
             var result = new List<Token>(tokens.Count);
 
@@ -184,14 +205,16 @@ namespace PeachPDF.CSS
             token.Type == TokenType.Ident && token.Data.Isi(Keywords.Inset);
 
         /// <summary>A box-shadow offset/blur/spread is a <c>&lt;length&gt;</c> (not a length-percentage):
-        /// a dimension, or the unitless zero. Percentages are not valid here.</summary>
-        private static bool IsLength(Token token)
+        /// a dimension, or the unitless zero. Percentages are not valid here. Also used by
+        /// <c>FilterGrammar</c>'s <c>blur()</c>/<c>drop-shadow()</c> argument classification, which is the
+        /// same production.</summary>
+        internal static bool IsLength(Token token)
         {
             if (token.Type == TokenType.Dimension) return true;
             return token is { Type: TokenType.Number, Value: 0f };
         }
 
-        private static float LengthValue(Token token) => token switch
+        internal static float LengthValue(Token token) => token switch
         {
             { Type: TokenType.Dimension or TokenType.Percentage } unit => unit.Value,
             { Type: TokenType.Number } number => number.Value,

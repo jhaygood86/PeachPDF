@@ -346,6 +346,12 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>True when this box's <c>opacity</c> is fully opaque.</summary>
         public bool IsOpaque => DerivedStyle.IsOpaque;
 
+        /// <summary>Lazily parses the used value of the <c>filter</c> property into its ordered function list.</summary>
+        public IReadOnlyList<FilterGrammar.FilterFunction> ActualFilterFunctions => DerivedStyle.ActualFilterFunctions;
+
+        /// <summary>The used value of <c>mix-blend-mode</c>.</summary>
+        public BlendMode ActualMixBlendMode => DerivedStyle.ActualMixBlendMode;
+
         /// <summary>Gets the actual color for the text.</summary>
         public RColor ActualColor => DerivedStyle.ActualColor;
 

@@ -45,6 +45,20 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         }
 
         /// <summary>
+        /// Sets the <c>/TR</c> transfer function - a single-input/single-output Type 4 function (see
+        /// <see cref="PdfType4Function.BuildInvertFunction"/>) mapping the mask's own computed alpha or
+        /// luminosity value to the resulting mask value, e.g. to invert a mask built for the opposite
+        /// sense (<c>SourceAlpha</c>/<c>feComposite</c>'s complement, a future phase's use case). Unlike
+        /// <see cref="PdfExtGState.TransferFunction"/>, a soft mask's TR is always exactly one function -
+        /// ISO 32000-1 §11.6.5.2 gives it a single scalar in, single scalar out, with no per-colorant
+        /// array form - so this is unconditionally spec-legal regardless of what produced the mask.
+        /// </summary>
+        public PdfDictionary TransferFunction
+        {
+            set { Elements[Keys.TR] = value; }
+        }
+
+        /// <summary>
         /// Predefined keys of this dictionary.
         /// </summary>
         internal class Keys : KeysBase

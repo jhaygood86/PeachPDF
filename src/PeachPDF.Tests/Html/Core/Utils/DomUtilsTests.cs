@@ -359,6 +359,54 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task IsStackingContextBox_NonNormalMixBlendMode_ReturnsTrue()
+        {
+            var root = await Render("<div><span id='inner' style='mix-blend-mode: multiply;'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.True(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
+        public async Task IsStackingContextBox_NormalMixBlendMode_ReturnsFalse()
+        {
+            var root = await Render("<div><span id='inner' style='mix-blend-mode: normal;'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.False(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
+        public async Task IsStackingContextBox_FilterOtherThanNone_ReturnsTrue()
+        {
+            var root = await Render("<div><span id='inner' style='filter: brightness(0.5);'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.True(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
+        public async Task IsStackingContextBox_FilterOfOnlyDocumentedNoOps_StillReturnsTrue()
+        {
+            // grayscale()/hue-rotate()/saturate()/sepia() paint as no-ops (no native PDF mechanism - see
+            // ColorMatrix's remarks), but the stacking-context rule is about the property's presence, not
+            // this renderer's paint-time coverage of it (Filter Effects Level 1 §3).
+            var root = await Render("<div><span id='inner' style='filter: grayscale(50%);'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.True(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
+        public async Task IsStackingContextBox_FilterNone_ReturnsFalse()
+        {
+            var root = await Render("<div><span id='inner' style='filter: none;'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.False(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
         public async Task IsProperTableChild_TableRow_ReturnsTrue()
         {
             var root = await Render("<table><tr id='row'><td>Cell</td></tr></table>");

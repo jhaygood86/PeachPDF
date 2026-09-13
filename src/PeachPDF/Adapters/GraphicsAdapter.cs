@@ -304,7 +304,25 @@ namespace PeachPDF.Adapters
             if (document is null || width <= 0 || height <= 0)
                 return null;
 
-            var form = new XForm(document, new XSize(width, height));
+            // width/height arrive in this adapter's own "inflated" layout-unit space (the caller always
+            // sizes a tile from a layout rect - a box's own clip, a background layer's resolved size, an
+            // SVG filter region - the same space every other RGraphics call operates in), but an XForm's
+            // /BBox is a real PDF construct measured in actual page points with no conversion of its own.
+            // Divide by PixelsPerPoint here so the form's declared size already matches what the content
+            // painted into it will occupy once ITS OWN drawing calls apply this same division (every
+            // GraphicsAdapter method does, via Utils.Convert). Skipping this - as an earlier version did -
+            // left the /BBox sized in undivided layout units while the content inside was already
+            // correctly point-sized; XGraphicsPdfRenderer.DrawImage's own placement scale
+            // (destRect.Width / image.PointWidth) then divided the whole form by PixelsPerPoint a SECOND
+            // time on top of that (image.PointWidth reading back the oversized BBox), visibly shrinking
+            // and mispositioning every tiled box - opacity<1, and now filter/mix-blend-mode/SVG
+            // pattern/mask/filter content, all of which paint through a tile - whenever PixelsPerPoint
+            // differs from 1 (ShrinkToFit/ScaleToPageSize, or a non-72 PixelsPerInch). A sibling that
+            // never needed a tile (e.g. a plain box painted directly onto the page) was never subject to
+            // this second division, so it rendered correctly while its tiled neighbors visibly shrank and
+            // drifted toward the page origin - reading, at a glance, as if the plain box were the one
+            // that had gone wrong.
+            var form = new XForm(document, new XSize(width / PixelsPerPoint, height / PixelsPerPoint));
             var formGraphics = XGraphics.FromForm(form);
             // releaseGraphics: true - disposing the returned tile RGraphics must dispose the
             // underlying XGraphics, which is what actually calls XForm.Finish() and closes out the
@@ -320,10 +338,28 @@ namespace PeachPDF.Adapters
                 _g.DrawImageMasked(imageForm, maskForm, Utils.Convert(destRect, PixelsPerPoint));
         }
 
-        public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity)
+        public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal)
         {
             if (((ImageAdapter)image).Image is XForm imageForm)
-                _g.DrawImageWithOpacity(imageForm, Utils.Convert(destRect, PixelsPerPoint), opacity);
+                _g.DrawImageWithOpacity(imageForm, Utils.Convert(destRect, PixelsPerPoint), opacity, blendMode.ToString());
+        }
+
+        public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix)
+        {
+            if (((ImageAdapter)image).Image is XForm imageForm)
+                _g.DrawImageWithColorMatrix(imageForm, Utils.Convert(destRect, PixelsPerPoint), matrix);
+        }
+
+        public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false)
+        {
+            if (((ImageAdapter)image).Image is XForm imageForm && ((ImageAdapter)maskImage).Image is XForm maskForm)
+                _g.DrawImageAlphaMasked(imageForm, maskForm, Utils.Convert(destRect, PixelsPerPoint), invert);
+        }
+
+        public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode)
+        {
+            if (((ImageAdapter)top).Image is XForm topForm && ((ImageAdapter)bottom).Image is XForm bottomForm)
+                _g.DrawImageBlendedOver(topForm, bottomForm, Utils.Convert(destRect, PixelsPerPoint), blendMode.ToString());
         }
 
         public override void BeginMarkedContent(string structureType, int mcid)

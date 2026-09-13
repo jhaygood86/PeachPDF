@@ -93,6 +93,8 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.BoxSizing, () => new BoxSizingProperty());
             AddLonghand(PropertyNames.AspectRatio, () => new AspectRatioProperty());
             AddLonghand(PropertyNames.BoxShadow, () => new BoxShadowProperty(), true);
+            AddLonghand(PropertyNames.MixBlendMode, () => new MixBlendModeProperty());
+            AddLonghand(PropertyNames.Filter, () => new FilterProperty(), true);
             AddLonghand(PropertyNames.BoxDecorationBreak, () => new BoxDecorationBreak());
             AddLonghand(PropertyNames.BreakAfter, () => new BreakAfterProperty());
             AddLonghand(PropertyNames.BreakBefore, () => new BreakBeforeProperty());

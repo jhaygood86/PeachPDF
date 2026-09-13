@@ -207,6 +207,7 @@ namespace PeachPDF.CSS
         public static readonly string MaxWidth = "max-width";
         public static readonly string MinHeight = "min-height";
         public static readonly string MinWidth = "min-width";
+        public static readonly string MixBlendMode = "mix-blend-mode";
         public static readonly string Opacity = "opacity";
         public static readonly string Order = "order";
         public static readonly string Orphans = "orphans";
