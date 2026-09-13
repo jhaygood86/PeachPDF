@@ -4,6 +4,7 @@ namespace PeachPDF.Tests.CSS
     using System.Collections;
     using System.Collections.Generic;
     using PeachPDF.CSS;
+    using PeachPDF.Tests.TestSupport;
     using Xunit;
 
     /// <summary>
@@ -41,16 +42,8 @@ namespace PeachPDF.Tests.CSS
             // hands over.
             IReadOnlyList<Token> source = new ReadOnlyListOnly(tokens);
 
-            // Warm: JIT both the constructor and the token list before anything is counted.
-            for (var i = 0; i < 3; i++) _ = new TokenValue(source);
-
-            // Per THREAD, not process-wide: the suite runs collections in parallel, so
-            // GC.GetTotalAllocatedBytes would count every other test's work too. This body is
-            // synchronous and never awaits, so it stays on one thread throughout.
             const int builds = 200;
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < builds; i++) _ = new TokenValue(source);
-            var allocated = (GC.GetAllocatedBytesForCurrentThread() - before) / builds;
+            var allocated = AllocationProbe.Bytes(() => _ = new TokenValue(source), builds) / builds;
 
             // One Token[64] is the floor. Growing 4->8->16->32->64 instead allocates all five arrays
             // plus a boxed enumerator, which is a little over twice that. The bound sits between the

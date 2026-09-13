@@ -1,5 +1,6 @@
 using PeachPDF.Fonts.OpenType;
 using PeachPDF.Text;
+using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -52,17 +53,9 @@ namespace PeachPDF.Tests.Text
             var glyphs = new List<ShapedGlyph>();
             for (var i = 0; i < 200; i++) glyphs.Add(new ShapedGlyph(i, i, 1));
 
-            // Warm: JIT the whole path before anything is counted.
-            for (var i = 0; i < 3; i++) GposPositioner.ApplyMarkToBase(null!, lookup, glyphs, gdef: null);
-
-            // Per THREAD, not process-wide: the suite runs collections in parallel, so
-            // GC.GetTotalAllocatedBytes counts whatever every other test is allocating at the same
-            // time and this reads over a megabyte of other people's work. This test body is
-            // synchronous and never awaits, so it stays on the one thread throughout.
             const int passes = 50;
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < passes; i++) GposPositioner.ApplyMarkToBase(null!, lookup, glyphs, gdef: null);
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            var allocated = AllocationProbe.Bytes(
+                () => GposPositioner.ApplyMarkToBase(null!, lookup, glyphs, gdef: null), passes);
 
             // 200 glyphs x 50 passes is 10,000 trips through the subtable loop. One boxed enumerator
             // each is ~320 KB; the indexed walk allocates nothing at all. A few hundred bytes of slack
