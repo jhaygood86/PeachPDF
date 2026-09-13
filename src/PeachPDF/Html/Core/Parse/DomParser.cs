@@ -2459,6 +2459,7 @@ namespace PeachPDF.Html.Core.Parse
                     if (JoinsTheInlineRun(box.Boxes[i]))
                     {
                         var newbox = CssBox.CreateBlock(box, null, box.Boxes[i++]);
+                        newbox.IsInlineRunWrapper = true;
                         while (i < box.Boxes.Count && JoinsTheInlineRun(box.Boxes[i]))
                         {
                             box.Boxes[i].ParentBox = newbox;

@@ -68,10 +68,10 @@ selects that does not in fact end the line before it. Since issue #1017 that pre
 block-level-ness from `display` — its own, plus the PARENT's via `IsFlexOrGridItem`, because a flex or
 grid item is blockified by its formatting context and its own computed value still says otherwise here.
 It is not a perfect proxy for "ends the line": a **float** is selected (CSS 2.1 §9.7 blockifies it) and
-does not in fact end the line before it, which is a real gap — see
-[.claude/accepted-gaps/a-float-does-not-contribute-to-the-line-in-the-intrinsic-walk.md](../accepted-gaps/a-float-does-not-contribute-to-the-line-in-the-intrinsic-walk.md).
-That gap makes the box measure too narrow; it does not make the trailing-space subtraction unsafe,
-because the invariant above is about `trailingSpace`'s own lifetime, not about who opened the line.
+does not in fact end the line before it. Since issue #1033 a float never reaches that predicate on the
+recursive path at all where it shares the line — `GetMinMaxSumWords`' child loop measures it in
+isolation and adds it, zeroing `trailingSpace` as it lands, exactly as the flex-row branch does — so
+the space before a float is now kept as the ordinary inter-word gap it is.
 
 **Subtracting after the epilogue's `Math.Max`** rather than before it: `maxSum` is then the widest of
 two *different* lines, and the space belongs to only one of them.
