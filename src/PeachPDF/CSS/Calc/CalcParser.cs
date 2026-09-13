@@ -1,5 +1,6 @@
 #nullable disable
 
+using System;
 using System.Collections.Generic;
 
 namespace PeachPDF.CSS
@@ -83,7 +84,7 @@ namespace PeachPDF.CSS
                 var sawWhitespaceBefore = pos != beforeWhitespace;
 
                 if (pos >= tokens.Count || tokens[pos].Type != TokenType.Delim ||
-                    (tokens[pos].Data != "+" && tokens[pos].Data != "-"))
+                    (!tokens[pos].Data.Is("+") && !tokens[pos].Data.Is("-")))
                 {
                     pos = beforeWhitespace;
                     break;
@@ -121,7 +122,7 @@ namespace PeachPDF.CSS
                 SkipWhitespace(tokens, ref pos);
 
                 if (pos >= tokens.Count || tokens[pos].Type != TokenType.Delim ||
-                    (tokens[pos].Data != "*" && tokens[pos].Data != "/"))
+                    (!tokens[pos].Data.Is("*") && !tokens[pos].Data.Is("/")))
                 {
                     pos = save;
                     break;
@@ -205,7 +206,7 @@ namespace PeachPDF.CSS
 
                 case TokenType.Delim when token.Data is "+" or "-":
                 {
-                    var negative = token.Data == "-";
+                    var negative = token.Data.Is("-");
                     pos++;
 
                     // A unary sign must be immediately followed by a parenthesized group or a nested
@@ -251,7 +252,7 @@ namespace PeachPDF.CSS
         }
 
         /// <summary>Whether <paramref name="name"/> is one of calc/min/max/clamp (case-insensitive).</summary>
-        public static bool IsCalcFamily(string name)
+        public static bool IsCalcFamily(ReadOnlySpan<char> name)
         {
             return name.Isi(FunctionNames.Calc) || name.Isi(FunctionNames.Min) ||
                    name.Isi(FunctionNames.Max) || name.Isi(FunctionNames.Clamp);

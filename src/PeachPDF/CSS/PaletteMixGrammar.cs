@@ -148,7 +148,7 @@ namespace PeachPDF.CSS
         {
             if (token.Type == TokenType.Ident)
             {
-                data = token.Data;
+                data = token.Data.ToString();
                 return true;
             }
 

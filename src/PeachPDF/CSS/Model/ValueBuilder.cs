@@ -96,7 +96,7 @@ namespace PeachPDF.CSS
 
         private bool CheckImportant(Token token)
         {
-            if (_values.Count != 0 && token.Data == Keywords.Important)
+            if (_values.Count != 0 && token.Data.Is(Keywords.Important))
             {
                 var previous = _values[_values.Count - 1];
                 if (IsExclamationMark(previous))

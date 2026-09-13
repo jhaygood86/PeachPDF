@@ -32,7 +32,7 @@ namespace PeachPDF.CSS
 
             foreach (var token in value)
             {
-                if (token.Type == TokenType.Delim && token.Data == "/") groups.Add(new List<Token>());
+                if (token.Type == TokenType.Delim && token.Data.Is("/")) groups.Add(new List<Token>());
                 else groups[^1].Add(token);
             }
 

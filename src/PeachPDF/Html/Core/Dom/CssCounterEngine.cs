@@ -438,19 +438,19 @@ namespace PeachPDF.Html.Core.Dom
             using var pooledTokens = CssValueParser.GetCssTokensPooled(propValue);
             List<Token> tokens = pooledTokens;
 
-            var reversedToken = tokens.SingleOrNull(x => x.Type == TokenType.Function && x.Data == "reversed");
+            var reversedToken = tokens.SingleOrNull(x => x.Type == TokenType.Function && x.Data.Is("reversed"));
             var keywordToken = tokens.FirstOrNull(t => t.Type is TokenType.Hash or TokenType.AtKeyword or TokenType.Ident);
 
             if (reversedToken is { } reversed)
             {
                 var args = reversed.ArgumentTokens;
-                var counterName = args.Count > 0 ? args[0].Data : null;
+                var counterName = args.Count > 0 ? args[0].Data.ToString() : null;
 
                 return (counterName!, true);
             }
             else if (keywordToken is { } keyword)
             {
-                var counterName = keyword.Data;
+                var counterName = keyword.Data.ToString();
 
                 return (counterName, false);
             }

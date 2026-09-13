@@ -48,6 +48,14 @@ namespace PeachPDF.Html.Core.Dom
 
             foreach (var child in box.Boxes)
             {
+                // A display:none subtree (e.g. <style>/<script>/<head> under the UA stylesheet) is
+                // never laid out or painted - layout already skips it via this exact check in a dozen
+                // places across CssBox.cs - so resolving bidi levels for its text is pure waste. For a
+                // large embedded <style>/<script> payload this waste is not incidental: it is the
+                // dominant cost of parsing the document at all (see
+                // .claude/recent-fixes/2026-09-12-bidi-resolver-skips-display-none-subtrees.md).
+                if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
                 AssignBidiLevels(child);
             }
         }
@@ -239,6 +247,12 @@ namespace PeachPDF.Html.Core.Dom
         {
             foreach (var child in box.Boxes)
             {
+                // Same reasoning as AssignBidiLevels's own recursion guard - a display:none child
+                // contributes nothing to the rendered paragraph, not even an object-replacement
+                // placeholder (it has no box in the rendered tree at all, unlike a genuinely atomic
+                // inline replaced element).
+                if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
                 if (child.Text is { Length: > 0 } childText)
                 {
                     var start = text.Length;

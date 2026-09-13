@@ -91,7 +91,7 @@ namespace PeachPDF.CSS
         /// every text-like HTML input type collapses to "text", matching FormFieldMapper's own "closest
         /// equivalent" collapsing for auto-inferred &lt;input type=&gt; values.
         /// </summary>
-        static string ResolveFieldTypeKeyword(string keyword) => keyword switch
+        static string ResolveFieldTypeKeyword(ReadOnlySpan<char> keyword) => keyword switch
         {
             _ when keyword.Is(Keywords.Auto) => Keywords.Auto,
             _ when keyword.Is(Keywords.Checkbox) => Keywords.Checkbox,

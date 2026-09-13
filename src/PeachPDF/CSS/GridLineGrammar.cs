@@ -57,15 +57,15 @@ namespace PeachPDF.CSS
 
             // <custom-ident> — a named line reference.
             if (toks.Length == 1 && IsCustomIdent(toks[0]))
-                return GridLine.Named(toks[0].Data);
+                return GridLine.Named(toks[0].Data.ToString());
 
             // <custom-ident> <integer> / <integer> <custom-ident> — the Nth line with that name (order-independent).
             if (toks.Length == 2)
             {
                 if (IsCustomIdent(toks[0]) && toks[1] is { Type: TokenType.Number, IsInteger: true } n1 && n1.IntegerValue != 0)
-                    return GridLine.NamedNth(toks[0].Data, n1.IntegerValue);
+                    return GridLine.NamedNth(toks[0].Data.ToString(), n1.IntegerValue);
                 if (IsCustomIdent(toks[1]) && toks[0] is { Type: TokenType.Number, IsInteger: true } n2 && n2.IntegerValue != 0)
-                    return GridLine.NamedNth(toks[1].Data, n2.IntegerValue);
+                    return GridLine.NamedNth(toks[1].Data.ToString(), n2.IntegerValue);
             }
 
             return null;

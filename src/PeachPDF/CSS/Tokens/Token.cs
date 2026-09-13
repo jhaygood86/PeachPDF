@@ -49,21 +49,37 @@ namespace PeachPDF.CSS
         // Either a slice of a shared, already-alive TextSource buffer (the common, allocation-free
         // case - see Lexer's BeginContentAt/AppendLiteral/EndContent) or a directly owned string
         // wrapped whole via .AsMemory() (the escape/CRLF/line-continuation exception, where the
-        // content genuinely diverges from a literal source range). ReadOnlyMemory<char>.ToString()
-        // returns the same string instance with zero extra allocation whenever it spans an entire
-        // string unchanged, which is exactly the owned-string case - so no separate "owned" field is
-        // needed to get that for free.
+        // content genuinely diverges from a literal source range).
+        //
+        // Exposed only as a span, never as a string: a token's content is very often a zero-copy slice
+        // of the *entire* source document (not an owned string), so materializing it via .ToString()
+        // allocates and copies on every single call - fine once, ruinous for a token whose value is
+        // read more than once (a large `url()`/@font-face src data: URI, read a handful of times during
+        // ordinary declaration-value processing, allocated and copied its own multi-megabyte length
+        // each time - see .claude/recent-fixes/2026-09-12-token-data-becomes-span-only.md). A caller
+        // that only needs to compare/scan the content (the overwhelming majority - see
+        // StringExtensions.Is/Isi/IsOneOf/Has's span overloads) pays nothing; a caller that genuinely
+        // needs an owned string calls `.ToString()` itself, once, visibly, at the point that needs it.
         private readonly ReadOnlyMemory<char> _data;
-        public string Data => _data.ToString();
-        public ReadOnlySpan<char> DataSpan => _data.Span;
+        public ReadOnlySpan<char> Data => _data.Span;
 
         // Null for every token that isn't one of the six kinds documented on TokenExtra itself - see
         // the class comment there for the current measured proportion and rationale.
         private readonly TokenExtra? _extra;
 
         public bool IsValid => Type == TokenType.Color
-            ? DataSpan.Length != 3 && DataSpan.Length != 4 && DataSpan.Length != 6 && DataSpan.Length != 8
+            ? Data.Length != 3 && Data.Length != 4 && Data.Length != 6 && Data.Length != 8
             : _extra?.IsValid ?? false;
+
+        /// <summary>
+        /// This token's content and position, reinterpreted as <paramref name="newType"/> - e.g. an
+        /// <c>@top-left</c>-shaped <see cref="TokenType.AtKeyword"/> token re-read as a plain
+        /// <see cref="TokenType.Ident"/> one for margin-box rule parsing. Reuses the same backing
+        /// <see cref="_data"/> (and <see cref="_extra"/>, if any) with no copy - the zero-allocation
+        /// alternative to a caller reconstructing one via <c>new Token(newType, token.Data.ToString().AsMemory(), token.Position)</c>,
+        /// which both allocates and (silently) drops <see cref="_extra"/>.
+        /// </summary>
+        public Token WithType(TokenType newType) => new(newType, _data, Position, _extra);
 
         public Token(TokenType type, ReadOnlyMemory<char> data, TextPosition position)
         {
@@ -123,21 +139,31 @@ namespace PeachPDF.CSS
             });
 
         // --- UnitToken / NumberToken ---
-        public float Value => float.Parse(DataSpan, CultureInfo.InvariantCulture);
-        public bool IsInteger => DataSpan.IndexOfAny(FloatIndicators) == -1;
+        public float Value => float.Parse(Data, CultureInfo.InvariantCulture);
+        public bool IsInteger => Data.IndexOfAny(FloatIndicators) == -1;
 
         public int IntegerValue
         {
             get
             {
-                var parsed = int.TryParse(DataSpan, out var result);
+                var parsed = int.TryParse(Data, out var result);
 
                 if (parsed)
                 {
                     return result;
                 }
 
-                if (Data.All(char.IsDigit))
+                var allDigits = true;
+                foreach (var c in Data)
+                {
+                    if (!char.IsDigit(c))
+                    {
+                        allDigits = false;
+                        break;
+                    }
+                }
+
+                if (allDigits)
                 {
                     return int.MaxValue;
                 }
@@ -183,16 +209,16 @@ namespace PeachPDF.CSS
 
         public string ToValue() => Type switch
         {
-            TokenType.Hash => "#" + Data,
-            TokenType.AtKeyword => "@" + Data,
-            TokenType.Function => string.Concat(Data, "(", _extra!.Arguments.ToText()),
-            TokenType.String => Data.StylesheetString(),
-            TokenType.Color => "#" + Data,
-            TokenType.Range => "U+" + Data,
-            TokenType.Url => FunctionName.StylesheetFunction(Data.StylesheetString()),
-            TokenType.Comment => string.Concat("/*", Data, IsValid ? string.Empty : "*/"),
-            TokenType.Dimension or TokenType.Percentage => Data + Unit,
-            _ => Data,
+            TokenType.Hash => $"#{Data}",
+            TokenType.AtKeyword => $"@{Data}",
+            TokenType.Function => $"{Data}({_extra!.Arguments.ToText()}",
+            TokenType.String => Data.ToString().StylesheetString(),
+            TokenType.Color => $"#{Data}",
+            TokenType.Range => $"U+{Data}",
+            TokenType.Url => FunctionName.StylesheetFunction(Data.ToString().StylesheetString()),
+            TokenType.Comment => $"/*{Data}{(IsValid ? string.Empty : "*/")}",
+            TokenType.Dimension or TokenType.Percentage => $"{Data}{Unit}",
+            _ => Data.ToString(),
         };
     }
 }

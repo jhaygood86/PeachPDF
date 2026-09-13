@@ -32,7 +32,7 @@ namespace PeachPDF.CSS
 
             // A hex color nested inside a function (e.g. a color-mix() operand) tokenizes as a Hash
             // token rather than a Color-typed one, so ToColor misses it - resolve it here.
-            if (element is { Type: TokenType.Hash } hash) return Color.FromHex(hash.Data);
+            if (element is { Type: TokenType.Hash } hash) return Color.FromHex(hash.Data.ToString());
 
             return element is { Type: TokenType.Function } function ? ParseColorFunction(function) : null;
         }
@@ -148,7 +148,7 @@ namespace PeachPDF.CSS
             if (segments.Count != 3) return null;
 
             var config = segments[0].Where(t => t.Type is not TokenType.Whitespace)
-                .Select(t => t.Data.ToLowerInvariant()).ToList();
+                .Select(t => t.Data.ToLowerInvariantString()).ToList();
             if (config.Count < 2 || config[0] != "in") return null;
             var space = MapSpace(config[1]);
             var hue = MapHue(config, 2);
@@ -222,7 +222,7 @@ namespace PeachPDF.CSS
                     case TokenType.Whitespace:
                     case TokenType.Comma:
                         continue;
-                    case TokenType.Delim when token.Data == "/":
+                    case TokenType.Delim when token.Data.Is("/"):
                         slashIndex = values.Count;
                         continue;
                     default:

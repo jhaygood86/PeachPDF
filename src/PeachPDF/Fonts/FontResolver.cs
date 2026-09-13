@@ -7,6 +7,7 @@ using PeachPDF.Fonts.OpenType;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.Text;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -24,6 +25,16 @@ namespace PeachPDF.Fonts
     {
         private static readonly FrozenDictionary<string, string> _systemFontPaths;
         private static readonly FrozenDictionary<string, FontFamilyModel> _systemFamilies;
+
+        // A system font file never changes during the process's lifetime (same rationale as
+        // _systemFontPaths/_systemFamilies above), so caching its bytes by path here - once, process-wide -
+        // means every FontResolver instance after the first to need a given face (e.g. a per-codepoint
+        // fallback face like an emoji/CJK font, resolved fresh by every test's own short-lived instance)
+        // reuses the same byte[] instead of re-reading a potentially multi-megabyte file from disk. This
+        // also makes XFontSource.GetOrCreateFrom's own buffer-identity checksum memo (see XFontSource.cs)
+        // actually hit for system fonts, not just custom ones - see .claude/recent-fixes for the measured
+        // effect.
+        private static readonly ConcurrentDictionary<string, byte[]> _systemFontBytesCache = new();
 
         private readonly Dictionary<string, byte[]> _CustomFonts = [];
         private readonly Dictionary<string, FontFamilyModel> InstalledFonts;
@@ -94,6 +105,15 @@ namespace PeachPDF.Fonts
         internal bool IsCustomFamily(string familyName) => _customFamilyNames.Contains(familyName);
 
         public static string[] SupportedFonts { get; }
+
+        /// <summary>
+        /// The display name (<see cref="FontFamilyModel.Name"/>) of every system font family already
+        /// discovered and parsed once into <see cref="_systemFamilies"/> at process start. Lets a caller
+        /// that only needs the family names (e.g. <see cref="PeachPDF.Adapters.PdfSharpAdapter"/>
+        /// registering them with <c>RAdapter.AddFontFamily</c>) avoid re-opening and re-parsing every
+        /// font file on disk purely to recompute a name this static constructor already produced.
+        /// </summary>
+        internal static IEnumerable<string> SystemFamilyDisplayNames => _systemFamilies.Values.Select(f => f.Name);
 
         private static readonly string[] FontExtensions = ["*.ttf", "*.otf"];
 
@@ -398,7 +418,7 @@ namespace PeachPDF.Fonts
 
             if (_systemFontPaths.TryGetValue(fontFaceName, out var fontPath))
             {
-                return File.ReadAllBytes(fontPath);
+                return _systemFontBytesCache.GetOrAdd(fontPath, File.ReadAllBytes);
             }
 
             throw new ArgumentOutOfRangeException(nameof(fontFaceName), "Unknown Font Face Name");

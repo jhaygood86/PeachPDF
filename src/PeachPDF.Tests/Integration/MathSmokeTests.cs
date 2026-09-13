@@ -13,14 +13,19 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class MathSmokeTests
     {
-        static string FontFace() =>
-            BundledFonts.FontFaceRule(BundledFonts.Math, "TestMath", "font/truetype");
-
         static async Task<string> GetPdfText(string mathHtml)
         {
-            var html = $"<html><head><style>{FontFace()} math {{ font-family: TestMath; }}</style></head>" +
+            var html = $"<html><head><style>math {{ font-family: TestMath; }}</style></head>" +
                        $"<body>{mathHtml}</body></html>";
             var generator = new PdfGenerator();
+            // Registers the real "STIX Two Math" family directly (bypassing CSS @font-face - see
+            // BundledFonts.RegisterFont), then aliases the "TestMath" name every test here already uses
+            // to it, so no test body or assertion needs to change.
+            using (var stream = File.OpenRead(BundledFonts.Math))
+            {
+                await generator.AddFontFromStream(stream);
+            }
+            generator.AddFontFamilyMapping("TestMath", "STIX Two Math");
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
             var doc = await generator.GeneratePdf(html, config);
             var ms = new MemoryStream();

@@ -167,7 +167,7 @@ namespace PeachPDF.CSS
                     while (i < toks.Length && toks[i].Type != TokenType.SquareBracketClose)
                     {
                         if (toks[i].Type != TokenType.Ident) return null; // only idents inside [ ]
-                        var name = toks[i].Data;
+                        var name = toks[i].Data.ToString();
                         if (!lineNames.TryGetValue(name, out var set))
                             lineNames[name] = set = new SortedSet<int>();
                         set.Add(lineIndex);
@@ -239,7 +239,7 @@ namespace PeachPDF.CSS
                 while (i < toks.Length && toks[i].Type != TokenType.SquareBracketClose)
                 {
                     if (toks[i].Type != TokenType.Ident) return null;
-                    var name = toks[i].Data;
+                    var name = toks[i].Data.ToString();
                     if (!lineNames.TryGetValue(name, out var set))
                         lineNames[name] = set = new SortedSet<int>();
                     set.Add(lineIndex);

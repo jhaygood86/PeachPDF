@@ -381,13 +381,15 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
-        public void StringSingleQuote_EscapedLineContinuation_InsertsThePlatformLineTerminator()
+        public void StringSingleQuote_EscapedLineContinuation_MaterializesWithoutTheEscapedNewline()
         {
+            // A backslash immediately followed by a newline is a line continuation (CSS Syntax §4.3.7) -
+            // fully consumed, contributing zero characters.
             var tokenizer = new Lexer(new TextSource("'a\\\nb'"));
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.String, token.Type);
-            Assert.Equal("a" + System.Environment.NewLine + "b", token.Data);
+            Assert.Equal("ab", token.Data);
         }
 
         // HashRest's own escape branch (as opposed to HashStart's, already covered by ValueContextHash) -
@@ -504,18 +506,15 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
-        public void UrlDoubleQuote_EscapedLineContinuation_InsertsThePlatformLineTerminator()
+        public void UrlDoubleQuote_EscapedLineContinuation_MaterializesWithoutTheEscapedNewline()
         {
-            // A backslash immediately followed by a newline is a "line continuation" (CSS Syntax
-            // §4.3.7); this codebase's escape handling inserts StringBuilder.AppendLine()'s platform
-            // default terminator rather than dropping the newline entirely, a pre-existing quirk
-            // unrelated to the Token.Data redesign - AppendLineContinuation() just forces materialization
-            // instead of a source slice, since the two would otherwise disagree here.
+            // A backslash immediately followed by a newline is a line continuation (CSS Syntax §4.3.7) -
+            // fully consumed, contributing zero characters.
             var tokenizer = new Lexer(new TextSource("url(\"a\\\nb\")"));
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.Url, token.Type);
-            Assert.Equal("a" + System.Environment.NewLine + "b", token.Data);
+            Assert.Equal("ab", token.Data);
         }
 
         [Fact]
@@ -539,13 +538,15 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
-        public void UrlSingleQuote_EscapedLineContinuation_InsertsThePlatformLineTerminator()
+        public void UrlSingleQuote_EscapedLineContinuation_MaterializesWithoutTheEscapedNewline()
         {
+            // A backslash immediately followed by a newline is a line continuation (CSS Syntax §4.3.7) -
+            // fully consumed, contributing zero characters.
             var tokenizer = new Lexer(new TextSource("url('a\\\nb')"));
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.Url, token.Type);
-            Assert.Equal("a" + System.Environment.NewLine + "b", token.Data);
+            Assert.Equal("ab", token.Data);
         }
 
         [Fact]

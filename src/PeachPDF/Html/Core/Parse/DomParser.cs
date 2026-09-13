@@ -2115,6 +2115,14 @@ namespace PeachPDF.Html.Core.Parse
             {
                 var childBox = box.Boxes[i];
 
+                // A display:none subtree (e.g. <style>/<script>/<head> under the UA stylesheet) is
+                // never laid out or painted, so generating its pseudo-content and word-splitting its
+                // text is pure waste - for a document with a large embedded <style>/<script> payload,
+                // it is the dominant cost of parsing the document at all. Leave the subtree exactly as
+                // HTML parsing produced it; nothing downstream reads it (layout/paint already skip
+                // display:none via this same check in a dozen places across CssBox.cs).
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
                 CssContentEngine.ApplyContent(childBox);
 
                 // CssBidiParagraphResolver.AssignBidiLevels's own whole-tree walk (CascadeApplyStyles's

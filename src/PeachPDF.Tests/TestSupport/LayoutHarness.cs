@@ -36,6 +36,13 @@ namespace PeachPDF.Tests.TestSupport
         /// one engine again over a box it already laid out, say. It runs before the graphics context is
         /// disposed, which is why it belongs here rather than after the call returns.
         /// </param>
+        /// <param name="configureAdapter">
+        /// Optional: run against the freshly-constructed adapter before <c>SetHtml</c> parses
+        /// <paramref name="html"/> - for registering a font directly (e.g.
+        /// <see cref="BundledFonts.RegisterFont"/>) instead of embedding it as a CSS <c>@font-face</c>
+        /// data: URI, which for a multi-megabyte font costs hundreds of milliseconds per call regardless
+        /// of caching (see .claude/recent-fixes/2026-09-12-mathml-tests-bypass-css-for-large-bundled-font-registration.md).
+        /// </param>
         internal static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(
             string html,
             double pageWidth = 595,
@@ -43,9 +50,14 @@ namespace PeachPDF.Tests.TestSupport
             double margin = 20,
             Action<CssBox>? prepare = null,
             Func<CssBox, HtmlContainerInt, RGraphics, Task>? after = null,
-            double pixelsPerPoint = 1.0)
+            double pixelsPerPoint = 1.0,
+            Func<PdfSharpAdapter, Task>? configureAdapter = null)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = pixelsPerPoint };
+            if (configureAdapter is not null)
+            {
+                await configureAdapter(adapter);
+            }
             var container = new HtmlContainerInt(adapter)
             {
                 MarginTop = margin,

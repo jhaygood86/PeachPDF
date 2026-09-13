@@ -164,7 +164,7 @@ namespace PeachPDF.Html.Core.Handlers
             return tokens[0] switch
             {
                 { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident, Data: Keywords.Self } => null,
-                { Type: TokenType.Url } urlToken => string.IsNullOrEmpty(urlToken.Data) ? null : urlToken.Data,
+                { Type: TokenType.Url } urlToken => urlToken.Data.IsEmpty ? null : urlToken.Data.ToString(),
                 { Type: TokenType.Function, Data: "attr" } attrToken => ResolveAttrTarget(box, attrToken),
                 _ => null
             };
@@ -177,7 +177,7 @@ namespace PeachPDF.Html.Core.Handlers
             // Same pseudo-element -> parent redirect CssContentEngine's own attr() handling uses - a
             // pseudo-element's own attributes don't exist, so it must read the real source element's.
             var sourceBox = box.IsPseudoElement && box.ParentBox != null ? box.ParentBox : box;
-            var value = sourceBox.GetAttribute(nameToken.Data, "");
+            var value = sourceBox.GetAttribute(nameToken.Data.ToString(), "");
             return string.IsNullOrEmpty(value) ? null : value;
         }
     }

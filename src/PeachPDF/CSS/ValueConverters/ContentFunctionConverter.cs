@@ -17,7 +17,7 @@ namespace PeachPDF.CSS
         {
             var first = value.OnlyOrDefault();
 
-            if (first is not { Type: TokenType.Function } funcToken || !funcToken.Data.Equals(FunctionNames.Content, System.StringComparison.OrdinalIgnoreCase))
+            if (first is not { Type: TokenType.Function } funcToken || !funcToken.Data.Isi(FunctionNames.Content))
                 return null;
 
             // Default mode is "text" if no argument provided
@@ -28,8 +28,8 @@ namespace PeachPDF.CSS
                 var argToken = funcToken.ArgumentTokens.FirstOrDefault();
                 if (argToken is { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } keywordToken)
                 {
-                    var keyword = keywordToken.Data.ToLowerInvariant();
-                    if (!ValidModes.Contains(keyword))
+                    var keyword = ValidModes.FindIsi(keywordToken.Data);
+                    if (keyword is null)
                         return null;
 
                     mode = keyword;

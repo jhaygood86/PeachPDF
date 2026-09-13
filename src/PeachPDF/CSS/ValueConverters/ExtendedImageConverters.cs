@@ -83,7 +83,7 @@ namespace PeachPDF.CSS
 
         private static bool IsTypeFunction(List<Token> item)
         {
-            if (item is not [{ Type: TokenType.Function } fn] || !fn.Data.Equals("type", System.StringComparison.OrdinalIgnoreCase))
+            if (item is not [{ Type: TokenType.Function } fn] || !fn.Data.Isi("type"))
                 return false;
             var inner = fn.Arguments.Where(t => t.Type is not (TokenType.Whitespace or TokenType.RoundBracketClose)).ToArray();
             return inner.Length == 1 && inner[0].Type == TokenType.String;

@@ -38,7 +38,7 @@ namespace PeachPDF.CSS
             if (args is not [{ Type: TokenType.Ident } nameToken])
                 return false;
 
-            name = nameToken.Data;
+            name = nameToken.Data.ToString();
             return true;
         }
 

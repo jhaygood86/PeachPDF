@@ -1,6 +1,7 @@
 #nullable disable
 
 using PeachPDF.Svg;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -215,7 +216,7 @@ namespace PeachPDF.CSS
             if (significant.Length == 0) return null;
 
             if (significant is [{ Type: TokenType.Url } urlToken])
-                return ParsedBasicShape.Url(urlToken.Data.TrimStart('#'));
+                return ParsedBasicShape.Url(urlToken.Data.TrimStart('#').ToString());
 
             GeometryBoxKind geometryBox = GeometryBoxKind.BorderBox;
             var foundGeometryBox = false;
@@ -436,7 +437,7 @@ namespace PeachPDF.CSS
             var stringGroup = groups[stringGroupIndex];
             if (stringGroup.Count != 1 || stringGroup[0].Type != TokenType.String) return null;
 
-            return SvgPathDataParser.TryParse(stringGroup[0].Data, out var segments)
+            return SvgPathDataParser.TryParse(stringGroup[0].Data.ToString(), out var segments)
                 ? ParsedBasicShape.Path(fillRule, segments)
                 : null;
         }

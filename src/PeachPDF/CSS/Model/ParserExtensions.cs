@@ -120,7 +120,7 @@ namespace PeachPDF.CSS
                     {
                         var functionName = token.FunctionName;
                         FunctionTypes.TryGetValue(functionName, out var creator);
-                        return creator(token.Data);
+                        return creator(token.Data.ToString());
                     }
                 case TokenType.Function when token.Data.Isi(FunctionNames.Regexp):
                     {

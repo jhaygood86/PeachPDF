@@ -30,7 +30,7 @@ namespace PeachPDF.CSS
             foreach (var token in value)
             {
                 if (token.Type == TokenType.Whitespace) { groups[^1].Add(token); continue; }
-                if (token.Type == TokenType.Delim && token.Data == "/") { groups.Add(new List<Token>()); continue; }
+                if (token.Type == TokenType.Delim && token.Data.Is("/")) { groups.Add(new List<Token>()); continue; }
                 groups[^1].Add(token);
             }
 

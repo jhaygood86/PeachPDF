@@ -22,7 +22,7 @@ namespace PeachPDF.CSS
             var first = value.OnlyOrDefault();
 
             if (first is not { Type: TokenType.Function } funcToken ||
-                !funcToken.Data.Equals(FunctionNames.TargetCounter, System.StringComparison.OrdinalIgnoreCase))
+                !funcToken.Data.Isi(FunctionNames.TargetCounter))
                 return null;
 
             var args = funcToken.ArgumentTokens
@@ -41,10 +41,10 @@ namespace PeachPDF.CSS
                 if (args[2] is not { Type: TokenType.Hash or TokenType.AtKeyword or TokenType.Ident } styleToken)
                     return null;
 
-                style = styleToken.Data;
+                style = styleToken.Data.ToString();
             }
 
-            return new TargetCounterFunctionValue(counterNameToken.Data, style, value);
+            return new TargetCounterFunctionValue(counterNameToken.Data.ToString(), style, value);
         }
 
         public IPropertyValue Construct(Property[] properties)

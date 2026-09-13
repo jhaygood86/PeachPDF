@@ -175,7 +175,7 @@ namespace PeachPDF.CSS
 
         private static bool IsAuto(Token token) => token.Type == TokenType.Ident && token.Data.Isi(Keywords.Auto);
 
-        private static bool IsSlash(Token token) => token.Type == TokenType.Delim && token.Data == "/";
+        private static bool IsSlash(Token token) => token.Type == TokenType.Delim && token.Data.Is("/");
 
         private static bool TryNonNegativeNumber(Token token, out double value)
         {

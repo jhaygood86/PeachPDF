@@ -7,11 +7,12 @@ namespace PeachPDF.Tests.CSS
     using Xunit;
 
     // Regression coverage for Token.Data's memory-slice-backed design (Lexer.BeginContentAt/
-    // AppendLiteral/EndContent): most tokens' Data is now a zero-allocation slice of the shared
-    // TextSource buffer rather than an eagerly materialized string, with escape sequences, CRLF/lone-CR
+    // AppendLiteral/EndContent): most tokens' Data is a zero-allocation slice of the shared TextSource
+    // buffer rather than an eagerly materialized string, with escape sequences, CRLF/lone-CR
     // normalization, and escaped line continuations as the three documented exceptions that force an
-    // owned-string fallback instead. These tests exercise exactly those exception boundaries, plus the
-    // DataSpan/Data equivalence invariant a range/length miscalculation in either path would violate.
+    // owned-string fallback instead. These tests exercise exactly those exception boundaries - that
+    // Data's *content* is correct in each case, not (there being only one accessor now - see
+    // .claude/recent-fixes/2026-09-12-token-data-becomes-span-only.md) an equivalence between two.
     public class TokenDataSlicingTests
     {
         private static Token FirstToken(string css)
@@ -26,8 +27,7 @@ namespace PeachPDF.Tests.CSS
             var token = FirstToken("/*a\r\nb*/");
 
             Assert.Equal(TokenType.Comment, token.Type);
-            Assert.Equal("a\nb", token.Data);
-            Assert.Equal(token.Data, token.DataSpan.ToString());
+            Assert.Equal("a\nb", token.Data.ToString());
         }
 
         [Fact]
@@ -36,8 +36,7 @@ namespace PeachPDF.Tests.CSS
             var token = FirstToken("/*a\rb*/");
 
             Assert.Equal(TokenType.Comment, token.Type);
-            Assert.Equal("a\nb", token.Data);
-            Assert.Equal(token.Data, token.DataSpan.ToString());
+            Assert.Equal("a\nb", token.Data.ToString());
         }
 
         [Fact]
@@ -47,8 +46,7 @@ namespace PeachPDF.Tests.CSS
             var token = FirstToken("\"a\\41 b\"");
 
             Assert.Equal(TokenType.String, token.Type);
-            Assert.Equal("aAb", token.Data);
-            Assert.Equal(token.Data, token.DataSpan.ToString());
+            Assert.Equal("aAb", token.Data.ToString());
         }
 
         [Fact]
@@ -59,7 +57,7 @@ namespace PeachPDF.Tests.CSS
             var token = FirstToken("\"a\\\nb\"");
 
             Assert.Equal(TokenType.String, token.Type);
-            Assert.Equal(token.Data, token.DataSpan.ToString());
+            Assert.Equal("ab", token.Data.ToString());
         }
 
         [Fact]
@@ -68,39 +66,7 @@ namespace PeachPDF.Tests.CSS
             var token = FirstToken("hello-world");
 
             Assert.Equal(TokenType.Ident, token.Type);
-            Assert.Equal("hello-world", token.Data);
-            Assert.Equal(token.Data, token.DataSpan.ToString());
-        }
-
-        [Theory]
-        [InlineData("div { color: red; margin: 1.5em -3px; }")]
-        [InlineData("@media screen and (min-width: 10px) { .a::before { content: \"x\"; } }")]
-        [InlineData("a[href^=\"http\"] { background: url(foo.png) no-repeat; }")]
-        [InlineData(".b { color: rgba(1, 2, 3, 0.5); transform: calc((1px + 2px) * 3); }")]
-        [InlineData("/* leading comment */ .c { unicode-range: U+41-5A, U+??; }")]
-        [InlineData(".d { font: 1e2px/1.2 sans-serif; width: 3e; height: 4e+; }")]
-        public void RepresentativeStylesheets_EveryTokensDataSpanMatchesData(string css)
-        {
-            var tokenizer = new Lexer(new TextSource(css));
-            Token token;
-            var count = 0;
-
-            do
-            {
-                token = tokenizer.Get();
-                Assert.Equal(token.Data, token.DataSpan.ToString());
-
-                if (token.Type == TokenType.Function)
-                {
-                    foreach (var argument in token.Arguments!)
-                    {
-                        Assert.Equal(argument.Data, argument.DataSpan.ToString());
-                    }
-                }
-
-                count++;
-                Assert.True(count < 10_000, "Tokenizer did not reach EndOfFile - possible infinite loop.");
-            } while (token.Type != TokenType.EndOfFile);
+            Assert.Equal("hello-world", token.Data.ToString());
         }
 
         // Regression guard for Token's common/TokenExtra split (issue #922 follow-up): the struct holds
@@ -186,12 +152,12 @@ namespace PeachPDF.Tests.CSS
                         Assert.Equal(TokenType.String, token.Type);
                         Assert.True(token.IsValid);
                         Assert.Equal('"', token.Quote);
-                        Assert.Equal($"str{i}", token.Data);
+                        Assert.Equal($"str{i}", token.Data.ToString());
                         break;
                     case 4:
                         Assert.Equal(TokenType.Comment, token.Type);
                         Assert.False(token.IsValid);
-                        Assert.Equal($"comment{i}", token.Data);
+                        Assert.Equal($"comment{i}", token.Data.ToString());
                         break;
                     default:
                         Assert.Equal(TokenType.Function, token.Type);
