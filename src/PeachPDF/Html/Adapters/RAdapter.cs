@@ -57,9 +57,22 @@ namespace PeachPDF.Html.Adapters
         private readonly FontsHandler _fontsHandler;
 
         /// <summary>
-        /// default CSS parsed data singleton
+        /// Default CSS parsed data, shared process-wide rather than per-instance. Despite this class's
+        /// own remarks above (written for a genuine singleton usage pattern), a fresh <see cref="RAdapter"/>
+        /// is actually constructed per document/test in this codebase (see
+        /// <c>.claude/recent-fixes/2026-09-12-pdfsharpadapter-reuses-cached-system-font-names.md</c>) - and
+        /// <see cref="CssDefaults.DefaultStyleSheet"/> is a fixed ~11.5KB constant, identical regardless of
+        /// which adapter parses it, so re-tokenizing and re-parsing it per instance was the same shape of
+        /// bug already fixed for system font checksums/bytes (see
+        /// <c>.claude/recent-fixes/2026-09-13-font-checksum-recomputed-on-every-lookup-even-cache-hits.md</c>):
+        /// a per-test cost for something that's actually process-invariant. Safe to share across every
+        /// caller: <see cref="CssData.Clone"/> is a shallow copy, and <c>DomParser.CloneCssData</c> already
+        /// clones-before-mutate the first time any document adds its own author (&lt;style&gt;/&lt;link&gt;)
+        /// rules on top of this - so nothing ever mutates this shared instance's <c>Stylesheets</c> list in
+        /// place.
         /// </summary>
-        private CssData? _defaultCssData;
+        private static Task<CssData>? _defaultCssDataTask;
+        private static readonly object _defaultCssDataLock = new();
 
         #endregion
 
@@ -75,15 +88,24 @@ namespace PeachPDF.Html.Adapters
         /// <summary>
         /// Get the default CSS stylesheet data.
         /// </summary>
-        public async Task<CssData> GetDefaultCssData()
+        public Task<CssData> GetDefaultCssData()
         {
-            if (_defaultCssData is null)
+            if (_defaultCssDataTask is not null)
+                return _defaultCssDataTask;
+
+            lock (_defaultCssDataLock)
             {
-                _defaultCssData = await CssData.Parse(this, CssDefaults.DefaultStyleSheet, false);
-                foreach (var s in _defaultCssData.Stylesheets)
-                    s.IsUserAgent = true;
+                _defaultCssDataTask ??= CreateDefaultCssDataAsync(this);
             }
-            return _defaultCssData;
+            return _defaultCssDataTask;
+        }
+
+        private static async Task<CssData> CreateDefaultCssDataAsync(RAdapter adapter)
+        {
+            var defaultCssData = await CssData.Parse(adapter, CssDefaults.DefaultStyleSheet, false);
+            foreach (var s in defaultCssData.Stylesheets)
+                s.IsUserAgent = true;
+            return defaultCssData;
         }
 
         public abstract RUri? BaseUri { get; }
