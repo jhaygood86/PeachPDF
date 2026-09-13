@@ -33,6 +33,7 @@
 
 using PeachPDF.PdfSharpCore.Drawing;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -607,6 +608,43 @@ namespace PeachPDF.Fonts.OpenType
             set { _pos = value; }
         }
         int _pos;
+
+        /// <summary>
+        /// Guards every on-demand read against <see cref="Position"/>/<see cref="Seek(string)"/>/
+        /// <see cref="ReadByte"/> and friends that happens AFTER this fontface's one-time, already-safe
+        /// load-time parse (see <c>OpenTypeFontfaceCache</c>'s own lock around construction/caching).
+        /// <see cref="_pos"/> is a single mutable cursor shared by every consumer of this cached,
+        /// process-wide instance - GSUB/GPOS's per-lookup lazy readers, COLRv1's on-demand paint-graph
+        /// decode, and glyf outline decoding are all invoked lazily, well after load, from whichever
+        /// thread happens to be shaping or painting a document that uses this font, so two such reads
+        /// racing on <see cref="_pos"/> at once corrupts both (silently wrong values, not just a crash -
+        /// confirmed via a stress run forcing high test parallelism). Lock scope must cover a whole
+        /// logical read (seek + however many subsequent primitive reads it takes), not one primitive
+        /// call at a time, since interleaving between a seek and its reads is exactly what corrupts a
+        /// result without throwing. Reentrant (a plain object + `lock`), since a paint/lookup read can
+        /// recurse into another read of the same fontface on the same thread.
+        /// </summary>
+        internal readonly object SyncRoot = new();
+
+        /// <summary>
+        /// The lazy-lookup-cache idiom used throughout GSUB/GPOS (<c>_someCache.GetOrAdd(index, someDelegate)</c>)
+        /// is safe for the <see cref="ConcurrentDictionary{TKey,TValue}"/> itself, but not for <paramref name="factory"/> -
+        /// <c>GetOrAdd</c> may invoke its factory more than once under contention, and here the factory
+        /// reads through this fontface's single shared <see cref="Position"/> cursor (see
+        /// <see cref="SyncRoot"/>). Checks the cache without locking first (the overwhelmingly common
+        /// case, once every real lookup index has been read once - a lookup is parsed at most once per
+        /// font, ever), and only takes <paramref name="face"/>'s lock on a miss.
+        /// </summary>
+        internal static TValue LockedGetOrAdd<TKey, TValue>(OpenTypeFontface face, ConcurrentDictionary<TKey, TValue> cache, TKey key, Func<TKey, TValue> factory) where TKey : notnull
+        {
+            if (cache.TryGetValue(key, out var existing))
+                return existing;
+
+            lock (face.SyncRoot)
+            {
+                return cache.GetOrAdd(key, factory);
+            }
+        }
 
         public int Seek(string tag)
         {

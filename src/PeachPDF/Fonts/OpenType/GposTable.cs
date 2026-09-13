@@ -402,33 +402,33 @@ namespace PeachPDF.Fonts.OpenType
         }
 
         public GposSingleAdjustmentLookup? GetSingleAdjustmentLookup(int lookupListIndex)
-            => _singleAdjustmentCache.GetOrAdd(lookupListIndex, _readSingleAdjustmentLookupDelegate ??= ReadSingleAdjustmentLookup);
+            => OpenTypeFontface.LockedGetOrAdd(_face, _singleAdjustmentCache, lookupListIndex, _readSingleAdjustmentLookupDelegate ??= ReadSingleAdjustmentLookup);
 
         public GposCursiveAttachmentLookup? GetCursiveAttachmentLookup(int lookupListIndex)
-            => _cursiveAttachmentCache.GetOrAdd(lookupListIndex, _readCursiveAttachmentLookupDelegate ??= ReadCursiveAttachmentLookup);
+            => OpenTypeFontface.LockedGetOrAdd(_face, _cursiveAttachmentCache, lookupListIndex, _readCursiveAttachmentLookupDelegate ??= ReadCursiveAttachmentLookup);
 
         public GposPairAdjustmentLookup? GetPairAdjustmentLookup(int lookupListIndex)
-            => _pairAdjustmentCache.GetOrAdd(lookupListIndex, _readPairAdjustmentLookupDelegate ??= ReadPairAdjustmentLookup);
+            => OpenTypeFontface.LockedGetOrAdd(_face, _pairAdjustmentCache, lookupListIndex, _readPairAdjustmentLookupDelegate ??= ReadPairAdjustmentLookup);
 
         public GposMarkToBaseLookup? GetMarkToBaseLookup(int lookupListIndex)
-            => _markToBaseCache.GetOrAdd(lookupListIndex, _readMarkToBaseLookupDelegate ??= ReadMarkToBaseLookup);
+            => OpenTypeFontface.LockedGetOrAdd(_face, _markToBaseCache, lookupListIndex, _readMarkToBaseLookupDelegate ??= ReadMarkToBaseLookup);
 
         public GposMarkToMarkLookup? GetMarkToMarkLookup(int lookupListIndex)
-            => _markToMarkCache.GetOrAdd(lookupListIndex, _readMarkToMarkLookupDelegate ??= ReadMarkToMarkLookup);
+            => OpenTypeFontface.LockedGetOrAdd(_face, _markToMarkCache, lookupListIndex, _readMarkToMarkLookupDelegate ??= ReadMarkToMarkLookup);
 
         public GposMarkToLigatureLookup? GetMarkToLigatureLookup(int lookupListIndex)
-            => _markToLigatureCache.GetOrAdd(lookupListIndex, _readMarkToLigatureLookupDelegate ??= ReadMarkToLigatureLookup);
+            => OpenTypeFontface.LockedGetOrAdd(_face, _markToLigatureCache, lookupListIndex, _readMarkToLigatureLookupDelegate ??= ReadMarkToLigatureLookup);
 
         public GposContextualLookup? GetContextualLookup(int lookupListIndex)
-            => _contextualLookupCache.GetOrAdd(lookupListIndex, _readContextualLookupDelegate ??= ReadContextualLookup);
+            => OpenTypeFontface.LockedGetOrAdd(_face, _contextualLookupCache, lookupListIndex, _readContextualLookupDelegate ??= ReadContextualLookup);
 
         public GposChainingContextLookup? GetChainingContextLookup(int lookupListIndex)
-            => _chainingContextLookupCache.GetOrAdd(lookupListIndex, _readChainingContextLookupDelegate ??= ReadChainingContextLookup);
+            => OpenTypeFontface.LockedGetOrAdd(_face, _chainingContextLookupCache, lookupListIndex, _readChainingContextLookupDelegate ??= ReadChainingContextLookup);
 
         /// <summary>The real lookup type at <paramref name="lookupListIndex"/> - a Type 9 (Extension
         /// Positioning) lookup resolves to whatever type it wraps. Returns -1 for an out-of-range index.</summary>
         public int GetResolvedLookupType(int lookupListIndex)
-            => _resolvedLookupTypeCache.GetOrAdd(lookupListIndex, _readResolvedLookupTypeDelegate ??= ReadResolvedLookupType);
+            => OpenTypeFontface.LockedGetOrAdd(_face, _resolvedLookupTypeCache, lookupListIndex, _readResolvedLookupTypeDelegate ??= ReadResolvedLookupType);
 
         private (string Tag, int Offset)[] ReadFeatureRecords()
         {
