@@ -53,11 +53,14 @@ count as a parameter rather than re-walking the line for it.
 `ResolveUsedAlignment` is where the three rules meet, and the order matters:
 
 1. §6.1/§6.3 — a line that ends a paragraph is aligned by `text-align-last`, not by `text-align`.
-2. §6.4.3 — a line still resolving to `justify` with **no** opportunity is *unexpandable text*, which
-   "is start-aligned, unless `text-align-last` specifies otherwise", so it too is handed to
-   `text-align-last`…
-3. …and when `text-align-last` is itself `justify`, there is nothing further to ask and the **start
-   edge** stands.
+2. §6.4.3 — a line whose contents "cannot be stretched to the full width of the line box" (here, a
+   line still resolving to `justify` with **no** opportunity) "must be aligned as specified by the
+   `text-align-last` property", so it too is handed to `text-align-last`…
+3. …and when `text-align-last` is itself `justify`, the **start edge** stands. This is a deliberate
+   deviation: §6.4.3's parenthetical says "(If `text-align-last` is `justify`, then they must be
+   aligned as for `center`.)" and no browser implements it — Chromium, Gecko and WebKit all
+   start-align. Recorded in
+   [../accepted-gaps/unexpandable-justified-line-starts-rather-than-centres.md](../accepted-gaps/unexpandable-justified-line-starts-rather-than-centres.md).
 
 Step 3 is not decorative. Without it, `text-align-last: justify` on an RTL paragraph whose closing line
 holds one word left that word against the physical *left* edge — worse than omitting the property, since
@@ -129,7 +132,7 @@ the CSS-OM flag is for.
 
 ## Not done
 
-`text-align-all`, `justify-all` and `match-parent` — see the accepted-gap file linked above. Also
-untouched: the leading space visible at the start of a line following a `<br>` in the new showcase. It
+`text-align-all`, `justify-all` and `match-parent` — see the accepted-gap file linked above — and
+§6.4.3's centre-the-unexpandable-line parenthetical, which has its own gap file. Also untouched: the leading space visible at the start of a line following a `<br>` in the new showcase. It
 is present identically in the before render, so it predates this change and belongs to whatever handles
 the synthetic `"\n"` word's own advance.

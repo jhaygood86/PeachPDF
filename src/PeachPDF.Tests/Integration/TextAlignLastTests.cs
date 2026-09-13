@@ -255,9 +255,12 @@ namespace PeachPDF.Tests.Integration
         public async Task AnRtlTextAlignLastJustify_StillStartAlignsAClosingLineItCannotStretch()
         {
             // text-align-last: justify hands the closing line to the justify path, which has nothing to
-            // do with a line holding one word - css-text-3 §6.4.3 then start-aligns it, and start under
-            // RTL is the physical right edge. Reading §6.4.3 as "leave it alone" strands it at the left
-            // edge, which is worse than not declaring the property at all.
+            // do with a line holding one word. css-text-3 §6.4.3 hands such a line to text-align-last,
+            // and its parenthetical asks for centre when that is itself justify; PeachPDF start-aligns
+            // instead, matching Chromium/Gecko/WebKit - see the accepted-gap file
+            // unexpandable-justified-line-starts-rather-than-centres.md. What this asserts is the part
+            // that is not in question: start under RTL is the physical *right* edge, so reading §6.4.3
+            // as "leave the line alone" strands it at the left, worse than not declaring the property.
             var (block, _) = await BlockAsync(
                 $"<p id='p' style='{Justify};direction:rtl;text-align-last:justify'>A<span>B</span></p>");
 

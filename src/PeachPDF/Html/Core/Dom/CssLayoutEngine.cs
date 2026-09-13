@@ -4192,13 +4192,23 @@ namespace PeachPDF.Html.Core.Dom
         /// <remarks>
         /// Two css-text-3 rules meet here. §6.1/§6.3: a line that ends a paragraph is aligned by
         /// <c>text-align-last</c>, not by <c>text-align</c>.
-        /// <see href="https://www.w3.org/TR/css-text-3/#justify-algos">§6.4.3</see>: a justified line with
-        /// no opportunity at all is <i>unexpandable text</i>, which "is start-aligned, unless
-        /// <c>text-align-last</c> specifies otherwise" - so it too is handed to <c>text-align-last</c>,
-        /// and when <c>text-align-last</c> is itself <c>justify</c> there is nothing further to ask and
-        /// the start edge stands. That last step matters under RTL, where the start edge is not where the
-        /// flow left the line: without it, <c>text-align-last: justify</c> on an RTL paragraph stranded
-        /// its closing line against the physical left edge - worse than leaving the property out.
+        /// <see href="https://www.w3.org/TR/css-text-3/#justify-algos">§6.4.3</see>: a line whose contents
+        /// "cannot be stretched to the full width of the line box" - here, a justified line with no
+        /// justification opportunity at all - "must be aligned as specified by the
+        /// <c>text-align-last</c> property", so it too is handed to <c>text-align-last</c>.
+        /// <para>
+        /// <b>Deliberate deviation.</b> §6.4.3 continues "(If <c>text-align-last</c> is <c>justify</c>,
+        /// then they must be aligned as for <c>center</c>.)" This resolves that case to <b>start</b>
+        /// instead, because Chromium, Gecko and WebKit all do - none implements the parenthetical - and a
+        /// renderer that centred there would disagree with every engine an author checks against. See
+        /// <c>.claude/accepted-gaps/unexpandable-justified-line-starts-rather-than-centres.md</c>.
+        /// </para>
+        /// <para>
+        /// Resolving it to start rather than leaving the line alone is what matters under RTL, where the
+        /// start edge is not where the flow left the line: without this step,
+        /// <c>text-align-last: justify</c> on an RTL paragraph stranded its closing line against the
+        /// physical left edge - worse than leaving the property out.
+        /// </para>
         /// </remarks>
         private static (HorizontalAlignment Alignment, int Opportunities) ResolveUsedAlignment(
             CssLineBox lineBox, bool endsAParagraph, HorizontalAlignment textAlign,
@@ -4214,6 +4224,8 @@ namespace PeachPDF.Html.Core.Dom
             var opportunities = CountJustificationOpportunities(lineBox);
             if (opportunities > 0) return (used, opportunities);
 
+            // towardStart, not Center: §6.4.3's parenthetical says centre, no browser implements it, and
+            // this follows the browsers - see the remarks above and the accepted-gap file they name.
             var fallback = ResolveLastLineAlignment(lineBox.OwnerBox, textAlign, towardStart, towardEnd);
             return (fallback == HorizontalAlignment.Justify ? towardStart : fallback, 0);
         }
