@@ -15,15 +15,17 @@ namespace PeachPDF.Tests.Html.Core.Paint
     public class MathPaintTests
     {
         static string Wrap(string mathHtml) =>
-            $"<html><head><style>{BundledFonts.FontFaceRule(BundledFonts.Math, "TestMath", "font/truetype")} " +
-            $"math {{ font-family: TestMath; }}</style></head><body style='margin:0'>{mathHtml}</body></html>";
+            $"<html><head><style>math {{ font-family: TestMath; }}</style></head><body style='margin:0'>{mathHtml}</body></html>";
+
+        static Task RegisterMathFont(PdfSharpAdapter adapter) =>
+            BundledFonts.RegisterFont(adapter, BundledFonts.Math, "TestMath");
 
         [Fact]
         public async Task Fraction_DrawsRuleBetweenNumeratorAndDenominatorTokenDraws()
         {
             var html = Wrap("<math><mfrac><mn>1</mn><mn>2</mn></mfrac></math>");
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, configureAdapter: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
             var adapter = new PdfSharpAdapter();
@@ -50,7 +52,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         {
             var html = Wrap("<math><mrow><mo stretchy=\"true\">(</mo><mfrac><mi>x</mi><mi>y</mi></mfrac><mo stretchy=\"true\">)</mo></mrow></math>");
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, configureAdapter: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
             var adapter = new PdfSharpAdapter();
@@ -67,7 +69,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         {
             var html = Wrap("<math><mi>a</mi><mo>+</mo><mi>b</mi></math>");
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, configureAdapter: RegisterMathFont);
             Assert.NotNull(LayoutHarness.Descendants(root).FirstOrDefault(b => b is CssBoxMath));
 
             var adapter = new PdfSharpAdapter();

@@ -1,7 +1,9 @@
+using PeachPDF.Adapters;
 using PeachPDF.PdfSharpCore.Utils;
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 using PeachPDF.Fonts;
 
@@ -221,6 +223,25 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         internal static string FontFaceRule(string fontPath, string familyName, string mimeType) =>
             $"@font-face {{ font-family: '{familyName}'; src: url('data:{mimeType};base64,{Convert.ToBase64String(File.ReadAllBytes(fontPath))}'); }}";
+
+        /// <summary>
+        /// Registers <paramref name="fontPath"/> on <paramref name="adapter"/> under
+        /// <paramref name="familyName"/> directly via <see cref="PdfSharpAdapter.AddFont(Stream, string?)"/>,
+        /// bypassing CSS <c>@font-face</c> entirely. For a test whose actual subject is layout or paint
+        /// (not CSS <c>@font-face</c> parsing/loading itself), prefer this over embedding the font as a
+        /// <see cref="FontFaceRule"/> data: URI - CSS's <c>url()</c> value handling re-materializes a
+        /// large token's content on every access rather than once (see
+        /// .claude/recent-fixes/2026-09-12-mathml-tests-bypass-css-for-large-bundled-font-registration.md),
+        /// so embedding a multi-megabyte font (e.g. <see cref="Math"/>) that way costs roughly 500-700ms
+        /// per call versus about 1ms for this direct registration - the same real font, the same
+        /// registered family name, none of the CSS-parsing overhead neither the test nor its assertions
+        /// have anything to do with.
+        /// </summary>
+        internal static async Task RegisterFont(PdfSharpAdapter adapter, string fontPath, string familyName)
+        {
+            using var stream = File.OpenRead(fontPath);
+            await adapter.AddFont(stream, familyName);
+        }
 
         /// <summary>
         /// Ensures <paramref name="resolver"/> can resolve at least one font family and

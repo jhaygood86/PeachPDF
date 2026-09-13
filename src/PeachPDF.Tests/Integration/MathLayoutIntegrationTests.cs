@@ -18,15 +18,14 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class MathLayoutIntegrationTests
     {
-        static string FontFace() => BundledFonts.FontFaceRule(BundledFonts.Math, "TestMath", "font/truetype");
-
         static string Wrap(string mathHtml) =>
-            $"<html><head><style>{FontFace()} math {{ font-family: TestMath; font-size: 20pt; }}</style></head><body>{mathHtml}</body></html>";
+            $"<html><head><style>math {{ font-family: TestMath; font-size: 20pt; }}</style></head><body>{mathHtml}</body></html>";
 
         static async Task<MathBox> LayoutMath(string mathHtml)
         {
             var html = Wrap(mathHtml);
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            await BundledFonts.RegisterFont(adapter, BundledFonts.Math, "TestMath");
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 
@@ -72,6 +71,7 @@ namespace PeachPDF.Tests.Integration
         static async Task<(CssBox Root, HtmlContainerInt Container)> LayoutMathBox(string html)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            await BundledFonts.RegisterFont(adapter, BundledFonts.Math, "TestMath");
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
 

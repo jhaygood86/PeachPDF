@@ -2,6 +2,7 @@ using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
 using PeachPDF.PdfSharpCore.Pdf.Structure;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,18 +18,31 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class TaggedPdfMathFormulaTests
     {
-        static string FontFace() => BundledFonts.FontFaceRule(BundledFonts.Math, "TestMath", "font/truetype");
+        const string MathStyle = "math { font-family: TestMath; }";
+
+        // Registers the real "STIX Two Math" family directly on the generator (bypassing CSS
+        // @font-face - see BundledFonts.RegisterFont) and aliases "TestMath" to it, so every test's
+        // markup/assertions keep referring to "TestMath" unchanged.
+        static async Task<PdfGenerator> CreateGeneratorWithMathFont()
+        {
+            var generator = new PdfGenerator();
+            using var stream = File.OpenRead(BundledFonts.Math);
+            await generator.AddFontFromStream(stream);
+            generator.AddFontFamilyMapping("TestMath", "STIX Two Math");
+            return generator;
+        }
 
         static async Task<PeachPdfDocument> RenderTagged(string mathHtml, bool pdf20 = false)
         {
-            var html = $"<html><head><style>{FontFace()} math {{ font-family: TestMath; }}</style></head><body>{mathHtml}</body></html>";
+            var html = $"<html><head><style>{MathStyle}</style></head><body>{mathHtml}</body></html>";
             var config = new PdfGenerateConfig
             {
                 PageSize = PageSize.A4,
                 EnableTaggedPdf = true,
                 PdfVersion = pdf20 ? PdfVersion.Pdf20 : PdfVersion.Pdf17,
             };
-            return await new PdfGenerator().GeneratePdf(html, config);
+            var generator = await CreateGeneratorWithMathFont();
+            return await generator.GeneratePdf(html, config);
         }
 
         [Fact]
@@ -81,10 +95,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task NoTagging_NoAssociatedFileWritten()
         {
-            var html = $"<html><head><style>{FontFace()} math {{ font-family: TestMath; }}</style></head>" +
+            var html = $"<html><head><style>{MathStyle}</style></head>" +
                        "<body><math><mi>x</mi></math></body></html>";
             var config = new PdfGenerateConfig { PageSize = PageSize.A4 };
-            var result = await new PdfGenerator().GeneratePdf(html, config);
+            var generator = await CreateGeneratorWithMathFont();
+            var result = await generator.GeneratePdf(html, config);
 
             Assert.False(result.PdfDocument.Catalog.Elements.ContainsKey("/AF"));
         }
@@ -92,10 +107,11 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task AuthorOverride_RetargetsFormulaToAnotherType_StillAttachesSource()
         {
-            var html = $"<html><head><style>{FontFace()} math {{ font-family: TestMath; -peachpdf-pdf-tag-type: P; }}</style></head>" +
+            var html = "<html><head><style>math { font-family: TestMath; -peachpdf-pdf-tag-type: P; }</style></head>" +
                        "<body><math><mi>x</mi></math></body></html>";
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, EnableTaggedPdf = true };
-            var result = await new PdfGenerator().GeneratePdf(html, config);
+            var generator = await CreateGeneratorWithMathFont();
+            var result = await generator.GeneratePdf(html, config);
 
             var documentElement = RootKids(result.PdfDocument.Catalog.StructureTreeRoot).Single();
             var element = Kids(documentElement).Single();
