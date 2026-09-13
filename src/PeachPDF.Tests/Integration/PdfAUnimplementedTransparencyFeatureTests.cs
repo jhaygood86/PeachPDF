@@ -10,9 +10,14 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// PDF/A-1 is enforced by rejecting every currently-implemented feature that requires a PDF
-    /// transparency group (see <c>PdfAConformanceTests</c>) - but <c>mix-blend-mode</c>,
-    /// <c>isolation</c>, CSS <c>mask</c>, <c>filter</c>, and <c>backdrop-filter</c> are not implemented
-    /// by PeachPDF at all today, so there is no code path to directly assert a rejection against yet.
+    /// transparency group (see <c>PdfAConformanceTests</c>) - but <c>isolation</c> and CSS
+    /// <c>mask</c>/<c>backdrop-filter</c> are not implemented by PeachPDF at all today, so there is no
+    /// code path to directly assert a rejection against yet. <c>mix-blend-mode</c> and the native
+    /// <c>filter</c> functions (<c>opacity()</c>/<c>brightness()</c>/<c>contrast()</c>/<c>invert()</c>)
+    /// WERE this file's own tripwire (see the remarks below) and have since moved to
+    /// <c>PdfAConformanceTests.PdfA1B_TransparencyRequiringContent_Throws</c> - <c>filter: blur(2px)</c>
+    /// stays here as a genuinely permanent no-op (no native PDF mechanism exists for it at all, not just
+    /// "not implemented yet" - see <c>ColorMatrix</c>'s remarks), not a stale leftover.
     /// </summary>
     /// <remarks>
     /// These tests instead PIN today's true "no-op" behavior for each property: generation succeeds
@@ -34,10 +39,10 @@ namespace PeachPDF.Tests.Integration
     public class PdfAUnimplementedTransparencyFeatureTests
     {
         [Theory]
-        [InlineData("mix-blend-mode: multiply;")]
         [InlineData("isolation: isolate;")]
         [InlineData("mask: url(#m);")]
         [InlineData("filter: blur(2px);")]
+        [InlineData("filter: grayscale(50%);")]
         [InlineData("backdrop-filter: blur(2px);")]
         public async Task UnimplementedProperty_UnderPdfA1_IsStillANoOp(string declaration)
         {

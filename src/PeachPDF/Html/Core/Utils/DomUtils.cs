@@ -1212,6 +1212,24 @@ namespace PeachPDF.Html.Core.Utils
                 return true;
             }
 
+            // A non-normal mix-blend-mode forces isolation (CSS Compositing and Blending Level 1 §2: "the
+            // element ... creates a new stacking context"), matching the opacity/transform arms above -
+            // it's painted as an isolated composite unit already (FragmentPainter routes it through the
+            // same offscreen-tile path), so its descendants must paint as one atomic block here too.
+            if (box.ActualMixBlendMode != BlendMode.Normal)
+            {
+                return true;
+            }
+
+            // Any filter other than `none` forces a stacking context (Filter Effects Level 1 §3, per its
+            // own note deferring to CSS3 Positioning) - true even for a filter list every function of which
+            // is a documented no-op here, since the rule is about the property's presence, not this
+            // renderer's paint-time coverage of it.
+            if (box.ActualFilterFunctions.Count > 0)
+            {
+                return true;
+            }
+
             return false;
         }
 

@@ -29,6 +29,7 @@
 
 #nullable disable warnings
 
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Drawing.Pdf;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -1904,13 +1905,43 @@ namespace PeachPDF.PdfSharpCore.Drawing  // #??? aufr�umen
 
         /// <summary>
         /// Draws <paramref name="image"/> at <paramref name="destRect"/>, composited as a single
-        /// flattened result at constant <paramref name="opacity"/> - see
+        /// flattened result at constant <paramref name="opacity"/> and (if not <c>"Normal"</c>)
+        /// <paramref name="pdfBlendModeName"/> - see
         /// <see cref="XGraphicsPdfRenderer.DrawImageWithOpacity"/> for why this differs from simply
         /// reducing the alpha of each shape painted into the tile.
         /// </summary>
-        internal void DrawImageWithOpacity(XForm image, XRect destRect, double opacity)
+        internal void DrawImageWithOpacity(XForm image, XRect destRect, double opacity, string pdfBlendModeName = "Normal")
         {
-            (_renderer as XGraphicsPdfRenderer)?.DrawImageWithOpacity(image, destRect, opacity);
+            (_renderer as XGraphicsPdfRenderer)?.DrawImageWithOpacity(image, destRect, opacity, pdfBlendModeName);
+        }
+
+        /// <summary>
+        /// Draws <paramref name="image"/> at <paramref name="destRect"/>, composited through a
+        /// channel-independent <see cref="ColorMatrix"/> - see
+        /// <see cref="XGraphicsPdfRenderer.DrawImageWithColorMatrix"/>.
+        /// </summary>
+        internal void DrawImageWithColorMatrix(XForm image, XRect destRect, ColorMatrix matrix)
+        {
+            (_renderer as XGraphicsPdfRenderer)?.DrawImageWithColorMatrix(image, destRect, matrix);
+        }
+
+        /// <summary>
+        /// Draws <paramref name="image"/> at <paramref name="destRect"/> with <paramref name="maskImage"/>
+        /// applied as an <c>/Alpha</c>-subtype soft mask - see
+        /// <see cref="XGraphicsPdfRenderer.DrawImageAlphaMasked"/>.
+        /// </summary>
+        internal void DrawImageAlphaMasked(XForm image, XForm maskImage, XRect destRect, bool invert = false)
+        {
+            (_renderer as XGraphicsPdfRenderer)?.DrawImageAlphaMasked(image, maskImage, destRect, invert);
+        }
+
+        /// <summary>
+        /// Paints <paramref name="bottom"/> then <paramref name="top"/> blended over it at
+        /// <paramref name="destRect"/> - see <see cref="XGraphicsPdfRenderer.DrawImageBlendedOver"/>.
+        /// </summary>
+        internal void DrawImageBlendedOver(XForm top, XForm bottom, XRect destRect, string pdfBlendModeName)
+        {
+            (_renderer as XGraphicsPdfRenderer)?.DrawImageBlendedOver(top, bottom, destRect, pdfBlendModeName);
         }
 
         /// <summary>

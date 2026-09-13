@@ -263,7 +263,10 @@ namespace PeachPDF.Tests.Integration
             public override void DrawImage(RImage image, RRect destRect, RRect srcRect) => DrawOperations++;
             public override void DrawImage(RImage image, RRect destRect) => DrawOperations++;
             public override void DrawImageMasked(RImage image, RImage maskImage, RRect destRect) => DrawOperations++;
-            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity) => DrawOperations++;
+            public override void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal) => DrawOperations++;
+            public override void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix) => DrawOperations++;
+            public override void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false) => DrawOperations++;
+            public override void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode) => DrawOperations++;
             public override void DrawPath(RPen pen, RGraphicsPath path) => DrawOperations++;
             public override void DrawPath(RBrush brush, RGraphicsPath path) => DrawOperations++;
             public override void DrawPolygon(RBrush brush, RPoint[] points) => DrawOperations++;

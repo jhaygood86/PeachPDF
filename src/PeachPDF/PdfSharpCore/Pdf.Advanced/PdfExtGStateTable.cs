@@ -115,8 +115,37 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             return extGState;
         }
 
+        /// <summary>
+        /// Same as <see cref="GetExtGState(double)"/>, additionally setting a non-Normal <c>/BM</c> in
+        /// the same ExtGState - the mechanism behind CSS <c>mix-blend-mode</c> combined with group
+        /// <c>opacity</c> on one tile, one <c>gs</c> rather than two nested ones. <paramref name="pdfBlendModeName"/>
+        /// of <c>"Normal"</c> is cached and looked up identically to a call to the single-parameter
+        /// overload - the two never diverge into separate cache entries for the same effective state.
+        /// </summary>
+        public PdfExtGState GetExtGState(double alpha, string pdfBlendModeName)
+        {
+            if (pdfBlendModeName is null or "Normal")
+                return GetExtGState(alpha);
+
+            string key = PdfExtGState.MakeKey(alpha, false) + pdfBlendModeName;
+            PdfExtGState extGState;
+            if (!_combinedAlphaBlendStates.TryGetValue(key, out extGState))
+            {
+                extGState = new PdfExtGState(Owner)
+                {
+                    StrokeAlpha = alpha,
+                    NonStrokeAlpha = alpha
+                };
+                extGState.Elements.SetName(PdfExtGState.Keys.BM, pdfBlendModeName);
+
+                _combinedAlphaBlendStates[key] = extGState;
+            }
+            return extGState;
+        }
+
         readonly Dictionary<string, PdfExtGState> _strokeAlphaValues = new Dictionary<string, PdfExtGState>();
         readonly Dictionary<string, PdfExtGState> _nonStrokeStates = new Dictionary<string, PdfExtGState>();
         readonly Dictionary<string, PdfExtGState> _combinedAlphaStates = new Dictionary<string, PdfExtGState>();
+        readonly Dictionary<string, PdfExtGState> _combinedAlphaBlendStates = new Dictionary<string, PdfExtGState>();
     }
 }

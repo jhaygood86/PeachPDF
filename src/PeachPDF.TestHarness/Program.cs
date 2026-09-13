@@ -9240,6 +9240,315 @@ await SaveShowcaseAsync("mathml", "Math", "MathML",
     "sub/superscripts, and MATH-table stretchy fences, using STIX Two Math's own OpenType MATH table.",
     mathHtml, pdfConfig);
 
+// --- CSS filter showcase (native functions: opacity/brightness/contrast/invert) ---
+
+static string FilterSwatch(string desc, string cssValue) =>
+    "<td>" +
+    $"<div class=\"fbox\" style=\"filter: {cssValue}\"><div class=\"chip\">Peach</div></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">filter: {cssValue}</div>" +
+    "</td>";
+
+const string FilterCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25%; text-align: center }
+    .fbox { width: 140px; height: 90px; margin: 0 auto 3px; border-radius: 6px;
+            background: linear-gradient(135deg, #ff5e62 0%, #ffb347 50%, #2980b9 100%);
+            display: flex; align-items: center; justify-content: center; }
+    .chip { color: #fff; font-size: 13pt; font-weight: bold; }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; line-height: 1.3; word-break: break-all }
+    </style>
+    """;
+
+var cssFilterHtml = "<!DOCTYPE html><html><head>" + FilterCss + "</head><body>" +
+
+    "<h1>CSS filter: Native PDF Color Math</h1>" +
+    "<p class=\"intro\">opacity(), brightness(), contrast(), and invert() apply as real PDF color math - opacity() reuses the same isolated transparency group as the opacity property, the other three compose into one ExtGState /TR transfer function - not a rasterized approximation. (docs/html-css-support.md#filters-and-blend-modes)</p>" +
+
+    "<h2>1 — Individual functions</h2>" +
+    Row(
+        FilterSwatch("baseline (no filter)", "none"),
+        FilterSwatch("brightness", "brightness(1.6)"),
+        FilterSwatch("contrast", "contrast(1.8)"),
+        FilterSwatch("invert", "invert(1)")
+    ) +
+
+    "<h2>2 — Composed in one filter: list</h2>" +
+    "<p class=\"intro\">Multiple native functions in one filter: value compose into a single PDF transfer function, so a whole native-only chain still costs one PDF object, the same as one function alone.</p>" +
+    Row(
+        FilterSwatch("brightness + contrast", "brightness(1.3) contrast(1.4)"),
+        FilterSwatch("brightness + invert", "brightness(0.9) invert(1)"),
+        FilterSwatch("opacity + brightness", "opacity(0.6) brightness(1.4)"),
+        FilterSwatch("all four together", "opacity(0.85) brightness(1.2) contrast(1.3) invert(0.15)")
+    ) +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("css_filter", "Graphics & Effects", "CSS Filter",
+    "filter: opacity(), brightness(), contrast(), and invert() - genuinely native PDF color math via ExtGState /TR, composed into a single transfer function per element.",
+    cssFilterHtml, pdfConfig);
+
+// --- CSS mix-blend-mode showcase ---
+
+static string BlendSwatch(string desc, string blendMode) =>
+    "<td>" +
+    "<div class=\"bstage\">" +
+        "<div class=\"circle circle-a\"></div>" +
+        $"<div class=\"circle circle-b\" style=\"mix-blend-mode: {blendMode}\"></div>" +
+    "</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">mix-blend-mode: {blendMode}</div>" +
+    "</td>";
+
+const string BlendCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 25%; text-align: center }
+    .bstage { position: relative; width: 140px; height: 100px; margin: 0 auto 3px; background: #f4e9d8; border: 1px solid #ccc; }
+    .circle { position: absolute; width: 80px; height: 80px; border-radius: 50%; }
+    .circle-a { left: 15px; top: 10px; background: #e63946; }
+    .circle-b { left: 55px; top: 10px; background: #1d4ed8; }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666 }
+    </style>
+    """;
+
+var mixBlendModeHtml = "<!DOCTYPE html><html><head>" + BlendCss + "</head><body>" +
+
+    "<h1>CSS mix-blend-mode</h1>" +
+    "<p class=\"intro\">Each pair of overlapping circles blends via a genuine PDF blend mode (ExtGState /BM, ISO 32000-1 §11.3.5) - real compositing math, not an approximation. (docs/html-css-support.md#filters-and-blend-modes)</p>" +
+    Row(
+        BlendSwatch("normal (baseline)", "normal"),
+        BlendSwatch("multiply", "multiply"),
+        BlendSwatch("screen", "screen"),
+        BlendSwatch("difference", "difference")
+    ) +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("mix_blend_mode", "Graphics & Effects", "mix-blend-mode",
+    "mix-blend-mode composites overlapping content via a real PDF blend mode (ExtGState /BM) - normal, multiply, screen, and difference shown over overlapping circles.",
+    mixBlendModeHtml, pdfConfig);
+
+// --- CSS filter: drop-shadow() showcase ---
+
+static string DropShadowSwatch(string desc, string cssValue) =>
+    "<td>" +
+    $"<div class=\"dstage\"><div class=\"dshape\" style=\"filter: {cssValue}\"></div></div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    $"<div class=\"css\">filter: {cssValue}</div>" +
+    "</td>";
+
+const string DropShadowCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 33.33%; text-align: center }
+    .dstage { width: 160px; height: 110px; margin: 0 auto 3px; background: #fafafa; border: 1px solid #ddd;
+              display: flex; align-items: center; justify-content: center; }
+    .dshape { width: 70px; height: 70px; background: #16a085; }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin-bottom: 1px }
+    .css { font-size: 6pt; color: #666; word-break: break-all }
+    </style>
+    """;
+
+var dropShadowHtml = "<!DOCTYPE html><html><head>" + DropShadowCss + "</head><body>" +
+
+    "<h1>CSS filter: drop-shadow()</h1>" +
+    "<p class=\"intro\">drop-shadow() reuses box-shadow's own concentric-fill blur approximation, keyed off the filtered element's own border-box rectangle rather than a true per-pixel alpha silhouette of its content. (docs/html-css-support.md#filters-and-blend-modes)</p>" +
+    Row(
+        DropShadowSwatch("offset only, no blur", "drop-shadow(10px 10px 0 rgba(0,0,0,0.45))"),
+        DropShadowSwatch("offset + blur", "drop-shadow(6px 6px 8px rgba(0,0,0,0.5))"),
+        DropShadowSwatch("colored shadow", "drop-shadow(-8px 8px 10px rgba(41,128,185,0.6))")
+    ) +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("css_filter_drop_shadow", "Graphics & Effects", "filter: drop-shadow()",
+    "CSS filter: drop-shadow() approximated with box-shadow's own vector blur technique, keyed off the filtered element's own rectangle - not a true alpha silhouette.",
+    dropShadowHtml, pdfConfig);
+
+// --- SVG <filter>: feBlend & feColorMatrix showcase ---
+
+static string SvgFilterPanel(string desc, string svg) =>
+    "<td>" +
+    $"<div class=\"stage\">{svg}</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    "</td>";
+
+const string SvgFilterCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 33.33%; text-align: center }
+    .stage { background: #fafafa; border: 1px solid #ccc }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
+    </style>
+    """;
+
+var svgFilterBlendMatrixHtml = "<!DOCTYPE html><html><head>" + SvgFilterCss + "</head><body>" +
+
+    "<h1>SVG &lt;filter&gt;: feBlend &amp; feColorMatrix</h1>" +
+    "<p class=\"intro\">A native primitive graph evaluated over PDF tiles - feBlend via a real PDF blend mode, feColorMatrix (restricted to a channel-independent/diagonal matrix) via a PDF ExtGState /TR transfer function. Never rasterized. (docs/supported-svg-features.md#filters)</p>" +
+
+    "<h2>1 — feBlend</h2>" +
+    "<table class=\"sw\"><tr>" +
+    SvgFilterPanel("unfiltered",
+        """
+        <svg viewBox="0 0 200 140" width="190" height="133">
+          <rect x="20" y="20" width="160" height="100" rx="10" fill="#2980b9"/>
+        </svg>
+        """) +
+    SvgFilterPanel("feBlend mode=\"multiply\" against a flood color",
+        """
+        <svg viewBox="0 0 200 140" width="190" height="133">
+          <defs>
+            <filter id="blendMul" x="-20%" y="-20%" width="140%" height="140%">
+              <feFlood flood-color="#f1c40f" result="flood"/>
+              <feBlend in="SourceGraphic" in2="flood" mode="multiply"/>
+            </filter>
+          </defs>
+          <rect x="20" y="20" width="160" height="100" rx="10" fill="#2980b9" filter="url(#blendMul)"/>
+        </svg>
+        """) +
+    SvgFilterPanel("feBlend mode=\"difference\"",
+        """
+        <svg viewBox="0 0 200 140" width="190" height="133">
+          <defs>
+            <filter id="blendDiff" x="-20%" y="-20%" width="140%" height="140%">
+              <feFlood flood-color="#e74c3c" result="flood"/>
+              <feBlend in="SourceGraphic" in2="flood" mode="difference"/>
+            </filter>
+          </defs>
+          <rect x="20" y="20" width="160" height="100" rx="10" fill="#2980b9" filter="url(#blendDiff)"/>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "<h2>2 — feColorMatrix (diagonal, channel-independent)</h2>" +
+    "<p class=\"intro\">Only a channel-independent (diagonal) matrix maps onto PDF's per-channel /TR transfer function - a cross-channel matrix (e.g. type=\"saturate\") has no native PDF mechanism, per ISO 32000-1 §8.6.5.3.</p>" +
+    "<table class=\"sw\"><tr>" +
+    SvgFilterPanel("unfiltered",
+        """
+        <svg viewBox="0 0 200 140" width="190" height="133">
+          <circle cx="100" cy="70" r="55" fill="#8e44ad"/>
+        </svg>
+        """) +
+    SvgFilterPanel("diagonal matrix: boost R, dim G",
+        """
+        <svg viewBox="0 0 200 140" width="190" height="133">
+          <defs>
+            <filter id="diagMatrix" x="-20%" y="-20%" width="140%" height="140%">
+              <feColorMatrix type="matrix" values="1.6 0 0 0 0  0 0.4 0 0 0  0 0 1 0 0  0 0 0 1 0"/>
+            </filter>
+          </defs>
+          <circle cx="100" cy="70" r="55" fill="#8e44ad" filter="url(#diagMatrix)"/>
+        </svg>
+        """) +
+    SvgFilterPanel("type=\"luminanceToAlpha\"",
+        """
+        <svg viewBox="0 0 200 140" width="190" height="133">
+          <defs>
+            <filter id="lumaAlpha" x="-20%" y="-20%" width="140%" height="140%">
+              <feColorMatrix type="luminanceToAlpha"/>
+            </filter>
+          </defs>
+          <rect x="10" y="10" width="180" height="120" fill="#fafafa"/>
+          <circle cx="100" cy="70" r="55" fill="#8e44ad" filter="url(#lumaAlpha)"/>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("svg_filter_blend_color_matrix", "Graphics & Effects", "SVG Filter: feBlend & feColorMatrix",
+    "Native SVG <filter> primitives - feBlend (a real PDF blend mode) and feColorMatrix (a channel-independent matrix via PDF's /TR transfer function) - never rasterized.",
+    svgFilterBlendMatrixHtml, pdfConfig);
+
+// --- SVG <filter>: multi-primitive graph showcase (named result/in references) ---
+
+static string SvgFilterGraphPanel(string desc, string svg) =>
+    "<td>" +
+    $"<div class=\"stage\">{svg}</div>" +
+    $"<div class=\"desc\">{desc}</div>" +
+    "</td>";
+
+const string SvgFilterGraphCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt; break-after: avoid }
+    table.sw { border-collapse: collapse; width: 100%; margin-bottom: 0.3em }
+    table.sw td { padding: 3px; vertical-align: top; width: 50%; text-align: center }
+    .stage { background: #fafafa; border: 1px solid #ccc }
+    .desc { font-size: 7pt; font-weight: bold; color: #444; margin: 2px 0 1px }
+    </style>
+    """;
+
+// Vertically centered within the 0 0 220 180 viewBox: a 5-point star's own bounding box isn't
+// symmetric around its geometric center (one point up, two points down), so the points below are
+// built around a center shifted down from the viewBox's true center (90) to 97, splitting the
+// resulting 44px of vertical slack evenly (22px top and bottom) rather than the 20px-top/0px-bottom
+// the original points left, which is what made the star look bottom-crammed relative to its box.
+const string FilterGraphStarPoints = "110,22 128,73 181,74 139,106 154,158 110,127 66,158 81,106 39,74 92,73";
+
+var svgFilterGraphHtml = "<!DOCTYPE html><html><head>" + SvgFilterGraphCss + "</head><body>" +
+
+    "<h1>SVG &lt;filter&gt;: a multi-primitive graph</h1>" +
+    "<p class=\"intro\">The classic drop-shadow-via-primitives idiom: feFlood + feComposite (\"in\") builds a solid shadow shape from the source's own alpha, feOffset displaces it, and feMerge layers it under the original. Each step names its own result (flood, shadowColor, offsetShadow) so a later primitive - including feMergeNode's own \"in\" - can look it up directly, not just chain to the immediately-previous step. (docs/supported-svg-features.md#filters)</p>" +
+    "<table class=\"sw\"><tr>" +
+    SvgFilterGraphPanel("unfiltered star",
+        $"""
+        <svg viewBox="0 0 220 180" width="210" height="172">
+          <polygon points="{FilterGraphStarPoints}"
+                   fill="#f39c12"/>
+        </svg>
+        """) +
+    SvgFilterGraphPanel("feFlood + feComposite(in) + feOffset + feMerge",
+        $"""
+        <svg viewBox="0 0 220 180" width="210" height="172">
+          <defs>
+            <filter id="primitiveShadow" x="-40%" y="-40%" width="180%" height="180%">
+              <feFlood flood-color="#000000" flood-opacity="0.55" result="flood"/>
+              <feComposite in="flood" in2="SourceAlpha" operator="in" result="shadowColor"/>
+              <feOffset in="shadowColor" dx="8" dy="10" result="offsetShadow"/>
+              <feMerge>
+                <feMergeNode in="offsetShadow"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          <polygon points="{FilterGraphStarPoints}"
+                   fill="#f39c12" filter="url(#primitiveShadow)"/>
+        </svg>
+        """) +
+    "</tr></table>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("svg_filter_graph", "Graphics & Effects", "SVG Filter: Multi-Primitive Graph",
+    "A real SVG <filter> primitive graph (feFlood, feComposite, feOffset, feMerge) building a drop shadow from named, non-adjacently-referenced results - the general filter graph evaluator, not a simple linear chain.",
+    svgFilterGraphHtml, pdfConfig);
+
 if (benchmarkMode)
 {
     PrintBenchmarkReport();

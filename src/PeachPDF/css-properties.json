@@ -696,6 +696,37 @@
       }
     },
     {
+      "name": "mix-blend-mode",
+      "comment": "CSS Compositing and Blending Level 1 §2: mix-blend-mode does not inherit. enum-keyword reuses the pre-existing BlendMode enum/Map.BlendModes dictionary (built alongside Html.Adapters.Entities.RBlendMode for the shared PDF blend-mode infrastructure) rather than binding directly to RBlendMode itself - the enum-keyword codegen (AreasEmitter/RegistryEmitter) hardcodes its enumType's namespace to PeachPDF.CSS, so a Core-side enum is required regardless of Html.Core's ability to reference Html.Adapters.Entities directly; BlendMode is mapped to RBlendMode at the one paint call site that needs it (FragmentPainter.ToRBlendMode).",
+      "inherited": false,
+      "initialValue": "normal",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BlendMode",
+        "keywordMap": "Map.BlendModes",
+        "fallback": "BlendMode.Normal"
+      },
+      "html": {
+        "propertyPath": "MixBlendMode",
+        "csharpDataType": "CssProperty<BlendMode>",
+        "area": "VisualEffectsArea",
+        "getterExpression": "{box}.MixBlendMode.ToString()"
+      }
+    },
+    {
+      "name": "filter",
+      "comment": "cssDataType 'cssom-grammar' calls FilterGrammar.TryParse directly - the same grammar PeachPDF.Html.Core.Paint.FilterEffectResolver (via CssBox.ActualFilterFunctions) calls at paint time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none'), matching box-shadow's own convention. Only opacity()/brightness()/contrast()/invert() (and drop-shadow(), approximated) have any native PDF rendering path - blur()/grayscale()/hue-rotate()/saturate()/sepia() parse successfully but are documented no-ops (ColorMatrix's remarks explain why: PDF's /TR transfer function is strictly per-channel independent, so a cross-channel color mix has no native PDF mechanism at all).",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.FilterGrammar.TryParse" },
+      "html": {
+        "propertyPath": "Filter",
+        "invalidates": "InvalidateFilter",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
       "name": "content",
       "comment": "cssDataType 'cssom-grammar' calls ContentProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,

@@ -24,6 +24,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -435,6 +436,16 @@ namespace PeachPDF.Svg
                         break;
                     case "mask" when !string.IsNullOrEmpty(id):
                         _document.Masks[id] = BuildMask(child);
+                        break;
+                    // Filters are self-contained (a primitive's `in`/`in2`/child `in` only reference
+                    // earlier results within the SAME filter, never forward or cross-filter) just like
+                    // gradients/markers/patterns/masks above, so eager building fits here too - no lazy
+                    // resolution needed. A filter whose graph isn't fully natively representable is
+                    // simply never added (BuildFilter returns null - see SvgFilter's remarks), so a
+                    // referencing element's FilterRef resolves to nothing and it paints unfiltered.
+                    case "filter" when !string.IsNullOrEmpty(id):
+                        if (BuildFilter(child) is { } filter)
+                            _document.Filters[id] = filter;
                         break;
                     // <style> elements are no longer collected here: SVG styling is matched through the
                     // full CSS engine (ISvgSourceNode.GetMatchedCssDeclarations) against the relevant
@@ -972,6 +983,10 @@ namespace PeachPDF.Svg
             // Same url(#id)/none grammar as a marker reference - reused directly rather than
             // duplicating the tiny parser.
             element.MaskRef = SvgValueParsers.ParseMarkerReference(Attr("mask"));
+
+            // Hand-parsed here rather than through css-properties.json, same reasoning as mask/clip-path
+            // above (CLAUDE.md's documented convention: URL extraction, not a pure grammar).
+            element.FilterRef = SvgValueParsers.ParseMarkerReference(Attr("filter"));
 
             // The `marker` shorthand sets all three individual properties at once; an individually
             // specified marker-start/mid/end (if present) then overrides just that one.
@@ -1590,6 +1605,335 @@ namespace PeachPDF.Svg
             };
 
             return pattern;
+        }
+
+        /// <summary>
+        /// Builds a <c>&lt;filter&gt;</c> definition, or null when ANY of its primitives (or the values/
+        /// operators/types they use) falls outside the natively-representable set this evaluator
+        /// supports - a whole-filter rejection, not a partial graph, per <see cref="SvgFilter"/>'s
+        /// remarks: an element referencing a rejected (or absent) filter id simply paints unfiltered.
+        /// Rejected: any primitive kind besides feFlood/feOffset/feMerge/feTile/feComposite/feBlend/
+        /// feColorMatrix/feComponentTransfer; feComposite type="arithmetic"; feColorMatrix
+        /// type="saturate"/"hueRotate" or a type="matrix" with any nonzero off-diagonal term (confirmed
+        /// against ISO 32000-1 §8.6.5.3: PDF's /TR transfer function is strictly per-channel independent,
+        /// so a cross-channel matrix has no native mechanism at all); feComponentTransfer
+        /// type="gamma"/"table"/"discrete" (gamma is non-affine - output = amplitude*pow(input,exponent)
+        /// + offset, not slope*input + intercept - so it doesn't fit ColorMatrix's affine shape even in
+        /// principle, not just "not yet built"; table/discrete would need a PDF FunctionType 0 sampled
+        /// function, not built here) or a non-identity feFuncA; an in/in2 of BackgroundImage/
+        /// BackgroundAlpha/FillPaint/StrokePaint; and a per-primitive x/y/width/height subregion (every
+        /// primitive here always operates over the whole resolved filter region).
+        /// </summary>
+        private SvgFilter? BuildFilter(ISvgSourceNode node)
+        {
+            var primitives = BuildFilterPrimitives(node);
+            if (primitives is null)
+                return null;
+
+            var isObjectBoundingBox = !string.Equals(node.GetAttribute("filterUnits"), "userSpaceOnUse", StringComparison.OrdinalIgnoreCase);
+            var primitiveUnitsUserSpaceOnUse = !string.Equals(node.GetAttribute("primitiveUnits"), "objectBoundingBox", StringComparison.OrdinalIgnoreCase);
+
+            var defaultFilter = new SvgFilter();
+            return new SvgFilter
+            {
+                Id = node.GetAttribute("id"),
+                X = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("x"), isObjectBoundingBox, _viewportWidth) ?? defaultFilter.X,
+                Y = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("y"), isObjectBoundingBox, _viewportHeight) ?? defaultFilter.Y,
+                Width = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("width"), isObjectBoundingBox, _viewportWidth) ?? defaultFilter.Width,
+                Height = SvgValueParsers.ParseGradientCoordinate(node.GetAttribute("height"), isObjectBoundingBox, _viewportHeight) ?? defaultFilter.Height,
+                FilterUnitsUserSpaceOnUse = !isObjectBoundingBox,
+                PrimitiveUnitsUserSpaceOnUse = primitiveUnitsUserSpaceOnUse,
+                Primitives = primitives,
+            };
+        }
+
+        /// <summary>Walks a <c>&lt;filter&gt;</c>'s direct children into a primitive list, or null on the first unsupported one (see <see cref="BuildFilter"/>'s remarks). A non-<c>fe*</c> child (<c>&lt;title&gt;</c>/<c>&lt;desc&gt;</c>/etc.) is skipped, not a rejection.</summary>
+        private List<FilterPrimitive>? BuildFilterPrimitives(ISvgSourceNode node)
+        {
+            var primitives = new List<FilterPrimitive>();
+
+            foreach (var child in node.Children)
+            {
+                if (!child.Name.StartsWith("fe", StringComparison.Ordinal))
+                    continue;
+
+                if (HasSubregion(child))
+                    return null;
+
+                if (BuildFilterPrimitive(child) is not { } primitive)
+                    return null;
+
+                primitives.Add(primitive);
+            }
+
+            return primitives;
+        }
+
+        private static bool HasSubregion(ISvgSourceNode node) =>
+            node.GetAttribute("x") is not null || node.GetAttribute("y") is not null ||
+            node.GetAttribute("width") is not null || node.GetAttribute("height") is not null;
+
+        private static bool IsReservedInput(string? value) =>
+            value is "BackgroundImage" or "BackgroundAlpha" or "FillPaint" or "StrokePaint";
+
+        private FilterPrimitive? BuildFilterPrimitive(ISvgSourceNode node) => node.Name switch
+        {
+            "feFlood" => BuildFeFlood(node),
+            "feOffset" => BuildFeOffset(node),
+            "feMerge" => BuildFeMerge(node),
+            "feTile" => BuildFeTile(node),
+            "feComposite" => BuildFeComposite(node),
+            "feBlend" => BuildFeBlend(node),
+            "feColorMatrix" => BuildFeColorMatrix(node),
+            "feComponentTransfer" => BuildFeComponentTransfer(node),
+            _ => null, // any other fe* element (feGaussianBlur, feImage, lighting, ...) - unsupported
+        };
+
+        private FilterPrimitive? BuildFeFlood(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr))
+                return null;
+
+            var floodColorAttr = node.GetAttribute("flood-color");
+            var color = string.IsNullOrWhiteSpace(floodColorAttr)
+                ? RColor.Black
+                : floodColorAttr.Trim().Equals("currentColor", StringComparison.OrdinalIgnoreCase)
+                    ? _contextColor
+                    : new CssValueParser(_adapter).GetActualColor(floodColorAttr);
+
+            return new FeFlood
+            {
+                In = inAttr,
+                Result = node.GetAttribute("result"),
+                Color = color,
+                Opacity = SvgValueParsers.ParseOpacity(node.GetAttribute("flood-opacity")),
+            };
+        }
+
+        private FilterPrimitive? BuildFeOffset(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr))
+                return null;
+
+            return new FeOffset
+            {
+                In = inAttr,
+                Result = node.GetAttribute("result"),
+                Dx = ParseFilterNumber(node.GetAttribute("dx")),
+                Dy = ParseFilterNumber(node.GetAttribute("dy")),
+            };
+        }
+
+        private FilterPrimitive? BuildFeMerge(ISvgSourceNode node)
+        {
+            var inputs = new List<string?>();
+
+            foreach (var child in node.Children)
+            {
+                if (child.Name != "feMergeNode")
+                    continue;
+
+                var inAttr = child.GetAttribute("in");
+                if (IsReservedInput(inAttr))
+                    return null;
+
+                inputs.Add(inAttr);
+            }
+
+            return new FeMerge { Result = node.GetAttribute("result"), Inputs = inputs };
+        }
+
+        private FilterPrimitive? BuildFeTile(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr))
+                return null;
+
+            return new FeTile { In = inAttr, Result = node.GetAttribute("result") };
+        }
+
+        private FilterPrimitive? BuildFeComposite(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            var in2Attr = node.GetAttribute("in2");
+            if (IsReservedInput(inAttr) || IsReservedInput(in2Attr))
+                return null;
+
+            // "arithmetic" needs true per-pixel computation (k1*i1*i2 + k2*i1 + k3*i2 + k4) - not
+            // representable, and any other/unrecognized operator value is rejected too rather than
+            // silently falling back to "over" (unlike feBlend's mode, which does default leniently -
+            // there is no safe default here since the author's INTENDED operator is unknown).
+            var op = (node.GetAttribute("operator") ?? "over").Trim().ToLowerInvariant();
+            if (op is not ("over" or "in" or "out" or "atop" or "xor"))
+                return null;
+
+            return new FeComposite { In = inAttr, In2 = in2Attr, Result = node.GetAttribute("result"), Operator = op };
+        }
+
+        private FilterPrimitive? BuildFeBlend(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            var in2Attr = node.GetAttribute("in2");
+            if (IsReservedInput(inAttr) || IsReservedInput(in2Attr))
+                return null;
+
+            return new FeBlend
+            {
+                In = inAttr,
+                In2 = in2Attr,
+                Result = node.GetAttribute("result"),
+                Mode = ParseFeBlendMode(node.GetAttribute("mode")),
+            };
+        }
+
+        /// <summary>
+        /// <c>mode</c>'s keyword vocabulary is exactly <see cref="RBlendMode"/>'s own member set
+        /// (separable + non-separable PDF 32000-1 §11.3.5 modes), so this maps 1:1 rather than through
+        /// an intermediate enum - unlike CSS <c>mix-blend-mode</c> (<c>FragmentPainter</c>'s own mapping
+        /// switch), which goes through the HTML-side <c>BlendMode</c> enum for CSS-OM reasons that don't
+        /// apply to this hand-parsed SVG attribute. An unrecognized/absent value defaults to Normal, the
+        /// same lenient-fallback shape every other enumerated presentation attribute in this file uses.
+        /// </summary>
+        private static RBlendMode ParseFeBlendMode(string? value) => value?.Trim().ToLowerInvariant() switch
+        {
+            "multiply" => RBlendMode.Multiply,
+            "screen" => RBlendMode.Screen,
+            "overlay" => RBlendMode.Overlay,
+            "darken" => RBlendMode.Darken,
+            "lighten" => RBlendMode.Lighten,
+            "color-dodge" => RBlendMode.ColorDodge,
+            "color-burn" => RBlendMode.ColorBurn,
+            "hard-light" => RBlendMode.HardLight,
+            "soft-light" => RBlendMode.SoftLight,
+            "difference" => RBlendMode.Difference,
+            "exclusion" => RBlendMode.Exclusion,
+            "hue" => RBlendMode.Hue,
+            "saturation" => RBlendMode.Saturation,
+            "color" => RBlendMode.Color,
+            "luminosity" => RBlendMode.Luminosity,
+            _ => RBlendMode.Normal,
+        };
+
+        private FilterPrimitive? BuildFeColorMatrix(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr))
+                return null;
+
+            var result = node.GetAttribute("result");
+            var type = (node.GetAttribute("type") ?? "matrix").Trim().ToLowerInvariant();
+
+            if (type == "luminancetoalpha")
+                return new FeColorMatrix { In = inAttr, Result = result, Matrix = ColorMatrix.Identity, IsLuminanceToAlpha = true };
+
+            // saturate/hueRotate mix all three color channels into each output channel by construction -
+            // no amount/angle value could ever bring either back into PDF /TR's per-channel-only model
+            // (ISO 32000-1 §8.6.5.3), so both are rejected unconditionally rather than inspected further.
+            if (type is "saturate" or "huerotate")
+                return null;
+
+            if (type != "matrix")
+                return null;
+
+            var values = SvgValueParsers.ParseNumberList(node.GetAttribute("values")) ?? SvgColorMatrixTable.Identity;
+            if (values.Length != 20)
+                return null;
+
+            var matrix = SvgColorMatrixTable.Build(values);
+            return matrix.IsChannelIndependent
+                ? new FeColorMatrix { In = inAttr, Result = result, Matrix = matrix, IsLuminanceToAlpha = false }
+                : null; // a real off-diagonal term - cross-channel, same corrected finding as saturate/hueRotate above
+        }
+
+        private FilterPrimitive? BuildFeComponentTransfer(ISvgSourceNode node)
+        {
+            var inAttr = node.GetAttribute("in");
+            if (IsReservedInput(inAttr))
+                return null;
+
+            if (!TryReadTransferFunction(node, "feFuncR", out var slopeR, out var interceptR)) return null;
+            if (!TryReadTransferFunction(node, "feFuncG", out var slopeG, out var interceptG)) return null;
+            if (!TryReadTransferFunction(node, "feFuncB", out var slopeB, out var interceptB)) return null;
+            if (!IsFeFuncAIdentityOrAbsent(node)) return null;
+
+            var linear = new Matrix4x4(
+                (float)slopeR, 0, 0, 0,
+                0, (float)slopeG, 0, 0,
+                0, 0, (float)slopeB, 0,
+                0, 0, 0, 1);
+            var offset = new Vector4((float)interceptR, (float)interceptG, (float)interceptB, 0f);
+
+            return new FeComponentTransfer { In = inAttr, Result = node.GetAttribute("result"), Matrix = new ColorMatrix(linear, offset) };
+        }
+
+        /// <summary>
+        /// Reads one <c>&lt;feFuncR&gt;</c>/<c>&lt;feFuncG&gt;</c>/<c>&lt;feFuncB&gt;</c> child's transfer
+        /// function: absent defaults to identity (slope 1, intercept 0) per spec; <c>type="identity"</c>
+        /// is the same; <c>type="linear"</c> reads <c>slope</c>/<c>intercept</c> (each defaulting per
+        /// spec when omitted). <c>false</c> for <c>type="gamma"</c>/<c>"table"</c>/<c>"discrete"</c> -
+        /// none of those are affine (see <see cref="FeComponentTransfer"/>'s remarks), so the whole
+        /// filter is rejected rather than approximated.
+        /// </summary>
+        private static bool TryReadTransferFunction(ISvgSourceNode node, string childName, out double slope, out double intercept)
+        {
+            slope = 1;
+            intercept = 0;
+
+            ISvgSourceNode? func = null;
+            foreach (var child in node.Children)
+            {
+                if (child.Name == childName)
+                {
+                    func = child;
+                    break;
+                }
+            }
+
+            if (func is null)
+                return true;
+
+            var type = (func.GetAttribute("type") ?? "identity").Trim().ToLowerInvariant();
+            switch (type)
+            {
+                case "identity":
+                    return true;
+                case "linear":
+                    slope = ParseFilterNumber(func.GetAttribute("slope"), 1);
+                    intercept = ParseFilterNumber(func.GetAttribute("intercept"), 0);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// <c>&lt;feComponentTransfer&gt;</c> only ever composes R/G/B here (see
+        /// <see cref="FeComponentTransfer"/>'s remarks) - an author-specified <c>&lt;feFuncA&gt;</c> that
+        /// would actually change alpha (any type other than absent/identity) is rejected outright rather
+        /// than silently dropped, since silently ignoring a real, spec-legal request would under-render
+        /// without any signal that anything was left out.
+        /// </summary>
+        private static bool IsFeFuncAIdentityOrAbsent(ISvgSourceNode node)
+        {
+            foreach (var child in node.Children)
+            {
+                if (child.Name != "feFuncA")
+                    continue;
+
+                return (child.GetAttribute("type") ?? "identity").Trim().Equals("identity", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return true;
+        }
+
+        private static double ParseFilterNumber(string? value, double fallback = 0)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return fallback;
+
+            return double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
         }
 
         /// <summary>Builds the renderable children of a pure definition element (<c>&lt;pattern&gt;</c>/<c>&lt;marker&gt;</c>/<c>&lt;mask&gt;</c>) - same recursion <see cref="BuildGroup"/> uses for an ordinary container, just not itself wrapped in a paintable <see cref="SvgElement"/>.</summary>

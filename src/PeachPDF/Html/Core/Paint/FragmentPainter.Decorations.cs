@@ -241,6 +241,38 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
+        /// Paints <c>filter: drop-shadow()</c>'s approximation - the same concentric-alpha-ramped-fill
+        /// technique <see cref="PaintOutsetShadow"/> already implements for <c>box-shadow</c>'s own blur
+        /// (accepted gap: non-Gaussian, see that method's remarks), reused wholesale rather than
+        /// re-derived, but keyed off <paramref name="box"/>'s own border-box rectangle rather than a true
+        /// per-pixel alpha silhouette of its actual rendered content (text glyphs, image cutouts, etc.) -
+        /// an approximation on the same accepted-gap footing as <c>box-shadow</c>'s own non-Gaussian blur.
+        /// A box can carry more than one <c>drop-shadow()</c> in its filter list (each painted here in
+        /// authored order, all keyed off the same border-box); real per-primitive filter chaining - where a
+        /// later <c>drop-shadow()</c> would see the *previous* filter step's output, not the original box -
+        /// is out of scope for this same reason.
+        /// </summary>
+        private static void PaintFilterDropShadows(RGraphics g, CssBox box, in BoxDecorationGeometry geometry)
+        {
+            var functions = box.ActualFilterFunctions;
+            if (functions.Count == 0) return;
+
+            var borderBox = geometry.DecorationRect;
+
+            foreach (var function in functions)
+            {
+                if (function.Name != "drop-shadow") continue;
+
+                var dx = CssValueParser.ParseLength(function.Arguments[0], 0, box);
+                var dy = CssValueParser.ParseLength(function.Arguments[1], 0, box);
+                var blur = CssValueParser.ParseLength(function.Arguments[2], 0, box);
+                var color = ResolveShadowColor(box, function.Arguments[3]);
+
+                PaintOutsetShadow(g, box, borderBox, dx, dy, blur, spread: 0, color);
+            }
+        }
+
+        /// <summary>
         /// Confines a sliced shadow to this fragment, cutting it at the fragmentation breaks and nowhere
         /// else: an edge the box really owns keeps the room the shadow needs to spill into, an edge that is
         /// a break stops exactly at the fragment. Returns whether a clip was pushed.

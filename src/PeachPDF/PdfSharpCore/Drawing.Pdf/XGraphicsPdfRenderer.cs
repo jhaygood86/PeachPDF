@@ -33,6 +33,7 @@
 
 using PeachPDF.Fonts;
 using PeachPDF.Fonts.OpenType;
+using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.PdfSharpCore.Internal;
 using PeachPDF.PdfSharpCore.Pdf;
 using PeachPDF.PdfSharpCore.Pdf.Advanced;
@@ -2151,7 +2152,7 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
         /// the same reasoning applies here: the <c>gs</c> activating the alpha must be emitted inside the
         /// same <c>q ... cm ... Do ... Q</c> block that places <paramref name="image"/>, not separately.
         /// </remarks>
-        internal void DrawImageWithOpacity(XForm image, XRect destRect, double opacity)
+        internal void DrawImageWithOpacity(XForm image, XRect destRect, double opacity, string pdfBlendModeName = "Normal")
         {
             const string format = Config.SignificantFigures4;
 
@@ -2166,7 +2167,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             image.Finish();
 
             // Checked before any group/ExtGState object is built, so a PDF/A-1 rejection never leaves
-            // partially-built objects registered in the document's resources/iref table.
+            // partially-built objects registered in the document's resources/iref table. A non-Normal
+            // blend mode is itself a transparency-group-requiring construct too (see SetBlendMode), but
+            // opacity-less-than-1 already requires the same group, so one check covers both here.
             PdfATransparencyGuard.RequireAllowed(Owner, _page, "CSS/SVG opacity less than 1");
 
             // Must be an isolated transparency group so the tile's own (possibly overlapping) content is
@@ -2179,7 +2182,10 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             contentGroup.Elements["/I"] = new PdfBoolean(true);
             contentPdfForm.Elements["/Group"] = contentGroup;
 
-            var extGState = Owner.ExtGStateTable.GetExtGState(opacity);
+            // A single ExtGState carries both /ca+/CA (opacity) and /BM (mix-blend-mode) - the pair is
+            // meant to composite as one operation against the destination, not as two separately-scoped
+            // effects, so one gs/Do pairing is both simpler and correct.
+            var extGState = Owner.ExtGStateTable.GetExtGState(opacity, pdfBlendModeName);
             var gsName = Resources.AddExtGState(extGState);
 
             double cx = width / image.PointWidth;
@@ -2190,6 +2196,210 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             // predates that constraint being tightened) - so there's only one placement to emit here.
             AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
                 x, y + height, cx, cy, name);
+        }
+
+        /// <summary>
+        /// Draws <paramref name="image"/> at <paramref name="destRect"/>, composited through
+        /// <paramref name="matrix"/>'s channel-independent linear part via an ExtGState <c>/TR</c>
+        /// transfer function - the mechanism behind channel-independent CSS <c>filter</c> functions
+        /// (<c>brightness()</c>, <c>contrast()</c>, <c>invert()</c>) applied to a whole tile. See
+        /// <see cref="ColorMatrix"/>'s remarks for the underlying PDF-spec research: a cross-channel
+        /// matrix (<c>grayscale()</c>, <c>sepia()</c>, <c>saturate()</c>, <c>hue-rotate()</c>) cannot be
+        /// expressed this way at all, so this throws for one rather than silently mis-rendering it.
+        /// </summary>
+        /// <remarks>
+        /// Dual-rasterization check (this repo's own convention for anything touching graphics-state
+        /// constructs - see <c>CLAUDE.md</c>'s Testing conventions) surfaced a real-world renderer gap
+        /// worth knowing before debugging "it doesn't look filtered": a well-formed <c>invert()</c>
+        /// matrix (a spec-correct <c>/TR</c>, verified structurally in
+        /// <c>XGraphicsPdfRendererColorMatrixAndMaskTests</c> and by hand against the raw PDF bytes)
+        /// rendered correctly in PDFium (the red test rectangle came out cyan, as expected) but rendered
+        /// completely UNCHANGED in MuPDF (still red) - MuPDF's rasterizer does not implement ExtGState
+        /// <c>/TR</c> at all, silently treating it as absent rather than erroring. This is the mirror
+        /// image of this codebase's usual soft-mask finding (MuPDF lenient, PDFium strict): here PDFium
+        /// is the one actually honoring a legitimate, spec-conformant construct, and MuPDF is the one
+        /// silently dropping it. Do not use a MuPDF-only render to conclude a channel-independent color
+        /// matrix "does nothing" - check PDFium (or a real browser/Acrobat) too.
+        /// </remarks>
+        internal void DrawImageWithColorMatrix(XForm image, XRect destRect, ColorMatrix matrix)
+        {
+            if (!matrix.IsChannelIndependent)
+            {
+                throw new NotSupportedException(
+                    "This color matrix mixes color channels (e.g. grayscale()/sepia()/saturate()/hue-rotate() " +
+                    "or a feColorMatrix with off-diagonal coefficients), which a PDF ExtGState transfer " +
+                    "function (ISO 32000-1 §8.6.5.3) cannot express - a transfer function is evaluated " +
+                    "independently per color component and never sees another component's value. See " +
+                    "ColorMatrix's remarks for the mechanisms that do apply (a raster image's own DeviceN " +
+                    "tint-transform color space, or rasterizing the affected content) and why neither is a " +
+                    "drop-in replacement for compositing an already-rendered vector tile.");
+            }
+
+            const string format = Config.SignificantFigures4;
+
+            double x = destRect.X;
+            double y = destRect.Y;
+            double width = destRect.Width;
+            double height = destRect.Height;
+
+            string name = Realize(image, width, height);
+
+            BeginPage();
+            image.Finish();
+
+            PdfATransparencyGuard.RequireAllowed(Owner, _page, "CSS/SVG color-matrix filter");
+
+            var contentPdfForm = image.PdfForm;
+            var contentGroup = new PdfDictionary();
+            contentGroup.Elements["/S"] = new PdfName("/Transparency");
+            contentGroup.Elements["/CS"] = new PdfName("/DeviceRGB");
+            contentGroup.Elements["/I"] = new PdfBoolean(true);
+            contentPdfForm.Elements["/Group"] = contentGroup;
+
+            var transferFunction = PdfType4Function.BuildChannelIndependentTransferFunction(Owner, matrix);
+
+            var extGState = new PdfExtGState(Owner);
+            extGState.TransferFunction = transferFunction;
+            var gsName = Resources.AddExtGState(extGState);
+
+            double cx = width / image.PointWidth;
+            double cy = height / image.PointHeight;
+
+            if (cx == 0 || cy == 0)
+                return;
+
+            AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+                x, y + height, cx, cy, name);
+        }
+
+        /// <summary>
+        /// Draws <paramref name="image"/> at <paramref name="destRect"/> with <paramref name="maskImage"/>
+        /// attached as an <c>/Alpha</c>-subtype soft mask, deriving mask values from the mask tile's
+        /// computed alpha rather than a luminosity conversion of its color - see
+        /// <see cref="Html.Adapters.RGraphics.DrawImageAlphaMasked"/> for the motivating SVG
+        /// <c>SourceAlpha</c>/<c>feComposite</c> use case.
+        /// </summary>
+        /// <remarks>
+        /// Unlike <see cref="DrawImageMasked"/>'s <c>/Luminosity</c> mask, the mask form's own transparency
+        /// group is NOT given a <c>/CS /DeviceGray</c> entry: ISO 32000-1 §11.6.5.2 only requires (and
+        /// only consults) a group colour space when deriving a luminosity value from it - "If the
+        /// subtype S is Luminosity, the group attributes dictionary shall contain a CS entry defining
+        /// the colour space in which the compositing computation is to be performed" - and the BC
+        /// (backdrop color) entry is likewise "consulted only if the subtype S is Luminosity". An Alpha
+        /// mask's value is the group's own computed alpha, which has no colour space to speak of, so
+        /// forcing DeviceGray here would be asserting a requirement the spec does not impose.
+        /// </remarks>
+        internal void DrawImageAlphaMasked(XForm image, XForm maskImage, XRect destRect, bool invert = false)
+        {
+            const string format = Config.SignificantFigures4;
+
+            double x = destRect.X;
+            double y = destRect.Y;
+            double width = destRect.Width;
+            double height = destRect.Height;
+
+            string name = Realize(image, width, height);
+
+            BeginPage();
+            image.Finish();
+            maskImage.Finish();
+
+            PdfATransparencyGuard.RequireAllowed(Owner, _page, "An SVG alpha mask (SourceAlpha/feComposite)");
+
+            var maskPdfForm = maskImage.PdfForm;
+            var maskGroup = new PdfDictionary();
+            maskGroup.Elements["/S"] = new PdfName("/Transparency");
+            maskGroup.Elements["/I"] = new PdfBoolean(true);
+            maskGroup.Elements["/K"] = new PdfBoolean(false);
+            maskPdfForm.Elements["/Group"] = maskGroup;
+
+            // See DrawImageMasked's remarks: the masked CONTENT form must be its own transparency group
+            // too, or stricter readers (PDFium/Acrobat) silently ignore the active SMask entirely.
+            var contentPdfForm = image.PdfForm;
+            var contentGroup = new PdfDictionary();
+            contentGroup.Elements["/S"] = new PdfName("/Transparency");
+            contentGroup.Elements["/CS"] = new PdfName("/DeviceRGB");
+            contentGroup.Elements["/I"] = new PdfBoolean(true);
+            contentPdfForm.Elements["/Group"] = contentGroup;
+
+            var softMask = new PdfSoftMask(Owner);
+            softMask.Elements[PdfSoftMask.Keys.S] = new PdfName("/Alpha");
+            softMask.Elements.SetReference(PdfSoftMask.Keys.G, maskPdfForm);
+            if (invert)
+                softMask.TransferFunction = PdfType4Function.BuildInvertFunction(Owner);
+
+            var extGState = new PdfExtGState(Owner);
+            extGState.Elements["/SMask"] = softMask;
+            var gsName = Resources.AddExtGState(extGState);
+
+            double cx = width / image.PointWidth;
+            double cy = height / image.PointHeight;
+
+            if (cx == 0 || cy == 0)
+                return;
+
+            AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+                x, y + height, cx, cy, name);
+        }
+
+        /// <summary>
+        /// Paints <paramref name="bottom"/> normally at <paramref name="destRect"/>, then
+        /// <paramref name="top"/> on top of it at the same rect composited with <paramref name="pdfBlendModeName"/> -
+        /// see <see cref="Html.Adapters.RGraphics.DrawImageBlendedOver"/> for the motivating SVG
+        /// <c>feBlend</c> use case. <paramref name="pdfBlendModeName"/> crosses from
+        /// <c>RBlendMode</c> as a plain string (via <c>RBlendMode.ToString()</c> at the
+        /// <c>GraphicsAdapter</c> call site) rather than as a typed enum, matching the same crossing
+        /// point <see cref="SetBlendMode"/> already uses - <c>PdfSharpCore</c> sits below
+        /// <c>Html.Adapters</c> in this codebase's layering, so it cannot reference
+        /// <c>Html.Adapters.Entities.RBlendMode</c> directly (see <see cref="SetBlendMode"/>).
+        /// </summary>
+        internal void DrawImageBlendedOver(XForm top, XForm bottom, XRect destRect, string pdfBlendModeName)
+        {
+            const string format = Config.SignificantFigures4;
+
+            double x = destRect.X;
+            double y = destRect.Y;
+            double width = destRect.Width;
+            double height = destRect.Height;
+
+            string topName = Realize(top, width, height);
+            string bottomName = Realize(bottom, width, height);
+
+            BeginPage();
+            top.Finish();
+            bottom.Finish();
+
+            // A non-Normal /BM is the transparency-group-requiring construct PDF/A-1 forbids (see
+            // SetBlendMode's own remarks) - a Normal-mode feBlend is just two ordinary Form XObject
+            // placements and needs no such check, matching SetBlendMode's identical carve-out.
+            if (pdfBlendModeName is not ("Normal" or "Compatible"))
+                PdfATransparencyGuard.RequireAllowed(Owner, _page, $"An SVG feBlend ({pdfBlendModeName})");
+
+            double cx = width / bottom.PointWidth;
+            double cy = height / bottom.PointHeight;
+
+            if (cx == 0 || cy == 0)
+                return;
+
+            // bottom paints normally; top's own placement carries the blend-mode gs, scoped to just
+            // that Do by the surrounding q...Q (same atomicity reasoning as DrawImageMasked/
+            // DrawImageWithOpacity above - the gs activating a non-default graphics-state parameter must
+            // share the q...Q block of the Do it's meant to affect, not rely on ambient state).
+            AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm {4} Do Q\n",
+                x, y + height, cx, cy, bottomName);
+
+            var extGState = new PdfExtGState(Owner);
+            extGState.Elements.SetName(PdfExtGState.Keys.BM, pdfBlendModeName);
+            var gsName = Resources.AddExtGState(extGState);
+
+            double tcx = width / top.PointWidth;
+            double tcy = height / top.PointHeight;
+
+            if (tcx == 0 || tcy == 0)
+                return;
+
+            AppendFormatImage("q {2:" + format + "} 0 0 {3:" + format + "} {0:" + format + "} {1:" + format + "} cm " + gsName + " gs {4} Do Q\n",
+                x, y + height, tcx, tcy, topName);
         }
 
         /// <summary>

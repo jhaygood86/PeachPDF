@@ -282,8 +282,53 @@ namespace PeachPDF.Html.Adapters
         /// (possibly overlapping) content once before applying <paramref name="opacity"/> to the
         /// flattened result, so overlapping content doesn't double-darken where it overlaps. A no-op if
         /// <paramref name="image"/> wasn't created via <see cref="CreateTile"/> on this same <see cref="RGraphics"/>.
+        /// <paramref name="blendMode"/> composites the flattened tile against the destination with a
+        /// non-Normal PDF blend mode in the same <c>gs</c> as <paramref name="opacity"/> - the mechanism
+        /// behind CSS <c>mix-blend-mode</c> combined with group <c>opacity</c>, a single ExtGState rather
+        /// than two nested ones.
         /// </summary>
-        public abstract void DrawImageWithOpacity(RImage image, RRect destRect, double opacity);
+        public abstract void DrawImageWithOpacity(RImage image, RRect destRect, double opacity, RBlendMode blendMode = RBlendMode.Normal);
+
+        /// <summary>
+        /// Draws <paramref name="image"/> (a tile from <see cref="CreateTile"/>) at
+        /// <paramref name="destRect"/>, composited through a CSS/SVG <c>filter</c> color-matrix
+        /// transform (<c>grayscale()</c>, <c>sepia()</c>, <c>saturate()</c>, <c>hue-rotate()</c>,
+        /// <c>invert()</c>, <c>brightness()</c>, <c>contrast()</c>, or <c>feColorMatrix</c>) expressed as
+        /// <paramref name="matrix"/>. Only representable when <see cref="ColorMatrix.IsChannelIndependent"/>
+        /// is true - see <see cref="ColorMatrix"/>'s remarks for why a PDF ExtGState transfer function
+        /// (the mechanism this goes through) cannot express a matrix that mixes color channels, and what
+        /// a caller needs instead for one that does. A no-op if <paramref name="image"/> wasn't created
+        /// via <see cref="CreateTile"/> on this same <see cref="RGraphics"/>.
+        /// </summary>
+        public abstract void DrawImageWithColorMatrix(RImage image, RRect destRect, ColorMatrix matrix);
+
+        /// <summary>
+        /// Draws <paramref name="image"/> (a tile from <see cref="CreateTile"/>) at
+        /// <paramref name="destRect"/> with <paramref name="maskImage"/> (another same-adapter tile)
+        /// attached as an <c>/Alpha</c>-subtype soft mask (ISO 32000-1 §11.6.4.3) - unlike
+        /// <see cref="DrawImageMasked"/>'s <c>/Luminosity</c> mask, which derives mask values from the
+        /// mask tile's rendered COLOR converted to grayscale, this derives them directly from the mask
+        /// tile's own computed ALPHA, disregarding whatever color it painted with. The motivating future
+        /// use case is SVG's <c>SourceAlpha</c> filter input and <c>feComposite</c>, both of which are
+        /// defined in terms of a source's alpha channel specifically, not a luminosity conversion of it.
+        /// When <paramref name="invert"/> is true, the mask's <c>/TR</c> is set to <c>1 - x</c>
+        /// (<see cref="PdfSharpCore.Pdf.Advanced.PdfType4Function.BuildInvertFunction"/>), for a
+        /// complemented alpha mask without needing a second tile painted with inverted alpha. A no-op if
+        /// either image wasn't created via <see cref="CreateTile"/> on this same <see cref="RGraphics"/>.
+        /// </summary>
+        public abstract void DrawImageAlphaMasked(RImage image, RImage maskImage, RRect destRect, bool invert = false);
+
+        /// <summary>
+        /// Paints <paramref name="bottom"/> normally at <paramref name="destRect"/>, then
+        /// <paramref name="top"/> on top of it at the same rect composited with <paramref name="blendMode"/> -
+        /// both same-adapter tiles from <see cref="CreateTile"/>, sized/positioned identically in their
+        /// own local coordinate systems. The motivating future use case is SVG's <c>feBlend</c>, which
+        /// blends two independently-rendered filter inputs together inside a fresh tile rather than
+        /// blending freshly-painted content against whatever the page already has underneath it (which
+        /// is what <see cref="PushBlendMode"/>/<see cref="PopBlendMode"/> do). A no-op if either image
+        /// wasn't created via <see cref="CreateTile"/> on this same <see cref="RGraphics"/>.
+        /// </summary>
+        public abstract void DrawImageBlendedOver(RImage top, RImage bottom, RRect destRect, RBlendMode blendMode);
 
         /// <summary>
         /// Begins a tagged marked-content sequence in the page content stream, associated with the

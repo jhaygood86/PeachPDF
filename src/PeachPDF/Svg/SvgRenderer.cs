@@ -1632,7 +1632,17 @@ namespace PeachPDF.Svg
                 }
             }
 
-            if (element.MaskRef is { } maskRef && document.Masks.TryGetValue(maskRef, out var mask))
+            // Checked FIRST: SVG's own compositing pipeline applies filter, then clip-path, then mask,
+            // then opacity (SVG 2 §3, CSS Masking/Compositing). clip-path is already pushed onto `g`
+            // above, so whichever branch below draws the final composited result through the ordinary
+            // paint path picks up that clip for free - "filter, then clip" falls out without extra code.
+            // An element with a filter never ALSO goes through the mask/opacity-group branches below in
+            // this implementation (same mutually-exclusive shape those two branches already have with
+            // each other) - combining a filter with its own element's mask/opacity on top is a narrow
+            // edge case left for a future change, not attempted here.
+            if (element.FilterRef is { } filterRef && document.Filters.TryGetValue(filterRef, out var filter))
+                RenderFilteredElementContent(g, document, element, filter, opacity, viewport);
+            else if (element.MaskRef is { } maskRef && document.Masks.TryGetValue(maskRef, out var mask))
                 RenderMaskedElementContent(g, document, element, mask, opacity, viewport);
             else if (element.Opacity < 1.0 && NeedsContainerOpacityGroup(element))
                 // A container's own opacity needs an isolated transparency-group composite - see
@@ -1891,6 +1901,18 @@ namespace PeachPDF.Svg
         /// than a simpler-looking "push the mask as ambient state, render normally, pop it" approach)
         /// is required for the mask to land in the same place as the content it's masking.
         /// </summary>
+        /// <summary>
+        /// Delegates to <see cref="SvgFilterEvaluator.Render"/>, supplying its <c>SourceGraphic</c> input
+        /// as a callback that paints <paramref name="element"/>'s own ordinary content - the same
+        /// <see cref="RenderElementSwitch"/> call <see cref="RenderMaskedElementContent"/> makes for its
+        /// mask tile, at the same (already inheritedOpacity*element.Opacity-multiplied)
+        /// <paramref name="opacity"/> that method already bakes into its own content tile, for
+        /// consistency with this renderer's existing (not fully spec-order-strict, but already
+        /// established) convention rather than introducing a second, different opacity-timing rule.
+        /// </summary>
+        private static void RenderFilteredElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgFilter filter, double opacity, (double Width, double Height) viewport) =>
+            SvgFilterEvaluator.Render(g, filter, element, tg => RenderElementSwitch(tg, document, element, opacity, viewport));
+
         private static void RenderMaskedElementContent(RGraphics g, SvgDocument document, SvgElement element, SvgMask mask, double opacity, (double Width, double Height) viewport)
         {
             var (x, y, width, height) = ResolveMaskRect(element, mask);
