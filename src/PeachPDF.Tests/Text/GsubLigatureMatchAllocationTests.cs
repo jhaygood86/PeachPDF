@@ -57,16 +57,9 @@ namespace PeachPDF.Tests.Text
             var glyphs = new List<ShapedGlyph>();
             for (var i = 0; i < 200; i++) glyphs.Add(new ShapedGlyph(i, i, 1));
 
-            // Warm: JIT the whole path before anything is counted.
-            for (var i = 0; i < 3; i++) GsubShaper.ApplyLigatureLookup(lookup, glyphs, gdef: null);
-
-            // Per THREAD, not process-wide: the suite runs collections in parallel, so
-            // GC.GetTotalAllocatedBytes would count whatever every other test is allocating at the
-            // same time. This body is synchronous and never awaits, so it stays on one thread.
             const int passes = 50;
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var i = 0; i < passes; i++) GsubShaper.ApplyLigatureLookup(lookup, glyphs, gdef: null);
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            var allocated = AllocationProbe.Bytes(
+                () => GsubShaper.ApplyLigatureLookup(lookup, glyphs, gdef: null), passes);
 
             // 200 positions x 50 passes is 10,000 match attempts. Unfixed that is an empty list plus a
             // boxed enumerator each, over half a megabyte; fixed it is nothing at all. A few hundred

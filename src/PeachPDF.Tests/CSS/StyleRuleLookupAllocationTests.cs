@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using PeachPDF.CSS;
+using PeachPDF.Tests.TestSupport;
 using Xunit;
 
 namespace PeachPDF.Tests.CSS
@@ -33,25 +34,12 @@ namespace PeachPDF.Tests.CSS
             var sheet = new StylesheetParser().Parse(".a .b > .c, #d { color: red; margin: 1px }");
             var rule = sheet.Rules.OfType<StyleRule>().Single();
 
-            // Warm: JIT both getters before anything is counted.
-            for (var i = 0; i < 3; i++)
-            {
-                _ = rule.Selector;
-                _ = rule.Style;
-            }
-
-            // Per THREAD, not process-wide: this suite runs collections in parallel, so
-            // GC.GetTotalAllocatedBytes would count whatever every other test is allocating.
             const int reads = 2000;
-            var before = GC.GetAllocatedBytesForCurrentThread();
-
-            for (var i = 0; i < reads; i++)
+            var allocated = AllocationProbe.Bytes(() =>
             {
                 _ = rule.Selector;
                 _ = rule.Style;
-            }
-
-            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            }, reads);
 
             Assert.True(allocated < 4096,
                 $"{reads * 2:N0} property reads allocated {allocated:N0} bytes. They should allocate "

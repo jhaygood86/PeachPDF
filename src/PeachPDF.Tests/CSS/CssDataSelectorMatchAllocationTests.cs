@@ -4,6 +4,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 using System;
 
 namespace PeachPDF.Tests.CSS;
@@ -43,13 +44,8 @@ public class CssDataSelectorMatchAllocationTests
         list.Add(TypeSelector.Create("ul"));
         list.Add(TypeSelector.Create("table"));
 
-        // Warm: JIT the path and build/cache MatchOrder before anything is counted.
-        for (var i = 0; i < 3; i++) CssData.DoesSelectorMatch(list, box);
-
         const int passes = 10_000;
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < passes; i++) CssData.DoesSelectorMatch(list, box);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var allocated = AllocationProbe.Bytes(() => CssData.DoesSelectorMatch(list, box), passes);
 
         Assert.True(allocated < 4096,
             $"matching a 5-alternative ListSelector allocated {allocated} bytes over {passes:N0} calls. "
@@ -73,12 +69,8 @@ public class CssDataSelectorMatchAllocationTests
         compound.Add(TypeSelector.Create("div"));
         compound.Add(TypeSelector.Create("div"));
 
-        for (var i = 0; i < 3; i++) CssData.DoesSelectorMatch(compound, box);
-
         const int passes = 10_000;
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < passes; i++) CssData.DoesSelectorMatch(compound, box);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var allocated = AllocationProbe.Bytes(() => CssData.DoesSelectorMatch(compound, box), passes);
 
         Assert.True(allocated < 4096,
             $"matching a 4-member CompoundSelector allocated {allocated} bytes over {passes:N0} calls. "
@@ -99,12 +91,8 @@ public class CssDataSelectorMatchAllocationTests
         compound.Add(TypeSelector.Create("div"));
         compound.Add(PseudoElementSelector.Create(PseudoElementNames.FirstLetter));
 
-        for (var i = 0; i < 3; i++) CssData.DoesSelectorMatch(compound, box);
-
         const int passes = 10_000;
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < passes; i++) CssData.DoesSelectorMatch(compound, box);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        var allocated = AllocationProbe.Bytes(() => CssData.DoesSelectorMatch(compound, box), passes);
 
         Assert.True(allocated < 4096,
             $"matching a compound selector ending in ::first-letter allocated {allocated} bytes over "
