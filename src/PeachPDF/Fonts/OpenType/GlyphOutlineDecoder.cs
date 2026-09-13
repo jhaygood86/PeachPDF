@@ -95,7 +95,13 @@ namespace PeachPDF.Fonts.OpenType
             if (glyphIndex < 0 || glyphIndex + 1 >= loca.Length)
                 return false;
 
-            DecodeInto(face, glyphIndex, outline, 0);
+            // Every call decodes fresh through this fontface's single shared read cursor (no per-glyph
+            // cache) - see OpenTypeFontface.SyncRoot. Locked at this entry point, not per DecodeInto
+            // recursion step, so one whole (possibly multi-component composite) glyph read is atomic.
+            lock (face.SyncRoot)
+            {
+                DecodeInto(face, glyphIndex, outline, 0);
+            }
             return !outline.IsEmpty;
         }
 

@@ -229,7 +229,14 @@ namespace PeachPDF.Fonts.OpenType
         {
             if (_v1BaseGlyphPaintOffsets is null || !_v1BaseGlyphPaintOffsets.TryGetValue(glyphId, out int offset))
                 return null;
-            return ParsePaint(offset, [], 0);
+            // ParsePaint decodes on demand through this fontface's single shared read cursor (and
+            // _paintCache is a plain, non-concurrent Dictionary) - see OpenTypeFontface.SyncRoot. Locked
+            // at this entry point rather than inside ParsePaint itself so one whole (possibly recursive,
+            // for nested layers) paint-graph read is atomic, not just each individual step of it.
+            lock (_face.SyncRoot)
+            {
+                return ParsePaint(offset, [], 0);
+            }
         }
 
         /// <summary>The paint at a LayerList index (used by PaintColrLayers).</summary>
@@ -237,7 +244,10 @@ namespace PeachPDF.Fonts.OpenType
         {
             if (_v1LayerPaintOffsets is null || index < 0 || index >= _v1LayerPaintOffsets.Length)
                 return null;
-            return ParsePaint(_v1LayerPaintOffsets[index], [], 0);
+            lock (_face.SyncRoot)
+            {
+                return ParsePaint(_v1LayerPaintOffsets[index], [], 0);
+            }
         }
 
         // ---- Paint parsing ---------------------------------------------------------------------
