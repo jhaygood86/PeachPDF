@@ -34,6 +34,7 @@ using PeachPDF.Fonts.OpenType;
 using System;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 
 namespace PeachPDF.PdfSharpCore.Drawing
 {
@@ -60,13 +61,31 @@ namespace PeachPDF.PdfSharpCore.Drawing
             _key = key;
         }
 
+        // FontHelper.CalcChecksum is an O(n) scan of the whole buffer - memoizing it by buffer identity
+        // means a font whose bytes we've already seen (the common case: FontFactory's own FontSourcesByKey
+        // cache below is process-wide, and FontResolver.GetFont now returns a stable byte[] per system
+        // font path too - see FontResolver.cs) never pays that scan again just to recompute the very key
+        // that would have found the existing cache entry. ConditionalWeakTable so a byte[] this process
+        // stops referencing elsewhere doesn't keep its checksum alive forever.
+        private static readonly ConditionalWeakTable<byte[], object> _checksumCache = new();
+
+        private static ulong GetOrComputeChecksum(byte[] bytes)
+        {
+            if (_checksumCache.TryGetValue(bytes, out var boxed))
+                return (ulong)boxed;
+
+            var key = FontHelper.CalcChecksum(bytes);
+            _checksumCache.AddOrUpdate(bytes, key);
+            return key;
+        }
+
         /// <summary>
         /// Gets an existing font source or creates a new one.
         /// A new font source is cached in font factory.
         /// </summary>
         public static XFontSource GetOrCreateFrom(byte[] bytes)
         {
-            ulong key = FontHelper.CalcChecksum(bytes);
+            ulong key = GetOrComputeChecksum(bytes);
             XFontSource fontSource;
             if (!FontFactory.TryGetFontSourceByKey(key, out fontSource))
             {
