@@ -125,7 +125,7 @@ namespace PeachPDF.Html.Core
         /// <summary>
         /// Whether any selector-carrying <c>@page</c> rule declares a physical <c>size</c> - when true,
         /// a pagination slot's sheet width/height can differ from the document's base/configured size
-        /// (e.g. a named page in a different orientation), so <see cref="Compute"/> resolves it per
+        /// (e.g. a named page in a different orientation), so <see cref="Compute(int, double)"/> resolves it per
         /// slot via <see cref="PageRuleResolver.ResolvePageSize"/> instead of the cheap global
         /// reconstruction. When false (the overwhelming majority of documents), sheet size stays the
         /// single base value for every slot and no per-slot resolution runs at all.
@@ -185,6 +185,49 @@ namespace PeachPDF.Html.Core
             return _pages[index];
         }
 
+        /// <summary>
+        /// Recomputes slot <paramref name="slotIndex"/>'s geometry as if its own <c>:first</c>/
+        /// <c>:left</c>/<c>:right</c>-facing page number were <paramref name="materializedPageNumber"/>
+        /// — the position this slot's fragmentainer actually lands at in the final, content-empty-
+        /// skipped page sequence (issue #148) — instead of its raw grid slot number
+        /// (<c>slotIndex + 1</c>, what <see cref="Compute(int, double)"/> used during layout). Returns
+        /// <c>null</c> — meaning "nothing to correct, the caller's own already-known geometry is
+        /// fine" — both when the two numbers agree (the overwhelmingly common case: no content-empty
+        /// slot has been skipped before this one) and when no <c>@page</c> rule in the document could
+        /// possibly vary by page number at all (<see cref="HasVerticalMarginOverrides"/>/
+        /// <see cref="HasHorizontalMarginOverrides"/>/<see cref="HasSizeOverrides"/> all false — a
+        /// cheap check that avoids running <see cref="Compute(int, double, int)"/> a second time only
+        /// to reproduce what the caller already has). Also returns <c>null</c> when the numbers
+        /// disagree AND substituting would change this slot's own
+        /// <see cref="PageBandGeometry.BandWidth"/>/<see cref="PageBandGeometry.BandHeight"/>: content
+        /// already laid out into this slot was wrapped/fragmented against the GRID-numbered dimensions
+        /// (<see cref="HtmlContainerInt.PageContentRightOf"/>/<see cref="HtmlContainerInt.PageBandHeightOf"/>
+        /// both key off <see cref="GetPage"/>(<paramref name="slotIndex"/>) during layout, before any
+        /// materialized number is knowable), so a dimensionally-different substitution would offset or
+        /// size the printed page differently from what its content actually is — unsafe. The
+        /// overwhelmingly common case where a genuine substitution IS safe is a mirrored
+        /// binding-gutter <c>:left</c>/<c>:right</c> pair (equal total left+right margin, only the
+        /// split differs) — see <see cref="HtmlContainerInt.MeasureIsSharedBetween"/>'s own remarks.
+        /// Called once per page, from <see cref="HtmlContainerInt.LayoutMarginBoxes"/>, which bakes a
+        /// non-null result back into the fragment tree — everything downstream (paint, links,
+        /// bookmarks, form fields) reads <see cref="Fragments.FragmentainerFragment.Geometry"/>
+        /// directly rather than calling this again, keeping the fragment tree the one place this is
+        /// decided. Only call this once the final page sequence is known — never during layout itself,
+        /// which doesn't know it yet.
+        /// </summary>
+        internal PageBandGeometry? ResolveForMaterializedPage(int slotIndex, int materializedPageNumber)
+        {
+            if (materializedPageNumber == slotIndex + 1) return null;
+            if (!HasVerticalMarginOverrides && !HasHorizontalMarginOverrides && !HasSizeOverrides) return null;
+
+            var slotGeometry = GetPage(slotIndex);
+            var candidate = Compute(slotIndex, slotGeometry.Top, materializedPageNumber);
+            return Math.Abs(candidate.BandWidth - slotGeometry.BandWidth) < 0.01
+                && Math.Abs(candidate.BandHeight - slotGeometry.BandHeight) < 0.01
+                ? candidate
+                : null;
+        }
+
         /// <summary>The slot whose band contains document Y <paramref name="y"/> (clamped to slot 0
         /// for anything above the first band's top).</summary>
         internal int PageIndexOf(double y)
@@ -220,7 +263,18 @@ namespace PeachPDF.Html.Core
             }
         }
 
-        private PageBandGeometry Compute(int pageIndex, double top)
+        private PageBandGeometry Compute(int pageIndex, double top) => Compute(pageIndex, top, pageIndex + 1);
+
+        /// <summary>
+        /// <paramref name="ruleSelectionPageNumber"/> is the number fed to
+        /// <see cref="PageRuleResolver.SelectPageRule"/> for <c>:first</c>/<c>:left</c>/<c>:right</c>
+        /// selection — ordinarily <paramref name="pageIndex"/> + 1 (the raw grid slot number, via the
+        /// single-argument overload above), but overridden by <see cref="ResolveForMaterializedPage"/>
+        /// to recompute this same slot's geometry against a different (materialized) page number
+        /// without touching <see cref="_pages"/>. Pure function of its arguments - safe to call
+        /// speculatively.
+        /// </summary>
+        private PageBandGeometry Compute(int pageIndex, double top, int ruleSelectionPageNumber)
         {
             var ppp = (container.Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             var baseLPt = container.MarginLeft / ppp;
@@ -234,7 +288,7 @@ namespace PeachPDF.Html.Core
             var baseSheetPxHeight = container.PageSize.Height + container.MarginTop + container.MarginBottom;
 
             var activeName = PageRuleResolver.ActiveNameAtSlotStart(container.NamedPageElements, top);
-            var rule = PageRuleResolver.SelectPageRule(container.PageRules, pageIndex + 1, activeName);
+            var rule = PageRuleResolver.SelectPageRule(container.PageRules, ruleSelectionPageNumber, activeName);
             var (mL, mT, mR, mB) = PageRuleResolver.ResolvePageMargins(
                 rule, baseLPt, baseTPt, baseRPt, baseBPt, container.PageLengthContext);
 

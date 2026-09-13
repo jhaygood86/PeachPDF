@@ -52,7 +52,7 @@ namespace PeachPDF.Html.Core.Handlers
                     Opened = ResolveState(box) != BookmarkState.Closed
                 };
 
-                ApplyDestination(document, outline, box, container, slotToPage, maxMappedSlot, fragmentainers.Count);
+                ApplyDestination(document, outline, box, container, fragmentainers, slotToPage, maxMappedSlot, fragmentainers.Count);
 
                 if (stack.Count > 0)
                     stack.Peek().Outline.Outlines.Add(outline);
@@ -90,7 +90,8 @@ namespace PeachPDF.Html.Core.Handlers
         /// over dropping the entry, since dropping it would perturb sibling/descendant nesting.
         /// </summary>
         private static void ApplyDestination(PdfDocument document, PdfOutline outline, CssBox box,
-            HtmlContainer container, IReadOnlyDictionary<int, int> slotToPage, int maxMappedSlot, int fallbackPageCount)
+            HtmlContainer container, IReadOnlyList<FragmentainerFragment> fragmentainers,
+            IReadOnlyDictionary<int, int> slotToPage, int maxMappedSlot, int fallbackPageCount)
         {
             var inner = container.HtmlContainerInt;
             var ppp = container.PixelsPerPoint;
@@ -131,7 +132,7 @@ namespace PeachPDF.Html.Core.Handlers
 
             if (rect is not { } r) return;
 
-            var (pageIndex, topPt) = PageAnchorResolver.ResolveRectToPage(inner, ppp, slotToPage, maxMappedSlot, fallbackPageCount, r);
+            var (pageIndex, topPt) = PageAnchorResolver.ResolveRectToPage(inner, ppp, fragmentainers, slotToPage, maxMappedSlot, fallbackPageCount, r);
             if (pageIndex < 0 || pageIndex >= document.Pages.Count) return;
 
             outline.DestinationPage = document.Pages[pageIndex];

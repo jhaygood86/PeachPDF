@@ -38,18 +38,24 @@ namespace PeachPDF.Html.Core.Handlers
         /// mirroring how the rest of this pass round-trips point-space rects for slot attribution. A
         /// rect inside a skipped (content-empty) slot attributes to the next materialized page - the
         /// nearest place a reader can actually land - falling back to the last mapped page if nothing
-        /// was mapped past it.
+        /// was mapped past it. Reads margins off <paramref name="fragmentainers"/>'s own resolved
+        /// <see cref="FragmentainerFragment.Geometry"/> (already corrected against its
+        /// materialized page number - see <see cref="HtmlContainerInt.LayoutMarginBoxes"/> and issue
+        /// #148) rather than the geometry table directly, so a destination can never disagree with
+        /// what was actually painted for that page. Callers only ever have a real rect to resolve for
+        /// a document that materialized at least one page, so <paramref name="fragmentainers"/> is
+        /// never empty here and <see cref="ResolvePixelYToPage"/>'s own result is always a valid index
+        /// into it.
         /// </summary>
         public static (int PageIndex, double TopPt) ResolveRectToPage(
-            HtmlContainerInt inner, double ppp, IReadOnlyDictionary<int, int> slotToPage, int maxMappedSlot,
-            int fallbackPageCount, XRect rect)
+            HtmlContainerInt inner, double ppp, IReadOnlyList<FragmentainerFragment> fragmentainers,
+            IReadOnlyDictionary<int, int> slotToPage, int maxMappedSlot, int fallbackPageCount, XRect rect)
         {
             var pixelY = rect.Top * ppp;
             var page = ResolvePixelYToPage(inner, slotToPage, maxMappedSlot, fallbackPageCount, pixelY);
 
-            var slot = inner.SlotStartingAt(pixelY);
-            var topPt = inner.PageGeometry.GetPage(slot).MarginTopPt
-                + (pixelY - inner.PageTopOf(slot)) / ppp;
+            var geom = fragmentainers[page].Geometry;
+            var topPt = geom.MarginTopPt + (pixelY - geom.Top) / ppp;
 
             return (page, topPt);
         }

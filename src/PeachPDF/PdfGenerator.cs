@@ -451,16 +451,18 @@ namespace PeachPDF
             foreach (var fragmentainer in fragmentainers)
             {
                 pageNumber++;
-                var slotIndex = fragmentainer.SlotIndex;
                 var scrollOffset = -fragmentainer.LocalOriginY;
 
                 // The single source of truth for this slot's margins and band: the same geometry
-                // table layout paginated against, carried on the fragmentainer itself, so paint can
-                // never disagree with layout about a page's content band. Margins come out in true
-                // points (the space the clip/translate below and MarginBoxRenderer use);
-                // Top/BandHeight are internal-pixel document space (the space NamedPageElement Ys
-                // live in), which also fixes the historical ShrinkToFit drift where pageY mixed a
-                // pixel-space slot top with a point-space MarginTop for named-page attribution.
+                // table layout paginated against, carried on the fragmentainer itself (already
+                // corrected against this slot's materialized page number, when a content-empty gap
+                // skipped earlier made that differ from its raw grid number - see
+                // HtmlContainerInt.LayoutMarginBoxes and issue #148), so paint can never disagree with
+                // layout about a page's content band. Margins come out in true points (the space the
+                // clip/translate below and MarginBoxRenderer use); Top/BandHeight are internal-pixel
+                // document space (the space NamedPageElement Ys live in), which also fixes the
+                // historical ShrinkToFit drift where pageY mixed a pixel-space slot top with a
+                // point-space MarginTop for named-page attribution.
                 var geom = fragmentainer.Geometry;
                 var pageY = geom.Top;
                 var applicableMargins = SelectApplicableMarginRules(
@@ -826,7 +828,7 @@ namespace PeachPDF
 
                 var anchorRect = container.GetElementRectangle(anchorId);
                 return anchorRect.HasValue
-                    ? PageAnchorResolver.ResolveRectToPage(inner, ppp, slotToPage, maxMappedSlot, fragmentainers.Count, anchorRect.Value)
+                    ? PageAnchorResolver.ResolveRectToPage(inner, ppp, fragmentainers, slotToPage, maxMappedSlot, fragmentainers.Count, anchorRect.Value)
                     : null;
             }
 
@@ -843,9 +845,12 @@ namespace PeachPDF
                         continue;
 
                     // Page-local geometry in true points, matching the painted content's own per-page
-                    // margins (the geometry table's slot margins are what the paint loop's
-                    // clip/translate used); PDF rect y counts from the page bottom.
-                    var slotGeom = inner.PageGeometry.GetPage(slot);
+                    // margins - read off the fragmentainer itself (already corrected against this
+                    // page's materialized number, same as the paint loop reads - see
+                    // HtmlContainerInt.LayoutMarginBoxes and issue #148) rather than re-deriving it
+                    // from the geometry table directly, so this can never disagree with what was
+                    // actually painted. PDF rect y counts from the page bottom.
+                    var slotGeom = fragmentainers[pageIndex].Geometry;
                     var topPt = slotGeom.MarginTopPt + (link.Rectangle.Top * ppp - inner.PageTopOf(slot)) / ppp;
                     var leftPt = slotGeom.MarginLeftPt + (link.Rectangle.Left * ppp - inner.MarginLeft) / ppp;
                     // This page's own resolved height (already written into /MediaBox by the paint loop
@@ -923,7 +928,10 @@ namespace PeachPDF
                 if (!slotToPage.TryGetValue(slot, out var pageIndex) || pageIndex >= document.Pages.Count)
                     continue;
 
-                var slotGeom = inner.PageGeometry.GetPage(slot);
+                // Read off the fragmentainer itself (already corrected against this page's
+                // materialized number - see HtmlContainerInt.LayoutMarginBoxes and issue #148) rather
+                // than re-deriving from the geometry table directly, matching HandleLinks' own fix.
+                var slotGeom = fragmentainers[pageIndex].Geometry;
                 var topPt = slotGeom.MarginTopPt + (pixelRect.Top - inner.PageTopOf(slot)) / ppp;
                 var leftPt = slotGeom.MarginLeftPt + (pixelRect.Left - inner.MarginLeft) / ppp;
                 var widthPt = pixelRect.Width / ppp;

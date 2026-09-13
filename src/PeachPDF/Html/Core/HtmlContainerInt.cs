@@ -1382,23 +1382,41 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
-        /// Lays out every page's <c>content: element(name[, keyword])</c> margin-box content for real
-        /// (css-gcpm-3) and captures it into <paramref name="tree"/>, so paint stays fragment-driven for
-        /// this content the same way it already is for everything else - see
+        /// Despite the name, this now does two things to every page, both only possible once the final
+        /// materialized page sequence is known (i.e. here, on <paramref name="tree"/> as
+        /// <see cref="FragmentEmitter.Finish"/> just produced it): (1) corrects each
+        /// <see cref="Fragments.FragmentainerFragment.Geometry"/> against its materialized page number
+        /// when a content-empty gap skipped earlier left it disagreeing with its raw grid slot number
+        /// on <c>:first</c>/<c>:left</c>/<c>:right</c> parity (issue #148 - see
+        /// <see cref="PageGeometryTable.ResolveForMaterializedPage"/>), baking the correction into the
+        /// fragment tree so every downstream paint-time reader (<c>PdfGenerator</c>'s page loop,
+        /// <c>PageAnchorResolver.ResolveRectToPage</c> for links/bookmarks, <c>HandleFormFields</c>)
+        /// reads one already-correct value rather than each re-deriving it; and (2), only when the
+        /// document actually declares running elements, lays out every page's
+        /// <c>content: element(name[, keyword])</c> margin-box content for real (css-gcpm-3) and
+        /// captures it into <paramref name="tree"/>, so paint stays fragment-driven for this content
+        /// the same way it already is for everything else - see
         /// <see cref="Fragments.FragmentainerFragment.MarginBoxes"/>. Plain string/counter/<c>string()</c>/
         /// image margin-box content is untouched: it stays on <see cref="MarginBoxRenderer"/>'s existing,
         /// separate, fragment-tree-free pipeline, since there is no formatting/descendant-element fidelity
-        /// to gain by moving already-plain-text content through real <see cref="CssBox"/> layout.
+        /// to gain by moving already-plain-text content through real <see cref="CssBox"/> layout - it
+        /// still reads the corrected <c>Geometry</c> from (1), just via <c>PdfGenerator</c> rather than
+        /// through this method's own margin-box loop.
         /// </summary>
         private async ValueTask<FragmentTree> LayoutMarginBoxes(RGraphics g, FragmentTree tree)
         {
-            if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0 || _runningElements.Count == 0)
+            // PageRules.Count == 0 is a safe skip for (1) too: with no @page rule at all, geometry
+            // can never vary by page number, so there is nothing ResolveForMaterializedPage could ever
+            // correct (see its own HasVerticalMarginOverrides/HasHorizontalMarginOverrides/
+            // HasSizeOverrides guard).
+            if (tree.Fragmentainers.Count == 0 || PageRules.Count == 0)
                 return tree;
 
             var ppp = (Adapter as PdfSharpAdapter)?.PixelsPerPoint ?? 1.0;
             var sheetSizePt = new XSize(PageSheetWidth / ppp, PageSheetHeight / ppp);
             var totalPages = tree.Fragmentainers.Count;
             var remPt = PageLengthContext?.RemPt ?? DefaultFontResolver.FontSize;
+            var hasRunningElements = _runningElements.Count > 0;
 
             var updated = new List<FragmentainerFragment>(totalPages);
             var pageNumber = 0;
@@ -1406,64 +1424,77 @@ namespace PeachPDF.Html.Core
             foreach (var fragmentainer in tree.Fragmentainers)
             {
                 pageNumber++;
-                var geom = fragmentainer.Geometry;
-                var pageY = geom.Top;
-                var activeName = PageRuleResolver.ActiveNameAtPageEnd(_namedPageElements, pageY, geom.BandHeight);
-                var applicableMargins = PageRuleResolver.SelectApplicableMarginRules(PageRules, pageNumber, activeName);
-                var applicablePageStyle = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName);
+
+                // Issue #148: a content-empty gap skipped earlier can leave this slot's raw grid
+                // number and its materialized pageNumber disagreeing on :first/:left/:right parity.
+                // Corrected here, once, for the whole fragment tree - the fragment tree stays the
+                // single source of truth paint-time code (PdfGenerator, link/bookmark/form-field
+                // resolution) reads Geometry off directly, rather than each re-deriving it.
+                var geom = PageGeometry.ResolveForMaterializedPage(fragmentainer.SlotIndex, pageNumber)
+                    ?? fragmentainer.Geometry;
 
                 List<MarginBoxFragment>? marginBoxes = null;
 
-                foreach (var marginRule in applicableMargins)
+                if (hasRunningElements)
                 {
-                    var boxName = marginRule.Selector?.Text?.Trim().ToLowerInvariant();
-                    if (string.IsNullOrEmpty(boxName)) continue;
+                    var pageY = geom.Top;
+                    var activeName = PageRuleResolver.ActiveNameAtPageEnd(_namedPageElements, pageY, geom.BandHeight);
+                    var applicableMargins = PageRuleResolver.SelectApplicableMarginRules(PageRules, pageNumber, activeName);
+                    var applicablePageStyle = PageRuleResolver.SelectApplicablePageStyle(PageRules, pageNumber, activeName);
 
-                    var contentValue = marginRule.Style.Content;
-                    if (string.IsNullOrEmpty(contentValue)) continue;
-
-                    if (!MarginBoxRenderer.TryParseElementFunction(contentValue, out var name, out var keyword))
-                        continue;
-
-                    var currentPageIndex = SlotStartingAt(pageY);
-                    var runningBox = MarginBoxRenderer.ResolveRunningElement(
-                        name, keyword, currentPageIndex, SlotStartingAt, _runningElements);
-                    if (runningBox is null) continue;
-
-                    var rectPt = MarginBoxRenderer.GetMarginBoxRect(
-                        boxName, sheetSizePt, geom.MarginLeftPt, geom.MarginTopPt, geom.MarginRightPt, geom.MarginBottomPt,
-                        applicableMargins, applicablePageStyle, remPt);
-                    // The same margin/padding the text path applies (see
-                    // MarginBoxRenderer.ApplyBoxModel). Without it a margin box holding element()
-                    // ignores its own box model, which is how a footer band on a shallow page margin
-                    // has no way to grow upward over the content the way a browser's overlay does.
-                    rectPt = MarginBoxRenderer.ApplyBoxModel(rectPt, marginRule, applicablePageStyle, remPt,
-                        MarginBoxRenderer.MarginAreaWidth(boxName, sheetSizePt, geom.MarginLeftPt, geom.MarginRightPt),
-                        MarginBoxRenderer.MarginAreaHeight(boxName, sheetSizePt, geom.MarginTopPt, geom.MarginBottomPt));
-                    if (rectPt.Width <= 0 || rectPt.Height <= 0) continue;
-
-                    var pixelRect = new RRect(rectPt.X * ppp, rectPt.Y * ppp, rectPt.Width * ppp, rectPt.Height * ppp);
-
-                    // Scoped to this one call so counter(page)/counter(pages) inside the
-                    // running element resolve against the page it is being laid out for. Cleared in a
-                    // finally so an exception mid-layout cannot leak a page number into the ordinary
-                    // document-counter path.
-                    RunningElementPageContext = (pageNumber, totalPages);
-                    try
+                    foreach (var marginRule in applicableMargins)
                     {
-                        await RunningElementLayout.LayoutRunningElementFor(g, runningBox, pixelRect, this);
-                    }
-                    finally
-                    {
-                        RunningElementPageContext = null;
-                    }
+                        var boxName = marginRule.Selector?.Text?.Trim().ToLowerInvariant();
+                        if (string.IsNullOrEmpty(boxName)) continue;
 
-                    var content = MarginBoxContentFragmentBuilder.Build(runningBox);
+                        var contentValue = marginRule.Style.Content;
+                        if (string.IsNullOrEmpty(contentValue)) continue;
 
-                    (marginBoxes ??= []).Add(new MarginBoxFragment(boxName, content));
+                        if (!MarginBoxRenderer.TryParseElementFunction(contentValue, out var name, out var keyword))
+                            continue;
+
+                        var currentPageIndex = SlotStartingAt(pageY);
+                        var runningBox = MarginBoxRenderer.ResolveRunningElement(
+                            name, keyword, currentPageIndex, SlotStartingAt, _runningElements);
+                        if (runningBox is null) continue;
+
+                        var rectPt = MarginBoxRenderer.GetMarginBoxRect(
+                            boxName, sheetSizePt, geom.MarginLeftPt, geom.MarginTopPt, geom.MarginRightPt, geom.MarginBottomPt,
+                            applicableMargins, applicablePageStyle, remPt);
+                        // The same margin/padding the text path applies (see
+                        // MarginBoxRenderer.ApplyBoxModel). Without it a margin box holding element()
+                        // ignores its own box model, which is how a footer band on a shallow page margin
+                        // has no way to grow upward over the content the way a browser's overlay does.
+                        rectPt = MarginBoxRenderer.ApplyBoxModel(rectPt, marginRule, applicablePageStyle, remPt,
+                            MarginBoxRenderer.MarginAreaWidth(boxName, sheetSizePt, geom.MarginLeftPt, geom.MarginRightPt),
+                            MarginBoxRenderer.MarginAreaHeight(boxName, sheetSizePt, geom.MarginTopPt, geom.MarginBottomPt));
+                        if (rectPt.Width <= 0 || rectPt.Height <= 0) continue;
+
+                        var pixelRect = new RRect(rectPt.X * ppp, rectPt.Y * ppp, rectPt.Width * ppp, rectPt.Height * ppp);
+
+                        // Scoped to this one call so counter(page)/counter(pages) inside the
+                        // running element resolve against the page it is being laid out for. Cleared in a
+                        // finally so an exception mid-layout cannot leak a page number into the ordinary
+                        // document-counter path.
+                        RunningElementPageContext = (pageNumber, totalPages);
+                        try
+                        {
+                            await RunningElementLayout.LayoutRunningElementFor(g, runningBox, pixelRect, this);
+                        }
+                        finally
+                        {
+                            RunningElementPageContext = null;
+                        }
+
+                        var content = MarginBoxContentFragmentBuilder.Build(runningBox);
+
+                        (marginBoxes ??= []).Add(new MarginBoxFragment(boxName, content));
+                    }
                 }
 
-                updated.Add(marginBoxes is null ? fragmentainer : fragmentainer with { MarginBoxes = marginBoxes });
+                updated.Add(marginBoxes is null && geom.Equals(fragmentainer.Geometry)
+                    ? fragmentainer
+                    : fragmentainer with { Geometry = geom, MarginBoxes = marginBoxes ?? fragmentainer.MarginBoxes });
             }
 
             return tree with { Fragmentainers = updated };
