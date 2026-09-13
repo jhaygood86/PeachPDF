@@ -19,9 +19,18 @@ caught it, `FlexboxIntegrationTests.Column_AlignItemsCenter_ReplacedItem_Centers
 (`CssLayoutEngineFlex.PerformLayoutBlockified`), so an inline item's own `width`/`height` do apply and it
 is measured, aligned and painted as a block. What genuinely broke before this area was touched was the
 *box tree* — CSS 2.1 §9.2.1.1's anonymous block wrapper being generated inside a flex container — and
-`DomParser.CorrectInlineBoxesParent` owns that now. The remaining deviation is the computed value itself,
-which is observable mainly through a future `@supports`/`getComputedStyle`-shaped surface rather than
-through layout.
+`DomParser.CorrectInlineBoxesParent` owns that now. The remaining deviation is the computed value itself.
+
+**It is not invisible to code that reads `display` to ask "is this box block-level", and that has bitten
+once.** This paragraph used to say the deviation was observable mainly through a future
+`@supports`/`getComputedStyle`-shaped surface rather than through layout; issue #1017 disproved it. The
+intrinsic-width walk's `CssBox.StartsNewLine` was rewritten to decide block-level-ness from
+`DerivedStyle.ActualDisplay`, and a single-line flex COLUMN of `inline-block` items promptly measured as
+the SUM of its items (72.5742pt against 39.5859pt for the same container built from `<div>`s), stealing
+that width from the table column beside it. `CssBox.IsFlexOrGridItem` now answers the question from the
+PARENT's display instead. **Any future code that asks a box whether it is block-level must do the same
+while this gap is open** — `ActualDisplay` alone will say "inline-level" for a box the flex/grid engine
+lays out as a block.
 
 **What closing it needs:** CSS 2.1 §10.3.4/§10.6.6 intrinsic sizing for block-level replaced content
 first. Blockifying without that trades a spec deviation nobody can see for one that breaks every image in
