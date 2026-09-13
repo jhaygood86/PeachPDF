@@ -1,0 +1,9 @@
+# `:left`/`:right`/`:first` page geometry now follows the materialized page number, not the grid slot
+
+**Landed:** 2026-09-13 — Fix #148: page geometry vs. materialized page number
+**Doc section:** docs/html-css-support.md § [`@page` rule](../../docs/html-css-support.md#page-rule)
+**Verified against v0.9.18:** the old, broader boundary note ("`:first`/`:left`/`:right` resolve against the underlying page sequence, not the renumbered output pages") was present verbatim in the `v0.9.18` tag's docs — confirmed genuine behavior change since 0.9.18, in scope for the next release notes.
+
+When a content-empty page slot was skipped during pagination (CSS Paged Media 3 §3.2 — e.g. a very tall empty element), a later page's own margins, sheet size, link/form-field rectangles, and bookmark/anchor destinations used to be sized and positioned against its raw internal grid-slot number rather than the page number a reader actually sees. For the ordinary case — a mirrored binding-gutter `:left`/`:right` pair, or a `:first` rule whose margins don't change the page's own content-box dimensions — a document with such a gap could render a page's content on the wrong side of the gutter (or under `:first`'s margins when it shouldn't, or vice versa), and any link/bookmark/form-field on that page could land at the wrong offset.
+
+Page geometry (and everything painted, clicked, or navigated to on it) now follows the page number a reader actually sees whenever doing so doesn't change the page's own content-box width or height — which covers the mirrored-gutter case and most `:first` overrides. A page-side rule that itself changes the content-box's width or height (an asymmetric margin override, or a `size` override) combined with a content-empty gap before it is the one case left unreconciled — see the accepted gap for the residual.
