@@ -203,7 +203,13 @@ namespace PeachPDF.Html.Core.Handlers
                 intrinsicSizeInCssPixels: false);
         }
 
-        private static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect, CssBox box, double? emSizePt)
+        /// <summary>
+        /// Builds a linear-gradient brush for <paramref name="originRect"/> - exposed (not <c>private</c>)
+        /// so <see cref="BorderImageDrawHandler"/> can render a <c>border-image-source: linear-gradient(...)</c>
+        /// into its own tile the same way a <c>background-image</c> gradient layer's tile is built above,
+        /// without a second, independently-derived copy of this gradient-line/stop-normalization math.
+        /// </summary>
+        internal static RBrush GetLinearGradientBrush(RGraphics g, ParsedLinearGradient gradient, RRect originRect, CssBox box, double? emSizePt)
         {
             var (p1, p2) = ComputeGradientLine(originRect, gradient.AngleRad);
             double gdx = p2.X - p1.X, gdy = p2.Y - p1.Y;
@@ -213,7 +219,8 @@ namespace PeachPDF.Html.Core.Handlers
             return g.GetLinearGradientBrush(p1, p2, stops, gradient.IsRepeating);
         }
 
-        private static RBrush GetRadialGradientBrush(RGraphics g, ParsedRadialGradient radialGradient, RRect originRect, CssBox box, double? emSizePt)
+        /// <summary>See <see cref="GetLinearGradientBrush"/>'s own doc comment - same reason, radial gradients.</summary>
+        internal static RBrush GetRadialGradientBrush(RGraphics g, ParsedRadialGradient radialGradient, RRect originRect, CssBox box, double? emSizePt)
         {
             var pixelsPerPoint = g.PixelsPerPoint;
             var center = new RPoint(
@@ -293,7 +300,8 @@ namespace PeachPDF.Html.Core.Handlers
             return g.GetRadialGradientBrush(center, radiusX, radiusY, radialStops, radialGradient.IsRepeating);
         }
 
-        private static RBrush GetConicGradientBrush(RGraphics g, ParsedConicGradient conicGradient, RRect originRect)
+        /// <summary>See <see cref="GetLinearGradientBrush"/>'s own doc comment - same reason, conic gradients.</summary>
+        internal static RBrush GetConicGradientBrush(RGraphics g, ParsedConicGradient conicGradient, RRect originRect)
         {
             double cx = originRect.X + conicGradient.CenterX * originRect.Width;
             double cy = originRect.Y + conicGradient.CenterY * originRect.Height;

@@ -598,6 +598,90 @@ await SaveShowcaseAsync("box_shadow", "Backgrounds & Borders", "Box Shadow",
     "box-shadow: drop shadows, blur, spread, inset, colored and multiple layered shadows, with border-radius — blur approximated as vector geometry.",
     shadowHtml, pdfConfig);
 
+// --- border-image showcase ---
+
+// A 12x12 "picture frame" texture: a 2px colored ring around a lighter center, synthesized with the
+// real raster encoder (PeachImage) rather than a hand-picked minimal PNG - see MakeRasterDataUri's own
+// comment above for why a hand-typed one isn't reliably decodable by PeachPDF's internal codec.
+static string MakeBorderImageFrameDataUri()
+{
+    const int size = 12;
+    const int ringWidth = 2;
+    var ring = (R: (byte)139, G: (byte)69, B: (byte)19);   // saddle brown
+    var center = (R: (byte)222, G: (byte)184, B: (byte)135); // burlywood
+
+    var pixels = new byte[size * size * 4];
+    for (var y = 0; y < size; y++)
+    {
+        for (var x = 0; x < size; x++)
+        {
+            var onRing = x < ringWidth || y < ringWidth || x >= size - ringWidth || y >= size - ringWidth;
+            var (r, g, b) = onRing ? ring : center;
+            var i = (y * size + x) * 4;
+            pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b; pixels[i + 3] = 255;
+        }
+    }
+
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Rgba32);
+    pixels.CopyTo(image.GetPixelSpan());
+    using var ms = new MemoryStream();
+    image.Save(ms, "png");
+    return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
+}
+var borderImageFrameDataUri = MakeBorderImageFrameDataUri();
+
+const string BorderImageCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    .row { display: flex; gap: 16px; margin-bottom: 4px }
+    .card { width: 120px; height: 80px }
+    .label { font-size: 7.5pt; font-family: "Courier New", monospace; color: #444; margin-bottom: 3px; text-align: center }
+    .col { text-align: center }
+    </style>
+    """;
+
+var borderImageHtml = "<!DOCTYPE html><html><head>" + BorderImageCss + "</head><body>" +
+
+    "<h1>CSS Backgrounds &amp; Borders 3 border-image</h1>" +
+
+    "<h2>1 — 9-slice from a raster frame texture</h2>" +
+    "<p style=\"font-size:8pt;color:#666;margin:0 0 6px\">The 12&times;12 source (a 2px ring around a lighter center) is sliced 2/2/2/2, then each region is stretched or tiled to a 12pt border.</p>" +
+    "<div class=\"row\">" +
+    "<div class=\"col\"><div class=\"label\">stretch (default)</div>" +
+    $"<div class=\"card\" style=\"border:12pt solid transparent;border-image-source:url({borderImageFrameDataUri});border-image-slice:2;border-image-width:12pt\"></div></div>" +
+    "<div class=\"col\"><div class=\"label\">repeat</div>" +
+    $"<div class=\"card\" style=\"border:12pt solid transparent;border-image-source:url({borderImageFrameDataUri});border-image-slice:2;border-image-width:12pt;border-image-repeat:repeat\"></div></div>" +
+    "<div class=\"col\"><div class=\"label\">slice ... fill</div>" +
+    $"<div class=\"card\" style=\"border:12pt solid transparent;border-image-source:url({borderImageFrameDataUri});border-image-slice:2 fill;border-image-width:12pt\"></div></div>" +
+    "</div>" +
+
+    "<h2>2 — border-image-outset</h2>" +
+    "<p style=\"font-size:8pt;color:#666;margin:0 0 6px\">The painted frame extends past the border box without affecting layout - the dashed guide shows the untouched border box underneath.</p>" +
+    "<div class=\"row\">" +
+    "<div class=\"col\"><div class=\"label\">outset: 8pt</div>" +
+    "<div style=\"width:120px;height:80px;border:1px dashed #999;display:flex;align-items:center;justify-content:center\">" +
+    $"<div style=\"width:80px;height:40px;border:12pt solid transparent;border-image-source:url({borderImageFrameDataUri});border-image-slice:2;border-image-width:12pt;border-image-outset:8pt\"></div>" +
+    "</div></div>" +
+    "</div>" +
+
+    "<h2>3 — a gradient source (no raster image needed)</h2>" +
+    "<p style=\"font-size:8pt;color:#666;margin:0 0 6px\">border-image-source accepts any &lt;image&gt;, including a gradient - useful for a colored frame with no asset at all.</p>" +
+    "<div class=\"row\">" +
+    "<div class=\"col\"><div class=\"label\">linear-gradient, slice:1 stretch</div>" +
+    "<div class=\"card\" style=\"border:10pt solid transparent;border-image-source:linear-gradient(135deg,#4a90d9,#f0a);border-image-slice:1;border-image-width:10pt\"></div></div>" +
+    "<div class=\"col\"><div class=\"label\">conic-gradient, rounded corners</div>" +
+    "<div class=\"card\" style=\"border:10pt solid transparent;border-radius:14pt;border-image-source:conic-gradient(red,orange,yellow,green,blue,violet,red);border-image-slice:1;border-image-width:10pt\"></div></div>" +
+    "</div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("border_image", "Backgrounds & Borders", "Border Image",
+    "border-image: the standard 9-slice algorithm (corners scaled, edges stretched/tiled per border-image-repeat, an optional filled center) from a raster texture or any CSS <image> including gradients, plus border-image-outset extending the painted frame past the border box.",
+    borderImageHtml, pdfConfig);
+
 // --- box-decoration-break showcase ---
 
 const string DecorationBreakCss = """
