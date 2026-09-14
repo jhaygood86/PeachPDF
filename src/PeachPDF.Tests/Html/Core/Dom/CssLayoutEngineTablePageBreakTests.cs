@@ -752,8 +752,9 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
 
-            // Determine the last page: the page where the table's actual bottom resides.
-            var lastPageIndex = (int)(table.ActualBottom / pageHeight);
+            // Use the materialized fragment list rather than re-deriving its last page from whole-box
+            // geometry, which can sit just beyond a page boundary without creating another fragment.
+            var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
             _output.WriteLine($"Table.ActualBottom={table.ActualBottom}, lastPageIndex={lastPageIndex}");
 
             // The bottom border line sits at the fragment's own bottom minus borderWidth/2, and the

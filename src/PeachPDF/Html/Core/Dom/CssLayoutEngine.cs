@@ -350,7 +350,6 @@ namespace PeachPDF.Html.Core.Dom
             // follows a forced break in the source, not just one born mid-fragmentainer.
             var seedLine = new CssLineBox(blockBox)
             {
-                FragmentainerBlockStart = startY,
                 FollowsForcedBreak = resume?.FollowsForcedBreak ?? false,
                 // css-break-3 §5.1: this line begins in whatever fragmentainer startY falls in, and a
                 // stretch-fit/auto-width main-column box recalculates its inline size per fragmentainer -
@@ -598,7 +597,7 @@ namespace PeachPDF.Html.Core.Dom
                 var (naturalWidth, naturalHeight) = NaturalWordSize(g, word);
                 var wordRectInline = naturalWidth; // the word's own glyph footprint, no trailing space
                 var wordAdvance = naturalWidth + word.ActualWordSpacing; // + spacing, what the next word's placement clears
-                var wordBlock = naturalHeight; // text content-area extent; the line box is sized separately below
+                var wordBlock = naturalHeight; // natural line-height - the line's own cross-axis thickness
                 var previousWord = line.Words.Count > 0 ? line.Words[^1] : null;
                 var isGraphemeBoundary = IsGraphemeBoundaryBefore(
                     previousWord, word, trailingRegionalIndicatorCount, trailingGraphemeContext);
@@ -751,9 +750,8 @@ namespace PeachPDF.Html.Core.Dom
                 inlineOffset += wordAdvance;
 
                 // The column's cross-axis thickness is the line box's own extent (CSS 2.1 §10.8.1), not the
-                // word's content-area footprint - `wordBlock` above stays the word rectangle and inline
-                // decoration extent. Under `normal` both use the same font-derived metric; an explicit
-                // shorter line-height retains the taller font content area and therefore negative leading.
+                // word's glyph footprint - `wordBlock` above stays the glyph content area, because that is
+                // what the word's own rectangle and its inline box's background/border area are sized from.
                 // Same rule and same shared helper as FlowBox's horizontal counterpart, so a declared
                 // line-height means the same thing in both writing modes; replaced content (IsImage) is
                 // still sized from its own box, exactly as it is there.
@@ -1045,7 +1043,7 @@ namespace PeachPDF.Html.Core.Dom
                     // per-codepoint fallback face (UsesPerCodepointFont) can have a materially different
                     // line height than the box's own default font. vmtx/VORG govern only the down-the-
                     // column advance above, not this cell-width sizing.
-                    natural = (width, styleSource.ResolveTextContentHeight(font));
+                    natural = (width, font.Height);
                 }
                 else
                 {
@@ -1065,7 +1063,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (word.Text != "\n" && styleSource.ActualLetterSpacing != 0)
                         width += g.CountShapedGlyphs(word.Text!, font, wordFeatures) * styleSource.ActualLetterSpacing;
 
-                    natural = (width, styleSource.ResolveTextContentHeight(font));
+                    natural = (width, styleSource.ActualFont.Height);
                 }
             }
 
@@ -1374,9 +1372,6 @@ namespace PeachPDF.Html.Core.Dom
                 if (isVertical) b.OffsetLeft(dist);
                 else b.OffsetTop(dist);
             }
-
-            if (!isVertical && dist != 0)
-                cell.OffsetLineFragmentainerStarts(dist);
 
             return dist;
         }
@@ -2799,19 +2794,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3 §6.2</see>). It
         /// is spent once, where the flow actually resumes. Always zero on a pass that is not resuming.
         /// </param>
-        /// <param name="pendingAtomicBottomInset">
-        /// Bottom border and padding from enclosing atomic inline boxes that the current line must still
-        /// reserve after placing this subtree's content.
-        /// </param>
-        private static async ValueTask FlowBox(
-            RGraphics g,
-            CssBox blockBox,
-            CssBox box,
-            double lineSpacing,
-            double lineStartX,
-            CssLineBoxCoordinates coordinates,
-            double clonedResumeStart = 0,
-            double pendingAtomicBottomInset = 0)
+        private static async ValueTask FlowBox(RGraphics g, CssBox blockBox, CssBox box, double lineSpacing, double lineStartX, CssLineBoxCoordinates coordinates, double clonedResumeStart = 0)
         {
             var startX = coordinates.CurrentX;
             var startY = coordinates.CurrentY;
@@ -3162,7 +3145,6 @@ namespace PeachPDF.Html.Core.Dom
 
                             coordinates.Line = new CssLineBox(blockBox)
                             {
-                                FragmentainerBlockStart = coordinates.CurrentY,
                                 FollowsForcedBreak = word.IsLineBreak,
                                 // Re-derived at the Y this wrap landed on (css-break-3 §5.1), mirroring the
                                 // seed line's own LineContentRightOf call in CreateLineBoxes - a straddling
@@ -3375,21 +3357,13 @@ namespace PeachPDF.Html.Core.Dom
                         if (box is { IsFixed: false } && box.HtmlContainer?.SuppressWordPageBreaks != true
                             && coordinates.Fragmentainer is not null)
                         {
-                            var lineTop = coordinates.Line.FragmentainerBlockStart ?? coordinates.CurrentY;
-                            var pendingBottomInset = pendingAtomicBottomInset + atomicBottomInset;
-                            var atomicOrReplacedBottom = word.IsImage || pendingBottomInset > 0
-                                ? word.Bottom + pendingBottomInset
-                                : double.MinValue;
-                            var lineBlockExtent =
-                                Math.Max(coordinates.MaxBottom, atomicOrReplacedBottom) - lineTop;
-
                             // The same question CssRect.BreakPage used to ask after the fact, answered
                             // here instead so this flow can stop before placing the word rather than
                             // relocating it and carrying on. The break is taken at the start of the line,
                             // not at this word: a line box is monolithic (css-break-3 §4.1), so the whole
                             // of it moves to the next fragmentainer rather than leaving its shorter words
                             // behind.
-                            if (word.WouldStraddleFragmentainer(lineTop, lineBlockExtent))
+                            if (word.WouldStraddleFragmentainer())
                             {
                                 // CompletedLineCount is filled in by CreateLineBoxes once the
                                 // in-progress line has been discarded, since that is what fixes how
@@ -3399,7 +3373,7 @@ namespace PeachPDF.Html.Core.Dom
                                     // Derived from where the break actually fell (the band this line
                                     // was trying to sit in), never assumed to be "the pass after this
                                     // one" - see ResumeSlotForBreakBefore's own remarks.
-                                    word.ResumeSlotForBreakBefore(lineTop, lineBlockExtent),
+                                    word.ResumeSlotForBreakBefore(),
                                     [], coordinates.LineStartOrdinal, CompletedLineCount: 0,
                                     FollowsForcedBreak: coordinates.Line.FollowsForcedBreak,
                                     // The discarded line-in-progress never closed, so it hasn't been
@@ -3415,10 +3389,9 @@ namespace PeachPDF.Html.Core.Dom
                             // break ever recording the crossing. Step the cursor there so any further
                             // fragmentation question this pass asks answers about the band flow has
                             // actually reached, not the one this overflowing word started in - #435.
-                            if (word.OverflowsEveryFragmentainer(lineTop, lineBlockExtent))
+                            if (word.OverflowsEveryFragmentainer())
                             {
-                                coordinates.Fragmentainer.StepOverTo(
-                                    box.HtmlContainer!.SlotEndingAt(lineTop + lineBlockExtent));
+                                coordinates.Fragmentainer.StepOverTo(box.HtmlContainer!.SlotEndingAt(word.Bottom));
                             }
                         }
 
@@ -3511,15 +3484,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    await FlowBox(
-                        g,
-                        blockBox,
-                        b,
-                        lineSpacing,
-                        lineStartX,
-                        coordinates,
-                        childClonedResumeStart,
-                        pendingAtomicBottomInset + atomicBottomInset);
+                    await FlowBox(g, blockBox, b, lineSpacing, lineStartX, coordinates, childClonedResumeStart);
 
                     if (coordinates.Break is not null)
                     {
@@ -4059,7 +4024,7 @@ namespace PeachPDF.Html.Core.Dom
                 width += g.CountShapedGlyphs(text, font, features) * styleSource.ActualLetterSpacing;
 
             word.Width = width;
-            word.Height = styleSource.ResolveTextContentHeight(font);
+            word.Height = styleSource.ActualFont.Height;
             return width;
         }
 
@@ -4154,12 +4119,12 @@ namespace PeachPDF.Html.Core.Dom
                 prefix = new CssRectWord(b, prefixText, word.HasSpaceBefore, false)
                 {
                     Width = prefixWidth,
-                    Height = b.ActualTextContentHeight
+                    Height = b.ActualFont.Height
                 };
                 suffix = new CssRectWord(b, suffixText, false, word.HasSpaceAfter)
                 {
                     Width = g.MeasureString(suffixText, b.ActualFont, b.ActualTextShapingFeatures).Width,
-                    Height = b.ActualTextContentHeight
+                    Height = b.ActualFont.Height
                 };
 
                 // Recorded so a discarded fragmentainer line can undo this split rather than carry it

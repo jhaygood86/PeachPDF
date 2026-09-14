@@ -11,10 +11,8 @@ exactly its own `line-height`, and glyphs taller than that overflow the line rat
 
 was 13.8pt tall — the fallback font's own ascent+descent — and is now exactly 9pt (12px). The same
 applies to every equivalent spelling: `line-height: 1`, `line-height: 1em`, and an explicit length.
-A `line-height` **taller** than the font behaved correctly before and still does. For
-`line-height: normal`, both the line box and its text content rectangle now use the same
-font-derived normal metric; this prevents legacy platform-specific win metrics from making ordinary
-text overlap the next line or appear clipped.
+`line-height: normal` is unaffected, and a `line-height` **taller** than the font behaved correctly
+before and still does.
 
 Two consequences a document author can see:
 

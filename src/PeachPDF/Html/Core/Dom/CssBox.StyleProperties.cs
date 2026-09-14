@@ -179,21 +179,6 @@ namespace PeachPDF.Html.Core.Dom
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
         public double ActualLineHeight => DerivedStyle.ActualLineHeight;
 
-        /// <summary>
-        /// Gets the text content-area height used for word rectangles. For <c>line-height: normal</c>,
-        /// use the same font-derived metric as the line box so platform-specific legacy win metrics
-        /// cannot make ordinary text overflow its own normal line. An explicitly shorter line height
-        /// still keeps the font content area and therefore produces the negative leading CSS permits.
-        /// </summary>
-        internal double ActualTextContentHeight => ResolveTextContentHeight(ActualFont);
-
-        /// <summary>
-        /// Resolves the text content-area height for a specific font selected for a word, retaining that
-        /// font's own content height for explicit line heights and the style's used line height for normal.
-        /// </summary>
-        internal double ResolveTextContentHeight(RFont font) =>
-            LineHeight.Value.Value is null ? ActualLineHeight : font.Height;
-
         /// <summary>Gets the text indentation of an indented line (see <see cref="ActualTextIndentHanging"/>/
         /// <see cref="ActualTextIndentEachLine"/> for which lines that is).</summary>
         public double ActualTextIndent => DerivedStyle.ActualTextIndent;

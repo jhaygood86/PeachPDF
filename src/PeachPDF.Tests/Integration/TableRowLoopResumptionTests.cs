@@ -1158,15 +1158,14 @@ namespace PeachPDF.Tests.Integration
         public async Task RetractingARowsPlacement_PutsBackTheSpanningCellItWroteTo()
         {
             var (root, _) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap("<table><tr><td id='a'>a</td></tr></table>"),
+                LayoutHarness.Wrap("<table><tr><td id='a'><div id='inner'>a</div></td></tr></table>"),
                 pageHeight: PageHeight, margin: Margin);
 
             var cell = LayoutHarness.FindById(root, "a")!;
-            var word = CssBox.FirstWordOccurence(cell, cell.LineBoxes[0])!;
+            var inner = LayoutHarness.FindById(root, "inner")!;
 
             var bottomBefore = cell.ActualBottom;
-            var wordTopBefore = word.Top;
-            var lineStartBefore = cell.LineBoxes[0].FragmentainerBlockStart!.Value;
+            var innerTopBefore = inner.Location.Y;
 
             var cursor = new TableRowCursor(top: 10, maxRight: 5, slotIndex: 0) { MaxBottom = 20 };
             var placement = cursor.BeginRow();
@@ -1175,21 +1174,18 @@ namespace PeachPDF.Tests.Integration
             // whole subtree to align its content in it.
             cell.ActualBottom = bottomBefore + 500;
             foreach (var child in cell.Boxes) child.OffsetTop(37);
-            cell.OffsetLineFragmentainerStarts(37);
             cursor.RecordForeignWrite(cell, bottomBefore, 37);
 
             cursor.Retract(placement);
 
             Assert.Equal(bottomBefore, cell.ActualBottom, 0.001);
-            Assert.Equal(wordTopBefore, word.Top, 0.001);
-            Assert.Equal(lineStartBefore, cell.LineBoxes[0].FragmentainerBlockStart!.Value, 0.001);
+            Assert.Equal(innerTopBefore, inner.Location.Y, 0.001);
 
             // Spent by the retraction: replaying it would offset the subtree a second time, in the
             // direction the first replay already took it.
             cursor.Retract(placement);
 
-            Assert.Equal(wordTopBefore, word.Top, 0.001);
-            Assert.Equal(lineStartBefore, cell.LineBoxes[0].FragmentainerBlockStart!.Value, 0.001);
+            Assert.Equal(innerTopBefore, inner.Location.Y, 0.001);
         }
 
         /// <summary>

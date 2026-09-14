@@ -31,7 +31,6 @@ namespace PeachPDF.Html.Core.Fragments
             internal double ActualRight { get; set; }
             internal double ActualBottom { get; set; }
             internal Dictionary<CssLineBox, RRect> Rectangles { get; } = [];
-            internal Dictionary<CssLineBox, double> LineBlockStarts { get; } = [];
 
             /// <summary>
             /// Where each of the box's words sat, or null for one that belongs to the <i>next</i>
@@ -47,7 +46,6 @@ namespace PeachPDF.Html.Core.Fragments
             /// snapshot still holds where it used to be.
             /// </remarks>
             internal List<RPoint?> WordOrigins { get; } = [];
-            internal List<double?> WordLineBlockStarts { get; } = [];
 
             internal RRect Bounds => RRect.FromLTRB(Location.X, Location.Y, ActualRight, ActualBottom);
         }
@@ -131,16 +129,12 @@ namespace PeachPDF.Html.Core.Fragments
             foreach (var (line, rect) in box.Rectangles)
             {
                 geometry.Rectangles[line] = rect;
-                if (line.FragmentainerBlockStart is { } blockStart)
-                    geometry.LineBlockStarts[line] = blockStart;
             }
 
             foreach (var word in box.Words)
             {
                 geometry.WordOrigins.Add(
                     word.AwaitsTheNextFragmentainer ? null : new RPoint(word.Left, word.Top));
-                geometry.WordLineBlockStarts.Add(
-                    word.AwaitsTheNextFragmentainer ? null : word.LineBox?.FragmentainerBlockStart);
             }
 
             _geometry[box] = geometry;
@@ -277,18 +271,10 @@ namespace PeachPDF.Html.Core.Fragments
                 geometry.Rectangles[line] = new RRect(r.X + dx, r.Y + dy, r.Width, r.Height);
             }
 
-            foreach (var line in geometry.LineBlockStarts.Keys)
-            {
-                geometry.LineBlockStarts[line] += dy;
-            }
-
             for (var i = 0; i < geometry.WordOrigins.Count; i++)
             {
                 if (geometry.WordOrigins[i] is { } origin)
                     geometry.WordOrigins[i] = new RPoint(origin.X + dx, origin.Y + dy);
-
-                if (geometry.WordLineBlockStarts[i] is { } lineBlockStart)
-                    geometry.WordLineBlockStarts[i] = lineBlockStart + dy;
             }
         }
     }

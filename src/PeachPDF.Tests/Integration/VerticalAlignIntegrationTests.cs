@@ -136,18 +136,11 @@ namespace PeachPDF.Tests.Integration
             var (rootTop, _) = await BuildAndLayout(htmlTop);
             var (rootBottom, _) = await BuildAndLayout(htmlBottom);
 
-            var topCell = FindById(rootTop, "v")!;
-            var bottomCell = FindById(rootBottom, "v")!;
-            var topY = CssBox.FirstWordOccurence(topCell, topCell.LineBoxes[0])!.Top;
-            var bottomY = CssBox.FirstWordOccurence(bottomCell, bottomCell.LineBoxes[0])!.Top;
+            var topY = CssBox.FirstWordOccurence(FindById(rootTop, "v")!, FindById(rootTop, "v")!.LineBoxes[0])!.Top;
+            var bottomY = CssBox.FirstWordOccurence(FindById(rootBottom, "v")!, FindById(rootBottom, "v")!.LineBoxes[0])!.Top;
 
             Assert.True(bottomY > topY,
                 $"vertical-align:bottom ({bottomY}) should push the cell's content lower than vertical-align:top ({topY})");
-            Assert.Equal(
-                bottomY - topY,
-                bottomCell.LineBoxes[0].FragmentainerBlockStart!.Value
-                - topCell.LineBoxes[0].FragmentainerBlockStart!.Value,
-                precision: 6);
         }
 
         [Fact]
