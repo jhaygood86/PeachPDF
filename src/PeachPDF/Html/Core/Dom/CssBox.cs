@@ -6071,19 +6071,22 @@ namespace PeachPDF.Html.Core.Dom
                 _pendingVerticalInlineFinalize = false;
             }
 
+            // Settle descendants' percentage heights against this box before their auto block margins use
+            // those heights. An absolute percentage is definite even when this containing block's own
+            // height is content-driven, so its first pass can only be provisional.
+            CssLayoutEngine.ApplyParentHeight(this);
+
             // An absolutely-positioned box resolves §10.6.4 from its own epilogue, at which point an
             // auto-height containing block has not yet applied its own height - its children, this box
             // included, are what determine it. So that first answer can be computed against a height of
             // zero, which sends a `margin: auto 0` box above the container instead of centring it in it.
-            // Now that this box's used height IS final, revise every such descendant against it. The
-            // second pass is the authoritative one; the first exists because a box that never reaches
-            // here (its containing block is the page) still needs an answer.
+            // Now that this box's used height and its descendants' percentage heights ARE final, revise
+            // every such descendant against them. The second pass is authoritative; the first exists
+            // because a box that never reaches here (its containing block is the page) still needs an answer.
             if (IsPositioned || IsRoot)
             {
                 ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
             }
-
-            CssLayoutEngine.ApplyParentHeight(this);
 
             // avoid / avoid-page, but not avoid-column or avoid-region: this mover is a page-context
             // mover by construction (it measures against PageBandHeightOf and relocates to PageTopOf),
@@ -6318,6 +6321,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (child.Position.Value == PositionMode.Absolute)
                     {
                         child.ResolvePositionedAutoBlockMargins(ActualHeight);
+                        child.ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
                     }
 
                     // A positioned descendant establishes the containing block for anything below it and
@@ -6997,35 +7001,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
         /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>
         /// <param name="maxWidth">The total width the content can take without line wrapping (with padding).</param>
-        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth) =>
-            GetMinMaxWidth(g, out minWidth, out maxWidth, out _);
-
-        /// <summary>
-        /// <see cref="GetMinMaxWidth(RGraphics, out double, out double)"/>, additionally reporting the
-        /// border/padding component of the two widths.
-        /// </summary>
-        /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
-        /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>
-        /// <param name="maxWidth">The total width the content can take without line wrapping (with padding).</param>
-        /// <param name="decoration">
-        /// The border/padding total <c>GetMinMaxSumWords</c> resolved for this subtree - see its own
-        /// <c>oldPaddingSum</c> save/restore, which combines a nested box's with its ancestor's by
-        /// <see cref="Math.Max(double,double)"/> rather than by addition. A caller measuring a box in
-        /// isolation, in place of the recursive descent that would otherwise have folded this into ITS
-        /// running total, needs this to fold it the same way and keep the accounting identical
-        /// (issue #1033). It is not a well-defined "outer width minus content" and must not be used as
-        /// one - see the accepted-gap note
-        /// <c>intrinsic-padding-total-is-not-the-winning-lines-own-padding.md</c>.
-        /// </param>
-        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth, out double decoration)
+        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth)
         {
             double min = 0f;
+            double minDecoration = 0f;
             double maxSum = 0f;
             double paddingSum = 0f;
             double marginSum = 0f;
 
-            // WidestLine carries the widest line CLOSED by a <br> anywhere in the
-            // subtree, which maxSum alone cannot -- see GetMinMaxSumWords's own break handling.
+            // Carries the complete outer width of the widest line closed by a <br> anywhere in the
+            // subtree, which the still-open maxSum/paddingSum pair alone cannot represent.
             double widestLine = 0f;
 
             // The trailing space of the last word before a <br> -- see the break handling
@@ -7040,10 +7025,11 @@ namespace PeachPDF.Html.Core.Dom
             var trailingRegionalIndicatorCount = 0;
             var trailingGraphemeContext = string.Empty;
 
-            GetMinMaxSumWords(g, this, ref min, ref maxSum, ref paddingSum, ref marginSum, ref widestLine,
-                ref trailingSpace, ref atLineStart, ref previousWord, ref unbreakableRunWidth,
-                ref trailingRegionalIndicatorCount, ref trailingGraphemeContext);
-            min = Math.Max(min, unbreakableRunWidth);
+            GetMinMaxSumWords(g, this, ref min, ref minDecoration, ref maxSum, ref paddingSum,
+                ref marginSum, ref widestLine, ref trailingSpace, ref atLineStart, ref previousWord,
+                ref unbreakableRunWidth, ref trailingRegionalIndicatorCount, ref trailingGraphemeContext,
+                inheritedDecoration: 0, includeExplicitWidth: false);
+            UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
 
             // The document runs out here, so the line in progress ends here too and its trailing
             // white space hangs (css-text-3 §4.1.2). A no-op whenever the walk already applied the
@@ -7053,9 +7039,8 @@ namespace PeachPDF.Html.Core.Dom
             // inline-level box measured directly.
             maxSum -= trailingSpace;
 
-            decoration = paddingSum;
-            maxWidth = paddingSum + Math.Max(maxSum, widestLine);
-            minWidth = paddingSum + (min < 90999 ? min : 0);
+            maxWidth = Math.Max(maxSum + paddingSum, widestLine);
+            minWidth = min + minDecoration;
 
             // A box that cannot wrap has no smaller size to offer -- its min-content
             // IS its max-content (CSS 2.1 §17.5.2). Measured as the longest word it is far
@@ -7236,6 +7221,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
         /// <param name="box">the box to calculate for</param>
         /// <param name="min">the width that allows for each word to fit (width of the longest word)</param>
+        /// <param name="minDecoration">the decoration belonging to the line that supplied <paramref name="min"/></param>
         /// <param name="maxSum">the max width a single line of words can take without wrapping</param>
         /// <param name="paddingSum">the total amount of padding the content has </param>
         /// <param name="marginSum"></param>
@@ -7246,32 +7232,26 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="unbreakableRunWidth">the accumulated min-content width since the last soft-wrap opportunity.</param>
         /// <param name="trailingRegionalIndicatorCount">regional indicators ending the current unbroken line.</param>
         /// <param name="trailingGraphemeContext">the final grapheme context across inline owners.</param>
+        /// <param name="inheritedDecoration">decoration from the current box's containing chain.</param>
+        /// <param name="includeExplicitWidth">whether this recursive child contributes its declared width.</param>
         /// <returns></returns>
-        private static void GetMinMaxSumWords(RGraphics g, CssBox box, ref double min, ref double maxSum,
-            ref double paddingSum, ref double marginSum, ref double widestLine, ref double trailingSpace,
-           ref bool atLineStart, ref CssRect? previousWord, ref double unbreakableRunWidth,
-           ref int trailingRegionalIndicatorCount, ref string trailingGraphemeContext)
+        private static void GetMinMaxSumWords(RGraphics g, CssBox box, ref double min,
+            ref double minDecoration, ref double maxSum, ref double paddingSum, ref double marginSum,
+            ref double widestLine, ref double trailingSpace, ref bool atLineStart,
+            ref CssRect? previousWord, ref double unbreakableRunWidth,
+            ref int trailingRegionalIndicatorCount, ref string trailingGraphemeContext,
+            double inheritedDecoration, bool includeExplicitWidth)
         {
+            var startsNewLine = StartsNewLine(box);
+            var maxSumBeforeBox = maxSum;
+            var paddingSumBeforeBox = paddingSum;
             double? oldSum = null;
-            // paddingSum must be scoped per "line" the same way maxSum is (see the oldSum save/restore
-            // below) - it represents the border/padding belonging to the WIDEST line found so far, not a
-            // running total across every sibling's own unrelated line. Without oldPaddingSum, a block
-            // box's own border/padding (and every descendant's, recursively) permanently accumulated
-            // into paddingSum and was never reset between siblings - e.g. Acid2's "#eyes-a" (contributing
-            // real intrinsic word/image width) followed by sibling "#eyes-b"/"#eyes-c" (contributing 0
-            // words but their own borders) summed all three siblings' unrelated border/padding into one
-            // box's shrink-to-fit width instead of using only the widest line's own padding, inflating
-            // position:absolute ".eyes"'s auto width well past its actual content.
-            //
-            // Worth knowing before reading anything else into it: it is NOT a well-defined
-            // "outer width minus content" and no caller may treat it as one - see the accepted-gap
-            // note `intrinsic-padding-total-is-not-the-winning-lines-own-padding.md`.
             double? oldPaddingSum = null;
 
             // not inline (block) boxes start a new line so we need to reset the max sum
-            if (StartsNewLine(box))
+            if (startsNewLine)
             {
-                min = Math.Max(min, unbreakableRunWidth);
+                UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                 unbreakableRunWidth = 0;
                 previousWord = null;
                 trailingRegionalIndicatorCount = 0;
@@ -7279,7 +7259,7 @@ namespace PeachPDF.Html.Core.Dom
                 oldSum = maxSum;
                 maxSum = marginSum;
                 oldPaddingSum = paddingSum;
-                paddingSum = 0;
+                paddingSum = inheritedDecoration;
                 atLineStart = true;
                 // Reset with the rest of the per-line state. trailingSpace is the hanging space of
                 // the last word measured, and the line it hung off has just ended -- carrying it into
@@ -7290,8 +7270,10 @@ namespace PeachPDF.Html.Core.Dom
                 trailingSpace = 0;
             }
 
-            // add the padding
-            paddingSum += box.ActualBorderLeftWidth + box.ActualBorderRightWidth + box.ActualPaddingRight + box.ActualPaddingLeft;
+            var boxDecoration = box.ActualBorderLeftWidth + box.ActualBorderRightWidth
+                + box.ActualPaddingRight + box.ActualPaddingLeft;
+            paddingSum += boxDecoration;
+            var descendantDecoration = inheritedDecoration + boxDecoration;
 
 
             // for tables the padding also contains the spacing between cells
@@ -7338,7 +7320,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 maxSum += rowMax;
-                min = Math.Max(min, rowMin);
+                UpdateMinWidth(ref min, ref minDecoration, rowMin, paddingSum);
 
                 // The row lands on the line AFTER whatever was measured onto it, so a space that
                 // was trailing is now an ordinary inter-word gap with content on both sides, and
@@ -7370,11 +7352,12 @@ namespace PeachPDF.Html.Core.Dom
                         // this every <br>-separated line measured one space too wide -- 2.6pt on that
                         // five-line address block, enough to over-subscribe its flex row and wrap the
                         // heading beside it.
-                        widestLine = Math.Max(widestLine, maxSum - trailingSpace);
+                        widestLine = Math.Max(widestLine, maxSum - trailingSpace + paddingSum);
+                        UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                         maxSum = marginSum;
+                        paddingSum = descendantDecoration;
                         trailingSpace = 0;
                         atLineStart = true;
-                        min = Math.Max(min, unbreakableRunWidth);
                         unbreakableRunWidth = 0;
                         previousWord = null;
                         trailingRegionalIndicatorCount = 0;
@@ -7413,12 +7396,12 @@ namespace PeachPDF.Html.Core.Dom
                             precedingRegionalIndicatorCount: trailingRegionalIndicatorCount,
                             precedingGraphemeContext: trailingGraphemeContext))
                     {
-                        min = Math.Max(min, unbreakableRunWidth);
+                        UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                         unbreakableRunWidth = 0;
                     }
 
                     unbreakableRunWidth += wordMinWidth;
-                    min = Math.Max(min, unbreakableRunWidth);
+                    UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                     previousWord = word;
                     if (word is CssRectWord textWord && !string.IsNullOrEmpty(textWord.Text))
                     {
@@ -7464,37 +7447,42 @@ namespace PeachPDF.Html.Core.Dom
                     // item.
                     if (childBox.IsFloated && (floatsShareTheLine ??= FloatsShareTheLine(box)))
                     {
-                        childBox.GetMinMaxWidth(g, out var floatMin, out var floatMax,
-                            out var floatDecoration);
+                        childBox.GetMinMaxWidth(g, out var floatMin, out var floatMax);
 
-                        // paddingSum is a SEPARATE running total from maxSum, combined down a chain of
-                        // boxes by Math.Max rather than by addition (see the oldPaddingSum save and
-                        // restore above). The isolated measurement folded the float's decoration into
-                        // the widths it returned, so the whole of them cannot go on the line: that
-                        // ADDS what the recursive descent would have MAXed. Split back out and folded
-                        // in the way the descent folded it, so this branch changes only WHERE the
-                        // float's content lands - on the line rather than competing with it - and
-                        // nothing about the padding accounting. Acid2's own ".smile div div" (a
-                        // shrink-to-fit absolute box with a 1em border around one 1em-bordered float)
-                        // is the shape that catches the difference: 108pt against its real 90pt, drawn
-                        // over the mouth beside it. The accounting itself is separately wrong — see
-                        // .claude/accepted-gaps/intrinsic-padding-total-is-not-the-winning-lines-own-padding.md
-                        // — but wrong identically before and after this change, which is the point.
-                        floatMin -= floatDecoration;
-                        floatMax -= floatDecoration;
-                        paddingSum = Math.Max(paddingSum, floatDecoration);
+                        // The float's own border/padding stays IN the widths measured here, and none of
+                        // it is folded into paddingSum. paddingSum is a separate running total combined
+                        // down a chain of boxes by Math.Max rather than by addition (see the
+                        // oldPaddingSum save/restore above) because a descendant's decoration sits
+                        // INSIDE its ancestor's and the two must not both be counted. A float is not on
+                        // that chain: §9.5 places it BESIDE the content of the block it is in, so its
+                        // decoration sits beside the container's too and genuinely adds to the line.
+                        //
+                        // Splitting it back out and Math.Max-ing it into paddingSum - which this did,
+                        // to mimic what the recursive descent would have done - merges it with the
+                        // container's own whenever the container's is the larger, losing it. Acid2's
+                        // ".smile div div" is exactly that shape (a 1em border around one 1em-bordered
+                        // float): 96px measured where Chrome gives 120px, the mouth's yellow flanks
+                        // painting black. The merge was invisible while the caller compensated for it by
+                        // treating this method's result as a CONTENT width and adding the box's own
+                        // decoration back on top; correcting that caller (§10.3.7 shrink-to-fit, which
+                        // must subtract instead) is what exposed it.
 
                         // This walk otherwise never consults a box's own explicit CSS `width` - the fold
                         // further down does it for a child on the recursive path, which this one leaves.
                         // A float declaring one is the ordinary case, not an exotic one, and unlike that
                         // fold's floor this REPLACES the measured width: a non-auto width IS the float's
                         // used width (CSS 2.1 §10.3.5), so content narrower than it does not shrink the
-                        // float and content wider than it overflows instead of widening it. A declared
-                        // width is a CONTENT width, and so is what is added to the line here - the
-                        // float's decoration has just been split out into paddingSum above.
+                        // float and content wider than it overflows instead of widening it.
+                        //
+                        // A declared width is a CONTENT width, while what goes on the line is the float's
+                        // OUTER one, so its own border and padding are added back here - the measured
+                        // widths being replaced already carried them. ActualBoxSizeIncludedWidth is
+                        // correctly zero under `box-sizing: border-box`, where the declared width already
+                        // is the outer one.
                         if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%'))
                         {
-                            floatMax = floatMin = CssValueParser.ParseLength(childBox.Width, 0, childBox);
+                            floatMax = floatMin = CssValueParser.ParseLength(childBox.Width, 0, childBox)
+                                + childBox.ActualBoxSizeIncludedWidth;
                         }
 
                         var floatMargins = childBox.ActualMarginLeft + childBox.ActualMarginRight;
@@ -7502,12 +7490,12 @@ namespace PeachPDF.Html.Core.Dom
                         // The float is an unbreakable unit on the line and the run of words before it
                         // ends there, so min-content takes the WIDER of the two rather than continuing
                         // the run through it.
-                        min = Math.Max(min, unbreakableRunWidth);
+                        UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                         unbreakableRunWidth = 0;
                         previousWord = null;
                         trailingRegionalIndicatorCount = 0;
                         trailingGraphemeContext = string.Empty;
-                        min = Math.Max(min, floatMin + floatMargins);
+                        UpdateMinWidth(ref min, ref minDecoration, floatMin + floatMargins, paddingSum);
 
                         // A float is out of flow, and
                         // <see href="https://www.w3.org/TR/css-text-3/#text-processing">css-text-3
@@ -7546,79 +7534,48 @@ namespace PeachPDF.Html.Core.Dom
                         maxSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
                     }
 
-                    var maxSumBeforeChild = maxSum;
-                    GetMinMaxSumWords(g, childBox, ref min, ref maxSum, ref paddingSum, ref marginSum,
-                        ref widestLine, ref trailingSpace, ref atLineStart, ref previousWord,
-                       ref unbreakableRunWidth, ref trailingRegionalIndicatorCount,
-                       ref trailingGraphemeContext);
-
-                    // This walk otherwise never consults a box's own explicit CSS `width` at all - only
-                    // literal word/text content. That's usually fine (explicit width constrains layout
-                    // AFTER content is measured, not the content's own intrinsic size) but breaks down
-                    // for a child whose only real sizing signal IS an explicit width with no word
-                    // content to measure (e.g. a solid-color box, or - Acid2's own case - an anonymous
-                    // table-cell (CSS2.1 17.2.1) wrapping a nested "display:table"/"display:list-item"
-                    // "<li>" that has "width:1em" but no text): the recursive content sum alone finds
-                    // nothing, so the anonymous cell sized itself to 0 instead of its child's real 1em,
-                    // clipping/overlapping the nested content. A plain absolute length (not a percentage
-                    // - resolving that here would read this box's own not-yet-final ActualWidth,
-                    // circular in exactly the way GetBoxWidth's shrink-to-fit callers already guard
-                    // against) is folded in as an explicit floor for this line's running total.
-                    //
-                    // Excludes a non-replaced inline box (Display:Inline with no Words of its own - a
-                    // replaced inline element, e.g. an image or resolved <object>, is already measured
-                    // via the Words.Count>0 branch elsewhere in this function and never reaches this
-                    // check in a way that would be wrongly excluded here): per CSS2.1 10.3.3, `width`
-                    // has NO EFFECT on a non-replaced inline-level box. Acid2's own
-                    // "#eyes-a object[type] { width: 7.5em; }" is exactly this - the middle <object
-                    // type="text/html"> in the fallback chain, which falls back to display:inline and
-                    // is deliberately meant to have this width ignored (Round 6 verified this is a
-                    // real no-op at layout time via CssBox.PerformLayoutImp's IsBlock gate).
-                    //
-                    // A child that starts its OWN new "line" (same condition as the block-reset check
-                    // at the top of this function) must have its explicit width combined via Math.Max,
-                    // NOT added to maxSumBeforeChild - maxSumBeforeChild already reflects whatever an
-                    // EARLIER, unrelated block-level sibling contributed (each such sibling resets to
-                    // its own line via the oldSum mechanism and is meant to compete for "widest line
-                    // wins", not accumulate). The very first version of this fix always added
-                    // maxSumBeforeChild + explicitContentWidth unconditionally, which was fine for a
-                    // lone child (maxSumBeforeChild was 0) but wrongly summed multiple separate
-                    // block-level siblings' explicit widths together - Acid2's own ".eyes" with three
-                    // block-level children ("#eyes-a" ~128 intrinsic, "#eyes-b"/"#eyes-c" each
-                    // explicit 10em/90pt) summed to 308 (128+90+90) instead of correctly taking the
-                    // widest single line (~128).
-                    if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%')
-                        && !(childBox.DerivedStyle.ActualDisplay == Keywords.Inline && childBox.Words.Count == 0))
-                    {
-                        var explicitContentWidth = CssValueParser.ParseLength(childBox.Width, 0, childBox);
-                        var childStartsNewLine = StartsNewLine(childBox);
-                        var withExplicitWidth = childStartsNewLine
-                            ? Math.Max(maxSum, explicitContentWidth)
-                            : Math.Max(maxSum, maxSumBeforeChild + explicitContentWidth);
-
-                        // An explicit width that RAISES the line total has replaced the measured
-                        // tail with a number that has no trailing space in it, so there is nothing
-                        // left hanging off the end of maxSum for the epilogue below to take back
-                        // off - and taking one off anyway swallows a real inter-word gap. Where the
-                        // measured total still wins, its own trailing word is still the end of the
-                        // line and its space still hangs.
-                        if (withExplicitWidth > maxSum)
-                        {
-                            trailingSpace = 0;
-                        }
-
-                        maxSum = withExplicitWidth;
-                        min = Math.Max(min, explicitContentWidth);
-                    }
+                    GetMinMaxSumWords(g, childBox, ref min, ref minDecoration, ref maxSum,
+                        ref paddingSum, ref marginSum, ref widestLine, ref trailingSpace,
+                        ref atLineStart, ref previousWord, ref unbreakableRunWidth,
+                        ref trailingRegionalIndicatorCount, ref trailingGraphemeContext,
+                        descendantDecoration, includeExplicitWidth: true);
 
                     marginSum -= childBox.ActualMarginLeft + childBox.ActualMarginRight;
                 }
             }
 
+            // This walk otherwise only sees literal word/text content. A recursive child's explicit
+            // non-percentage width is therefore a floor for the line it occupies. Apply it before this
+            // box's line competes with an earlier sibling so its own decoration remains attached to it.
+            // The top-level box's width is intentionally excluded: intrinsic sizing measures its content,
+            // while a non-replaced inline child's width has no effect under CSS 2.1 §10.3.1.
+            if (includeExplicitWidth
+                && CssValueParser.IsValidLength(box.Width)
+                && !box.Width.EndsWith('%')
+                && !(box.DerivedStyle.ActualDisplay == Keywords.Inline && box.Words.Count == 0))
+            {
+                var explicitContentWidth = CssValueParser.ParseLength(box.Width, 0, box);
+                var explicitSum = startsNewLine
+                    ? explicitContentWidth
+                    : maxSumBeforeBox + explicitContentWidth;
+                var explicitDecoration = startsNewLine
+                    ? descendantDecoration
+                    : paddingSumBeforeBox + boxDecoration;
+
+                if (explicitSum + explicitDecoration > maxSum + paddingSum)
+                {
+                    maxSum = explicitSum;
+                    paddingSum = explicitDecoration;
+                    trailingSpace = 0;
+                }
+
+                UpdateMinWidth(ref min, ref minDecoration, explicitContentWidth, explicitDecoration);
+            }
+
             // max sum (and its matching padding contribution) is the max of all the lines in the box
             if (oldSum.HasValue)
             {
-                min = Math.Max(min, unbreakableRunWidth);
+                UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                 unbreakableRunWidth = 0;
                 previousWord = null;
                 trailingRegionalIndicatorCount = 0;
@@ -7634,9 +7591,27 @@ namespace PeachPDF.Html.Core.Dom
                 // and the block reset zero it when the line ends. So the space taken off is always
                 // one that is currently in maxSum. oldSum is a different, already-closed line and
                 // keeps its own width.
-                maxSum = Math.Max(maxSum - trailingSpace, oldSum.Value);
+                var currentSum = maxSum - trailingSpace;
+                if (oldSum.Value + oldPaddingSum!.Value > currentSum + paddingSum)
+                {
+                    maxSum = oldSum.Value;
+                    paddingSum = oldPaddingSum.Value;
+                }
+                else
+                {
+                    maxSum = currentSum;
+                }
                 trailingSpace = 0;
-                paddingSum = Math.Max(paddingSum, oldPaddingSum!.Value);
+            }
+        }
+
+        private static void UpdateMinWidth(ref double min, ref double minDecoration,
+            double candidate, double candidateDecoration)
+        {
+            if (candidate + candidateDecoration > min + minDecoration)
+            {
+                min = candidate;
+                minDecoration = candidateDecoration;
             }
         }
 
@@ -7857,7 +7832,11 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 anchor = prevSibling;
-                margins.Fold(prevSibling.ActualMarginBottom);
+
+                // Not just prevSibling's own bottom margin: §8.3.1 also puts its last in-flow child's in
+                // this set whenever nothing of prevSibling's own separates the two, transitively down the
+                // chain - see FoldOwnAdjoiningBlockEndMargins.
+                prevSibling.FoldOwnAdjoiningBlockEndMargins(ref margins);
             }
 
             var walker = prevSibling;
@@ -7872,7 +7851,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    margins.Fold(earlierSibling.ActualMarginBottom);
+                    earlierSibling.FoldOwnAdjoiningBlockEndMargins(ref margins);
                 }
                 walker = earlierSibling;
                 if (!walker.IsMarginCollapseThrough() || walker.PlacedByForcedBreak) anchor = walker;
@@ -8040,11 +8019,125 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private double GetEffectiveBottomMargin()
         {
-            if (!IsMarginCollapseThrough()) return ActualMarginBottom;
-
             var margins = new AdjoiningMarginSet();
-            FoldSelfCollapsingMargins(ref margins);
+
+            if (IsMarginCollapseThrough())
+            {
+                FoldSelfCollapsingMargins(ref margins);
+            }
+            else
+            {
+                FoldOwnAdjoiningBlockEndMargins(ref margins);
+            }
+
             return margins.CollapsedValue;
+        }
+
+        /// <summary>
+        /// Whether this box's own block-end margin collapses with its last in-flow child's, per CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/box.html#collapsing-margins">§8.3.1</see>: "the bottom
+        /// margin of an in-flow block box with a 'height' of 'auto' ... collapses with its last in-flow
+        /// block-level child's bottom margin, if the box has no bottom padding or border".
+        /// </summary>
+        /// <remarks>
+        /// The mirror of the conditions <see cref="FoldOwnAdjoiningBlockStartMargins"/>'s chain walks
+        /// under, plus the one the two sides genuinely differ on: a non-<c>auto</c> <c>height</c> blocks
+        /// collapsing at the block-<i>end</i> edge only (the box's own declared size is what separates its
+        /// margin from its child's there), while the block-start edge is unaffected by it.
+        /// <para>
+        /// When this is false the child's block-end margin has nowhere to escape to, so it stays inside
+        /// this box - which is what makes the same markup measure 23px with a <c>border-bottom</c> and
+        /// 10px without one.
+        /// </para>
+        /// </remarks>
+        /// <summary>
+        /// Whether <paramref name="box"/> can be the last in-flow child a block-end margin collapses with:
+        /// in flow, not <c>display: none</c>, and not a captioned table's synthetic grid decoration box
+        /// (issue #721), which has no margin of its own and would end the chain in place of the table's
+        /// real last child. The block-start walk selects its own chain members by the same three tests.
+        /// </summary>
+        private static bool IsBlockEndMarginChainMember(CssBox box) =>
+            !box.IsExcludedFromFlow
+            && !box.IsInline
+            && box.DerivedStyle.ActualDisplay != Keywords.None
+            && !box.IsTableGridDecorationBox;
+
+        private bool CollapsesBlockEndMarginWithLastChild() =>
+            HasAutoBlockEndHeight()
+            && !DomUtils.EstablishesIndependentFormattingContext(this)
+            && Overflow.Value == PeachPDF.CSS.Overflow.Visible
+            && ActualPaddingBottom < 0.1
+            && ActualBorderBottomWidth < 0.1
+            && (MinHeight == Keywords.Auto
+                || (CssValueParser.IsValidLength(MinHeight)
+                    && CssValueParser.ParseLength(MinHeight, ContainingBlock.Size.Height, this) <= 0));
+
+        /// <summary>
+        /// Whether this box's <c>height</c> is <c>auto</c> for §8.3.1's block-end collapsing question.
+        /// A percentage height against an indefinite (not-yet-height-calculated) containing block
+        /// resolves to <c>auto</c> per CSS 2.1 §10.5, the same rule <c>ApplyHeight</c> and
+        /// <see cref="IsMarginCollapseThrough"/> already apply - Acid2's
+        /// <c>.empty { height: 10% }</c> is written to exercise exactly that.
+        /// </summary>
+        private bool HasAutoBlockEndHeight() =>
+            Height == Keywords.Auto || (Height.EndsWith('%') && !ContainingBlock.IsHeightCalculated);
+
+        /// <summary>
+        /// Folds into <paramref name="margins"/> this box's own block-end margin and every
+        /// last-in-flow-child margin adjoining it - the block-end mirror of
+        /// <see cref="FoldOwnAdjoiningBlockStartMargins"/>, and the reason a box's own bottom margin is
+        /// not the whole of what it contributes to the gap before whatever follows it.
+        /// </summary>
+        /// <remarks>
+        /// CSS 2.1 §8.3.1 puts a box's bottom margin and its last in-flow child's in one adjoining set
+        /// whenever nothing of the box's own separates them (see
+        /// <see cref="CollapsesBlockEndMarginWithLastChild"/>), transitively down the chain. Reading only
+        /// <c>ActualMarginBottom</c> - as the sibling walk used to - loses every margin below the first
+        /// level, so a wrapper whose own margin is zero contributed nothing at all and its child's margin
+        /// was silently dropped: neither escaping into the gap after the wrapper, nor staying inside its
+        /// height. That is what put Acid2's <c>&lt;ul&gt;</c> (its last face row) on top of
+        /// <c>.parser</c> instead of below it.
+        /// <para>
+        /// Deliberately fold-only: unlike the block-start walk this leaves no per-member override behind,
+        /// because a block-end margin positions only what FOLLOWS the chain, never any member of it - so
+        /// there is no position for a member to double-count. The collapsed value belongs entirely to the
+        /// caller's adjoining set.
+        /// </para>
+        /// </remarks>
+        private void FoldOwnAdjoiningBlockEndMargins(ref AdjoiningMarginSet margins)
+        {
+            margins.Fold(ActualMarginBottom);
+
+            // Same guard, and same reason, as the block-start walk's: this box's own margin is an ordinary
+            // physical value on the caller's axis whatever its writing mode, but its CHILDREN are stacked
+            // along its own block axis, so they may only be examined when that axis is the caller's.
+            if (LogicalPropertyResolver.BlockEnd(WritingMode.Value) != PhysicalSide.Bottom) return;
+
+            var current = this;
+
+            // Capped defensively for the same reason the block-start walk is: a malformed or cyclic box
+            // tree degrades to "stop extending the group" rather than hanging.
+            for (var depth = 0; depth < 1000 && current.CollapsesBlockEndMarginWithLastChild(); depth++)
+            {
+                var lastInFlowChild = current.Boxes.LastOrDefault(IsBlockEndMarginChainMember);
+
+                if (lastInFlowChild is null || lastInFlowChild == current) break;
+
+                // A self-collapsing child puts its own top margin, and its whole subtree's, in this same
+                // set (§8.3.1) - and FoldSelfCollapsingMargins has already descended, so the walk ends
+                // here rather than continuing into a subtree it just covered.
+                if (lastInFlowChild.IsMarginCollapseThrough())
+                {
+                    lastInFlowChild.FoldSelfCollapsingMargins(ref margins);
+                    break;
+                }
+
+                margins.Fold(lastInFlowChild.ActualMarginBottom);
+
+                if (lastInFlowChild.HasDifferentWritingModeFromParent) break;
+
+                current = lastInFlowChild;
+            }
         }
 
         /// <summary>
@@ -8210,86 +8303,59 @@ namespace PeachPDF.Html.Core.Dom
             // unguarded, a trailing float sibling of an atomic inline-level box's own anonymous wrapper
             // (an inline-table/inline-block) made THIS box's own auto-height collapse to the wrapper's
             // own near-zero height instead of the real content before it, so whatever followed THIS box
-            // in the document started too early and visibly overlapped it. Falls back to the plain
-            // !IsExcludedFromFlow match when nothing else qualifies (this box's ENTIRE content is such a
-            // wrapper and nothing else) - Boxes.Last always has at least that match, by this box's own
-            // precondition for being called at all (see PerformLayoutEpilogue's own gate), and the
-            // stricter match is only ever meant to prefer a REAL sibling over the wrapper, not to leave
-            // this box with no candidate at all.
-            var lastNonFloatingBox = Boxes.LastOrDefault(b => !b.IsExcludedFromFlow
+            // in the document started too early and visibly overlapped it.
+            // Selected by the same test the chain walk uses (IsBlockEndMarginChainMember), so the box whose
+            // margin is folded here and the box the walk would reach cannot disagree. A `display: none`
+            // child used to qualify here but not there: with the blocked arm now folding this box's own
+            // bottom margin into the parent's height, that disagreement made a hidden element's margin
+            // real - a 40pt margin on a `display: none` last child grew a bordered parent from 23pt to
+            // 51pt. If no rendered in-flow child exists, there is no child margin or bottom to include.
+            var lastNonFloatingBox = Boxes.LastOrDefault(b => IsBlockEndMarginChainMember(b)
                 && !(b.HtmlTag is null && b.Boxes.Count == 1 && b.Boxes[0].IsExcludedFromFlow))
-                ?? Boxes.Last(b => !b.IsExcludedFromFlow);
+                ?? Boxes.LastOrDefault(IsBlockEndMarginChainMember);
 
-            double margin = 0;
-            // Per CSS 2.1 §8.3.1, a box's own bottom margin can only collapse with (i.e. be folded
-            // into) its last in-flow child's bottom margin when there is nothing of this box's own
-            // separating the two - non-zero bottom padding or a bottom border on THIS box blocks it,
-            // just like it blocks parent/child collapsing on the top side, and so does this box
-            // establishing a new block formatting context (e.g. via `overflow`).
-            //
-            // The "is this box its own parent's last child" condition below is NOT an unrelated/
-            // incidental restriction - it is load-bearing. When this box folds its own bottom margin
-            // into its own ActualBottom, that inflated ActualBottom is what a FOLLOWING SIBLING's own
-            // CollapsedMarginBefore call adds on top of (via the ordinary adjoining-sibling-margin path,
-            // which separately reads this box's raw ActualMarginBottom too) - if this box has a
-            // following sibling, the same margin value gets counted twice: once baked into
-            // ActualBottom here, and again via the sibling's own fold of prevSibling.
-            // ActualMarginBottom into its adjoining set. Removing this gate (an earlier attempt at this fix did
-            // exactly that) reproduces precisely that double-count - confirmed via a real regression
-            // where a heading's own 60pt bottom margin was added once into the heading's own height and
-            // a second time into the following paragraph's top offset, an easy 60pt to trace back to
-            // the heading's own declared margin. Only when this box has NO following sibling (is the
-            // last child) is folding the margin into ActualBottom safe: nothing else will ever
-            // separately collapse against this box's own ActualMarginBottom, so propagating the fold via
-            // ActualBottom (which return value the box's PARENT then treats as this box's true bottom
-            // edge, letting a further collapse continue outward through as many blocked-only-by-
-            // border/padding ancestors as apply) is the only place left for it to go.
-            // lastNonFloatingBox.StaticBottom (not ActualBottom) throughout: a relatively-positioned
-            // last child's visual offset must not grow this box's own content-driven height
-            // (CSS 2.1 §9.4.3) - Acid2's ".smile div { position: relative; bottom: -1em }" otherwise
-            // inflates ".smile" by 1em and pushes ".chin" that much too far down.
-            //
-            // Deliberately NOT gated on this box's own writing-mode relative to ParentBox's (unlike
-            // FoldOwnAdjoiningBlockStartMargins's chain walk, issue #776): this box's own bottom margin
-            // collapsing with ITS OWN last in-flow child is a relationship entirely internal to this
-            // box and its own descendant, governed by THIS box's own writing-mode alone (an orthogonal
-            // horizontal-tb box's own children really are stacked top-to-bottom in its own established
-            // flow, regardless of what writing-mode its own parent happens to use) - unlike the chain
-            // walk's bug, which came from applying ONE frame's fixed axis to a DIFFERENT box's own
-            // descendants. Nor is a vertical ParentBox's own ActualMarginBottom a double-count risk the
-            // way an ordinary horizontal-tb ParentBox's is: LayoutVerticalBlockChildren's own stacking
-            // loop reads a child's LEFT/RIGHT margins for its own sibling gaps, never its top/bottom
-            // ones, so nothing there would ever separately re-fold this box's own ActualMarginBottom.
-            if (ParentBox == null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
-                !(_parentBox!.ActualMarginBottom < 0.1) ||
-                !(ActualPaddingBottom < 0.1) || !(ActualBorderBottomWidth < 0.1) ||
-                Overflow.Value != PeachPDF.CSS.Overflow.Visible)
-                return Math.Max(ActualBottom,
-                    lastNonFloatingBox.StaticBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
+            if (lastNonFloatingBox is null)
+                return ActualBottom;
 
-            // Set-based accumulation (AdjoiningMarginSet, not pairwise CollapseMargins) here too: the
-            // last child's contribution can itself be a whole adjoining set when it is self-collapsing
-            // (its {+10px, -3px} collapses to 7px, but folding this box's own 8px against that
-            // PRE-collapsed 7px pairwise gives 8px when the true set {10, -3, 8} is still 7px).
-            if (Height == "auto")
+            // Two separate questions, which the single condition that used to stand here conflated - and
+            // conflating them is how a last in-flow child's block-end margin came to be dropped on the
+            // floor entirely, neither escaping into the gap after this box nor staying inside its height:
+            //
+            //   (a) DOES this box's own block-end margin collapse with its last in-flow child's? That is
+            //       CSS 2.1 §8.3.1's question alone - auto height, no bottom padding or border, no new
+            //       block formatting context (see CollapsesBlockEndMarginWithLastChild) - and has nothing
+            //       to do with where this box sits among its own siblings. When the answer is NO the
+            //       child's margin has nowhere to escape to and stays INSIDE this box, which is what
+            //       makes the same markup 23px tall with a `border-bottom` and 10px without one.
+            //   (b) When it DOES collapse, where does the collapsed value go? Not into this box's own
+            //       ActualBottom. The value belongs to the gap AFTER this box, and everything that needs
+            //       it reads it by walking this same chain from the outside
+            //       (FoldOwnAdjoiningBlockEndMargins, via the sibling walk in FoldMarginsPrecedingChild
+            //       or via an ancestor's own chain). Baking it into ActualBottom instead - which this
+            //       method used to do for a box that happened to be its own parent's last child - both
+            //       inflates this box's painted height and, for any box with a following sibling, gets
+            //       counted a second time by that sibling's own fold. The old "is this box its parent's
+            //       last child" gate existed precisely to suppress that double-count; with the value no
+            //       longer baked in anywhere, the gate has nothing left to guard and is gone.
+            //
+            // lastNonFloatingBox.StaticBottom (not ActualBottom) throughout: a relatively-positioned last
+            // child's visual offset must not grow this box's own content-driven height (CSS 2.1 §9.4.3) -
+            // Acid2's ".smile div { position: relative; bottom: -1em }" otherwise inflates ".smile" by
+            // 1em and pushes ".chin" that much too far down.
+            var containedChildMargin = 0d;
+
+            if (!CollapsesBlockEndMarginWithLastChild())
             {
-                var margins = new AdjoiningMarginSet();
-                margins.Fold(ActualMarginBottom);
-                if (lastNonFloatingBox.IsMarginCollapseThrough())
-                {
-                    lastNonFloatingBox.FoldSelfCollapsingMargins(ref margins);
-                }
-                else
-                {
-                    margins.Fold(lastNonFloatingBox.ActualMarginBottom);
-                }
-                margin = margins.CollapsedValue;
+                // A non-auto height is the one blocking reason that does not hand the child's margin to
+                // this box's height: the declared height IS the height, and content - the margin
+                // included - overflows it rather than growing it.
+                containedChildMargin = HasAutoBlockEndHeight()
+                    ? lastNonFloatingBox.GetEffectiveBottomMargin()
+                    : 0;
             }
-            else
-            {
-                margin = lastNonFloatingBox.GetEffectiveBottomMargin();
-            }
-            return Math.Max(ActualBottom, lastNonFloatingBox.StaticBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
+
+            return Math.Max(ActualBottom,
+                lastNonFloatingBox.StaticBottom + containedChildMargin + ActualPaddingBottom + ActualBorderBottomWidth);
         }
 
         /// <summary>

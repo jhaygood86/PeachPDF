@@ -217,6 +217,24 @@ Form elements are rendered as static boxes by default. There is no interactive b
 | `frameset` | [frameset](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/frameset) | Deprecated element; rendered as a block |
 | `noframes` | [noframes](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noframes) | Deprecated element; content is rendered |
 
+### Malformed markup
+
+Two of the HTML Standard's [tree-construction](https://html.spec.whatwg.org/multipage/parsing.html#tree-construction)
+error-recovery rules are worth stating, because both change the **element tree** a stylesheet then
+matches against — most visibly through the sibling combinators `+` and `~`, and through
+`:first-child`/`:nth-child()`:
+
+- **An end tag whose element is not open is ignored**, and the insertion point does not move. Content
+  after it stays where it was rather than being reparented.
+- **`</p>` is the exception**: when no `<p>` is open it generates an *empty* `<p>`, immediately closed.
+  This is what the spec requires, and it is observable. An end tag written after a construct that
+  already implied it — `<p><table>…</table></p>`, where `<table>` closes the paragraph itself — leaves
+  a real, empty paragraph element behind, so `p + table + p` matches *that* element rather than the
+  next authored paragraph.
+
+`</br>`, which the spec turns into a `<br>` *start* tag, is not implemented and is ignored like any
+other unmatched end tag.
+
 ---
 
 ## CSS Properties
@@ -475,7 +493,7 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 |----------|--------------|-------|
 | `display` | [display](https://developer.mozilla.org/en-US/docs/Web/CSS/display) | `block`, `inline`, `inline-block`, `none`, `flex`, `inline-flex`, `grid`, `inline-grid`, `table`, `table-row`, `table-cell`, `table-header-group`, `table-footer-group`, `table-row-group`, `table-column`, `table-column-group`, `table-caption`, `list-item` |
 | `position` | [position](https://developer.mozilla.org/en-US/docs/Web/CSS/position) | `static`, `relative`, `absolute`, `fixed` (renders ignoring page margins). `sticky` is treated as `relative` with a zero offset, since there is no scroll to ever cross a sticky threshold against — it participates in normal flow and in stacking/z-index like a positioned box, but its `top`/`right`/`bottom`/`left` values (the scroll-threshold parameters, not a static offset) never shift it. `running(<custom-ident>)` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#running-syntax)) removes the element from normal flow entirely, making it available to a page margin box via `content: element(<custom-ident>)` — see [Running elements](#running-elements-position-running--element) |
-| `float` | [float](https://developer.mozilla.org/en-US/docs/Web/CSS/float) | `left`, `right`, `none`, `footnote` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#footnotes)) — removes an inline-level element from normal flow entirely and routes its content to the page's footnote area, the same "remove from flow" idea `position: running()` uses for margin boxes; see [Footnotes](#footnotes-float-footnote). A `left`/`right` float is placed beside the line boxes of the block it is in, and text wraps around it, when the float **precedes** that text in source order. A float written **after** text already on the line is not placed on that line: it lands at the block's inline-start (or -end) edge, overlapping the text before it, and the content after it starts a new line. A shrink-to-fit box holding both (a float, an auto-width `position: absolute` box, an auto table column) is nonetheless sized for the text and the float side by side, as are two adjacent floats — which are themselves placed side by side correctly. Where two or more floats share a line and each declares its own `padding`/`border`, only the largest of those is counted in that measurement, so such a box can be sized short of what it draws |
+| `float` | [float](https://developer.mozilla.org/en-US/docs/Web/CSS/float) | `left`, `right`, `none`, `footnote` ([css-gcpm-3](https://www.w3.org/TR/css-gcpm-3/#footnotes)) — removes an inline-level element from normal flow entirely and routes its content to the page's footnote area, the same "remove from flow" idea `position: running()` uses for margin boxes; see [Footnotes](#footnotes-float-footnote). A `left`/`right` float is placed beside the line boxes of the block it is in, and text wraps around it, when the float **precedes** that text in source order. A float written **after** text already on the line is not placed on that line: it lands at the block's inline-start (or -end) edge, overlapping the text before it, and the content after it starts a new line. A shrink-to-fit box holding both (a float, an auto-width `position: absolute` box, an auto table column) is nonetheless sized for the text and the float side by side, as are two adjacent floats — which are themselves placed side by side correctly. A box that establishes its own formatting context and takes its height from content — a float, an `overflow` other than `visible`, an `inline-block`, an absolutely/fixed-positioned box, a table cell or caption, a flex or grid item — **contains** its floats: its height grows to cover any floating descendant hanging below its content ([CSS 2.1 §10.6.7](https://www.w3.org/TR/CSS21/visudet.html#root-height)), which is what makes the `overflow: hidden` containment idiom work. An ordinary block correctly does not, so a float still overhangs it. `display: flow-root`, css-display-3's dedicated way to ask for containment, is not implemented and computes as `block` |
 | `clear` | [clear](https://developer.mozilla.org/en-US/docs/Web/CSS/clear) | `left`, `right`, `both`, `none` |
 | `overflow` | [overflow](https://developer.mozilla.org/en-US/docs/Web/CSS/overflow) | Affects clipping regions; there is no interactive scrolling in PDF output. `hidden` clips descendant content to the padding edge, following any `border-radius` on the clipping box (rather than clipping to a rectangle regardless of rounding) — the curve's own radius is reduced by the border width the same way `background-clip: padding-box` is, above |
 | `visibility` | [visibility](https://developer.mozilla.org/en-US/docs/Web/CSS/visibility) | `visible`, `hidden`, `collapse` — on a table row, row group, column, or column group, `collapse` removes it from the table's geometry entirely (the rows/columns after it shift in to fill the gap), distinct from `hidden`, which reserves the element's layout space and only omits painting it |

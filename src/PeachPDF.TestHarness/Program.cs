@@ -5596,6 +5596,66 @@ await SaveShowcaseAsync("line_height_normal", "Typography & Text", "line-height:
     "line-height: normal resolved from each font's own ascent/descent/line-gap metrics, matching browser behavior, rather than a flat 1.2× font-size.",
     normalLineHeightHtml, pdfConfig);
 
+// --- declared line-height showcase (CSS 2.1 §10.8/§10.8.1) ---
+// The companion to the "normal" showcase above: what a DECLARED line-height does, including the two
+// cases the line box's height used to be computed wrongly for - a line-height shorter than the font's
+// own height (which must win anyway, letting the glyphs overflow), and the strut a block contributes
+// to a line whose content all comes from a shorter-line-height inline descendant.
+
+const string DeclaredLineHeightCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font-size: 12pt; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif; break-after: avoid }
+    p.intro { font-family: Arial, sans-serif; color: #444; margin: 0 0 1em; max-width: 500pt }
+    .sample { border: 1px solid #ccc; margin-bottom: 8pt; max-width: 380pt }
+    .sample .label { font-family: Arial, sans-serif; font-size: 7pt; font-weight: bold; color: #444; background: #eee; padding: 3pt 6pt; border-bottom: 1px solid #ccc }
+    .sample .text { font-family: Georgia, 'Times New Roman', serif; font-size: 24pt; padding: 0 6pt; background: #e8f0fe; margin: 0 }
+    .stack .text { font-size: 12pt; max-width: 300pt }
+    </style>
+    """;
+
+var declaredLineHeightHtml = "<!DOCTYPE html><html><head>" + DeclaredLineHeightCss + "</head><body>" +
+
+    "<h1>Declared line-height</h1>" +
+    "<p class=\"intro\">The shaded band behind each sample is exactly as tall as the line boxes it holds - " +
+    "one line box in the single-line samples, and one per line in the wrapped ones further down. A declared " +
+    "<code>line-height</code> is the line box's height whether it is larger or <em>smaller</em> than the " +
+    "font's own ascent+descent (CSS 2.1 &sect;10.8): when it is smaller the leading is negative and the " +
+    "glyphs deliberately overflow the band rather than the band growing to fit them.</p>" +
+
+    "<h2>One line, 24pt Georgia</h2>" +
+    "<div class=\"sample\"><div class=\"label\">line-height: 0.75 (shorter than the font - glyphs overflow the band)</div>" +
+    "<div class=\"text\" style=\"line-height: 0.75\">Aligny jpqg</div></div>" +
+    "<div class=\"sample\"><div class=\"label\">line-height: 1 (exactly the font-size)</div>" +
+    "<div class=\"text\" style=\"line-height: 1\">Aligny jpqg</div></div>" +
+    "<div class=\"sample\"><div class=\"label\">line-height: 1.5</div>" +
+    "<div class=\"text\" style=\"line-height: 1.5\">Aligny jpqg</div></div>" +
+    "<div class=\"sample\"><div class=\"label\">line-height: 36pt (absolute length)</div>" +
+    "<div class=\"text\" style=\"line-height: 36pt\">Aligny jpqg</div></div>" +
+
+    "<h2>Several lines - every line box stacks by the declared height</h2>" +
+    "<div class=\"sample stack\"><div class=\"label\">line-height: 0.8 (lines pack tighter than the glyphs)</div>" +
+    "<div class=\"text\" style=\"line-height: 0.8\">The quick brown fox jumps over the lazy dog, and then jumps back over it again for good measure.</div></div>" +
+    "<div class=\"sample stack\"><div class=\"label\">line-height: 2</div>" +
+    "<div class=\"text\" style=\"line-height: 2\">The quick brown fox jumps over the lazy dog, and then jumps back over it again for good measure.</div></div>" +
+
+    "<h2>The strut</h2>" +
+    "<p class=\"intro\">Every line box is also tall enough for the block's own font and line-height - the " +
+    "<em>strut</em> (&sect;10.8.1) - even when all of the line's actual content comes from an inline that " +
+    "declares a shorter one. Both bands below are the block's 30pt, not the inline's.</p>" +
+    "<div class=\"sample\"><div class=\"label\">block line-height: 30pt, inline font: 6pt/6pt</div>" +
+    "<div class=\"text\" style=\"line-height: 30pt\"><span style=\"font: 6pt/6pt Arial, sans-serif\">a small inline on a tall block's line</span></div></div>" +
+    "<div class=\"sample\"><div class=\"label\">block line-height: 30pt, inline line-height: 48pt (the taller inline wins instead)</div>" +
+    "<div class=\"text\" style=\"line-height: 30pt\"><span style=\"line-height: 48pt\">Aligny</span></div></div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("line_height_declared", "Typography & Text", "Declared line-height",
+    "A declared line-height sets the line box height in both directions - including shorter than the font, where the glyphs overflow - plus the block's strut on every line.",
+    declaredLineHeightHtml, pdfConfig);
+
 // --- letter-spacing / word-spacing showcase ---
 
 const string SpacingCss = """
@@ -6287,10 +6347,17 @@ await SaveShowcaseAsync("font_resolution_showcase", "Typography & Text", "Font R
 // subset compliance target. See CLAUDE.md and docs/html-css-support.md for what "compliance" means
 // for a static PDF renderer (no :hover/:active, no scripting).
 var acid2Html = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "acid2.html"));
+var acid2Config = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PageOrientation = PageOrientation.Portrait,
+    ShrinkToFit = true
+};
+acid2Config.SetMargins(0);
 
 await SaveShowcaseAsync("acid2", "Standards & Accessibility", "Acid2",
     "The unmodified Acid2 test rendered by PeachPDF - the classic CSS compliance smiley.",
-    acid2Html, pdfConfig);
+    acid2Html, acid2Config);
 
 // ─── Real-World Documents: Quarterly Sales Ledger (repeating table headers) ───
 // A 60-row <table> spanning three US Letter pages - the <thead> repeats automatically on

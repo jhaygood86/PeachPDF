@@ -74,7 +74,7 @@ namespace PeachPDF.Html.Core.Utils
         //        public const string OL = "OL";
         //        public const string OPTGROUP = "OPTGROUP";
         public const string Option = "option";
-        //        public const string P = "P";
+        public const string P = "p";
         //        public const string PARAM = "PARAM";
         //        public const string PRE = "PRE";
         //        public const string Q = "Q";

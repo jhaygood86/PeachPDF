@@ -748,7 +748,15 @@ namespace PeachPDF.Html.Core.Dom
                     word, trailingRegionalIndicatorCount, trailingGraphemeContext);
 
                 inlineOffset += wordAdvance;
-                lineThickness = Math.Max(lineThickness, wordBlock);
+
+                // The column's cross-axis thickness is the line box's own extent (CSS 2.1 §10.8.1), not the
+                // word's glyph footprint - `wordBlock` above stays the glyph content area, because that is
+                // what the word's own rectangle and its inline box's background/border area are sized from.
+                // Same rule and same shared helper as FlowBox's horizontal counterpart, so a declared
+                // line-height means the same thing in both writing modes; replaced content (IsImage) is
+                // still sized from its own box, exactly as it is there.
+                lineThickness = Math.Max(lineThickness,
+                    word.IsImage ? wordBlock : LineBoxExtentOf(word, blockBox));
             }
 
             maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
@@ -1853,7 +1861,24 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    width = await GetFitContentWidth(g, box, absCb.Size.Width);
+                    // CSS 2.1 §10.3.7's shrink-to-fit is §10.3.5's formula verbatim -
+                    // min(max(preferred minimum, available), preferred) - so this is the float branch
+                    // above, with the same two corrections it already makes and this one used to skip:
+                    // the min-content floor (GetFitContentWidth alone only ever narrows toward the
+                    // available width, with nothing to stop it going below what the content needs), and
+                    // subtracting this box's own decoration, because GetMinMaxWidth returns an OUTER
+                    // width - its result already has the box's border and padding folded in - while what
+                    // is returned here is a CONTENT width the caller adds them back onto.
+                    //
+                    // Without the subtraction an absolutely-positioned box counted its own border twice:
+                    // Acid2's `blockquote.first.one`, 2em of black border either side of a 48px float,
+                    // measured 144px instead of 96px, putting the face's second row an em and a half too
+                    // wide on each side. A no-op under `box-sizing: border-box`, as it is there.
+                    var fit = Math.Max(
+                        await GetFitContentWidth(g, box, absCb.Size.Width),
+                        await GetMinContentWidth(g, box));
+
+                    width = fit - box.ActualBoxSizeIncludedWidth;
                 }
             }
 
@@ -1928,7 +1953,13 @@ namespace PeachPDF.Html.Core.Dom
             // relative to whatever this establishes here.
             var heightCb = PercentageBase(box);
             var isFixedToPage = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null;
-            var heightBasisIsCalculated = isFixedToPage || heightCb.IsHeightCalculated;
+            // CSS Sizing 3 makes an absolutely-positioned element's containing-block size definite with
+            // respect to that element even when the positioned ancestor's own height is content-driven.
+            // The first pass may see that ancestor before its height settles; ApplyParentHeight reruns this
+            // after the ancestor's epilogue and supplies the authoritative used size.
+            var heightBasisIsCalculated = isFixedToPage
+                || box.Position.Value is PositionMode.Absolute
+                || heightCb.IsHeightCalculated;
             var heightBasis = isFixedToPage ? box.HtmlContainer!.PageGeometry.GetPage(0).BandHeight : heightCb.Size.Height;
 
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
@@ -2027,6 +2058,7 @@ namespace PeachPDF.Html.Core.Dom
             // written for absolute and fixed alike); TryGetAspectRatioWidth, the original caller, only ever
             // runs for absolute boxes.
             if (box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null) return true;
+            if (box.Position.Value is PositionMode.Absolute) return true;
 
             return PercentageBase(box).IsHeightCalculated;
         }
@@ -2128,8 +2160,7 @@ namespace PeachPDF.Html.Core.Dom
             // `.picture` is exactly this trap - it must resolve to `auto`, not to a huge value derived
             // from `.picture`'s own content height).
             var isRootWithPageHeight = box == box.ContainingBlock && box.HtmlContainer is not null;
-            var isDefiniteHeight = CssValueParser.IsValidLength(box.Height) &&
-                (box.ContainingBlock.IsHeightCalculated || !box.Height.EndsWith('%'));
+            var isDefiniteHeight = HasDefiniteHeight(box);
             // An aspect-ratio with a definite width and no definite height yields a definite (ratio-derived)
             // height too, so a percentage-height descendant resolves against it — this is what lets the
             // Charts.css bars take their height from the ratio-sized tbody. "No definite height" is exactly
@@ -2138,6 +2169,31 @@ namespace PeachPDF.Html.Core.Dom
             // that as automatic, so the ratio applies there too).
             var isRatioHeight = !isDefiniteHeight && TryGetAspectRatioHeight(box, out _);
             box.IsHeightCalculated = isRootWithPageHeight || isDefiniteHeight || isRatioHeight;
+
+            // CSS 2.1 §10.6.7: a box that establishes a formatting context of its own and takes its height
+            // from content grows to cover any floating descendant whose bottom margin edge falls below its
+            // bottom content edge. This is the whole reason `overflow: hidden` (and a float, an
+            // inline-block, an absolutely-positioned box, a flex/grid item...) "contains" its floats while
+            // an ordinary block does not - and without it such a box holding nothing but a float came out
+            // zero-height, which is what made Acid2's `blockquote.first.one` - the second row of the face,
+            // a shrink-wrapped absolutely-positioned box whose only content is one float - invisible: its
+            // 2em black side borders had no height to be drawn over.
+            //
+            // Gated on !isDefiniteHeight, not merely on `height: auto`: an indefinite percentage height is
+            // automatic too (the same reading isRatioHeight above already relies on). A definite height is
+            // the used height regardless of content (§10.6.3), float included, so it is left alone; the
+            // min/max-height clamps below then apply to the result either way, since §10.6.7's increase is
+            // part of computing the auto height rather than something that outranks §10.7.
+            if (!isDefiniteHeight && !isRootWithPageHeight && DomUtils.EstablishesIndependentFormattingContext(box))
+            {
+                var lowestFloatBottom = DomUtils.LowestFloatBottomInOwnFormattingContext(box);
+
+                if (!double.IsNegativeInfinity(lowestFloatBottom))
+                {
+                    box.ActualBottom = Math.Max(box.ActualBottom,
+                        lowestFloatBottom + box.ActualPaddingBottom + box.ActualBorderBottomWidth);
+                }
+            }
 
             // Apply max-height constraint. Unlike min-height/explicit-height above (which only ever
             // grow ActualBottom), max-height must be able to shrink the box below its content's
@@ -2682,6 +2738,47 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// How much of the block axis a line box holding <paramref name="word"/> is obliged to
+        /// occupy, per <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1 §10.8.1</see>:
+        /// the largest <c>line-height</c> among every inline box the text sits inside -
+        /// the word's effective style and its owner's inline ancestors up to <paramref name="blockBox"/> - and the
+        /// <b>strut</b>, an imaginary inline box carrying <paramref name="blockBox"/>'s own font and
+        /// <c>line-height</c> that is present on every line box holding content.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately not the glyph content area (<c>RFont.Height</c>, which is what a word's own
+        /// rectangle and therefore an inline box's background/border area is sized from): §10.8 lets a
+        /// content area <i>taller</i> than the line-height overflow the line rather than grow it, which is
+        /// what negative leading means. Replaced/atomic inline content is the case §10.8 does size from the
+        /// element's own box, and each caller handles that separately.
+        /// <para>
+        /// Shared by both line-layout engines - <see cref="FlowBox"/> for horizontal writing modes and
+        /// <c>CreateVerticalLineBoxes</c> for vertical ones - so the two cannot drift into disagreeing
+        /// about how tall a line is. The effective style is <see cref="CssRect.FirstLineStyle"/> when present,
+        /// because a <c>::first-line</c> font or line-height can differ from the owner's normal style.
+        /// </para>
+        /// </remarks>
+        private static double LineBoxExtentOf(CssRect word, CssBox blockBox)
+        {
+            // The first-line pseudo wraps the root inline box, so its inherited line-height replaces the
+            // block's ordinary strut on that line and can reduce as well as increase the line box.
+            var extent = word.FirstLineStyle?.ActualLineHeight ?? blockBox.ActualLineHeight;
+            var ownerBox = word.OwnerBox;
+
+            if (word.FirstLineStyle is null)
+                extent = Math.Max(extent, ownerBox.ActualLineHeight);
+
+            for (var inlineAncestor = ownerBox.ParentBox;
+                 inlineAncestor is not null && !ReferenceEquals(inlineAncestor, blockBox);
+                 inlineAncestor = inlineAncestor.ParentBox)
+            {
+                extent = Math.Max(extent, inlineAncestor.ActualLineHeight);
+            }
+
+            return extent;
+        }
+
+        /// <summary>
         /// Recursively flows the content of the box using the inline model
         /// </summary>
         /// <param name="g">Device Info</param>
@@ -2701,6 +2798,29 @@ namespace PeachPDF.Html.Core.Dom
         {
             var startX = coordinates.CurrentX;
             var startY = coordinates.CurrentY;
+
+            // How much of the block axis a line holding this box's text is obliged to occupy, per CSS 2.1
+            // §10.8.1: the line box is tall enough for *every* inline box on it, plus the strut - an
+            // imaginary inline box carrying the block's own font and line-height, present on every line box
+            // that holds content. The inline boxes this box's words sit inside are exactly this box and its
+            // inline ancestors up to blockBox (FlowBox only ever recurses through inline boxes), so the
+            // whole chain is walked: reading only the two ends would make a `line-height` declared on an
+            // intermediate <span> inert whenever that span held no direct text of its own.
+            //
+            // Grows the line the cursor is currently on to at least that height. Called at two points per
+            // word, deliberately: once before the wrap decision, because the float-intersection queries
+            // (DomUtils.GetLastLeft/RightIntersectingFloatBox) and the wrap itself read MaxBottom as the
+            // bottom of the line being closed; and once after the word has actually been placed, because a
+            // word that wrapped landed on a *new* line whose CurrentY the first call knew nothing about.
+            // Without the second call a line whose only word arrived by wrapping contributes no height at
+            // all - the common "paragraph's last line holds one word" shape, which came out one whole
+            // line-height short.
+            void GrowLineToItsExtent(CssRect word)
+            {
+                var lineExtent = LineBoxExtentOf(word, blockBox);
+                if (coordinates.MaxBottom - coordinates.CurrentY < lineExtent)
+                    coordinates.MaxBottom += lineExtent - (coordinates.MaxBottom - coordinates.CurrentY);
+            }
 
             // text-indent's line-start side is physical-right under RTL (CSS Text 3 §3) - reserved here by
             // narrowing the wrap boundary for the currently-active line's own indent, rather than by an
@@ -2888,8 +3008,12 @@ namespace PeachPDF.Html.Core.Dom
                         var wordOrdinal = coordinates.WordOrdinal++;
                         if (wordOrdinal < coordinates.ResumeOrdinal) continue;
 
-                        if (coordinates.MaxBottom - coordinates.CurrentY < box.ActualLineHeight)
-                            coordinates.MaxBottom += box.ActualLineHeight - (coordinates.MaxBottom - coordinates.CurrentY);
+                        // The line the cursor is on before this word is placed - see GrowLineToItsExtent.
+                        // Applied per word rather than when a line is created: §9.4.2 makes a line box
+                        // holding no content zero-height, so an empty block must not gain a strut's worth
+                        // of height out of nothing.
+                        var maxBottomBeforeIncomingWord = coordinates.MaxBottom;
+                        GrowLineToItsExtent(word);
 
                         var actualLimitRight = coordinates.Line.ContentRight;
                         var lastRightIntersectingFloatBox = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
@@ -2974,6 +3098,13 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (wrapping)
                         {
+                            // The incoming word belongs to the new line, not the one being closed. Its
+                            // line-height was applied speculatively above so float intersection and wrapping
+                            // could inspect the candidate line extent; remove it before advancing the cursor.
+                            // A forced-break marker itself terminates the current line and retains its extent.
+                            if (!word.IsLineBreak)
+                                coordinates.MaxBottom = maxBottomBeforeIncomingWord;
+
                             // The line about to close is being abandoned for a new one - fold whether it
                             // ended in a hyphen into the running consecutive-hyphenated-lines count before
                             // that state resets for the line that's about to start.
@@ -3198,6 +3329,11 @@ namespace PeachPDF.Html.Core.Dom
                         word.Left = coordinates.CurrentX;
                         word.Top = coordinates.CurrentY;
 
+                        // The word has landed - and if it got here by wrapping, it landed on a line the
+                        // call before the wrap decision never saw. Grow that line now, against the cursor's
+                        // post-wrap CurrentY.
+                        GrowLineToItsExtent(word);
+
                         // Assigned, never accumulated: this box tree can be laid out again (a
                         // shrink-to-fit ancestor's provisional pass, a variable-page-width reflow), and
                         // each pass re-derives the flag from the same three sources rather than
@@ -3262,7 +3398,18 @@ namespace PeachPDF.Html.Core.Dom
                         coordinates.CurrentX = word.Left + word.FullWidth;
 
                         coordinates.MaxRight = Math.Max(coordinates.MaxRight, word.Right);
-                        coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, word.Bottom);
+
+                        // CSS 2.1 §10.8: a non-replaced inline box contributes exactly its own
+                        // `line-height` to the line box - its glyph content area (`word.Height`, the
+                        // font's own ascent+descent, which is what the box's background/border area is
+                        // drawn from) is free to be *taller* and simply overflow, which is what negative
+                        // leading means. Letting a text word raise MaxBottom turned the line's height into
+                        // max(line-height, font height), so any line-height shorter than the font's own
+                        // height was silently ignored. Replaced/atomic inline content (IsImage: an image,
+                        // an inline <svg>, MathML, a form control) is the case §10.8 does size from the
+                        // box itself, so it still contributes.
+                        if (word.IsImage)
+                            coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, word.Bottom);
 
                         if (b.Position.Value != PositionMode.Absolute) continue;
 

@@ -33,11 +33,9 @@ namespace PeachPDF.Tests.Integration
             var calls = g.DrawStringCalls;
             Assert.True(calls.Count > 1, $"expected multiple draw calls, got {calls.Count}");
 
-            var firstLineTop = p.LineBoxes[0].Rectangles.Values.Min(r => r.Top);
-            var firstLineBottom = p.LineBoxes[0].LineBottom;
-
-            var onFirstLine = calls.Where(c => c.Point.Y >= firstLineTop && c.Point.Y < firstLineBottom).ToList();
-            var onLaterLines = calls.Where(c => c.Point.Y >= firstLineBottom).ToList();
+            var firstLineWordCount = p.LineBoxes[0].Words.Count;
+            var onFirstLine = calls.Take(firstLineWordCount).ToList();
+            var onLaterLines = calls.Skip(firstLineWordCount).ToList();
 
             Assert.NotEmpty(onFirstLine);
             Assert.NotEmpty(onLaterLines);
@@ -62,6 +60,38 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(wordsOnLine1With < wordsOnLine1Without,
                 $"expected fewer words on line 1 with bigger first-line font: with={wordsOnLine1With} without={wordsOnLine1Without}");
+        }
+
+        [Fact]
+        public async Task LargerFirstLineFont_ExpandsTheFirstLineBox()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>p::first-line { font-size: 40pt; line-height: normal }</style>" +
+                "<p id='p' style='width:50pt; font:10pt/10pt sans-serif'>one two three four</p>"));
+            var p = FindById(root, "p")!;
+
+            Assert.True(p.LineBoxes.Count > 1, "expected the paragraph to wrap");
+            Assert.NotNull(p.ResolvedFirstLineStyle);
+
+            var expectedHeight = p.ResolvedFirstLineStyle!.ActualLineHeight
+                + ((p.LineBoxes.Count - 1) * p.ActualLineHeight);
+            Assert.Equal(expectedHeight, p.ActualBottom - p.Location.Y, precision: 6);
+        }
+
+        [Fact]
+        public async Task SmallerFirstLineHeight_ReducesTheFirstLineBox()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>p::first-line { line-height: 5pt }</style>" +
+                "<p id='p' style='width:50pt; font:10pt/20pt sans-serif'>one two three four</p>"));
+            var p = FindById(root, "p")!;
+
+            Assert.True(p.LineBoxes.Count > 1, "expected the paragraph to wrap");
+            Assert.NotNull(p.ResolvedFirstLineStyle);
+
+            var expectedHeight = p.ResolvedFirstLineStyle!.ActualLineHeight
+                + ((p.LineBoxes.Count - 1) * p.ActualLineHeight);
+            Assert.Equal(expectedHeight, p.ActualBottom - p.Location.Y, precision: 6);
         }
 
         [Fact]
@@ -369,9 +399,9 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, p, g);
 
             var calls = g.DrawStringCalls;
-            var firstLineBottom = p.LineBoxes[0].LineBottom;
-            var onFirstLine = calls.Where(c => c.Point.Y < firstLineBottom).ToList();
-            var onLaterLines = calls.Where(c => c.Point.Y >= firstLineBottom).ToList();
+            var firstLineWordCount = p.LineBoxes[0].Words.Count;
+            var onFirstLine = calls.Take(firstLineWordCount).ToList();
+            var onLaterLines = calls.Skip(firstLineWordCount).ToList();
 
             Assert.NotEmpty(onFirstLine);
             Assert.NotEmpty(onLaterLines);

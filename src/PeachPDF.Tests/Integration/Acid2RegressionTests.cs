@@ -495,25 +495,19 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Eyes_ShrinkToFitWidth_MatchesEyeIconIntrinsicWidth_NotEyesBAndEyesCSummed()
+        public async Task Eyes_ShrinkToFitWidth_TakesTheWidestCompleteChildLine()
         {
-            // Regression for a real bug: "eyesWidth ≈ eyesAWidth" alone (the test above) is
-            // tautologically true regardless of whether ".eyes" is correctly ~128 or wrongly inflated
-            // - "#eyes-a" always fills whatever width ".eyes" resolves to, per normal block flow, so
-            // that assertion alone never actually catches a shrink-to-fit regression. This pins an
-            // absolute upper bound: ".eyes" must not approach "#eyes-b"'s width (10em=90pt) plus
-            // "#eyes-c"'s width (10em=90pt) summed together (~180pt+), which is exactly what
-            // GetMinMaxSumWords's explicit-width floor produced when it wrongly ADDED multiple
-            // separate block-level siblings' explicit widths instead of taking their max (see
-            // PositionAbsoluteAutoWidth_MultipleExplicitWidthSiblings_TakesWidestNotSum in
-            // Acid2FeatureVerificationTests.cs for the isolated mechanism test).
+            // The children occupy separate block lines. #eyes-a is 131px wide including its nested
+            // object's decoration; #eyes-b/#eyes-c are each 144px wide including their own borders.
+            // The shrink-to-fit parent is therefore 144px (108pt), not 155px from combining
+            // #eyes-a's 35px decoration with #eyes-b's unrelated 120px content width. That extra 11px
+            // right-aligns the eye image under a fixed-position bar and visibly hides its left eye.
             var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyes = FindByClass(root, "eyes")!;
 
             var eyesWidth = eyes.ActualRight - eyes.Location.X;
 
-            Assert.True(eyesWidth < 170,
-                $"expected .eyes's shrink-to-fit width to stay well under #eyes-b + #eyes-c's summed widths (~180pt+), got {eyesWidth}");
+            Assert.InRange(eyesWidth, 107.5, 108.5);
         }
 
         [Fact]
@@ -615,15 +609,23 @@ namespace PeachPDF.Tests.Integration
         public async Task FixedPositionMargin_ShiftsSecondParagraphBelowFirstsBlackBar()
         {
             // Regression for CssBox.PerformLayoutImp's position:fixed branch dropping the box's own
-            // margin entirely (unlike every other positioning scheme). Per the HTML4 DTD, "<p><table>
-            // ...</table></p><p class='bad'>..." auto-closes the first <p> the moment <table> opens,
-            // producing two SIBLING <p> elements - the second ("p.bad") is matched by both ".picture p"
-            // (margin:0; top:9em - shared with the first paragraph) AND, being genuinely preceded by a
-            // <table> sibling, ".picture p + table + p { margin-top: 3em; }" too. Both paragraphs share
-            // the exact same "top:9em" offset, so the ONLY thing that should separate them vertically is
-            // that 3em margin-top on the second one - asserting against the box's own resolved
-            // ActualMarginTop (rather than a hardcoded pixel/point value) keeps this test independent of
-            // this environment's em-to-point conversion specifics.
+            // margin entirely (unlike every other positioning scheme). "<p><table>...</table></p>
+            // <p class='bad'>" puts four <p> elements in ".picture": <table> auto-closes the first, the
+            // stray "</p>" after it generates an empty one (HTML §13.2.6.4.7 - see
+            // HtmlParser.InsertEmptyParagraphForStrayEndTag), then "p.bad", then a second generated one
+            // from the fixture's own trailing "</p>". Every one of them is matched by ".picture p"
+            // (margin: 0; top: 9em), and exactly one - the FIRST generated empty paragraph, genuinely
+            // preceded by "p" + "table" - is additionally matched by
+            // ".picture p + table + p { margin-top: 3em }".
+            //
+            // They all share the same "top: 9em", so the only thing that may separate that one from the
+            // first vertically is its own 3em margin-top. Asserted against the box's own resolved
+            // ActualMarginTop rather than a hardcoded value, so it stays independent of this
+            // environment's em-to-point conversion.
+            //
+            // This used to assert two paragraphs and name "p.bad" as the one carrying the margin, which
+            // was the HTML4 parse: no element was generated for a stray "</p>" there, so "p + table + p"
+            // fell through onto "p.bad" instead. Chrome produces the four-paragraph shape.
             var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var picture = FindByClass(root, "picture")!;
 
@@ -635,13 +637,13 @@ namespace PeachPDF.Tests.Integration
             }
             Collect(picture);
 
-            Assert.Equal(2, paragraphs.Count);
+            Assert.Equal(4, paragraphs.Count);
             var first = paragraphs[0];
-            var second = paragraphs[1];
 
-            Assert.Equal("bad", second.HtmlTag?.TryGetAttribute("class", ""));
-            Assert.True(second.ActualMarginTop > 0, "the second paragraph's own margin-top should be a real, positive value (3em)");
-            Assert.InRange(second.Location.Y - first.Location.Y, second.ActualMarginTop - 0.5, second.ActualMarginTop + 0.5);
+            var shifted = Assert.Single(paragraphs, p => p.ActualMarginTop > 0);
+
+            Assert.Null(shifted.HtmlTag?.TryGetAttribute("class"));
+            Assert.InRange(shifted.Location.Y - first.Location.Y, shifted.ActualMarginTop - 0.5, shifted.ActualMarginTop + 0.5);
         }
 
         [Fact]

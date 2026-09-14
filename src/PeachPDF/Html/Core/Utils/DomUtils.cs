@@ -747,6 +747,61 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// The lowest bottom margin edge among the floats in <paramref name="box"/>'s <i>own</i> formatting
+        /// context, or <see cref="double.NegativeInfinity"/> when it holds none — CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#root-height">§10.6.7</see>'s "if the element
+        /// has any floating descendants whose bottom margin edge is below the element's bottom content
+        /// edge, then the height is increased to include those edges".
+        /// </summary>
+        /// <remarks>
+        /// Only a box that establishes a formatting context of its own
+        /// (<see cref="EstablishesIndependentFormattingContext"/>) asks this: an ordinary block does not
+        /// contain its floats, which is why a float can overhang the block it sits in and why
+        /// <c>clear</c> and the <c>overflow: hidden</c> containment idiom exist at all.
+        /// <para>
+        /// The walk stops descending at a nested formatting-context root, because that root already
+        /// contains its own floats — its box bottom is ordinary content, already counted by the caller's
+        /// content height. It also skips out-of-flow (absolute/fixed) descendants, which are not
+        /// <paramref name="box"/>'s content at all (§9.3.1), and a float's own subtree for the same reason
+        /// the nested-root case is skipped: a float is itself such a root.
+        /// </para>
+        /// </remarks>
+        internal static double LowestFloatBottomInOwnFormattingContext(CssBox box)
+        {
+            var lowest = double.NegativeInfinity;
+            Walk(box);
+            return lowest;
+
+            void Walk(CssBox parent)
+            {
+                foreach (var child in parent.Boxes)
+                {
+                    if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                    if (child.Position.Value is PositionMode.Absolute or PositionMode.Fixed) continue;
+                    if (child.IsRunningPositioned) continue;
+
+                    if (child.IsFloated)
+                    {
+                        var staticBottom = child.ActualBottom + child.ActualMarginBottom;
+                        for (var current = child;
+                             current is not null && !ReferenceEquals(current, box);
+                             current = current.ParentBox)
+                        {
+                            staticBottom -= current.RelativeOffsetY;
+                        }
+
+                        lowest = Math.Max(lowest, staticBottom);
+                        continue;
+                    }
+
+                    if (EstablishesIndependentFormattingContext(child)) continue;
+
+                    Walk(child);
+                }
+            }
+        }
+
+        /// <summary>
         /// A right float's constraint on a line is unlike a left float's: a left float caps where
         /// the cursor itself currently sits (a point-collision test, correct in
         /// <see cref="GetLastLeftIntersectingFloatBox"/> above), but a right float caps how far
@@ -980,7 +1035,8 @@ namespace PeachPDF.Html.Core.Utils
         // wherever it happens to sit in a plain wrapper's local scope). Internal (not private) so
         // HtmlContainerInt's HasStackingHoistCandidates computation can reuse the exact same predicate
         // rather than duplicating it, alongside Paint.StackingOrder, which owns the ordering walk.
-        internal static bool NeedsStackingHoist(CssBox box) => box.IsOutOfFlow || IsStackingContextBox(box);
+        internal static bool NeedsStackingHoist(CssBox box) =>
+            box.IsOutOfFlow || box.IsPositioned || IsStackingContextBox(box);
 
         /// <summary>
         /// Whether any box in <paramref name="box"/>'s subtree asks for its decorations to be cloned at a

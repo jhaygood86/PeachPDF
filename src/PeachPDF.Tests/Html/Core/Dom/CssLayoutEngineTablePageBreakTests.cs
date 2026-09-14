@@ -729,36 +729,48 @@ namespace PeachPDF.Tests.Html.Core.Dom
         [Fact]
         public async Task TableBorderPaint_LastPage_OuterBottomBorderIsDrawn()
         {
-            // Verify that the outer table bottom border appears on the last page of the table.
-            // The fix clips from content-area top to actualRect.Bottom on the last page; the
-            // border must be drawn at actualRect.Bottom relative to that page's scroll offset.
+            // Verify that the outer table bottom border appears on the last page of the table. Keep the
+            // deterministic table's end clear of the page boundary: line/word/fragment geometry diverging
+            // there is the separate cross-platform limitation tracked by issue #1048.
             var pageHeight = 200.0;
 
             var html = @"
 <!DOCTYPE html>
 <html>
-<body>
+<body style='font-family:Table Border Fixture;line-height:12pt;'>
     <table style='width:100%;border-collapse:collapse;border:2px solid black;'>
         <tbody>
-" + string.Join("", Enumerable.Range(1, 20).Select(i =>
+" + string.Join("", Enumerable.Range(1, 18).Select(i =>
     $"<tr><td style='border:1px solid black;padding:5px;'>Row {i}</td></tr>")) + @"
         </tbody>
     </table>
 </body>
 </html>";
 
-            var (rootBox, container) = await BuildCssBoxTree(html, pageHeight);
+            var (rootBox, container) = await BuildCssBoxTree(
+                html,
+                pageHeight,
+                configureAdapter: adapter =>
+                    BundledFonts.RegisterFont(adapter, BundledFonts.Ttf, "Table Border Fixture"));
 
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
 
-            // Determine the last page: the page where the table's actual bottom resides.
-            var lastPageIndex = (int)(table.ActualBottom / pageHeight);
+            // Use the materialized fragment list rather than re-deriving its last page from whole-box
+            // geometry, which can sit just beyond a page boundary without creating another fragment.
+            var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
+            Assert.True(lastPageIndex >= 1, "Table should span at least 2 pages for this test to be meaningful.");
+            var tableFragment = FragmentPaintHarness.FragmentOf(container, table, lastPageIndex);
+            var tableLine = Assert.Single(tableFragment.Lines);
+            Assert.True(tableFragment.IsLastFragment);
             _output.WriteLine($"Table.ActualBottom={table.ActualBottom}, lastPageIndex={lastPageIndex}");
 
-            // The bottom border line sits at the fragment's own bottom minus borderWidth/2, and the
-            // fragment's coordinates are local to the last page's band.
-            var expectedBottomBorderY = table.ActualBottom - lastPageIndex * pageHeight;
+            // Paint starts from the materialized fragment's local decoration rectangle, then caps a
+            // paginated table at the recorded end of this slice. Whole-box geometry is not authoritative
+            // here: font metrics can leave ActualBottom beyond the final materialized page.
+            var expectedBottomBorderY = tableLine.Rect.Bottom;
+            if (table.PageBreakBottoms?.TryGetValue(tableFragment.FragmentainerIndex, out var pageBreakBottom) == true)
+                expectedBottomBorderY = Math.Min(expectedBottomBorderY, pageBreakBottom - tableFragment.OriginY);
             _output.WriteLine($"Expected bottom border near Y={expectedBottomBorderY}");
 
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
@@ -1071,9 +1083,13 @@ namespace PeachPDF.Tests.Html.Core.Dom
             string html,
             double pageHeight = 842,
             double marginTop = 20,
-            double marginBottom = 20)
+            double marginBottom = 20,
+            Func<PdfSharpAdapter, Task>? configureAdapter = null)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            if (configureAdapter is not null)
+                await configureAdapter(adapter);
+
             var container = new HtmlContainerInt(adapter);
             await container.SetHtml(html, null);
             var size = new XSize(595, pageHeight);

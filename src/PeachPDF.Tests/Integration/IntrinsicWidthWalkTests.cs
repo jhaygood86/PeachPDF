@@ -289,6 +289,33 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ABlockLinesDecoration_StaysAttachedToThatLinesContentWidth()
+        {
+            // Each block child is a competing line. The first has the wider content (100pt) and the
+            // second has the wider decoration (40pt), but neither is 140pt wide: their complete outer
+            // widths are 102pt and 120pt. Choosing max-content and decoration independently invents a
+            // line that does not exist and over-sizes the shrink-to-fit parent.
+            Assert.Equal(
+                120,
+                await FloatWidthAsync(
+                    "<div style='width:100pt;border:1pt solid'></div>"
+                    + "<div style='width:80pt;border:20pt solid'></div>"),
+                precision: 3);
+        }
+
+        [Fact]
+        public async Task NestedBlockDecoration_StillAddsThroughTheContainmentChain()
+        {
+            // Sibling lines compete, but nested decorations do not: the child's 20pt border sits
+            // inside the parent's content box, whose own 4pt border remains outside it.
+            Assert.Equal(
+                124,
+                await FloatWidthAsync(
+                    "<div style='border:2pt solid'><div style='width:100pt;border:10pt solid'></div></div>"),
+                precision: 3);
+        }
+
+        [Fact]
         public async Task AnInlineFlexChild_SharesTheLine_WithoutNeedingNowrap()
         {
             // The other half of the same predicate: an inline-level box never begins a line, so it
@@ -474,6 +501,34 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(
                 await FloatWidthAsync("ZZZZXY") + 10,
                 await FloatWidthAsync("<span style='float:left;margin-right:10pt'>ZZZZ</span>XY"), 3);
+        }
+
+        [Theory]
+        // A 48pt float inside a box whose own border is 12pt a side. When the float ALSO has a 12pt
+        // border, both decorations are on the line: 24 (container) + 24 (float) + 48 = 96pt.
+        [InlineData("border:12pt solid black", 96d)]
+        // ...and with no decoration of its own, just the container's: 24 + 48 = 72pt.
+        [InlineData("", 72d)]
+        public async Task AFloatsOwnDecoration_AddsToTheLine_RatherThanMergingWithItsContainers(
+            string floatStyle, double expectedWidth)
+        {
+            // The running padding total this walk keeps is combined down a chain of boxes by Math.Max,
+            // because a descendant's border/padding sits INSIDE its ancestor's and counting both would
+            // double it. A float is not on that chain - CSS 2.1 §9.5 places it BESIDE the content of the
+            // block it is in, so its decoration sits beside the container's and genuinely adds. Folding
+            // it in by Math.Max instead merged the two whenever the container's was the larger, losing
+            // the float's entirely: Acid2's ".smile div div" (a 1em border around one 1em-bordered
+            // float) measured 96px where Chrome gives 120px, and the mouth's yellow flanks painted black.
+            //
+            // Both expectations are Chrome's own on this markup.
+            var html = LayoutHarness.Wrap(
+                $"<div id='t' style=\"position:absolute; top:0; left:400pt; border:12pt solid yellow\">" +
+                $"<div style=\"float:right; width:48pt; height:12pt; {floatStyle}\"></div></div>");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var box = LayoutHarness.FindById(root, "t")!;
+
+            Assert.Equal(expectedWidth, box.ActualRight - box.Location.X, precision: 6);
         }
 
         [Fact]
