@@ -598,7 +598,7 @@ namespace PeachPDF.Html.Core.Paint
                 x2 -= box.ActualPaddingRight + box.ActualBorderRightWidth;
 
             var pen = g.GetPen(textDecorationActualColor);
-            pen.Width = 1;
+            pen.Width = ResolveDecorationThickness(styleSource.TextDecorationThickness, styleSource, g.PixelsPerPoint);
             pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(textDecorationStyle);
 
             // text-decoration-line may list several keywords (e.g. "underline overline"); draw each.
@@ -618,6 +618,37 @@ namespace PeachPDF.Html.Core.Paint
                 y -= bottomInset;
                 g.DrawLine(pen, x1, y, x2, y);
             }
+        }
+
+        /// <summary>
+        /// Resolves CSS Text Decoration 4 §3.3 <c>text-decoration-thickness</c> to a concrete pen width,
+        /// in the same internal pixel space every other geometry value in <see cref="PaintDecoration"/>
+        /// already uses. <c>auto</c> (the initial value) deliberately preserves this engine's
+        /// pre-existing fixed decoration-line thickness exactly, rather than deriving one from the font,
+        /// so a declaration with no <c>text-decoration-thickness</c> at all paints byte-for-byte as it
+        /// did before this property existed. A percentage resolves against the element's own font size,
+        /// per the spec's own percentage-basis rule for this property (not line-height, unlike
+        /// <c>vertical-align</c>'s superficially similar length-or-percentage grammar).
+        /// </summary>
+        private static double ResolveDecorationThickness(
+            CssProperty<CssKeywordOrValue<TextDecorationThicknessKeyword, LengthOrCalc>> thickness,
+            CssBox styleSource, double pixelsPerPoint)
+        {
+            var value = thickness.Value;
+
+            if (value is { IsValue: true, Value: { } lengthOrCalc })
+            {
+                var fontSizePx = styleSource.ActualFont.Size * pixelsPerPoint;
+                return CssValueParser.ParseLength(lengthOrCalc, fontSizePx, styleSource);
+            }
+
+            return value.Keyword switch
+            {
+                TextDecorationThicknessKeyword.FromFont => styleSource.ActualFont.UnderlineThickness,
+                // Auto (the initial value), and any unresolved/global-keyword state - this engine's
+                // pre-existing fixed thickness, unchanged.
+                _ => 1
+            };
         }
 
         /// <summary>

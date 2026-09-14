@@ -5696,6 +5696,46 @@ await SaveShowcaseAsync("letter_word_spacing", "Typography & Text", "Letter & Wo
     "letter-spacing and word-spacing adjustments across text runs.",
     spacingHtml, pdfConfig);
 
+// --- text-decoration-thickness showcase (CSS Text Decoration 4 §3.3) ---
+
+const string DecorationThicknessCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 16pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    .row { margin-bottom: 0.8em }
+    .label { font-size: 9pt; font-family: "Courier New", monospace; color: #444; margin-bottom: 2px }
+    </style>
+    """;
+
+var decorationThicknessHtml = "<!DOCTYPE html><html><head>" + DecorationThicknessCss + "</head><body>" +
+
+    "<h1>CSS Text Decoration 4 text-decoration-thickness</h1>" +
+
+    "<div class=\"row\"><div class=\"label\">auto (initial value - this engine's own fixed thickness)</div>" +
+    "<span style=\"text-decoration:underline\">The quick brown fox</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">from-font (the resolved font's real underline metric)</div>" +
+    "<span style=\"text-decoration:underline; text-decoration-thickness:from-font\">The quick brown fox</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">1px</div>" +
+    "<span style=\"text-decoration:underline; text-decoration-thickness:1px\">The quick brown fox</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">3px</div>" +
+    "<span style=\"text-decoration:underline; text-decoration-thickness:3px\">The quick brown fox</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">6px</div>" +
+    "<span style=\"text-decoration:underline; text-decoration-thickness:6px\">The quick brown fox</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">15% (of this 16pt font size)</div>" +
+    "<span style=\"text-decoration:underline; text-decoration-thickness:15%\">The quick brown fox</span></div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("text_decoration_thickness", "Typography & Text", "text-decoration-thickness",
+    "text-decoration-thickness (CSS Text Decoration 4): auto, from-font, and explicit length/percentage underline thickness.",
+    decorationThicknessHtml, pdfConfig);
+
 // --- tab-size showcase (CSS Text 4 §3.6) ---
 
 const string TabSizeCss = """

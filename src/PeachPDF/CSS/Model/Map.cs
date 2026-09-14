@@ -87,6 +87,12 @@ namespace PeachPDF.CSS
                 {Keywords.Start, HorizontalAlignment.Start},
                 {Keywords.End, HorizontalAlignment.End}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, TextDecorationThicknessKeyword> TextDecorationThicknessKeywords =
+            new Dictionary<string, TextDecorationThicknessKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, TextDecorationThicknessKeyword.Auto},
+                {Keywords.FromFont, TextDecorationThicknessKeyword.FromFont}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, VerticalAlignment> VerticalAlignments =
             new Dictionary<string, VerticalAlignment>(StringComparer.OrdinalIgnoreCase)
             {

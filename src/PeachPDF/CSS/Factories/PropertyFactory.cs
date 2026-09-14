@@ -435,6 +435,8 @@ namespace PeachPDF.CSS
             AddLonghand(PropertyNames.TextDecorationStyle, () => new TextDecorationStyleProperty());
             AddLonghand(PropertyNames.TextDecorationLine, () => new TextDecorationLineProperty());
             AddLonghand(PropertyNames.TextDecorationColor, () => new TextDecorationColorProperty(), true);
+            // Not part of the text-decoration shorthand (CSS Text Decoration 4 doesn't add it there).
+            AddLonghand(PropertyNames.TextDecorationThickness, () => new TextDecorationThicknessProperty());
 
             AddLonghand(PropertyNames.TextIndent, () => new TextIndentProperty(), true);
             AddLonghand(PropertyNames.TextJustify, () => new TextJustifyProperty());
