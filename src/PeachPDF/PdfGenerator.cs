@@ -24,6 +24,7 @@ using PeachPDF.Html.Core.Parse;
 using System;
 using System.Linq;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Layout;
 using PeachPDF.Network;
 using PeachPDF.Utilities;
 using PeachPDF.PdfSharpCore;
@@ -346,6 +347,122 @@ namespace PeachPDF
             await RenderPagesCore(document, container, config);
 
             measure?.Dispose();
+        }
+
+        /// <summary>
+        /// Creates a PDF document by building PeachPDF's own internal box tree directly in C#, via
+        /// <paramref name="handler"/>, instead of parsing HTML/CSS - a QuestPDF-style declarative
+        /// alternative to <see cref="GeneratePdf(string?,PdfGenerateConfig,PeachPdfCssContent?)"/> for a
+        /// caller that wants a code-first API. <paramref name="handler"/> never receives, generates, or
+        /// parses any HTML/CSS text; every style is set directly as a typed value
+        /// (<see cref="PdfLength"/>/<see cref="PdfColor"/>/etc.).
+        /// </summary>
+        /// <param name="handler">Builds the document's pages via the given <see cref="IDocumentBuilder"/>.</param>
+        /// <param name="config">
+        /// The configuration to use for generation (page size/orientation/margins/etc. - see
+        /// <see cref="PdfGenerateConfig"/>). A page built by <see cref="IPageDescriptor"/> that never
+        /// calls <c>.Size(...)</c>/<c>.Margin*(...)</c> falls back to this config's own page geometry,
+        /// exactly like an HTML document's own <c>@page</c> rule falls back to it. Defaults to A4 with
+        /// 20pt margins when omitted - unlike <see cref="PdfGenerateConfig"/>'s own bare field defaults
+        /// (<see cref="PageSize.Undefined"/>, a 0pt page with no margins), which exist so the HTML path's
+        /// <c>@page</c> rule can tell "unset" from "explicitly zero"; a declarative document has no
+        /// <c>@page</c> rule to defer to, so <c>CreateDocument(handler)</c> with no config at all needs a
+        /// usable page size on its own to be a genuinely code-first, zero-config entry point.
+        /// </param>
+        public async Task<PeachPdfDocument> CreateDocument(Action<IDocumentBuilder> handler, PdfGenerateConfig? config = null)
+        {
+            var document = new PeachPdfDocument(new PdfDocument());
+            await AddPages(document, handler, config);
+            return document;
+        }
+
+        /// <summary>
+        /// Builds a declarative document's pages via <paramref name="handler"/> (see
+        /// <see cref="CreateDocument"/>) and appends them to <paramref name="document"/> - the
+        /// declarative counterpart of <see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>,
+        /// callable more than once to add further declaratively-built pages to the same document.
+        /// </summary>
+        public async Task AddPages(PeachPdfDocument document, Action<IDocumentBuilder> handler, PdfGenerateConfig? config = null)
+        {
+            ArgumentNullException.ThrowIfNull(handler);
+            config ??= new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                MarginTop = 20,
+                MarginBottom = 20,
+                MarginLeft = 20,
+                MarginRight = 20
+            };
+
+            // Collected synchronously first (the builder callback itself is synchronous, matching
+            // QuestPDF's own declarative-composition-then-execution shape), then each page's own tree is
+            // built/laid out/rendered in turn below, since that part is genuinely asynchronous (image
+            // loading, layout).
+            var documentBuilder = new DocumentBuilder();
+            handler(documentBuilder);
+
+            var properties = new CssPropertyFactory(_pdfSharpAdapter);
+
+            foreach (var pageHandler in documentBuilder.PageHandlers)
+            {
+                await AddDeclarativePage(document, pageHandler, config, properties);
+            }
+        }
+
+        /// <summary>
+        /// Builds, lays out and renders exactly one <see cref="IDocumentBuilder.Page"/> call's own content
+        /// as one or more physical PDF pages appended to <paramref name="document"/> - mirrors
+        /// <see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>'s
+        /// own shape (resolve page geometry, populate the container, lay out, then
+        /// <see cref="RenderPagesCore"/>), but populates the container from an already-built
+        /// <see cref="CssBox"/> tree (<see cref="HtmlContainer.SetDeclarativeRoot"/>) instead of parsing
+        /// HTML. Each <see cref="IDocumentBuilder.Page"/> call is independent - its own page size/margins,
+        /// its own <see cref="HtmlContainer"/>, its own layout pass - exactly like a separate
+        /// <see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>
+        /// call appending to the same document would be.
+        /// </summary>
+        private async Task AddDeclarativePage(PeachPdfDocument document, Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, CssPropertyFactory properties)
+        {
+            var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
+
+            var orgPageSize = pageDescriptor.PageSizeOverride
+                ?? (config.PageSize != PageSize.Undefined
+                    ? PageSizeConverter.ToSize(config.PageSize)
+                    : new XSize(config.ManualPageWidth, config.ManualPageHeight));
+
+            if ((pageDescriptor.OrientationOverride ?? config.PageOrientation) == PageOrientation.Landscape)
+            {
+                orgPageSize = new XSize(orgPageSize.Height, orgPageSize.Width);
+            }
+
+            _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
+            _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;
+            _pdfSharpAdapter.PixelsPerPoint = config.PixelsPerInch / 72d;
+
+            using var container = new HtmlContainer(_pdfSharpAdapter);
+
+            container.MarginTop = pageDescriptor.MarginTopOverride ?? config.MarginTop;
+            container.MarginBottom = pageDescriptor.MarginBottomOverride ?? config.MarginBottom;
+            container.MarginLeft = pageDescriptor.MarginLeftOverride ?? config.MarginLeft;
+            container.MarginRight = pageDescriptor.MarginRightOverride ?? config.MarginRight;
+            container.HtmlContainerInt.PageRules = pageDescriptor.PageRules;
+
+            container.PageSize = orgPageSize;
+            await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage);
+
+            // Mirrors SetContent's own tail: the content page size is the sheet less its margins, and
+            // the document origin sits at the top-left of that band.
+            var contentPageSize = new XSize(
+                orgPageSize.Width - container.MarginLeft - container.MarginRight,
+                orgPageSize.Height - container.MarginTop - container.MarginBottom);
+            container.PageSize = contentPageSize;
+            container.Location = new XPoint(container.MarginLeft, container.MarginTop);
+
+            using var measure = XGraphics.CreateMeasureContext(orgPageSize, XGraphicsUnit.Point, XPageDirection.Downwards);
+            container.MaxSize = new XSize(container.PageSize.Width, 0);
+            await container.PerformLayout(measure);
+
+            await RenderPagesCore(document, container, config);
         }
 
         /// <summary>

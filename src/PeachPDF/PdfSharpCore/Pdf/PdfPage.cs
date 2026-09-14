@@ -536,7 +536,7 @@ namespace PeachPDF.PdfSharpCore.Pdf
         /// </summary>
         internal string GetImageName(XImage image, double width, double height)
         {
-            PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
+            global::PeachPDF.PdfSharpCore.Pdf.Advanced.PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
             Debug.Assert(pdfImage != null);
             string name = Resources.AddImage(pdfImage);
             return name;

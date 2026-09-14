@@ -946,6 +946,68 @@ namespace PeachPDF.Html.Core
         }
 
         /// <summary>
+        /// Attaches an already-built, already-styled <paramref name="root"/> as this container's document
+        /// root, for the declarative document-building API - the structural counterpart of <see cref="SetHtml"/>
+        /// for a tree that was constructed directly in C# (<see cref="Layout.DocumentBuilder"/>) rather
+        /// than parsed from an HTML string. <see cref="SetHtml"/>'s own <c>DomParser.GenerateCssTree</c>
+        /// does a large amount of HTML-correction/cascade work (anonymous table fixup, text-box
+        /// splitting, pseudo-element synthesis, the cascade itself) that has nothing to do for a
+        /// hand-built tree whose boxes already carry their own final, directly-assigned style - this
+        /// performs only the structural bookkeeping such a tree still needs.
+        /// </summary>
+        /// <param name="root">
+        /// The already-built tree, rooted at a block-level <see cref="CssBox"/> constructed via
+        /// <see cref="CssBox.CreateBlock()"/>/<see cref="CssBox.CreateBox(CssBox,HtmlTag?,CssBox?)"/> with
+        /// every box's own <see cref="CssBox.InheritStyle"/> already called in tree order. Text boxes must
+        /// have their <see cref="CssBox.Text"/> set but must NOT have had <see cref="CssBox.ParseToWords"/>
+        /// called yet - this method calls it, after bidi levels are assigned across the whole tree, so
+        /// word-splitting sees the correct per-box level array (mirrors <c>DomParser.GenerateCssTree</c>'s
+        /// own AssignBidiLevels-before-CorrectTextBoxes ordering; splitting into words before bidi levels
+        /// exist would visibly mis-order a mixed LTR/RTL paragraph).
+        /// </param>
+        /// <param name="documentLanguage">
+        /// The document's language (for <c>hyphens: auto</c> and the PDF's own <c>/Lang</c>), since a
+        /// declarative document has no <c>&lt;html lang&gt;</c> to read one from automatically. Null leaves
+        /// <see cref="DocumentLanguage"/> unset.
+        /// </param>
+        internal async ValueTask SetDeclarativeRoot(CssBox root, string? documentLanguage)
+        {
+            Clear();
+            CssBox.ClearCounter();
+
+            root.IsRoot = true;
+            root.HtmlContainer = this;
+            Root = root;
+
+            // v1 scope: no vertical writing modes for the declarative API (a separate, much larger
+            // feature than bidi/RTL, and orthogonal to it) - always the initial value, exactly as
+            // DomParser.GenerateCssTree only ever resolves this from a real <html> box's own
+            // writing-mode declaration, which a declarative document has no equivalent of.
+            RootWritingMode = WritingMode.HorizontalTb;
+            DocumentLanguage = documentLanguage;
+            CssData = await Adapter.GetDefaultCssData();
+
+            // Mirrors DomParser.GenerateCssTree's own ordering (AssignBidiLevels, then the tree walk that
+            // calls ParseToWords on every text box) - see this method's own <paramref name="root"/> remarks
+            // for why the order matters.
+            CssBidiParagraphResolver.AssignBidiLevels(root);
+            ParseToWordsRecursive(root);
+        }
+
+        private static void ParseToWordsRecursive(CssBox box)
+        {
+            if (box.Text != null)
+            {
+                box.ParseToWords();
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                ParseToWordsRecursive(child);
+            }
+        }
+
+        /// <summary>
         /// Get all the links in the HTML with the element rectangle and href data, additionally
         /// collecting every bookmark-candidate box (<c>bookmark-level != none</c>) into
         /// <paramref name="bookmarkBoxes"/> from the same tree walk when non-null (see

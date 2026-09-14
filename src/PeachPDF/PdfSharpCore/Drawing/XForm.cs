@@ -393,7 +393,7 @@ namespace PeachPDF.PdfSharpCore.Drawing
         internal string GetImageName(XImage image, double width, double height)
         {
             Debug.Assert(IsTemplate, "This function is for form templates only.");
-            PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
+            global::PeachPDF.PdfSharpCore.Pdf.Advanced.PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
             Debug.Assert(pdfImage != null);
             string name = Resources.AddImage(pdfImage);
             return name;
