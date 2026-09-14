@@ -4265,11 +4265,14 @@ namespace PeachPDF.Html.Core.Dom
         /// CSS Overflow 3 explicitly defers it): once <paramref name="blockBox"/> has already produced as
         /// many lines as its declared limit, this appends a generated ellipsis word to the line currently
         /// being built (the last one that will ever be visible) and reports that the whole block's
-        /// content is done - permanently, not merely paused for a later fragmentainer pass. Returns
-        /// false (leaving <paramref name="coordinates"/> untouched) when <c>line-clamp</c> is <c>none</c>,
-        /// the limit hasn't been reached yet, or the line has no content of its own to attach the
-        /// ellipsis to (an emergency case - see the empty-line guard below - deliberately left to wrap
-        /// normally rather than emit a blank clamped line).
+        /// content is done - permanently, not merely paused for a later fragmentainer pass. The ellipsis
+        /// text itself is <see cref="CssBox.BlockEllipsis"/> (default <c>"…"</c> when unset/<c>auto</c>);
+        /// when it is <c>none</c> (stored as <c>""</c>), the block still stops here but no ellipsis word is
+        /// generated at all - see the short-circuit below. Returns false (leaving
+        /// <paramref name="coordinates"/> untouched) when <c>line-clamp</c> is <c>none</c>, the limit
+        /// hasn't been reached yet, or the line has no content of its own to attach the ellipsis to (an
+        /// emergency case - see the empty-line guard below - deliberately left to wrap normally rather
+        /// than emit a blank clamped line).
         /// </summary>
         /// <remarks>
         /// Word-granularity, not character-granularity: this pops whole trailing words until the
@@ -4297,6 +4300,11 @@ namespace PeachPDF.Html.Core.Dom
             if (blockBox.LineBoxes.Count < limit) return false;
             if (coordinates.Line.Words.Count == 0) return false;
 
+            // block-ellipsis: none (CSS Overflow 4) - the block still stops at its line limit, but with
+            // no ellipsis marker at all, so there is nothing to pop room for or append; the already-placed
+            // words on the last visible line are left exactly as they are.
+            if (string.Equals(blockBox.BlockEllipsis, Keywords.None, StringComparison.OrdinalIgnoreCase)) return true;
+
             var fitLimit = actualLimitRight - rightSpacing - clonedTrailing;
 
             // Pop trailing words - whole words, not characters, see this method's own remarks - until
@@ -4309,7 +4317,14 @@ namespace PeachPDF.Html.Core.Dom
             // and would still paint, landing underneath/beside the ellipsis instead of actually being
             // replaced by it. Each removal is recorded on blockBox so a fresh layout pass over the same
             // tree can put it back first - see LineClampPoppedWords.
-            const string ellipsisText = "…";
+            // block-ellipsis's raw declared text is stored as-is (still carrying its quotes, same
+            // convention as hyphenate-character - see the property's own css-properties.json comment);
+            // re-parsed here into the actual ellipsis text. "auto" (the default) and any other bare
+            // keyword fail TryParseSingleString (it only accepts a genuine quoted <string> token), which
+            // is exactly the fallback to the spec's own UA-default ellipsis this needs.
+            var ellipsisText = CssValueParser.TryParseSingleString(blockBox.BlockEllipsis, out var customEllipsisText)
+                ? customEllipsisText
+                : "…";
             CssRect last;
             CssBox styleSource;
             double ellipsisWidth;

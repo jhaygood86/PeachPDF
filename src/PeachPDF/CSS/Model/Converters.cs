@@ -639,6 +639,17 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter LineClampConverter =
             PositiveIntegerConverter.Or(Assign(Keywords.None, NoneKeyword.None));
 
+        /// <summary>
+        /// CSS Overflow 4 §block-ellipsis: <c>auto | none | &lt;string&gt;</c> - line-clamp's own
+        /// ellipsis text, defaulting to the usual "…" (auto) or suppressed entirely (none). Referenced
+        /// directly by css-properties.json's own "cssom-grammar" entry for this property, the same
+        /// shared-converter shape <see cref="HyphenateCharacterConverter"/> uses for its own near-identical
+        /// <c>auto | &lt;string&gt;</c> grammar - <c>CssLayoutEngine.TryApplyLineClamp</c> re-parses the
+        /// raw stored text (still carrying its quotes, same convention as hyphenate-character) to get the
+        /// actual ellipsis text/none decision.
+        /// </summary>
+        public static readonly IValueConverter BlockEllipsisConverter = StringConverter.OrAuto().OrNone();
+
         #endregion
 
         #region Misc

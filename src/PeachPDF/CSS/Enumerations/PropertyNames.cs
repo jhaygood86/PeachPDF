@@ -29,6 +29,7 @@ namespace PeachPDF.CSS
         public static readonly string Background = "background";
         public static readonly string Behavior = "behavior";
         public static readonly string BaselineShift = "baseline-shift";
+        public static readonly string BlockEllipsis = "block-ellipsis";
         public static readonly string BorderColor = "border-color";
         public static readonly string BorderSpacing = "border-spacing";
         public static readonly string BorderCollapse = "border-collapse";

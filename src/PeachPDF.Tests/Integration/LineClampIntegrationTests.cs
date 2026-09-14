@@ -1,5 +1,6 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -71,6 +72,64 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(3, box.LineClamp.Value.Value);
         }
 
+        [Fact]
+        public async Task BlockEllipsis_DefaultsToAuto()
+        {
+            var box = await FindByIdAsync("<p id='p'>text</p>");
+            Assert.Equal("auto", box.BlockEllipsis, ignoreCase: true);
+        }
+
+        [Fact]
+        public async Task BlockEllipsis_ParsesCustomStringAndNone()
+        {
+            var custom = await FindByIdAsync("<p id='p' style='block-ellipsis:\"[more]\"'>text</p>");
+            Assert.True(CssValueParser.TryParseSingleString(custom.BlockEllipsis, out var customText));
+            Assert.Equal("[more]", customText);
+
+            var none = await FindByIdAsync("<p id='p' style='block-ellipsis:none'>text</p>");
+            Assert.Equal("none", none.BlockEllipsis, ignoreCase: true);
+
+            var auto = await FindByIdAsync("<p id='p' style='block-ellipsis:auto'>text</p>");
+            Assert.Equal("auto", auto.BlockEllipsis, ignoreCase: true);
+        }
+
+        [Fact]
+        public async Task BlockEllipsis_RejectsAnUnquotedValue()
+        {
+            // An invalid declaration is dropped entirely by real CSS cascade parsing - the property
+            // keeps its own initial value rather than storing the bad text.
+            var box = await FindByIdAsync("<p id='p' style='block-ellipsis:more'>text</p>");
+            Assert.Equal("auto", box.BlockEllipsis, ignoreCase: true);
+        }
+
+        [Fact]
+        public async Task BlockEllipsis_Inherits()
+        {
+            // Unlike line-clamp's own longhands (max-lines/continue - see LineClamp_DoesNotInherit
+            // above), block-ellipsis itself IS inherited per the real CSS Overflow 4 property table - a
+            // parent's custom marker applies to any descendant's own line-clamp without needing to be
+            // redeclared on every clamped element.
+            var html = LayoutHarness.Wrap(
+                "<div id='parent' style='block-ellipsis:\"[more]\"'><p id='child'>text</p></div>");
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var child = LayoutHarness.FindById(root, "child")!;
+
+            Assert.True(CssValueParser.TryParseSingleString(child.BlockEllipsis, out var inheritedText));
+            Assert.Equal("[more]", inheritedText);
+        }
+
+        [Fact]
+        public async Task BlockEllipsis_OwnDeclarationOverridesTheInheritedOne()
+        {
+            var html = LayoutHarness.Wrap(
+                "<div id='parent' style='block-ellipsis:\"[more]\"'>" +
+                "<p id='child' style='block-ellipsis:none'>text</p></div>");
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var child = LayoutHarness.FindById(root, "child")!;
+
+            Assert.Equal("none", child.BlockEllipsis, ignoreCase: true);
+        }
+
         // ─── layout: line-count cutoff ──────────────────────────────────────────
 
         [Fact]
@@ -100,6 +159,33 @@ namespace PeachPDF.Tests.Integration
             // on its own, regardless of the ellipsis - a fit-driven pop loop with no floor would keep
             // popping until the line held nothing but the generated ellipsis.
             Assert.Contains(lastLine.Words, w => w.Text == "BBBBB");
+        }
+
+        [Fact]
+        public async Task LineClamp_CustomBlockEllipsis_AppendsCustomMarkerInsteadOfDefault()
+        {
+            var box = await FindByIdAsync(NarrowParagraph(FiveWords, lineClamp: 2, blockEllipsis: "\"[more]\""));
+
+            var lastLine = box.LineBoxes[^1];
+            Assert.DoesNotContain(lastLine.Words, w => w.Text == "…");
+            Assert.Contains(lastLine.Words, w => w.Text == "[more]");
+        }
+
+        [Fact]
+        public async Task LineClamp_BlockEllipsisNone_StillClampsButAddsNoMarkerAtAll()
+        {
+            var box = await FindByIdAsync(NarrowParagraph(FiveWords, lineClamp: 2, blockEllipsis: "none"));
+
+            // Still cuts off after the declared limit...
+            Assert.Equal(2, box.LineBoxes.Count);
+
+            // ...but with nothing appended in place of the truncated content, and the last visible
+            // line's own real words left untouched (none popped to make room for a marker that was
+            // never going to be added).
+            var words = box.LineBoxes.SelectMany(l => l.Words).ToList();
+            Assert.DoesNotContain(words, w => w.Text == "…");
+            Assert.DoesNotContain(words, w => w.Text == "[more]");
+            Assert.Contains(box.LineBoxes[^1].Words, w => w.Text == "BBBBB");
         }
 
         [Fact]
@@ -273,10 +359,11 @@ namespace PeachPDF.Tests.Integration
 
         // ─── helpers ────────────────────────────────────────────────────────────
 
-        private static string NarrowParagraph(string text, int? lineClamp) =>
+        private static string NarrowParagraph(string text, int? lineClamp, string? blockEllipsis = null) =>
             LayoutHarness.Wrap(
                 $"<p id='p' style='width:1px;font:16px monospace;margin:0" +
                 (lineClamp is { } n ? $";line-clamp:{n}" : "") +
+                (blockEllipsis is not null ? $";block-ellipsis:{blockEllipsis}" : "") +
                 $"'>{text}</p>");
 
         private static async Task<CssBox> FindByIdAsync(string html)

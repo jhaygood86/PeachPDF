@@ -10051,6 +10051,12 @@ const string declarativeApiSource =
                         list.Item().Text("Revenue grew across every region.");
                         list.Item().Text("West opened its first retail location.");
                     }, PdfListMarkerType.Disc);
+
+                    column.Item().ClampLines(2, "… [continued]").Text(
+                        "A full year in review: every region grew its revenue year over year, led by a " +
+                        "particularly strong second half, and the West region opened its first physical " +
+                        "retail location - a milestone the team has been working toward since the start " +
+                        "of the fiscal year.");
                 });
             });
         });
@@ -10061,7 +10067,7 @@ const string declarativeApiSource =
     """;
 
 await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Declarative Document-Building API",
-    "PdfGenerator.CreateDocument: pages, a padded/bordered/shadowed card, a table with a repeating header, a bulleted list, and a repeating page-numbered footer, built directly in C# with no HTML/CSS strings - layered entirely on PeachPDF's own flexbox, table, list, and running-header/footer machinery.",
+    "PdfGenerator.CreateDocument: pages, a padded/bordered/shadowed card, a table with a repeating header, a dashed divider, a bulleted list, a line-clamped paragraph with a custom ellipsis, and a repeating page-numbered footer, built directly in C# with no HTML/CSS strings - layered entirely on PeachPDF's own flexbox, table, list, line-clamp, and running-header/footer machinery.",
     declarativeApiSource,
     async gen =>
     {
@@ -10132,6 +10138,12 @@ await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Decl
                             list.Item().Text("Revenue grew across every region.");
                             list.Item().Text("West opened its first retail location.");
                         }, PdfListMarkerType.Disc);
+
+                        column.Item().ClampLines(2, "… [continued]").Text(
+                            "A full year in review: every region grew its revenue year over year, led by a " +
+                            "particularly strong second half, and the West region opened its first physical " +
+                            "retail location - a milestone the team has been working toward since the start " +
+                            "of the fiscal year.");
                     });
                 });
             });
