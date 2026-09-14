@@ -1097,6 +1097,79 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Direction_Auto_DetectsRtlAndLtrFromEachSpansOwnText()
+        {
+            CssBox? hebrewBox = null;
+            CssBox? latinBox = null;
+            CssBox? noStrongCharBox = null;
+
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(container =>
+                {
+                    container.Text(t =>
+                    {
+                        hebrewBox = ((TextStyleApplier)t.Span("שלום").Direction(PdfTextDirection.Auto)).Box;
+                        latinBox = ((TextStyleApplier)t.Span("hello").Direction(PdfTextDirection.Auto)).Box;
+                        noStrongCharBox = ((TextStyleApplier)t.Span("123").Direction(PdfTextDirection.Auto)).Box;
+                    });
+                });
+            });
+
+            Assert.Contains("rtl", hebrewBox!.Direction.ToString());
+            Assert.Contains("ltr", latinBox!.Direction.ToString());
+            // No character with a strong direction (digits are direction-neutral) - defaults to ltr,
+            // same as the HTML path's own dir="auto" default.
+            Assert.Contains("ltr", noStrongCharBox!.Direction.ToString());
+        }
+
+        [Fact]
+        public async Task Direction_Auto_SetViaDefaultTextStyleBeforeTextExists_StillResolvesCorrectly()
+        {
+            // DefaultTextStyle is a decorator, chained ahead of the terminal Text() call that actually
+            // supplies the text to scan - regression coverage for the exact ordering problem that rules
+            // out resolving Auto eagerly at Direction() call time.
+            CssBox? containerBox = null;
+
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(container =>
+                {
+                    var cb = (ContainerBuilder)container.DefaultTextStyle(s => s.Direction(PdfTextDirection.Auto));
+                    containerBox = cb.Box;
+                    cb.Text("שלום");
+                });
+            });
+
+            Assert.Contains("rtl", containerBox!.Direction.ToString());
+        }
+
+        [Fact]
+        public async Task Direction_Auto_SkipsAPrecedingSpanWithNoStrongCharacterAndKeepsScanning()
+        {
+            // Regression coverage for the multi-child scan itself: the first span (digits only) has no
+            // character with a strong direction, so the scan must continue past it into the second span
+            // rather than stopping (or wrongly defaulting to ltr) as soon as the first one comes up empty.
+            CssBox? containerBox = null;
+
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(container =>
+                {
+                    var cb = (ContainerBuilder)container.DefaultTextStyle(s => s.Direction(PdfTextDirection.Auto));
+                    containerBox = cb.Box;
+                    cb.Text(t =>
+                    {
+                        t.Span("123");
+                        t.Span("שלום");
+                    });
+                });
+            });
+
+            Assert.Contains("rtl", containerBox!.Direction.ToString());
+        }
+
+        [Fact]
         public async Task TextSpan_DecorationStyleColorThickness_ReachResolvedBox()
         {
             CssBox? spanBox = null;
@@ -1348,6 +1421,7 @@ namespace PeachPDF.Tests.Integration
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var properties = new CssPropertyFactory(adapter);
             var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
+            PdfGenerator.ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);
 
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined

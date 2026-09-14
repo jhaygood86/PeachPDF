@@ -424,6 +424,7 @@ namespace PeachPDF
         private async Task AddDeclarativePage(PeachPdfDocument document, Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, CssPropertyFactory properties)
         {
             var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
+            ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);
 
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
@@ -463,6 +464,32 @@ namespace PeachPDF
             await container.PerformLayout(measure);
 
             await RenderPagesCore(document, container, config);
+        }
+
+        /// <summary>
+        /// Resolves every <see cref="CssBox.PendingAutoDirection"/> box under <paramref name="root"/> to a
+        /// literal <c>ltr</c>/<c>rtl</c> <c>direction</c>, once over the whole page's already-built tree -
+        /// mirrors <see cref="DomParser"/> resolving the HTML path's own <c>dir="auto"</c> once over a
+        /// whole freshly-parsed document (<see cref="DomParser.GenerateCssTree"/>'s own call to its
+        /// <c>ResolveAutoDirectionality</c>), just triggered here instead of from the parser, since a
+        /// declaratively-built tree has no parse step of its own to hook. Unlike that HTML path (which
+        /// writes a literal <c>dir</c> attribute back onto the element and lets the UA stylesheet's
+        /// <c>[dir]</c> attribute-selector apply <c>direction</c> through the normal cascade), a
+        /// declarative tree never runs selector-based cascade at all, so this sets the resolved value
+        /// directly via <paramref name="properties"/> instead.
+        /// </summary>
+        internal static void ResolvePendingAutoDirections(CssBox root, CssPropertyFactory properties)
+        {
+            if (root.PendingAutoDirection)
+            {
+                properties.Set(root, "direction", BidiDirectionalityResolver.ScanForStrongDirection(root) ?? Keywords.Ltr);
+                root.PendingAutoDirection = false;
+            }
+
+            foreach (var child in root.Boxes)
+            {
+                ResolvePendingAutoDirections(child, properties);
+            }
         }
 
         /// <summary>

@@ -1149,6 +1149,22 @@ namespace PeachPDF.Html.Core.Dom
         internal (CssBox Owner, CssRect Word)? LineClampEllipsisWord { get; set; }
 
         /// <summary>
+        /// True when this box's <c>direction</c> was set to <see cref="PeachPDF.Layout.PdfTextDirection.Auto"/>
+        /// via the declarative API (<see cref="PeachPDF.Layout.TextStyleApplier.Direction(PeachPDF.Layout.PdfTextDirection)"/>)
+        /// and still needs its real <c>ltr</c>/<c>rtl</c> value resolved. Not a real CSS property/cascade
+        /// value - the declarative tree never runs the HTML path's own <c>[dir]</c> attribute-selector
+        /// cascade (see <see cref="Utils.CssPropertyFactory.CreateAnonymousBox"/>'s own doc comment), and
+        /// resolution can't happen eagerly when <c>Direction(Auto)</c> is called either, since a decorator
+        /// like <c>DefaultTextStyle</c> typically runs before the text it needs to scan even exists - so
+        /// this just marks the box for a deferred pass (<see cref="PeachPDF.PdfGenerator"/>'s own
+        /// declarative page-building code, once per page, after the whole page's content is built) that
+        /// resolves every pending box in one walk
+        /// and clears the flag, mirroring how <see cref="Parse.DomParser"/> resolves the HTML path's own
+        /// <c>dir="auto"</c> once over a whole freshly-parsed document.
+        /// </summary>
+        internal bool PendingAutoDirection { get; set; }
+
+        /// <summary>
         /// Gets the rectangles where this box should be painted
         /// </summary>
         internal Dictionary<CssLineBox, RRect> Rectangles { get; } = [];
