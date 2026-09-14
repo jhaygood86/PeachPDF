@@ -756,7 +756,7 @@ namespace PeachPDF.Html.Core.Dom
                 // line-height means the same thing in both writing modes; replaced content (IsImage) is
                 // still sized from its own box, exactly as it is there.
                 lineThickness = Math.Max(lineThickness,
-                    word.IsImage ? wordBlock : LineBoxExtentOf(word.OwnerBox, blockBox));
+                    word.IsImage ? wordBlock : LineBoxExtentOf(word, blockBox));
             }
 
             maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
@@ -1953,7 +1953,13 @@ namespace PeachPDF.Html.Core.Dom
             // relative to whatever this establishes here.
             var heightCb = PercentageBase(box);
             var isFixedToPage = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null;
-            var heightBasisIsCalculated = isFixedToPage || heightCb.IsHeightCalculated;
+            // CSS Sizing 3 makes an absolutely-positioned element's containing-block size definite with
+            // respect to that element even when the positioned ancestor's own height is content-driven.
+            // The first pass may see that ancestor before its height settles; ApplyParentHeight reruns this
+            // after the ancestor's epilogue and supplies the authoritative used size.
+            var heightBasisIsCalculated = isFixedToPage
+                || box.Position.Value is PositionMode.Absolute
+                || heightCb.IsHeightCalculated;
             var heightBasis = isFixedToPage ? box.HtmlContainer!.PageGeometry.GetPage(0).BandHeight : heightCb.Size.Height;
 
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
@@ -2052,6 +2058,7 @@ namespace PeachPDF.Html.Core.Dom
             // written for absolute and fixed alike); TryGetAspectRatioWidth, the original caller, only ever
             // runs for absolute boxes.
             if (box.Position.Value is PositionMode.Fixed && box.HtmlContainer is not null) return true;
+            if (box.Position.Value is PositionMode.Absolute) return true;
 
             return PercentageBase(box).IsHeightCalculated;
         }
@@ -2153,8 +2160,7 @@ namespace PeachPDF.Html.Core.Dom
             // `.picture` is exactly this trap - it must resolve to `auto`, not to a huge value derived
             // from `.picture`'s own content height).
             var isRootWithPageHeight = box == box.ContainingBlock && box.HtmlContainer is not null;
-            var isDefiniteHeight = CssValueParser.IsValidLength(box.Height) &&
-                (box.ContainingBlock.IsHeightCalculated || !box.Height.EndsWith('%'));
+            var isDefiniteHeight = HasDefiniteHeight(box);
             // An aspect-ratio with a definite width and no definite height yields a definite (ratio-derived)
             // height too, so a percentage-height descendant resolves against it — this is what lets the
             // Charts.css bars take their height from the ratio-sized tbody. "No definite height" is exactly
@@ -2732,10 +2738,10 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// How much of the block axis a line box holding <paramref name="box"/>'s text is obliged to
+        /// How much of the block axis a line box holding <paramref name="word"/> is obliged to
         /// occupy, per <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1 §10.8.1</see>:
         /// the largest <c>line-height</c> among every inline box the text sits inside -
-        /// <paramref name="box"/> and its inline ancestors up to <paramref name="blockBox"/> - and the
+        /// the word's effective style and its owner's inline ancestors up to <paramref name="blockBox"/> - and the
         /// <b>strut</b>, an imaginary inline box carrying <paramref name="blockBox"/>'s own font and
         /// <c>line-height</c> that is present on every line box holding content.
         /// </summary>
@@ -2748,14 +2754,21 @@ namespace PeachPDF.Html.Core.Dom
         /// <para>
         /// Shared by both line-layout engines - <see cref="FlowBox"/> for horizontal writing modes and
         /// <c>CreateVerticalLineBoxes</c> for vertical ones - so the two cannot drift into disagreeing
-        /// about how tall a line is.
+        /// about how tall a line is. The effective style is <see cref="CssRect.FirstLineStyle"/> when present,
+        /// because a <c>::first-line</c> font or line-height can differ from the owner's normal style.
         /// </para>
         /// </remarks>
-        private static double LineBoxExtentOf(CssBox box, CssBox blockBox)
+        private static double LineBoxExtentOf(CssRect word, CssBox blockBox)
         {
-            var extent = blockBox.ActualLineHeight;
+            // The first-line pseudo wraps the root inline box, so its inherited line-height replaces the
+            // block's ordinary strut on that line and can reduce as well as increase the line box.
+            var extent = word.FirstLineStyle?.ActualLineHeight ?? blockBox.ActualLineHeight;
+            var ownerBox = word.OwnerBox;
 
-            for (var inlineAncestor = box;
+            if (word.FirstLineStyle is null)
+                extent = Math.Max(extent, ownerBox.ActualLineHeight);
+
+            for (var inlineAncestor = ownerBox.ParentBox;
                  inlineAncestor is not null && !ReferenceEquals(inlineAncestor, blockBox);
                  inlineAncestor = inlineAncestor.ParentBox)
             {
@@ -2794,11 +2807,6 @@ namespace PeachPDF.Html.Core.Dom
             // whole chain is walked: reading only the two ends would make a `line-height` declared on an
             // intermediate <span> inert whenever that span held no direct text of its own.
             //
-            // Walked once per invocation rather than per word: every box on the chain is fixed for the
-            // whole call, and DerivedStyle.ActualLineHeight is documented as recomputed fresh on every read
-            // (it parses a stored CSS value, or takes a font-metrics lookup for `normal`).
-            var ownLineExtent = LineBoxExtentOf(box, blockBox);
-
             // Grows the line the cursor is currently on to at least that height. Called at two points per
             // word, deliberately: once before the wrap decision, because the float-intersection queries
             // (DomUtils.GetLastLeft/RightIntersectingFloatBox) and the wrap itself read MaxBottom as the
@@ -2807,10 +2815,11 @@ namespace PeachPDF.Html.Core.Dom
             // Without the second call a line whose only word arrived by wrapping contributes no height at
             // all - the common "paragraph's last line holds one word" shape, which came out one whole
             // line-height short.
-            void GrowLineToItsExtent()
+            void GrowLineToItsExtent(CssRect word)
             {
-                if (coordinates.MaxBottom - coordinates.CurrentY < ownLineExtent)
-                    coordinates.MaxBottom += ownLineExtent - (coordinates.MaxBottom - coordinates.CurrentY);
+                var lineExtent = LineBoxExtentOf(word, blockBox);
+                if (coordinates.MaxBottom - coordinates.CurrentY < lineExtent)
+                    coordinates.MaxBottom += lineExtent - (coordinates.MaxBottom - coordinates.CurrentY);
             }
 
             // text-indent's line-start side is physical-right under RTL (CSS Text 3 §3) - reserved here by
@@ -3003,7 +3012,8 @@ namespace PeachPDF.Html.Core.Dom
                         // Applied per word rather than when a line is created: §9.4.2 makes a line box
                         // holding no content zero-height, so an empty block must not gain a strut's worth
                         // of height out of nothing.
-                        GrowLineToItsExtent();
+                        var maxBottomBeforeIncomingWord = coordinates.MaxBottom;
+                        GrowLineToItsExtent(word);
 
                         var actualLimitRight = coordinates.Line.ContentRight;
                         var lastRightIntersectingFloatBox = DomUtils.GetLastRightIntersectingFloatBox(box, coordinates);
@@ -3088,6 +3098,13 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (wrapping)
                         {
+                            // The incoming word belongs to the new line, not the one being closed. Its
+                            // line-height was applied speculatively above so float intersection and wrapping
+                            // could inspect the candidate line extent; remove it before advancing the cursor.
+                            // A forced-break marker itself terminates the current line and retains its extent.
+                            if (!word.IsLineBreak)
+                                coordinates.MaxBottom = maxBottomBeforeIncomingWord;
+
                             // The line about to close is being abandoned for a new one - fold whether it
                             // ended in a hyphen into the running consecutive-hyphenated-lines count before
                             // that state resets for the line that's about to start.
@@ -3315,7 +3332,7 @@ namespace PeachPDF.Html.Core.Dom
                         // The word has landed - and if it got here by wrapping, it landed on a line the
                         // call before the wrap decision never saw. Grow that line now, against the cursor's
                         // post-wrap CurrentY.
-                        GrowLineToItsExtent();
+                        GrowLineToItsExtent(word);
 
                         // Assigned, never accumulated: this box tree can be laid out again (a
                         // shrink-to-fit ancestor's provisional pass, a variable-page-width reflow), and

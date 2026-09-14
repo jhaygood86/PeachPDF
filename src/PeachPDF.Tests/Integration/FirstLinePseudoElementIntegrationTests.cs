@@ -65,6 +65,38 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task LargerFirstLineFont_ExpandsTheFirstLineBox()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>p::first-line { font-size: 40pt; line-height: normal }</style>" +
+                "<p id='p' style='width:50pt; font:10pt/10pt sans-serif'>one two three four</p>"));
+            var p = FindById(root, "p")!;
+
+            Assert.True(p.LineBoxes.Count > 1, "expected the paragraph to wrap");
+            Assert.NotNull(p.ResolvedFirstLineStyle);
+
+            var expectedHeight = p.ResolvedFirstLineStyle!.ActualLineHeight
+                + ((p.LineBoxes.Count - 1) * p.ActualLineHeight);
+            Assert.Equal(expectedHeight, p.ActualBottom - p.Location.Y, precision: 6);
+        }
+
+        [Fact]
+        public async Task SmallerFirstLineHeight_ReducesTheFirstLineBox()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>p::first-line { line-height: 5pt }</style>" +
+                "<p id='p' style='width:50pt; font:10pt/20pt sans-serif'>one two three four</p>"));
+            var p = FindById(root, "p")!;
+
+            Assert.True(p.LineBoxes.Count > 1, "expected the paragraph to wrap");
+            Assert.NotNull(p.ResolvedFirstLineStyle);
+
+            var expectedHeight = p.ResolvedFirstLineStyle!.ActualLineHeight
+                + ((p.LineBoxes.Count - 1) * p.ActualLineHeight);
+            Assert.Equal(expectedHeight, p.ActualBottom - p.Location.Y, precision: 6);
+        }
+
+        [Fact]
         public async Task WordSpacing_WidthAffecting_ChangesWrapPoint()
         {
             var withRule = await BuildAndLayout(Wrap(

@@ -97,12 +97,39 @@ namespace PeachPDF.Tests.Html.Core.Parse
             Assert.Equal(["p", "span"], ChildElementsOf("<div id='t'></p><span>after</span></div>"));
         }
 
+        [Fact]
+        public void ParagraphOutsideButtonScope_IsNotClosedByTheEndTag()
+        {
+            const string html =
+                "<div id='t'><p><button id='button'></p><span>after</span></button></div>";
+
+            Assert.Equal(["p"], ChildElementsOf(html));
+            Assert.Equal(["p", "span"], ChildElementsOf(html, "button"));
+        }
+
+        [Fact]
+        public void ParagraphEndTag_InSelect_IsIgnored()
+        {
+            Assert.Equal(["option"], ChildElementsOf(
+                "<select id='t'></p><option>x</option></select>"));
+        }
+
+        [Fact]
+        public void ParagraphEndTag_InTable_IsFosterParentedBeforeTheTable()
+        {
+            const string html =
+                "<div id='t'><table id='table'></p><tbody><tr><td>x</td></tr></tbody></table></div>";
+
+            Assert.Equal(["p", "table"], ChildElementsOf(html));
+            Assert.DoesNotContain("p", ChildElementsOf(html, "table"));
+        }
+
         /// <summary>
         /// The tag names of <c>#t</c>'s child elements, in order — the box-tree equivalent of
         /// <c>element.children</c>, which is what the Chrome runs these are checked against report.
         /// </summary>
-        private static List<string> ChildElementsOf(string bodyHtml) =>
-            FindById(HtmlParser.ParseDocument($"<!DOCTYPE html><html><body>{bodyHtml}</body></html>"), "t")!
+        private static List<string> ChildElementsOf(string bodyHtml, string id = "t") =>
+            FindById(HtmlParser.ParseDocument($"<!DOCTYPE html><html><body>{bodyHtml}</body></html>"), id)!
                 .Boxes
                 .Where(b => b.HtmlTag is not null)
                 .Select(b => b.HtmlTag!.Name.ToLowerInvariant())

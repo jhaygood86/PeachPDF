@@ -782,7 +782,15 @@ namespace PeachPDF.Html.Core.Utils
 
                     if (child.IsFloated)
                     {
-                        lowest = Math.Max(lowest, child.ActualBottom + child.ActualMarginBottom);
+                        var staticBottom = child.ActualBottom + child.ActualMarginBottom;
+                        for (var current = child;
+                             current is not null && !ReferenceEquals(current, box);
+                             current = current.ParentBox)
+                        {
+                            staticBottom -= current.RelativeOffsetY;
+                        }
+
+                        lowest = Math.Max(lowest, staticBottom);
                         continue;
                     }
 

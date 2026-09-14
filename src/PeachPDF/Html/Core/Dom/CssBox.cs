@@ -6062,19 +6062,22 @@ namespace PeachPDF.Html.Core.Dom
                 _pendingVerticalInlineFinalize = false;
             }
 
+            // Settle descendants' percentage heights against this box before their auto block margins use
+            // those heights. An absolute percentage is definite even when this containing block's own
+            // height is content-driven, so its first pass can only be provisional.
+            CssLayoutEngine.ApplyParentHeight(this);
+
             // An absolutely-positioned box resolves §10.6.4 from its own epilogue, at which point an
             // auto-height containing block has not yet applied its own height - its children, this box
             // included, are what determine it. So that first answer can be computed against a height of
             // zero, which sends a `margin: auto 0` box above the container instead of centring it in it.
-            // Now that this box's used height IS final, revise every such descendant against it. The
-            // second pass is the authoritative one; the first exists because a box that never reaches
-            // here (its containing block is the page) still needs an answer.
+            // Now that this box's used height and its descendants' percentage heights ARE final, revise
+            // every such descendant against them. The second pass is authoritative; the first exists
+            // because a box that never reaches here (its containing block is the page) still needs an answer.
             if (IsPositioned || IsRoot)
             {
                 ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
             }
-
-            CssLayoutEngine.ApplyParentHeight(this);
 
             // avoid / avoid-page, but not avoid-column or avoid-region: this mover is a page-context
             // mover by construction (it measures against PageBandHeightOf and relocates to PageTopOf),
@@ -6309,6 +6312,7 @@ namespace PeachPDF.Html.Core.Dom
                     if (child.Position.Value == PositionMode.Absolute)
                     {
                         child.ResolvePositionedAutoBlockMargins(ActualHeight);
+                        child.ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
                     }
 
                     // A positioned descendant establishes the containing block for anything below it and
@@ -8079,11 +8083,13 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static bool IsBlockEndMarginChainMember(CssBox box) =>
             !box.IsExcludedFromFlow
+            && !box.IsInline
             && box.DerivedStyle.ActualDisplay != Keywords.None
             && !box.IsTableGridDecorationBox;
 
         private bool CollapsesBlockEndMarginWithLastChild() =>
             HasAutoBlockEndHeight()
+            && !DomUtils.EstablishesIndependentFormattingContext(this)
             && Overflow.Value == PeachPDF.CSS.Overflow.Visible
             && ActualPaddingBottom < 0.1
             && ActualBorderBottomWidth < 0.1
@@ -8322,23 +8328,19 @@ namespace PeachPDF.Html.Core.Dom
             // unguarded, a trailing float sibling of an atomic inline-level box's own anonymous wrapper
             // (an inline-table/inline-block) made THIS box's own auto-height collapse to the wrapper's
             // own near-zero height instead of the real content before it, so whatever followed THIS box
-            // in the document started too early and visibly overlapped it. Falls back to the plain
-            // !IsExcludedFromFlow match when nothing else qualifies (this box's ENTIRE content is such a
-            // wrapper and nothing else) - Boxes.Last always has at least that match, by this box's own
-            // precondition for being called at all (see PerformLayoutEpilogue's own gate), and the
-            // stricter match is only ever meant to prefer a REAL sibling over the wrapper, not to leave
-            // this box with no candidate at all.
+            // in the document started too early and visibly overlapped it.
             // Selected by the same test the chain walk uses (IsBlockEndMarginChainMember), so the box whose
             // margin is folded here and the box the walk would reach cannot disagree. A `display: none`
             // child used to qualify here but not there: with the blocked arm now folding this box's own
             // bottom margin into the parent's height, that disagreement made a hidden element's margin
             // real - a 40pt margin on a `display: none` last child grew a bordered parent from 23pt to
-            // 51pt. The final fallback keeps the original, looser predicate so a box whose every child is
-            // hidden still resolves to something rather than throwing.
+            // 51pt. If no rendered in-flow child exists, there is no child margin or bottom to include.
             var lastNonFloatingBox = Boxes.LastOrDefault(b => IsBlockEndMarginChainMember(b)
                 && !(b.HtmlTag is null && b.Boxes.Count == 1 && b.Boxes[0].IsExcludedFromFlow))
-                ?? Boxes.LastOrDefault(IsBlockEndMarginChainMember)
-                ?? Boxes.Last(b => !b.IsExcludedFromFlow);
+                ?? Boxes.LastOrDefault(IsBlockEndMarginChainMember);
+
+            if (lastNonFloatingBox is null)
+                return ActualBottom;
 
             // Two separate questions, which the single condition that used to stand here conflated - and
             // conflating them is how a last in-flow child's block-end margin came to be dropped on the

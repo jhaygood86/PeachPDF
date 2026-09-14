@@ -94,6 +94,19 @@ assigned, against the cursor's post-wrap `CurrentY`. Deleting either call fails 
 theories carry an explicit one-word-last-line case (`"aaaa bb"`, `"aaa bbb ccc ddd eee"`) plus a
 `line-height: normal` counterpart asserted against the box's own resolved line height.
 
+The review pass found that the extent also has to be resolved **per word**, after
+`ApplyFirstLineStyleOverride`: CSS Pseudo 4 says `::first-line { line-height: ... }` replaces the
+root-inline strut on that line and can decrease as well as increase it. Caching the ordinary box's
+extent before the override made a larger first-line font overflow the following line, while retaining
+the block's ordinary strut would prevent a smaller first-line `line-height` from shrinking the line.
+`LineBoxExtentOf` therefore reads `CssRect.FirstLineStyle` when present, and both the larger and smaller
+directions are pinned by layout tests.
+
+That same per-word calculation is speculative until wrapping is known. If the incoming word moves to a
+new line, its extent is removed from the line being closed before the cursor advances, then applied to
+the new line after placement. Otherwise a tall inline that begins with a wrapping word incorrectly makes
+both the preceding line and its own line tall.
+
 **The lesson worth keeping: a fixture's text is part of its coverage.** A wrapped-text assertion that
 does not control how many words land on the *last* line is not testing the last line.
 

@@ -90,6 +90,23 @@ fallback so a box whose every child is hidden still resolves to something rather
 `DisplayNoneLastChild_IsNotTheChildWhoseMarginCounts` pins both the blocked and unblocked shapes
 against Chrome's own numbers.
 
+The review pass found one missing part of the same CSS 2.1 condition: the block-end margin also cannot
+collapse through a box that establishes an independent formatting context. The initial implementation
+only encoded this indirectly for `overflow`-created contexts. It now reuses
+`DomUtils.EstablishesIndependentFormattingContext`, covering floats, absolutely positioned boxes,
+inline-blocks, table cells/captions, and flex/grid contexts as well; representative float, absolute,
+and inline-block cases all contain the child's 12pt bottom margin.
+
+The last-child selection also has a real empty result: when every child is `display: none`, no child
+generates a box and none can contribute geometry or a margin. Falling back to a hidden child made a
+bordered empty parent 41pt tall from that child's 40pt margin; the method now retains the parent's own
+already-resolved border-box bottom instead.
+
+Only block-level children participate in this chain. Filtering merely for in-flow boxes admitted inline
+children, so a `margin-bottom` on a text-bearing span incorrectly became a 100pt gap after its parent.
+The shared membership predicate now excludes inline-level boxes while retaining anonymous block
+wrappers.
+
 ## Evidence
 
 - New `BlockEndMarginCollapseTests` (13 tests), every expectation measured in headless Chrome first.

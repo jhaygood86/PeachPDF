@@ -194,6 +194,23 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task WrappingWordContributesItsLineHeightOnlyToTheLineItEnters()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html><body style="margin: 0">
+                  <div class="t" style="font:10px/10px sans-serif; width:35px">aa <span style="line-height:40px"><em style="line-height:10px">bbbb</em></span></div>
+                </body></html>
+                """;
+
+            var (root, _) = await BuildCssBoxTree(html);
+            var target = FindBoxByClass(root, "t")!;
+
+            Assert.Equal(2, target.LineBoxes.Count);
+            Assert.Equal(50 * PointsPerPx, target.ActualBottom - target.Location.Y, precision: 6);
+        }
+
+        [Fact]
         public async Task ReplacedInlineContent_StillSizesTheLineFromItsOwnBox_NotTheLineHeight()
         {
             // §10.8 sizes a *replaced* inline element's contribution from the element's own margin box, not

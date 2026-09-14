@@ -28,6 +28,17 @@ across the middle of the face.
 Verified against Chrome's own DOM for seven markup shapes before writing any assertion, including the
 three controls that must generate nothing (`</span>`, `</em>`, `</blockquote>`).
 
+The review pass caught that "unmatched" here means **not in button scope**, not absent from the entire
+ancestor chain. A `p` outside an intervening `button` must remain open; `</p>` instead generates and
+immediately closes an empty paragraph inside the button. The parser now stops the lookup at every
+WHATWG button-scope boundary rather than closing an out-of-scope ancestor, with the resulting Chrome DOM
+shape pinned directly.
+
+The rule is also insertion-mode-specific rather than universal: an unrecognized `</p>` is ignored in
+`select`, while table structure processes it through the in-body rules with foster parenting. The parser
+now ignores the token under a `select` and inserts the generated paragraph immediately before the
+enclosing table when no cell boundary has returned parsing to the in-body rules.
+
 ## This makes the Acid2 *pixel* comparison worse, on purpose
 
 Rows matching the reference image went 84/168 → 66/168, and that is the correct direction.

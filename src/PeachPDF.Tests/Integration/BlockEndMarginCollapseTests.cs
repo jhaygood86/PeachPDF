@@ -102,6 +102,17 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, next.Gap, precision: 6);
         }
 
+        [Theory]
+        [InlineData("float:left")]
+        [InlineData("position:absolute; top:0; left:0")]
+        [InlineData("display:inline-block")]
+        public async Task FormattingContextRoot_ContainsItsLastChildsMargin(string outerStyle)
+        {
+            var (outer, _) = await MeasurePairAsync(outerStyle, "");
+
+            Assert.Equal(22, outer.Height, precision: 6);
+        }
+
         [Fact]
         public async Task NonAutoHeight_BlocksCollapse_ButIsStillTheHeight()
         {
@@ -154,6 +165,26 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(expectedHeight, outer.Height, precision: 6);
             Assert.Equal(expectedGap, next.Gap, precision: 6);
+        }
+
+        [Fact]
+        public async Task DisplayNoneOnlyChild_ContributesNeitherHeightNorMargin()
+        {
+            var (outer, next) = await MeasurePairAsync("border-bottom:1pt solid black", "",
+                innerMarkup: "<div style='display:none; margin-bottom:40pt'></div>");
+
+            Assert.Equal(1, outer.Height, precision: 6);
+            Assert.Equal(0, next.Gap, precision: 6);
+        }
+
+        [Fact]
+        public async Task InlineChildsBlockAxisMargin_DoesNotEnterTheCollapseChain()
+        {
+            var (outer, next) = await MeasurePairAsync("", "",
+                innerMarkup: "<span style='margin-bottom:100pt'>x</span>");
+
+            Assert.True(outer.Height > 0);
+            Assert.Equal(0, next.Gap, precision: 6);
         }
 
         /// <summary>

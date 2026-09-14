@@ -103,6 +103,68 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task AbsolutePercentageHeight_UsesItsPositionedAncestorBeforeFloatContainment()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html><body style="margin:0">
+                  <div style="position:relative; height:100pt">
+                    <div>
+                      <div id="t" style="position:absolute; height:50%">
+                        <div style="float:left; width:10pt; height:80pt"></div>
+                      </div>
+                    </div>
+                  </div>
+                </body></html>
+                """;
+
+            var box = await MeasureBoxAsync(html, "t");
+
+            Assert.Equal(50, box.Height, precision: 6);
+        }
+
+        [Fact]
+        public async Task AbsolutePercentageHeight_AutoHeightPositionedAncestorIsStillDefinite()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html><body style="margin:0">
+                  <div style="position:relative">
+                    <div style="height:100pt"></div>
+                    <div>
+                      <div id="t" style="position:absolute; height:50%">
+                        <div style="float:left; width:10pt; height:80pt"></div>
+                      </div>
+                    </div>
+                  </div>
+                </body></html>
+                """;
+
+            var box = await MeasureBoxAsync(html, "t");
+
+            Assert.Equal(50, box.Height, precision: 6);
+        }
+
+        [Fact]
+        public async Task RelativelyPositionedFloat_DoesNotVisuallyOffsetItsContainersHeight()
+        {
+            var box = await MeasureAsync("overflow:hidden",
+                "<div style='float:left; position:relative; top:20pt; width:10pt; height:12pt'></div>");
+
+            Assert.Equal(12, box.Height, precision: 6);
+        }
+
+        [Fact]
+        public async Task FloatBelowRelativelyPositionedAncestor_DoesNotVisuallyOffsetItsContainersHeight()
+        {
+            var box = await MeasureAsync("overflow:hidden",
+                "<div style='position:relative; top:20pt'>" +
+                "<div style='float:left; width:10pt; height:12pt'></div></div>");
+
+            Assert.Equal(12, box.Height, precision: 6);
+        }
+
+        [Fact]
         public async Task NestedFormattingContextRoot_ContainsItsOwnFloat_SoTheOuterBoxDoesNotCountItTwice()
         {
             // The inner `overflow: hidden` box already contains the float, so its own box bottom is
@@ -152,6 +214,11 @@ namespace PeachPDF.Tests.Integration
                 </body></html>
                 """;
 
+            return await MeasureBoxAsync(html, "t");
+        }
+
+        private static async Task<(double Width, double Height)> MeasureBoxAsync(string html, string id)
+        {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
             {
@@ -176,7 +243,7 @@ namespace PeachPDF.Tests.Integration
             var byId = new Dictionary<string, CssBox>();
             Collect(container.Root!, byId);
 
-            var box = byId["t"];
+            var box = byId[id];
             return (box.ActualRight - box.Location.X, box.ActualBottom - box.Location.Y);
         }
 

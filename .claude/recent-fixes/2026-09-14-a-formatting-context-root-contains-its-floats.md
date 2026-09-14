@@ -34,6 +34,20 @@ Three things the gate has to get right, each pinned by its own test:
   bottom is ordinary content the caller's content height has counted. It also skips out-of-flow
   descendants (§9.3.1) and does not descend into a float, which is such a root itself.
 
+The review pass added two necessary qualifications. First, percentage-height definiteness uses the same
+`PercentageBase`/`HasDefiniteHeight` path as `GetBoxHeight`, so an absolute box resolves against its
+positioned ancestor rather than an intervening static block. CSS Sizing 3 additionally makes that
+containing-block size definite with respect to an absolute descendant even when the ancestor's height is
+content-driven; the ancestor epilogue now settles descendant percentage heights before resolving their
+auto block margins. Second, a relatively positioned float's visual offset does not participate in its
+formatting-context root's auto height. The float-bottom walk backs out every relative offset between the
+float and that root, matching the existing `StaticBottom` invariant used by normal-flow height and
+clearance.
+
+The authoritative second pass recurses through positioned descendants too. Without that recursion, an
+absolute child could receive its final percentage height while an absolute grandchild kept an auto
+margin calculated against the child's earlier provisional zero height.
+
 ## Width: the abs branch counted its own border twice
 
 Separately, `GetBoxWidth`'s `position: absolute` shrink-to-fit branch returned

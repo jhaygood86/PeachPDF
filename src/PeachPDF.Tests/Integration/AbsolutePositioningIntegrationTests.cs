@@ -314,6 +314,23 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task NestedAbsoluteAutoMargins_UseTheFinalPercentageHeightOfTheirContainingBlock()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='cb' style='position:relative; margin:0; padding:0; border:0;'>" +
+                "<div style='height:100pt;'></div>" +
+                "<div id='outer-abs' style='position:absolute; top:0; height:50%;'>" +
+                "<div id='inner-abs' style='position:absolute; top:0; bottom:0; height:10pt;" +
+                " margin-top:auto; margin-bottom:0;'></div></div></div>"), margin: 20);
+
+            var outer = LayoutHarness.FindById(root, "outer-abs")!;
+            var inner = LayoutHarness.FindById(root, "inner-abs")!;
+
+            Assert.Equal(50, outer.ActualHeight, 1.5);
+            Assert.Equal(outer.ClientTop + 40, inner.Location.Y, 1.5);
+        }
+
+        [Fact]
         public async Task FixedBothInsets_BothAutoBlockMargins_CentreTheBoxInThePageArea()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
@@ -348,10 +365,11 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task AbsoluteBothInsets_IndefinitePercentageHeight_IsTreatedAsAuto()
+        public async Task AbsoluteBothInsets_PercentageHeightAgainstAutoHeightContainingBlock_IsDefinite()
         {
-            // A percentage height against a containing block with no definite height of its own behaves as
-            // automatic (CSS Box Sizing 4 §5), so it takes the auto-height arm above, not the margin one.
+            // CSS Sizing 3 makes an absolute box's containing-block size definite with respect to that box,
+            // even when the positioned ancestor's own height is content-driven. The 50pt height leaves 50pt
+            // for the single auto margin, so the box starts halfway down the 100pt containing block.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div id='outer' style='width:200pt;'>" +
                 "<div id='cb' style='position:relative; margin:0; padding:0; border:0;'>" +
@@ -362,7 +380,8 @@ namespace PeachPDF.Tests.Integration
             var cb = LayoutHarness.FindById(root, "cb")!;
             var abs = LayoutHarness.FindById(root, "abs")!;
 
-            Assert.Equal(cb.ClientTop, abs.Location.Y, 1.5);
+            Assert.Equal(50, abs.ActualBottom - abs.Location.Y, 1.5);
+            Assert.Equal(cb.ClientTop + 50, abs.Location.Y, 1.5);
         }
 
         [Fact]

@@ -120,16 +120,20 @@ namespace PeachPDF.Html.Core.Parse
                     Console.WriteLine($"parse token, tag close: {tagName}. current box: {curBox}");
 #endif
                     // need to find the parent tag to go one level up
-                    var afterClose = DomUtils.FindParent(curBox.ParentBox!, tagName, curBox);
+                    var isParagraphEndTag = string.Equals(
+                        tagName, HtmlConstants.P, StringComparison.OrdinalIgnoreCase);
+                    var afterClose = isParagraphEndTag && !HasElementInButtonScope(curBox, HtmlConstants.P)
+                        ? null
+                        : DomUtils.FindParent(curBox.ParentBox!, tagName, curBox);
 
                     if (afterClose is not null)
                     {
                         curBox = afterClose;
                     }
-                    else if (string.Equals(tagName, HtmlConstants.P, StringComparison.OrdinalIgnoreCase))
+                    else if (isParagraphEndTag)
                     {
                         // The one unmatched end tag that generates an element rather than being dropped.
-                        InsertEmptyParagraphForStrayEndTag(curBox);
+                        HandleStrayParagraphEndTag(curBox);
                     }
 
                     // Every other unmatched end tag is a parse error the HTML5 tree construction algorithm
@@ -176,12 +180,30 @@ namespace PeachPDF.Html.Core.Parse
             }
         }
 
+        private static bool HasElementInButtonScope(CssBox currentBox, string tagName)
+        {
+            for (CssBox? box = currentBox; box is not null; box = box.ParentBox)
+            {
+                var openTagName = box.HtmlTag?.Name;
+                if (string.Equals(openTagName, tagName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                if (openTagName?.ToLowerInvariant() is "applet" or "caption" or "html" or "table"
+                    or "td" or "th" or "marquee" or "object" or "template" or "button")
+                {
+                    return false;
+                }
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Moves the insertion point up past <paramref name="tagName"/>'s own box. Used for an
         /// <i>implied</i> end tag (<see cref="HtmlUtils.CanEndTagBeOmitted"/>), where the element being
         /// closed is <paramref name="cssBox"/> itself and so is always found; an explicit end tag is
         /// resolved by its caller instead, which has a stray-end-tag case to answer that this does not
-        /// (see <see cref="InsertEmptyParagraphForStrayEndTag"/>).
+        /// (see <see cref="HandleStrayParagraphEndTag"/>).
         /// </summary>
         private static CssBox CloseElement(CssBox cssBox, string tagName)
         {
@@ -217,13 +239,35 @@ namespace PeachPDF.Html.Core.Parse
         /// slides a black-and-red bar down across the middle of the face.
         /// </para>
         /// </remarks>
-        private static void InsertEmptyParagraphForStrayEndTag(CssBox curBox)
+        private static void HandleStrayParagraphEndTag(CssBox curBox)
         {
+            CssBox? fosterTable = null;
+
+            for (var box = curBox; box is not null; box = box.ParentBox)
+            {
+                var name = box.HtmlTag?.Name.ToLowerInvariant();
+                if (name == HtmlConstants.Select)
+                    return;
+
+                if (name is HtmlConstants.Td or HtmlConstants.Th or "template")
+                    break;
+
+                if (name == HtmlConstants.Table)
+                {
+                    fosterTable = box;
+                    break;
+                }
+            }
+
 #if DEBUG
             Console.WriteLine($"parse token, stray </p> generating an empty <p>. current box: {curBox}");
 #endif
 
-            CssBox.CreateBox(new HtmlTag(HtmlConstants.P, isSingle: false), curBox);
+            var paragraph = new HtmlTag(HtmlConstants.P, isSingle: false);
+            if (fosterTable?.ParentBox is { } fosterParent)
+                CssBox.CreateBox(fosterParent, paragraph, fosterTable);
+            else
+                CssBox.CreateBox(paragraph, curBox);
         }
 
         /// <summary>
