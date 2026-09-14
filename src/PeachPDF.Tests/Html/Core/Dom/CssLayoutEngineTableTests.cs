@@ -2686,6 +2686,54 @@ Assert.NotNull(tbody);
             });
         }
 
+        [Fact]
+        public async Task TableCaption_TableHasOwnBackgroundAndRepeatingHeader_BackgroundPaintsBeforeHeaderText()
+        {
+            // Regression test for issue #1049. A <thead> becomes a repeating-group CapturedInstance the
+            // moment a table has one at all (the #917 CapturedInstance generalization), whether or not
+            // the table actually spans multiple pages - and FragmentEmitter.ChildrenOf used to yield
+            // every repeating-group capture (the header's own DetachedSourceRoot) before anything else in
+            // the table's own child list, regardless of where the grid decoration box that paints a
+            // captioned table's background (see the sibling test above) actually sits there. So the
+            // header text painted first and the background painted second, silently covering it - visible
+            // only on a raster, since the header's own words are still present and correctly positioned
+            // in the content stream.
+            var html = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        table { background-color: rgb(238, 238, 238); }
+    </style>
+</head>
+<body>
+    <table>
+        <caption>Caption</caption>
+        <thead><tr><th>HeaderA</th><th>HeaderB</th></tr></thead>
+        <tbody><tr><td>cell 1</td><td>value 1</td></tr></tbody>
+    </table>
+</body>
+</html>";
+
+            var (rootBox, container) = await BuildCssBoxTree(html);
+            var table = FindTableBox(rootBox)!;
+            Assert.NotNull(table.TableGridDecorationBox);
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, table, g);
+
+            var backgroundIndex = g.Log.FindIndex(c =>
+                c is TestRecordingGraphics.DrawRectCall r && r.Color is { R: 238, G: 238, B: 238, A: 255 });
+            var headerIndex = g.Log.FindIndex(c =>
+                c is TestRecordingGraphics.DrawStringCall s && s.Text.Contains("HeaderA"));
+
+            Assert.True(backgroundIndex >= 0, "table's own background was never painted");
+            Assert.True(headerIndex >= 0, "header text was never painted");
+            Assert.True(backgroundIndex < headerIndex,
+                $"background (painted at log index {backgroundIndex}) must paint before the header text " +
+                $"(log index {headerIndex}), or it covers the header on the raster");
+        }
+
         #endregion
 
    #region Helper Methods

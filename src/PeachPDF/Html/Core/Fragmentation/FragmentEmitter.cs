@@ -2602,12 +2602,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                     for (var i = 0; i < fragmentainers.Count; i++)
                     {
                         var fragmentainer = fragmentainers[i];
-
-                        if (fragmentainer.DetachedSourceRoot is { } sourceRoot)
-                        {
-                            yield return (sourceRoot, fragmentainer.Geometry, fragmentainer, i + 1);
-                            continue;
-                        }
+                        if (fragmentainer.DetachedSourceRoot is not null) continue;
 
                         foreach (var childBox in box.Boxes)
                         {
@@ -2618,16 +2613,46 @@ namespace PeachPDF.Html.Core.Fragmentation
                         }
                     }
 
-                    // A child no fragmentainer holds was not placed into one — an out-of-flow child, which
-                    // css-multicol resolves against the container rather than a column, and which the columns
-                    // engine lays out once at the end. It is read live and belongs to the page, exactly as it
-                    // did before captured instances existed.
-                    foreach (var childBox in box.Boxes)
+                    // A detached-source-root capture (a repeating <thead>/<tfoot>'s page instance) stands
+                    // in for one specific box.Boxes position - the CssProxyBox RemoveHeaderFooterFromTree
+                    // left there when it detached the group - so it has to be interleaved at that position
+                    // rather than always emitted ahead of everything else. A captioned table's own grid
+                    // decoration box (CssBox.TableGridDecorationBox) sits earlier in box.Boxes than the
+                    // header/footer group did, and must still paint before it or its background covers the
+                    // header's own text (issue #1049). Matched by SourceGeometry reference identity, not by
+                    // SourceBox alone: a multi-page repeating header leaves one proxy per page it repeats
+                    // on, all sharing the same SourceBox, and RecordRepeatingGroupInstance stores exactly
+                    // the proxy's own SourceGeometry instance as this capture's Geometry (see its own
+                    // remarks) - the one thing that ties a capture back to the one proxy it came from.
+                    var detachedAnchor = FindDetachedSourceAnchors(box, fragmentainers);
+
+                    for (var boxIndex = 0; boxIndex < box.Boxes.Count; boxIndex++)
                     {
+                        for (var i = 0; i < fragmentainers.Count; i++)
+                        {
+                            if (fragmentainers[i].DetachedSourceRoot is { } sourceRoot && detachedAnchor[i] == boxIndex)
+                                yield return (sourceRoot, fragmentainers[i].Geometry, fragmentainers[i], i + 1);
+                        }
+
+                        var childBox = box.Boxes[boxIndex];
                         if (childBox.IsFragmentWalkPlaceholder) continue;
 
+                        // A child no fragmentainer holds was not placed into one — an out-of-flow child, which
+                        // css-multicol resolves against the container rather than a column, and which the columns
+                        // engine lays out once at the end. It is read live and belongs to the page, exactly as it
+                        // did before captured instances existed.
                         if (!HeldByAny(fragmentainers, childBox))
                             yield return (childBox, snapshot, null, instance);
+                    }
+
+                    // A detached-source-root capture whose proxy is no longer in box.Boxes (should not
+                    // happen - RemoveHeaderFooterFromTree always leaves one behind for a page it recorded a
+                    // capture for - but silently dropping the header/footer would be worse than this
+                    // defensive fallback) still gets painted, at the position it always used to be emitted.
+                    for (var i = 0; i < fragmentainers.Count; i++)
+                    {
+                        if (fragmentainers[i].DetachedSourceRoot is { } sourceRoot && detachedAnchor[i] < 0)
+                            yield return (sourceRoot, fragmentainers[i].Geometry, fragmentainers[i], i + 1);
                     }
 
                     yield break;
@@ -2971,6 +2996,41 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// For each of <paramref name="fragmentainers"/>, the <paramref name="box"/>.Boxes index of the
+        /// <see cref="CssProxyBox"/> whose own <see cref="CssProxyBox.SourceGeometry"/> is that capture's
+        /// <see cref="CapturedInstance.Geometry"/> - i.e. the exact page instance the capture was recorded
+        /// from (see <see cref="RecordRepeatingGroupInstance"/>) - or -1 for an entry that either is not a
+        /// detached-source-root capture or has no matching proxy left in the tree. Reference identity, not
+        /// <see cref="CapturedInstance.DetachedSourceRoot"/> equality: a multi-page repeating header leaves
+        /// one proxy per page behind in <c>box.Boxes</c>, all sharing the same source box, and only the
+        /// captured <c>SourceGeometry</c> instance ties a given capture back to the one page it came from.
+        /// </summary>
+        private static int[] FindDetachedSourceAnchors(CssBox box, List<CapturedInstance> fragmentainers)
+        {
+            var anchors = new int[fragmentainers.Count];
+            Array.Fill(anchors, -1);
+
+            if (!fragmentainers.Exists(f => f.DetachedSourceRoot is not null)) return anchors;
+
+            for (var boxIndex = 0; boxIndex < box.Boxes.Count; boxIndex++)
+            {
+                if (box.Boxes[boxIndex] is not CssProxyBox proxy) continue;
+
+                for (var i = 0; i < fragmentainers.Count; i++)
+                {
+                    if (fragmentainers[i].DetachedSourceRoot is not null &&
+                        ReferenceEquals(fragmentainers[i].Geometry, proxy.SourceGeometry))
+                    {
+                        anchors[i] = boxIndex;
+                        break;
+                    }
+                }
+            }
+
+            return anchors;
         }
 
         /// <summary>
