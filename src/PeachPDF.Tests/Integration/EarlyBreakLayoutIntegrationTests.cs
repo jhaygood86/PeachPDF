@@ -667,6 +667,116 @@ namespace PeachPDF.Tests.Integration
             }
         }
 
+        // ── a table sibling drives the self-relocation retry (#1045) ────────────────────────────────
+
+        /// <summary>
+        /// #1045: a <c>break-inside:avoid</c> box whose subtree contains a <c>&lt;table&gt;</c> drops its
+        /// other children — a preceding <c>&lt;h2&gt;</c> here — when its own straddle is only discovered
+        /// late (on the pass that <i>completes</i> the box, per <see cref="CssBox.PerformLayoutEpilogue"/>),
+        /// because the table engine's own row-height estimate (<c>EstimateRowHeight</c>, which can
+        /// undershoot) misjudges whether the table fits at discovery time. The self-relocation retry this
+        /// triggers (<c>CssBox.TakeEarlyBreak</c>'s <c>_earlyBreakRetryTop</c>, driven by
+        /// <c>CssBox.DriveBlockChildPass</c>) is the one <c>PassRewind</c> re-entry point that used to skip
+        /// the shared rollback every other one performs — so the heading, already laid out once this
+        /// generation, never got its prologue back on the retry.
+        /// </summary>
+        /// <remarks>
+        /// Pinned rather than swept, for the same reason the boundary rows in
+        /// <see cref="RelocatedBox_HasNoInteriorGap"/> are: 139.5/139.75 straddle the disagreement between
+        /// the table's coarse estimate and <c>card</c>'s own precise post-layout straddle check; 130 is a
+        /// control that reaches the ordinary relocation path without it. Found by sweeping this fixture's
+        /// own filler height in 0.25pt steps.
+        /// </remarks>
+        [Theory]
+        [InlineData(130)]
+        [InlineData(139.5)]
+        [InlineData(139.75)]
+        public async Task BoxContainingATableAndAHeading_KeepsItsHeading(double fillerHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                TableAndHeadingCardDocument(fillerHeight), pageHeight: PageHeight, margin: Margin);
+
+            var heading = LayoutHarness.FindById(root, "heading");
+            Assert.NotNull(heading);
+
+            var present = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .Any(f => ReferenceEquals(f.Box, heading));
+
+            Assert.True(present, $"heading missing from the fragment tree at filler height {fillerHeight}pt");
+        }
+
+        /// <summary>
+        /// The workhorse invariant, over the same fixture: every word the document authored is claimed by
+        /// exactly one fragment, which fails the way #1045 did if the heading's words are left permanently
+        /// excluded (see <c>CssRect.AwaitsTheNextFragmentainer</c>) after the retry.
+        /// </summary>
+        [Theory]
+        [InlineData(130)]
+        [InlineData(139.5)]
+        [InlineData(139.75)]
+        public async Task BoxContainingATableAndAHeading_ClaimsEveryWordExactlyOnce(double fillerHeight)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                TableAndHeadingCardDocument(fillerHeight), pageHeight: PageHeight, margin: Margin);
+
+            var authored = WordsIn(root);
+            Assert.NotEmpty(authored);
+
+            var claimed = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .SelectMany(f => f.Words)
+                .Select(w => (object)w.Word)
+                .ToList();
+
+            Assert.Equal(authored.Count, claimed.Count);
+            Assert.Equal(claimed.Count, claimed.Distinct(ReferenceEqualityComparer.Instance).Count());
+        }
+
+        /// <summary>
+        /// The issue's own second, more severe symptom: a preceding sibling's own box straddling the
+        /// boundary (here, via <c>padding-bottom</c> rather than a spacer <c>&lt;div&gt;</c> — the issue
+        /// notes a spacer alone does not reproduce it) can carry the whole <c>break-inside:avoid</c> box,
+        /// table and heading alike, out of the fragment tree entirely. Pinned at the offsets this fixture's
+        /// own sweep found failing.
+        /// </summary>
+        [Theory]
+        [InlineData(122)]
+        [InlineData(122.25)]
+        public async Task BoxContainingATableAndAHeading_SurvivesAPrecedingSiblingsPaddingBottom(double padding)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                PaddingPrecedesTableCardDocument(padding), pageHeight: PageHeight, margin: Margin);
+
+            var card = LayoutHarness.FindById(root, "card");
+            var heading = LayoutHarness.FindById(root, "heading");
+            Assert.NotNull(card);
+            Assert.NotNull(heading);
+
+            var fragments = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .ToList();
+
+            Assert.Contains(fragments, f => ReferenceEquals(f.Box, card));
+            Assert.Contains(fragments, f => ReferenceEquals(f.Box, heading));
+        }
+
+        private static string TableAndHeadingCardDocument(double fillerHeight) =>
+            LayoutHarness.Wrap(
+                $"<div style='height:{fillerHeight}pt'>filler</div>"
+                + "<div id='card' style='break-inside:avoid;font-size:10pt;line-height:20pt'>"
+                + "<h2 id='heading' style='margin:0'>Heading</h2>"
+                + "<table><tr><td>Alpha</td><td>one</td></tr><tr><td>Beta</td><td>two</td></tr></table></div>");
+
+        private static string PaddingPrecedesTableCardDocument(double precedingPadding) =>
+            LayoutHarness.Wrap(
+                $"<div style='padding-bottom:{precedingPadding}pt'>preceding</div>"
+                + "<div id='card' style='break-inside:avoid;font-size:10pt;line-height:20pt;"
+                + "border:1pt solid black;padding:4pt'>"
+                + "<h2 id='heading' style='margin:0'>Heading</h2>"
+                + "<table><tr><td>Alpha</td><td>one</td></tr><tr><td>Beta</td><td>two</td></tr>"
+                + "<tr><td>Gamma</td><td>three</td></tr></table></div>");
+
         private static List<CssRect> WordsIn(CssBox box) =>
             LayoutHarness.Descendants(box).SelectMany(b => b.Words).ToList();
 

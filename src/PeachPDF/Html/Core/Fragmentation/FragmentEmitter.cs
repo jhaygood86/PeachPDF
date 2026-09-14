@@ -1425,7 +1425,21 @@ namespace PeachPDF.Html.Core.Fragmentation
                     // call never re-walks, so an earlier stale slot has no guarantee that everything above
                     // it - within this specific call - has already been confirmed.
                     EmitSlot(stale, mayWrite: true);
-                    CommitRemainingObservations(stale >= _lastEmittedSlot);
+
+                    // Always false, never stale >= _lastEmittedSlot: that comparison assumes nothing has
+                    // been laid out past _lastEmittedSlot yet, which is exactly what a §4.3 mover
+                    // relocating a box forward (break-inside:avoid's own self-relocation retry among
+                    // them) violates - the box's live geometry can already sit at a slot this walk has
+                    // not reached, while _lastEmittedSlot still names an earlier one. A box only frozen
+                    // at the stale slot being rebuilt (its one prior fragment now superseded) reads as
+                    // "already produced a fragment, found nothing here, so done for good" and gets marked
+                    // empty from here on - permanently hiding the fragment its relocated position is
+                    // about to produce at the higher slot. Finish()'s own replay over this identical kind
+                    // of scattered batch reasons through the same hazard and also never writes; this path
+                    // exists only to rebuild eagerly rather than leave it for that replay to rediscover
+                    // (see this method's own remarks), not to draw conclusions Finish() itself declines to
+                    // draw.
+                    CommitRemainingObservations(commit: false);
                 }
             }
         }
