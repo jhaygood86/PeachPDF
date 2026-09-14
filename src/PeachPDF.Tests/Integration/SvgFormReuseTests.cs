@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.Integration
                 $"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' width='20' height='20'>" +
                 $"<rect width='20' height='20' fill='{fill}'/></svg>"));
 
-        private static void AssertOneFormOnTwoPages(string pdf)
+        private static void AssertOneFormOnTwoPages(string pdf, bool tiled = false)
         {
             Assert.Equal(2, Regex.Matches(pdf, @"/Type /Page\b").Count);
             Assert.Single(Regex.Matches(pdf, @"/Subtype /Form\b"));
@@ -35,7 +35,11 @@ namespace PeachPDF.Tests.Integration
                 RegexOptions.Singleline).Groups[1].Value;
             Assert.NotEmpty(formObject);
             Assert.Equal(2, Regex.Matches(pdf, @"/XObject\s*<<\s*/\w+ " + formObject + @" 0 R").Count);
-            Assert.Equal(2, Regex.Matches(pdf, @"/\w+ Do\b").Count);
+            var placements = Regex.Matches(pdf, @"/\w+ Do\b").Count;
+            if (tiled)
+                Assert.True(placements > 2, "the border must invoke the form for its separate slices");
+            else
+                Assert.Equal(2, placements);
         }
 
         [Fact]
@@ -76,6 +80,21 @@ namespace PeachPDF.Tests.Integration
 
             AssertOneFormOnTwoPages(pdf);
             Assert.Contains("/BBox [0 0 40 40]", pdf);
+        }
+
+        [Fact]
+        public async Task FixedSvgBorderImage_ReusesOneFormAcrossPages()
+        {
+            var url = SvgDataUri();
+            var pdf = await Render($"""
+                <div style="position:fixed;top:0;left:0;width:40pt;height:40pt;
+                            border:10pt solid transparent;border-image-source:url('{url}');
+                            border-image-slice:5;border-image-repeat:repeat"></div>
+                <div>first page</div><div style="break-before:page">second page</div>
+                """);
+
+            AssertOneFormOnTwoPages(pdf, tiled: true);
+            Assert.Contains("/BBox [0 0 60 60]", pdf);
         }
 
         [Fact]

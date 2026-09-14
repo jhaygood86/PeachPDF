@@ -89,13 +89,13 @@ namespace PeachPDF.Html.Core.Handlers
         /// One resolved <c>border-image-source</c>, ready for slicing: a real <see cref="RImage"/> plus its
         /// "natural" size in the same pixel space <see cref="RGraphics.DrawImage(RImage,RRect,RRect)"/>'s own
         /// <c>srcRect</c> expects. A raster <c>url()</c> uses its own real natural size; a gradient, SVG, or
-        /// any other source with no natural-size concept of its own is rendered once into a
+        /// any other source with no natural-size concept of its own is rendered into a
         /// <see cref="RGraphics.CreateTile"/> tile sized to the border-image area itself - mirroring
         /// <see cref="CssImagePainter"/>'s identical "auto == fills the box" treatment of a generated
         /// background-image layer - so its own percentages in <c>border-image-slice</c> resolve against that
-        /// same area. <see cref="Dispose"/> disposes the tile's own graphics context/image where one was
-        /// created; a raster source's <see cref="RImage"/> is owned by its <see cref="CssImage.Url"/> and is
-        /// left alone.
+        /// same area. An SVG tile is cached per PDF document and reused at the same size. <see cref="Dispose"/>
+        /// disposes only a newly created, uncached tile image; a raster source's <see cref="RImage"/>
+        /// belongs to its <see cref="CssImage.Url"/> and is left alone.
         /// </summary>
         private readonly struct ResolvedSourceImage(RImage image, double naturalWidth, double naturalHeight, bool ownsImage) : IDisposable
         {
@@ -114,14 +114,19 @@ namespace PeachPDF.Html.Core.Handlers
             if (source is CssImage.Url { Image: { } raster })
                 return new ResolvedSourceImage(raster, raster.Width, raster.Height, ownsImage: false);
 
-            // Every other source kind - an SVG url(), or a gradient - has no natural size of its own, so it
-            // is rendered once into a tile sized to the border-image area, exactly as a background-image
-            // layer with no explicit background-size renders one (CssImagePainter.PaintGradientLayer/
-            // PaintSvgLayer's own "isFullBox"/tile-at-resolved-size treatment) - border-image has no sizing
-            // property of its own to resolve against instead.
+            // SVGs and gradients have no natural size to slice against, so use the border box as the
+            // viewport, matching a generated background image with auto size. SVGs can reuse the
+            // document-local form; gradients still create a tile for this paint.
             var tileWidth = borderBoxRect.Width;
             var tileHeight = borderBoxRect.Height;
             if (tileWidth <= 0 || tileHeight <= 0) return null;
+
+            if (source is CssImage.Url { SvgDocument: { } svg })
+            {
+                var form = SvgRenderer.GetOrCreateForm(g, svg, tileWidth, tileHeight);
+                return form is null ? null : new ResolvedSourceImage(form, tileWidth, tileHeight,
+                    ownsImage: g.FormCacheOwner is null);
+            }
 
             var tile = g.CreateTile(tileWidth, tileHeight);
             if (tile is not { } t) return null; // no real page/document context (e.g. a measure-only pass)
@@ -129,9 +134,6 @@ namespace PeachPDF.Html.Core.Handlers
             var tileRect = new RRect(0, 0, tileWidth, tileHeight);
             switch (source)
             {
-                case CssImage.Url { SvgDocument: { } svg }:
-                    SvgRenderer.RenderInto(t.Graphics, svg, tileRect);
-                    break;
                 case CssImage.LinearGradient lg:
                     using (var brush = CssImagePainter.GetLinearGradientBrush(t.Graphics, lg.Gradient, tileRect, box, null))
                         t.Graphics.DrawRectangle(brush, 0, 0, tileWidth, tileHeight);
