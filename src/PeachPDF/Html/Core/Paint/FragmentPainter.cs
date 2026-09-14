@@ -579,19 +579,32 @@ namespace PeachPDF.Html.Core.Paint
 
             PaintWords(g, box, fragment);
 
-            for (var i = 0; i < lines.Count; i++)
+            // A block container's own decoration area is one rectangle - its border box - which is the
+            // right area for its background and border but never for its text decoration: css-text-decor-3
+            // §2.4 propagates a block container's decoration to the anonymous inline box wrapping its
+            // in-flow inline content, so the line spans that content, not the box's full width. The
+            // per-line rectangles a line-hosted box carries already are that content, so only the
+            // one-rectangle (Line: null) case needs the content found for it.
+            if (lines is [{ Line: null }])
             {
-                var actualRect = lines[i].Rect;
-
-                if (IsRectVisible(actualRect, clip))
+                PaintPropagatedDecoration(g, box, fragment, clip);
+            }
+            else
+            {
+                for (var i = 0; i < lines.Count; i++)
                 {
-                    // Text decoration is drawn over the rectangle itself, never the unbroken box: an
-                    // underline belongs to the line it underlines. Only whether to inset it by the box's own
-                    // padding and border is a §6.2 question, which is what the edge flags answer.
-                    var geometry = BoxDecorationGeometry.For(box, lines[i]);
+                    var actualRect = lines[i].Rect;
 
-                    PaintDecoration(g, box, actualRect, geometry.HasLeftEdge, geometry.HasRightEdge,
-                        GetFirstLineStyleForRect(lines[i].Line));
+                    if (IsRectVisible(actualRect, clip))
+                    {
+                        // Text decoration is drawn over the rectangle itself, never the unbroken box: an
+                        // underline belongs to the line it underlines. Only whether to inset it by the box's own
+                        // padding and border is a §6.2 question, which is what the edge flags answer.
+                        var geometry = BoxDecorationGeometry.For(box, lines[i]);
+
+                        PaintDecoration(g, box, actualRect, geometry.HasLeftEdge, geometry.HasRightEdge,
+                            GetFirstLineStyleForRect(lines[i].Line));
+                    }
                 }
             }
 
