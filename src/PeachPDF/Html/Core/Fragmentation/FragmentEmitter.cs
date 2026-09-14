@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core.Dom;
@@ -3327,8 +3327,13 @@ namespace PeachPDF.Html.Core.Fragmentation
             var basisWidthPx = (geom.SheetWidthPt - geom.MarginLeftPt - geom.MarginRightPt) * ppp;
             var basisHeightPx = (geom.SheetHeightPt - geom.MarginTopPt - geom.MarginBottomPt) * ppp;
 
-            var left = box.ActualMarginLeft + CssBox.ResolveOffsetOrZero(box.Left, basisWidthPx, box);
-            var top = box.ActualMarginTop + CssBox.ResolveOffsetOrZero(box.Top, basisHeightPx, box);
+            // Same page-area origin CssBox's own canonical resolution uses (CSS 2.1 §10.1), taken from
+            // THIS slot's own resolved margins rather than the document's base ones - which is the whole
+            // reason this per-page correction exists.
+            var left = geom.MarginLeftPt * ppp + box.ActualMarginLeft
+                       + CssBox.ResolveOffsetOrZero(box.Left, basisWidthPx, box);
+            var top = geom.MarginTopPt * ppp + box.ActualMarginTop
+                      + CssBox.ResolveOffsetOrZero(box.Top, basisHeightPx, box);
 
             return (left - box.Location.X, top - box.Location.Y);
         }

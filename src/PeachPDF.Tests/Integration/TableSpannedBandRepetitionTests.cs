@@ -277,7 +277,7 @@ namespace PeachPDF.Tests.Integration
         /// every page, rather than travelling with the strip around it.
         /// </summary>
         /// <remarks>
-        /// Its containing block is the page box (CSS Position 3), so it is not part of the run being
+        /// Its containing block is the page area (CSS 2.1 §10.1), so it is not part of the run being
         /// sliced even though it descends from one. The two halves of a displacement have to agree about
         /// that: dropping the shift from <c>originY</c> alone would still leave the membership test asking
         /// about a displaced rectangle, so the box would be claimed by a band a strip away from the one it
@@ -312,8 +312,10 @@ namespace PeachPDF.Tests.Integration
             Assert.All(drawn, hits => Assert.Equal(onFirstPage, hits[0].Rect.Top, 1));
 
             // ...and it really is that box's position, not some other page's strip leaking in: the ink
-            // starts at the declared top and within one line box of it.
-            Assert.InRange(onFirstPage, top, top + drawn[0][0].Rect.Height);
+            // starts at the declared top - measured from the page AREA's top edge, the box's containing
+            // block - and within one line box of it.
+            var declaredTop = Margin + top;
+            Assert.InRange(onFirstPage, declaredTop, declaredTop + drawn[0][0].Rect.Height);
         }
 
         /// <summary>
