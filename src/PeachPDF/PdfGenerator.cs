@@ -343,6 +343,24 @@ namespace PeachPDF
                 await container.PerformLayout(measure);
             }
 
+            await RenderPagesCore(document, container, config);
+
+            measure?.Dispose();
+        }
+
+        /// <summary>
+        /// The content-source-agnostic half of page generation: metadata/XMP/output-intent/tagging/form
+        /// setup, one PDF page per fragmentainer (paint, footnote area, margin boxes), and the
+        /// whole-document link/form-field/bookmark passes at the end. Reads only already-resolved
+        /// <paramref name="container"/> state (its fragment tree, page rules, document metadata/language) -
+        /// nothing here is specific to how that container's content tree was built, so this is shared
+        /// verbatim between the HTML path (<see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>,
+        /// after its own <see cref="SetContent"/>/<c>ShrinkToFit</c> setup above) and the declarative
+        /// document-building path that builds a <see cref="Html.Core.Dom.CssBox"/> tree directly instead
+        /// of parsing HTML. The caller owns its own measure context and disposes it after this returns.
+        /// </summary>
+        private async Task RenderPagesCore(PeachPdfDocument document, HtmlContainer container, PdfGenerateConfig config)
+        {
             var resolvedCreationDate = ApplyDocumentMetadata(document.PdfDocument, container.DocumentMetadata, config.Metadata);
 
             // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally
@@ -612,8 +630,6 @@ namespace PeachPDF
             // UA stylesheet, everything else defaults to none), so this is unconditional: a document
             // with no headings simply collects zero bookmark boxes above and adds no outline.
             BookmarkOutlineBuilder.Build(document.PdfDocument, container, fragmentainers, bookmarkBoxes);
-
-            measure?.Dispose();
         }
 
         #region Private/Protected methods
