@@ -2809,7 +2809,10 @@ namespace PeachPDF.Html.Core.Dom
             if (word.FirstLineStyle is null)
                 extent = extent.Union(HalfLeadingExtentOf(ownerBox.ActualFont, ownerBox.ActualLineHeight));
 
-            for (var inlineAncestor = ownerBox.ParentBox;
+            // A word owned by the block itself has no inline ancestors. Starting at its parent in
+            // that case would walk *outside* the line's formatting context and let an outer element's
+            // larger font inflate this line (e.g. an 8pt chart value inside a 12pt table cell).
+            for (var inlineAncestor = ReferenceEquals(ownerBox, blockBox) ? null : ownerBox.ParentBox;
                  inlineAncestor is not null && !ReferenceEquals(inlineAncestor, blockBox);
                  inlineAncestor = inlineAncestor.ParentBox)
             {
