@@ -114,6 +114,51 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task StretchWithNoFill_TakesEachRegionFromItsOwnNinthOfTheSource()
+        {
+            // The half of a 9-slice a destination-only assertion cannot see: WHICH part of the source each
+            // region draws. PDF has no sub-rectangle image operator, and the backend used to drop srcRect
+            // silently - every region drew the whole 4x4 texture squashed into its own band, which looked
+            // like a far denser, differently-coloured frame than the author wrote and passed every
+            // destination-geometry test here.
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{Png4X4}');border-image-slice:1;border-image-width:10pt");
+
+            static void AssertSrc(RRect? src, double x, double y, double w, double h)
+            {
+                Assert.NotNull(src);
+                Assert.Equal(x, src!.Value.X, 3);
+                Assert.Equal(y, src.Value.Y, 3);
+                Assert.Equal(w, src.Value.Width, 3);
+                Assert.Equal(h, src.Value.Height, 3);
+            }
+
+            // Corners: the 1x1 pixel in each corner of the 4x4 source.
+            AssertSrc(g.DrawImageCalls[0].SrcRect, 0, 0, 1, 1);
+            AssertSrc(g.DrawImageCalls[1].SrcRect, 3, 0, 1, 1);
+            AssertSrc(g.DrawImageCalls[2].SrcRect, 0, 3, 1, 1);
+            AssertSrc(g.DrawImageCalls[3].SrcRect, 3, 3, 1, 1);
+
+            // Edges: the 2px band between the corners, along each side.
+            AssertSrc(g.DrawImageCalls[4].SrcRect, 1, 0, 2, 1);
+            AssertSrc(g.DrawImageCalls[5].SrcRect, 1, 3, 2, 1);
+            AssertSrc(g.DrawImageCalls[6].SrcRect, 0, 1, 1, 2);
+            AssertSrc(g.DrawImageCalls[7].SrcRect, 3, 1, 1, 2);
+        }
+
+        [Fact]
+        public async Task NineSlice_PaintsWithoutInterpolation()
+        {
+            // Each region is cut out with a clip, so a smoothing renderer samples across that clip edge and
+            // bleeds the neighbouring slice half a source pixel into this one - at the 6x-and-up scales a
+            // slice-to-border stretch reaches, a visible fraction of the whole border.
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{Png4X4}');border-image-slice:1;border-image-width:10pt");
+
+            Assert.All(g.DrawImageCalls, call => Assert.False(call.Interpolate));
+        }
+
+        [Fact]
         public async Task Fill_AddsAOneMoreRegionForTheMiddle()
         {
             var (_, g) = await PaintAsync(
@@ -241,6 +286,61 @@ namespace PeachPDF.Tests.Integration
                 new TileCapableGraphics());
 
             Assert.Equal(8, g.DrawImageCalls.Count);
+        }
+
+        [Fact]
+        public async Task SvgSourceWithAnIntrinsicSize_IsSlicedAtThatSize_NotStretchedOverTheBorderBox()
+        {
+            // CSS Images 3's default sizing algorithm: an SVG carrying its own width/height has an
+            // intrinsic size, so that - not the border-image area - is what the slices are cut from.
+            // Sizing it to the area first stretched the artwork over the box before slicing it, which
+            // distorted the motif and gave every edge tile the wrong aspect ratio.
+            const string svg = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22%3E%3Crect width=%2240%22 height=%2240%22 fill=%22red%22/%3E%3C/svg%3E";
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{svg}');border-image-slice:50%;border-image-width:10pt",
+                new TileCapableGraphics());
+
+            // 40 CSS px of SVG is 30pt of layout, and the tile is built at exactly that - not at the
+            // fixture's own 120x80pt border box.
+            var image = g.DrawImageCalls[0].Image;
+            Assert.Equal(30, image.Width, 3);
+            Assert.Equal(30, image.Height, 3);
+
+            // ...so a 50% slice is 15pt of it, and the top-left corner takes that much.
+            var corner = g.DrawImageCalls[0].SrcRect;
+            Assert.NotNull(corner);
+            Assert.Equal(new RRect(0, 0, 15, 15), corner!.Value);
+        }
+
+        [Fact]
+        public async Task SvgSourceWithNoIntrinsicSize_FallsBackToTheBorderImageArea()
+        {
+            // The other half of the default sizing algorithm: with nothing to take a size from, the
+            // default object size - the border-image area itself - is used, as for a gradient.
+            const string svg = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22%3E%3C/svg%3E";
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{svg}');border-image-slice:50%;border-image-width:10pt",
+                new TileCapableGraphics());
+
+            var image = g.DrawImageCalls[0].Image;
+            Assert.Equal(120, image.Width, 3);
+            Assert.Equal(80, image.Height, 3);
+        }
+
+        [Fact]
+        public async Task SvgSourceSliceNumbers_AreCssPixels_NotLayoutPoints()
+        {
+            // A <number> slice is "vector coordinates" for a vector source (CSS Backgrounds 3 §13.4),
+            // i.e. CSS pixels - while the tile it is cut from is measured in layout points, 0.75 of one.
+            const string svg = "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22 viewBox=%220 0 40 40%22%3E%3Crect width=%2240%22 height=%2240%22 fill=%22red%22/%3E%3C/svg%3E";
+            var (_, g) = await PaintAsync(
+                $"border-image-source:url('{svg}');border-image-slice:20;border-image-width:10pt",
+                new TileCapableGraphics());
+
+            var corner = g.DrawImageCalls[0].SrcRect;
+            Assert.NotNull(corner);
+            Assert.Equal(15, corner!.Value.Width, 3);   // 20 CSS px of the source, in points
+            Assert.Equal(15, corner.Value.Height, 3);
         }
 
         [Fact]

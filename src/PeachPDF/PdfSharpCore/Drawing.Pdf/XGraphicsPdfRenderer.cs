@@ -860,7 +860,15 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
         }
 
-        // TODO: incomplete - srcRect not used
+        /// <summary>
+        /// Draws all of <paramref name="image"/> into <paramref name="destRect"/>. <paramref name="srcRect"/>
+        /// is NOT honored and cannot be at this level: PDF has no "draw this sub-rectangle of an XObject"
+        /// operator, so cropping is a clip plus an off-destination placement of the whole image, which
+        /// <c>GraphicsAdapter.DrawImage</c> composes above. Callers wanting a portion of an image must go
+        /// through that; this overload exists so a whole-image draw keeps emitting the operators it always
+        /// has. (Silently dropping srcRect here is what once made every <c>border-image</c> slice paint the
+        /// entire source squashed into its own ninth of the frame.)
+        /// </summary>
         public void DrawImage(XImage image, XRect destRect, XRect srcRect, XGraphicsUnit srcUnit)
         {
             const string format = Config.SignificantFigures4;

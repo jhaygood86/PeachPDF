@@ -48,7 +48,7 @@ namespace PeachPDF.Html.Core.Dom
                 g.PushClip(contentBox);
 
             if (svg is not null)
-                SvgRenderer.RenderInto(g, svg, destination);
+                SvgRenderer.RenderCachedInto(g, svg, destination);
             else if (image is not null)
                 g.DrawImage(image, destination);
 

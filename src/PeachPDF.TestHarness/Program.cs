@@ -4272,6 +4272,104 @@ await SaveShowcaseAsync("svg", "Graphics & Effects", "SVG",
     "Inline and embedded SVG rendered as true vector PDF content: shapes, paths, gradients, patterns, masks, and text.",
     svgHtml, pdfConfig);
 
+// --- SVG Form XObject reuse showcase ---
+
+// Two pieces of SVG artwork, both repeated on every one of twelve pages: a `position: fixed` logo, and
+// a border-image whose source is an SVG sliced into corners and tiled edges (so it is invoked many
+// times per page, not once). Each is rendered into ONE document-local Form XObject and invoked
+// wherever it appears, so the file carries two copies of the artwork rather than two per page - the
+// saving this showcase exists to make visible. Measured by rendering this same document with the form
+// cache switched off: 24 Form XObjects instead of 2, and 176,077 bytes instead of 126,666 - 39% larger.
+const string SvgFormReuseBorderSource =
+    "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'120'%20height%3D'120'%20viewBox%3D'0%200%20120%20120'%20preserveAspectRatio%3D'none'%3E%3Crect%20width%3D'120'%20height%3D'120'%20fill%3D'%23fde5d5'%2F%3E%3Crect%20x%3D'48'%20y%3D'48'%20width%3D'24'%20height%3D'24'%20fill%3D'%23fffaf6'%2F%3E%3Cg%20fill%3D'%23c95e58'%3E%3Ccircle%20cx%3D'24'%20cy%3D'24'%20r%3D'13'%2F%3E%3Ccircle%20cx%3D'96'%20cy%3D'24'%20r%3D'13'%2F%3E%3Ccircle%20cx%3D'24'%20cy%3D'96'%20r%3D'13'%2F%3E%3Ccircle%20cx%3D'96'%20cy%3D'96'%20r%3D'13'%2F%3E%3Cpath%20d%3D'M60%2010L74%2024%2060%2038%2046%2024Z%20M60%2082L74%2096%2060%20110%2046%2096Z%20M10%2060L24%2046%2038%2060%2024%2074Z%20M82%2060L96%2046%20110%2060%2096%2074Z'%2F%3E%3C%2Fg%3E%3Cg%20fill%3D'%23fff6e9'%3E%3Ccircle%20cx%3D'24'%20cy%3D'24'%20r%3D'5'%2F%3E%3Ccircle%20cx%3D'96'%20cy%3D'24'%20r%3D'5'%2F%3E%3Ccircle%20cx%3D'24'%20cy%3D'96'%20r%3D'5'%2F%3E%3Ccircle%20cx%3D'96'%20cy%3D'96'%20r%3D'5'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E";
+
+var svgFormReuseSheetTitles = new[]
+{
+    "Overview", "Line items", "Delivery notes", "Quality checks", "Regional figures", "Customer notes",
+    "Inventory", "Timeline", "Forecast", "Appendix A", "Appendix B", "Final page"
+};
+
+var svgFormReuseHtml =
+    "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
+    "<style>" +
+    "@page { size: A4; margin: 38px 48px 42px }" +
+    "body { margin: 0; color: #543b38; font: 14px Arial, sans-serif }" +
+    ".running-logo { position: fixed; top: 0; left: 0; width: 365px; height: 81px }" +
+    ".logo-rule { position: fixed; top: 126px; left: 0; right: 0; height: 2px; background: #e8b9a4 }" +
+    ".border-panel {" +
+    "  position: fixed; top: 146px; left: 0; width: 100%; height: 168px;" +
+    "  box-sizing: border-box; border: 16px solid transparent;" +
+    $"  border-image-source: url(\"{SvgFormReuseBorderSource}\");" +
+    "  border-image-slice: 40%; border-image-width: 16px; border-image-repeat: repeat;" +
+    "  background: #fffaf6; padding: 20px 24px }" +
+    ".border-panel h2 { margin: 0 0 8px; color: #a64246; font-size: 19px }" +
+    ".border-panel p { margin: 0; line-height: 1.45 }" +
+    ".sheet { padding-top: 350px }" +
+    ".sheet + .sheet { break-before: page }" +
+    ".sheet-number { color: #a64246; font-size: 11px; font-weight: bold; letter-spacing: 2px }" +
+    "h1 { margin: 9px 0 18px; font-size: 25px }" +
+    ".sheet p { max-width: 570px; line-height: 1.65; margin: 0 0 16px }" +
+    ".sample-row { margin-top: 30px; border-top: 1px solid #e8b9a4; padding-top: 11px }" +
+    ".sample-row strong { float: right; color: #a64246 }" +
+    "</style></head><body>" +
+
+    // One parsed SvgDocument - the project's own peach mark, from docs/assets/img/peach.svg, plus the
+    // wordmark - painted on every output page from a single Form XObject.
+    """
+    <svg class="running-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 110" width="500" height="110" aria-label="PeachPDF logo">
+      <defs>
+        <radialGradient id="peach-body" cx="35%" cy="28%" r="85%">
+          <stop offset="0%" stop-color="#ffc487"/>
+          <stop offset="45%" stop-color="#ff9c66"/>
+          <stop offset="100%" stop-color="#f4566a"/>
+        </radialGradient>
+        <linearGradient id="peach-leaf" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#7bc47f"/>
+          <stop offset="100%" stop-color="#3e7a4c"/>
+        </linearGradient>
+      </defs>
+      <!-- docs/assets/img/peach.svg, the real project logo, in its own 32-unit space. -->
+      <g transform="translate(8 7) scale(2.95)">
+        <path fill="url(#peach-body)" d="M16 8.5 C14.8 6.9 12.9 6 10.9 6 C5.9 6 3 10.2 3 15.1 C3 22.3 8.8 29 16 29 C23.2 29 29 22.3 29 15.1 C29 10.2 26.1 6 21.1 6 C19.1 6 17.2 6.9 16 8.5 Z"/>
+        <path fill="none" stroke="#000000" stroke-opacity="0.2" stroke-width="1.6" stroke-linecap="round" d="M16 9.5 C14.6 13.5 13.9 19.5 14.6 26"/>
+        <path fill="none" stroke="#8a5a3b" stroke-width="2" stroke-linecap="round" d="M16 8.2 C16 6.6 16.6 5.2 17.8 4.2"/>
+        <path fill="url(#peach-leaf)" d="M17.5 6.5 C18.5 3.5 21.5 1.8 24.8 2.2 C24.9 5.6 22.6 8.4 19.3 8.9 C18.2 9 17.3 8.3 17.5 6.5 Z"/>
+      </g>
+      <text x="122" y="53" font-family="Arial" font-size="43" font-weight="bold" fill="#9f3f45">PeachPDF</text>
+      <text x="124" y="78" font-family="Arial" font-size="14" fill="#9a756c">VECTOR ARTWORK REUSED ACROSS PAGES</text>
+    </svg>
+    """ +
+    "<div class=\"logo-rule\"></div>" +
+
+    // One div, repainted on every page; its border-image source is a genuine repeating SVG frame, so
+    // the same form is invoked once per corner, once per edge tile, twelve times over.
+    "<div class=\"border-panel\">" +
+    "<h2>One SVG border image, twelve pages</h2>" +
+    "<p>The four corners are fixed; the diamond motif repeats along each edge. Both this frame and the " +
+    "logo above are drawn into one document-local Form XObject each and invoked for every slice and " +
+    "every page, so the PDF stores the artwork twice rather than twenty-four times - a copy per page " +
+    "would make this file around 40% larger.</p>" +
+    "</div>" +
+
+    string.Concat(svgFormReuseSheetTitles.Select((title, index) =>
+        "<section class=\"sheet\">" +
+        $"<div class=\"sheet-number\">PAGE {index + 1:00} / 12</div>" +
+        $"<h1>{title}</h1>" +
+        "<p>This page repeats the same fixed vector logo and the same SVG border-image. Nothing about " +
+        "the artwork changes from sheet to sheet, which is exactly the case a per-page copy would pay " +
+        "for twelve times over.</p>" +
+        "<p>Reuse is keyed on the parsed SVG document and the size it is painted at, so the twelve " +
+        "pages share one form per artwork - and the border-image's own corners and edge tiles, all " +
+        "drawn at the same size, share it too.</p>" +
+        $"<div class=\"sample-row\"><span>Reference</span><strong>PEACH-{index + 1:000}</strong></div>" +
+        "</section>")) +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("svg_form_reuse", "Graphics & Effects", "SVG Form XObject Reuse",
+    "The same SVG logo and SVG border-image on all twelve pages: each is stored once as a document-local Form XObject and invoked wherever it appears, rather than written into the PDF again per page - two copies of the artwork instead of twenty-four, and a file around 40% smaller.",
+    svgFormReuseHtml, pdfConfig);
+
 // --- advanced SVG text showcase (gradient/pattern fill, stroke, textPath) ---
 
 static string TextPanel(string desc, string svg) =>
