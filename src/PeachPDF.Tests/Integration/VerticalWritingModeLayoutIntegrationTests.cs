@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Threading.Tasks;
 using PeachPDF.Adapters;
 using PeachPDF.CSS;
@@ -1523,8 +1523,11 @@ namespace PeachPDF.Tests.Integration
             var fixedBox = LayoutHarness.FindById(root, "fixed");
             Assert.NotNull(fixedBox);
 
-            Assert.Equal(10, fixedBox!.Location.X, 1);
-            Assert.Equal(10, fixedBox.Location.Y, 1);
+            // Offsets are measured from the page AREA's corner (CSS 2.1 §10.1), so the page margin is
+            // part of the coordinate - the point here is that the vertical writing mode does not enter
+            // into it at all.
+            Assert.Equal(container.MarginLeft + 10, fixedBox!.Location.X, 1);
+            Assert.Equal(container.MarginTop + 10, fixedBox.Location.Y, 1);
         }
 
         [Fact]
@@ -1538,12 +1541,12 @@ namespace PeachPDF.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, container) = await LayoutHarness.LayoutAsync(html);
             var fixedBox = LayoutHarness.FindById(root, "fixed");
             Assert.NotNull(fixedBox);
 
-            Assert.Equal(10, fixedBox!.Location.X, 1);
-            Assert.Equal(10, fixedBox.Location.Y, 1);
+            Assert.Equal(container.MarginLeft + 10, fixedBox!.Location.X, 1);
+            Assert.Equal(container.MarginTop + 10, fixedBox.Location.Y, 1);
 
             var width = fixedBox.ActualRight - fixedBox.Location.X;
             Assert.True(width > 0 && width < 50, $"auto width should shrink to its short content, got {width}");

@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -786,17 +786,24 @@ namespace PeachPDF.Html.Core.Parse
             var uaSnapshot = needsUaSnapshot ? CssUtils.SnapshotProperties(box) : null;
             var uaCustomSnapshot = needsUaSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
 
+            // Presentational hints (width="", bgcolor="", align="", ...) are applied HERE, between the
+            // UA sheet and the author sheets: HTML maps them to declarations that sit at the very start
+            // of the author origin with zero specificity, so ANY author rule beats them. Applying them
+            // after the author rules instead let <svg width="500"> override a `.logo { width: 365px }`
+            // rule - only an inline style could win - which is exactly backwards. Captured after
+            // uaSnapshot deliberately: `revert` in an author rule rolls back past the hints, since the
+            // hints are themselves author-origin.
+            if (box.HtmlTag != null)
+            {
+                TranslateAttributes(box.HtmlTag, box, valueParser);
+            }
+
             // 4. Author normal — applied in ascending layer-rank bands so revert-layer can roll back to
             // the state before each layer (= all lower-priority layers + prior origins).
             ApplyAuthorRulesInLayerBands(valueParser, box, authorNormal, importantPass: false, uaSnapshot, uaCustomSnapshot, captureLayerBands, pendingVarProperties);
             var needsAuthorNormalSnapshot = inlineUsesRevert || authorUsesRevert;
             var authorNormalSnapshot = needsAuthorNormalSnapshot ? CssUtils.SnapshotProperties(box) : null;
             var authorNormalCustomSnapshot = needsAuthorNormalSnapshot ? CssUtils.SnapshotCustomProperties(box) : null;
-
-            if (box.HtmlTag != null)
-            {
-                TranslateAttributes(box.HtmlTag, box, valueParser);
-            }
 
             // 5. Inline normal; revert target is the author-normal-applied state (unchanged from
             // before this restructure)

@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -6004,8 +6004,17 @@ namespace PeachPDF.Html.Core.Dom
                     // (issue #146); FragmentEmitter.ComputeFixedPageOffset corrects the delta for every
                     // LATER page relative to whatever this establishes here.
                     var pageZero = child.HtmlContainer!.PageGeometry.GetPage(0);
-                    var left = child.ActualMarginLeft + ResolveOffsetOrZero(child.Left, pageZero.BandWidth, child);
-                    var top = child.ActualMarginTop + ResolveOffsetOrZero(child.Top, pageZero.BandHeight, child);
+                    // The origin is the page AREA's own corner, not the sheet's: CSS 2.1 §10.1 makes the
+                    // page area the containing block of a fixed box in paged media, so `left: 0` is the
+                    // content edge, exactly where a browser printing the same document puts it. Anchoring
+                    // at the sheet corner instead (what this did until the offsets below were paired with
+                    // a page-area size basis) left the two halves disagreeing: a `left: 0; right: 0` box
+                    // was given the content width - BandWidth, below - but drawn from the sheet edge, so
+                    // it stopped a margin short of the right content edge instead of spanning the measure.
+                    var left = child.HtmlContainer.MarginLeft + child.ActualMarginLeft
+                               + ResolveOffsetOrZero(child.Left, pageZero.BandWidth, child);
+                    var top = child.HtmlContainer.MarginTop + child.ActualMarginTop
+                              + ResolveOffsetOrZero(child.Top, pageZero.BandHeight, child);
                     child.Location = new RPoint(left, top);
                 }
             }

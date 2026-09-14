@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -178,6 +178,54 @@ namespace PeachPDF.Tests.Integration
             var div = FindById(root, "d")!;
 
             Assert.Equal(HorizontalAlignment.Left, div.TextAlign.Value);
+        }
+
+        [Fact]
+        public async Task WidthAttribute_LosesToAnAuthorStyleRule()
+        {
+            // HTML maps a presentational attribute to a declaration at the very START of the author
+            // origin, with zero specificity, so any author rule beats it. Applying the attributes after
+            // the author sheet instead - which is what this parser did - let <svg width="500"> ignore a
+            // `.logo { width: 365px }` rule, and only an inline style could win.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>.sized { width: 120pt }</style>" +
+                "<img id='i' class='sized' src='x.png' width='400' height='50'>"));
+            var img = FindById(root, "i")!;
+
+            Assert.Equal("120pt", img.Width);
+        }
+
+        [Fact]
+        public async Task WidthAttribute_StillWinsWhereNoAuthorRuleTouchesTheProperty()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>.sized { height: 25pt }</style>" +
+                "<img id='i' class='sized' src='x.png' width='400' height='50'>"));
+            var img = FindById(root, "i")!;
+
+            Assert.Equal("400px", img.Width);
+            Assert.Equal("25pt", img.Height);
+        }
+
+        [Fact]
+        public async Task BgcolorAttribute_LosesToAnAuthorStyleRule()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<style>#d { background-color: blue }</style>" +
+                "<div id='d' bgcolor='red'>x</div>"));
+            var div = FindById(root, "d")!;
+
+            Assert.Equal("rgb(0, 0, 255)", div.BackgroundColor);
+        }
+
+        [Fact]
+        public async Task WidthAttribute_StillLosesToAnInlineStyle()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<img id='i' style='width: 90pt' src='x.png' width='400' height='50'>"));
+            var img = FindById(root, "i")!;
+
+            Assert.Equal("90pt", img.Width);
         }
 
         [Fact]

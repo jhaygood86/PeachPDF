@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+﻿using PeachPDF.Adapters;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -331,6 +331,40 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task FixedZeroInsets_AnchorAtThePageAreasCorner_NotTheSheets()
+        {
+            // CSS 2.1 §10.1: a fixed box's containing block is the page area in paged media, so `top: 0;
+            // left: 0` is the content corner - inside the @page margins - which is where a browser
+            // printing the same document puts it. Anchoring at the sheet corner instead also disagreed
+            // with the sizes, which have always resolved against the page area.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='fixed' style='position:fixed; top:0; left:0; width:30pt; height:10pt;'></div>"),
+                margin: 20);
+
+            var fixedBox = LayoutHarness.FindById(root, "fixed")!;
+
+            Assert.Equal(container.MarginLeft, fixedBox.Location.X, 0.5);
+            Assert.Equal(container.MarginTop, fixedBox.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task FixedLeftAndRightZero_SpanTheFullMeasure()
+        {
+            // The half that was already right - the fill between two insets resolves against the page
+            // area - now agrees with the origin: the box starts at the content edge AND ends at the
+            // opposite one, rather than being given the measure but drawn from the sheet edge, stopping
+            // one margin short.
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='fixed' style='position:fixed; top:0; left:0; right:0; height:2pt;'></div>"),
+                margin: 20);
+
+            var fixedBox = LayoutHarness.FindById(root, "fixed")!;
+
+            Assert.Equal(container.MarginLeft, fixedBox.Location.X, 0.5);
+            Assert.Equal(container.MarginLeft + container.PageSize.Width, fixedBox.ActualRight, 0.5);
+        }
+
+        [Fact]
         public async Task FixedBothInsets_BothAutoBlockMargins_CentreTheBoxInThePageArea()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
@@ -338,7 +372,10 @@ namespace PeachPDF.Tests.Integration
                 margin: 20);
 
             var fixedBox = LayoutHarness.FindById(root, "fixed")!;
-            var expectedTop = (container.PageBandHeightOf(0) - fixedBox.ActualHeight) / 2;
+            // Centred within the page AREA, which is where the box's containing block starts (CSS 2.1
+            // §10.1) - so the page's own top margin is part of the coordinate, not something the
+            // centring replaces.
+            var expectedTop = container.MarginTop + (container.PageBandHeightOf(0) - fixedBox.ActualHeight) / 2;
 
             Assert.Equal(expectedTop, fixedBox.Location.Y, 1.5);
         }
@@ -397,9 +434,10 @@ namespace PeachPDF.Tests.Integration
             var fixedBox = LayoutHarness.FindById(root, "fixed")!;
             var band = container.PageBandHeightOf(0);
 
-            // Half the band, centred by the two auto margins: a quarter of the band above it.
+            // Half the band, centred by the two auto margins: a quarter of the band above it, measured
+            // from the page area's own top edge (the containing block, CSS 2.1 §10.1).
             Assert.Equal(band / 2, fixedBox.ActualBottom - fixedBox.Location.Y, 1.5);
-            Assert.Equal(band / 4, fixedBox.Location.Y, 1.5);
+            Assert.Equal(container.MarginTop + band / 4, fixedBox.Location.Y, 1.5);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

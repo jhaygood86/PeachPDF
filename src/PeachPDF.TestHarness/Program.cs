@@ -4324,16 +4324,16 @@ var svgFormReuseHtml =
     "@page { size: A4; margin: 38px 48px 42px }" +
     "body { margin: 0; color: #543b38; font: 14px Arial, sans-serif }" +
     ".running-logo { position: fixed; top: 0; left: 0; width: 365px; height: 81px }" +
-    ".logo-rule { position: fixed; top: 126px; left: 0; right: 0; height: 2px; background: #e8b9a4 }" +
+    ".logo-rule { position: fixed; top: 96px; left: 0; right: 0; height: 2px; background: #e8b9a4 }" +
     ".border-panel {" +
-    "  position: fixed; top: 146px; left: 0; width: 100%; height: 168px;" +
+    "  position: fixed; top: 112px; left: 0; width: 100%; height: 168px;" +
     "  box-sizing: border-box; border: 16px solid transparent;" +
     $"  border-image-source: url(\"{SvgFormReuseBorderSource}\");" +
     "  border-image-slice: 40%; border-image-width: 16px; border-image-repeat: repeat;" +
     "  background: #fffaf6; padding: 20px 24px }" +
     ".border-panel h2 { margin: 0 0 8px; color: #a64246; font-size: 19px }" +
     ".border-panel p { margin: 0; line-height: 1.45 }" +
-    ".sheet { padding-top: 350px }" +
+    ".sheet { padding-top: 300px }" +
     ".sheet + .sheet { break-before: page }" +
     ".sheet-number { color: #a64246; font-size: 11px; font-weight: bold; letter-spacing: 2px }" +
     "h1 { margin: 9px 0 18px; font-size: 25px }" +
