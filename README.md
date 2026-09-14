@@ -20,6 +20,7 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 - Optional PDF/A (ISO 19005) conformance — parts 1, 2, and 3, each with visual-only (B), guaranteed-text-extraction (U), and accessible (A) levels (see `PdfGenerateConfig.PdfAConformance`)
 - Automatic PDF outline (bookmark sidebar) generation from headings, with full CSS control via `bookmark-level`/`bookmark-label`/`bookmark-state` (CSS Generated Content Module Level 3) — no configuration required
 - Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery — with per-character font matching (`@font-face` `unicode-range` and coverage-based fallback across the `font-family` stack), supplementary-plane text via `cmap` format-12, and searchable/selectable `COLR`/`CPAL` color emoji rendered as native PDF vectors
+- A declarative, code-first document-building API (`PdfGenerator.CreateDocument`) — pages, containers, text, images, rows/columns, tables, lists, and repeating headers/footers with page numbers, built directly in C# with no HTML/CSS strings
 
 See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the full compatibility matrix, [Supported SVG Features](https://peachpdf.net/supported-svg-features.html) for the full SVG compatibility matrix, and [Supported MathML Features](https://peachpdf.net/supported-mathml-features.html) for the full MathML compatibility matrix.
 
@@ -123,6 +124,32 @@ document.Save(stream);
 Note that loading resources using relative paths resolves against the configured `NetworkLoader`'s `BaseUri` (e.g. an `HttpClientNetworkLoader` or `FileUriNetworkLoader`), or a `<base href>` element if the HTML has one. With the default loader, relative paths resolve against the current working directory and load from the local file system. `file:` URIs are always loaded from disk regardless of which loader is configured, the same way `data:` URIs always are.
 
 A local file's content type is resolved from the OS's own MIME mechanism by default (Windows shell associations, macOS/iOS Uniform Type Identifiers, or Linux `/etc/mime.types`), falling back to a built-in set for HTML, CSS, SVG, PeachPDF's raster image formats, and TTF/OTF/WOFF/WOFF2 fonts. For a local file with an extension outside that set, register its MIME type with the OS so PeachPDF can resolve it. See [Rendering a local HTML file](docs/usage-examples.md#rendering-a-local-html-file) for details.
+
+### Building a document declaratively
+
+If you'd rather build a document directly in C# than author HTML, `PdfGenerator.CreateDocument` gives you pages, containers, text, images, rows/columns, tables, lists, and repeating headers/footers with page numbers — no HTML/CSS strings involved:
+
+```csharp
+var generator = new PdfGenerator();
+
+var document = await generator.CreateDocument(doc =>
+{
+    doc.Page(page =>
+    {
+        page.Size(PageSize.A4);
+        page.Margin(20);
+        page.Content(container =>
+        {
+            container.Padding(20).Border(1, PdfColor.FromHex("#CCCCCC")).Text("Hello, declarative PeachPDF!");
+        });
+    });
+});
+
+var stream = new MemoryStream();
+document.Save(stream);
+```
+
+See the [Declarative Document-Building API guide](docs/declarative-api.md) for the full surface.
 
 ## Command-line tool
 

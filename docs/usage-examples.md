@@ -1,6 +1,6 @@
 # Usage Examples
 
-This page collects practical, copy-pasteable examples for common PeachPDF scenarios, including hosting it behind an HTTP endpoint. For the full list of supported HTML elements and CSS properties, see [HTML & CSS Support](html-css-support.md); for how the rendering pipeline works internally, see [Architecture](architecture.md).
+This page collects practical, copy-pasteable examples for common PeachPDF scenarios, including hosting it behind an HTTP endpoint. For the full list of supported HTML elements and CSS properties, see [HTML & CSS Support](html-css-support.md); for how the rendering pipeline works internally, see [Architecture](architecture.md). If you'd rather build a document directly in C# than author HTML, see the [Declarative Document-Building API](declarative-api.md).
 
 All examples assume:
 

@@ -1,4 +1,5 @@
 ﻿using PeachPDF;
+using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;
 using System.Diagnostics;
 using System.Globalization;
@@ -132,6 +133,34 @@ async Task SaveShowcaseAsync(string slug, string category, string cardTitle, str
             Console.WriteLine($"PDF/A SWEEP GENERATION FAILED for {slug}: {ex.GetType().Name}: {ex.Message}");
         }
     }
+}
+
+// Declarative-API showcases build via PdfGenerator.CreateDocument instead of parsing an HTML string, so
+// there is no HTML source to show a reader - csharpSource (the exact call the showcase makes) is written
+// as the "source" file instead, wrapped in a minimal valid HTML document so it stays compatible with the
+// existing ShowcaseEntry.Html manifest field/site build (docs/showcase.html, .github/workflows/pages.yml)
+// without changing that schema for every other (HTML-based) showcase.
+async Task SaveDeclarativeShowcaseAsync(string slug, string category, string cardTitle, string cardDescription,
+    string csharpSource, Func<PdfGenerator, Task<PeachPdfDocument>> build)
+{
+    // --benchmark measures HTML-parsing showcases only (BenchmarkShowcaseAsync times GeneratePdf
+    // specifically) - a declarative showcase has no comparable "parse this HTML" cost to measure, so it
+    // simply doesn't run in that mode rather than writing files a benchmark pass isn't meant to produce.
+    if (benchmarkMode) return;
+
+    var showcaseDocument = await build(generator);
+    using var pdfStream = new MemoryStream();
+    showcaseDocument.Save(pdfStream);
+    File.WriteAllBytes(Path.Combine(outputDir, $"{slug}.pdf"), pdfStream.ToArray());
+
+    var sourceHtml =
+        $"""
+        <!DOCTYPE html><html><head><meta charset="utf-8"><title>{cardTitle}</title></head>
+        <body><pre><code>{System.Net.WebUtility.HtmlEncode(csharpSource)}</code></pre></body></html>
+        """;
+    File.WriteAllText(Path.Combine(outputDir, $"{slug}.html"), sourceHtml);
+    showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, $"{slug}.pdf", $"{slug}.html"));
+    Console.WriteLine($"Saved {slug}.pdf + {slug}.html (declarative)");
 }
 
 // Renders sourceHtml the same way a real caller would - GeneratePdf, then Save to a stream - without
@@ -9950,6 +9979,160 @@ var svgFilterGraphHtml = "<!DOCTYPE html><html><head>" + SvgFilterGraphCss + "</
 await SaveShowcaseAsync("svg_filter_graph", "Graphics & Effects", "SVG Filter: Multi-Primitive Graph",
     "A real SVG <filter> primitive graph (feFlood, feComposite, feOffset, feMerge) building a drop shadow from named, non-adjacently-referenced results - the general filter graph evaluator, not a simple linear chain.",
     svgFilterGraphHtml, pdfConfig);
+
+const string declarativeApiSource =
+    """
+    var generator = new PdfGenerator();
+
+    var document = await generator.CreateDocument(doc =>
+    {
+        doc.Page(page =>
+        {
+            page.Size(PageSize.A4);
+            page.Margin(24);
+            page.Header(header => header.Text(t =>
+            {
+                t.Alignment(TextAlignment.Center);
+                t.Span("Quarterly Report").Bold().FontColor(PdfColor.FromRgb(70, 70, 70));
+            }));
+            page.Footer(footer => footer.Text(t =>
+            {
+                t.Alignment(TextAlignment.Center);
+                t.Span("Page ");
+                t.CurrentPageNumber();
+                t.Span(" of ");
+                t.TotalPages();
+            }));
+            page.Content(container =>
+            {
+                container.Column(column =>
+                {
+                    column.Spacing(16);
+
+                    column.Item()
+                        .Padding(16).Border(1, PdfColor.FromHex("#DDDDDD")).CornerRadius(8)
+                        .Background(PdfColor.FromRgb(248, 248, 248))
+                        .Shadow(new PdfBoxShadow(PdfColor.FromArgb(40, 0, 0, 0), 0, 3, 6))
+                        .Text(t =>
+                        {
+                            t.Span("Built directly in C# - ").FontSize(14);
+                            t.Span("no HTML or CSS strings involved.").FontSize(14).Italic();
+                        });
+
+                    column.Item().Table(table =>
+                    {
+                        table.Columns(columns =>
+                        {
+                            columns.RelativeColumn(2);
+                            columns.RelativeColumn(1);
+                            columns.RelativeColumn(1);
+                        });
+                        table.Header(header =>
+                        {
+                            header.Cell().Padding(4).Text(t => t.Span("Region").Bold());
+                            header.Cell().Padding(4).Text(t => t.Span("Q1").Bold());
+                            header.Cell().Padding(4).Text(t => t.Span("Q2").Bold());
+                        });
+                        foreach (var (region, q1, q2) in new[] { ("North", "$42k", "$48k"), ("South", "$31k", "$35k"), ("West", "$27k", "$30k") })
+                        {
+                            table.Row(row =>
+                            {
+                                row.Cell().Padding(4).Text(region);
+                                row.Cell().Padding(4).Text(q1);
+                                row.Cell().Padding(4).Text(q2);
+                            });
+                        }
+                    });
+
+                    column.Item().UnorderedList(list =>
+                    {
+                        list.Item().Text("Revenue grew across every region.");
+                        list.Item().Text("West opened its first retail location.");
+                    }, PdfListMarkerType.Disc);
+                });
+            });
+        });
+    });
+
+    var stream = new MemoryStream();
+    document.Save(stream);
+    """;
+
+await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Declarative Document-Building API",
+    "PdfGenerator.CreateDocument: pages, a padded/bordered/shadowed card, a table with a repeating header, a bulleted list, and a repeating page-numbered footer, built directly in C# with no HTML/CSS strings - layered entirely on PeachPDF's own flexbox, table, list, and running-header/footer machinery.",
+    declarativeApiSource,
+    async gen =>
+    {
+        return await gen.CreateDocument(doc =>
+        {
+            doc.Page(page =>
+            {
+                page.Size(PageSize.A4);
+                page.Margin(24);
+                page.Header(header => header.Text(t =>
+                {
+                    t.Alignment(TextAlignment.Center);
+                    t.Span("Quarterly Report").Bold().FontColor(PdfColor.FromRgb(70, 70, 70));
+                }));
+                page.Footer(footer => footer.Text(t =>
+                {
+                    t.Alignment(TextAlignment.Center);
+                    t.Span("Page ");
+                    t.CurrentPageNumber();
+                    t.Span(" of ");
+                    t.TotalPages();
+                }));
+                page.Content(container =>
+                {
+                    container.Column(column =>
+                    {
+                        column.Spacing(16);
+
+                        column.Item()
+                            .Padding(16).Border(1, PdfColor.FromHex("#DDDDDD")).CornerRadius(8)
+                            .Background(PdfColor.FromRgb(248, 248, 248))
+                            .Shadow(new PdfBoxShadow(PdfColor.FromArgb(40, 0, 0, 0), 0, 3, 6))
+                            .Text(t =>
+                            {
+                                t.Span("Built directly in C# - ").FontSize(14);
+                                t.Span("no HTML or CSS strings involved.").FontSize(14).Italic();
+                            });
+
+                        column.Item().Table(table =>
+                        {
+                            table.Columns(columns =>
+                            {
+                                columns.RelativeColumn(2);
+                                columns.RelativeColumn(1);
+                                columns.RelativeColumn(1);
+                            });
+                            table.Header(header =>
+                            {
+                                header.Cell().Padding(4).Text(t => t.Span("Region").Bold());
+                                header.Cell().Padding(4).Text(t => t.Span("Q1").Bold());
+                                header.Cell().Padding(4).Text(t => t.Span("Q2").Bold());
+                            });
+                            foreach (var (region, q1, q2) in new[] { ("North", "$42k", "$48k"), ("South", "$31k", "$35k"), ("West", "$27k", "$30k") })
+                            {
+                                table.Row(row =>
+                                {
+                                    row.Cell().Padding(4).Text(region);
+                                    row.Cell().Padding(4).Text(q1);
+                                    row.Cell().Padding(4).Text(q2);
+                                });
+                            }
+                        });
+
+                        column.Item().UnorderedList(list =>
+                        {
+                            list.Item().Text("Revenue grew across every region.");
+                            list.Item().Text("West opened its first retail location.");
+                        }, PdfListMarkerType.Disc);
+                    });
+                });
+            });
+        });
+    });
 
 if (benchmarkMode)
 {

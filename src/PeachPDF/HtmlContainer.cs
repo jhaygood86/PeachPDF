@@ -166,6 +166,12 @@ namespace PeachPDF
             await HtmlContainerInt.SetHtml(htmlSource, baseCssData);
         }
 
+        /// <summary>Thin wrapper over <see cref="HtmlContainerInt.SetDeclarativeRoot"/> - see its own remarks.</summary>
+        internal async ValueTask SetDeclarativeRoot(CssBox root, string? documentLanguage)
+        {
+            await HtmlContainerInt.SetDeclarativeRoot(root, documentLanguage);
+        }
+
         /// <summary>
         /// Get all the links in the HTML with the element rectangle and href data.
         /// </summary>
