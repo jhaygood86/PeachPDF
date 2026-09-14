@@ -129,9 +129,12 @@ namespace PeachPDF.Layout
         /// <summary>
         /// Truncates this container's own text after <paramref name="lines"/> lines, marking the cut with
         /// an ellipsis (<c>overflow: hidden</c> + <c>line-clamp</c>). Applies only when this container's
-        /// own terminal content is text.
+        /// own terminal content is text. By default the cut is marked with the usual "…"; pass
+        /// <paramref name="ellipsis"/> for a custom marker instead (e.g. <c>" [more]"</c>), or
+        /// <c>""</c> for no marker at all - the text is still cut at <paramref name="lines"/> lines, just
+        /// with nothing appended (<c>block-ellipsis: none</c>).
         /// </summary>
-        IContainer ClampLines(int lines);
+        IContainer ClampLines(int lines, string? ellipsis = null);
 
         /// <summary>Places a paragraph of plain text. Terminal - may be called at most once.</summary>
         void Text(string text);

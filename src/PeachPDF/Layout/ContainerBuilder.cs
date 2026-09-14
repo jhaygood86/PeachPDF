@@ -272,10 +272,17 @@ namespace PeachPDF.Layout
             return this;
         }
 
-        public IContainer ClampLines(int lines)
+        public IContainer ClampLines(int lines, string? ellipsis = null)
         {
             properties.Set(box, "overflow", "hidden");
             properties.Set(box, "line-clamp", lines.ToString(CultureInfo.InvariantCulture));
+
+            if (ellipsis is not null)
+            {
+                properties.Set(box, "block-ellipsis",
+                    ellipsis.Length == 0 ? "none" : "\"" + EscapeCssStringLiteral(ellipsis) + "\"");
+            }
+
             return this;
         }
 

@@ -824,6 +824,33 @@ namespace PeachPDF.Html.Core.Parse
         }
 
         /// <summary>
+        /// Parses <paramref name="value"/> as a single CSS <c>&lt;string&gt;</c> token (e.g. <c>"some text"</c>)
+        /// - the shared &lt;string&gt;-only grammar for a property whose own value is nothing but a quoted
+        /// string, such as <c>block-ellipsis</c>'s <c>auto | none | &lt;string&gt;</c> (CSS Overflow 4).
+        /// Fails for anything else: no tokens, more than one token, or an unquoted identifier. Deliberately
+        /// does not gate on <see cref="Token.IsValid"/> - same as the only other single-string-token caller,
+        /// <see cref="GetFontFaceFamilyName"/> - since that flag's sense for a <see cref="TokenType.String"/>
+        /// token is the reverse of what its name suggests (a cleanly-closed string comes back
+        /// <c>IsValid: false</c>; see <see cref="Lexer.NewString"/>'s own <c>bad</c> parameter, threaded
+        /// straight into <see cref="Token.NewString"/>'s <c>valid</c> parameter with no inversion) - a
+        /// pre-existing tokenizer quirk this method works around rather than relies on.
+        /// </summary>
+        public static bool TryParseSingleString(string value, out string content)
+        {
+            using var pooled = GetCssTokensPooled(value);
+            List<Token> tokens = pooled;
+
+            if (tokens is [{ Type: TokenType.String } token])
+            {
+                content = token.Data.ToString();
+                return true;
+            }
+
+            content = "";
+            return false;
+        }
+
+        /// <summary>
         /// Same tokenization as <see cref="GetCssTokens"/>, but the returned list's backing array comes
         /// from a thread-static pool instead of a fresh allocation - use only at a call site that has been
         /// individually audited to never retain the list (or a sub-list/enumerable slice of it) past the

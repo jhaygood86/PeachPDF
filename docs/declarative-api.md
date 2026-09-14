@@ -111,7 +111,7 @@ container.Text(t =>
 });
 ```
 
-`ITextStyle` (shared by `DefaultTextStyle` and every span) also covers `FontWeight(int)` (a raw 1–1000 weight, not just `Bold()`), `LetterSpacing`/`WordSpacing`, `LineHeight`, `Subscript()`, `FontFeature(tag, enabled)` for OpenType features, `Direction(PdfTextDirection.Rtl)` for right-to-left paragraphs, and `BreakAnywhere()`. A container itself has `ParagraphFirstLineIndentation`, `ParagraphSpacing`, and `ClampLines(n)` to truncate a block after a fixed number of lines with an ellipsis. `ITextSpanContainer.Element(content => ...)` inserts arbitrary container content — an image, a styled box — inline between spans.
+`ITextStyle` (shared by `DefaultTextStyle` and every span) also covers `FontWeight(int)` (a raw 1–1000 weight, not just `Bold()`), `LetterSpacing`/`WordSpacing`, `LineHeight`, `Subscript()`, `FontFeature(tag, enabled)` for OpenType features, `Direction(PdfTextDirection.Rtl)` for right-to-left paragraphs, and `BreakAnywhere()`. A container itself has `ParagraphFirstLineIndentation`, `ParagraphSpacing`, and `ClampLines(n, ellipsis)` to truncate a block after a fixed number of lines, marking the cut with the usual "…" by default, a custom string (e.g. `ClampLines(2, "… [continued]")`), or nothing at all (`ClampLines(2, "")`). `ITextSpanContainer.Element(content => ...)` inserts arbitrary container content — an image, a styled box — inline between spans.
 
 ## Images
 
@@ -239,5 +239,4 @@ page.Footer(footer =>
 - **No sectioned page numbers** (a page count scoped to/counted from a named section) — only document-wide `CurrentPageNumber()`/`TotalPages()`.
 - **No dashed-line pattern** for `LineHorizontal`/`LineVertical` — only a solid fill or a gradient.
 - **`PdfTextDirection` has no `Auto`** — only explicit `Ltr`/`Rtl`.
-- **`ClampLines` always uses the default ellipsis** — there's no way to supply a custom truncation string.
 - **No callback-driven raster image generation, per-image compression/DPI override, or `ShrinkToFit`/`ScaleToPageSize`** for a declarative document — each of these needs a caller-provided image at a pixel size or a re-run of the whole builder callback that a hand-built tree has no equivalent for; document-wide settings on `PdfGenerateConfig` (`DownscaleImages`, `PixelsPerInch`, ...) still apply.

@@ -3,6 +3,7 @@ using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Fragments;
+using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;
@@ -1105,6 +1106,39 @@ namespace PeachPDF.Tests.Integration
             Assert.InRange(paragraphBox.Box.ActualMarginBottom, 7, 9);
 
             Assert.Contains("2", clampedBox!.Box.LineClamp.ToString());
+        }
+
+        [Fact]
+        public async Task ClampLines_CustomEllipsis_SetsBlockEllipsis()
+        {
+            ContainerBuilder? customEllipsisBox = null;
+            ContainerBuilder? noEllipsisBox = null;
+            ContainerBuilder? defaultEllipsisBox = null;
+
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(container =>
+                {
+                    container.Column(column =>
+                    {
+                        customEllipsisBox = (ContainerBuilder)column.Item().ClampLines(2, "[more]");
+                        customEllipsisBox.Text("some long text that wraps across more than two lines of content");
+
+                        noEllipsisBox = (ContainerBuilder)column.Item().ClampLines(2, "");
+                        noEllipsisBox.Text("some long text that wraps across more than two lines of content");
+
+                        defaultEllipsisBox = (ContainerBuilder)column.Item().ClampLines(2);
+                        defaultEllipsisBox.Text("some long text that wraps across more than two lines of content");
+                    });
+                });
+            });
+
+            Assert.True(CssValueParser.TryParseSingleString(customEllipsisBox!.Box.BlockEllipsis, out var customText));
+            Assert.Equal("[more]", customText);
+
+            Assert.Equal("none", noEllipsisBox!.Box.BlockEllipsis, ignoreCase: true);
+
+            Assert.Equal("auto", defaultEllipsisBox!.Box.BlockEllipsis, ignoreCase: true);
         }
 
         [Fact]
