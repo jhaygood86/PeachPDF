@@ -52,7 +52,8 @@ namespace PeachPDF.Html.Core.Handlers
 
             if (areaRect.Width <= 0 || areaRect.Height <= 0) return false;
 
-            var slice = BorderImageLayerResolver.ResolveSlice(box.BorderImageSlice, image.NaturalWidth, image.NaturalHeight);
+            var slice = BorderImageLayerResolver.ResolveSlice(box.BorderImageSlice, image.NaturalWidth, image.NaturalHeight,
+                image.NumberUnit);
 
             var width = BorderImageLayerResolver.ResolveWidth(box.BorderImageWidth,
                 borderTop, borderRight, borderBottom, borderLeft, areaRect.Width, areaRect.Height, box);
@@ -72,6 +73,16 @@ namespace PeachPDF.Html.Core.Handlers
                 }
             }
 
+            // Every region is cut out of the source with a clip (there is no "draw this sub-rectangle"
+            // operator in PDF - see GraphicsAdapter.DrawImage's own note), and a smoothing renderer
+            // samples across that clip edge: the neighbouring slice's pixels bleed half a source pixel
+            // into this one, which at a slice-to-border scale of 6x is a quarter of the whole border. Any
+            // seam between two tiles of a repeated edge smooths the same way. Nearest-neighbour keeps each
+            // region to its own pixels; restore afterwards, since the same RImage is shared with any <img>
+            // or background layer using the same url().
+            var wasInterpolate = image.Image.Interpolate;
+            image.Image.Interpolate = false;
+
             try
             {
                 PaintNineSlice(g, image.Image, image.NaturalWidth, image.NaturalHeight, slice, areaRect, width,
@@ -79,6 +90,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
             finally
             {
+                image.Image.Interpolate = wasInterpolate;
                 if (pushedClip) g.PopClip();
             }
 
@@ -88,20 +100,36 @@ namespace PeachPDF.Html.Core.Handlers
         /// <summary>
         /// One resolved <c>border-image-source</c>, ready for slicing: a real <see cref="RImage"/> plus its
         /// "natural" size in the same pixel space <see cref="RGraphics.DrawImage(RImage,RRect,RRect)"/>'s own
-        /// <c>srcRect</c> expects. A raster <c>url()</c> uses its own real natural size; a gradient, SVG, or
-        /// any other source with no natural-size concept of its own is rendered into a
-        /// <see cref="RGraphics.CreateTile"/> tile sized to the border-image area itself - mirroring
-        /// <see cref="CssImagePainter"/>'s identical "auto == fills the box" treatment of a generated
-        /// background-image layer - so its own percentages in <c>border-image-slice</c> resolve against that
-        /// same area. An SVG tile is cached per PDF document and reused at the same size. <see cref="Dispose"/>
+        /// <c>srcRect</c> expects. A raster <c>url()</c> uses its own real natural size, and an SVG its own
+        /// intrinsic size (width/height, or the viewBox they default to); a gradient - or an SVG with no
+        /// intrinsic size at all - has nothing to slice against, so it is rendered into a
+        /// <see cref="RGraphics.CreateTile"/> tile sized to the border-image area itself, the default object
+        /// size CSS Images 3 gives a border-image, mirroring <see cref="CssImagePainter"/>'s identical
+        /// "auto == fills the box" treatment of a generated background-image layer. An SVG form is cached
+        /// per PDF document and reused at the same size. <see cref="Dispose"/>
         /// disposes only a newly created, uncached tile image; a raster source's <see cref="RImage"/>
         /// belongs to its <see cref="CssImage.Url"/> and is left alone.
         /// </summary>
-        private readonly struct ResolvedSourceImage(RImage image, double naturalWidth, double naturalHeight, bool ownsImage) : IDisposable
+        /// <param name="image">The resolved image itself - a raster's own <see cref="RImage"/>, or a tile.</param>
+        /// <param name="naturalWidth">The image's natural width, the horizontal basis every slice is cut against.</param>
+        /// <param name="naturalHeight">The image's natural height, the vertical basis every slice is cut against.</param>
+        /// <param name="numberUnit">
+        /// How much of <see cref="NaturalWidth"/>/<see cref="NaturalHeight"/> one bare
+        /// <c>border-image-slice</c> <c>&lt;number&gt;</c> buys. A raster's natural size is counted in its
+        /// own device pixels and a number "represents pixels in the image", so the two already agree (1).
+        /// Every other source is rendered into a tile measured in layout points, while a number there is a
+        /// vector coordinate / CSS pixel - so one number is <see cref="Length.PointsPerPx"/> of it.
+        /// </param>
+        /// <param name="ownsImage">
+        /// Whether <see cref="Dispose"/> owns <paramref name="image"/> - true only for a tile created for
+        /// this paint alone, false for a raster's shared image or a document-cached SVG form.
+        /// </param>
+        private readonly struct ResolvedSourceImage(RImage image, double naturalWidth, double naturalHeight, double numberUnit, bool ownsImage) : IDisposable
         {
             public RImage Image { get; } = image;
             public double NaturalWidth { get; } = naturalWidth;
             public double NaturalHeight { get; } = naturalHeight;
+            public double NumberUnit { get; } = numberUnit;
 
             public void Dispose()
             {
@@ -112,20 +140,32 @@ namespace PeachPDF.Html.Core.Handlers
         private static ResolvedSourceImage? ResolveSourceImage(RGraphics g, CssImage source, CssBox box, RRect borderBoxRect)
         {
             if (source is CssImage.Url { Image: { } raster })
-                return new ResolvedSourceImage(raster, raster.Width, raster.Height, ownsImage: false);
+                return new ResolvedSourceImage(raster, raster.Width, raster.Height, numberUnit: 1, ownsImage: false);
 
-            // SVGs and gradients have no natural size to slice against, so use the border box as the
-            // viewport, matching a generated background image with auto size. SVGs can reuse the
-            // document-local form; gradients still create a tile for this paint.
+            // A gradient has no size of its own, so it is rendered at the border-image area itself - the
+            // default object size CSS Images 3 §5.3 hands a border-image - matching a generated background
+            // image with auto size.
             var tileWidth = borderBoxRect.Width;
             var tileHeight = borderBoxRect.Height;
             if (tileWidth <= 0 || tileHeight <= 0) return null;
 
             if (source is CssImage.Url { SvgDocument: { } svg })
             {
-                var form = SvgRenderer.GetOrCreateForm(g, svg, tileWidth, tileHeight);
-                return form is null ? null : new ResolvedSourceImage(form, tileWidth, tileHeight,
-                    ownsImage: g.FormCacheOwner is null);
+                // ...but an SVG that carries its own width/height (or a viewBox to take them from) does
+                // have an intrinsic size, and CSS Images 3's default sizing algorithm uses it verbatim when
+                // no size is specified - so the slices are cut from the artwork at its own scale, exactly
+                // as <img src="x.svg"> would draw it. Sizing it to the border-image area instead stretched
+                // the whole drawing over the box before slicing it, which both distorted the motif and made
+                // every edge tile the wrong aspect. Only a genuinely sizeless SVG falls back to the area.
+                var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(svg);
+                var svgWidth = intrinsicWidth is > 0 && intrinsicHeight is > 0
+                    ? intrinsicWidth.Value * Length.PointsPerPx : tileWidth;
+                var svgHeight = intrinsicWidth is > 0 && intrinsicHeight is > 0
+                    ? intrinsicHeight.Value * Length.PointsPerPx : tileHeight;
+
+                var form = SvgRenderer.GetOrCreateForm(g, svg, svgWidth, svgHeight);
+                return form is null ? null : new ResolvedSourceImage(form, svgWidth, svgHeight,
+                    numberUnit: Length.PointsPerPx, ownsImage: g.FormCacheOwner is null);
             }
 
             var tile = g.CreateTile(tileWidth, tileHeight);
@@ -153,7 +193,7 @@ namespace PeachPDF.Html.Core.Handlers
             }
 
             t.Graphics.Dispose();
-            return new ResolvedSourceImage(t.Image, tileWidth, tileHeight, ownsImage: true);
+            return new ResolvedSourceImage(t.Image, tileWidth, tileHeight, numberUnit: Length.PointsPerPx, ownsImage: true);
         }
 
         /// <summary>
@@ -243,8 +283,6 @@ namespace PeachPDF.Html.Core.Handlers
                 return;
             }
 
-            var wasInterpolate = image.Interpolate;
-            image.Interpolate = false;
             g.PushClip(dest);
             try
             {
@@ -268,7 +306,6 @@ namespace PeachPDF.Html.Core.Handlers
             finally
             {
                 g.PopClip();
-                image.Interpolate = wasInterpolate;
             }
         }
 
@@ -294,8 +331,6 @@ namespace PeachPDF.Html.Core.Handlers
             var tileHeight = repeatVertical == BorderRepeat.Stretch ? dest.Height : src.Height;
             if (tileWidth <= 0 || tileHeight <= 0) return;
 
-            var wasInterpolate = image.Interpolate;
-            image.Interpolate = false;
             g.PushClip(dest);
             try
             {
@@ -310,7 +345,6 @@ namespace PeachPDF.Html.Core.Handlers
             finally
             {
                 g.PopClip();
-                image.Interpolate = wasInterpolate;
             }
         }
     }

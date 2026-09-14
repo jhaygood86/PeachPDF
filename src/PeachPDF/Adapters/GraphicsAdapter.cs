@@ -431,7 +431,79 @@ namespace PeachPDF.Adapters
 
         public override void DrawImage(RImage image, RRect destRect, RRect srcRect)
         {
-            _g.DrawImage(((ImageAdapter)image).Image, Utils.Convert(destRect, PixelsPerPoint), Utils.Convert(srcRect, PixelsPerPoint), XGraphicsUnit.Point);
+            var naturalWidth = image.Width;
+            var naturalHeight = image.Height;
+
+            if (naturalWidth <= 0 || naturalHeight <= 0 || srcRect.Width <= 0 || srcRect.Height <= 0)
+                return;
+
+            if (IsWholeImage(srcRect, naturalWidth, naturalHeight))
+            {
+                DrawWhole(image, destRect);
+                return;
+            }
+
+            // PDF has no "draw this sub-rectangle of an XObject" operator, and PdfSharpCore's own
+            // srcRect overload never implemented one either - it silently drew the whole image into
+            // destRect, so every border-image slice painted the entire source squashed into its own
+            // region rather than the region's own ninth of it. Crop the only way the imaging model
+            // allows: clip to destRect, then place the WHOLE image at the scale/offset that lands
+            // srcRect exactly on destRect.
+            var placement = ComputeCroppedPlacement(destRect, srcRect, naturalWidth, naturalHeight);
+
+            PushClip(destRect);
+            try
+            {
+                DrawWhole(image, placement);
+            }
+            finally
+            {
+                PopClip();
+            }
+        }
+
+        /// <summary>
+        /// Draws all of <paramref name="image"/> into <paramref name="rect"/>, through the same
+        /// <see cref="XGraphics"/> call every un-cropped draw has always used - so a whole-image draw
+        /// still emits exactly the operators it did before cropping existed, and the cropped draw's own
+        /// placement emits the same shape.
+        /// </summary>
+        private void DrawWhole(RImage image, RRect rect)
+        {
+            var xImage = ((ImageAdapter)image).Image;
+            _g.DrawImage(xImage, Utils.Convert(rect, PixelsPerPoint),
+                new XRect(0, 0, xImage.PointWidth, xImage.PointHeight), XGraphicsUnit.Point);
+        }
+
+        /// <summary>
+        /// True when <paramref name="srcRect"/> selects the image in full (every background layer's own
+        /// draw does, <c>BackgroundImageDrawHandler</c> passing <c>(0, 0, image.Width, image.Height)</c>),
+        /// so the draw needs neither a clip nor an off-destination placement.
+        /// </summary>
+        private static bool IsWholeImage(RRect srcRect, double naturalWidth, double naturalHeight)
+        {
+            const double epsilon = 0.001;
+            return srcRect.X <= epsilon && srcRect.Y <= epsilon &&
+                   srcRect.Width >= naturalWidth - epsilon && srcRect.Height >= naturalHeight - epsilon;
+        }
+
+        /// <summary>
+        /// The rectangle the whole image must be drawn into so that its <paramref name="srcRect"/> portion -
+        /// in the image's own natural units, as <see cref="RImage.Width"/>/<see cref="RImage.Height"/>
+        /// report them (pixels for a raster, points for an <see cref="XForm"/> tile) - covers
+        /// <paramref name="destRect"/> exactly. Clipping to <paramref name="destRect"/> then leaves only
+        /// that portion visible. Exposed (not private) so the arithmetic can be asserted directly.
+        /// </summary>
+        internal static RRect ComputeCroppedPlacement(RRect destRect, RRect srcRect, double naturalWidth, double naturalHeight)
+        {
+            var scaleX = destRect.Width / srcRect.Width;
+            var scaleY = destRect.Height / srcRect.Height;
+
+            return new RRect(
+                destRect.X - srcRect.X * scaleX,
+                destRect.Y - srcRect.Y * scaleY,
+                naturalWidth * scaleX,
+                naturalHeight * scaleY);
         }
 
         public override void DrawImage(RImage image, RRect destRect)

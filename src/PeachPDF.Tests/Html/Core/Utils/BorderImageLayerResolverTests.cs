@@ -42,6 +42,33 @@ namespace PeachPDF.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public void ResolveSlice_BareNumbersOnAVectorSource_AreCssPixelsOfItsPointSize()
+        {
+            // A raster's natural size is counted in the same device pixels the spec's <number> counts, so
+            // the two agree. A vector or generated source is rendered into a tile measured in layout
+            // points, while a number there is still a vector coordinate / CSS pixel - 0.75 of one.
+            var slice = BorderImageLayerResolver.ResolveSlice("20", naturalWidth: 30, naturalHeight: 30,
+                numberUnit: Length.PointsPerPx);
+
+            Assert.Equal(15, slice.Top);
+            Assert.Equal(15, slice.Right);
+            Assert.Equal(15, slice.Bottom);
+            Assert.Equal(15, slice.Left);
+        }
+
+        [Fact]
+        public void ResolveSlice_PercentagesIgnoreTheNumberUnit()
+        {
+            // A percentage is relative to the natural size either way, so the unit a bare number is
+            // counted in must not touch it.
+            var slice = BorderImageLayerResolver.ResolveSlice("50%", naturalWidth: 30, naturalHeight: 30,
+                numberUnit: Length.PointsPerPx);
+
+            Assert.Equal(15, slice.Top);
+            Assert.Equal(15, slice.Left);
+        }
+
+        [Fact]
         public void ResolveSlice_FillKeywordDetectedRegardlessOfPosition()
         {
             Assert.True(BorderImageLayerResolver.ResolveSlice("fill 10", 40, 40).Fill);

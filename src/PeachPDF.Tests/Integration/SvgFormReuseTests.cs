@@ -94,7 +94,10 @@ namespace PeachPDF.Tests.Integration
                 """);
 
             AssertOneFormOnTwoPages(pdf, tiled: true);
-            Assert.Contains("/BBox [0 0 60 60]", pdf);
+            // The SVG's own intrinsic 20x20 CSS px, in points - CSS Images 3's default sizing algorithm
+            // uses an intrinsic size verbatim, so the artwork is sliced at its own scale rather than
+            // stretched over the 60pt border-image area first.
+            Assert.Contains("/BBox [0 0 15 15]", pdf);
         }
 
         [Fact]
