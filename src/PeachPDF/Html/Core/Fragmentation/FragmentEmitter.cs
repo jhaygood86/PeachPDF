@@ -276,6 +276,18 @@ namespace PeachPDF.Html.Core.Fragmentation
             internal bool BoundsEndAtItsContent { get; set; }
 
             /// <summary>
+            /// Which of <see cref="BoundsEndAtItsContent"/>'s two reasons applies: true when this is a
+            /// captured instance still continuing through a nested fragmentainer, whose own bounds have not
+            /// had its height applied yet and so describe nothing about this fragment at all. False when it
+            /// is only the page-grid/issue-#569 arm, where the box's bounds <i>are</i> its real, finished
+            /// ones and the extension is a correction for a height an item-content commit pass pinned early.
+            /// <see cref="ExtentOf"/> needs the distinction: only the pinned arm may ignore an inline-level
+            /// child's own (font-content-area) box, because there the box's own bounds already record the
+            /// line boxes that child sits on. A continuing capture has no such bounds to fall back on.
+            /// </summary>
+            internal bool BoundsStatedByACapturedContinuation { get; set; }
+
+            /// <summary>
             /// Whether the box carries on past this fragmentainer, and whether it resumes one it began in
             /// earlier — §6.2's block-axis edges (<see cref="SliceGeometry.HasTopEdge"/>). Read from the
             /// break record rather than from geometry, which cannot answer it inside a nested context.
@@ -1727,7 +1739,8 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         /// <remarks>
         /// Deliberately exhaustive rather than "the rectangles look right": <see cref="Draft.UsesOwnBounds"/>,
-        /// <see cref="Draft.BoundsEndAtItsContent"/>, <see cref="Draft.ShellRect"/>, <see cref="Draft.Shift"/>,
+        /// <see cref="Draft.BoundsEndAtItsContent"/>,
+        /// <see cref="Draft.BoundsStatedByACapturedContinuation"/>, <see cref="Draft.ShellRect"/>, <see cref="Draft.Shift"/>,
         /// <see cref="Draft.ConfinedTo"/> and <see cref="Draft.DisplacementRoot"/> are read only at
         /// materialization, so a comparison of fragment rectangles alone would pass while the decoration,
         /// the clip or the band a fragment is confined to had silently changed.
@@ -1752,6 +1765,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             Same(pruned.IsFixed, full.IsFixed, "IsFixed");
             Same(pruned.IsMonolithic, full.IsMonolithic, "IsMonolithic");
             Same(pruned.BoundsEndAtItsContent, full.BoundsEndAtItsContent, "BoundsEndAtItsContent");
+            Same(pruned.BoundsStatedByACapturedContinuation, full.BoundsStatedByACapturedContinuation, "BoundsStatedByACapturedContinuation");
             Same(pruned.ContinuesIntoTheNext, full.ContinuesIntoTheNext, "ContinuesIntoTheNext");
             Same(pruned.ContinuedFromThePrevious, full.ContinuedFromThePrevious, "ContinuedFromThePrevious");
             Same(pruned.UsesOwnBounds, full.UsesOwnBounds, "UsesOwnBounds");
@@ -2374,8 +2388,9 @@ namespace PeachPDF.Html.Core.Fragmentation
             draft.FixedSizeDeltaWidth = fixedSizeDelta.DeltaWidth;
             draft.FixedSizeDeltaHeight = fixedSizeDelta.DeltaHeight;
             draft.InlineExtentDeltaWidth = inlineExtentDeltaWidth;
-            draft.BoundsEndAtItsContent = boundsEndAtContentOnThePageGrid
-                || (capture is { } instanceCaptured && instanceCaptured.Continuing.Contains(box));
+            var continuingCapture = capture is { } instanceCaptured && instanceCaptured.Continuing.Contains(box);
+            draft.BoundsEndAtItsContent = boundsEndAtContentOnThePageGrid || continuingCapture;
+            draft.BoundsStatedByACapturedContinuation = continuingCapture;
 
             // Which of the box's block-axis edges are its own, from the two records that state it: the pass's
             // own resumption chain for the page grid, and the captured instance's carry sets for a column.
@@ -3070,6 +3085,12 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 var bottom = bounds.Bottom;
 
+                // Not gated the way the inline-level *child* below is, deliberately: a box carrying its own
+                // words never also carries child boxes (see the
+                // `dom-a-box-must-never-hold-both-its-own-words-and-child-boxes` invariant), and a block's
+                // text always reaches it through an interposed anonymous inline child - so a draft whose
+                // own Words are a block's line content does not occur. What does carry its own words is an
+                // inline box, whose decoration area genuinely is this word extent.
                 foreach (var word in draft.Words)
                 {
                     bottom = Math.Max(bottom, word.Rect.Bottom + draft.OriginY);
@@ -3089,6 +3110,22 @@ namespace PeachPDF.Html.Core.Fragmentation
                     // same inflated rect is the background positioning area, so the repeating grid-line
                     // background was sized from it too and its last line no longer met the axis.
                     if (child.Box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) continue;
+
+                    // Nor is an inline-level child's own box: CSS 2.1 §10.6.3 sizes a block from the
+                    // *line boxes* its inline content produces, and an inline box's own decoration area
+                    // is the font's content area (§10.8's "content area", which is what its background
+                    // and border are drawn from), not the line box it sits on. The two differ whenever
+                    // `line-height` is shorter than the font's own height - the glyphs then overflow the
+                    // line, by design - and this box's own bounds already record the line boxes, which
+                    // are what its height is made of. Counting the overflow here grew the block's painted
+                    // border box back to the glyph ink, undoing the very thing a short line-height asks
+                    // for. This extension exists for a box whose declared bounds were *pinned* before its
+                    // content was known (issue #569's flex/grid item), whose content is block-level
+                    // children - those still count, below. A captured instance continuing through a nested
+                    // fragmentainer is excluded from the skip: its own bounds have not had a height applied
+                    // yet, so they record no line boxes to fall back on and its inline content is all this
+                    // fragment has to be measured from.
+                    if (child.Box.IsInline && !draft.BoundsStatedByACapturedContinuation) continue;
 
                     bottom = Math.Max(bottom, RectOf(child).Bottom + child.OriginY);
                 }
