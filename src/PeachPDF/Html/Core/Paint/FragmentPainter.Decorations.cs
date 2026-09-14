@@ -548,6 +548,99 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
+        /// Paints the text decoration of a box whose own decoration area is a single rectangle - its
+        /// border box - over the in-flow inline content that rectangle contains, one span per line box.
+        /// </summary>
+        /// <remarks>
+        /// <see href="https://www.w3.org/TR/css-text-decor-3/#line-decoration">css-text-decor-3 §2.4</see>:
+        /// a text decoration declared on (or propagated to) a block container propagates to an anonymous
+        /// inline box wrapping that block's in-flow inline-level content, and through its in-flow
+        /// block-level descendants to theirs. It is therefore drawn across that content - not across the
+        /// block's full width, which is what painting it over the block's own border box did, and what
+        /// made a <c>display: block</c> link's underline run to the right page margin.
+        /// <para>
+        /// The spans come from the fragment tree rather than the box tree, so a block broken across pages
+        /// decorates exactly the lines that landed on the page being painted. Each descendant that is
+        /// hosted on a line box already carries its content as per-line rectangles (an inline box's own,
+        /// including any padding and border; an atomic inline's whole border box, which §2.4 draws the
+        /// line across without propagating into its contents) - so such a fragment contributes its
+        /// rectangles and is not descended into. Anything else is a block-level box whose own rectangle
+        /// is its border box again, and is descended into for the same reason this method exists.
+        /// Out-of-flow descendants are skipped outright, per the same section.
+        /// </para>
+        /// </remarks>
+        private static void PaintPropagatedDecoration(RGraphics g, CssBox box, BoxFragment fragment, RRect clip)
+        {
+            // Finding the spans means walking the fragment's whole subtree, so the box that declares no
+            // decoration at all - almost every block in a document - never starts the walk. A
+            // ::first-line style can declare one the box itself doesn't, so it is asked too; which of the
+            // two applies to a given span stays PaintDecoration's own decision.
+            if (!DeclaresADecorationLine(box) && !DeclaresADecorationLine(box.ResolvedFirstLineStyle)) return;
+
+            Dictionary<CssLineBox, RRect> spans = [];
+            List<CssLineBox> order = [];
+
+            foreach (var child in fragment.Children)
+            {
+                CollectDecorationSpans(child, spans, order);
+            }
+
+            foreach (var lineBox in order)
+            {
+                var rect = spans[lineBox];
+
+                if (IsRectVisible(rect, clip))
+                {
+                    PaintDecoration(g, box, rect, hasLeftEdge: false, hasRightEdge: false,
+                        GetFirstLineStyleForRect(lineBox), ownDecorationArea: false);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> declares a <c>text-decoration-line</c> other than <c>none</c>.
+        /// </summary>
+        private static bool DeclaresADecorationLine(CssBox? box) =>
+            box is not null && !string.IsNullOrEmpty(box.TextDecorationLine) && box.TextDecorationLine != Keywords.None;
+
+        /// <summary>
+        /// Accumulates the inline content of <paramref name="fragment"/> into one union rectangle per line
+        /// box - the spans <see cref="PaintPropagatedDecoration"/> draws over. <paramref name="order"/>
+        /// keeps the lines in the order they were first reached, so painting is deterministic.
+        /// </summary>
+        private static void CollectDecorationSpans(BoxFragment fragment, Dictionary<CssLineBox, RRect> spans,
+            List<CssLineBox> order)
+        {
+            if (fragment.Box.IsOutOfFlow) return;
+
+            var hosted = false;
+
+            foreach (var lineFragment in fragment.Lines)
+            {
+                if (lineFragment.Line is not { } lineBox) continue;
+
+                hosted = true;
+
+                if (spans.TryGetValue(lineBox, out var existing))
+                {
+                    spans[lineBox] = RRect.Union(existing, lineFragment.Rect);
+                }
+                else
+                {
+                    spans.Add(lineBox, lineFragment.Rect);
+                    order.Add(lineBox);
+                }
+            }
+
+            if (hosted) return;
+
+            foreach (var child in fragment.Children)
+            {
+                CollectDecorationSpans(child, spans, order);
+            }
+        }
+
+        /// <summary>
         /// Paints the text decoration (underline/strike-through/over-line)
         /// </summary>
         /// <param name="g">the device to draw into</param>
@@ -564,7 +657,14 @@ namespace PeachPDF.Html.Core.Paint
         /// rule - its resolved text-decoration/color/font (for underline-offset) are used instead of
         /// the box's own.
         /// </param>
-        private static void PaintDecoration(RGraphics g, CssBox box, RRect rectangle, bool hasLeftEdge, bool hasRightEdge, CssBox? firstLineStyle = null)
+        /// <param name="ownDecorationArea">
+        /// whether <paramref name="rectangle"/> is the box's own decoration area, and so is measured from
+        /// its border edges. False for a span <see cref="PaintPropagatedDecoration"/> found in a
+        /// descendant, which is inline content geometry already inside the box's padding - compensating
+        /// for padding the rectangle never included would only displace the line.
+        /// </param>
+        private static void PaintDecoration(RGraphics g, CssBox box, RRect rectangle, bool hasLeftEdge, bool hasRightEdge,
+            CssBox? firstLineStyle = null, bool ownDecorationArea = true)
         {
             // The `text-decoration` shorthand is expanded into these longhands by the CSS-OM (Layer A) before
             // it ever reaches the box, so the painter reads the longhands directly. text-decoration-line may
@@ -590,11 +690,11 @@ namespace PeachPDF.Html.Core.Paint
             var textDecorationActualColor = string.IsNullOrEmpty(textDecorationColor) ? styleSource.ActualColor : box.HtmlContainer!.CssParser.ParseColor(textDecorationColor);
 
             double x1 = rectangle.X;
-            if (hasLeftEdge)
+            if (ownDecorationArea && hasLeftEdge)
                 x1 += box.ActualPaddingLeft + box.ActualBorderLeftWidth;
 
             double x2 = rectangle.Right;
-            if (hasRightEdge)
+            if (ownDecorationArea && hasRightEdge)
                 x2 -= box.ActualPaddingRight + box.ActualBorderRightWidth;
 
             var pen = g.GetPen(textDecorationActualColor);
@@ -602,7 +702,7 @@ namespace PeachPDF.Html.Core.Paint
             pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(textDecorationStyle);
 
             // text-decoration-line may list several keywords (e.g. "underline overline"); draw each.
-            var bottomInset = box.ActualPaddingBottom - box.ActualBorderBottomWidth;
+            var bottomInset = ownDecorationArea ? box.ActualPaddingBottom - box.ActualBorderBottomWidth : 0;
             foreach (var line in textDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
                 double y = line switch
