@@ -15,13 +15,11 @@ quantity, and when `line-height` is the smaller of the two the leading is negati
 overflow the line on purpose. §10.8.1 adds the **strut**: every line box that holds content is also
 at least as tall as an imaginary inline box carrying the *block's* own font and `line-height`.
 
-`CssLayoutEngine` had neither. A word's rect is `ActualFont.Height` (right — that *is* the content
-area, and `CssLineBox.UpdateRectangle` builds an inline box's decoration rectangle from it), and the
-line's extent was `Math.Max` over those word rects, with `ActualLineHeight` only ever allowed to
-*grow* the result. So the line's height was `max(line-height, font height)` and a declared
-`line-height` below the font's own was silently discarded. The one place `ActualLineHeight` was read
-took it from `box` — the innermost inline being flowed — never from `blockBox`, so the strut did not
-exist either.
+`CssLayoutEngine` had neither. A word's rect used `ActualFont.Height`, and the line's extent was
+`Math.Max` over those word rects, with `ActualLineHeight` only ever allowed to *grow* the result. So
+the line's height was `max(line-height, font height)` and a declared `line-height` below the font's own
+was silently discarded. The one place `ActualLineHeight` was read took it from `box` — the innermost
+inline being flowed — never from `blockBox`, so the strut did not exist either.
 
 The rule now lives in one place, `CssLayoutEngine.LineBoxExtentOf(box, blockBox)`: the largest
 `line-height` among the block's strut and *every* inline box the text sits inside — `box` and its
@@ -42,6 +40,25 @@ column's cross-axis thickness straight from the word's glyph footprint and never
 `line-height` at all, so neither half of this applied there and the same document laid out under two
 different line-box models depending on `writing-mode`. It now calls the same `LineBoxExtentOf`, with
 the same `IsImage` carve-out, so the two engines cannot drift.
+
+For `line-height: normal`, a word's content rectangle now uses that same font-derived normal metric
+rather than `RFont.Height`'s legacy OS/2 win-metrics value. Those two values can differ materially for
+Linux/macOS fallback fonts: after line boxes switched to `ActualLineHeight`, leaving ordinary word
+rectangles on `RFont.Height` made them overlap the next normal line, report false vertical clipping,
+and leak into pagination geometry. Explicit line heights deliberately keep the font content-area
+height, including the negative-leading overflow described above; only `normal` guarantees that the
+ordinary word and its line share one resolved metric.
+
+The content-height resolver still receives the **word's resolved font**. That matters for
+per-codepoint fallback and synthesized small caps: an explicit line height preserves the rendered
+word's font height, not the owning box's default font height. Fragmentation likewise asks whether the
+current **line-box extent** crosses the band, rather than asking whether a possibly taller or shorter
+word rectangle does. A short explicit line can therefore fit while its negative-leading content
+overflows, and a tall line moves intact even when its glyph rectangle would fit. The emitter assigns
+overflowing word content only to the line's pre-alignment starting fragmentainer, so that intentional
+overflow is clipped rather than painted again on the next page. That starting coordinate is preserved
+through captured and translated geometry as well, rather than being re-derived from a word that
+`vertical-align` may have shifted across the page boundary.
 
 `DerivedStyle.ActualLineHeight` was already correct and is untouched — see
 [`2026-09-08-line-height-normal-font-metrics.md`](2026-09-08-line-height-normal-font-metrics.md),
@@ -123,7 +140,7 @@ does not control how many words land on the *last* line is not testing the last 
 
 ## Evidence
 
-- New `LineHeightLineBoxExtentTests` (21 tests). Confirmed against the unfixed code that the
+- New `LineHeightLineBoxExtentTests` (31 tests). Confirmed against the unfixed code that the
   defect-targeting ones fail (all three `line-height` spellings, the stacking theories, the strut
   case) while the guards — taller `line-height`, a taller inline child, replaced content, the empty
   block — pass both before and after, which is what makes them guards rather than restatements of
@@ -135,14 +152,17 @@ does not control how many words land on the *last* line is not testing the last 
   assertions, and took every expectation from it: the seven single-block cases
   (`12/12/12/14/12/24/20` CSS px), the four nested-inline-ancestor cases (`40/40/40/12`), and the
   vertical-writing-mode ones (`6/14/30/12`). The fixed engine reproduces all fifteen exactly.
-- Full suite: `dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0` — 11,347 passed,
-  0 failed, 9 skipped (pre-existing platform skips), and green on four consecutive runs.
+- Full suite: `dotnet test PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0` — 11,413 passed,
+  0 failed, 9 skipped (pre-existing platform skips). The initial version exposed nine deterministic
+  macOS/Linux failures because normal-line word rectangles still used different font metrics; the
+  follow-up above restores one shared metric while retaining explicit negative leading.
   `BoxDecorationBreakPaintIntegrationTests.Clone_WrappingInline_DrawsEveryBorderEdgeOnEveryLine`
   failed once mid-development and could not be reproduced across five later full runs or in
   isolation; recorded here rather than dismissed, since this repo already warns that `FontFactory`'s
   process-wide static caches make order-dependent flakiness real.
 - `dotnet build PeachPDF.slnx -t:Rebuild` — 0 warnings.
-- Diff coverage 100% on the changed lines (`diff-cover` against `origin/main`).
+- Diff coverage 99% on the changed lines (`diff-cover` against `origin/main`); the two uncovered lines
+  are pre-existing defensive parser branches elsewhere in this branch.
 - New `line_height_declared` showcase, rasterized with **both** PDFium and MuPDF: the painted band
   heights are `[18.3, 24.4, 36.1, 36.1, 19.4, 48.3, 30.6, 48.3]` (PDFium) and
   `[18.0, 23.5, 36.0, 35.5, 19.0, 48.0, 29.5, 48.0]` (MuPDF) against Chrome's

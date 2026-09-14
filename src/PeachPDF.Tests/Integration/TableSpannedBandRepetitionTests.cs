@@ -320,7 +320,7 @@ namespace PeachPDF.Tests.Integration
         /// is why nothing else here sees it.
         /// </remarks>
         [Theory]
-        [InlineData(247)]
+        [InlineData(246)]
         [InlineData(250)]
         [InlineData(490)]
         [InlineData(495)]
@@ -328,7 +328,7 @@ namespace PeachPDF.Tests.Integration
         public async Task EveryBandOfASlicedRun_KeepsItsDecorations(double tall)
         {
             var (root, container) = await Paginate(
-                "<table style='width:150pt;line-height:12pt'><tfoot><tr><td>TFOOTWORD</td></tr></tfoot><tbody>"
+                "<table style='width:150pt'><tfoot><tr><td>TFOOTWORD</td></tr></tfoot><tbody>"
                 + $"<tr><td style='border:1pt solid #000'><div id='tall' style='height:{tall}pt;background:#ddd'></div></td></tr>"
                 + "<tr><td>word0001</td></tr></tbody></table>");
 

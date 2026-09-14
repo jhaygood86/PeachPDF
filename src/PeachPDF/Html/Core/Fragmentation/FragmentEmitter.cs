@@ -2240,7 +2240,12 @@ namespace PeachPDF.Html.Core.Fragmentation
                     foreach (var (line, rect) in rectangles)
                     {
                         var shiftedRect = Shifted(rect);
-                        if (region.Contains(Displaced(shiftedRect, shift))) lines.Add((line, shiftedRect));
+                        var shiftedLineTop = LineTopOf(box, line, snapshot, rect.Top) + fixedOffset.Dy;
+                        if (region.Contains(Displaced(shiftedRect, shift))
+                            && ClaimsLine(shiftedLineTop + shift, slot.Index, isFixed))
+                        {
+                            lines.Add((line, shiftedRect));
+                        }
                     }
                 }
                 else
@@ -2258,8 +2263,14 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                     if (!TryGetWordRect(box, i, snapshot, out var rect)) continue;
                     var shiftedRect = Shifted(rect);
+                    var shiftedLineTop = LineTopOf(box, i, snapshot, rect.Top) + fixedOffset.Dy;
 
-                    if (ClaimsWord(Displaced(shiftedRect, shift), slot.Index, region, isFixed))
+                    if (ClaimsWord(
+                            Displaced(shiftedRect, shift),
+                            shiftedLineTop + shift,
+                            slot.Index,
+                            region,
+                            isFixed))
                         words.Add(new TextFragment(Localize(shiftedRect, originY), box.Words[i]));
                 }
             }
@@ -2415,50 +2426,14 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Only a line layout could have moved belongs to one fragmentainer alone.</b> Where
-        /// <c>CssRect.WouldStraddleFragmentainer</c> answered "no, it fits" — which it does for an overhang
-        /// of up to <see cref="HtmlContainerInt.PageBoundaryEpsilon"/> — §4.1 has made the line the unit and
-        /// the line is wholly the earlier band's, whatever <see cref="FragmentRegion.Contains"/>'s much finer
-        /// <see cref="BandOverlapEpsilon"/> says about the sliver hanging past the boundary. Asking
-        /// <see cref="HtmlContainerInt.SlotStartingAt"/> — the convention layout used
-        /// (<c>BandStartingAt(Top)</c>) — settles both with one tolerance rather than two that agree over
-        /// most of their range, and stops the page's last line being drawn again above the next page's
-        /// content top (<see href="https://github.com/jhaygood86/PeachPDF/issues/446">#446</see>).
-        /// </para>
-        /// <para>
-        /// <b>A line layout never had the chance to move used to be a second reason the tie-break was
-        /// conditional; one of its two cases is now historical.</b> A flex or grid item's content used to be
-        /// laid out under <see cref="HtmlContainerInt.SuppressWordPageBreaks"/> and never revisited when
-        /// <c>AssignLocations</c> translated it, which could leave a line overhanging by many points with no
-        /// fragmentainer of its own to be whole in — both bands had to keep it, or the tie-break deleted it
-        /// outright (measured at 45 words, one line per break, on a four-page flex document,
-        /// <see href="https://github.com/jhaygood86/PeachPDF/issues/477">#477</see>). <c>CssLayoutEngineGrid</c>
-        /// and <c>CssLayoutEngineFlex</c> now commit their items'/lines' content live once it sits at its
-        /// final position, so that path's straddle check runs for real and this arm has nothing left to do
-        /// for it — kept in mind here only so a future regression in that commit-live behavior is recognized
-        /// as reopening this case, not treated as new.
-        /// </para>
-        /// <para>
-        /// <b>The one case left: <c>MonolithicContent.FitsNoFragmentainer</c> keeps anything taller than the
-        /// band exactly where it is</b> — layout never asks it to move, because moving would only repeat the
-        /// question on the next fragmentainer. That content is <i>clipped</i> to the first fragmentainer it
-        /// starts in, not repeated in every later one it geometrically overlaps
-        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/484">#484</see>): the extra claim is
-        /// gated on <c>!MonolithicContent.FitsNoFragmentainer</c> as well as
-        /// <see cref="HtmlContainerInt.FallsPast"/>, so it survives only for content that could, in
-        /// principle, have fit some fragmentainer and simply wasn't asked to move there — a case
-        /// <see cref="HtmlContainerInt.FallsPast"/> alone cannot distinguish, since it only sees that a word's
-        /// bottom has overhung the band its own top started in, not <i>why</i>. With the flex/grid case above
-        /// now closed at the source, that leaves no live case that reaches the extra claim at all — the arm
-        /// stays rather than being deleted outright, both to keep the "can only remove a claim, never invent
-        /// one" shape intact for whatever reaches it next, and because <see cref="HtmlContainerInt.FallsPast"/>
-        /// is deliberately a looser test than layout's own here: the emitter drops
-        /// <c>MonolithicContent.ClonedBlockInsets</c>' bottom inset, and asks the page band even inside a
-        /// column, where layout asks the column's. That looseness only ever makes <c>FallsPast</c> fire more
-        /// readily than layout's own straddle check would, never less — safe on its own because it is
-        /// intersected with the region test, and now additionally intersected with the "could this ever fit
-        /// anywhere" question so it cannot grant a claim <c>FitsNoFragmentainer</c> says should be clipped
-        /// instead.
+        /// A line layout kept belongs to one fragmentainer alone. The line box is the fragmentation unit
+        /// (css-break-3 §4.1), while a word's content rectangle may legitimately overflow it because of
+        /// negative leading or vertical alignment. Asking <see cref="HtmlContainerInt.SlotStartingAt"/> of
+        /// the line's pre-alignment block start assigns that overflow to the line's fragmentainer rather
+        /// than painting it again on every page it intersects — or dropping it when alignment moves the
+        /// word's own top across the preceding boundary.
+        /// Words on a line layout discarded are excluded earlier through
+        /// <see cref="CssRect.AwaitsTheNextFragmentainer"/>.
         /// </para>
         /// <para>
         /// It is a <i>tie-break on top of</i> the region test rather than a replacement for it, and that is
@@ -2474,12 +2449,13 @@ namespace PeachPDF.Html.Core.Fragmentation
         /// slot, so the one slot its own Y falls in would name a single page instead of all of them.
         /// </para>
         /// </remarks>
-        private bool ClaimsWord(RRect rect, int slotIndex, FragmentRegion region, bool isFixed) =>
+        private bool ClaimsWord(
+            RRect rect, double lineTop, int slotIndex, FragmentRegion region, bool isFixed) =>
             region.Contains(rect)
-            && (isFixed
-                || container.SlotStartingAt(rect.Top) == slotIndex
-                || (HtmlContainerInt.FallsPast(rect.Bottom, container.BandStartingAt(rect.Top))
-                    && !MonolithicContent.FitsNoFragmentainer(rect.Height, 0, 0, container)));
+            && ClaimsLine(lineTop, slotIndex, isFixed);
+
+        private bool ClaimsLine(double lineTop, int slotIndex, bool isFixed) =>
+            isFixed || container.SlotStartingAt(lineTop) == slotIndex;
 
         /// <summary>
         /// <paramref name="rect"/> where a displacement puts it — the rectangle every membership question
@@ -3381,6 +3357,33 @@ namespace PeachPDF.Html.Core.Fragmentation
 
         private static IReadOnlyDictionary<CssLineBox, RRect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.Rectangles;
+
+        private static double LineTopOf(
+            CssBox box, CssLineBox line, BoxGeometrySnapshot? snapshot, double fallback)
+        {
+            if (snapshot is not null
+                && snapshot.TryGetGeometry(box, out var geometry)
+                && geometry.LineBlockStarts.TryGetValue(line, out var capturedTop))
+            {
+                return capturedTop;
+            }
+
+            return line.FragmentainerBlockStart ?? fallback;
+        }
+
+        private static double LineTopOf(
+            CssBox box, int wordIndex, BoxGeometrySnapshot? snapshot, double fallback)
+        {
+            if (snapshot is not null
+                && snapshot.TryGetGeometry(box, out var geometry)
+                && wordIndex < geometry.WordLineBlockStarts.Count
+                && geometry.WordLineBlockStarts[wordIndex] is { } capturedTop)
+            {
+                return capturedTop;
+            }
+
+            return box.Words[wordIndex].LineBox?.FragmentainerBlockStart ?? fallback;
+        }
 
         /// <summary>
         /// Where a word sits in this fragmentainer, or false when it belongs to a later one.

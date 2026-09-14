@@ -9,24 +9,17 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// One membership question, asked with one tolerance (issue #446). Layout tolerates a line whose bottom
-    /// overhangs its band by up to <see cref="HtmlContainerInt.PageBoundaryEpsilon"/> — it keeps the line on
-    /// the page it started — so the emitter must place that line's words on the same page rather than
-    /// counting the overhang as membership of the next band.
+    /// A line belongs to the fragmentainer in which layout kept it (issue #446). The line box is the
+    /// fragmentation unit; a word's content rectangle can extend beyond it because of negative leading, so
+    /// the emitter must not turn either kind of overhang into membership of the next band.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The window is 0.5pt wide, so whether any given document reaches it is a function of the platform's
-    /// font metrics — which is why the symptom was first seen on <c>windows-latest</c> alone. These fixtures
-    /// do not hope for it: they lay the document out once to measure where the last line of the first page
+    /// The tolerance window is 0.5pt wide. These fixtures do not depend on platform font metrics to happen
+    /// to reach it: they lay the document out once to measure where the last line box of the first page
     /// actually falls, then lay it out again on a band shortened so that same line overhangs by a quarter of
     /// a point. That lands inside the window on every platform, and the fixtures assert that it did before
     /// asserting anything else.
-    /// </para>
-    /// <para>
-    /// The counter-case — a line layout <i>could not</i> move, which both pages must keep — lives in
-    /// <see cref="StraddlingLineClaimTests"/>. Neither class is sufficient alone: a rule that always gives a
-    /// line to the page its top starts in passes everything here and loses content there.
     /// </para>
     /// </remarks>
     public class BandMembershipToleranceTests
@@ -75,19 +68,20 @@ namespace PeachPDF.Tests.Integration
         {
             var (_, container) = await LayoutTunedToTheWindowAsync(Paragraph);
 
-            var overhanging = WordsOverhangingTheirBand(container).ToList();
+            var overhanging = LinesOverhangingTheFirstBand(container).ToList();
             Assert.NotEmpty(overhanging);
 
-            foreach (var word in overhanging)
+            foreach (var line in overhanging)
             {
-                var expected = BandStrictlyContaining(container, word.Top);
+                var expected = BandStrictlyContaining(container, LineTop(line));
 
-                // The rule is only doing work if the next band really is a candidate — that is, if the word
-                // overhangs into it at all.
-                Assert.True(word.Bottom > container.PageBottomOf(expected),
-                    $"'{word.Text}' does not reach the next band, so it cannot show a double claim");
+                // The rule is only doing work if the next band really is a candidate — that is, if the line
+                // box overhangs into it at all.
+                Assert.True(LineBottom(line) > container.PageBottomOf(expected),
+                    "the line does not reach the next band, so it cannot show a double claim");
 
-                Assert.Equal([expected], SlotsClaiming(container, word));
+                Assert.All(line.Words,
+                    word => Assert.Equal([expected], SlotsClaiming(container, word)));
             }
         }
 
@@ -120,7 +114,7 @@ namespace PeachPDF.Tests.Integration
             var (_, probe) = await LayoutHarness.LayoutAsync(
                 Document(template), pageHeight: probeHeight, margin: margin);
 
-            var lastBottom = LastBottomOnTheFirstPage(probe);
+            var lastBottom = LastLineBottomOnTheFirstPage(probe);
             var slack = probe.PageBottomOf(0) - lastBottom;
 
             Assert.True(slack >= 0, $"the probe's own last line already overhangs by {-slack}");
@@ -133,7 +127,7 @@ namespace PeachPDF.Tests.Integration
 
             // The fixture is only meaningful if it landed in the window, so it says so itself rather than
             // silently degrading into a second copy of the ordinary case.
-            var overhang = LastBottomOnTheFirstPage(container) - container.PageBottomOf(0);
+            var overhang = LastLineBottomOnTheFirstPage(container) - container.PageBottomOf(0);
 
             // Exclusive at the top: at exactly PageBoundaryEpsilon, FallsPast fires and the line becomes
             // StraddlingLineClaimTests' subject rather than this class's.
@@ -143,13 +137,12 @@ namespace PeachPDF.Tests.Integration
             return (root, container);
         }
 
-        /// <summary>The lowest edge of any word whose own top starts in the first page's band.</summary>
-        private static double LastBottomOnTheFirstPage(HtmlContainerInt container)
+        /// <summary>The lowest line-box edge emitted into the first page.</summary>
+        private static double LastLineBottomOnTheFirstPage(HtmlContainerInt container)
         {
-            var bottoms = LayoutHarness.Descendants(container.Root!)
-                .SelectMany(b => b.Words)
-                .Where(w => container.SlotStartingAt(w.Top) == 0)
-                .Select(w => w.Bottom)
+            var bottoms = SourceLines(container)
+                .Where(line => container.SlotStartingAt(LineTop(line)) == 0)
+                .Select(LineBottom)
                 .ToList();
 
             Assert.NotEmpty(bottoms);
@@ -157,14 +150,22 @@ namespace PeachPDF.Tests.Integration
             return bottoms.Max();
         }
 
-        /// <summary>
-        /// Every word that layout kept in the band its top starts in while its bottom crosses that band's
-        /// end — the words the two tolerances used to disagree about.
-        /// </summary>
-        private static IEnumerable<CssRect> WordsOverhangingTheirBand(HtmlContainerInt container) =>
+        /// <summary>The source lines whose emitted line box crosses the first page's band end.</summary>
+        private static IEnumerable<CssLineBox> LinesOverhangingTheFirstBand(HtmlContainerInt container)
+            => SourceLines(container)
+                .Where(line => container.SlotStartingAt(LineTop(line)) == 0
+                               && LineBottom(line) > container.PageBottomOf(0));
+
+        private static IEnumerable<CssLineBox> SourceLines(HtmlContainerInt container) =>
             LayoutHarness.Descendants(container.Root!)
-                .SelectMany(b => b.Words)
-                .Where(w => w.Bottom > container.PageBottomOf(container.SlotStartingAt(w.Top)));
+                .SelectMany(box => box.LineBoxes)
+                .Where(line => line.Words.Count > 0)
+                .Distinct<CssLineBox>(ReferenceEqualityComparer.Instance);
+
+        private static double LineTop(CssLineBox line) => line.Words.Min(word => word.Top);
+
+        private static double LineBottom(CssLineBox line) =>
+            LineTop(line) + line.OwnerBox.ActualLineHeight;
 
         private static List<int> SlotsClaiming(HtmlContainerInt container, CssRect word) =>
             container.FragmentTree!.Fragmentainers
@@ -199,7 +200,8 @@ namespace PeachPDF.Tests.Integration
 
         private static string Document(string template) =>
             LayoutHarness.Wrap(template.Replace(
-                "{F}", string.Join(" ", Enumerable.Range(0, 600).Select(i => $"w{i}"))));
+                "{F}", string.Join(" ", Enumerable.Range(0, 600).Select(i => $"w{i}")))
+                + "<div style='break-before:page'>after</div>");
 
         private static List<CssRect> WordsIn(CssBox box) =>
             LayoutHarness.Descendants(box).SelectMany(b => b.Words).ToList();

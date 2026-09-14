@@ -5,6 +5,7 @@ using PeachPDF.Html.Core.Fragments;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -67,6 +68,205 @@ namespace PeachPDF.Tests.Integration
             var height = await MeasureSingleLineBlockAsync("line-height: 40px");
 
             Assert.Equal(40 * PointsPerPx, height, precision: 6);
+        }
+
+        [Fact]
+        public async Task NormalLineHeight_UsesTheSameExtentForTheWordAndItsLine()
+        {
+            var html = $"""
+                <!DOCTYPE html>
+                <html><head><style>
+                  {BundledFonts.FontFaceRule(BundledFonts.Ttf, "Normal Word Extent", "font/truetype")}
+                </style></head><body style="margin: 0">
+                  <div class="t" style="font: 20pt/normal 'Normal Word Extent'">x</div>
+                </body></html>
+                """;
+
+            var (root, _) = await BuildCssBoxTree(html);
+            var target = FindBoxByClass(root, "t")!;
+            var word = Assert.Single(target.LineBoxes[0].Words);
+
+            Assert.NotEqual(target.ActualFont.Height, target.ActualLineHeight);
+            Assert.Equal(target.ActualLineHeight, word.Height, precision: 6);
+            Assert.Equal(word.Height, target.ActualBottom - target.Location.Y, precision: 6);
+        }
+
+        [Fact]
+        public async Task ExplicitShortLineHeight_KeepsTheFontsContentAreaOverflow()
+        {
+            var html = $"""
+                <!DOCTYPE html>
+                <html><head><style>
+                  {BundledFonts.FontFaceRule(BundledFonts.Ttf, "Explicit Word Extent", "font/truetype")}
+                </style></head><body style="margin: 0">
+                  <div class="t" style="font: 20pt/10pt 'Explicit Word Extent'">x</div>
+                </body></html>
+                """;
+
+            var (root, _) = await BuildCssBoxTree(html);
+            var target = FindBoxByClass(root, "t")!;
+            var word = Assert.Single(target.LineBoxes[0].Words);
+
+            Assert.True(target.ActualFont.Height > target.ActualLineHeight);
+            Assert.Equal(target.ActualFont.Height, word.Height, precision: 6);
+            Assert.Equal(10, target.ActualBottom - target.Location.Y, precision: 6);
+        }
+
+        [Fact]
+        public async Task ExplicitLineHeight_UsesTheResolvedWordsFontForItsContentArea()
+        {
+            var html = $"""
+                <!DOCTYPE html>
+                <html><head><style>
+                  {BundledFonts.FontFaceRule(BundledFonts.Otf, "Resolved Word Extent", "font/opentype")}
+                </style></head><body style="margin: 0">
+                  <div class="t" style="font: 20pt/10pt 'Resolved Word Extent'; font-variant-caps: small-caps">x</div>
+                </body></html>
+                """;
+
+            var (root, _) = await BuildCssBoxTree(html);
+            var target = FindBoxByClass(root, "t")!;
+            var word = Assert.Single(target.LineBoxes[0].Words);
+            var wordFont = CssBox.ResolveWordFont(word, target);
+
+            Assert.True(word.FontSizeScale < 1);
+            Assert.NotEqual(target.ActualFont.Height, wordFont.Height);
+            Assert.Equal(wordFont.Height, word.Height, precision: 6);
+        }
+
+        [Fact]
+        public async Task SidewaysVerticalText_UsesTheResolvedWordsFontForItsContentArea()
+        {
+            var html = $"""
+                <!DOCTYPE html>
+                <html><head><style>
+                  {BundledFonts.FontFaceRule(BundledFonts.Otf, "Vertical Word Extent", "font/opentype")}
+                </style></head><body style="margin: 0">
+                  <div class="t" style="font: 20pt/10pt 'Vertical Word Extent'; font-variant-caps: small-caps; writing-mode: vertical-rl; text-orientation: sideways">x</div>
+                </body></html>
+                """;
+
+            var (root, _) = await BuildCssBoxTree(html);
+            var target = FindBoxByClass(root, "t")!;
+            var word = Assert.Single(target.LineBoxes[0].Words);
+            var wordFont = CssBox.ResolveWordFont(word, target);
+
+            Assert.True(word.FontSizeScale < 1);
+            Assert.NotEqual(target.ActualFont.Height, wordFont.Height);
+            Assert.Equal(wordFont.Height, word.Width, precision: 6);
+        }
+
+        [Fact]
+        public async Task ExplicitShortLineHeight_FragmentsByTheLineBox_NotItsOverflowingWord()
+        {
+            var html = $"""
+                <!DOCTYPE html>
+                <html><head><style>
+                  {BundledFonts.FontFaceRule(BundledFonts.Ttf, "Fragmented Short Line", "font/truetype")}
+                </style></head><body style="margin: 0">
+                  <div style="height: 85pt"></div>
+                  <div class="t" style="font: 20pt/10pt 'Fragmented Short Line'">x</div>
+                  <div style="break-before: page">next page</div>
+                </body></html>
+                """;
+
+            var (root, container) = await BuildCssBoxTree(html, pageHeight: 100);
+            var target = FindBoxByClass(root, "t")!;
+            var word = Assert.Single(target.LineBoxes[0].Words);
+
+            Assert.Equal(85, word.Top, precision: 6);
+            Assert.Equal(95, target.ActualBottom, precision: 6);
+            Assert.True(word.Bottom > 100, "the word must overflow the first page for this fixture to exercise negative leading");
+            Assert.Single(container.FragmentTree!.Fragmentainers,
+                fragmentainer => ContainsWord(fragmentainer.Root, word));
+        }
+
+        [Fact]
+        public async Task TallLineHeight_MovesTheWholeLineBeforeItStraddlesAFragmentainer()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html><body style="margin: 0">
+                  <div style="height: 75pt"></div>
+                  <div class="t" style="font: 10pt/30pt sans-serif">x</div>
+                </body></html>
+                """;
+
+            var (root, _) = await BuildCssBoxTree(html, pageHeight: 100);
+            var target = FindBoxByClass(root, "t")!;
+            var word = Assert.Single(target.LineBoxes[0].Words);
+
+            Assert.True(word.Height < 25, "the word must fit where the taller line box does not");
+            Assert.Equal(100, word.Top, precision: 6);
+            Assert.Equal(130, target.ActualBottom, precision: 6);
+        }
+
+        [Fact]
+        public async Task AtomicInlineBottomDecoration_MovesWithItsLineBeforeAFragmentainer()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html><body style="margin: 0">
+                  <div style="height: 75pt"></div>
+                  <div class="t" style="font: 10pt/10pt sans-serif"><span style="display: inline-block; padding-bottom: 20pt">x</span></div>
+                </body></html>
+                """;
+
+            var (root, _) = await BuildCssBoxTree(html, pageHeight: 100);
+            var target = FindBoxByClass(root, "t")!;
+            var word = Assert.Single(target.LineBoxes[0].Words);
+
+            Assert.Equal(100, word.Top, precision: 6);
+            Assert.Equal(word.Bottom + 20, target.ActualBottom, precision: 6);
+        }
+
+        [Fact]
+        public async Task ShortAtomicInline_DoesNotAddItsBottomDecorationToATallerSibling()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html><body style="margin: 0">
+                  <div style="height: 55pt"></div>
+                  <div class="t" style="font: 5pt/5pt sans-serif"><span style="line-height: 40pt">tall</span><span style="display: inline-block; padding-bottom: 10pt">short</span></div>
+                  <div style="break-before: page">next page</div>
+                </body></html>
+                """;
+
+            var (root, _) = await BuildCssBoxTree(html, pageHeight: 100);
+            var target = FindBoxByClass(root, "t")!;
+
+            Assert.Equal(2, target.LineBoxes[0].Words.Count);
+            Assert.All(target.LineBoxes[0].Words, word => Assert.Equal(55, word.Top, precision: 6));
+            Assert.Equal(95, target.ActualBottom, precision: 6);
+        }
+
+        [Fact]
+        public async Task VerticallyAlignedWord_IsClaimedByItsLinesFragmentainer()
+        {
+            const string html = """
+                <!DOCTYPE html>
+                <html><body style="margin: 0">
+                  <div style="height: 85pt"></div>
+                  <div style="font: 10pt/20pt sans-serif"><span class="t" style="vertical-align: super; background: red">x</span></div>
+                </body></html>
+                """;
+
+            var (root, container) = await BuildCssBoxTree(html, pageHeight: 100);
+            var target = FindBoxByClass(root, "t")!;
+            var word = Assert.Single(LayoutHarness.Descendants(target).SelectMany(box => box.Words));
+            var line = Assert.Single(word.OwnerBox.Rectangles.Keys);
+
+            Assert.True(word.Top < 100, "vertical alignment must shift the word above its line's page");
+            Assert.True(word.Bottom > 100, "the shifted word must still intersect its line's page");
+            Assert.Equal(100, line.FragmentainerBlockStart!.Value, precision: 6);
+            Assert.Contains(word, line.Words);
+            var fragmentainer = Assert.Single(container.FragmentTree!.Fragmentainers,
+                candidate => ContainsWord(candidate.Root, word));
+            Assert.Equal(1, fragmentainer.SlotIndex);
+
+            var decorationFragmentainer = Assert.Single(container.FragmentTree.Fragmentainers,
+                candidate => FindFragment(candidate.Root, target) is { Lines.Count: > 0 });
+            Assert.Equal(1, decorationFragmentainer.SlotIndex);
         }
 
         [Theory]
@@ -314,6 +514,12 @@ namespace PeachPDF.Tests.Integration
             return null;
         }
 
+        private static bool ContainsWord(BoxFragment fragment, CssRect word)
+        {
+            if (fragment.Words.Any(text => ReferenceEquals(text.Word, word))) return true;
+            return fragment.Children.Any(child => ContainsWord(child, word));
+        }
+
         /// <summary>
         /// Lays out a single-line block carrying <paramref name="style"/> on top of a fixed 12px font and
         /// returns its used height.
@@ -332,7 +538,8 @@ namespace PeachPDF.Tests.Integration
             return target.ActualBottom - target.Location.Y;
         }
 
-        private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(string html)
+        private static async Task<(CssBox root, HtmlContainerInt container)> BuildCssBoxTree(
+            string html, double pageHeight = 842)
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(adapter)
@@ -345,7 +552,7 @@ namespace PeachPDF.Tests.Integration
 
             await container.SetHtml(html, null);
 
-            var size = new XSize(595, 842);
+            var size = new XSize(595, pageHeight);
             container.PageSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.Convert(size, 1.0);
 

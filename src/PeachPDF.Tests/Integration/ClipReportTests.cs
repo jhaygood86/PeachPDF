@@ -141,10 +141,9 @@ namespace PeachPDF.Tests.Integration
         public async Task AWideEnoughBoxReportsNothing_EvenWithOverflowHidden()
         {
             // The contrast case for the control above: `overflow: hidden` alone must not report —
-            // only content that genuinely did not fit. Give the fixture explicit vertical room so
-            // platform font ink that exceeds the normal line box cannot turn it into a height test.
+            // only content that genuinely did not fit.
             var report = await RenderAsync(
-                "<div style=\"width:400px;height:100px;overflow:hidden;white-space:nowrap\">Extended</div>");
+                "<div style=\"width:400px;overflow:hidden;white-space:nowrap\">Extended</div>");
 
             Assert.Empty(report.ClippedWords);
         }

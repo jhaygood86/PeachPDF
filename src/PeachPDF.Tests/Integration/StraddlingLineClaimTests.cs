@@ -64,8 +64,9 @@ namespace PeachPDF.Tests.Integration
 
             // Every band the word geometrically covers, from the grid's own coordinates — proves the
             // fixture is a genuine multi-band straddle, not merely a within-tolerance overhang.
-            var covered = container.FragmentTree!.Fragmentainers
-                .Select(f => f.SlotIndex)
+            var covered = Enumerable.Range(
+                    container.SlotStartingAt(word.Top),
+                    container.SlotEndingAt(word.Bottom) - container.SlotStartingAt(word.Top) + 1)
                 .Where(slot => word.Bottom > container.PageTopOf(slot)
                                && word.Top < container.PageBottomOf(slot))
                 .ToList();

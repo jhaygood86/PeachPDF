@@ -52,6 +52,12 @@ namespace PeachPDF.Html.Core.Dom
         public int StartOrdinal { get; internal set; }
 
         /// <summary>
+        /// The document-space block-start coordinate at which horizontal flow placed this line, before
+        /// vertical alignment shifts individual word rectangles. Null for a line created by vertical flow.
+        /// </summary>
+        internal double? FragmentainerBlockStart { get; set; }
+
+        /// <summary>
         /// Whether this line was created because a forced-break word (<see cref="CssRect.IsLineBreak"/> -
         /// the synthetic <c>"\n"</c> marker from a <c>&lt;br&gt;</c> or a preserved newline) ended the
         /// previous line, as opposed to a natural/no-wrap-box wrap. Defaults false (the seed line of a
@@ -161,6 +167,8 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="word"></param>
         internal void ReportExistanceOf(CssRect word)
         {
+            word.LineBox = this;
+
             if (!Words.Contains(word))
             {
                 Words.Add(word);

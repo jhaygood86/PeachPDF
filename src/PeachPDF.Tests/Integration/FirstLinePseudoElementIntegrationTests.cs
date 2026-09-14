@@ -33,9 +33,11 @@ namespace PeachPDF.Tests.Integration
             var calls = g.DrawStringCalls;
             Assert.True(calls.Count > 1, $"expected multiple draw calls, got {calls.Count}");
 
-            var firstLineWordCount = p.LineBoxes[0].Words.Count;
-            var onFirstLine = calls.Take(firstLineWordCount).ToList();
-            var onLaterLines = calls.Skip(firstLineWordCount).ToList();
+            var firstLineTop = p.LineBoxes[0].Rectangles.Values.Min(r => r.Top);
+            var firstLineBottom = p.LineBoxes[0].LineBottom;
+
+            var onFirstLine = calls.Where(c => c.Point.Y >= firstLineTop && c.Point.Y < firstLineBottom).ToList();
+            var onLaterLines = calls.Where(c => c.Point.Y >= firstLineBottom).ToList();
 
             Assert.NotEmpty(onFirstLine);
             Assert.NotEmpty(onLaterLines);
@@ -399,9 +401,9 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, p, g);
 
             var calls = g.DrawStringCalls;
-            var firstLineWordCount = p.LineBoxes[0].Words.Count;
-            var onFirstLine = calls.Take(firstLineWordCount).ToList();
-            var onLaterLines = calls.Skip(firstLineWordCount).ToList();
+            var firstLineBottom = p.LineBoxes[0].LineBottom;
+            var onFirstLine = calls.Where(c => c.Point.Y < firstLineBottom).ToList();
+            var onLaterLines = calls.Where(c => c.Point.Y >= firstLineBottom).ToList();
 
             Assert.NotEmpty(onFirstLine);
             Assert.NotEmpty(onLaterLines);

@@ -6606,7 +6606,7 @@ namespace PeachPDF.Html.Core.Dom
                     // would suggest.
                     if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
                         boxWord.Width += g.CountShapedGlyphs(boxWord.Text!, font, ResolveWordShapingFeatures(boxWord)) * ActualLetterSpacing;
-                    boxWord.Height = ActualFont.Height;
+                    boxWord.Height = ResolveTextContentHeight(font);
 
                 }
             }
@@ -6675,7 +6675,7 @@ namespace PeachPDF.Html.Core.Dom
                 // and the shaped glyph count rather than the character count.
                 if (effectiveText != "\n" && firstLineStyle.ActualLetterSpacing != 0)
                     boxWord.Width += g.CountShapedGlyphs(effectiveText!, font, firstLineWordFeatures) * firstLineStyle.ActualLetterSpacing;
-                boxWord.Height = font.Height;
+                boxWord.Height = firstLineStyle.ResolveTextContentHeight(font);
             }
         }
 
@@ -6723,7 +6723,7 @@ namespace PeachPDF.Html.Core.Dom
                 // and the shaped glyph count rather than the character count.
                 if (boxWord.Text != "\n" && ActualLetterSpacing != 0)
                     boxWord.Width += g.CountShapedGlyphs(measureText, font, tailWordFeatures) * ActualLetterSpacing;
-                boxWord.Height = font.Height;
+                boxWord.Height = ResolveTextContentHeight(font);
             }
         }
 
@@ -8403,6 +8403,8 @@ namespace PeachPDF.Html.Core.Dom
                 Rectangles[line] = new RRect(r.X, r.Y + amount, r.Width, r.Height);
             }
 
+            OffsetLineFragmentainerStarts(amount);
+
             foreach (var word in Words)
             {
                 word.Top += amount;
@@ -8433,6 +8435,16 @@ namespace PeachPDF.Html.Core.Dom
 
             Location = Location with { Y = Location.Y + amount };
             OnTranslated(0, amount);
+        }
+
+        /// <summary>Moves the pre-alignment fragmentainer origin of every line owned by this box.</summary>
+        internal void OffsetLineFragmentainerStarts(double amount)
+        {
+            foreach (var line in LineBoxes)
+            {
+                if (line.FragmentainerBlockStart is { } blockStart)
+                    line.FragmentainerBlockStart = blockStart + amount;
+            }
         }
 
         /// <summary>

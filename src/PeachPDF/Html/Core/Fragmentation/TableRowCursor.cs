@@ -586,6 +586,9 @@ namespace PeachPDF.Html.Core.Fragmentation
                         if (IsVertical) child.OffsetLeft(-appliedOffset);
                         else child.OffsetTop(-appliedOffset);
                     }
+
+                    if (!IsVertical)
+                        cell.OffsetLineFragmentainerStarts(-appliedOffset);
                 }
 
                 // previousBottom was captured off whichever physical field is this table's own row axis

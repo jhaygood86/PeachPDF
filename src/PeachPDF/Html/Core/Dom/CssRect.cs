@@ -53,6 +53,9 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         public CssBox OwnerBox { get; }
 
+        /// <summary>The line box this word most recently entered during layout.</summary>
+        internal CssLineBox? LineBox { get; set; }
+
         /// <summary>
         /// Gets or sets the bounds of the rectangle
         /// </summary>
@@ -369,14 +372,14 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Whether this word, at its current <see cref="Top"/>, crosses the fragmentainer the pass
-        /// <i>is filling</i> — the break decision the resumable inline flow makes: a straddle here ends
-        /// the pass with an <see cref="Fragmentation.InlineBreakToken"/> rather than moving the word and
+        /// Whether the line containing this word, at its current <see cref="Top"/>, crosses the fragmentainer
+        /// the pass <i>is filling</i> — the break decision the resumable inline flow makes: a straddle here
+        /// ends the pass with an <see cref="Fragmentation.InlineBreakToken"/> rather than moving the word and
         /// carrying on.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// A word taller than a whole band never counts as straddling: there is no fragmentainer it
+        /// A line taller than a whole band never counts as straddling: there is no fragmentainer it
         /// could fit in, so moving it would only repeat the question on the next one. That makes it
         /// monolithic content in the sense of
         /// <see href="https://www.w3.org/TR/css-break-3/#monolithic">css-break-3 §2</see> — it overflows
@@ -385,7 +388,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <para>
         /// Where an enclosing box asks for <c>box-decoration-break: clone</c>, the fragment being left behind
         /// closes with its own bottom border and padding, and §6.2 requires room to be reserved for them. So
-        /// the word has to clear that much more than its own depth to still count as fitting. A table
+        /// the line has to clear that much more than its own depth to still count as fitting. A table
         /// repeating a <c>&lt;tfoot&gt;</c> claims the foot of the band the same way
         /// (<see cref="Fragmentation.FragmentainerContext.BandEndInsetOf"/>), and the two compose.
         /// </para>
@@ -396,16 +399,19 @@ namespace PeachPDF.Html.Core.Dom
         /// mechanism that can spill flow past that fragmentainer step the pass cursor to match.
         /// </para>
         /// </remarks>
-        public bool WouldStraddleFragmentainer()
+        /// <param name="lineTop">The current line box's document-space block-start coordinate.</param>
+        /// <param name="lineBlockExtent">The current line box's block-axis extent.</param>
+        public bool WouldStraddleFragmentainer(double lineTop, double lineBlockExtent)
         {
             var container = OwnerBox.HtmlContainer!;
+            var lineBottom = lineTop + lineBlockExtent;
 
-            var (clonedTop, reservedEnd) = ClonedInsets(container);
+            var (clonedTop, reservedEnd) = ClonedInsets(container, lineTop);
 
             // The reserved insets count towards "too tall to fit anywhere": a resumed pass re-opens with the top
-            // set and still has to clear the bottom one, so if the word cannot fit between them it never will,
+            // set and still has to clear the bottom one, so if the line cannot fit between them it never will,
             // and calling it a straddle would break to a fresh fragmentainer for every fragmentainer there is.
-            if (MonolithicContent.FitsNoFragmentainer(Height, clonedTop, reservedEnd, container))
+            if (MonolithicContent.FitsNoFragmentainer(lineBlockExtent, clonedTop, reservedEnd, container))
                 return false;
 
             // Inside a multi-column column the question is about that column's own band, not the page grid's:
@@ -414,16 +420,16 @@ namespace PeachPDF.Html.Core.Dom
             // overflows the one it is in rather than breaking to a fresh column for every column there is.
             if (container.CurrentFragmentainer is { HasOwnBand: true } columnBand)
             {
-                return MonolithicContent.FitsInBand(Height, clonedTop, reservedEnd, columnBand.BandHeight)
-                       && HtmlContainerInt.FallsPast(Bottom + reservedEnd, columnBand.Band);
+                return MonolithicContent.FitsInBand(lineBlockExtent, clonedTop, reservedEnd, columnBand.BandHeight)
+                       && HtmlContainerInt.FallsPast(lineBottom + reservedEnd, columnBand.Band);
             }
 
             // The band this word's own top falls in, asked of the fragmentainer the pass is actually
             // filling rather than merely of the page grid.
-            var gridBand = container.BandStartingAt(Top);
-            var band = container.BandBeingFilled(Top, gridBand);
+            var gridBand = container.BandStartingAt(lineTop);
+            var band = container.BandBeingFilled(lineTop, gridBand);
 
-            return HtmlContainerInt.FallsPast(Bottom + reservedEnd, band);
+            return HtmlContainerInt.FallsPast(lineBottom + reservedEnd, band);
         }
 
         /// <summary>
@@ -433,7 +439,8 @@ namespace PeachPDF.Html.Core.Dom
         /// repeating <c>&lt;tfoot&gt;</c> (or a clone ancestor's own closing edge) has claimed at the far
         /// end of the band. Shared so the two questions can never drift onto different reservations.
         /// </summary>
-        private (double ClonedTop, double ReservedEnd) ClonedInsets(HtmlContainerInt container)
+        private (double ClonedTop, double ReservedEnd) ClonedInsets(
+            HtmlContainerInt container, double lineTop)
         {
             var (clonedTop, clonedBottom) = MonolithicContent.ClonedBlockInsets(OwnerBox, container);
 
@@ -442,7 +449,7 @@ namespace PeachPDF.Html.Core.Dom
             // name different fragmentainers, which they could if this read the context's own SlotIndex, a
             // cursor StepOverTo moves.
             var reservedEnd = clonedBottom
-                              + (container.CurrentFragmentainer?.BandEndInsetOf(container.SlotStartingAt(Top)) ?? 0);
+                              + (container.CurrentFragmentainer?.BandEndInsetOf(container.SlotStartingAt(lineTop)) ?? 0);
 
             return (clonedTop, reservedEnd);
         }
@@ -468,22 +475,26 @@ namespace PeachPDF.Html.Core.Dom
         /// it - the band the line was trying to sit in, per #435's own words, not a further one.
         /// </para>
         /// </remarks>
-        internal int ResumeSlotForBreakBefore()
+        /// <param name="lineTop">The current line box's document-space block-start coordinate.</param>
+        /// <param name="lineBlockExtent">The current line box's block-axis extent.</param>
+        internal int ResumeSlotForBreakBefore(double lineTop, double lineBlockExtent)
         {
             var container = OwnerBox.HtmlContainer!;
-            var slot = container.SlotStartingAt(Top);
-            var (_, reservedEnd) = ClonedInsets(container);
+            var slot = container.SlotStartingAt(lineTop);
+            var (_, reservedEnd) = ClonedInsets(container, lineTop);
 
-            return HtmlContainerInt.FallsPast(Bottom + reservedEnd, container.BandOfSlot(slot)) ? slot + 1 : slot;
+            return HtmlContainerInt.FallsPast(lineTop + lineBlockExtent + reservedEnd, container.BandOfSlot(slot))
+                ? slot + 1
+                : slot;
         }
 
         /// <summary>
-        /// Whether this word is too tall to fit in any fragmentainer at all - the <c>css-break-3 §2</c>
+        /// Whether this line is too tall to fit in any fragmentainer at all - the <c>css-break-3 §2</c>
         /// monolithic-overflow case <see cref="WouldStraddleFragmentainer"/> exempts from being called a
         /// straddle, since moving it would only repeat the question on the next fragmentainer forever.
         /// </summary>
         /// <remarks>
-        /// A word answering this <c>true</c> overflows the fragmentainer it is in rather than breaking,
+        /// A line answering this <c>true</c> overflows the fragmentainer it is in rather than breaking,
         /// so the content <i>after</i> it flows into the following band without a break ever having been
         /// recorded for the crossing - one of the handful of mechanisms
         /// <see href="https://github.com/jhaygood86/PeachPDF/issues/435">#435</see> names as putting flow
@@ -491,12 +502,14 @@ namespace PeachPDF.Html.Core.Dom
         /// cursor over to match once this word's own bottom is known, mirroring how a forced break already
         /// does the same thing by placement.
         /// </remarks>
-        internal bool OverflowsEveryFragmentainer()
+        /// <param name="lineTop">The current line box's document-space block-start coordinate.</param>
+        /// <param name="lineBlockExtent">The current line box's block-axis extent.</param>
+        internal bool OverflowsEveryFragmentainer(double lineTop, double lineBlockExtent)
         {
             var container = OwnerBox.HtmlContainer!;
-            var (clonedTop, reservedEnd) = ClonedInsets(container);
+            var (clonedTop, reservedEnd) = ClonedInsets(container, lineTop);
 
-            return MonolithicContent.FitsNoFragmentainer(Height, clonedTop, reservedEnd, container);
+            return MonolithicContent.FitsNoFragmentainer(lineBlockExtent, clonedTop, reservedEnd, container);
         }
     }
 }

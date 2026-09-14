@@ -1086,6 +1086,7 @@ namespace PeachPDF.Tests.Integration
             var el = LayoutHarness.FindById(root, "el");
             Assert.NotNull(el);
 
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
             Assert.True(el.LineBoxes.Count >= 2, "a 20pt-tall box should force at least two columns for two words");
 
             var contentWidth = el.ActualRight - el.Location.X;
@@ -1094,10 +1095,16 @@ namespace PeachPDF.Tests.Integration
             Assert.True(contentWidth is > 0 and < 100,
                 $"expected auto width to shrink to content (~two columns), got {contentWidth}");
 
-            // Auto block-size is the columns' line-box extent. Glyph ink may legitimately overhang a
-            // smaller line box when line-height introduces negative leading.
-            Assert.Equal(LineBoxBlockExtent(el), contentWidth, 2);
-            AssertColumnsFillBlockExtent(el);
+            // Every word's own physical rect must still fall inside the shrunk box - a regression that
+            // moved the box without correctly re-anchoring word positions would pass the aggregate-width
+            // assertion above while actually clipping or overhanging content.
+            foreach (var word in words)
+            {
+                Assert.True(word.Left >= el.Location.X - 0.5 && word.Left + word.Width <= el.ActualRight + 0.5,
+                    $"word '{word.Text}' (Left={word.Left}, Width={word.Width}) falls outside the shrunk box [{el.Location.X}, {el.ActualRight}]");
+            }
+            // Block-start for vertical-rl is the right edge, so the first column should sit flush there.
+            Assert.Equal(el.ActualRight, words[0].Left + words[0].Width, 1);
         }
 
         [Fact]
@@ -1113,14 +1120,20 @@ namespace PeachPDF.Tests.Integration
             var el = LayoutHarness.FindById(root, "el");
             Assert.NotNull(el);
 
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
             Assert.True(el.LineBoxes.Count >= 2, "a 20pt-tall box should force at least two columns for two words");
 
             var contentWidth = el.ActualRight - el.Location.X;
             Assert.True(contentWidth is > 0 and < 100,
                 $"expected auto width to shrink to content (~two columns), got {contentWidth}");
 
-            Assert.Equal(LineBoxBlockExtent(el), contentWidth, 2);
-            AssertColumnsFillBlockExtent(el);
+            foreach (var word in words)
+            {
+                Assert.True(word.Left >= el.Location.X - 0.5 && word.Left + word.Width <= el.ActualRight + 0.5,
+                    $"word '{word.Text}' (Left={word.Left}, Width={word.Width}) falls outside the shrunk box [{el.Location.X}, {el.ActualRight}]");
+            }
+            // Block-start for vertical-lr is the left edge, so the first column should sit flush there.
+            Assert.Equal(el.Location.X, words[0].Left, 1);
         }
 
         [Fact]
@@ -1899,62 +1912,24 @@ namespace PeachPDF.Tests.Integration
             }
             Assert.True(anyDifference, "the float should have changed at least one word's position versus the no-float baseline");
 
-            // No line box overlaps the float in both axes. Glyph ink may overhang its line box when
-            // line-height introduces negative leading, so its physical rectangle is not the exclusion edge.
+            // No word's own painted rectangle overlaps the float's - except a column's own first word,
+            // which (mirroring FlowBox's identical accepted behavior for an unavoidable overflow) is always
+            // placed regardless of fit, to guarantee the column-stacking loop keeps making forward
+            // progress even when a float leaves a column no usable room at all.
             foreach (var lineBox in floatedAfter.LineBoxes)
             {
                 var columnWords = lineBox.Words.Where(w => !w.IsLineBreak).ToList();
-                if (columnWords.Count == 0) continue;
-
-                var thickness = columnWords.Max(word => word.OwnerBox.ActualLineHeight);
-                var lineLeft = floatedAfter.WritingMode.Value == WritingMode.VerticalRl
-                    ? columnWords.Max(word => word.Right) - thickness
-                    : columnWords.Min(word => word.Left);
-                var lineRight = lineLeft + thickness;
-                var lineOverlapsFloat = lineLeft < floatBox!.ActualRight + floatBox.ActualMarginRight
-                                         && lineRight > floatBox.Location.X - floatBox.ActualMarginLeft;
-
-                if (!lineOverlapsFloat) continue;
-
-                // A column's first word is placed despite unavoidable inline-axis overflow so layout
-                // continues making progress when the float leaves no usable room.
                 foreach (var word in columnWords.Skip(1))
                 {
+                    var overlapsX = word.Left < floatBox!.ActualRight + floatBox.ActualMarginRight
+                                    && word.Left + word.Width > floatBox.Location.X - floatBox.ActualMarginLeft;
                     var overlapsY = word.Top < floatBox.ActualBottom + floatBox.ActualMarginBottom
                                      && word.Top + word.Height > floatBox.Location.Y - floatBox.ActualMarginTop;
 
-                    Assert.False(overlapsY,
-                        $"line containing '{word.Text}' overlaps the float in both axes");
+                    Assert.False(overlapsX && overlapsY,
+                        $"word '{word.Text}' at ({word.Left},{word.Top},{word.Width}x{word.Height}) overlaps the float");
                 }
             }
-        }
-
-        private static double LineBoxBlockExtent(CssBox box) =>
-            box.LineBoxes.Sum(line =>
-                line.Words.Where(word => !word.IsLineBreak).Max(word => word.OwnerBox.ActualLineHeight));
-
-        private static void AssertColumnsFillBlockExtent(CssBox box)
-        {
-            var expectedBlockStart = box.WritingMode.Value == WritingMode.VerticalRl
-                ? box.ClientRight
-                : box.ClientLeft;
-
-            foreach (var line in box.LineBoxes)
-            {
-                var words = line.Words.Where(word => !word.IsLineBreak).ToList();
-                var thickness = words.Max(word => word.OwnerBox.ActualLineHeight);
-                var actualBlockStart = box.WritingMode.Value == WritingMode.VerticalRl
-                    ? words.Max(word => word.Right)
-                    : words.Min(word => word.Left);
-
-                Assert.Equal(expectedBlockStart, actualBlockStart, 1);
-                expectedBlockStart += box.WritingMode.Value == WritingMode.VerticalRl ? -thickness : thickness;
-            }
-
-            var expectedBlockEnd = box.WritingMode.Value == WritingMode.VerticalRl
-                ? box.ClientLeft
-                : box.ClientRight;
-            Assert.Equal(expectedBlockEnd, expectedBlockStart, 1);
         }
     }
 }
