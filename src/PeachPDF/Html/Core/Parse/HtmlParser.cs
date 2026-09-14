@@ -120,8 +120,22 @@ namespace PeachPDF.Html.Core.Parse
                     Console.WriteLine($"parse token, tag close: {tagName}. current box: {curBox}");
 #endif
                     // need to find the parent tag to go one level up
-                    curBox = CloseElement(curBox, tagName);
+                    var afterClose = DomUtils.FindParent(curBox.ParentBox!, tagName, curBox);
 
+                    if (afterClose is not null)
+                    {
+                        curBox = afterClose;
+                    }
+                    else if (string.Equals(tagName, HtmlConstants.P, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // The one unmatched end tag that generates an element rather than being dropped.
+                        InsertEmptyParagraphForStrayEndTag(curBox);
+                    }
+
+                    // Every other unmatched end tag is a parse error the HTML5 tree construction algorithm
+                    // simply ignores, leaving the insertion point where it is - NOT "close everything up
+                    // to the document root", which would silently reparent the rest of the document under
+                    // <body>/<html>.
                 }
             }
             else if (!string.IsNullOrEmpty(tagName))
@@ -162,13 +176,15 @@ namespace PeachPDF.Html.Core.Parse
             }
         }
 
+        /// <summary>
+        /// Moves the insertion point up past <paramref name="tagName"/>'s own box. Used for an
+        /// <i>implied</i> end tag (<see cref="HtmlUtils.CanEndTagBeOmitted"/>), where the element being
+        /// closed is <paramref name="cssBox"/> itself and so is always found; an explicit end tag is
+        /// resolved by its caller instead, which has a stray-end-tag case to answer that this does not
+        /// (see <see cref="InsertEmptyParagraphForStrayEndTag"/>).
+        /// </summary>
         private static CssBox CloseElement(CssBox cssBox, string tagName)
         {
-            // No matching open ancestor (e.g. a stray </p> for a <p> already auto-closed by a nested
-            // <table>, per HTML4's "table closes p" rule) is a parse error - per the HTML5 tree
-            // construction algorithm, an end tag with no matching open element is simply ignored,
-            // leaving the current insertion point unchanged, not "close everything up to the document
-            // root" (which would silently reparent all of the rest of the document under <body>/<html>).
             var currentBox = DomUtils.FindParent(cssBox.ParentBox!, tagName, cssBox) ?? cssBox;
 
 #if DEBUG
@@ -176,6 +192,38 @@ namespace PeachPDF.Html.Core.Parse
 #endif
 
             return currentBox;
+        }
+
+        /// <summary>
+        /// Handles a <c>&lt;/p&gt;</c> whose <c>&lt;p&gt;</c> is no longer open, by inserting an empty
+        /// one — <see href="https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody">HTML
+        /// §13.2.6.4.7 "in body"</see>: "An end tag whose tag name is <c>p</c>: if the stack of open
+        /// elements does not have a <c>p</c> element in button scope, then this is a parse error; insert
+        /// an HTML element for a <c>p</c> start tag token with no attributes. Close a <c>p</c> element."
+        /// </summary>
+        /// <remarks>
+        /// <c>p</c> is one of only two end tags the spec answers this way rather than by ignoring an
+        /// unmatched end tag outright (<c>br</c> is the other, and is turned into a <i>start</i> tag
+        /// instead — not implemented here). The generated element is empty and immediately closed, so the
+        /// insertion point does not move; what it changes is the <b>element count</b>, and therefore
+        /// sibling-combinator matching.
+        /// <para>
+        /// This is not academic. It is exactly what Acid2 tests with
+        /// <c>&lt;p&gt;&lt;table&gt;…&lt;/table&gt;&lt;/p&gt;&lt;p class="bad"&gt;</c>: <c>&lt;table&gt;</c>
+        /// closes the first <c>&lt;p&gt;</c>, so the <c>&lt;/p&gt;</c> after it is stray and generates the
+        /// empty paragraph that <c>.picture p + table + p</c> then matches. Without it that selector falls
+        /// through onto <c>p.bad</c> instead, which is precisely the element the fixture means to keep it
+        /// away from — <c>p.bad</c> takes a <c>margin-top: 3em</c> meant for the generated element and
+        /// slides a black-and-red bar down across the middle of the face.
+        /// </para>
+        /// </remarks>
+        private static void InsertEmptyParagraphForStrayEndTag(CssBox curBox)
+        {
+#if DEBUG
+            Console.WriteLine($"parse token, stray </p> generating an empty <p>. current box: {curBox}");
+#endif
+
+            CssBox.CreateBox(new HtmlTag(HtmlConstants.P, isSingle: false), curBox);
         }
 
         /// <summary>

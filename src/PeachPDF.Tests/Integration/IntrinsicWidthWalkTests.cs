@@ -476,6 +476,34 @@ namespace PeachPDF.Tests.Integration
                 await FloatWidthAsync("<span style='float:left;margin-right:10pt'>ZZZZ</span>XY"), 3);
         }
 
+        [Theory]
+        // A 48pt float inside a box whose own border is 12pt a side. When the float ALSO has a 12pt
+        // border, both decorations are on the line: 24 (container) + 24 (float) + 48 = 96pt.
+        [InlineData("border:12pt solid black", 96d)]
+        // ...and with no decoration of its own, just the container's: 24 + 48 = 72pt.
+        [InlineData("", 72d)]
+        public async Task AFloatsOwnDecoration_AddsToTheLine_RatherThanMergingWithItsContainers(
+            string floatStyle, double expectedWidth)
+        {
+            // The running padding total this walk keeps is combined down a chain of boxes by Math.Max,
+            // because a descendant's border/padding sits INSIDE its ancestor's and counting both would
+            // double it. A float is not on that chain - CSS 2.1 §9.5 places it BESIDE the content of the
+            // block it is in, so its decoration sits beside the container's and genuinely adds. Folding
+            // it in by Math.Max instead merged the two whenever the container's was the larger, losing
+            // the float's entirely: Acid2's ".smile div div" (a 1em border around one 1em-bordered
+            // float) measured 96px where Chrome gives 120px, and the mouth's yellow flanks painted black.
+            //
+            // Both expectations are Chrome's own on this markup.
+            var html = LayoutHarness.Wrap(
+                $"<div id='t' style=\"position:absolute; top:0; left:400pt; border:12pt solid yellow\">" +
+                $"<div style=\"float:right; width:48pt; height:12pt; {floatStyle}\"></div></div>");
+
+            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var box = LayoutHarness.FindById(root, "t")!;
+
+            Assert.Equal(expectedWidth, box.ActualRight - box.Location.X, precision: 6);
+        }
+
         [Fact]
         public async Task AnOutOfFlowOrUndisplayedSibling_DoesNotStopTheFloatSharingTheLine()
         {

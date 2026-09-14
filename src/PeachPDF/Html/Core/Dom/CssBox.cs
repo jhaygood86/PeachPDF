@@ -7455,37 +7455,42 @@ namespace PeachPDF.Html.Core.Dom
                     // item.
                     if (childBox.IsFloated && (floatsShareTheLine ??= FloatsShareTheLine(box)))
                     {
-                        childBox.GetMinMaxWidth(g, out var floatMin, out var floatMax,
-                            out var floatDecoration);
+                        childBox.GetMinMaxWidth(g, out var floatMin, out var floatMax, out _);
 
-                        // paddingSum is a SEPARATE running total from maxSum, combined down a chain of
-                        // boxes by Math.Max rather than by addition (see the oldPaddingSum save and
-                        // restore above). The isolated measurement folded the float's decoration into
-                        // the widths it returned, so the whole of them cannot go on the line: that
-                        // ADDS what the recursive descent would have MAXed. Split back out and folded
-                        // in the way the descent folded it, so this branch changes only WHERE the
-                        // float's content lands - on the line rather than competing with it - and
-                        // nothing about the padding accounting. Acid2's own ".smile div div" (a
-                        // shrink-to-fit absolute box with a 1em border around one 1em-bordered float)
-                        // is the shape that catches the difference: 108pt against its real 90pt, drawn
-                        // over the mouth beside it. The accounting itself is separately wrong — see
-                        // .claude/accepted-gaps/intrinsic-padding-total-is-not-the-winning-lines-own-padding.md
-                        // — but wrong identically before and after this change, which is the point.
-                        floatMin -= floatDecoration;
-                        floatMax -= floatDecoration;
-                        paddingSum = Math.Max(paddingSum, floatDecoration);
+                        // The float's own border/padding stays IN the widths measured here, and none of
+                        // it is folded into paddingSum. paddingSum is a separate running total combined
+                        // down a chain of boxes by Math.Max rather than by addition (see the
+                        // oldPaddingSum save/restore above) because a descendant's decoration sits
+                        // INSIDE its ancestor's and the two must not both be counted. A float is not on
+                        // that chain: §9.5 places it BESIDE the content of the block it is in, so its
+                        // decoration sits beside the container's too and genuinely adds to the line.
+                        //
+                        // Splitting it back out and Math.Max-ing it into paddingSum - which this did,
+                        // to mimic what the recursive descent would have done - merges it with the
+                        // container's own whenever the container's is the larger, losing it. Acid2's
+                        // ".smile div div" is exactly that shape (a 1em border around one 1em-bordered
+                        // float): 96px measured where Chrome gives 120px, the mouth's yellow flanks
+                        // painting black. The merge was invisible while the caller compensated for it by
+                        // treating this method's result as a CONTENT width and adding the box's own
+                        // decoration back on top; correcting that caller (§10.3.7 shrink-to-fit, which
+                        // must subtract instead) is what exposed it.
 
                         // This walk otherwise never consults a box's own explicit CSS `width` - the fold
                         // further down does it for a child on the recursive path, which this one leaves.
                         // A float declaring one is the ordinary case, not an exotic one, and unlike that
                         // fold's floor this REPLACES the measured width: a non-auto width IS the float's
                         // used width (CSS 2.1 §10.3.5), so content narrower than it does not shrink the
-                        // float and content wider than it overflows instead of widening it. A declared
-                        // width is a CONTENT width, and so is what is added to the line here - the
-                        // float's decoration has just been split out into paddingSum above.
+                        // float and content wider than it overflows instead of widening it.
+                        //
+                        // A declared width is a CONTENT width, while what goes on the line is the float's
+                        // OUTER one, so its own border and padding are added back here - the measured
+                        // widths being replaced already carried them. ActualBoxSizeIncludedWidth is
+                        // correctly zero under `box-sizing: border-box`, where the declared width already
+                        // is the outer one.
                         if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%'))
                         {
-                            floatMax = floatMin = CssValueParser.ParseLength(childBox.Width, 0, childBox);
+                            floatMax = floatMin = CssValueParser.ParseLength(childBox.Width, 0, childBox)
+                                + childBox.ActualBoxSizeIncludedWidth;
                         }
 
                         var floatMargins = childBox.ActualMarginLeft + childBox.ActualMarginRight;

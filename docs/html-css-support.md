@@ -217,6 +217,24 @@ Form elements are rendered as static boxes by default. There is no interactive b
 | `frameset` | [frameset](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/frameset) | Deprecated element; rendered as a block |
 | `noframes` | [noframes](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/noframes) | Deprecated element; content is rendered |
 
+### Malformed markup
+
+Two of the HTML Standard's [tree-construction](https://html.spec.whatwg.org/multipage/parsing.html#tree-construction)
+error-recovery rules are worth stating, because both change the **element tree** a stylesheet then
+matches against — most visibly through the sibling combinators `+` and `~`, and through
+`:first-child`/`:nth-child()`:
+
+- **An end tag whose element is not open is ignored**, and the insertion point does not move. Content
+  after it stays where it was rather than being reparented.
+- **`</p>` is the exception**: when no `<p>` is open it generates an *empty* `<p>`, immediately closed.
+  This is what the spec requires, and it is observable. An end tag written after a construct that
+  already implied it — `<p><table>…</table></p>`, where `<table>` closes the paragraph itself — leaves
+  a real, empty paragraph element behind, so `p + table + p` matches *that* element rather than the
+  next authored paragraph.
+
+`</br>`, which the spec turns into a `<br>` *start* tag, is not implemented and is ignored like any
+other unmatched end tag.
+
 ---
 
 ## CSS Properties
