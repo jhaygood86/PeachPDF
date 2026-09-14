@@ -25,6 +25,10 @@ namespace PeachPDF.Tests.Adapters
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var page = document.AddPage();
+            // A new PdfPage defaults to A4 or Letter depending on RegionInfo.CurrentRegion.IsMetric, so a
+            // test asserting literal page-space coordinates has to pin the size - otherwise it passes in a
+            // metric region and fails on a US-region machine (as CI's runners are) purely on page height.
+            page.Size = PageSize.A4;
             var pageGfx = XGraphics.FromPdfPage(page);
             var adapter = new PdfSharpAdapter();
             var graphics = new GraphicsAdapter(adapter, pageGfx, 1.0);
@@ -98,8 +102,8 @@ namespace PeachPDF.Tests.Adapters
 
             var text = Serialize(document);
 
-            // The clip - a 20pt square at the destination, in PDF's y-up space, so the A4 page's 842pt
-            // height puts its edges at 832 and 812 - has to be established before the single form
+            // The clip - a 20pt square at the destination, in PDF's y-up space, so the pinned A4 page's
+            // 842pt height puts its edges at 832 and 812 - has to be established before the single form
             // invocation it bounds: what falls outside the destination is cut away, not squeezed into it.
             var clipThenDraw = Regex.Match(text, @"10 832 m.*?W\*? n(?:(?!W\*? n).)*?/\w+ Do", RegexOptions.Singleline);
             Assert.True(clipThenDraw.Success, "the cropped draw must clip to its destination before invoking the form");
