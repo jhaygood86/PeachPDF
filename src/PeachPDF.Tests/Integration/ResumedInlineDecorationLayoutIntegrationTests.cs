@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+﻿using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -432,8 +432,11 @@ namespace PeachPDF.Tests.Integration
 
             foreach (var page in byPage)
             {
+                // Measured on the line box, not its words: the re-opened border and padding push the
+                // fragment's CONTENT EDGE down by topInset, and the first line box begins there - its
+                // words then sit half a leading lower again (CSS 2.1 §10.8.1).
                 var expectedTop = container.PageTopOf(page.Key) + topInset;
-                Assert.Equal(expectedTop, page.Min(w => w.Top), 2);
+                Assert.Equal(expectedTop, page.Min(w => LayoutHarness.LineTopOf(root, w)), 2);
             }
         }
 

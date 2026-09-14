@@ -164,6 +164,29 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ColumnBarValue_StartsAtBarTop()
+        {
+            // Charts.css puts an 8pt flex value inside a bar whose table text is 12pt. The anonymous
+            // text item owns its own line: its parent's larger strut must not enlarge that line or push
+            // the ink down inside the bar.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>" +
+                "  #bar { display:flex; justify-content:center; align-items:flex-start;" +
+                "         width:100pt; height:100pt; font-size:12pt; }" +
+                "  #value { display:flex; font-size:8pt; }" +
+                "</style>" +
+                "<div id='bar'><span id='value'>$42M</span></div>"), margin: 20);
+
+            var bar = LayoutHarness.FindById(root, "bar")!;
+            var value = LayoutHarness.FindById(root, "value")!;
+            var text = Assert.Single(value.Boxes);
+            var word = Assert.Single(text.Words);
+            Assert.Equal(bar.ClientTop, value.Location.Y, 0.5);
+            Assert.InRange(text.ActualBoxSizingHeight, 8, 12);
+            Assert.InRange(word.Top - bar.ClientTop, -1, 2);
+        }
+
+        [Fact]
         public async Task AbsoluteColumnLabelInAStretchedFlexItem_DoesNotBreakMidWord()
         {
             // Charts.css's column axis label, reduced to the parts that matter: a `tbody` flex container

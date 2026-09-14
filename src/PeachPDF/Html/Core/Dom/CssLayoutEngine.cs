@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -1212,7 +1212,9 @@ namespace PeachPDF.Html.Core.Dom
 
             // The block now ends where the line it just lost began, which is the bottom of the line
             // the break actually terminated.
-            coordinates.MaxBottom = last.Words[0].Top;
+            // The line box's own top, not its first word's - a word sits half a leading below the line
+            // it is on (CSS 2.1 §10.8.1), and reading it here made the block that much too tall.
+            coordinates.MaxBottom = last.LineTop;
         }
 
         /// <summary>
@@ -2740,41 +2742,83 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// How much of the block axis a line box holding <paramref name="word"/> is obliged to
-        /// occupy, per <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1 §10.8.1</see>:
-        /// the largest <c>line-height</c> among every inline box the text sits inside -
-        /// the word's effective style and its owner's inline ancestors up to <paramref name="blockBox"/> - and the
-        /// <b>strut</b>, an imaginary inline box carrying <paramref name="blockBox"/>'s own font and
-        /// <c>line-height</c> that is present on every line box holding content.
+        /// The total thickness a line box holding <paramref name="word"/> is obliged to occupy — the
+        /// two sides of <see cref="LineBoxContributionOf"/> summed. Used by the vertical-writing-mode
+        /// engine, which sizes a line's cross axis but has no baseline of its own to place content
+        /// against; <see cref="FlowBox"/> keeps the two sides apart instead, because it does.
+        /// </summary>
+        private static double LineBoxExtentOf(CssRect word, CssBox blockBox) =>
+            LineBoxContributionOf(word, blockBox).Height;
+
+        /// <summary>
+        /// One inline box's share of a line box, split at the baseline, per
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1 §10.8.1</see>: its
+        /// glyph content area (<c>ascent</c>/<c>descent</c>) with the <b>leading</b> —
+        /// <c>line-height - (ascent + descent)</c> — split in half and added to each side. A
+        /// <c>line-height</c> larger than the font centres the content area in the line box rather than
+        /// hanging it from the top; a smaller one makes the leading negative and the glyphs deliberately
+        /// overflow the line on both sides.
+        /// </summary>
+        private static LineBoxExtent HalfLeadingExtentOf(RFont font, double lineHeight)
+        {
+            var halfLeading = (lineHeight - font.Height) / 2;
+
+            return new LineBoxExtent(font.Ascent + halfLeading, font.Height - font.Ascent + halfLeading);
+        }
+
+        /// <summary>
+        /// How far a line box holding <paramref name="word"/> is obliged to reach on each side of its
+        /// baseline, per <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1
+        /// §10.8.1</see>: the per-side largest <see cref="HalfLeadingExtentOf"/> among every inline box
+        /// the text sits inside — the word's effective style and its owner's inline ancestors up to
+        /// <paramref name="blockBox"/> — and the <b>strut</b>, an imaginary inline box carrying
+        /// <paramref name="blockBox"/>'s own font and <c>line-height</c> that is present on every line
+        /// box holding content.
         /// </summary>
         /// <remarks>
-        /// Deliberately not the glyph content area (<c>RFont.Height</c>, which is what a word's own
-        /// rectangle and therefore an inline box's background/border area is sized from): §10.8 lets a
-        /// content area <i>taller</i> than the line-height overflow the line rather than grow it, which is
-        /// what negative leading means. Replaced/atomic inline content is the case §10.8 does size from the
-        /// element's own box, and each caller handles that separately.
+        /// The two sides are maximised <i>independently</i>, which is the whole reason this returns a
+        /// pair rather than a height: a line's tallest box above the baseline need not be its deepest
+        /// below, so the line can be taller than any single <c>line-height</c> on it. Summing to a
+        /// height first — as this did before real baseline alignment existed — silently assumed every
+        /// box shared one baseline offset, which is true only while every font on the line is the same
+        /// size.
         /// <para>
-        /// Shared by both line-layout engines - <see cref="FlowBox"/> for horizontal writing modes and
-        /// <c>CreateVerticalLineBoxes</c> for vertical ones - so the two cannot drift into disagreeing
-        /// about how tall a line is. The effective style is <see cref="CssRect.FirstLineStyle"/> when present,
-        /// because a <c>::first-line</c> font or line-height can differ from the owner's normal style.
+        /// Replaced and atomic inline content is deliberately absent: §10.8 sizes those from the
+        /// element's own box rather than from font metrics, and this engine still aligns them to the
+        /// line's top rather than its baseline (see <see cref="ApplyVerticalAlignment"/>), so they grow
+        /// the line through <c>MaxBottom</c> at the call site instead of through this.
+        /// </para>
+        /// <para>
+        /// Shared by both line-layout engines — <see cref="FlowBox"/> for horizontal writing modes and
+        /// <see cref="CreateVerticalLineBoxes"/> (via <see cref="LineBoxExtentOf"/>, which wants only the
+        /// summed thickness) for vertical ones — so the two cannot drift into disagreeing about how tall
+        /// a line is. The effective style is <see cref="CssRect.FirstLineStyle"/> when present, because a
+        /// <c>::first-line</c> font or line-height can differ from the owner's normal style, and per
+        /// CSS Pseudo 4 it replaces the root inline box's own contribution rather than joining it.
         /// </para>
         /// </remarks>
-        private static double LineBoxExtentOf(CssRect word, CssBox blockBox)
+        private static LineBoxExtent LineBoxContributionOf(CssRect word, CssBox blockBox)
         {
-            // The first-line pseudo wraps the root inline box, so its inherited line-height replaces the
-            // block's ordinary strut on that line and can reduce as well as increase the line box.
-            var extent = word.FirstLineStyle?.ActualLineHeight ?? blockBox.ActualLineHeight;
+            // The first-line pseudo wraps the root inline box, so its inherited font and line-height
+            // replace the block's ordinary strut on that line and can reduce as well as increase the
+            // line box. With no ::first-line in play the strut is the block's own, and the word's own
+            // inline box contributes separately alongside it.
             var ownerBox = word.OwnerBox;
+            var strutStyle = word.FirstLineStyle ?? blockBox;
+
+            var extent = HalfLeadingExtentOf(strutStyle.ActualFont, strutStyle.ActualLineHeight);
 
             if (word.FirstLineStyle is null)
-                extent = Math.Max(extent, ownerBox.ActualLineHeight);
+                extent = extent.Union(HalfLeadingExtentOf(ownerBox.ActualFont, ownerBox.ActualLineHeight));
 
-            for (var inlineAncestor = ownerBox.ParentBox;
+            // A word owned by the block itself has no inline ancestors. Starting at its parent in
+            // that case would walk *outside* the line's formatting context and let an outer element's
+            // larger font inflate this line (e.g. an 8pt chart value inside a 12pt table cell).
+            for (var inlineAncestor = ReferenceEquals(ownerBox, blockBox) ? null : ownerBox.ParentBox;
                  inlineAncestor is not null && !ReferenceEquals(inlineAncestor, blockBox);
                  inlineAncestor = inlineAncestor.ParentBox)
             {
-                extent = Math.Max(extent, inlineAncestor.ActualLineHeight);
+                extent = extent.Union(HalfLeadingExtentOf(inlineAncestor.ActualFont, inlineAncestor.ActualLineHeight));
             }
 
             return extent;
@@ -2819,9 +2863,40 @@ namespace PeachPDF.Html.Core.Dom
             // line-height short.
             void GrowLineToItsExtent(CssRect word)
             {
-                var lineExtent = LineBoxExtentOf(word, blockBox);
-                if (coordinates.MaxBottom - coordinates.CurrentY < lineExtent)
-                    coordinates.MaxBottom += lineExtent - (coordinates.MaxBottom - coordinates.CurrentY);
+                var line = coordinates.Line;
+                var extent = LineBoxContributionOf(word, blockBox);
+
+                // An outside marker is not in this flow (IsOutsideMarker), but it does sit on this
+                // line's baseline, so the line has to be tall enough to hold it - otherwise a marker
+                // in a font larger than its item's text overlaps whatever precedes the item.
+                //
+                // Its ASCENT side only: the marker hangs outside the principal box, so its descender has
+                // nothing under it to push down, and browsers do not let it. Measured in Chrome on
+                // `<li>Item` at 8.5pt with `::marker { font-size: 20pt }`: the line's own extent above the
+                // baseline goes from 10px to 24px - the marker's whole ascent - while below it stays at
+                // the item's own 2px, rather than growing to the marker's ~5.7px descent. css-lists-3
+                // §3.5 leaves this interaction expressly undefined, so browsers are the reference.
+                if (blockBox.LineBoxes.Count > 0 && ReferenceEquals(line, blockBox.LineBoxes[0])
+                    && OutsideMarkerExtentOf(blockBox) is { } markerExtent)
+                {
+                    extent = extent with
+                    {
+                        AboveBaseline = Math.Max(extent.AboveBaseline, markerExtent.AboveBaseline)
+                    };
+                }
+
+                line.BaselineExtent = line.BaselineExtent is { } held ? held.Union(extent) : extent;
+                extent = line.BaselineExtent.Value;
+
+                // The line box's own top, stated while the cursor still names it. Every question about
+                // which fragmentainer a line is in is asked of this, not of a word on it - the two part
+                // company by the half-leading as soon as a word is placed on its baseline.
+                line.FlowTop = line.FlowTop is { } known
+                    ? Math.Min(known, coordinates.CurrentY)
+                    : coordinates.CurrentY;
+
+                if (coordinates.MaxBottom - coordinates.CurrentY < extent.Height)
+                    coordinates.MaxBottom += extent.Height - (coordinates.MaxBottom - coordinates.CurrentY);
             }
 
             // text-indent's line-start side is physical-right under RTL (CSS Text 3 §3) - reserved here by
@@ -3015,6 +3090,7 @@ namespace PeachPDF.Html.Core.Dom
                         // holding no content zero-height, so an empty block must not gain a strut's worth
                         // of height out of nothing.
                         var maxBottomBeforeIncomingWord = coordinates.MaxBottom;
+                        var lineExtentBeforeIncomingWord = coordinates.Line.BaselineExtent;
                         GrowLineToItsExtent(word);
 
                         var actualLimitRight = coordinates.Line.ContentRight;
@@ -3107,7 +3183,10 @@ namespace PeachPDF.Html.Core.Dom
                             // every case a new line doesn't actually start with this word. A forced-break
                             // marker itself terminates the current line and retains its extent.
                             if (!word.IsLineBreak)
+                            {
                                 coordinates.MaxBottom = maxBottomBeforeIncomingWord;
+                                coordinates.Line.BaselineExtent = lineExtentBeforeIncomingWord;
+                            }
 
                             // line-clamp (CSS Overflow 4 §block-ellipsis / §max-lines): once the block has
                             // already produced as many lines as its declared limit, this new line must never
@@ -3354,6 +3433,24 @@ namespace PeachPDF.Html.Core.Dom
                         // call before the wrap decision never saw. Grow that line now, against the cursor's
                         // post-wrap CurrentY.
                         GrowLineToItsExtent(word);
+
+                        // ...then sit it on that line's baseline straight away, rather than leaving it at
+                        // the line's top for ApplyVerticalAlignment to move later. CSS 2.1 §10.8.1 puts a
+                        // word's content area half a leading below its line box's top, and the questions
+                        // asked immediately below - does this word straddle the fragmentainer, does it
+                        // overflow every one - are asked of the word's own rectangle. Answering them at the
+                        // line's top and only then moving the glyphs down by the half-leading let a word
+                        // that had just been judged to fit end up across the boundary after all, and the
+                        // emitter claimed it in both fragmentainers (MulticolLayoutIntegrationTests'
+                        // AtAnAvoidColumnBreak_TheContentMovesAlone_SinceItsHeightIsNotYetKnown states
+                        // this: the same word painted twice, in two columns).
+                        //
+                        // An approximation on purpose, and a self-correcting one: the line's extent is only
+                        // as final as the words placed on it so far, so a taller word arriving later moves
+                        // this one again. ApplyVerticalAlignment re-derives every offset from the closed
+                        // line and is the authority; for a line whose fonts are all one size - which is
+                        // nearly all of them - the two agree exactly and it has nothing left to do.
+                        word.Top += HalfLeadingOffsetOf(word, coordinates.Line);
 
                         // Assigned, never accumulated: this box tree can be laid out again (a
                         // shrink-to-fit ancestor's provisional pass, a variable-page-width reflow), and
@@ -4980,16 +5077,60 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// The initial <c>vertical-align</c>, used where a box's own declared value must not be read as an
+        /// inline alignment — see <see cref="ApplyVerticalAlignment"/>'s table-cell case.
+        /// </summary>
+        private static readonly CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>> BaselineVerticalAlign =
+            CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue(
+                Keywords.Baseline, new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Baseline, null));
+
+        /// <summary>
         /// Applies vertical alignment to the linebox
         /// </summary>
         /// <param name="lineBox"></param>
         private static void ApplyVerticalAlignment(CssLineBox lineBox)
         {
-            var baseline = double.MinValue;
+            // Where the flow left this line's content: every word on it was placed at the line's own
+            // top, so this is the line box's top edge (less any border/padding UpdateRectangle folded
+            // into a rectangle). Every case below is expressed as an offset from it, which is what lets
+            // a line the flow gave no baseline to - an empty one, or one from the vertical-writing-mode
+            // engine - fall through unchanged.
+            var flowTop = double.MinValue;
 
             foreach (var box in lineBox.Rectangles.Keys)
             {
-                baseline = Math.Max(baseline, lineBox.Rectangles[box].Top);
+                flowTop = Math.Max(flowTop, lineBox.Rectangles[box].Top);
+            }
+
+            // CSS 2.1 §10.8.1: the line box's baseline sits AboveBaseline below its top, and every
+            // inline box on it hangs its own content area from that one baseline - so a box whose font
+            // is smaller than the line's tallest moves DOWN to meet it, rather than staying flush with
+            // the line's top as it did while this engine had no baseline of its own. Corrected below by
+            // the same floor the boxes themselves get, so this names the baseline they actually sit on.
+            lineBox.BaselineY = lineBox.BaselineExtent is { } lineExtent
+                ? (lineBox.FlowTop ?? flowTop) + lineExtent.AboveBaseline
+                : null;
+
+            // How far a box has to move from where the flow left it to sit on this line's baseline.
+            // Zero for anything the baseline does not govern: a line with no baseline at all, and a box
+            // holding nothing but replaced/atomic content, which §10.8 aligns by its own box rather than
+            // by font metrics and which this engine still leaves at the line's top.
+            //
+            // Expressed as a shift of the whole box - rectangle and words together, via
+            // OffsetBoxWithinLine - rather than as an absolute top for its words alone. An inline box's
+            // rectangle IS its content area plus its border and padding (CssLineBox.UpdateRectangle), so
+            // moving the words out from under it detaches a padded inline-block's label from its own
+            // padding box, which is exactly what happened when this set word tops directly.
+            // The box's own first word, wherever in its subtree it sits: an inline box that holds no text
+            // directly (a <span> around an anonymous text box, an inline-block around its label) still has
+            // to move with the content it wraps, or its background and border part company with the words
+            // inside it. Null means the baseline does not govern this box at all.
+            (CssRect Word, double Delta)? BaselineShiftOf(CssBox box)
+            {
+                if (lineBox.BaselineY is not { } baselineY) return null;
+                if (FirstNonReplacedWordOf(box, lineBox) is not { } word) return null;
+
+                return (word, baselineY - (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent - word.Top);
             }
 
             // A ::first-line rule's vertical-align (if it sets one) applies to everything on the
@@ -5021,13 +5162,77 @@ namespace PeachPDF.Html.Core.Dom
             // rectangles - same convention this method already uses for "baseline" above, so every
             // case below aligns against the line's original geometry rather than a value some earlier
             // box in this loop already shifted.
-            var lineTop = double.MaxValue;
-            var lineBottom = double.MinValue;
+            // Seeded from the line box itself, not only from its rectangles: since a word is placed on
+            // its baseline, those rectangles sit half a leading below the line's top and end half a
+            // leading above its bottom, so reading them alone would align `vertical-align: top` to the
+            // topmost INK rather than to the line box §10.8.1 defines it against. The rectangles are
+            // still folded in, because replaced content grows the line without contributing to its
+            // baseline extent (see LineBoxContributionOf) and can reach past both edges.
+            var lineTop = lineBox.FlowTop ?? double.MaxValue;
+            var lineBottom = lineBox.FlowTop is { } lineBoxTop && lineBox.BaselineExtent is { } boxExtent
+                ? lineBoxTop + boxExtent.Height
+                : double.MinValue;
+
             foreach (var box in boxes)
             {
                 var r = lineBox.Rectangles[box];
                 lineTop = Math.Min(lineTop, r.Top);
                 lineBottom = Math.Max(lineBottom, r.Bottom);
+            }
+
+            // Resolved for every box up front, for the same reason lineTop/lineBottom are: each delta is
+            // measured from where the FLOW left that box's words, and the loop below moves them. Reading
+            // it lazily let a box whose words had already been shifted by its own descendant's turn
+            // measure against the shifted position and conclude it had nowhere to go - which detached a
+            // padded inline-block's border box from the label inside it.
+            var baselineDeltas = new Dictionary<CssBox, double>(boxes.Count);
+
+            // Where the flow left the line's topmost governed content, and where baseline alignment would
+            // put it. A `line-height` shorter than the font makes the leading negative, and §10.8 then
+            // has the content area overflow its line box on BOTH sides - but this engine decides which
+            // fragmentainer a word belongs to from the word's own rectangle
+            // (Fragmentation.FragmentEmitter.ClaimsWord), so ink that escapes above its line box escapes
+            // the fragmentainer the line was placed in: at a page boundary the line's own words are then
+            // claimed by the page above it, or - their bottoms being past that page - by neither, and
+            // vanish. A line box is a monolithic break unit (css-break-3 §4.1) and its content has to go
+            // with it.
+            var governed = new List<CssBox>(boxes.Count);
+            var flowInkTop = double.MaxValue;
+            var alignedInkTop = double.MaxValue;
+
+            foreach (var box in boxes)
+            {
+                if (BaselineShiftOf(box) is not { } shift)
+                {
+                    baselineDeltas[box] = 0;
+                    continue;
+                }
+
+                baselineDeltas[box] = shift.Delta;
+                governed.Add(box);
+                flowInkTop = Math.Min(flowInkTop, shift.Word.Top);
+                alignedInkTop = Math.Min(alignedInkTop, shift.Word.Top + shift.Delta);
+            }
+
+            // Negative leading is spread evenly over a line, so holding the line's topmost ink at the top
+            // the flow gave it moves every governed box by the same amount - the baseline the boxes now
+            // share is preserved exactly, and only the whole line's ink shifts down within its own box.
+            // Zero whenever the leading is positive, which is every line whose `line-height` is at least
+            // its font's own height.
+            if (alignedInkTop < flowInkTop)
+            {
+                var escape = flowInkTop - alignedInkTop;
+
+                foreach (var box in governed)
+                {
+                    baselineDeltas[box] += escape;
+                }
+
+                // The shared baseline moved down with them. Anything reading it afterwards - CssBoxMarker
+                // sitting an outside marker on the item's first baseline, and text-top/text-bottom below -
+                // has to see where the line's boxes actually ended up, or it lands a half-leading above
+                // the text it is aligning to.
+                lineBox.BaselineY += escape;
             }
 
             foreach (var box in boxes)
@@ -5050,16 +5255,29 @@ namespace PeachPDF.Html.Core.Dom
                 while (styledBoxForVerticalAlign.HtmlTag is null && !styledBoxForVerticalAlign.IsMarkerPseudoElement
                        && styledBoxForVerticalAlign.ParentBox is not null)
                     styledBoxForVerticalAlign = styledBoxForVerticalAlign.ParentBox;
-                var effectiveVerticalAlign = firstLineVerticalAlign ?? styledBoxForVerticalAlign.VerticalAlign;
+                // A table cell's own `vertical-align` means something else entirely - CSS 2.1 §17.5.3
+                // aligns the cell's whole content within the cell, which ApplyCellVerticalAlignment does -
+                // so it must not also be read here as an inline alignment for the cell's own line content.
+                // The walk above stops at the first box carrying an HtmlTag, which for text directly inside
+                // a <td> is the cell itself, and applying the value twice moved that text by a half-leading
+                // more than the cell algorithm had accounted for. `vertical-align` is not inherited
+                // (§10.8.1), so a cell's value reaching this point can only be the cell's own.
+                var effectiveVerticalAlign =
+                    firstLineVerticalAlign
+                    ?? (styledBoxForVerticalAlign.DerivedStyle.ActualDisplay == Keywords.TableCell
+                        ? BaselineVerticalAlign
+                        : styledBoxForVerticalAlign.VerticalAlign);
 
                 // A length/percentage (CSS 2.1 §10.8.1, issue #603) raises (positive) or lowers
                 // (negative) the box by this distance from its own baseline - a percentage resolves
                 // against the styled box's own line-height, mirroring sub/super's own baseline-relative
                 // offset below rather than any of the line-extent-relative cases.
+                var baselineDelta = baselineDeltas[box];
+
                 if (effectiveVerticalAlign.Value is { IsValue: true, Value: { } lengthOrCalc })
                 {
                     var offset = CssValueParser.ParseLength(lengthOrCalc, styledBoxForVerticalAlign.ActualLineHeight, styledBoxForVerticalAlign);
-                    lineBox.SetBaseLine(box, baseline - offset);
+                    OffsetBoxWithinLine(lineBox, box, baselineDelta - offset);
                     continue;
                 }
 
@@ -5067,10 +5285,10 @@ namespace PeachPDF.Html.Core.Dom
                 switch (effectiveVerticalAlign.Value.Keyword)
                 {
                     case VerticalAlignment.Sub:
-                        lineBox.SetBaseLine(box, baseline + rect.Height * .5f);
+                        OffsetBoxWithinLine(lineBox, box, baselineDelta + rect.Height * .5f);
                         break;
                     case VerticalAlignment.Super:
-                        lineBox.SetBaseLine(box, baseline - rect.Height * .2f);
+                        OffsetBoxWithinLine(lineBox, box, baselineDelta - rect.Height * .2f);
                         break;
                     case VerticalAlignment.Top:
                         OffsetBoxWithinLine(lineBox, box, lineTop - rect.Top);
@@ -5090,7 +5308,9 @@ namespace PeachPDF.Html.Core.Dom
                         // same tagged-ancestor walk computed above for effectiveVerticalAlign.
                         var styledBox = styledBoxForVerticalAlign;
                         var referenceFont = (styledBox.ParentBox ?? styledBox).ActualFont;
-                        var fontTop = baseline - referenceFont.Ascent;
+                        // The parent's own content area, hung from the line's baseline - not from this
+                        // box's baseline-aligned top, which is already offset by this box's own ascent.
+                        var fontTop = (lineBox.BaselineY ?? flowTop) - referenceFont.Ascent;
                         var target = effectiveVerticalAlign.Value.Keyword == VerticalAlignment.TextTop
                             ? fontTop
                             : fontTop + referenceFont.Height - rect.Height;
@@ -5100,10 +5320,102 @@ namespace PeachPDF.Html.Core.Dom
                         // baseline, and PeachBaselineMiddle (the deprecated img align=middle sentinel -
                         // see Keywords.PeachBaselineMiddle - has no distinct inline-layout effect,
                         // matching its pre-existing behavior before this typed-storage conversion).
-                        lineBox.SetBaseLine(box, baseline);
+                        OffsetBoxWithinLine(lineBox, box, baselineDelta);
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// How far below its line box's top <paramref name="word"/>'s own content area sits — the
+        /// half-leading CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visudet.html#leading">§10.8.1</see>
+        /// puts above it, measured against the line's extent so far.
+        /// </summary>
+        /// <remarks>
+        /// Never negative, even where the leading is: a <c>line-height</c> shorter than the font would
+        /// otherwise lift the glyphs out through the top of their own line box, and this engine decides
+        /// which fragmentainer a word belongs to from the word's own rectangle
+        /// (<c>Fragmentation.FragmentEmitter.ClaimsWord</c>), so ink that escapes its line box escapes the
+        /// fragmentainer the line was placed in. <see cref="ApplyVerticalAlignment"/> holds the same floor
+        /// when it re-derives these offsets over the closed line, so the two cannot disagree — see the
+        /// note there on why it holds it line-wide rather than per word.
+        /// <para>
+        /// Zero for replaced and atomic inline content, which §10.8 sizes from the element's own box
+        /// rather than from font metrics, and which this engine leaves at the line's top.
+        /// </para>
+        /// </remarks>
+        private static double HalfLeadingOffsetOf(CssRect word, CssLineBox lineBox)
+        {
+            if (word.IsImage || lineBox.BaselineExtent is not { } extent) return 0;
+
+            var ascent = (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent;
+
+            return Math.Max(0, extent.AboveBaseline - ascent);
+        }
+
+        /// <summary>
+        /// The first word of <paramref name="box"/>'s own subtree on <paramref name="lineBox"/> that is
+        /// not replaced/atomic content, or null when it has none there — which is what
+        /// <see cref="ApplyVerticalAlignment"/> both measures a box's baseline offset from and uses to
+        /// decide whether the baseline governs it at all.
+        /// </summary>
+        /// <remarks>
+        /// Null for a box whose content on this line is entirely replaced/atomic — an
+        /// <c>&lt;img&gt;</c>, an inline <c>&lt;svg&gt;</c>, MathML, a form control, a vector list-marker
+        /// glyph — including an inline ancestor wrapping nothing else, so a <c>&lt;span&gt;</c>'s
+        /// background cannot part company with the image inside it. CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#leading">§10.8</see> sizes those from the
+        /// element's own box and would sit its bottom margin edge on the baseline; this engine still
+        /// leaves them at the line's top, which is the remaining gap here.
+        /// </remarks>
+        private static CssRect? FirstNonReplacedWordOf(CssBox box, CssLineBox lineBox)
+        {
+            foreach (var word in lineBox.Words)
+            {
+                if (word.IsImage) continue;
+
+                for (var owner = word.OwnerBox; owner is not null; owner = owner.ParentBox)
+                {
+                    if (ReferenceEquals(owner, box)) return word;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// The line-box extent an <c>outside</c> <c>::marker</c> on <paramref name="blockBox"/> claims of
+        /// its item's first line, or null when the box is not a list item carrying one. Only the
+        /// <see cref="LineBoxExtent.AboveBaseline"/> side is consumed - see the call site.
+        /// </summary>
+        /// <remarks>
+        /// The marker is excluded from the item's inline flow (<see cref="CssBox.IsOutsideMarker"/>) — it
+        /// is positioned beside the principal block box, not inside it — but it does sit on that box's
+        /// first baseline (<c>CssBoxMarker.PerformLayoutImp</c>), so the line has to be tall enough to
+        /// hold it: a marker in a font larger than its item's own text would otherwise reach up out of
+        /// the line and collide with whatever precedes the item.
+        /// <see href="https://www.w3.org/TR/css-lists-3/#list-style-position-property">css-lists-3
+        /// §3.5</see> leaves this interaction expressly undefined ("The size or contents of the marker
+        /// box may affect … the height of its first line box; this interaction is also not defined"), so
+        /// this follows what browsers actually do rather than a rule.
+        /// <para>
+        /// Only the item's <i>own</i> inline content is reached: an item whose content is block-level
+        /// (<c>&lt;li&gt;&lt;p&gt;…&lt;/p&gt;&lt;/li&gt;</c>) produces its first line inside that child
+        /// block, which is a different <c>blockBox</c> and never asks. That marker is still baseline-
+        /// aligned, just without growing the line it sits on.
+        /// </para>
+        /// </remarks>
+        private static LineBoxExtent? OutsideMarkerExtentOf(CssBox blockBox)
+        {
+            if (blockBox.DerivedStyle.ActualDisplay != Keywords.ListItem) return null;
+
+            foreach (var child in blockBox.Boxes)
+            {
+                if (CssBox.IsOutsideMarker(child))
+                    return HalfLeadingExtentOf(child.ActualFont, child.ActualLineHeight);
+            }
+
+            return null;
         }
 
         /// <summary>

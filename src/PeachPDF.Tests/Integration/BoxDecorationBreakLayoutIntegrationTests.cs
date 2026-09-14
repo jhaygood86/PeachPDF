@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+﻿using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragments;
@@ -370,11 +370,17 @@ namespace PeachPDF.Tests.Integration
                 .Count(t => t >= bandTop - 0.01 && t < bandBottom);
         }
 
-        /// <summary>The distinct vertical positions of a block's own text lines, in document order.</summary>
+        /// <summary>Where each of a box's line boxes begins, in document order — the line's own top, not its words'.</summary>
+        /// <remarks>
+        /// A word sits half a leading below its line box's top (CSS 2.1 §10.8.1), so it is the line box
+        /// that begins at the border and padding a cloned fragment re-opens with; the word begins that
+        /// much further down. The two agreed only while this engine placed words flush with the line's
+        /// top, which is what made reading word tops here look like reading line tops.
+        /// </remarks>
         private static List<double> LineTops(CssBox box) =>
         [
             .. box.Words.Concat(box.Boxes.SelectMany(b => b.Words))
-                .Select(w => w.Top)
+                .Select(w => LayoutHarness.LineTopOf(box, w))
                 .Distinct()
                 .OrderBy(t => t)
         ];

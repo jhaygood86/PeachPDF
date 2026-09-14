@@ -1,4 +1,4 @@
-using PeachPDF.Html.Adapters.Entities;
+﻿using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Fragmentation;
@@ -437,14 +437,20 @@ namespace PeachPDF.Tests.Html.Core.Fragments
             var tree = container.FragmentTree!;
             Assert.True(tree.Fragmentainers.Count >= 2, "fixture must paginate");
 
-            // Three lines land on page 0 and the fourth on page 1. Edges belong to the box, not to a page,
-            // so the leading edge is on page 0's first line and the trailing edge on page 1's only line -
-            // page 0's last line owns neither, even though it is the last one *there*.
+            // Two lines land on page 0 and the rest on page 1. The third line box spans 60pt-90pt and the
+            // page's content ends at 80pt, so it does not fit and moves whole - a line box is a monolithic
+            // break unit (css-break-3 4.1). It used to be kept here because its GLYPHS fitted: at
+            // line-height:30pt over a 10pt font the ink was flush with the line's top and ended well
+            // inside the page, and the break was decided on the ink rather than on the line.
+            //
+            // Edges belong to the box, not to a page, so the leading edge is on page 0's first line and
+            // the trailing edge on page 1's last - page 0's last line owns neither, even though it is the
+            // last one *there*.
             var page0 = LinesOf(tree, "s", page: 0);
             var page1 = LinesOf(tree, "s", page: 1);
 
-            Assert.Equal([true, false, false], page0.Select(l => l.Slice.HasLeftEdge));
-            Assert.Equal([false, false, false], page0.Select(l => l.Slice.HasRightEdge));
+            Assert.Equal([true, false], page0.Select(l => l.Slice.HasLeftEdge));
+            Assert.Equal([false, false], page0.Select(l => l.Slice.HasRightEdge));
             Assert.All(page1, l => Assert.False(l.Slice.HasLeftEdge));
             Assert.True(page1[^1].Slice.HasRightEdge);
         }

@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -12,6 +12,7 @@
 
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
 using System;
 using System.Collections.Generic;
@@ -92,6 +93,32 @@ namespace PeachPDF.Html.Core.Dom
         public double ContentLeft { get; internal set; }
 
         /// <summary>
+        /// How far this line box reaches on each side of its own baseline, per
+        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1 §10.8.1</see>: the
+        /// per-side largest <c>ascent + half-leading</c>/<c>descent + half-leading</c> among the strut and
+        /// every inline box on the line. Null until the line holds content — §9.4.2 keeps a line box
+        /// holding none at zero height — and left null by
+        /// <c>CssLayoutEngine.CreateVerticalLineBoxes</c>, whose baseline runs along the other axis.
+        /// </summary>
+        /// <remarks>
+        /// Nullable rather than a zero-seeded pair because either side can legitimately be
+        /// <b>negative</b>: a <c>line-height</c> shorter than the font makes the leading negative, and the
+        /// content area then overflows the line box. Accumulating into a zeroed pair silently floored such
+        /// a side at zero, which made a line with a short <c>line-height</c> taller than the
+        /// <c>line-height</c> said it was.
+        /// </remarks>
+        public LineBoxExtent? BaselineExtent { get; internal set; }
+
+        /// <summary>
+        /// This line's baseline, in the same document-Y space as its words — filled in by
+        /// <c>CssLayoutEngine.ApplyVerticalAlignment</c> once the line closes, and null for a line that
+        /// never got one (an empty line, or one from the vertical-writing-mode engine). Read by
+        /// <c>CssBoxMarker</c> to sit an <c>outside</c> marker on the baseline of the first line of the
+        /// item it belongs to, rather than at that item's content-box top.
+        /// </summary>
+        public double? BaselineY { get; internal set; }
+
+        /// <summary>
         /// Gets the words inside the linebox
         /// </summary>
         public List<CssRect> Words { get; }
@@ -123,13 +150,29 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Get the top of this box line (the min top of all the words), which is what says which
-        /// fragmentainer the line is in. Zero for a line that has not been given rectangles yet.
+        /// The top edge of the line box itself, as the flow placed it — <i>not</i> the top of the ink on
+        /// it, which sits half a leading lower (CSS 2.1 §10.8.1). Null for a line the flow never placed
+        /// content on.
+        /// </summary>
+        /// <remarks>
+        /// Recorded because the two used to be the same number, and a good deal of this engine read a
+        /// word's own top as though it were its line's. Once a word is placed at its baseline rather than
+        /// flush with the line's top, that reading is off by the half-leading everywhere it happens —
+        /// which is every question about <i>which fragmentainer a line is in</i>.
+        /// </remarks>
+        public double? FlowTop { get; internal set; }
+
+        /// <summary>
+        /// Get the top of this box line, which is what says which fragmentainer the line is in — the line
+        /// box's own <see cref="FlowTop"/> where the flow recorded one, falling back to the min top of its
+        /// rectangles. Zero for a line that has neither.
         /// </summary>
         public double LineTop
         {
             get
             {
+                if (FlowTop is { } flowTop) return flowTop;
+
                 double? top = null;
                 foreach (var rect in Rectangles)
                 {
@@ -247,68 +290,6 @@ namespace PeachPDF.Html.Core.Dom
                 // hold nothing in. UpdateRectangle has already walked the inline ancestor chain, so
                 // every inline on the line is a key here and is told.
                 b.DiscardEmittedNothing();
-            }
-        }
-
-        /// <summary>
-        /// Sets the baseline of the words of the specified box to certain height
-        /// </summary>
-        /// <param name="b">box to check words</param>
-        /// <param name="baseline">baseline</param>
-        internal void SetBaseLine(CssBox b, double baseline)
-        {
-            //TODO: Aqui me quede, checar poniendo "by the" con un font-size de 3em
-            List<CssRect> ws = WordsOf(b);
-
-            if (!Rectangles.TryGetValue(b, out RRect r))
-                return;
-
-            //Save top of words related to the top of rectangle
-            double gap = 0f;
-
-            if (ws.Count > 0)
-            {
-                gap = ws[0].Top - r.Top;
-            }
-            else
-            {
-                var firstw = CssBox.FirstWordOccurence(b, this);
-
-                if (firstw != null)
-                {
-                    gap = firstw.Top - r.Top;
-                }
-            }
-
-            //New top that words will have
-            //float newtop = baseline - (Height - OwnerBox.FontDescent - 3); //OLD
-            double newtop = baseline; // -GetBaseLineHeight(b, g); //OLD
-
-            var wordTop = newtop;
-
-            if (b.ParentBox != null &&
-                b.ParentBox.Rectangles.ContainsKey(this) &&
-                r.Height < b.ParentBox.Rectangles[this].Height)
-            {
-                //Do this only if rectangle is shorter than parent's
-                double recttop = newtop - gap;
-                RRect newr = new(r.X, recttop, r.Width, r.Height);
-                Rectangles[b] = newr;
-            }
-            else
-            {
-                // The rect is NOT being repositioned here, so re-anchoring the words flush to
-                // the baseline would collapse the box's own word-to-rect gap - which is exactly
-                // its border+padding-top content inset (CSS2.1 §8.1) for a box holding its
-                // words directly (e.g. a padded inline-block ::before/::after pseudo-element).
-                // Preserve it; unpadded boxes have gap == 0 and are unaffected.
-                wordTop = newtop + gap;
-            }
-
-            foreach (var word in ws)
-            {
-                if (!word.IsImage)
-                    word.Top = wordTop;
             }
         }
 
