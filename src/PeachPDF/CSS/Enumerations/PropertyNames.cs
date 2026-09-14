@@ -290,6 +290,7 @@ namespace PeachPDF.CSS
         public static readonly string TextDecorationColor = "text-decoration-color";
         public static readonly string TextDecorationLine = "text-decoration-line";
         public static readonly string TextDecorationStyle = "text-decoration-style";
+        public static readonly string TextDecorationThickness = "text-decoration-thickness";
         public static readonly string TextIndent = "text-indent";
         public static readonly string TextJustify = "text-justify";
         public static readonly string TextOrientation = "text-orientation";

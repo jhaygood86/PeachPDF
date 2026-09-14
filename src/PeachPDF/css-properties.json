@@ -2411,6 +2411,25 @@
       }
     },
     {
+      "name": "text-decoration-thickness",
+      "comment": "CSS Text Decoration 4 §3.3. CssKeywordOrValue<TextDecorationThicknessKeyword, LengthOrCalc>-backed, mirroring vertical-align's shape - valueType \"length\" already covers percentages (CssValueParser.IsValidLength/ValueExtensions.ToDistance), and CSS Text Decoration 4 defines the percentage basis as the element's own font-size. 'auto' (the initial value) preserves this engine's pre-existing fixed decoration-line thickness exactly (FragmentPainter.PaintDecoration used a hardcoded pen width before this property existed) rather than deriving a UA thickness from the font; 'from-font' is the only way to opt into the font's own real underlineThickness metric (RFont.UnderlineThickness).",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "TextDecorationThicknessKeyword",
+        "keywordMap": "Map.TextDecorationThicknessKeywords",
+        "fallback": "TextDecorationThicknessKeyword.Auto",
+        "valueType": "length"
+      },
+      "html": {
+        "propertyPath": "TextDecorationThickness",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<TextDecorationThicknessKeyword, LengthOrCalc>>",
+        "area": "TextDecorationArea",
+        "getterExpression": "{box}.TextDecorationThickness.ToString()"
+      }
+    },
+    {
       "name": "font-size",
       "comment": "CssKeywordOrValue<FontSizeKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. supportedValues (via FontSizeKeyword/Map.FontSizeKeywords) deliberately excludes CSS Fonts 4's xxx-large - FontSizeResolver.Resolve's switch has no case for it, so an accepted 'font-size: xxx-large' would fall through to the length/calc() value path (which can't parse the bare keyword), Math.Max(0, ...)-clamp to 0, and silently render invisible text rather than being rejected. RegistryEmitter.BuildHtmlAssignment runs CssBox.ResolveFontSizeValueComputation(value) (the html.valueComputation \"font-size\" case) against the raw authored text before FromCssText parses it - see that method's own doc comment for the eager em/ex/percent/smaller/larger-to-points resolution it performs (calc() and rem stay lazy, resolved later by FontSizeResolver.Resolve/DerivedStyle.ActualFont via LengthOrCalc's deferred-calc mechanism).",
       "inherited": true,

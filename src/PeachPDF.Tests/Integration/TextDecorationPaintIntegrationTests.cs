@@ -134,6 +134,73 @@ namespace PeachPDF.Tests.Integration
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
         }
 
+        [Fact]
+        public async Task TextDecorationThickness_Auto_PreservesPreExistingFixedWidth()
+        {
+            // The initial value (auto) must paint identically to a declaration that never set
+            // text-decoration-thickness at all - CssBox.PaintDecoration used a hardcoded pen width of 1
+            // before this property existed, and auto is defined to preserve that exactly rather than
+            // derive a thickness from the font (see the property's own css-properties.json comment).
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<span id='s' style='text-decoration:underline; text-decoration-thickness:auto'>text</span>"));
+            var s = FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.Equal(1, line.Width);
+        }
+
+        [Fact]
+        public async Task TextDecorationThickness_ExplicitLength_UsesResolvedThickness()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<span id='s' style='text-decoration:underline; text-decoration-thickness:3pt'>text</span>"));
+            var s = FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            // PixelsPerPoint is 1.0 in BuildAndLayout, so 3pt resolves directly to 3 internal units.
+            Assert.Equal(3, line.Width, 1);
+        }
+
+        [Fact]
+        public async Task TextDecorationThickness_ExplicitPercentage_ResolvesAgainstFontSize()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<span id='s' style='text-decoration:underline; font-size:20pt; text-decoration-thickness:10%'>text</span>"));
+            var s = FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            // CSS Text Decoration 4 §3.3: a percentage resolves against the element's own font-size, not
+            // line-height (unlike vertical-align's superficially similar grammar) - 10% of 20pt = 2pt.
+            Assert.Equal(2, line.Width, 1);
+        }
+
+        [Fact]
+        public async Task TextDecorationThickness_FromFont_UsesRealFontMetricNotHardcodedDefault()
+        {
+            // Deliberately a loose bound, not a pinned exact value - the resolved font-face (and so its
+            // real OpenType post.underlineThickness) is system/platform-dependent, and this repo's own
+            // test conventions (see the existing UnderlineOffset-based Y-position assertions above) avoid
+            // asserting an exact font-metric-derived number for exactly that reason.
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<span id='s' style='text-decoration:underline; text-decoration-thickness:from-font'>text</span>"));
+            var s = FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.True(line.Width > 0 && line.Width < 10, $"expected a plausible font-derived thickness, got {line.Width}");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<double> GetDecorationYAsync(string decorationLine)

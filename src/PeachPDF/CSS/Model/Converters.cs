@@ -321,6 +321,17 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter AnimationFillStyleConverter = Map.AnimationFillStyles.ToConverter();
         public static readonly IValueConverter TextDecorationStyleConverter = Map.TextDecorationStyles.ToConverter();
 
+        /// <summary>
+        /// CSS Text Decoration 4 §3.3: <c>auto | from-font | &lt;length-percentage&gt;</c>. The typed
+        /// result here only needs to round-trip through the CSS-OM's own parsing/validation layer - the
+        /// real interpretation (including which of the two keywords was given) is done independently by
+        /// <c>CssPropertyRegistry.Set_TextDecorationThickness</c> when applying the value to a <c>CssBox</c>.
+        /// </summary>
+        public static readonly IValueConverter TextDecorationThicknessConverter =
+            LengthOrPercentConverter
+                .Or(Assign(Keywords.Auto, TextDecorationThicknessKeyword.Auto))
+                .Or(Assign(Keywords.FromFont, TextDecorationThicknessKeyword.FromFont));
+
         public static readonly IValueConverter TextDecorationLinesConverter =
             Map.TextDecorationLines.ToConverter().Many().OrNone();
 
