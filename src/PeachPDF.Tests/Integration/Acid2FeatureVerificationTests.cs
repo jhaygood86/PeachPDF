@@ -335,20 +335,22 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task NegativeBottomMargin_OnLastChildOfBorderedParent_DoesNotCollapseThrough()
         {
-            // A negative margin-bottom on the LAST child of a parent that has its own non-zero
-            // top-and-bottom border must have no effect on the parent's height - margin collapsing
-            // through a parent boundary is blocked by any border/padding on that side (CSS2.1 §8.3.1),
-            // the same rule already covered for MarginBottomCollapse in the Round 1 work, but not
-            // previously tested with a negative margin value specifically.
+            // A border on the parent's block-end side blocks collapsing through that boundary (CSS 2.1
+            // §8.3.1) - so the child's margin has nowhere to escape to and stays INSIDE the parent,
+            // counted in its auto height like any other content. That holds for a negative margin too,
+            // which therefore SHRINKS the parent: 20pt of content, less the child's -10pt, plus the
+            // parent's own 1pt + 1pt borders = 12pt.
+            //
+            // This used to assert 22pt on the reasoning that a blocked margin "has no effect" - but
+            // blocked means contained, not discarded. Chrome measures 11.5pt here, the 0.5pt being its
+            // own sub-pixel rounding of a 1pt border, not a difference in the margin arithmetic.
             var html = Wrap(
                 "<div id='parent' style='border-top:1pt solid black; border-bottom:1pt solid black;'>"
                 + "<div id='child' style='height:20pt; margin-bottom:-10pt;'></div></div>");
             var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
-            // Parent's content height must be exactly the child's 20pt (plus its own 1pt+1pt borders =
-            // 22pt total) - the child's negative margin must not shrink it.
-            Assert.InRange(parent.ActualBottom - parent.Location.Y, 21.5, 22.5);
+            Assert.InRange(parent.ActualBottom - parent.Location.Y, 11.5, 12.5);
         }
 
         // ─── `bottom`/`right` offset properties for position:relative and position:absolute ──
@@ -1365,7 +1367,7 @@ namespace PeachPDF.Tests.Integration
         // relationship gate and fixing Math.Max -> CollapseMargins for negative margins.
 
         [Fact]
-        public async Task ParentLastChildBottomCollapse_IsItsOwnParentsLastChild_Folds()
+        public async Task ParentLastChildBottomCollapse_CollapsedMarginEscapes_RatherThanInflatingTheParent()
         {
             var html = Wrap(
                 "<div id='outer'>"
@@ -1373,11 +1375,19 @@ namespace PeachPDF.Tests.Integration
                 + "</div>");
             var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
+            var outer = FindById(root, "outer")!;
 
-            // #parent IS #outer's last (only) child - its own bottom-margin fold may happen, since
-            // nothing else will ever separately collapse against #parent's own ActualMarginBottom.
-            // Folded height = #content's own 20pt + the 50pt margin.
-            Assert.InRange(parent.ActualBottom - parent.Location.Y, 69.5, 70.5);
+            // #parent has an auto height and no bottom border or padding, so per CSS 2.1 §8.3.1 its own
+            // bottom margin collapses with #content's - and a collapsed block-end margin belongs to the
+            // gap AFTER the box, never to the box's own height. #parent is therefore its content's 20pt
+            // and the 50pt sits outside it; the same is true of #outer, which collapses with #parent in
+            // turn, so the margin escapes all the way out of both.
+            //
+            // This used to assert 70pt - the margin folded INTO #parent's own height - which is what
+            // MarginBottomCollapse did whenever the box happened to be its own parent's last child.
+            // Chrome measures 20pt for both boxes on this exact markup.
+            Assert.InRange(parent.ActualBottom - parent.Location.Y, 19.5, 20.5);
+            Assert.InRange(outer.ActualBottom - outer.Location.Y, 19.5, 20.5);
         }
 
         [Fact]
@@ -1410,16 +1420,19 @@ namespace PeachPDF.Tests.Integration
                 "<div id='outer'>"
                 + "<div id='parent' style='margin-bottom:-5pt;'>"
                 + "<div id='content' style='height:20pt; margin-bottom:-10pt;'></div></div>"
+                + "<div id='sibling' style='height:5pt;'></div>"
                 + "</div>");
             var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
+            var sibling = FindById(root, "sibling")!;
 
-            // #parent IS its parent's only/last child, so the fold applies. Both this box's own bottom
-            // margin (-5) and its last child's (-10) are negative - the correct collapse is the more
-            // negative value (-10, via CollapseMargins), not Math.Max(-5, -10) = -5. Folded height =
-            // content's own 20pt + the -10 folded margin = 10 (a buggy Math.Max(-5,-10)=-5 would
-            // instead give 20-5=15).
-            Assert.InRange(parent.ActualBottom - parent.Location.Y, 9.5, 10.5);
+            // #parent's own bottom margin (-5) and its last child's (-10) are one adjoining set, and a
+            // set of all-negative margins collapses to the MOST negative member (-10), not to
+            // Math.Max(-5, -10) = -5. The collapsed value lands in the gap after #parent rather than in
+            // its height, so it is measured there: #parent stays its content's 20pt and #sibling starts
+            // 10pt back up into it. Chrome measures exactly this (20pt / -10pt) on the same markup.
+            Assert.InRange(parent.ActualBottom - parent.Location.Y, 19.5, 20.5);
+            Assert.InRange(sibling.Location.Y - parent.ActualBottom, -10.5, -9.5);
         }
 
         // Scenario 4: self-collapsing empty boxes (zero height, no border/padding, no in-flow content) -
@@ -1552,8 +1565,13 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await BuildAndLayout(html);
             var parent = FindById(root, "parent")!;
 
-            // No fold: parent's own height is just its content's 20pt, the 50pt margin stays external.
-            Assert.InRange(parent.ActualBottom - parent.Location.Y, 19.5, 20.5);
+            // `overflow: hidden` makes #parent a new block formatting context, so nothing collapses
+            // across its boundary (CSS 2.1 §8.3.1). The child's 50pt margin therefore cannot escape and
+            // is contained in #parent's auto height: 20pt + 50pt = 70pt.
+            //
+            // This used to assert 20pt, on the reading that a blocked margin "stays external" - but with
+            // no collapsing to carry it out, external is exactly where it cannot go. Chrome measures 70pt.
+            Assert.InRange(parent.ActualBottom - parent.Location.Y, 69.5, 70.5);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

@@ -7848,7 +7848,11 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 anchor = prevSibling;
-                margins.Fold(prevSibling.ActualMarginBottom);
+
+                // Not just prevSibling's own bottom margin: §8.3.1 also puts its last in-flow child's in
+                // this set whenever nothing of prevSibling's own separates the two, transitively down the
+                // chain - see FoldOwnAdjoiningBlockEndMargins.
+                prevSibling.FoldOwnAdjoiningBlockEndMargins(ref margins);
             }
 
             var walker = prevSibling;
@@ -7863,7 +7867,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    margins.Fold(earlierSibling.ActualMarginBottom);
+                    earlierSibling.FoldOwnAdjoiningBlockEndMargins(ref margins);
                 }
                 walker = earlierSibling;
                 if (!walker.IsMarginCollapseThrough() || walker.PlacedByForcedBreak) anchor = walker;
@@ -8031,11 +8035,123 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private double GetEffectiveBottomMargin()
         {
-            if (!IsMarginCollapseThrough()) return ActualMarginBottom;
-
             var margins = new AdjoiningMarginSet();
-            FoldSelfCollapsingMargins(ref margins);
+
+            if (IsMarginCollapseThrough())
+            {
+                FoldSelfCollapsingMargins(ref margins);
+            }
+            else
+            {
+                FoldOwnAdjoiningBlockEndMargins(ref margins);
+            }
+
             return margins.CollapsedValue;
+        }
+
+        /// <summary>
+        /// Whether this box's own block-end margin collapses with its last in-flow child's, per CSS 2.1
+        /// <see href="https://www.w3.org/TR/CSS21/box.html#collapsing-margins">§8.3.1</see>: "the bottom
+        /// margin of an in-flow block box with a 'height' of 'auto' ... collapses with its last in-flow
+        /// block-level child's bottom margin, if the box has no bottom padding or border".
+        /// </summary>
+        /// <remarks>
+        /// The mirror of the conditions <see cref="FoldOwnAdjoiningBlockStartMargins"/>'s chain walks
+        /// under, plus the one the two sides genuinely differ on: a non-<c>auto</c> <c>height</c> blocks
+        /// collapsing at the block-<i>end</i> edge only (the box's own declared size is what separates its
+        /// margin from its child's there), while the block-start edge is unaffected by it.
+        /// <para>
+        /// When this is false the child's block-end margin has nowhere to escape to, so it stays inside
+        /// this box - which is what makes the same markup measure 23px with a <c>border-bottom</c> and
+        /// 10px without one.
+        /// </para>
+        /// </remarks>
+        /// <summary>
+        /// Whether <paramref name="box"/> can be the last in-flow child a block-end margin collapses with:
+        /// in flow, not <c>display: none</c>, and not a captioned table's synthetic grid decoration box
+        /// (issue #721), which has no margin of its own and would end the chain in place of the table's
+        /// real last child. The block-start walk selects its own chain members by the same three tests.
+        /// </summary>
+        private static bool IsBlockEndMarginChainMember(CssBox box) =>
+            !box.IsExcludedFromFlow
+            && box.DerivedStyle.ActualDisplay != Keywords.None
+            && !box.IsTableGridDecorationBox;
+
+        private bool CollapsesBlockEndMarginWithLastChild() =>
+            HasAutoBlockEndHeight()
+            && Overflow.Value == PeachPDF.CSS.Overflow.Visible
+            && ActualPaddingBottom < 0.1
+            && ActualBorderBottomWidth < 0.1
+            && (MinHeight == Keywords.Auto
+                || (CssValueParser.IsValidLength(MinHeight)
+                    && CssValueParser.ParseLength(MinHeight, ContainingBlock.Size.Height, this) <= 0));
+
+        /// <summary>
+        /// Whether this box's <c>height</c> is <c>auto</c> for §8.3.1's block-end collapsing question.
+        /// A percentage height against an indefinite (not-yet-height-calculated) containing block
+        /// resolves to <c>auto</c> per CSS 2.1 §10.5, the same rule <c>ApplyHeight</c> and
+        /// <see cref="IsMarginCollapseThrough"/> already apply - Acid2's
+        /// <c>.empty { height: 10% }</c> is written to exercise exactly that.
+        /// </summary>
+        private bool HasAutoBlockEndHeight() =>
+            Height == Keywords.Auto || (Height.EndsWith('%') && !ContainingBlock.IsHeightCalculated);
+
+        /// <summary>
+        /// Folds into <paramref name="margins"/> this box's own block-end margin and every
+        /// last-in-flow-child margin adjoining it - the block-end mirror of
+        /// <see cref="FoldOwnAdjoiningBlockStartMargins"/>, and the reason a box's own bottom margin is
+        /// not the whole of what it contributes to the gap before whatever follows it.
+        /// </summary>
+        /// <remarks>
+        /// CSS 2.1 §8.3.1 puts a box's bottom margin and its last in-flow child's in one adjoining set
+        /// whenever nothing of the box's own separates them (see
+        /// <see cref="CollapsesBlockEndMarginWithLastChild"/>), transitively down the chain. Reading only
+        /// <c>ActualMarginBottom</c> - as the sibling walk used to - loses every margin below the first
+        /// level, so a wrapper whose own margin is zero contributed nothing at all and its child's margin
+        /// was silently dropped: neither escaping into the gap after the wrapper, nor staying inside its
+        /// height. That is what put Acid2's <c>&lt;ul&gt;</c> (its last face row) on top of
+        /// <c>.parser</c> instead of below it.
+        /// <para>
+        /// Deliberately fold-only: unlike the block-start walk this leaves no per-member override behind,
+        /// because a block-end margin positions only what FOLLOWS the chain, never any member of it - so
+        /// there is no position for a member to double-count. The collapsed value belongs entirely to the
+        /// caller's adjoining set.
+        /// </para>
+        /// </remarks>
+        private void FoldOwnAdjoiningBlockEndMargins(ref AdjoiningMarginSet margins)
+        {
+            margins.Fold(ActualMarginBottom);
+
+            // Same guard, and same reason, as the block-start walk's: this box's own margin is an ordinary
+            // physical value on the caller's axis whatever its writing mode, but its CHILDREN are stacked
+            // along its own block axis, so they may only be examined when that axis is the caller's.
+            if (LogicalPropertyResolver.BlockEnd(WritingMode.Value) != PhysicalSide.Bottom) return;
+
+            var current = this;
+
+            // Capped defensively for the same reason the block-start walk is: a malformed or cyclic box
+            // tree degrades to "stop extending the group" rather than hanging.
+            for (var depth = 0; depth < 1000 && current.CollapsesBlockEndMarginWithLastChild(); depth++)
+            {
+                var lastInFlowChild = current.Boxes.LastOrDefault(IsBlockEndMarginChainMember);
+
+                if (lastInFlowChild is null || lastInFlowChild == current) break;
+
+                // A self-collapsing child puts its own top margin, and its whole subtree's, in this same
+                // set (§8.3.1) - and FoldSelfCollapsingMargins has already descended, so the walk ends
+                // here rather than continuing into a subtree it just covered.
+                if (lastInFlowChild.IsMarginCollapseThrough())
+                {
+                    lastInFlowChild.FoldSelfCollapsingMargins(ref margins);
+                    break;
+                }
+
+                margins.Fold(lastInFlowChild.ActualMarginBottom);
+
+                if (lastInFlowChild.HasDifferentWritingModeFromParent) break;
+
+                current = lastInFlowChild;
+            }
         }
 
         /// <summary>
@@ -8207,80 +8323,57 @@ namespace PeachPDF.Html.Core.Dom
             // precondition for being called at all (see PerformLayoutEpilogue's own gate), and the
             // stricter match is only ever meant to prefer a REAL sibling over the wrapper, not to leave
             // this box with no candidate at all.
-            var lastNonFloatingBox = Boxes.LastOrDefault(b => !b.IsExcludedFromFlow
+            // Selected by the same test the chain walk uses (IsBlockEndMarginChainMember), so the box whose
+            // margin is folded here and the box the walk would reach cannot disagree. A `display: none`
+            // child used to qualify here but not there: with the blocked arm now folding this box's own
+            // bottom margin into the parent's height, that disagreement made a hidden element's margin
+            // real - a 40pt margin on a `display: none` last child grew a bordered parent from 23pt to
+            // 51pt. The final fallback keeps the original, looser predicate so a box whose every child is
+            // hidden still resolves to something rather than throwing.
+            var lastNonFloatingBox = Boxes.LastOrDefault(b => IsBlockEndMarginChainMember(b)
                 && !(b.HtmlTag is null && b.Boxes.Count == 1 && b.Boxes[0].IsExcludedFromFlow))
+                ?? Boxes.LastOrDefault(IsBlockEndMarginChainMember)
                 ?? Boxes.Last(b => !b.IsExcludedFromFlow);
 
-            double margin = 0;
-            // Per CSS 2.1 §8.3.1, a box's own bottom margin can only collapse with (i.e. be folded
-            // into) its last in-flow child's bottom margin when there is nothing of this box's own
-            // separating the two - non-zero bottom padding or a bottom border on THIS box blocks it,
-            // just like it blocks parent/child collapsing on the top side, and so does this box
-            // establishing a new block formatting context (e.g. via `overflow`).
+            // Two separate questions, which the single condition that used to stand here conflated - and
+            // conflating them is how a last in-flow child's block-end margin came to be dropped on the
+            // floor entirely, neither escaping into the gap after this box nor staying inside its height:
             //
-            // The "is this box its own parent's last child" condition below is NOT an unrelated/
-            // incidental restriction - it is load-bearing. When this box folds its own bottom margin
-            // into its own ActualBottom, that inflated ActualBottom is what a FOLLOWING SIBLING's own
-            // CollapsedMarginBefore call adds on top of (via the ordinary adjoining-sibling-margin path,
-            // which separately reads this box's raw ActualMarginBottom too) - if this box has a
-            // following sibling, the same margin value gets counted twice: once baked into
-            // ActualBottom here, and again via the sibling's own fold of prevSibling.
-            // ActualMarginBottom into its adjoining set. Removing this gate (an earlier attempt at this fix did
-            // exactly that) reproduces precisely that double-count - confirmed via a real regression
-            // where a heading's own 60pt bottom margin was added once into the heading's own height and
-            // a second time into the following paragraph's top offset, an easy 60pt to trace back to
-            // the heading's own declared margin. Only when this box has NO following sibling (is the
-            // last child) is folding the margin into ActualBottom safe: nothing else will ever
-            // separately collapse against this box's own ActualMarginBottom, so propagating the fold via
-            // ActualBottom (which return value the box's PARENT then treats as this box's true bottom
-            // edge, letting a further collapse continue outward through as many blocked-only-by-
-            // border/padding ancestors as apply) is the only place left for it to go.
-            // lastNonFloatingBox.StaticBottom (not ActualBottom) throughout: a relatively-positioned
-            // last child's visual offset must not grow this box's own content-driven height
-            // (CSS 2.1 §9.4.3) - Acid2's ".smile div { position: relative; bottom: -1em }" otherwise
-            // inflates ".smile" by 1em and pushes ".chin" that much too far down.
+            //   (a) DOES this box's own block-end margin collapse with its last in-flow child's? That is
+            //       CSS 2.1 §8.3.1's question alone - auto height, no bottom padding or border, no new
+            //       block formatting context (see CollapsesBlockEndMarginWithLastChild) - and has nothing
+            //       to do with where this box sits among its own siblings. When the answer is NO the
+            //       child's margin has nowhere to escape to and stays INSIDE this box, which is what
+            //       makes the same markup 23px tall with a `border-bottom` and 10px without one.
+            //   (b) When it DOES collapse, where does the collapsed value go? Not into this box's own
+            //       ActualBottom. The value belongs to the gap AFTER this box, and everything that needs
+            //       it reads it by walking this same chain from the outside
+            //       (FoldOwnAdjoiningBlockEndMargins, via the sibling walk in FoldMarginsPrecedingChild
+            //       or via an ancestor's own chain). Baking it into ActualBottom instead - which this
+            //       method used to do for a box that happened to be its own parent's last child - both
+            //       inflates this box's painted height and, for any box with a following sibling, gets
+            //       counted a second time by that sibling's own fold. The old "is this box its parent's
+            //       last child" gate existed precisely to suppress that double-count; with the value no
+            //       longer baked in anywhere, the gate has nothing left to guard and is gone.
             //
-            // Deliberately NOT gated on this box's own writing-mode relative to ParentBox's (unlike
-            // FoldOwnAdjoiningBlockStartMargins's chain walk, issue #776): this box's own bottom margin
-            // collapsing with ITS OWN last in-flow child is a relationship entirely internal to this
-            // box and its own descendant, governed by THIS box's own writing-mode alone (an orthogonal
-            // horizontal-tb box's own children really are stacked top-to-bottom in its own established
-            // flow, regardless of what writing-mode its own parent happens to use) - unlike the chain
-            // walk's bug, which came from applying ONE frame's fixed axis to a DIFFERENT box's own
-            // descendants. Nor is a vertical ParentBox's own ActualMarginBottom a double-count risk the
-            // way an ordinary horizontal-tb ParentBox's is: LayoutVerticalBlockChildren's own stacking
-            // loop reads a child's LEFT/RIGHT margins for its own sibling gaps, never its top/bottom
-            // ones, so nothing there would ever separately re-fold this box's own ActualMarginBottom.
-            if (ParentBox == null || ParentBox.Boxes.IndexOf(this) != ParentBox.Boxes.Count - 1 ||
-                !(_parentBox!.ActualMarginBottom < 0.1) ||
-                !(ActualPaddingBottom < 0.1) || !(ActualBorderBottomWidth < 0.1) ||
-                Overflow.Value != PeachPDF.CSS.Overflow.Visible)
-                return Math.Max(ActualBottom,
-                    lastNonFloatingBox.StaticBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
+            // lastNonFloatingBox.StaticBottom (not ActualBottom) throughout: a relatively-positioned last
+            // child's visual offset must not grow this box's own content-driven height (CSS 2.1 §9.4.3) -
+            // Acid2's ".smile div { position: relative; bottom: -1em }" otherwise inflates ".smile" by
+            // 1em and pushes ".chin" that much too far down.
+            var containedChildMargin = 0d;
 
-            // Set-based accumulation (AdjoiningMarginSet, not pairwise CollapseMargins) here too: the
-            // last child's contribution can itself be a whole adjoining set when it is self-collapsing
-            // (its {+10px, -3px} collapses to 7px, but folding this box's own 8px against that
-            // PRE-collapsed 7px pairwise gives 8px when the true set {10, -3, 8} is still 7px).
-            if (Height == "auto")
+            if (!CollapsesBlockEndMarginWithLastChild())
             {
-                var margins = new AdjoiningMarginSet();
-                margins.Fold(ActualMarginBottom);
-                if (lastNonFloatingBox.IsMarginCollapseThrough())
-                {
-                    lastNonFloatingBox.FoldSelfCollapsingMargins(ref margins);
-                }
-                else
-                {
-                    margins.Fold(lastNonFloatingBox.ActualMarginBottom);
-                }
-                margin = margins.CollapsedValue;
+                // A non-auto height is the one blocking reason that does not hand the child's margin to
+                // this box's height: the declared height IS the height, and content - the margin
+                // included - overflows it rather than growing it.
+                containedChildMargin = HasAutoBlockEndHeight()
+                    ? lastNonFloatingBox.GetEffectiveBottomMargin()
+                    : 0;
             }
-            else
-            {
-                margin = lastNonFloatingBox.GetEffectiveBottomMargin();
-            }
-            return Math.Max(ActualBottom, lastNonFloatingBox.StaticBottom + margin + ActualPaddingBottom + ActualBorderBottomWidth);
+
+            return Math.Max(ActualBottom,
+                lastNonFloatingBox.StaticBottom + containedChildMargin + ActualPaddingBottom + ActualBorderBottomWidth);
         }
 
         /// <summary>
