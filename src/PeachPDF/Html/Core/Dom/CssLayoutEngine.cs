@@ -1861,7 +1861,24 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    width = await GetFitContentWidth(g, box, absCb.Size.Width);
+                    // CSS 2.1 §10.3.7's shrink-to-fit is §10.3.5's formula verbatim -
+                    // min(max(preferred minimum, available), preferred) - so this is the float branch
+                    // above, with the same two corrections it already makes and this one used to skip:
+                    // the min-content floor (GetFitContentWidth alone only ever narrows toward the
+                    // available width, with nothing to stop it going below what the content needs), and
+                    // subtracting this box's own decoration, because GetMinMaxWidth returns an OUTER
+                    // width - its result already has the box's border and padding folded in - while what
+                    // is returned here is a CONTENT width the caller adds them back onto.
+                    //
+                    // Without the subtraction an absolutely-positioned box counted its own border twice:
+                    // Acid2's `blockquote.first.one`, 2em of black border either side of a 48px float,
+                    // measured 144px instead of 96px, putting the face's second row an em and a half too
+                    // wide on each side. A no-op under `box-sizing: border-box`, as it is there.
+                    var fit = Math.Max(
+                        await GetFitContentWidth(g, box, absCb.Size.Width),
+                        await GetMinContentWidth(g, box));
+
+                    width = fit - box.ActualBoxSizeIncludedWidth;
                 }
             }
 
@@ -2146,6 +2163,31 @@ namespace PeachPDF.Html.Core.Dom
             // that as automatic, so the ratio applies there too).
             var isRatioHeight = !isDefiniteHeight && TryGetAspectRatioHeight(box, out _);
             box.IsHeightCalculated = isRootWithPageHeight || isDefiniteHeight || isRatioHeight;
+
+            // CSS 2.1 §10.6.7: a box that establishes a formatting context of its own and takes its height
+            // from content grows to cover any floating descendant whose bottom margin edge falls below its
+            // bottom content edge. This is the whole reason `overflow: hidden` (and a float, an
+            // inline-block, an absolutely-positioned box, a flex/grid item...) "contains" its floats while
+            // an ordinary block does not - and without it such a box holding nothing but a float came out
+            // zero-height, which is what made Acid2's `blockquote.first.one` - the second row of the face,
+            // a shrink-wrapped absolutely-positioned box whose only content is one float - invisible: its
+            // 2em black side borders had no height to be drawn over.
+            //
+            // Gated on !isDefiniteHeight, not merely on `height: auto`: an indefinite percentage height is
+            // automatic too (the same reading isRatioHeight above already relies on). A definite height is
+            // the used height regardless of content (§10.6.3), float included, so it is left alone; the
+            // min/max-height clamps below then apply to the result either way, since §10.6.7's increase is
+            // part of computing the auto height rather than something that outranks §10.7.
+            if (!isDefiniteHeight && !isRootWithPageHeight && DomUtils.EstablishesIndependentFormattingContext(box))
+            {
+                var lowestFloatBottom = DomUtils.LowestFloatBottomInOwnFormattingContext(box);
+
+                if (!double.IsNegativeInfinity(lowestFloatBottom))
+                {
+                    box.ActualBottom = Math.Max(box.ActualBottom,
+                        lowestFloatBottom + box.ActualPaddingBottom + box.ActualBorderBottomWidth);
+                }
+            }
 
             // Apply max-height constraint. Unlike min-height/explicit-height above (which only ever
             // grow ActualBottom), max-height must be able to shrink the box below its content's
