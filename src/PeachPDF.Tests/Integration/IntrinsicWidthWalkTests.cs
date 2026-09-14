@@ -289,6 +289,33 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ABlockLinesDecoration_StaysAttachedToThatLinesContentWidth()
+        {
+            // Each block child is a competing line. The first has the wider content (100pt) and the
+            // second has the wider decoration (40pt), but neither is 140pt wide: their complete outer
+            // widths are 102pt and 120pt. Choosing max-content and decoration independently invents a
+            // line that does not exist and over-sizes the shrink-to-fit parent.
+            Assert.Equal(
+                120,
+                await FloatWidthAsync(
+                    "<div style='width:100pt;border:1pt solid'></div>"
+                    + "<div style='width:80pt;border:20pt solid'></div>"),
+                precision: 3);
+        }
+
+        [Fact]
+        public async Task NestedBlockDecoration_StillAddsThroughTheContainmentChain()
+        {
+            // Sibling lines compete, but nested decorations do not: the child's 20pt border sits
+            // inside the parent's content box, whose own 4pt border remains outside it.
+            Assert.Equal(
+                124,
+                await FloatWidthAsync(
+                    "<div style='border:2pt solid'><div style='width:100pt;border:10pt solid'></div></div>"),
+                precision: 3);
+        }
+
+        [Fact]
         public async Task AnInlineFlexChild_SharesTheLine_WithoutNeedingNowrap()
         {
             // The other half of the same predicate: an inline-level box never begins a line, so it

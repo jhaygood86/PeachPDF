@@ -143,6 +143,34 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task PositionedAutoSiblings_PaintInTreeOrderAcrossPositionSchemes()
+        {
+            // CSS 2.1 Appendix E step 8 puts every positioned descendant with stack level 0 in one
+            // tree-order bucket. Separate relative/absolute/fixed paint passes reverse that order and
+            // let an earlier fixed box cover a later absolute sibling (the Acid2 eye-row failure).
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<div id='fixed' style='position:fixed;top:0;left:0;width:20px;height:20px;background:rgb(10,20,30);'></div>" +
+                "<div id='absolute' style='position:absolute;top:0;left:0;width:20px;height:20px;background:rgb(40,50,60);'></div>" +
+                "<div id='sticky' style='position:sticky;top:0;width:20px;height:20px;background:rgb(55,65,75);'></div>" +
+                "<div id='relative' style='position:relative;width:20px;height:20px;background:rgb(70,80,90);'></div>"));
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintPage(container, g);
+
+            var rects = g.Log.OfType<TestRecordingGraphics.DrawRectCall>().ToList();
+            var fixedIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(10, 20, 30));
+            var absoluteIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(40, 50, 60));
+            var stickyIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(55, 65, 75));
+            var relativeIndex = rects.FindIndex(r => r.Color == RColor.FromArgb(70, 80, 90));
+
+            Assert.True(fixedIndex >= 0 && absoluteIndex >= 0 && stickyIndex >= 0 && relativeIndex >= 0,
+                "one of the positioned siblings never painted");
+            Assert.True(fixedIndex < absoluteIndex && absoluteIndex < stickyIndex && stickyIndex < relativeIndex,
+                $"stack-level-0 positioned siblings must paint in tree order, regardless of positioning scheme " +
+                $"(fixed={fixedIndex}, absolute={absoluteIndex}, sticky={stickyIndex}, relative={relativeIndex})");
+        }
+
+        [Fact]
         public async Task HoistedBox_PastTwoNestedOverflowHiddenAncestors_GetsBothAncestorsClipsApplied()
         {
             // Regression: RenderUtils.ClipGraphicsByOverflow, called naturally inside a box's own

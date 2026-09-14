@@ -2345,13 +2345,16 @@ namespace PeachPDF.Html.Core.Fragmentation
             // first, fresh commit, and never revisits it on a later, resumed one - see its own remarks). Its
             // content still fragments and lands in later slots regardless, so this fragment's decoration is
             // extended from what it actually holds here, the same way a captured instance's continuing box
-            // already is. Unconditional whenever there is real content to extend from, not only when the
-            // box's own bounds miss this region entirely - a pinned box's declared bounds can still land a
-            // sliver inside the right region while the bulk of what it actually holds here runs well past
-            // that sliver (ExtentOf only ever grows the bottom, so this is a no-op wherever the box's own
-            // bounds already reach far enough on their own). Closes issue #569.
+            // already is. This applies only to a box known to have gone through that pin; an ordinary
+            // author-declared definite height remains the used height when content overflows it (CSS 2.1
+            // §10.6.3). Within the pinned case the extension is unconditional whenever there is real content,
+            // not only when the box's own bounds miss this region entirely - a pinned box's declared bounds
+            // can still land a sliver inside the right region while the bulk of what it actually holds here
+            // runs well past that sliver (ExtentOf only ever grows the bottom, so this is a no-op wherever the
+            // box's own bounds already reach far enough on their own). Closes issue #569.
             var boundsEndAtContentOnThePageGrid = shellRect is null && usesOwnBounds
-                && capture is null && (children.Count > 0 || words.Count > 0);
+                && capture is null && box.ItemContentSizeEverPinned
+                && (children.Count > 0 || words.Count > 0);
 
             // A shell is backgrounds and borders and nothing else, which CSS Paged Media Level 3 §3.2
             // excludes from printable content by name - so it can never on its own make a slot into a page.

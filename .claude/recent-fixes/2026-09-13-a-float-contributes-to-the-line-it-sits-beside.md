@@ -89,11 +89,9 @@ before it was built on.
   `.smile div div` went to 108pt against its real 90pt and drew over the mouth beside it. Fixing that
   consumer *and* making `paddingSum` accumulate down a containment chain (both genuinely wrong today)
   then widened a third defect — the padding added is not the winning line's own — on two more
-  showcases. All three are one tangle, now tracked as **#1040** and recorded in
-  [.claude/accepted-gaps/intrinsic-padding-total-is-not-the-winning-lines-own-padding.md](../accepted-gaps/intrinsic-padding-total-is-not-the-winning-lines-own-padding.md)
-  with the measurements. **The visible cost of leaving it** is that two floats that each declare
-  padding lose one of the two paddings from the line they share; without padding the same markup is
-  correct.
+  showcases. All three were one tangle, tracked as **#1040**. The follow-up
+  [intrinsic-line pairing correction](2026-09-14-intrinsic-widths-and-positioned-paint-order.md)
+  resolves the complete set rather than preserving the intermediate accounting.
 - **A float's declared `width` had to be handled in the branch.** Taking the isolated path leaves the
   child-explicit-width fold further down the loop, and `float: left; width: 200px` is the ordinary
   case. Unlike that fold's *floor*, this **replaces** the measured width — a non-auto width IS the

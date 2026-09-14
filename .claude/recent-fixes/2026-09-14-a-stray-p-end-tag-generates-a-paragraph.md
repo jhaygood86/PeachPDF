@@ -87,18 +87,11 @@ caught that on the first run.
 **Every box in Acid2's `.smile` subtree now matches Chrome exactly** — `.smile`, `div`, `div div`,
 `span`, `em`, `strong`.
 
-## Still wrong, and why it was not fixed here
+## Follow-up: the remaining paint defect
 
-The mouth's *lower* half still paints its yellow flanks at half width. The geometry is now correct, so
-this is a **paint** defect: `.smile div div span` declares `height: 1em` around a 24px float, and
-`FragmentEmitter.ExtentOf` grows its painted rect to 24px — CSS 2.1 §10.6.3 says a definite height is
-the height and content overflows it.
-
-Gating that extension on `CssBox.IsHeightCalculated` was tried and **reverted**: it fails three tests,
-two of them issue #569's, because a flex item's height is *pinned by the engine* and sets the same flag
-— and #569's extension exists precisely to paper over that pin. The engine carries no distinction
-between an author-declared height and an engine-pinned one, so the real fix needs that distinction
-rather than a gate. Confirmed pre-existing by rendering `origin/main`: identical there.
+The mouth's lower half still painted too wide after this change because `FragmentEmitter.ExtentOf`
+grew a 1em-high box to its overflowing 2em child. That follow-up is now fixed separately; see
+[`2026-09-14-definite-height-decoration-does-not-grow-to-overflow.md`](2026-09-14-definite-height-decoration-does-not-grow-to-overflow.md).
 
 ## Evidence
 

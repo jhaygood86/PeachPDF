@@ -1035,7 +1035,8 @@ namespace PeachPDF.Html.Core.Utils
         // wherever it happens to sit in a plain wrapper's local scope). Internal (not private) so
         // HtmlContainerInt's HasStackingHoistCandidates computation can reuse the exact same predicate
         // rather than duplicating it, alongside Paint.StackingOrder, which owns the ordering walk.
-        internal static bool NeedsStackingHoist(CssBox box) => box.IsOutOfFlow || IsStackingContextBox(box);
+        internal static bool NeedsStackingHoist(CssBox box) =>
+            box.IsOutOfFlow || box.IsPositioned || IsStackingContextBox(box);
 
         /// <summary>
         /// Whether any box in <paramref name="box"/>'s subtree asks for its decorations to be cloned at a

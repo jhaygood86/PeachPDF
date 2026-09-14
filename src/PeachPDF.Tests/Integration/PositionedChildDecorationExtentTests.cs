@@ -5,8 +5,9 @@ using Xunit;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// A box's own painted border box is sized from its <b>in-flow</b> content. An absolutely- or
-    /// fixed-positioned descendant is out of the flow entirely
+    /// An auto-height box's painted border box is sized from its <b>in-flow</b> content. A definite height
+    /// remains the used height when content overflows it, while an absolutely- or fixed-positioned descendant
+    /// is out of the flow entirely
     /// (<see href="https://www.w3.org/TR/CSS21/visuren.html#absolute-positioning">CSS 2.1 §9.3.1</see>) and
     /// contributes nothing to it (§10.6.3), however far outside the box it is placed.
     /// </summary>
@@ -44,10 +45,8 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task InFlowChildOverflowingItsParent_StillGrowsTheDecorationRect()
+        public async Task InFlowChildOverflowingDefiniteHeight_DoesNotGrowTheDecorationRect()
         {
-            // The guard above must not blunt what the extension is for: an in-flow child that overflows its
-            // parent's declared bounds still extends what the parent paints.
             var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<style>" +
                 "  #cb { position: relative; width: 200pt; height: 40pt; margin: 0; padding: 0; }" +
@@ -56,11 +55,14 @@ namespace PeachPDF.Tests.Integration
                 "<div id='cb'><div id='tall'>x</div></div>"), margin: 20);
 
             var cb = LayoutHarness.FindById(root, "cb")!;
+            var tall = LayoutHarness.FindById(root, "tall")!;
             var fragment = FragmentPaintHarness.FragmentOf(container, cb);
             var decoration = Assert.Single(fragment.Lines);
 
-            Assert.True(decoration.Rect.Height > 100,
-                $"expected the overflowing in-flow child to extend the rect, got {decoration.Rect.Height}");
+            Assert.True(tall.ActualBottom > cb.ActualBottom,
+                "fixture must have an in-flow child overflowing the definite-height parent");
+            Assert.Equal(40, decoration.Rect.Height, 0.5);
+            Assert.Equal(cb.Bounds.Height, decoration.Rect.Height, 0.5);
         }
     }
 }

@@ -495,25 +495,19 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Eyes_ShrinkToFitWidth_MatchesEyeIconIntrinsicWidth_NotEyesBAndEyesCSummed()
+        public async Task Eyes_ShrinkToFitWidth_TakesTheWidestCompleteChildLine()
         {
-            // Regression for a real bug: "eyesWidth ≈ eyesAWidth" alone (the test above) is
-            // tautologically true regardless of whether ".eyes" is correctly ~128 or wrongly inflated
-            // - "#eyes-a" always fills whatever width ".eyes" resolves to, per normal block flow, so
-            // that assertion alone never actually catches a shrink-to-fit regression. This pins an
-            // absolute upper bound: ".eyes" must not approach "#eyes-b"'s width (10em=90pt) plus
-            // "#eyes-c"'s width (10em=90pt) summed together (~180pt+), which is exactly what
-            // GetMinMaxSumWords's explicit-width floor produced when it wrongly ADDED multiple
-            // separate block-level siblings' explicit widths instead of taking their max (see
-            // PositionAbsoluteAutoWidth_MultipleExplicitWidthSiblings_TakesWidestNotSum in
-            // Acid2FeatureVerificationTests.cs for the isolated mechanism test).
+            // The children occupy separate block lines. #eyes-a is 131px wide including its nested
+            // object's decoration; #eyes-b/#eyes-c are each 144px wide including their own borders.
+            // The shrink-to-fit parent is therefore 144px (108pt), not 155px from combining
+            // #eyes-a's 35px decoration with #eyes-b's unrelated 120px content width. That extra 11px
+            // right-aligns the eye image under a fixed-position bar and visibly hides its left eye.
             var (root, container) = await BuildAndLayout(File.ReadAllText(FixturePath));
             var eyes = FindByClass(root, "eyes")!;
 
             var eyesWidth = eyes.ActualRight - eyes.Location.X;
 
-            Assert.True(eyesWidth < 170,
-                $"expected .eyes's shrink-to-fit width to stay well under #eyes-b + #eyes-c's summed widths (~180pt+), got {eyesWidth}");
+            Assert.InRange(eyesWidth, 107.5, 108.5);
         }
 
         [Fact]

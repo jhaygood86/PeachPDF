@@ -6992,35 +6992,16 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
         /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>
         /// <param name="maxWidth">The total width the content can take without line wrapping (with padding).</param>
-        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth) =>
-            GetMinMaxWidth(g, out minWidth, out maxWidth, out _);
-
-        /// <summary>
-        /// <see cref="GetMinMaxWidth(RGraphics, out double, out double)"/>, additionally reporting the
-        /// border/padding component of the two widths.
-        /// </summary>
-        /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
-        /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>
-        /// <param name="maxWidth">The total width the content can take without line wrapping (with padding).</param>
-        /// <param name="decoration">
-        /// The border/padding total <c>GetMinMaxSumWords</c> resolved for this subtree - see its own
-        /// <c>oldPaddingSum</c> save/restore, which combines a nested box's with its ancestor's by
-        /// <see cref="Math.Max(double,double)"/> rather than by addition. A caller measuring a box in
-        /// isolation, in place of the recursive descent that would otherwise have folded this into ITS
-        /// running total, needs this to fold it the same way and keep the accounting identical
-        /// (issue #1033). It is not a well-defined "outer width minus content" and must not be used as
-        /// one - see the accepted-gap note
-        /// <c>intrinsic-padding-total-is-not-the-winning-lines-own-padding.md</c>.
-        /// </param>
-        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth, out double decoration)
+        internal void GetMinMaxWidth(RGraphics g, out double minWidth, out double maxWidth)
         {
             double min = 0f;
+            double minDecoration = 0f;
             double maxSum = 0f;
             double paddingSum = 0f;
             double marginSum = 0f;
 
-            // WidestLine carries the widest line CLOSED by a <br> anywhere in the
-            // subtree, which maxSum alone cannot -- see GetMinMaxSumWords's own break handling.
+            // Carries the complete outer width of the widest line closed by a <br> anywhere in the
+            // subtree, which the still-open maxSum/paddingSum pair alone cannot represent.
             double widestLine = 0f;
 
             // The trailing space of the last word before a <br> -- see the break handling
@@ -7035,10 +7016,11 @@ namespace PeachPDF.Html.Core.Dom
             var trailingRegionalIndicatorCount = 0;
             var trailingGraphemeContext = string.Empty;
 
-            GetMinMaxSumWords(g, this, ref min, ref maxSum, ref paddingSum, ref marginSum, ref widestLine,
-                ref trailingSpace, ref atLineStart, ref previousWord, ref unbreakableRunWidth,
-                ref trailingRegionalIndicatorCount, ref trailingGraphemeContext);
-            min = Math.Max(min, unbreakableRunWidth);
+            GetMinMaxSumWords(g, this, ref min, ref minDecoration, ref maxSum, ref paddingSum,
+                ref marginSum, ref widestLine, ref trailingSpace, ref atLineStart, ref previousWord,
+                ref unbreakableRunWidth, ref trailingRegionalIndicatorCount, ref trailingGraphemeContext,
+                inheritedDecoration: 0, includeExplicitWidth: false);
+            UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
 
             // The document runs out here, so the line in progress ends here too and its trailing
             // white space hangs (css-text-3 §4.1.2). A no-op whenever the walk already applied the
@@ -7048,9 +7030,8 @@ namespace PeachPDF.Html.Core.Dom
             // inline-level box measured directly.
             maxSum -= trailingSpace;
 
-            decoration = paddingSum;
-            maxWidth = paddingSum + Math.Max(maxSum, widestLine);
-            minWidth = paddingSum + (min < 90999 ? min : 0);
+            maxWidth = Math.Max(maxSum + paddingSum, widestLine);
+            minWidth = min + minDecoration;
 
             // A box that cannot wrap has no smaller size to offer -- its min-content
             // IS its max-content (CSS 2.1 §17.5.2). Measured as the longest word it is far
@@ -7231,6 +7212,7 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
         /// <param name="box">the box to calculate for</param>
         /// <param name="min">the width that allows for each word to fit (width of the longest word)</param>
+        /// <param name="minDecoration">the decoration belonging to the line that supplied <paramref name="min"/></param>
         /// <param name="maxSum">the max width a single line of words can take without wrapping</param>
         /// <param name="paddingSum">the total amount of padding the content has </param>
         /// <param name="marginSum"></param>
@@ -7241,32 +7223,26 @@ namespace PeachPDF.Html.Core.Dom
         /// <param name="unbreakableRunWidth">the accumulated min-content width since the last soft-wrap opportunity.</param>
         /// <param name="trailingRegionalIndicatorCount">regional indicators ending the current unbroken line.</param>
         /// <param name="trailingGraphemeContext">the final grapheme context across inline owners.</param>
+        /// <param name="inheritedDecoration">decoration from the current box's containing chain.</param>
+        /// <param name="includeExplicitWidth">whether this recursive child contributes its declared width.</param>
         /// <returns></returns>
-        private static void GetMinMaxSumWords(RGraphics g, CssBox box, ref double min, ref double maxSum,
-            ref double paddingSum, ref double marginSum, ref double widestLine, ref double trailingSpace,
-           ref bool atLineStart, ref CssRect? previousWord, ref double unbreakableRunWidth,
-           ref int trailingRegionalIndicatorCount, ref string trailingGraphemeContext)
+        private static void GetMinMaxSumWords(RGraphics g, CssBox box, ref double min,
+            ref double minDecoration, ref double maxSum, ref double paddingSum, ref double marginSum,
+            ref double widestLine, ref double trailingSpace, ref bool atLineStart,
+            ref CssRect? previousWord, ref double unbreakableRunWidth,
+            ref int trailingRegionalIndicatorCount, ref string trailingGraphemeContext,
+            double inheritedDecoration, bool includeExplicitWidth)
         {
+            var startsNewLine = StartsNewLine(box);
+            var maxSumBeforeBox = maxSum;
+            var paddingSumBeforeBox = paddingSum;
             double? oldSum = null;
-            // paddingSum must be scoped per "line" the same way maxSum is (see the oldSum save/restore
-            // below) - it represents the border/padding belonging to the WIDEST line found so far, not a
-            // running total across every sibling's own unrelated line. Without oldPaddingSum, a block
-            // box's own border/padding (and every descendant's, recursively) permanently accumulated
-            // into paddingSum and was never reset between siblings - e.g. Acid2's "#eyes-a" (contributing
-            // real intrinsic word/image width) followed by sibling "#eyes-b"/"#eyes-c" (contributing 0
-            // words but their own borders) summed all three siblings' unrelated border/padding into one
-            // box's shrink-to-fit width instead of using only the widest line's own padding, inflating
-            // position:absolute ".eyes"'s auto width well past its actual content.
-            //
-            // Worth knowing before reading anything else into it: it is NOT a well-defined
-            // "outer width minus content" and no caller may treat it as one - see the accepted-gap
-            // note `intrinsic-padding-total-is-not-the-winning-lines-own-padding.md`.
             double? oldPaddingSum = null;
 
             // not inline (block) boxes start a new line so we need to reset the max sum
-            if (StartsNewLine(box))
+            if (startsNewLine)
             {
-                min = Math.Max(min, unbreakableRunWidth);
+                UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                 unbreakableRunWidth = 0;
                 previousWord = null;
                 trailingRegionalIndicatorCount = 0;
@@ -7274,7 +7250,7 @@ namespace PeachPDF.Html.Core.Dom
                 oldSum = maxSum;
                 maxSum = marginSum;
                 oldPaddingSum = paddingSum;
-                paddingSum = 0;
+                paddingSum = inheritedDecoration;
                 atLineStart = true;
                 // Reset with the rest of the per-line state. trailingSpace is the hanging space of
                 // the last word measured, and the line it hung off has just ended -- carrying it into
@@ -7285,8 +7261,10 @@ namespace PeachPDF.Html.Core.Dom
                 trailingSpace = 0;
             }
 
-            // add the padding
-            paddingSum += box.ActualBorderLeftWidth + box.ActualBorderRightWidth + box.ActualPaddingRight + box.ActualPaddingLeft;
+            var boxDecoration = box.ActualBorderLeftWidth + box.ActualBorderRightWidth
+                + box.ActualPaddingRight + box.ActualPaddingLeft;
+            paddingSum += boxDecoration;
+            var descendantDecoration = inheritedDecoration + boxDecoration;
 
 
             // for tables the padding also contains the spacing between cells
@@ -7333,7 +7311,7 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 maxSum += rowMax;
-                min = Math.Max(min, rowMin);
+                UpdateMinWidth(ref min, ref minDecoration, rowMin, paddingSum);
 
                 // The row lands on the line AFTER whatever was measured onto it, so a space that
                 // was trailing is now an ordinary inter-word gap with content on both sides, and
@@ -7365,11 +7343,12 @@ namespace PeachPDF.Html.Core.Dom
                         // this every <br>-separated line measured one space too wide -- 2.6pt on that
                         // five-line address block, enough to over-subscribe its flex row and wrap the
                         // heading beside it.
-                        widestLine = Math.Max(widestLine, maxSum - trailingSpace);
+                        widestLine = Math.Max(widestLine, maxSum - trailingSpace + paddingSum);
+                        UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                         maxSum = marginSum;
+                        paddingSum = descendantDecoration;
                         trailingSpace = 0;
                         atLineStart = true;
-                        min = Math.Max(min, unbreakableRunWidth);
                         unbreakableRunWidth = 0;
                         previousWord = null;
                         trailingRegionalIndicatorCount = 0;
@@ -7408,12 +7387,12 @@ namespace PeachPDF.Html.Core.Dom
                             precedingRegionalIndicatorCount: trailingRegionalIndicatorCount,
                             precedingGraphemeContext: trailingGraphemeContext))
                     {
-                        min = Math.Max(min, unbreakableRunWidth);
+                        UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                         unbreakableRunWidth = 0;
                     }
 
                     unbreakableRunWidth += wordMinWidth;
-                    min = Math.Max(min, unbreakableRunWidth);
+                    UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                     previousWord = word;
                     if (word is CssRectWord textWord && !string.IsNullOrEmpty(textWord.Text))
                     {
@@ -7459,7 +7438,7 @@ namespace PeachPDF.Html.Core.Dom
                     // item.
                     if (childBox.IsFloated && (floatsShareTheLine ??= FloatsShareTheLine(box)))
                     {
-                        childBox.GetMinMaxWidth(g, out var floatMin, out var floatMax, out _);
+                        childBox.GetMinMaxWidth(g, out var floatMin, out var floatMax);
 
                         // The float's own border/padding stays IN the widths measured here, and none of
                         // it is folded into paddingSum. paddingSum is a separate running total combined
@@ -7502,12 +7481,12 @@ namespace PeachPDF.Html.Core.Dom
                         // The float is an unbreakable unit on the line and the run of words before it
                         // ends there, so min-content takes the WIDER of the two rather than continuing
                         // the run through it.
-                        min = Math.Max(min, unbreakableRunWidth);
+                        UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                         unbreakableRunWidth = 0;
                         previousWord = null;
                         trailingRegionalIndicatorCount = 0;
                         trailingGraphemeContext = string.Empty;
-                        min = Math.Max(min, floatMin + floatMargins);
+                        UpdateMinWidth(ref min, ref minDecoration, floatMin + floatMargins, paddingSum);
 
                         // A float is out of flow, and
                         // <see href="https://www.w3.org/TR/css-text-3/#text-processing">css-text-3
@@ -7546,79 +7525,48 @@ namespace PeachPDF.Html.Core.Dom
                         maxSum += childBox.ActualMarginLeft + childBox.ActualMarginRight;
                     }
 
-                    var maxSumBeforeChild = maxSum;
-                    GetMinMaxSumWords(g, childBox, ref min, ref maxSum, ref paddingSum, ref marginSum,
-                        ref widestLine, ref trailingSpace, ref atLineStart, ref previousWord,
-                       ref unbreakableRunWidth, ref trailingRegionalIndicatorCount,
-                       ref trailingGraphemeContext);
-
-                    // This walk otherwise never consults a box's own explicit CSS `width` at all - only
-                    // literal word/text content. That's usually fine (explicit width constrains layout
-                    // AFTER content is measured, not the content's own intrinsic size) but breaks down
-                    // for a child whose only real sizing signal IS an explicit width with no word
-                    // content to measure (e.g. a solid-color box, or - Acid2's own case - an anonymous
-                    // table-cell (CSS2.1 17.2.1) wrapping a nested "display:table"/"display:list-item"
-                    // "<li>" that has "width:1em" but no text): the recursive content sum alone finds
-                    // nothing, so the anonymous cell sized itself to 0 instead of its child's real 1em,
-                    // clipping/overlapping the nested content. A plain absolute length (not a percentage
-                    // - resolving that here would read this box's own not-yet-final ActualWidth,
-                    // circular in exactly the way GetBoxWidth's shrink-to-fit callers already guard
-                    // against) is folded in as an explicit floor for this line's running total.
-                    //
-                    // Excludes a non-replaced inline box (Display:Inline with no Words of its own - a
-                    // replaced inline element, e.g. an image or resolved <object>, is already measured
-                    // via the Words.Count>0 branch elsewhere in this function and never reaches this
-                    // check in a way that would be wrongly excluded here): per CSS2.1 10.3.3, `width`
-                    // has NO EFFECT on a non-replaced inline-level box. Acid2's own
-                    // "#eyes-a object[type] { width: 7.5em; }" is exactly this - the middle <object
-                    // type="text/html"> in the fallback chain, which falls back to display:inline and
-                    // is deliberately meant to have this width ignored (Round 6 verified this is a
-                    // real no-op at layout time via CssBox.PerformLayoutImp's IsBlock gate).
-                    //
-                    // A child that starts its OWN new "line" (same condition as the block-reset check
-                    // at the top of this function) must have its explicit width combined via Math.Max,
-                    // NOT added to maxSumBeforeChild - maxSumBeforeChild already reflects whatever an
-                    // EARLIER, unrelated block-level sibling contributed (each such sibling resets to
-                    // its own line via the oldSum mechanism and is meant to compete for "widest line
-                    // wins", not accumulate). The very first version of this fix always added
-                    // maxSumBeforeChild + explicitContentWidth unconditionally, which was fine for a
-                    // lone child (maxSumBeforeChild was 0) but wrongly summed multiple separate
-                    // block-level siblings' explicit widths together - Acid2's own ".eyes" with three
-                    // block-level children ("#eyes-a" ~128 intrinsic, "#eyes-b"/"#eyes-c" each
-                    // explicit 10em/90pt) summed to 308 (128+90+90) instead of correctly taking the
-                    // widest single line (~128).
-                    if (CssValueParser.IsValidLength(childBox.Width) && !childBox.Width.EndsWith('%')
-                        && !(childBox.DerivedStyle.ActualDisplay == Keywords.Inline && childBox.Words.Count == 0))
-                    {
-                        var explicitContentWidth = CssValueParser.ParseLength(childBox.Width, 0, childBox);
-                        var childStartsNewLine = StartsNewLine(childBox);
-                        var withExplicitWidth = childStartsNewLine
-                            ? Math.Max(maxSum, explicitContentWidth)
-                            : Math.Max(maxSum, maxSumBeforeChild + explicitContentWidth);
-
-                        // An explicit width that RAISES the line total has replaced the measured
-                        // tail with a number that has no trailing space in it, so there is nothing
-                        // left hanging off the end of maxSum for the epilogue below to take back
-                        // off - and taking one off anyway swallows a real inter-word gap. Where the
-                        // measured total still wins, its own trailing word is still the end of the
-                        // line and its space still hangs.
-                        if (withExplicitWidth > maxSum)
-                        {
-                            trailingSpace = 0;
-                        }
-
-                        maxSum = withExplicitWidth;
-                        min = Math.Max(min, explicitContentWidth);
-                    }
+                    GetMinMaxSumWords(g, childBox, ref min, ref minDecoration, ref maxSum,
+                        ref paddingSum, ref marginSum, ref widestLine, ref trailingSpace,
+                        ref atLineStart, ref previousWord, ref unbreakableRunWidth,
+                        ref trailingRegionalIndicatorCount, ref trailingGraphemeContext,
+                        descendantDecoration, includeExplicitWidth: true);
 
                     marginSum -= childBox.ActualMarginLeft + childBox.ActualMarginRight;
                 }
             }
 
+            // This walk otherwise only sees literal word/text content. A recursive child's explicit
+            // non-percentage width is therefore a floor for the line it occupies. Apply it before this
+            // box's line competes with an earlier sibling so its own decoration remains attached to it.
+            // The top-level box's width is intentionally excluded: intrinsic sizing measures its content,
+            // while a non-replaced inline child's width has no effect under CSS 2.1 §10.3.1.
+            if (includeExplicitWidth
+                && CssValueParser.IsValidLength(box.Width)
+                && !box.Width.EndsWith('%')
+                && !(box.DerivedStyle.ActualDisplay == Keywords.Inline && box.Words.Count == 0))
+            {
+                var explicitContentWidth = CssValueParser.ParseLength(box.Width, 0, box);
+                var explicitSum = startsNewLine
+                    ? explicitContentWidth
+                    : maxSumBeforeBox + explicitContentWidth;
+                var explicitDecoration = startsNewLine
+                    ? descendantDecoration
+                    : paddingSumBeforeBox + boxDecoration;
+
+                if (explicitSum + explicitDecoration > maxSum + paddingSum)
+                {
+                    maxSum = explicitSum;
+                    paddingSum = explicitDecoration;
+                    trailingSpace = 0;
+                }
+
+                UpdateMinWidth(ref min, ref minDecoration, explicitContentWidth, explicitDecoration);
+            }
+
             // max sum (and its matching padding contribution) is the max of all the lines in the box
             if (oldSum.HasValue)
             {
-                min = Math.Max(min, unbreakableRunWidth);
+                UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
                 unbreakableRunWidth = 0;
                 previousWord = null;
                 trailingRegionalIndicatorCount = 0;
@@ -7634,9 +7582,27 @@ namespace PeachPDF.Html.Core.Dom
                 // and the block reset zero it when the line ends. So the space taken off is always
                 // one that is currently in maxSum. oldSum is a different, already-closed line and
                 // keeps its own width.
-                maxSum = Math.Max(maxSum - trailingSpace, oldSum.Value);
+                var currentSum = maxSum - trailingSpace;
+                if (oldSum.Value + oldPaddingSum!.Value > currentSum + paddingSum)
+                {
+                    maxSum = oldSum.Value;
+                    paddingSum = oldPaddingSum.Value;
+                }
+                else
+                {
+                    maxSum = currentSum;
+                }
                 trailingSpace = 0;
-                paddingSum = Math.Max(paddingSum, oldPaddingSum!.Value);
+            }
+        }
+
+        private static void UpdateMinWidth(ref double min, ref double minDecoration,
+            double candidate, double candidateDecoration)
+        {
+            if (candidate + candidateDecoration > min + minDecoration)
+            {
+                min = candidate;
+                minDecoration = candidateDecoration;
             }
         }
 

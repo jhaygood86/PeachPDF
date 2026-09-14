@@ -6347,10 +6347,17 @@ await SaveShowcaseAsync("font_resolution_showcase", "Typography & Text", "Font R
 // subset compliance target. See CLAUDE.md and docs/html-css-support.md for what "compliance" means
 // for a static PDF renderer (no :hover/:active, no scripting).
 var acid2Html = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "acid2.html"));
+var acid2Config = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PageOrientation = PageOrientation.Portrait,
+    ShrinkToFit = true
+};
+acid2Config.SetMargins(0);
 
 await SaveShowcaseAsync("acid2", "Standards & Accessibility", "Acid2",
     "The unmodified Acid2 test rendered by PeachPDF - the classic CSS compliance smiley.",
-    acid2Html, pdfConfig);
+    acid2Html, acid2Config);
 
 // ─── Real-World Documents: Quarterly Sales Ledger (repeating table headers) ───
 // A 60-row <table> spanning three US Letter pages - the <thead> repeats automatically on

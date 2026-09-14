@@ -610,7 +610,7 @@ namespace PeachPDF.Html.Core.Paint
                 // this stacking context's own direct children).
                 foreach (var p in layerBoxes)
                 {
-                    if (!StackingOrder.ActsAsInline(p.Box) && p.Box.Position.Value != PositionMode.Absolute && p.Box is { IsFixed: false, IsFloated: false })
+                    if (!StackingOrder.ActsAsInline(p.Box) && !p.Box.IsPositioned && !p.Box.IsFloated)
                         PaintStackingParticipant(g, p);
                 }
 
@@ -622,19 +622,16 @@ namespace PeachPDF.Html.Core.Paint
 
                 foreach (var p in layerBoxes)
                 {
-                    if (StackingOrder.ActsAsInline(p.Box) && p.Box.Position.Value != PositionMode.Absolute && p.Box is { IsFixed: false, IsFloated: false })
+                    if (StackingOrder.ActsAsInline(p.Box) && !p.Box.IsPositioned && !p.Box.IsFloated)
                         PaintStackingParticipant(g, p);
                 }
 
                 foreach (var p in layerBoxes)
                 {
-                    if (p.Box.Position.Value == PositionMode.Absolute)
-                        PaintStackingParticipant(g, p);
-                }
-
-                foreach (var p in layerBoxes)
-                {
-                    if (p.Box.IsFixed)
+                    // CSS 2.1 Appendix E step 8 is one tree-order bucket for every positioned
+                    // descendant at stack level 0. Splitting absolute/fixed/relative into separate
+                    // passes reorders otherwise-equal siblings by positioning scheme.
+                    if (p.Box.IsPositioned)
                         PaintStackingParticipant(g, p);
                 }
             }
