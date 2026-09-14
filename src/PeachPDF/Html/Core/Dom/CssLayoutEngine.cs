@@ -317,6 +317,7 @@ namespace PeachPDF.Html.Core.Dom
             else
             {
                 RestoreOverflowWrapSplits(blockBox);
+                RestoreLineClampMutations(blockBox);
                 blockBox.LineBoxes.Clear();
 
                 // A word carries no position of its own until the flow reaches it, and the position it
@@ -486,6 +487,7 @@ namespace PeachPDF.Html.Core.Dom
         internal static async ValueTask CreateVerticalLineBoxes(RGraphics g, CssBox blockBox)
         {
             RestoreOverflowWrapSplits(blockBox);
+            RestoreLineClampMutations(blockBox);
             blockBox.LineBoxes.Clear();
 
             var words = new List<CssRect>();
@@ -3098,12 +3100,31 @@ namespace PeachPDF.Html.Core.Dom
 
                         if (wrapping)
                         {
-                            // The incoming word belongs to the new line, not the one being closed. Its
-                            // line-height was applied speculatively above so float intersection and wrapping
-                            // could inspect the candidate line extent; remove it before advancing the cursor.
-                            // A forced-break marker itself terminates the current line and retains its extent.
+                            // The incoming word belongs to the new line, not the one being closed (or, for
+                            // a clamped stop below, to a line that will never open at all) - its line-height
+                            // was applied speculatively above so float intersection and wrapping could
+                            // inspect the candidate line extent; remove it before advancing the cursor, in
+                            // every case a new line doesn't actually start with this word. A forced-break
+                            // marker itself terminates the current line and retains its extent.
                             if (!word.IsLineBreak)
                                 coordinates.MaxBottom = maxBottomBeforeIncomingWord;
+
+                            // line-clamp (CSS Overflow 4 §block-ellipsis / §max-lines): once the block has
+                            // already produced as many lines as its declared limit, this new line must never
+                            // open - the content stops here, permanently (not "paused for a later
+                            // fragmentainer pass", which is what coordinates.Break means), with a generated
+                            // ellipsis word on the last visible line in its place. Checked ahead of every
+                            // other consequence of wrapping (hyphenation bookkeeping, the new CssLineBox, RTL
+                            // text-indent, etc.) since none of that should happen for a line that will never
+                            // exist - but only after the MaxBottom restore just above, which applies whether
+                            // or not this stop actually clamps (issue: an unrestored MaxBottom otherwise
+                            // inflates the clamped block's own height by however tall the never-rendered
+                            // next word would have been).
+                            if (TryApplyLineClamp(g, blockBox, coordinates, actualLimitRight, rightSpacing, clonedTrailing))
+                            {
+                                coordinates.ClampedStop = true;
+                                return;
+                            }
 
                             // The line about to close is being abandoned for a new one - fold whether it
                             // ended in a hyphen into the running consecutive-hyphenated-lines count before
@@ -3417,12 +3438,14 @@ namespace PeachPDF.Html.Core.Dom
                         word.Top += box.ActualMarginTop;
                     }
 
-                    if (coordinates.Break is not null)
+                    if (coordinates.Break is not null || coordinates.ClampedStop)
                     {
                         // Under clone this pass's own portion of b closes here with its own bottom
                         // border/padding (css-break-3 §6.2), same as the true-final-pass case below -
-                        // the break just means it isn't that pass (#343).
-                        if (clonesAtomicDecorations) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
+                        // the break just means it isn't that pass (#343). A line-clamp stop takes the
+                        // same early return (nothing after it should ever be visited), but never applies
+                        // clone's re-opened decorations - there is no later pass to open them for.
+                        if (clonesAtomicDecorations && coordinates.Break is not null) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
                         return;
                     }
 
@@ -3486,12 +3509,13 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     await FlowBox(g, blockBox, b, lineSpacing, lineStartX, coordinates, childClonedResumeStart);
 
-                    if (coordinates.Break is not null)
+                    if (coordinates.Break is not null || coordinates.ClampedStop)
                     {
                         // Same as the branch above: under clone this pass's own portion of b closes here
                         // with its own bottom border/padding, same as the true-final-pass case below - the
-                        // break just means it isn't that pass (#343).
-                        if (clonesAtomicDecorations) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
+                        // break just means it isn't that pass (#343). A line-clamp stop takes the same
+                        // early return but never applies clone's re-opened decorations - see the branch above.
+                        if (clonesAtomicDecorations && coordinates.Break is not null) ApplyAtomicInlineVerticalInsets(b, coordinates, atomicBottomInset);
                         return;
                     }
 
@@ -4137,6 +4161,140 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// CSS Overflow 4 §block-ellipsis/§max-lines (the module <c>line-clamp</c> itself now lives in -
+        /// CSS Overflow 3 explicitly defers it): once <paramref name="blockBox"/> has already produced as
+        /// many lines as its declared limit, this appends a generated ellipsis word to the line currently
+        /// being built (the last one that will ever be visible) and reports that the whole block's
+        /// content is done - permanently, not merely paused for a later fragmentainer pass. Returns
+        /// false (leaving <paramref name="coordinates"/> untouched) when <c>line-clamp</c> is <c>none</c>,
+        /// the limit hasn't been reached yet, or the line has no content of its own to attach the
+        /// ellipsis to (an emergency case - see the empty-line guard below - deliberately left to wrap
+        /// normally rather than emit a blank clamped line).
+        /// </summary>
+        /// <remarks>
+        /// Word-granularity, not character-granularity: this pops whole trailing words until the
+        /// ellipsis fits rather than splitting the last one character-by-character the way
+        /// <c>text-overflow</c>'s paint-time truncation does (<c>FragmentPainter.TextOverflow.cs</c>) -
+        /// and, per spec, this is the *specified* behavior (§block-ellipsis places the ellipsis "after
+        /// the last soft wrap opportunity that would still allow the entire block overflow ellipsis to
+        /// fit"), not a simplification of it. The floor below - never popping the line's last remaining
+        /// word - is what §block-ellipsis's own fallback covers: when no soft wrap opportunity leaves
+        /// room, the ellipsis overflows the line rather than the line losing real content it would
+        /// otherwise have kept.
+        ///
+        /// The ellipsis is measured and painted using whichever real word survives as the line's own
+        /// last word once popping is done, resolved fresh here rather than reused from before popping
+        /// started (a popped word's own owner is no longer part of the line at all). Spec (§block-ellipsis)
+        /// wants it "wrapped in an anonymous inline box... as a direct child of the block container"
+        /// instead - a real, separate anonymous inline this engine does not synthesize - so an ellipsis
+        /// following a specially-styled trailing span (a colored/bordered run of text, say) can still
+        /// visually pick up that span's own decorations; see the accepted-gap note.
+        /// </remarks>
+        private static bool TryApplyLineClamp(RGraphics g, CssBox blockBox, CssLineBoxCoordinates coordinates,
+            double actualLimitRight, double rightSpacing, double clonedTrailing)
+        {
+            if (blockBox.LineClamp.Value is not { IsValue: true, Value: { } limit }) return false;
+            if (blockBox.LineBoxes.Count < limit) return false;
+            if (coordinates.Line.Words.Count == 0) return false;
+
+            var fitLimit = actualLimitRight - rightSpacing - clonedTrailing;
+
+            // Pop trailing words - whole words, not characters, see this method's own remarks - until
+            // the ellipsis (sized against whichever word is currently last) fits in the line's own
+            // available width, or only one word (which must stay, so the line keeps real content instead
+            // of losing all of it - see this method's own remarks) remains. A popped word has to come out
+            // of its OWNER box's own Words list too, not just this line's - FragmentEmitter walks
+            // CssBox.Words directly (see the ellipsis word's own comment below), so a word only removed
+            // from the line's bookkeeping would still carry its original, already-assigned position there
+            // and would still paint, landing underneath/beside the ellipsis instead of actually being
+            // replaced by it. Each removal is recorded on blockBox so a fresh layout pass over the same
+            // tree can put it back first - see LineClampPoppedWords.
+            const string ellipsisText = "…";
+            CssRect last;
+            CssBox styleSource;
+            double ellipsisWidth;
+            while (true)
+            {
+                last = coordinates.Line.Words[^1];
+                styleSource = last.OwnerBox;
+                ellipsisWidth = g.MeasureString(ellipsisText, styleSource.ActualFont, styleSource.ActualTextShapingFeatures).Width;
+
+                if (coordinates.Line.Words.Count <= 1 || last.Right + ellipsisWidth <= fitLimit)
+                    break;
+
+                coordinates.Line.Words.RemoveAt(coordinates.Line.Words.Count - 1);
+
+                var ownerIndex = styleSource.Words.IndexOf(last);
+                styleSource.Words.RemoveAt(ownerIndex);
+
+                (blockBox.LineClampPoppedWords ??= []).Add((styleSource, ownerIndex, last));
+            }
+
+            var x = last.Right;
+            var ellipsisWord = new CssRectWord(styleSource, ellipsisText, hasSpaceBefore: false, hasSpaceAfter: false)
+            {
+                Width = ellipsisWidth,
+                Height = styleSource.ActualFont.Height,
+                Left = x,
+                Top = coordinates.CurrentY
+            };
+
+            // Fragment emission (FragmentEmitter.BuildDraft) walks a box's own CssBox.Words - not the
+            // per-line CssLineBox.Words ReportExistanceOf below adds to - to decide what actually reaches
+            // the fragment tree paint reads from, so the generated word needs a real home in both lists:
+            // owner.Words is what makes it exist as far as painting is concerned, and the line's own list
+            // is what makes WordsOf/BubbleRectangles fold it into the owner's line-local rectangle.
+            // styleSource must be a box that can legitimately hold words at all - never blockBox itself
+            // when it has child boxes of its own (CssLayoutEngine.FlowBox silently skips a box's own
+            // Words whenever it also has Boxes - see the dom-a-box-must-never-hold-both-its-own-words-and-
+            // child-boxes invariant) - which is exactly why this is the surviving real word's own owner,
+            // not blockBox.
+            styleSource.Words.Add(ellipsisWord);
+            blockBox.LineClampEllipsisWord = (styleSource, ellipsisWord);
+            coordinates.Line.ReportExistanceOf(ellipsisWord);
+
+            // An auto-width block sizes itself from MaxRight (see CreateLineBoxes below); the ordinary
+            // per-word placement loop is what normally advances it; the ellipsis is generated after that
+            // loop already ran for this line; without this, an auto-width clamped block would come out
+            // exactly the popped content's width narrower than what it actually paints.
+            coordinates.MaxRight = Math.Max(coordinates.MaxRight, x + ellipsisWidth);
+
+            return true;
+        }
+
+        /// <summary>
+        /// Undoes every mutation <see cref="TryApplyLineClamp"/> made to <paramref name="box"/>'s (and its
+        /// popped words' owners') <see cref="CssBox.Words"/> lists, before a fresh (non-resumed) layout
+        /// pass lays <paramref name="box"/> out again. Mirrors <see cref="RestoreOverflowWrapSplits"/> for
+        /// the same reason: <see cref="CssBox.Words"/> is mutated in place and never rebuilt from scratch
+        /// between passes, so a clamp decision made on an earlier pass would otherwise compound (a second
+        /// pass sees an already-shortened word list and appends a second ellipsis, a third sees that
+        /// result and appends a third, ...) instead of being re-derived fresh each time.
+        /// </summary>
+        private static void RestoreLineClampMutations(CssBox box)
+        {
+            if (box.LineClampEllipsisWord is { } ellipsis)
+            {
+                ellipsis.Owner.Words.Remove(ellipsis.Word);
+                box.LineClampEllipsisWord = null;
+            }
+
+            // Reinserted in reverse removal order (last popped, first restored) - TryApplyLineClamp always
+            // pops from the tail of a growing gap, so undoing in that same LIFO order is what lands every
+            // word back at the index it actually occupied before any of them were removed.
+            if (box.LineClampPoppedWords is { } popped)
+            {
+                for (var i = popped.Count - 1; i >= 0; i--)
+                {
+                    var (owner, index, word) = popped[i];
+                    owner.Words.Insert(Math.Min(index, owner.Words.Count), word);
+                }
+
+                box.LineClampPoppedWords = null;
+            }
         }
 
         /// <summary>

@@ -6285,6 +6285,48 @@ await SaveShowcaseAsync("text_overflow", "Typography & Text", "text-overflow: el
     "Per-line-box truncation with a trailing ellipsis wherever content overflows an overflow:hidden container's content edge - Tailwind's truncate idiom for the common single nowrap line, a wrapping paragraph whose one unbreakable line overflows, and both horizontal directions plus vertical-rl/vertical-lr writing modes, each finding the correct end edge (right/left/bottom/top) for its own writing-mode/direction combination.",
     textOverflowHtml, pdfConfig);
 
+// --- line-clamp showcase (CSS Overflow 4 §line-clamp) ---
+
+const string LineClampCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; padding-bottom: 2px; border-bottom: 1px solid #999; break-after: avoid }
+    .card { border: 1px solid #ccc; border-radius: 4px; padding: 8px 10px; margin-bottom: 0.6em; width: 320px; background: #fafafa }
+    .label { font-size: 8pt; font-family: "Courier New", monospace; color: #444; margin-bottom: 3px }
+    </style>
+    """;
+
+const string ClampParagraph =
+    "The quick brown fox jumps over the lazy dog. This sentence keeps going long enough to wrap " +
+    "across quite a few lines once the container is narrow, which is exactly what this showcase needs " +
+    "in order to demonstrate line-clamp actually cutting it short partway through.";
+
+var lineClampHtml = "<!DOCTYPE html><html><head>" + LineClampCss + "</head><body>" +
+
+    "<h1>CSS Overflow 4 line-clamp</h1>" +
+
+    "<h2>1 &mdash; the same paragraph clamped at increasing line counts</h2>" +
+    "<div class=\"label\">line-clamp: 1</div>" +
+    $"<div class=\"card\" style=\"line-clamp:1\">{ClampParagraph}</div>" +
+    "<div class=\"label\">line-clamp: 2</div>" +
+    $"<div class=\"card\" style=\"line-clamp:2\">{ClampParagraph}</div>" +
+    "<div class=\"label\">line-clamp: 4</div>" +
+    $"<div class=\"card\" style=\"line-clamp:4\">{ClampParagraph}</div>" +
+    "<div class=\"label\">none (unclamped, for comparison)</div>" +
+    $"<div class=\"card\">{ClampParagraph}</div>" +
+
+    "<h2>2 &mdash; content that already fits within the limit gets no ellipsis</h2>" +
+    "<div class=\"label\">line-clamp: 5 on a two-line paragraph</div>" +
+    "<div class=\"card\" style=\"line-clamp:5\">Short paragraph that only wraps onto two lines in this narrow card.</div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("line_clamp", "Typography & Text", "line-clamp",
+    "line-clamp (CSS Overflow 4): a layout-time cutoff limiting a block to a fixed number of visible lines, with a generated ellipsis on the last one whenever content is actually truncated - the block's own height shrinks to fit only the visible lines, and content past the limit is never laid out at all.",
+    lineClampHtml, pdfConfig);
+
 // --- CSS1 canvas background showcase ---
 
 var canvasBackgroundHtml = "<!DOCTYPE html><html><head><style>" +

@@ -628,6 +628,17 @@ namespace PeachPDF.CSS
         public static readonly IValueConverter ColumnFillConverter = Toggle(Keywords.Balance, Keywords.Auto);
         public static readonly IValueConverter BoxSizingConverter = Toggle(Keywords.ContentBox, Keywords.BorderBox);
 
+        /// <summary>
+        /// CSS Overflow 4 §line-clamp (a shorthand for <c>max-lines</c> + <c>continue: discard</c> +
+        /// <c>block-ellipsis</c> - modeled here as one property; CSS Overflow 3 explicitly deferred the
+        /// feature to Level 4): <c>none | &lt;integer [1,∞]&gt;</c>. The typed result here only needs to
+        /// round-trip through the CSS-OM's own parsing/validation layer -
+        /// <c>CssPropertyRegistry.Set_LineClamp</c> does the real interpretation independently when
+        /// applying the value to a <c>CssBox</c>.
+        /// </summary>
+        public static readonly IValueConverter LineClampConverter =
+            PositiveIntegerConverter.Or(Assign(Keywords.None, NoneKeyword.None));
+
         #endregion
 
         #region Misc

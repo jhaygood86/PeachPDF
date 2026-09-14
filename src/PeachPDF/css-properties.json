@@ -2089,6 +2089,25 @@
       }
     },
     {
+      "name": "line-clamp",
+      "comment": "CSS Overflow 4 §line-clamp (CSS Overflow 3 explicitly deferred this feature to Level 4; it's a shorthand for max-lines + continue: discard + block-ellipsis there, modeled here as one property): none | <integer [1,∞]>. CssKeywordOrValue<NoneKeyword, int>-backed, mirroring z-index's <integer>|<keyword> shape. Consumed directly by CssLayoutEngine.CreateLineBoxes's per-word wrap loop (not by paint) - once a clamped block has produced this many lines, layout stops rather than starting another, and splices a generated ellipsis word onto the last one; there is deliberately no separate paint-time enforcement (see FragmentPainter's own remarks on why this differs from text-overflow's paint-time-only truncation).",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": {
+        "type": "keyword-or-value",
+        "enumType": "NoneKeyword",
+        "keywordMap": "Map.NoneKeywords",
+        "fallback": "NoneKeyword.None",
+        "valueType": "integer"
+      },
+      "html": {
+        "propertyPath": "LineClamp",
+        "csharpDataType": "CssProperty<CssKeywordOrValue<NoneKeyword, int>>",
+        "area": "TextArea",
+        "getterExpression": "{box}.LineClamp.ToString()"
+      }
+    },
+    {
       "name": "tab-size",
       "comment": "CSS Text 4 §3.6 (https://www.w3.org/TR/css-text-4/#tab-size-property): <number [0,∞]> | <length [0,∞]> - no percentage. No keyword side, so this doesn't fit the keyword-or-value shape (line-height/word-spacing/letter-spacing) — plain array-union cssDataType instead, same shape as flex-grow/flex-shrink. A bare number isn't resolved here (unlike line-height's bare multiplier, which scales font-size) — the spec defines it as a multiple of the *space glyph's* advance width, which is only known once the tab's actual font is resolved, so DerivedStyle.ResolvedTabSize defers that to CssBox.MeasureWordsSize (see its ExpandTabs helper). Neither the plain \"number\" nor \"length\" DataTypeKind enforces a lower bound on its own (see orphans/flex-grow precedent), so customValidator adds the >=0 check for both union sides; it also explicitly excludes Length.Unit.Percent - unlike the CSS-OM's own ValueExtensions.ToLength (which the generated \"length\" DataTypeKind's base check would otherwise defer to for Layer A), PeachPDF.CSS.Length.TryParse used here accepts percentages, and without this exclusion a value like \"50%\" would validate, then DerivedStyle.ResolvedTabSize would resolve it against a hundredPercent basis of 0 (tab-size has no percentage basis to resolve against) and silently collapse to a zero-width tab-stop instead of being rejected. A calc() length is accepted without a sign check (matching CssValueParser.IsCalcFunction's existing permissiveness for other length properties) since evaluating it needs layout-time context this validator doesn't have.",
       "inherited": true,

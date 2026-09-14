@@ -1125,6 +1125,30 @@ namespace PeachPDF.Html.Core.Dom
         internal List<CssLineBox> LineBoxes { get; } = [];
 
         /// <summary>
+        /// Per-pass bookkeeping for a <c>line-clamp</c> cutoff this box triggered (see
+        /// <see cref="CssLayoutEngine.TryApplyLineClamp"/>): every trailing word popped from its own
+        /// owner's <see cref="Words"/> list to make room for the generated ellipsis, in removal order,
+        /// together with the owner box and the exact index it occupied there. A layout pass mutates
+        /// <see cref="Words"/> in place - unlike <see cref="LineBoxes"/>, it is never cleared and rebuilt
+        /// from scratch - so a fresh (non-resumed) pass over the same box tree must undo this first, the
+        /// same way <see cref="CssLayoutEngine.RestoreOverflowWrapSplits"/> undoes an emergency
+        /// <c>overflow-wrap</c> split before that same pass. Restored (and cleared) by
+        /// <see cref="CssLayoutEngine.RestoreLineClampMutations"/>, called wherever
+        /// <see cref="CssLayoutEngine.RestoreOverflowWrapSplits"/> is.
+        /// </summary>
+        internal List<(CssBox Owner, int Index, CssRect Word)>? LineClampPoppedWords { get; set; }
+
+        /// <summary>
+        /// The generated ellipsis word <see cref="CssLayoutEngine.TryApplyLineClamp"/> appended to some
+        /// owner box's <see cref="Words"/> (not necessarily this box's own - see that method's own
+        /// remarks on why it must be a box that can legitimately hold words), if this box's own content
+        /// was clamped this pass - restored (removed) and cleared by
+        /// <see cref="CssLayoutEngine.RestoreLineClampMutations"/> for the same reason
+        /// <see cref="LineClampPoppedWords"/> is.
+        /// </summary>
+        internal (CssBox Owner, CssRect Word)? LineClampEllipsisWord { get; set; }
+
+        /// <summary>
         /// Gets the rectangles where this box should be painted
         /// </summary>
         internal Dictionary<CssLineBox, RRect> Rectangles { get; } = [];
