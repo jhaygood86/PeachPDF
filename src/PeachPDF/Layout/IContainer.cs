@@ -154,11 +154,11 @@ namespace PeachPDF.Layout
         /// <summary>Places a reusable <see cref="PdfImage"/> - pass the same instance to more than one container to place it in multiple places without reloading its source. Terminal - may be called at most once.</summary>
         void Image(PdfImage image);
 
-        /// <summary>Places a horizontal rule of the given thickness, filled with <paramref name="color"/> (default black). Terminal - may be called at most once.</summary>
-        void LineHorizontal(PdfLength thickness, PdfColor? color = null);
+        /// <summary>Places a horizontal rule of the given thickness, filled with <paramref name="color"/> (default black), or dashed when <paramref name="dashed"/> is true. Terminal - may be called at most once.</summary>
+        void LineHorizontal(PdfLength thickness, PdfColor? color = null, bool dashed = false);
 
-        /// <summary>Places a vertical rule of the given thickness, filled with <paramref name="color"/> (default black). Terminal - may be called at most once.</summary>
-        void LineVertical(PdfLength thickness, PdfColor? color = null);
+        /// <summary>Places a vertical rule of the given thickness, filled with <paramref name="color"/> (default black), or dashed when <paramref name="dashed"/> is true. Terminal - may be called at most once.</summary>
+        void LineVertical(PdfLength thickness, PdfColor? color = null, bool dashed = false);
 
         /// <summary>Places a horizontal row of items. Terminal - may be called at most once.</summary>
         void Row(Action<IRowDescriptor> handler);

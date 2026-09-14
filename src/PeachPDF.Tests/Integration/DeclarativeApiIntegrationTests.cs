@@ -523,6 +523,63 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(14, vLine.ActualBackgroundColor.R);
         }
 
+        [Fact]
+        public async Task LineHorizontalAndVertical_Dashed_ProduceDashedBorderRuleBoxes()
+        {
+            CssBox? hLine = null;
+            CssBox? vLine = null;
+
+            var (root, _) = await BuildAndLayoutPage(page =>
+            {
+                page.Content(container =>
+                {
+                    container.Column(column =>
+                    {
+                        var hContainer = (ContainerBuilder)column.Item();
+                        hContainer.LineHorizontal(3, PdfColor.FromRgb(11, 12, 13), dashed: true);
+                        hLine = Assert.Single(hContainer.Box.Boxes);
+
+                        var vContainer = (ContainerBuilder)column.Item();
+                        vContainer.LineVertical(4, PdfColor.FromRgb(14, 15, 16), dashed: true);
+                        vLine = Assert.Single(vContainer.Box.Boxes);
+                    });
+                });
+            });
+
+            Assert.True(LayoutHarnessContains(root, hLine!));
+            Assert.Equal(PeachPDF.CSS.LineStyle.Dashed, hLine!.BorderTopStyle.Value);
+            Assert.InRange(hLine.ActualBorderTopWidth, 2.5, 3.5);
+            Assert.Equal(11, hLine.ActualBorderTopColor.R);
+            Assert.False(RenderUtils.IsColorVisible(hLine.ActualBackgroundColor));
+
+            Assert.True(LayoutHarnessContains(root, vLine!));
+            Assert.Equal(PeachPDF.CSS.LineStyle.Dashed, vLine!.BorderLeftStyle.Value);
+            Assert.InRange(vLine.ActualBorderLeftWidth, 3.5, 4.5);
+            Assert.Equal(14, vLine.ActualBorderLeftColor.R);
+            Assert.False(RenderUtils.IsColorVisible(vLine.ActualBackgroundColor));
+        }
+
+        [Fact]
+        public async Task LineHorizontalAndVertical_DashedWithPercentageThickness_Throws()
+        {
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(container =>
+                {
+                    container.Column(column =>
+                    {
+                        var hContainer = (ContainerBuilder)column.Item();
+                        Assert.Throws<ArgumentException>(() =>
+                            hContainer.LineHorizontal(PdfLength.Percent(50), dashed: true));
+
+                        var vContainer = (ContainerBuilder)column.Item();
+                        Assert.Throws<ArgumentException>(() =>
+                            vContainer.LineVertical(PdfLength.Percent(50), dashed: true));
+                    });
+                });
+            });
+        }
+
         // ─── Text / rich text ────────────────────────────────────────────────────────────────────────
 
         [Fact]

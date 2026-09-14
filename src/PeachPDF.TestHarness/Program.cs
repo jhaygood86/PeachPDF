@@ -10044,6 +10044,8 @@ const string declarativeApiSource =
                         }
                     });
 
+                    column.Item().LineHorizontal(1, PdfColor.FromHex("#BBBBBB"), dashed: true);
+
                     column.Item().UnorderedList(list =>
                     {
                         list.Item().Text("Revenue grew across every region.");
@@ -10122,6 +10124,8 @@ await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Decl
                                 });
                             }
                         });
+
+                        column.Item().LineHorizontal(1, PdfColor.FromHex("#BBBBBB"), dashed: true);
 
                         column.Item().UnorderedList(list =>
                         {

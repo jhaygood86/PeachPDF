@@ -369,22 +369,58 @@ namespace PeachPDF.Layout
             _ = image;
         }
 
-        public void LineHorizontal(PdfLength thickness, PdfColor? color = null)
+        public void LineHorizontal(PdfLength thickness, PdfColor? color = null, bool dashed = false)
         {
+            // border-*-width never accepts a percentage (unlike height/width on the solid path below),
+            // so a percentage thickness is rejected up front rather than silently falling back to the
+            // initial "medium" width the cascade would otherwise leave in place - checked before
+            // MarkTerminal() so a rejected call leaves the container's terminal slot unused.
+            if (dashed && thickness.Unit == PdfLengthUnit.Percent)
+                throw new ArgumentException("A dashed line's thickness cannot be a percentage - border width has no percentage form.", nameof(thickness));
+
             MarkTerminal();
             var line = CssPropertyFactory.CreateAnonymousBox(box);
             properties.Set(line, "display", "block");
-            properties.Set(line, "height", thickness);
-            properties.Set(line, "background-color", color ?? PdfColor.Black);
+
+            if (dashed)
+            {
+                // A dashed rule can't come from background-color (a solid fill has no dash pattern of
+                // its own) - drawn instead as a single dashed top border edge on a zero-height box, the
+                // same border-style machinery BordersDrawHandler already paints dotted/dashed borders
+                // through (see SetBorderEdge for the solid-border equivalent of this cascade shape).
+                properties.Set(line, "height", "0");
+                properties.Set(line, "border-top-width", thickness);
+                properties.Set(line, "border-top-style", "dashed");
+                properties.Set(line, "border-top-color", color ?? PdfColor.Black);
+            }
+            else
+            {
+                properties.Set(line, "height", thickness);
+                properties.Set(line, "background-color", color ?? PdfColor.Black);
+            }
         }
 
-        public void LineVertical(PdfLength thickness, PdfColor? color = null)
+        public void LineVertical(PdfLength thickness, PdfColor? color = null, bool dashed = false)
         {
+            if (dashed && thickness.Unit == PdfLengthUnit.Percent)
+                throw new ArgumentException("A dashed line's thickness cannot be a percentage - border width has no percentage form.", nameof(thickness));
+
             MarkTerminal();
             var line = CssPropertyFactory.CreateAnonymousBox(box);
             properties.Set(line, "display", "block");
-            properties.Set(line, "width", thickness);
-            properties.Set(line, "background-color", color ?? PdfColor.Black);
+
+            if (dashed)
+            {
+                properties.Set(line, "width", "0");
+                properties.Set(line, "border-left-width", thickness);
+                properties.Set(line, "border-left-style", "dashed");
+                properties.Set(line, "border-left-color", color ?? PdfColor.Black);
+            }
+            else
+            {
+                properties.Set(line, "width", thickness);
+                properties.Set(line, "background-color", color ?? PdfColor.Black);
+            }
         }
 
         public void Row(Action<IRowDescriptor> handler)
