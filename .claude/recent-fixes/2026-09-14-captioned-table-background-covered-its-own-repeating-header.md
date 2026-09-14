@@ -41,6 +41,24 @@ the same arithmetic to put them back into the *emitted* order instead, correctly
 footer's index being expressed relative to the header-already-removed list rather than the fully
 original one.
 
+## A "defensive" trailing branch that was actually dead code
+
+The merge first shipped with a *second* fallback: a loop after the main `box.Boxes` walk to catch a
+detached capture whose `SourceIndex` never satisfied the walk's own `<=` check against a later entry
+(reasoned as "a repeating `<tfoot>` with nothing after it in the markup"). CI's diff-coverage gate
+(which aggregates net8.0 + net10.0 + the CLI and source-generator test projects, and so is stricter
+than a single-framework local run) caught it as unreached — confirmed directly by instrumenting it
+with a `Console.WriteLine` and finding zero hits across the whole suite, including a fixture
+purpose-built to trigger it (`<thead>`, `<tbody>`, then `<tfoot>` last, no caption). The reason: a
+`CssProxyBox` is *itself* always one of `box.Boxes`' own entries (appended by `CreateHeaderProxy`/
+`CreateFooterProxy`), so whenever a slot has a detached capture at all, at least one proxy for it is
+already sitting in `box.Boxes` — meaning the main walk's own `boxIndex` loop always reaches far
+enough to satisfy every pending capture before running out of entries. The branch was never
+reachable under this invariant, not just untested by coincidence. Removed it and folded its "still
+not yielded" condition into the one real fallback (a `bool[]` tracking which fragmentainers the main
+walk actually yielded, replacing the narrower "`SourceIndex` was never recorded" check) — one
+fallback block instead of two, and it restored 100% diff coverage on the changed lines.
+
 ## Evidence
 
 Verified against unmodified `main` with a small console harness (printing each box as it's
@@ -49,17 +67,19 @@ header/footer/tbody/caption order `main` already produces — main's own order i
 tbody, caption` (the grid decoration box's background is simply spliced in ahead of all of them by
 the bug), not `thead, tbody, tfoot, caption` as markup order alone would suggest; footer landing
 before the body and caption landing last are both pre-existing, unrelated `_tableBox.Boxes`
-ordering facts, not something this fix introduced or needed to change. Confirmed the wrong (v1)
-anchor by reverting to it and rerunning the test suite: it reproduces exactly the failure a review
-pass found, with the header painting after the body row. Two new regression tests
+ordering facts (traced to `<tfoot>` sitting before `<tbody>` in that fixture's own markup — a
+separate, out-of-scope question of whether this engine should reposition a source-order-early
+`<tfoot>` to the visual bottom the way browsers do), not something this fix introduced or needed to
+change. Confirmed the wrong (v1) anchor by reverting to it and rerunning the test suite: it
+reproduces exactly the failure a review pass found, with the header painting after the body row.
+Three regression tests
 (`CssLayoutEngineTableTests.TableCaption_TableHasOwnBackgroundAndRepeatingHeader_BackgroundPaintsBeforeHeaderText`,
-asserting both background-before-header *and* header-before-body; and
+asserting both background-before-header *and* header-before-body; and two in
 `RepeatingHeaderFooterCaptionBackgroundPaintOrderTests`, the same shape across every page of a
-multi-page table with both a repeating header and footer) each fail on the pre-fix code and pass
-after. Full `PeachPDF.Tests` suite on net8.0: green (one unrelated, pre-existing, environment-sensitive
-memory-ratio benchmark test also fails identically on unmodified `main`). The
-`PEACHPDF_VERIFY_FRAGMENT_PRUNING=1` pruning-parity oracle, scoped to every repeating-header/
-multicolumn/proxy-box test file this change touches: green. Solution-wide `dotnet build
-PeachPDF.slnx -t:Rebuild`: 0 warnings. Diff coverage against `origin/main`: 91% (the only uncovered
-lines are a defensive "capture with no matching proxy" fallback that current invariants say should
-be unreachable).
+multi-page table with both a repeating header and footer, plus one with `<tfoot>` genuinely last in
+the markup) each fail on the pre-fix code and pass after. Full `PeachPDF.Tests` suite on net8.0:
+green (one unrelated, pre-existing, environment-sensitive memory-ratio benchmark test also fails
+identically on unmodified `main`). The `PEACHPDF_VERIFY_FRAGMENT_PRUNING=1` pruning-parity oracle,
+scoped to every repeating-header/multicolumn/proxy-box test file this change touches: green.
+Solution-wide `dotnet build PeachPDF.slnx -t:Rebuild`: 0 warnings. Diff coverage against
+`origin/main`: 100%.

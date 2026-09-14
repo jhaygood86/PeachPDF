@@ -2645,6 +2645,7 @@ namespace PeachPDF.Html.Core.Fragmentation
 
                     var pendingCursor = 0;
                     var originalIndex = 0;
+                    var detachedYielded = new bool[fragmentainers.Count];
 
                     for (var boxIndex = 0; boxIndex < box.Boxes.Count; boxIndex++)
                     {
@@ -2653,6 +2654,7 @@ namespace PeachPDF.Html.Core.Fragmentation
                         {
                             var fi = pendingDetached[pendingCursor].FragmentainerIndex;
                             yield return (fragmentainers[fi].DetachedSourceRoot!, fragmentainers[fi].Geometry, fragmentainers[fi], fi + 1);
+                            detachedYielded[fi] = true;
                             pendingCursor++;
                         }
                         originalIndex++;
@@ -2668,24 +2670,15 @@ namespace PeachPDF.Html.Core.Fragmentation
                             yield return (childBox, snapshot, null, instance);
                     }
 
-                    // A detached-source-root group that was last in the table (a repeating <tfoot> with no
-                    // trailing sibling) never satisfies the loop's own <= check against a later box.Boxes
-                    // entry - there isn't one - so it is still owed here, in SourceIndex order.
-                    while (pendingCursor < pendingDetached.Count)
-                    {
-                        var fi = pendingDetached[pendingCursor].FragmentainerIndex;
-                        yield return (fragmentainers[fi].DetachedSourceRoot!, fragmentainers[fi].Geometry, fragmentainers[fi], fi + 1);
-                        pendingCursor++;
-                    }
-
-                    // A detached-source-root capture whose proxy is no longer in box.Boxes, or whose
-                    // SourceIndex was never recorded (should not happen - RemoveHeaderFooterFromTree always
-                    // leaves a proxy behind, with a real index, for a page it recorded a capture for - but
-                    // silently dropping the header/footer would be worse than this defensive fallback)
-                    // still gets painted, at the position it always used to be emitted.
+                    // A detached-source-root capture the walk above never reached - no matching proxy left
+                    // in box.Boxes at all (SourceIndex unrecorded), or, in principle, a SourceIndex at or
+                    // past the end of the table's own current child list (defensive - should not happen,
+                    // since the very proxy that recorded a valid SourceIndex is itself always one of
+                    // box.Boxes' own entries, so the walk above always reaches far enough to find it) -
+                    // still gets painted, appended at the end, rather than silently dropped.
                     for (var i = 0; i < fragmentainers.Count; i++)
                     {
-                        if (fragmentainers[i].DetachedSourceRoot is { } sourceRoot && detachedSourceIndex[i] < 0)
+                        if (fragmentainers[i].DetachedSourceRoot is { } sourceRoot && !detachedYielded[i])
                             yield return (sourceRoot, fragmentainers[i].Geometry, fragmentainers[i], i + 1);
                     }
 

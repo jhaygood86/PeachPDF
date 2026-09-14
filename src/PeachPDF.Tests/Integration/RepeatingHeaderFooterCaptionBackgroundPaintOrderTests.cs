@@ -85,5 +85,56 @@ namespace PeachPDF.Tests.Integration
             var proxies = LayoutHarness.Descendants(root).OfType<CssProxyBox>().ToList();
             Assert.True(proxies.Count >= headerPages, $"expected one header proxy per repeating page, got {proxies.Count}");
         }
+
+        /// <summary>
+        /// No caption (so no decoration box) and markup order <c>&lt;thead&gt;</c>, <c>&lt;tbody&gt;</c>,
+        /// <c>&lt;tfoot&gt;</c> - the shape that puts the repeating <c>&lt;tfoot&gt;</c>'s own
+        /// <see cref="CssProxyBox.SourceIndex"/> past every other child still left in the table's own
+        /// child list, so <c>FragmentEmitter.ChildrenOf</c>'s merge never finds a later box.Boxes entry to
+        /// yield it ahead of and has to fall back to its own trailing "still owed" loop - unlike the
+        /// sibling test above, whose fixture puts <c>&lt;tfoot&gt;</c> before <c>&lt;tbody&gt;</c> in
+        /// markup and a caption after everything, so its own footer is always caught mid-walk instead.
+        /// </summary>
+        [Fact]
+        public async Task RepeatingFooterWithNothingAfterItInMarkup_StillPaintsAfterTheBodyRows()
+        {
+            var html = LayoutHarness.Wrap(
+                "<table style='width:100%'>" +
+                "<thead><tr><th>HEADERMARKER</th></tr></thead>" +
+                "<tbody>" +
+                string.Join("", Enumerable.Range(1, 20).Select(i =>
+                    $"<tr><td style='height:14pt;padding:0'>Row {i}</td></tr>")) +
+                "</tbody>" +
+                "<tfoot><tr><td>FOOTERMARKER</td></tr></tfoot>" +
+                "</table>");
+
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageHeight: PageHeight, margin: Margin);
+
+            var pages = container.FragmentTree!.Fragmentainers.Count;
+            Assert.True(pages >= 2, $"fixture must span at least two pages, got {pages}");
+
+            var footerPages = 0;
+
+            for (var page = 0; page < pages; page++)
+            {
+                var g = new TestRecordingGraphics();
+                FragmentPaintHarness.PaintPage(container, g, page);
+
+                var bodyIndex = g.Log.FindIndex(c =>
+                    c is TestRecordingGraphics.DrawStringCall s && s.Text.Contains("Row"));
+                var footerIndex = g.Log.FindIndex(c =>
+                    c is TestRecordingGraphics.DrawStringCall s && s.Text.Contains("FOOTERMARKER"));
+
+                if (footerIndex < 0) continue;
+                footerPages++;
+
+                Assert.True(bodyIndex >= 0, $"page {page}: footer painted but no body row did");
+                Assert.True(bodyIndex < footerIndex,
+                    $"page {page}: body row (index {bodyIndex}) must paint before the footer " +
+                    $"(index {footerIndex}), matching <tbody> preceding <tfoot> in the markup");
+            }
+
+            Assert.True(footerPages > 0, "expected the footer to repeat on at least one page");
+        }
     }
 }
