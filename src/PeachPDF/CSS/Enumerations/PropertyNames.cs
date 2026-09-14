@@ -188,6 +188,7 @@ namespace PeachPDF.CSS
         public static readonly string LayoutGridLine = "layout-grid-line";
         public static readonly string Left = "left";
         public static readonly string LetterSpacing = "letter-spacing";
+        public static readonly string LineClamp = "line-clamp";
         public static readonly string LineHeight = "line-height";
         public static readonly string ListStyleImage = "list-style-image";
         public static readonly string ListStylePosition = "list-style-position";

@@ -73,6 +73,21 @@ namespace PeachPDF.Html.Core.Entities
         public InlineBreakToken? Break { get; set; }
 
         /// <summary>
+        /// Set once <c>line-clamp</c> (CSS Overflow 4 §line-clamp) has appended its generated ellipsis
+        /// word to the block's last visible line and the walk must stop right there. Deliberately a
+        /// separate flag from <see cref="Break"/> rather than reusing it: <see cref="Break"/> means "this
+        /// fragmentainer is full, a later pass resumes the remaining content elsewhere" and round-trips
+        /// through an <see cref="InlineBreakToken"/> a future pass expects to consume — a clamped block's
+        /// content is not paused, it is permanently done, so <c>CreateLineBoxes</c> must take its
+        /// ordinary non-paginated finish (as if the content had simply ended) once this is set, the same
+        /// way it already does whenever <see cref="Break"/> is null. Every recursive <see cref="Break"/>-
+        /// propagation checkpoint in <see cref="CssLayoutEngine.FlowBox"/> also checks this flag, for
+        /// exactly the same "stop walking now" reason, without taking <see cref="Break"/>'s "resume later"
+        /// meaning.
+        /// </summary>
+        public bool ClampedStop { get; set; }
+
+        /// <summary>
         /// Whether the line currently being built already ends in a hyphenation split — tracked so the
         /// wrap that closes it can fold that into <see cref="ConsecutiveHyphenatedLines"/> before starting
         /// the next line. Reset to false whenever a new line starts.

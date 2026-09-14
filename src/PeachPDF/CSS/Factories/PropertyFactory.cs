@@ -337,6 +337,7 @@ namespace PeachPDF.CSS
 
             AddLonghand(PropertyNames.Left, () => new LeftProperty(), true);
             AddLonghand(PropertyNames.LetterSpacing, () => new LetterSpacingProperty());
+            AddLonghand(PropertyNames.LineClamp, () => new LineClampProperty());
             AddLonghand(PropertyNames.LineHeight, () => new LineHeightProperty(), true);
 
             AddShorthand(PropertyNames.ListStyle, () => new ListStyleProperty(),
