@@ -36,6 +36,18 @@ namespace PeachPDF.Html.Adapters
         public abstract double UnderlineOffset { get; }
 
         /// <summary>
+        /// The font's own real underline-stroke thickness (OpenType <c>post.underlineThickness</c>,
+        /// scaled to this font's size the same way <see cref="UnderlineOffset"/> is), consulted only when
+        /// CSS <c>text-decoration-thickness: from-font</c> is used (CSS Text Decoration 4 §3.3) - the
+        /// property's initial value (<c>auto</c>) deliberately does not read this, to preserve this
+        /// engine's pre-existing fixed decoration-line thickness exactly. Defaults to <c>1</c> (this
+        /// engine's own pre-existing hardcoded decoration thickness), mirroring <see cref="NormalLineHeight"/>'s
+        /// pattern of a plain default for every <see cref="RFont"/> except the OpenType-descriptor-backed
+        /// adapter, which overrides it with the font's real metric.
+        /// </summary>
+        public virtual double UnderlineThickness => 1;
+
+        /// <summary>
         /// Get the ascent, in pixels, of the font — the distance from the top of the font's
         /// line box down to its baseline.
         /// </summary>
