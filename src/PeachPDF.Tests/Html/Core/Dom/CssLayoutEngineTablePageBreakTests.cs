@@ -755,13 +755,17 @@ namespace PeachPDF.Tests.Html.Core.Dom
             // Use the materialized fragment list rather than re-deriving its last page from whole-box
             // geometry, which can sit just beyond a page boundary without creating another fragment.
             var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
-            var lastPage = container.FragmentTree.Fragmentainers[lastPageIndex];
+            var tableFragment = FragmentPaintHarness.FragmentOf(container, table, lastPageIndex);
+            var tableLine = Assert.Single(tableFragment.Lines);
+            Assert.True(tableFragment.IsLastFragment);
             _output.WriteLine($"Table.ActualBottom={table.ActualBottom}, lastPageIndex={lastPageIndex}");
 
-            // Paint uses fragmentainer-local coordinates. LocalOriginY includes the first page's top
-            // margin, unlike lastPageIndex * pageHeight, so it remains correct when the table's final edge
-            // falls near the bottom of a later page.
-            var expectedBottomBorderY = table.ActualBottom - lastPage.LocalOriginY;
+            // Paint starts from the materialized fragment's local decoration rectangle, then caps a
+            // paginated table at the recorded end of this slice. Whole-box geometry is not authoritative
+            // here: font metrics can leave ActualBottom beyond the final materialized page.
+            var expectedBottomBorderY = tableLine.Rect.Bottom;
+            if (table.PageBreakBottoms?.TryGetValue(tableFragment.FragmentainerIndex, out var pageBreakBottom) == true)
+                expectedBottomBorderY = Math.Min(expectedBottomBorderY, pageBreakBottom - tableFragment.OriginY);
             _output.WriteLine($"Expected bottom border near Y={expectedBottomBorderY}");
 
             var adapter = new PeachPDF.Adapters.PdfSharpAdapter();
