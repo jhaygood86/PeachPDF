@@ -7,6 +7,9 @@
 
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+    <!-- Showcase-only dependency (for the declarative_api showcase's ScottPlot examples) - never
+         referenced by the shipping PeachPDF library or its tests. -->
+    <PackageReference Include="ScottPlot" Version="5.1.59" />
   </ItemGroup>
 
   <ItemGroup>

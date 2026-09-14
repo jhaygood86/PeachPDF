@@ -154,8 +154,36 @@ namespace PeachPDF.Layout
         /// <summary>Places an image loaded from a local file path. Terminal - may be called at most once.</summary>
         void Image(string filePath);
 
-        /// <summary>Places a reusable <see cref="PdfImage"/> - pass the same instance to more than one container to place it in multiple places without reloading its source. Terminal - may be called at most once.</summary>
+        /// <summary>Places a reusable <see cref="PdfImage"/> - pass the same instance to more than one container to place it in multiple places without reloading/redecoding its source. Works for a shared SVG source too - <see cref="PdfImage"/> detects the format automatically, same as the other overloads. Terminal - may be called at most once.</summary>
         void Image(PdfImage image);
+
+        /// <summary>
+        /// Places an image generated on demand, at exactly this container's own resolved size, once that
+        /// size is known - <paramref name="generator"/> receives it as a <see cref="PdfSize"/>. Requires
+        /// this container to have (or inherit, via the default <c>width:100%;height:100%</c> this fills
+        /// with) a definite size: an explicit <see cref="Width"/>/<see cref="Height"/> on it, or an
+        /// ancestor that already has one - a container with no definite size anywhere in its ancestry
+        /// throws <see cref="InvalidOperationException"/> once layout reaches it. Useful for a chart or
+        /// other generated graphic that should render at its actual placed resolution rather than a
+        /// guessed fixed one (mirrors QuestPDF's own dynamic-image API). Terminal - may be called at most once.
+        /// </summary>
+        void Image(Func<PdfSize, byte[]> generator);
+
+        /// <summary>Places inline SVG markup. Terminal - may be called at most once.</summary>
+        void Svg(string svgMarkup);
+
+        /// <summary>Places inline SVG markup read fully from a stream. Terminal - may be called at most once.</summary>
+        void Svg(Stream stream);
+
+        /// <summary>Places inline SVG markup loaded from raw bytes. Terminal - may be called at most once.</summary>
+        void Svg(byte[] data);
+
+        /// <summary>
+        /// Places SVG markup generated on demand, at exactly this container's own resolved size, once
+        /// that size is known - see <see cref="Image(Func{PdfSize,byte[]})"/>'s own doc comment for the
+        /// size-resolution rules, which are identical here. Terminal - may be called at most once.
+        /// </summary>
+        void Svg(Func<PdfSize, string> generator);
 
         /// <summary>Places a horizontal rule of the given thickness, filled with <paramref name="color"/> (default black), or dashed when <paramref name="dashed"/> is true. Terminal - may be called at most once.</summary>
         void LineHorizontal(PdfLength thickness, PdfColor? color = null, bool dashed = false);
