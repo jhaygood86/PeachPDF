@@ -2613,26 +2613,49 @@ namespace PeachPDF.Html.Core.Fragmentation
                         }
                     }
 
-                    // A detached-source-root capture (a repeating <thead>/<tfoot>'s page instance) stands
-                    // in for one specific box.Boxes position - the CssProxyBox RemoveHeaderFooterFromTree
-                    // left there when it detached the group - so it has to be interleaved at that position
-                    // rather than always emitted ahead of everything else. A captioned table's own grid
-                    // decoration box (CssBox.TableGridDecorationBox) sits earlier in box.Boxes than the
-                    // header/footer group did, and must still paint before it or its background covers the
-                    // header's own text (issue #1049). Matched by SourceGeometry reference identity, not by
-                    // SourceBox alone: a multi-page repeating header leaves one proxy per page it repeats
-                    // on, all sharing the same SourceBox, and RecordRepeatingGroupInstance stores exactly
-                    // the proxy's own SourceGeometry instance as this capture's Geometry (see its own
-                    // remarks) - the one thing that ties a capture back to the one proxy it came from.
-                    var detachedAnchor = FindDetachedSourceAnchors(box, fragmentainers);
+                    // A detached-source-root capture (a repeating <thead>/<tfoot>'s page instance) stands in
+                    // for one specific box.Boxes position - the one RemoveHeaderFooterFromTree took the
+                    // group out of - so it has to be interleaved there rather than always emitted ahead of
+                    // everything else. A captioned table's own grid decoration box
+                    // (CssBox.TableGridDecorationBox) sits earlier in box.Boxes than the header/footer group
+                    // did, and must still paint before it or its background covers the header's own text
+                    // (issue #1049).
+                    //
+                    // The anchor is CssProxyBox.SourceIndex, not a proxy's own *current* box.Boxes position:
+                    // CreateHeaderProxy/CreateFooterProxy's CssProxyBox constructor always appends the new
+                    // proxy to the end of _tableBox.Boxes, so on a table with ordinary rows a proxy's live
+                    // position is always after them regardless of the header/footer's real place in the
+                    // markup - anchoring to that would (and, in an earlier version of this fix, did) paint a
+                    // repeating header after the table's own body rows. SourceIndex is recorded once, before
+                    // any proxy exists, from RemoveHeaderFooterFromTree's own IndexOf calls - the header's
+                    // against the list with the decoration box already in place (EnsureGridDecorationBoxStructure
+                    // runs first) and nothing else removed yet, the footer's against that same list with the
+                    // header already taken out - exactly the reverse of the order RestoreStructureFromAnyPreviousRun
+                    // already re-inserts them in (ascending SourceIndex, lowest first) to undo this same
+                    // detachment on the tree itself; merging here mirrors that.
+                    var detachedSourceIndex = FindDetachedSourceIndices(box, fragmentainers);
+
+                    var pendingDetached = new List<(int SourceIndex, int FragmentainerIndex)>();
+                    for (var i = 0; i < fragmentainers.Count; i++)
+                    {
+                        if (fragmentainers[i].DetachedSourceRoot is not null && detachedSourceIndex[i] >= 0)
+                            pendingDetached.Add((detachedSourceIndex[i], i));
+                    }
+                    pendingDetached.Sort((a, b) => a.SourceIndex.CompareTo(b.SourceIndex));
+
+                    var pendingCursor = 0;
+                    var originalIndex = 0;
 
                     for (var boxIndex = 0; boxIndex < box.Boxes.Count; boxIndex++)
                     {
-                        for (var i = 0; i < fragmentainers.Count; i++)
+                        while (pendingCursor < pendingDetached.Count &&
+                               pendingDetached[pendingCursor].SourceIndex <= originalIndex)
                         {
-                            if (fragmentainers[i].DetachedSourceRoot is { } sourceRoot && detachedAnchor[i] == boxIndex)
-                                yield return (sourceRoot, fragmentainers[i].Geometry, fragmentainers[i], i + 1);
+                            var fi = pendingDetached[pendingCursor].FragmentainerIndex;
+                            yield return (fragmentainers[fi].DetachedSourceRoot!, fragmentainers[fi].Geometry, fragmentainers[fi], fi + 1);
+                            pendingCursor++;
                         }
+                        originalIndex++;
 
                         var childBox = box.Boxes[boxIndex];
                         if (childBox.IsFragmentWalkPlaceholder) continue;
@@ -2645,13 +2668,24 @@ namespace PeachPDF.Html.Core.Fragmentation
                             yield return (childBox, snapshot, null, instance);
                     }
 
-                    // A detached-source-root capture whose proxy is no longer in box.Boxes (should not
-                    // happen - RemoveHeaderFooterFromTree always leaves one behind for a page it recorded a
-                    // capture for - but silently dropping the header/footer would be worse than this
-                    // defensive fallback) still gets painted, at the position it always used to be emitted.
+                    // A detached-source-root group that was last in the table (a repeating <tfoot> with no
+                    // trailing sibling) never satisfies the loop's own <= check against a later box.Boxes
+                    // entry - there isn't one - so it is still owed here, in SourceIndex order.
+                    while (pendingCursor < pendingDetached.Count)
+                    {
+                        var fi = pendingDetached[pendingCursor].FragmentainerIndex;
+                        yield return (fragmentainers[fi].DetachedSourceRoot!, fragmentainers[fi].Geometry, fragmentainers[fi], fi + 1);
+                        pendingCursor++;
+                    }
+
+                    // A detached-source-root capture whose proxy is no longer in box.Boxes, or whose
+                    // SourceIndex was never recorded (should not happen - RemoveHeaderFooterFromTree always
+                    // leaves a proxy behind, with a real index, for a page it recorded a capture for - but
+                    // silently dropping the header/footer would be worse than this defensive fallback)
+                    // still gets painted, at the position it always used to be emitted.
                     for (var i = 0; i < fragmentainers.Count; i++)
                     {
-                        if (fragmentainers[i].DetachedSourceRoot is { } sourceRoot && detachedAnchor[i] < 0)
+                        if (fragmentainers[i].DetachedSourceRoot is { } sourceRoot && detachedSourceIndex[i] < 0)
                             yield return (sourceRoot, fragmentainers[i].Geometry, fragmentainers[i], i + 1);
                     }
 
@@ -2999,38 +3033,45 @@ namespace PeachPDF.Html.Core.Fragmentation
         }
 
         /// <summary>
-        /// For each of <paramref name="fragmentainers"/>, the <paramref name="box"/>.Boxes index of the
-        /// <see cref="CssProxyBox"/> whose own <see cref="CssProxyBox.SourceGeometry"/> is that capture's
-        /// <see cref="CapturedInstance.Geometry"/> - i.e. the exact page instance the capture was recorded
-        /// from (see <see cref="RecordRepeatingGroupInstance"/>) - or -1 for an entry that either is not a
-        /// detached-source-root capture or has no matching proxy left in the tree. Reference identity, not
-        /// <see cref="CapturedInstance.DetachedSourceRoot"/> equality: a multi-page repeating header leaves
-        /// one proxy per page behind in <c>box.Boxes</c>, all sharing the same source box, and only the
-        /// captured <c>SourceGeometry</c> instance ties a given capture back to the one page it came from.
+        /// For each of <paramref name="fragmentainers"/>, the <see cref="CssProxyBox.SourceIndex"/> of a
+        /// <see cref="CssProxyBox"/> in <paramref name="box"/>.Boxes whose own <see cref="CssProxyBox.SourceBox"/>
+        /// is that capture's <see cref="CapturedInstance.DetachedSourceRoot"/> - the position, among
+        /// <paramref name="box"/>'s children, the repeating group sat at before
+        /// <c>CssLayoutEngineTable.RemoveHeaderFooterFromTree</c> took it out - or -1 for an entry that
+        /// either is not a detached-source-root capture or has no matching proxy left in the tree.
         /// </summary>
-        private static int[] FindDetachedSourceAnchors(CssBox box, List<CapturedInstance> fragmentainers)
+        /// <remarks>
+        /// <see cref="CssProxyBox.SourceIndex"/> is the same value on every proxy that shares one
+        /// <see cref="CssProxyBox.SourceBox"/> - a multi-page repeating header leaves one proxy per page it
+        /// repeats on, but the header sat at exactly one place in the markup, recorded once by
+        /// <c>RemoveHeaderFooterFromTree</c> before any of those proxies existed - so unlike matching a
+        /// specific page's own capture, any surviving proxy for the same source answers this for every
+        /// capture of it.
+        /// </remarks>
+        private static int[] FindDetachedSourceIndices(CssBox box, List<CapturedInstance> fragmentainers)
         {
-            var anchors = new int[fragmentainers.Count];
-            Array.Fill(anchors, -1);
+            var indices = new int[fragmentainers.Count];
+            Array.Fill(indices, -1);
 
-            if (!fragmentainers.Exists(f => f.DetachedSourceRoot is not null)) return anchors;
+            if (!fragmentainers.Exists(f => f.DetachedSourceRoot is not null)) return indices;
 
-            for (var boxIndex = 0; boxIndex < box.Boxes.Count; boxIndex++)
+            foreach (var childBox in box.Boxes)
             {
-                if (box.Boxes[boxIndex] is not CssProxyBox proxy) continue;
+                if (childBox is not CssProxyBox proxy) continue;
 
                 for (var i = 0; i < fragmentainers.Count; i++)
                 {
-                    if (fragmentainers[i].DetachedSourceRoot is not null &&
-                        ReferenceEquals(fragmentainers[i].Geometry, proxy.SourceGeometry))
+                    if (indices[i] >= 0) continue;
+
+                    if (fragmentainers[i].DetachedSourceRoot is { } sourceRoot &&
+                        ReferenceEquals(sourceRoot, proxy.SourceBox))
                     {
-                        anchors[i] = boxIndex;
-                        break;
+                        indices[i] = proxy.SourceIndex;
                     }
                 }
             }
 
-            return anchors;
+            return indices;
         }
 
         /// <summary>
