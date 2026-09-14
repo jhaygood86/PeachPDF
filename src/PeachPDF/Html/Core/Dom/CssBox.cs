@@ -6452,6 +6452,9 @@ namespace PeachPDF.Html.Core.Dom
 
             if (ListStyleImage != null)
                 await ListStyleImage.EnsureLoadedAsync(HtmlContainer!);
+
+            if (BorderImageSource != null)
+                await BorderImageSource.EnsureLoadedAsync(HtmlContainer!);
         }
 
         /// <summary>

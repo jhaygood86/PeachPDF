@@ -130,6 +130,11 @@ namespace PeachPDF.Html.Core.Paint
         /// positioned in the unbroken box and appears wherever in the box it belongs.
         /// </description></item>
         /// <item><description>
+        /// <c>border-image-source</c>: like a background-image layer, its slices/tiling are measured
+        /// against the whole border-image area (the unbroken border box, extended by
+        /// <c>border-image-outset</c>), not one fragment's own slice of it.
+        /// </description></item>
+        /// <item><description>
         /// <c>box-shadow</c>: offsets, blur and spread are measured from the rectangle's edges.
         /// </description></item>
         /// <item><description>
@@ -148,6 +153,7 @@ namespace PeachPDF.Html.Core.Paint
         private static bool NeedsUnbrokenGeometry(CssBox box) =>
             box.IsRounded
             || box.BackgroundImages is { Count: > 0 }
+            || box.BorderImageSource != null
             || HasBoxShadow(box)
             || IsNonDefaultBackgroundClip(box.BackgroundClip);
 
