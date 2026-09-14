@@ -26,10 +26,16 @@ Load-bearing details:
   decorates exactly the lines that landed on the page being painted, with no coordinate mapping —
   fragment rectangles are already fragmentainer-local.
 - **A descendant hosted on a line box contributes its rectangles and is not descended into.** Its
-  rectangle already covers its content (an inline box's includes its padding and border; an atomic
-  inline's is its whole border box, which §2.4 draws the line across without propagating into its
-  contents). Anything else is a block whose own rectangle is its border box again — the very thing
-  this method exists to avoid reading — so it is descended into.
+  rectangle already covers its content, and an inline box's includes its padding and border, which
+  §2.4 requires: "the margins, border, and padding of descendant inline boxes are not" skipped,
+  unlike the decorating box's own. Anything else is a block whose own rectangle is its border box
+  again — the very thing this method exists to avoid reading — so it is descended into.
+- **An atomic inline is not excluded, and §2.4 says it should be.** The spec is unambiguous —
+  "Atomic inlines, such as images and inline blocks, are not decorated" — but its rectangle is
+  unioned into the span like any other line-hosted box, so the line runs through it rather than
+  breaking around it. This method preserves that deviation rather than introducing it: the block's
+  own full-width rectangle ran through the atomic inline in exactly the same way beforehand. Tracked
+  in [decoration-line-runs-through-atomic-inlines.md](../accepted-gaps/decoration-line-runs-through-atomic-inlines.md).
 - **Out-of-flow descendants are skipped** (`CssBox.IsOutOfFlow`), per the same section.
 - **`PaintDecoration` gained `ownDecorationArea`.** A propagated span is inline content geometry,
   already inside the box's padding; the padding/border insets (`hasLeftEdge`/`hasRightEdge`) and the
@@ -41,10 +47,12 @@ Load-bearing details:
 ## Found by running it, not by reading it
 
 - An opaque atomic inline (an `<img>`, an inline-block with a background) **covers** the propagated
-  line, because the decoration is painted with the block and the atomic inline paints later. With the
-  background removed the same line is continuous underneath, so the geometry is right and only the
-  existing stacking order shows through. Not changed here — that is CSS 2.1 Appendix E's order, not
-  this fix's business.
+  line, because the decoration is painted with the block and the atomic inline paints later. Take the
+  background away and the line is continuous underneath — which is the §2.4 deviation above, not a
+  paint-order curiosity. This is worth knowing precisely because it makes the deviation nearly
+  invisible in a rendered page: the common atomic inlines paint opaque content exactly where the line
+  wrongly is, so a rasterized check shows the gap the spec wants and hides the reason it is there.
+  Reading the content stream, or giving the atomic inline `opacity: 0`, is what exposes it.
 - Union-of-tops for the line's y-position was the worry (a tall inline-block or a baseline-aligned
   image would drag the union's top upward and lift the line). Rasterizing both cases showed the line
   still at text level, so no per-span y heuristic was added. If this ever does bite, the fix is a y

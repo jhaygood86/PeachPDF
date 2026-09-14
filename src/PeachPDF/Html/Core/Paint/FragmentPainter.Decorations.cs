@@ -561,12 +561,21 @@ namespace PeachPDF.Html.Core.Paint
         /// <para>
         /// The spans come from the fragment tree rather than the box tree, so a block broken across pages
         /// decorates exactly the lines that landed on the page being painted. Each descendant that is
-        /// hosted on a line box already carries its content as per-line rectangles (an inline box's own,
-        /// including any padding and border; an atomic inline's whole border box, which §2.4 draws the
-        /// line across without propagating into its contents) - so such a fragment contributes its
-        /// rectangles and is not descended into. Anything else is a block-level box whose own rectangle
-        /// is its border box again, and is descended into for the same reason this method exists.
-        /// Out-of-flow descendants are skipped outright, per the same section.
+        /// hosted on a line box already carries its content as per-line rectangles - an inline box's own,
+        /// including its padding and border, which §2.4 requires ("the margins, border, and padding of
+        /// descendant inline boxes are not" skipped, unlike the decorating box's own) - so such a
+        /// fragment contributes its rectangles and is not descended into. Anything else is a block-level
+        /// box whose own rectangle is its border box again, and is descended into for the same reason
+        /// this method exists. Out-of-flow descendants are skipped outright, per the same section.
+        /// </para>
+        /// <para>
+        /// An atomic inline is <b>not</b> excluded here, and §2.4 says it should be: "Atomic inlines,
+        /// such as images and inline blocks, are not decorated." Its rectangle is unioned into the span
+        /// like any other line-hosted box, so the line runs through it instead of breaking around it.
+        /// That is a pre-existing deviation this method preserves rather than introduces - before it,
+        /// the block's own full-width rectangle ran through the atomic inline just the same - and it is
+        /// usually invisible only because an atomic inline paints opaque content over the line. See
+        /// <c>.claude/accepted-gaps/decoration-line-runs-through-atomic-inlines.md</c>.
         /// </para>
         /// </remarks>
         private static void PaintPropagatedDecoration(RGraphics g, CssBox box, BoxFragment fragment, RRect clip)
