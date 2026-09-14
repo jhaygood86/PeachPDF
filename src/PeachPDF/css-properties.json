@@ -556,6 +556,69 @@
       }
     },
     {
+      "name": "border-image-source",
+      "comment": "CSS Backgrounds and Borders 3 <13>: none | <image>. Parses into a structurally different field (a single CssImage, not a list) via a custom setter, mirroring background-image's own custom-setter pattern; cssDataType 'cssom-grammar' calls the same Converters.OptionalImageSourceConverter.Convert real grammar background-image and this property's own CSS-OM BorderImageSourceProperty already use, so validation and application share one parser rather than a second, independently-derived one.",
+      "inherited": false,
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.Converters.OptionalImageSourceConverter.Convert" },
+      "html": {
+        "propertyPath": "BorderImageSource",
+        "csharpDataType": "CssImage?",
+        "area": "BorderArea",
+        "customSetter": "{box}.BorderImageSource = {parser}.ParseImage({value});",
+        "hasGetter": false,
+        "snapshot": false
+      }
+    },
+    {
+      "name": "border-image-slice",
+      "comment": "CSS Backgrounds and Borders 3 <13>: [<number-percentage>{1,4} && fill?]. Stored as the raw declared string (like background-size/background-repeat) rather than eagerly resolved - a slice value has no meaning until border-image-source's own natural/concretized size is known at paint time, which BorderImageLayerResolver.ResolveSlice re-derives from this same string using the identical component grammar BorderImageSliceProperty.TheConverter (this cssDataType's own validator) already parses, per the 'don't write two independent parsers' convention.",
+      "inherited": false,
+      "initialValue": "100%",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BorderImageSliceProperty.TheConverter.Convert" },
+      "html": {
+        "propertyPath": "BorderImageSlice",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-image-width",
+      "comment": "CSS Backgrounds and Borders 3 <13>: [<length-percentage> | <number> | auto]{1,4}. Stored as the raw declared string for the same reason border-image-slice is - BorderImageLayerResolver.ResolveWidth resolves it against the box's own border widths/border-box size at paint time, reusing BorderImageWidthProperty.TheConverter's grammar.",
+      "inherited": false,
+      "initialValue": "1",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BorderImageWidthProperty.TheConverter.Convert" },
+      "html": {
+        "propertyPath": "BorderImageWidth",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-image-outset",
+      "comment": "CSS Backgrounds and Borders 3 <13>: [<length> | <number>]{1,4}. Stored as the raw declared string for the same reason border-image-slice is - BorderImageLayerResolver.ResolveOutset resolves it against the box's own border widths at paint time, reusing BorderImageOutsetProperty.TheConverter's grammar. That CSS-OM grammar also accepts a percentage (pre-existing, tested CSS-OM-layer behavior broader than the spec's own length|number grammar - not introduced or corrected here); the resolver honors one if declared, against the same axis's border width.",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BorderImageOutsetProperty.TheConverter.Convert" },
+      "html": {
+        "propertyPath": "BorderImageOutset",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "border-image-repeat",
+      "comment": "CSS Backgrounds and Borders 3 <13>: [stretch | repeat | round | space]{1,2}. 'space' is missing from Map.BorderRepeatModes/the BorderRepeat enum entirely (a pre-existing CSS-OM gap, not introduced here - see the accepted-gap note), so it is never a value BorderImageLayerResolver.ResolveRepeat actually sees. Stored as the raw declared string for the same reason border-image-slice is.",
+      "inherited": false,
+      "initialValue": "stretch",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachPDF.CSS.BorderImageRepeatProperty.TheConverter.Convert" },
+      "html": {
+        "propertyPath": "BorderImageRepeat",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
       "name": "box-shadow",
       "comment": "cssDataType 'cssom-grammar' calls BoxShadowGrammar.TryParse directly - the same grammar CssBox.PaintBoxShadows already calls at render time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none' - see its own doc comment).",
       "inherited": false,

@@ -301,6 +301,25 @@ Percentages are relative to the border-box width (horizontal radius) and height 
 
 Known limitation: `double`/`groove`/`ridge` combined with `border-radius` on the same edge falls back to a single solid-colored stroke at the full border width — full rounded rendering of these three styles (two concentric arcs, or a two-tone beveled arc) is out of scope for CSS1 compliance.
 
+### Border Image
+
+| Property | MDN Reference | Notes |
+|----------|--------------|-------|
+| `border-image` | [border-image](https://developer.mozilla.org/en-US/docs/Web/CSS/border-image) | Shorthand for the five longhands below |
+| `border-image-source` | [border-image-source](https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-source) | `none`, or any `<image>` — a `url()` (raster or SVG), or a `linear-gradient()`/`radial-gradient()`/`conic-gradient()` (including their `repeating-` forms) |
+| `border-image-slice` | [border-image-slice](https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-slice) | 1–4 `<number>`/`<percentage>` values plus the optional `fill` keyword, in any order |
+| `border-image-width` | [border-image-width](https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-width) | 1–4 values, each `<length>`, `<percentage>`, `<number>`, or `auto` |
+| `border-image-outset` | [border-image-outset](https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-outset) | 1–4 values, each `<length>` or `<number>` |
+| `border-image-repeat` | [border-image-repeat](https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-repeat) | 1–2 keywords: `stretch` (default), `repeat`, `round` |
+
+The source image is sliced into nine regions per the standard algorithm: the four corners are placed unchanged (scaled independently on each axis to fit `border-image-width`, but never tiled); the four edges are stretched or tiled along their one free axis per `border-image-repeat`; the center is painted, tiled the same way on both axes, only when `fill` is declared. A gradient or SVG source has no natural size of its own, so it is rendered once at the size of the border-image area itself (the border box, extended by `border-image-outset`) before slicing — `border-image-slice` percentages on such a source are therefore always relative to that area, not to some other intrinsic size. Once `border-image-source` resolves to a real, loaded image, it replaces `border-style`'s own stroke entirely for that box; an unset or failed-to-load source falls back to painting the ordinary border as if `border-image` were never declared.
+
+Known limitations:
+
+- `border-image-repeat: round` is accepted but renders identically to `repeat` (plain edge-to-edge tiling, not resized to fit an integer number of tiles evenly) — the same simplification this engine's `background-repeat: round` already makes.
+- `border-image-repeat: space` is not recognized as a value at all (an unrelated, pre-existing gap in the underlying keyword table) — a declaration using it is invalid and the property keeps its previous/initial value.
+- `border-image-outset` accepts a `<percentage>` component (resolved against the same side's own border width) — broader than the specification's `<length> | <number>` grammar, a pre-existing behavior at the parsing layer.
+
 ### Outline
 
 | Property | MDN Reference | Notes |
@@ -814,7 +833,6 @@ Limitations:
 - A page break is decided against the text itself rather than the line box around it, so the **half** of a large `line-height`'s leading that falls below the last line on a page is not counted. A cloned bottom border can therefore sit within that half-leading. Ordinary line heights leave this invisible.
 - An inline box that wraps *and* is split at a column boundary has its unbroken width measured within each column rather than across both, so a gradient on such a box restarts in the second column. A block-level box is unaffected, and so is an inline box that only crosses page breaks.
 - Where a line box of an inline straddles a page boundary, that one line's decoration slice is drawn on both pages: once in its own place, and once near the top of the following page. Under `slice` the second copy is usually a thin band, partly clipped by the page edge; under `clone` it is a complete closed frame, drawn entirely inside the following page's content.
-- `border-image` is parsed but never painted, so §6.2's treatment of it has no visible effect either way. A replaced element (an image, an inline `<svg>`, an `<iframe>`) is never split at all, so it always paints its whole box regardless of the value.
 
 ### Tables
 

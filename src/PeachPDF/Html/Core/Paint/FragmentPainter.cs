@@ -555,8 +555,16 @@ namespace PeachPDF.Html.Core.Paint
                 // border instead, at the grid's own rect (CssBox.SuppressOwnBorderPaint, issue #721).
                 if (!box.SuppressOwnBorderPaint)
                 {
-                    BordersDrawHandler.DrawBoxBorders(g, box, rectForBorders,
-                        geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge);
+                    // border-image (CSS Backgrounds & Borders 3 §13) replaces the ordinary border-style
+                    // stroke entirely once its source resolves to a real, loaded image - falls back to
+                    // BordersDrawHandler whenever there is no border-image-source, or its image failed to
+                    // load (TryDrawBorderImage returns false either way, same as border-image not being
+                    // declared at all).
+                    if (!BorderImageDrawHandler.TryDrawBorderImage(g, box, rectForBorders))
+                    {
+                        BordersDrawHandler.DrawBoxBorders(g, box, rectForBorders,
+                            geometry.HasLeftEdge, geometry.HasRightEdge, geometry.HasTopEdge, geometry.HasBottomEdge);
+                    }
                 }
 
                 if (geometry.NeedsClip) g.PopClip();
