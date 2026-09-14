@@ -141,10 +141,13 @@ namespace PeachPDF.Tests.Integration
 
             var pdfText = await GetPdfText(html);
 
-            // Stroke color (0xC0,0x39,0x2B -> 0.753/0.224/0.169) must appear; pure black fill (the
-            // wrong, pre-fix behavior) must not.
+            // Stroke color (0xC0,0x39,0x2B -> 0.753/0.224/0.169) must appear. PDF page/form
+            // setup may set an unused black fill color, so check for an actual fill operator instead.
             Assert.Contains("0.753", pdfText);
-            Assert.DoesNotContain("0 0 0 rg", pdfText);
+            var formStream = Regex.Match(pdfText, @"/Subtype /Form.*?stream\r?\n(.*?)\r?\nendstream",
+                RegexOptions.Singleline).Groups[1].Value;
+            Assert.NotEmpty(formStream);
+            Assert.DoesNotContain("\nf\n", formStream);
         }
 
         [Fact]

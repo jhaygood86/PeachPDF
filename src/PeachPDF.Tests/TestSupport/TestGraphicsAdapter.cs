@@ -209,7 +209,18 @@ namespace PeachPDF.Tests.TestSupport
         public sealed record DrawPolygonCall(RColor Color, RPoint[] Points);
         public sealed record PushClipCall(RRect Rect);
         public sealed record PopClipCall;
-        public sealed record DrawImageCall(RImage Image, RRect DestRect);
+        /// <param name="SrcRect">
+        /// The portion of the source the call asked for, in the image's own natural units - null for the
+        /// whole-image overload. Recorded because a border-image slice is defined entirely by WHICH part of
+        /// the source it draws: a mock that only kept the destination could not tell a correct 9-slice from
+        /// one drawing the whole image into every region, which is exactly how that shipped once.
+        /// </param>
+        /// <param name="Interpolate">
+        /// The image's smoothing flag AS OF this call - it is toggled around a draw and restored
+        /// afterwards, so reading it off the image once painting is over says nothing about what the draw
+        /// actually asked for.
+        /// </param>
+        public sealed record DrawImageCall(RImage Image, RRect DestRect, RRect? SrcRect = null, bool Interpolate = false);
         public sealed record PushBlendModeCall(RBlendMode Mode);
         public sealed record PopBlendModeCall;
         public sealed record PushTransformCall(RMatrix Matrix);
@@ -397,13 +408,13 @@ namespace PeachPDF.Tests.TestSupport
         }
         public override void DrawImage(RImage image, RRect destRect, RRect srcRect)
         {
-            var call = new DrawImageCall(image, destRect);
+            var call = new DrawImageCall(image, destRect, srcRect, image.Interpolate);
             DrawImageCalls.Add(call);
             Log.Add(call);
         }
         public override void DrawImage(RImage image, RRect destRect)
         {
-            var call = new DrawImageCall(image, destRect);
+            var call = new DrawImageCall(image, destRect, null, image.Interpolate);
             DrawImageCalls.Add(call);
             Log.Add(call);
         }

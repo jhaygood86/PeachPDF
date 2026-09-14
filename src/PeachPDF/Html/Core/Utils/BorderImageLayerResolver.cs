@@ -34,7 +34,18 @@ namespace PeachPDF.Html.Core.Utils
         /// the same way <see cref="ResolveWidth"/> reduces opposite <c>border-image-width</c> values against
         /// the border-image area.
         /// </summary>
-        internal static BorderImageSlice ResolveSlice(string sliceValue, double naturalWidth, double naturalHeight)
+        /// <param name="sliceValue">The declared <c>border-image-slice</c> string, as cascaded onto the box.</param>
+        /// <param name="naturalWidth">The source image's natural width, the basis for the left/right slices.</param>
+        /// <param name="naturalHeight">The source image's natural height, the basis for the top/bottom slices.</param>
+        /// <param name="numberUnit">
+        /// How much of <paramref name="naturalWidth"/>/<paramref name="naturalHeight"/> one bare
+        /// <c>&lt;number&gt;</c> is worth: 1 for a raster source, whose natural size is already counted in
+        /// the same device pixels the spec's number counts, and <c>Length.PointsPerPx</c> for a vector or
+        /// generated source, whose natural size is in layout points while a number is still a vector
+        /// coordinate / CSS pixel. Percentages are unaffected - they are relative either way.
+        /// </param>
+        internal static BorderImageSlice ResolveSlice(string sliceValue, double naturalWidth, double naturalHeight,
+            double numberUnit = 1)
         {
             var components = CssValueParser.SplitTopLevelWhitespace(sliceValue).ToArray();
 
@@ -44,10 +55,10 @@ namespace PeachPDF.Html.Core.Utils
 
             var (top, right, bottom, left) = ExpandFourSided(numeric);
 
-            var sliceTop = ResolveSliceComponent(top, naturalHeight);
-            var sliceRight = ResolveSliceComponent(right, naturalWidth);
-            var sliceBottom = ResolveSliceComponent(bottom, naturalHeight);
-            var sliceLeft = ResolveSliceComponent(left, naturalWidth);
+            var sliceTop = ResolveSliceComponent(top, naturalHeight, numberUnit);
+            var sliceRight = ResolveSliceComponent(right, naturalWidth, numberUnit);
+            var sliceBottom = ResolveSliceComponent(bottom, naturalHeight, numberUnit);
+            var sliceLeft = ResolveSliceComponent(left, naturalWidth, numberUnit);
 
             if (sliceTop + sliceBottom > naturalHeight && naturalHeight > 0)
             {
@@ -150,7 +161,7 @@ namespace PeachPDF.Html.Core.Utils
                 ? mode
                 : BorderRepeat.Stretch;
 
-        private static double ResolveSliceComponent(string component, double naturalBasis)
+        private static double ResolveSliceComponent(string component, double naturalBasis, double numberUnit)
         {
             if (component.EndsWith('%'))
             {
@@ -159,7 +170,7 @@ namespace PeachPDF.Html.Core.Utils
                     : naturalBasis;
             }
 
-            return TryParseInvariant(component, out var number) ? Math.Max(0, number) : 0;
+            return TryParseInvariant(component, out var number) ? Math.Max(0, number * numberUnit) : 0;
         }
 
         private static double ResolveWidthComponent(string component, double usedBorderWidth, double areaBasis, CssBox box)

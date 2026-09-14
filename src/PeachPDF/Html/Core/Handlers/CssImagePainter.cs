@@ -188,21 +188,18 @@ namespace PeachPDF.Html.Core.Handlers
             if (tileWidth <= 0 || tileHeight <= 0)
                 return;
 
-            var tile = g.CreateTile(tileWidth, tileHeight);
-            if (tile is not { } t)
+            var image = SvgRenderer.GetOrCreateForm(g, svgDocument, tileWidth, tileHeight);
+            if (image is null)
             {
                 // No real page/document context to own a Form XObject in (e.g. a measure-only pass) -
                 // there is no untiled brush fallback for a vector image, so just skip this layer.
                 return;
             }
 
-            SvgRenderer.RenderInto(t.Graphics, svgDocument, new RRect(0, 0, tileWidth, tileHeight));
-            t.Graphics.Dispose();
-
             var positionValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(positionList), layerIndex);
             var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
             BackgroundImageDrawHandler.DrawBackgroundImage(
-                g, t.Image, Keywords.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
+                g, image, Keywords.Auto, positionValue, repeatValue, originRect, clipRect, roundedClipPath, box,
                 intrinsicSizeInCssPixels: false);
         }
 
