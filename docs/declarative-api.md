@@ -91,6 +91,12 @@ container
 
 `BorderLinearGradient(width, angleDegrees, stops)` paints a gradient border instead of a solid one. Lengths accept a bare number (points) or an explicit unit — `PdfLength.Pixels(16)`, `PdfLength.Inches(1)`, `PdfLength.Percent(50)`, `PdfLength.Em(1.5)` — resolved through PeachPDF's own CSS length parser.
 
+`LineHorizontal(thickness, color)`/`LineVertical(thickness, color)` place a simple rule — a solid-filled line by default, or `dashed: true` for a dashed one:
+
+```csharp
+container.LineHorizontal(1, PdfColor.FromHex("#BBBBBB"), dashed: true);
+```
+
 ## Text and rich text
 
 ```csharp
@@ -237,7 +243,6 @@ page.Footer(footer =>
 
 - **No standalone SVG or `Placeholder` element yet.** Both are planned; `Placeholder` needs new paint code (it has no CSS mapping at all), while standalone SVG just needs wiring to PeachPDF's existing SVG support.
 - **No sectioned page numbers** (a page count scoped to/counted from a named section) — only document-wide `CurrentPageNumber()`/`TotalPages()`.
-- **No dashed-line pattern** for `LineHorizontal`/`LineVertical` — only a solid fill or a gradient.
 - **`PdfTextDirection` has no `Auto`** — only explicit `Ltr`/`Rtl`.
 - **`ClampLines` always uses the default ellipsis** — there's no way to supply a custom truncation string.
 - **No callback-driven raster image generation, per-image compression/DPI override, or `ShrinkToFit`/`ScaleToPageSize`** for a declarative document — each of these needs a caller-provided image at a pixel size or a re-run of the whole builder callback that a hand-built tree has no equivalent for; document-wide settings on `PdfGenerateConfig` (`DownscaleImages`, `PixelsPerInch`, ...) still apply.
