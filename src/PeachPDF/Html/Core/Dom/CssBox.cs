@@ -2972,6 +2972,15 @@ namespace PeachPDF.Html.Core.Dom
                 // already been worked out and must not be re-derived here.
                 child._resumeTopOverride = retryTop;
 
+                // The retry below lays child's own children out again from the start, exactly as a
+                // fresh pass would - so they need the same rollback every other from-the-start pass
+                // re-entry performs first (PassRewind's own remarks). Without it a child already laid
+                // out once this generation (its _prologueDone already true) never gets RectanglesReset
+                // back, and can be left flagged AwaitsTheNextFragmentainer with nothing left to clear it.
+                // child itself is not in this list: its own prologue deliberately does not run again,
+                // for the reason below.
+                PassRewind.RollBackTo(null, child.Boxes);
+
                 // A retry re-places this box; it does not continue where a previous fragmentainer left
                 // off. The prologue deliberately does not run again — everything it settles is either
                 // already consumed or overridden by the target above, and re-running it would register
