@@ -112,12 +112,14 @@ does not control how many words land on the *last* line is not testing the last 
 
 ## Deliberately not done
 
-- **No half-leading, and no real baseline alignment.** §10.8.1 centres an inline box's leading
-  (half above the content area, half below) around the baseline; this engine top-aligns words on a
-  line and `ApplyVerticalAlignment`'s "baseline" is `max(rect.Top)`. Making the line's *height*
-  correct does not require that, and reworking the alignment model is a much larger change with a
-  large blast radius across the suite. A line mixing two very different font sizes is still aligned
-  by top rather than by baseline — pre-existing, unchanged here.
+- ~~**No half-leading, and no real baseline alignment.**~~ **Superseded — this was done next, in
+  [`2026-09-14-a-line-box-shares-one-baseline.md`](2026-09-14-a-line-box-shares-one-baseline.md).**
+  As left by *this* change: §10.8.1 centres an inline box's leading (half above the content area,
+  half below) around the baseline; this engine top-aligned words on a line and
+  `ApplyVerticalAlignment`'s "baseline" was `max(rect.Top)`. Making the line's *height* correct did
+  not require that, and reworking the alignment model was a much larger change with a large blast
+  radius across the suite, so a line mixing two very different font sizes was still aligned by top.
+  Read the successor before assuming any of that still holds.
 - **`MaxBottom` is still not recomputed after `ApplyVerticalAlignment`**, so `vertical-align` still
   does not feed back into the block's height. Also pre-existing and out of scope.
 

@@ -1,4 +1,4 @@
-using PeachPDF;
+﻿using PeachPDF;
 using PeachPDF.PdfSharpCore;
 using System.Diagnostics;
 using System.Globalization;
@@ -5655,6 +5655,77 @@ var declaredLineHeightHtml = "<!DOCTYPE html><html><head>" + DeclaredLineHeightC
 await SaveShowcaseAsync("line_height_declared", "Typography & Text", "Declared line-height",
     "A declared line-height sets the line box height in both directions - including shorter than the font, where the glyphs overflow - plus the block's strut on every line.",
     declaredLineHeightHtml, pdfConfig);
+
+// --- baseline alignment / half-leading showcase (CSS 2.1 §10.8.1) ---
+// The third of the line-box trio, after "normal" and "declared" above: where a line's content sits
+// INSIDE the line box those two size. Every sample here looked different before baseline alignment
+// existed - the engine placed every inline box flush with its line's top, which is indistinguishable
+// from baseline alignment only while every font on the line is one size.
+
+const string BaselineCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt Georgia, 'Times New Roman', serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999; font-family: Arial, sans-serif; break-after: avoid }
+    p.intro { font-family: Arial, sans-serif; font-size: 9pt; color: #444; margin: 0 0 0.8em; max-width: 500pt }
+    .sample { border: 1px solid #ccc; margin-bottom: 8pt; max-width: 420pt }
+    .sample .label { font-family: Arial, sans-serif; font-size: 7pt; font-weight: bold; color: #444; background: #eee; padding: 3pt 6pt; border-bottom: 1px solid #ccc }
+    .sample .text { padding: 0 6pt; background: #e8f0fe; margin: 0 }
+    ol.mk { margin: 0; padding-left: 40pt; background: #e8f0fe; max-width: 420pt }
+    ol.big li::marker { font-size: 22pt; font-weight: bold; color: #c0392b }
+    </style>
+    """;
+
+var baselineHtml = "<!DOCTYPE html><html><head>" + BaselineCss + "</head><body>" +
+
+    "<h1>One line, one baseline</h1>" +
+    "<p class=\"intro\">Every inline box on a line hangs its own glyphs from a single shared baseline, and " +
+    "the <strong>leading</strong> - a box's <code>line-height</code> less its font's own height - is split " +
+    "in half above and below that content area (CSS 2.1 &sect;10.8.1). The shaded band behind each sample " +
+    "is exactly one line box tall, so it shows where the line box itself begins and ends.</p>" +
+
+    "<h2>1 &mdash; Mixed font sizes share a baseline, not a top edge</h2>" +
+    "<div class=\"sample\"><div class=\"label\">10pt text around a 30pt span - every run rests on one baseline</div>" +
+    "<div class=\"text\" style=\"font-size: 10pt\">before <span style=\"font-size: 30pt\">Big Ag</span> after</div></div>" +
+    "<div class=\"sample\"><div class=\"label\">three sizes at once: 8pt, 18pt, 30pt</div>" +
+    "<div class=\"text\" style=\"font-size: 8pt\">small <span style=\"font-size: 18pt\">medium</span> " +
+    "<span style=\"font-size: 30pt\">large</span> small</div></div>" +
+
+    "<h2>2 &mdash; A tall line-height centres the text, it does not hang it from the top</h2>" +
+    "<p class=\"intro\">Half of the leading goes above the glyphs and half below, so the text sits in the " +
+    "middle of its band. The band itself is the declared <code>line-height</code> either way.</p>" +
+    "<div class=\"sample\"><div class=\"label\">font-size: 14pt; line-height: 1 (leading ~0 - the band hugs the glyphs)</div>" +
+    "<div class=\"text\" style=\"font-size: 14pt; line-height: 1\">Aligny jpqg</div></div>" +
+    "<div class=\"sample\"><div class=\"label\">font-size: 14pt; line-height: 2.5 (the glyphs sit centred in the band)</div>" +
+    "<div class=\"text\" style=\"font-size: 14pt; line-height: 2.5\">Aligny jpqg</div></div>" +
+    "<div class=\"sample\"><div class=\"label\">the same, wrapped - every line is centred in its own band</div>" +
+    "<div class=\"text\" style=\"font-size: 11pt; line-height: 2.5; width: 260pt\">The quick brown fox " +
+    "jumps over the lazy dog and then jumps back again.</div></div>" +
+
+    "<h2>3 &mdash; A line can be taller than every line-height on it</h2>" +
+    "<p class=\"intro\">The two sides of a line box are maximised independently: the box reaching highest " +
+    "above the baseline need not be the one reaching lowest below it. Here the 26pt text sets the ascent " +
+    "side and the small span's tall <code>line-height</code> sets the descent side, so the band is taller " +
+    "than either box's own <code>line-height</code>.</p>" +
+    "<div class=\"sample\"><div class=\"label\">block 26pt/26pt containing a span of 8pt/40pt</div>" +
+    "<div class=\"text\" style=\"font-size: 26pt; line-height: 26pt\">Ascent" +
+    "<span style=\"font-size: 8pt; line-height: 40pt\"> and a deep small span</span></div></div>" +
+
+    "<h2>4 &mdash; An outside ::marker sits on its item's first baseline</h2>" +
+    "<p class=\"intro\">A <code>::marker</code> in a larger font than its item keeps its own baseline on the " +
+    "item's, rather than hanging its digits below the text they number - and the item's first line grows to " +
+    "hold it. css-lists-3 &sect;3.5 leaves both expressly undefined; this follows what browsers do.</p>" +
+    "<div class=\"sample\"><div class=\"label\">10pt items, ::marker { font-size: 22pt } - markers and text share a baseline</div>" +
+    "<ol class=\"mk big\" style=\"font-size: 10pt\"><li>First item</li><li>Second item</li><li>Third item</li></ol></div>" +
+    "<div class=\"sample\"><div class=\"label\">the same list with no ::marker override, for comparison</div>" +
+    "<ol class=\"mk\" style=\"font-size: 10pt\"><li>First item</li><li>Second item</li><li>Third item</li></ol></div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("baseline_alignment", "Typography & Text", "Baseline alignment & leading",
+    "Every inline box on a line shares one baseline, with a declared line-height's leading split half above the text and half below.",
+    baselineHtml, pdfConfig);
 
 // --- letter-spacing / word-spacing showcase ---
 

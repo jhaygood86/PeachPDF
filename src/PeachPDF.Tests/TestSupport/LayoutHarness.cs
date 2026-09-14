@@ -1,4 +1,4 @@
-using PeachPDF.Adapters;
+﻿using PeachPDF.Adapters;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -193,6 +193,31 @@ namespace PeachPDF.Tests.TestSupport
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// The top of the line box <paramref name="word"/> sits on, searched for in
+        /// <paramref name="root"/>'s subtree — or the word's own top if no line box on it claims the word.
+        /// </summary>
+        /// <remarks>
+        /// A word is placed on its line's baseline, half a leading below the line box's own top
+        /// (<see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1 §10.8.1</see>), so a
+        /// test asking "where does this fragment's content begin" — against a reserved border and padding,
+        /// a band's own edge, a recorded named-string position — has to ask the line box. Asking the word
+        /// answers a different question, and one that only agreed with this while <c>line-height</c>
+        /// happened to equal the font's own height.
+        /// </remarks>
+        internal static double LineTopOf(CssBox root, CssRect word)
+        {
+            foreach (var box in Descendants(root))
+            {
+                foreach (var lineBox in box.LineBoxes)
+                {
+                    if (lineBox.Words.Contains(word)) return lineBox.LineTop;
+                }
+            }
+
+            return word.Top;
         }
 
         /// <summary>

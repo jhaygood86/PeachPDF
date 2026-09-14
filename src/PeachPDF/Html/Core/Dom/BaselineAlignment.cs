@@ -1,4 +1,4 @@
-using PeachPDF.CSS;
+﻿using PeachPDF.CSS;
 using PeachPDF.Html.Core.Utils;
 
 namespace PeachPDF.Html.Core.Dom
@@ -36,6 +36,14 @@ namespace PeachPDF.Html.Core.Dom
         /// content. Returns null if the item has no line-box content anywhere, in which case the caller falls
         /// back to start alignment.
         /// </summary>
+        /// <remarks>
+        /// Deliberately reconstructs the baseline from the first word rather than reading the line's own
+        /// <see cref="CssLineBox.BaselineY"/>: the flex and grid engines ask this during their own sizing
+        /// passes, before the item's line boxes have been through
+        /// <c>CssLayoutEngine.ApplyVerticalAlignment</c> and had a baseline resolved, so the stored value
+        /// would be missing (or, on a re-laid-out box tree, left over from an earlier pass). The word is
+        /// positioned by the flow itself and is available either way.
+        /// </remarks>
         public static double? GetItemBaselineOffset(CssBox box)
         {
             var lineBox = FindFirstLineBox(box);

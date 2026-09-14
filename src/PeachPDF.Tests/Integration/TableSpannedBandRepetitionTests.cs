@@ -1,4 +1,4 @@
-using PeachPDF.CSS;
+﻿using PeachPDF.CSS;
 using PeachPDF.Html.Adapters.Entities;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -302,8 +302,18 @@ namespace PeachPDF.Tests.Integration
             Assert.All(drawn, hits => Assert.Single(hits));
 
             // Identical coordinates on every page - the whole point of `fixed`, and what a leaked
-            // displacement would move by a strip's worth on all but the first.
-            Assert.All(drawn, hits => Assert.Equal(top, hits[0].Rect.Top, 1));
+            // displacement would move by a strip's worth on all but the first. Stated against the first
+            // page's own answer rather than against `top` directly: `top` positions the span's BOX, and
+            // the glyphs inside it sit half a leading lower within their line box (CSS 2.1 §10.8.1), so
+            // the ink is a line's worth of leading below the box edge and always has been - it was simply
+            // zero while words were placed flush with their line's top.
+            var onFirstPage = drawn[0][0].Rect.Top;
+
+            Assert.All(drawn, hits => Assert.Equal(onFirstPage, hits[0].Rect.Top, 1));
+
+            // ...and it really is that box's position, not some other page's strip leaking in: the ink
+            // starts at the declared top and within one line box of it.
+            Assert.InRange(onFirstPage, top, top + drawn[0][0].Rect.Height);
         }
 
         /// <summary>

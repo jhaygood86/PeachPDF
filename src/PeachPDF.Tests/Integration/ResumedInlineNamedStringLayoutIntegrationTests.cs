@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core;
+﻿using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -34,7 +34,10 @@ namespace PeachPDF.Tests.Integration
             AssertPaginated(container);
 
             var term = LayoutHarness.FindById(root, "term")!;
-            var trueY = AllWords(term).Single().Top;
+
+            // The line box the term opens on, not its word: ApplyStringSet records where the line begins,
+            // and a word sits half a leading below that (CSS 2.1 §10.8.1).
+            var trueY = LayoutHarness.LineTopOf(root, AllWords(term).Single());
 
             // The regression guard: without the opensHere gate, the resumed pass overwrites this with the
             // resumed page's own top Y, and/or leaves a second orphaned entry behind.
@@ -64,8 +67,8 @@ namespace PeachPDF.Tests.Integration
 
             var term = LayoutHarness.FindById(root, "term")!;
             var words = AllWords(term).ToList();
-            var openingY = words.Min(w => w.Top);
-            var closingY = words.Max(w => w.Top);
+            var openingY = words.Select(w => LayoutHarness.LineTopOf(root, w)).Min();
+            var closingY = words.Select(w => LayoutHarness.LineTopOf(root, w)).Max();
 
             // The fixture must actually straddle a break, or the assertion below is vacuous.
             Assert.NotEqual(container.PageIndexOf(openingY), container.PageIndexOf(closingY));

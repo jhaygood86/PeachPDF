@@ -1,4 +1,4 @@
-// "Therefore those skilled at the unorthodox
+﻿// "Therefore those skilled at the unorthodox
 // are infinite as heaven and earth,
 // inexhaustible as the great rivers.
 // When they come to an end,
@@ -189,12 +189,31 @@ namespace PeachPDF.Html.Core.Dom
             var width = word?.Width ?? 0;
             var height = word?.Height ?? owner.ActualFont.Height;
 
-            var top = owner.Location.Y + owner.ActualBorderTopWidth + owner.ActualPaddingTop;
+            // CSS 2.1 §10.8.1 / css-lists-3 §3.5: the marker sits on the baseline of the item's own
+            // first line, not at its content-box top. The two coincide only while the marker's font
+            // matches the item's - a ::marker { font-size } override otherwise leaves the marker's own
+            // baseline below the text it is numbering, by the difference of the two ascents. The line
+            // has already been through CssLayoutEngine.ApplyVerticalAlignment by the time this runs (see
+            // this method's own remarks on why the marker is positioned after LayoutContents), so its
+            // BaselineY is final.
+            var contentTop = owner.Location.Y + owner.ActualBorderTopWidth + owner.ActualPaddingTop;
+            var baselineY = OwnFirstLineBaselineOf(owner);
+
+            double top;
+
             if (MarkerShape is not null)
             {
-                // Text is drawn top-aligned; center the (much smaller) shape within the owner's line
-                // box instead, so it sits level with the middle of the adjacent text.
-                top += (owner.ActualFont.Height - height) / 2;
+                // A vector shape has no baseline of its own; centre the (much smaller) glyph on the
+                // line's own middle, so it sits level with the adjacent text the way a disc does in a
+                // browser. Measured from the baseline when there is one, so it tracks a line the
+                // marker's own font-size grew rather than assuming the item's font governs it.
+                top = baselineY is { } shapeBaseline
+                    ? shapeBaseline - owner.ActualFont.Ascent + (owner.ActualFont.Height - height) / 2
+                    : contentTop + (owner.ActualFont.Height - height) / 2;
+            }
+            else
+            {
+                top = baselineY is { } textBaseline ? textBaseline - ActualFont.Ascent : contentTop;
             }
 
             var left = owner.ClientLeft - width - ActualMarginRight;
@@ -207,6 +226,33 @@ namespace PeachPDF.Html.Core.Dom
                 word.Left = left;
                 word.Top = top;
             }
+        }
+
+        /// <summary>
+        /// The baseline of the first line box the owning list item laid out <i>itself</i>, or null when it
+        /// laid out none — an item whose content is block-level, or one holding nothing but replaced
+        /// content.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately its own lines only, not the first baseline anywhere in its subtree (which is what
+        /// <see cref="BaselineAlignment.GetItemBaselineOffset"/> gives the flex and grid engines). A
+        /// descendant block's line boxes are not reliable evidence here: a column-fill attempt
+        /// this item is later abandoned by still leaves lines behind in it, and a marker positioned
+        /// against one of those lands in a fragmentainer that no longer holds its item, so nothing claims
+        /// it and it paints on no page at all
+        /// (<c>StraddlingListMarkerTests.ABlockContentItemAColumnFillAttemptAbandons_ClaimsItsMarkerExactlyOnce</c>
+        /// states this directly, and fails on the wider walk). An item whose content is block-level
+        /// therefore keeps the content-box top it has always used — the two coincide whenever the marker's
+        /// font matches the item's, which is every case but an explicit <c>::marker</c> font override.
+        /// </remarks>
+        private static double? OwnFirstLineBaselineOf(CssBox owner)
+        {
+            foreach (var lineBox in owner.LineBoxes)
+            {
+                if (lineBox.BaselineY is { } baselineY) return baselineY;
+            }
+
+            return null;
         }
 
         public override void Dispose()
