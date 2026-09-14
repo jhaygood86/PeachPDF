@@ -21,23 +21,78 @@ using PeachPDF.Text.Shaping.Use;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace PeachPDF.Svg
 {
     /// <summary>
     /// Paints a parsed <see cref="SvgDocument"/> into an <see cref="RGraphics"/>, mapping its
-    /// viewBox onto a target viewport rectangle (default <c>xMidYMid meet</c> scaling only - the only
-    /// <c>preserveAspectRatio</c> mode supported in v1) and walking the scene graph issuing
-    /// <c>RGraphics.DrawPath</c> calls for each shape.
+    /// viewBox onto a target viewport rectangle and walking the scene graph. Whole documents can
+    /// be stored as reusable forms by <see cref="RenderCachedInto"/>.
     /// </summary>
     internal static class SvgRenderer
     {
+        // A form belongs to one PDF document. ConditionalWeakTable also lets a finished PDF and all
+        // its cached forms be collected, even though each form refers back to its owning document.
+        private static readonly ConditionalWeakTable<object, Dictionary<(SvgDocument Document, double Width,
+            double Height, double PixelsPerPoint), RImage>> FormCaches = new();
+
+        /// <summary>
+        /// Paints a whole SVG from a document-local Form XObject. Position is only a placement concern;
+        /// size and PixelsPerPoint affect the artwork rendered into the form. A scene graph is shared
+        /// only by identity, since separately built inline SVGs may have different resolved currentColor.
+        /// </summary>
+        public static void RenderCachedInto(RGraphics g, SvgDocument document, RRect viewportRect)
+        {
+            if (viewportRect.Width <= 0 || viewportRect.Height <= 0)
+                return;
+
+            // Recording/measurement graphics have no PDF document to own a form and should still
+            // receive the individual drawing calls directly.
+            if (g.FormCacheOwner is null)
+            {
+                RenderInto(g, document, viewportRect);
+                return;
+            }
+
+            var form = GetOrCreateForm(g, document, viewportRect.Width, viewportRect.Height);
+            if (form is not null)
+                g.DrawImage(form, viewportRect);
+            else
+                RenderInto(g, document, viewportRect);
+        }
+
+        /// <summary>Returns the reusable SVG artwork tile, or null if this graphics cannot create one.</summary>
+        public static RImage? GetOrCreateForm(RGraphics g, SvgDocument document, double width, double height)
+        {
+            if (width <= 0 || height <= 0 ||
+                (g.FormCacheOwner is not null && (width / g.PixelsPerPoint < 1 || height / g.PixelsPerPoint < 1)))
+                return null;
+
+            var owner = g.FormCacheOwner;
+            var key = (document, width, height, g.PixelsPerPoint);
+            Dictionary<(SvgDocument Document, double Width, double Height, double PixelsPerPoint), RImage>? cache =
+                owner is null ? null : FormCaches.GetValue(owner, _ => new());
+            if (cache is not null && cache.TryGetValue(key, out var existing))
+                return existing;
+
+            var tile = g.CreateTile(width, height);
+            if (tile is not { } t)
+                return null;
+
+            using (t.Graphics)
+                RenderInto(t.Graphics, document, new RRect(0, 0, width, height));
+
+            cache?.Add(key, t.Image);
+            return t.Image;
+        }
+
         /// <summary>
         /// Clips to <paramref name="viewportRect"/>, pushes the viewBox-to-viewport transform, renders
         /// every root element of <paramref name="document"/>, then pops both. This is the single entry
-        /// point shared by <c>CssBoxSvg.PaintImp</c> (inline <c>&lt;svg&gt;</c>) and
-        /// <c>CssBoxImage.PaintImp</c> (<c>&lt;img src="x.svg"&gt;</c>).
+        /// point used to paint the cached form's content, or to paint directly when no form can be
+        /// created. Replaced elements call <see cref="RenderCachedInto"/> instead.
         /// </summary>
         public static void RenderInto(RGraphics g, SvgDocument document, RRect viewportRect)
         {

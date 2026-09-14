@@ -450,7 +450,8 @@ namespace PeachPDF.Tests.Integration
                 </svg></body></html>
                 """;
 
-            var matrix = Assert.Single(ShadingPatternMatrices(await GetPdfText(Html)));
+            var pdfText = await GetPdfText(Html);
+            var matrix = Assert.Single(ShadingPatternMatrices(pdfText));
 
             // The viewBox maps 100 user units onto 80px (60pt), so the CTM scale is 0.6. The gradient's
             // radii are 40 and 20 user units, giving 24 × 12pt once the CTM is carried through - the
@@ -458,10 +459,11 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(24, matrix[0], 3);
             Assert.Equal(12, matrix[3], 3);
 
-            // ...and the ellipse's center sits inside the 60 × 60pt viewport at the page's top-left,
-            // rather than at the raw user-space (50, 50) the un-composed matrix would have left it at.
+            // The shading matrix now lives inside the SVG's reusable form, so its center must be
+            // inside that form's 60 × 60pt local viewport. The form invocation positions it on the page.
+            Assert.Contains("/BBox [0 0 60 60]", pdfText);
             Assert.InRange(matrix[4], 0, 60);
-            Assert.InRange(matrix[5], 841.89 - 60, 841.89);
+            Assert.InRange(matrix[5], 0, 60);
         }
     }
 }

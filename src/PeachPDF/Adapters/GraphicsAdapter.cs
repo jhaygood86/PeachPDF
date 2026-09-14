@@ -39,6 +39,8 @@ namespace PeachPDF.Adapters
 
         public override double PixelsPerPoint { get; }
 
+        internal override object? FormCacheOwner => _g.Owner;
+
         /// <summary>
         /// _releaseGraphics is set true exactly for tile-backed instances (see the constructor
         /// comment and CreateTile below), making it the same signal as "paints into an offscreen

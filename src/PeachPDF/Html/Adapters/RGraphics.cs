@@ -73,6 +73,13 @@ namespace PeachPDF.Html.Adapters
         public virtual double PixelsPerPoint => 1.0;
 
         /// <summary>
+        /// Identity of the document that owns forms created by <see cref="CreateTile"/>. A tile may be
+        /// reused on another page of that document, but never in another document. Null for graphics
+        /// contexts without a PDF document (including test and measure-only graphics).
+        /// </summary>
+        internal virtual object? FormCacheOwner => null;
+
+        /// <summary>
         /// Get color pen.
         /// </summary>
         /// <param name="color">the color to get the pen for</param>
