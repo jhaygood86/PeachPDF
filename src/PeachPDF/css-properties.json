@@ -2524,6 +2524,30 @@
       }
     },
     {
+      "name": "text-decoration-skip-ink",
+      "comment": "CSS Text Decoration 4 §2.5. Inherited, single keyword. 'auto' (the initial value) is defined as UA discretion and PeachPDF exercises it by skipping, which is what browsers do - so this property changes the default rendering of every underline and overline in every document (see .claude/migration-notes/). 'none' is the opt-out that restores an unbroken line. The skip itself is done at paint time by FragmentPainter, which subtracts the glyph ink crossing the line's band from the span it draws (DecorationSegments) - line-through is never skipped, per the spec. A CFF/OTF-outline font yields no decodable ink (GlyphOutlineDecoder reads glyf/loca only), so nothing is skipped in one; that is conformant for 'auto' and an accepted gap for 'all'. Lives in TextArea rather than TextDecorationArea because this is the one text-decoration-* longhand that inherits, and TextArea is the area CssBox.InheritStyle whole-adopts from the parent - TextDecorationArea is copied only for a structural duplicate of the same element, so an inherited property placed there would silently never inherit (confirmed by a test that failed exactly that way).",
+      "inherited": true,
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextDecorationSkipInk",
+        "keywordMap": "Map.TextDecorationSkipInkModes",
+        "fallback": "TextDecorationSkipInk.Auto"
+      },
+      "supportsDataType": "keyword",
+      "supportsSupportedValues": [
+        "auto",
+        "none",
+        "all"
+      ],
+      "html": {
+        "propertyPath": "TextDecorationSkipInk",
+        "csharpDataType": "CssProperty<TextDecorationSkipInk>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextDecorationSkipInk.ToString()"
+      }
+    },
+    {
       "name": "font-size",
       "comment": "CssKeywordOrValue<FontSizeKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. supportedValues (via FontSizeKeyword/Map.FontSizeKeywords) deliberately excludes CSS Fonts 4's xxx-large - FontSizeResolver.Resolve's switch has no case for it, so an accepted 'font-size: xxx-large' would fall through to the length/calc() value path (which can't parse the bare keyword), Math.Max(0, ...)-clamp to 0, and silently render invisible text rather than being rejected. RegistryEmitter.BuildHtmlAssignment runs CssBox.ResolveFontSizeValueComputation(value) (the html.valueComputation \"font-size\" case) against the raw authored text before FromCssText parses it - see that method's own doc comment for the eager em/ex/percent/smaller/larger-to-points resolution it performs (calc() and rem stay lazy, resolved later by FontSizeResolver.Resolve/DerivedStyle.ActualFont via LengthOrCalc's deferred-calc mechanism).",
       "inherited": true,

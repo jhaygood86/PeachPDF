@@ -569,39 +569,28 @@ namespace PeachPDF.Html.Core.Paint
         /// this method exists. Out-of-flow descendants are skipped outright, per the same section.
         /// </para>
         /// <para>
-        /// An atomic inline is <b>not</b> excluded here, and §2.4 says it should be: "Atomic inlines,
-        /// such as images and inline blocks, are not decorated." Its rectangle is unioned into the span
-        /// like any other line-hosted box, so the line runs through it instead of breaking around it.
-        /// That is a pre-existing deviation this method preserves rather than introduces - before it,
-        /// the block's own full-width rectangle ran through the atomic inline just the same - and it is
-        /// usually invisible only because an atomic inline paints opaque content over the line. See
-        /// <c>.claude/accepted-gaps/decoration-line-runs-through-atomic-inlines.md</c>.
+        /// An atomic inline is excluded from the line rather than covered by it, per the same section:
+        /// "Atomic inlines, such as images and inline blocks, are not decorated." Its rectangle is kept
+        /// out of the span and subtracted from what is drawn, so one span can become several segments -
+        /// see <see cref="DecorationSegments"/>. What exactly is subtracted is its margin box; §2.4 does
+        /// not say which box, so that is this engine's choice, taken because a margin authored around an
+        /// atomic inline reads as part of the space it occupies on the line.
         /// </para>
         /// </remarks>
         private static void PaintPropagatedDecoration(RGraphics g, CssBox box, BoxFragment fragment, RRect clip)
         {
-            // Finding the spans means walking the fragment's whole subtree, so the box that declares no
-            // decoration at all - almost every block in a document - never starts the walk. A
-            // ::first-line style can declare one the box itself doesn't, so it is asked too; which of the
-            // two applies to a given span stays PaintDecoration's own decision.
-            if (!DeclaresADecorationLine(box) && !DeclaresADecorationLine(box.ResolvedFirstLineStyle)) return;
+            if (!DecorationsWorthCollecting(box)) return;
 
-            Dictionary<CssLineBox, RRect> spans = [];
-            List<CssLineBox> order = [];
+            var content = DecorationContent.Of(fragment, collectSpans: true, collectWords: WantsInkFrom(box));
 
-            foreach (var child in fragment.Children)
+            foreach (var lineBox in content.Order)
             {
-                CollectDecorationSpans(child, spans, order);
-            }
-
-            foreach (var lineBox in order)
-            {
-                var rect = spans[lineBox];
+                var rect = content.SpanOf(lineBox);
 
                 if (IsRectVisible(rect, clip))
                 {
                     PaintDecoration(g, box, rect, hasLeftEdge: false, hasRightEdge: false,
-                        GetFirstLineStyleForRect(lineBox), ownDecorationArea: false);
+                        GetFirstLineStyleForRect(lineBox), ownDecorationArea: false, content, lineBox);
                 }
             }
         }
@@ -613,41 +602,23 @@ namespace PeachPDF.Html.Core.Paint
             box is not null && !string.IsNullOrEmpty(box.TextDecorationLine) && box.TextDecorationLine != Keywords.None;
 
         /// <summary>
-        /// Accumulates the inline content of <paramref name="fragment"/> into one union rectangle per line
-        /// box - the spans <see cref="PaintPropagatedDecoration"/> draws over. <paramref name="order"/>
-        /// keeps the lines in the order they were first reached, so painting is deterministic.
+        /// Whether it is worth walking <paramref name="box"/>'s fragment subtree to find what its
+        /// decoration covers. The overwhelming majority of boxes declare no decoration at all and so never
+        /// start the walk; a <c>::first-line</c> rule can declare one the box itself doesn't, so it is
+        /// asked too, and which of the two applies to a given line stays
+        /// <see cref="PaintDecoration"/>'s own decision.
         /// </summary>
-        private static void CollectDecorationSpans(BoxFragment fragment, Dictionary<CssLineBox, RRect> spans,
-            List<CssLineBox> order)
-        {
-            if (fragment.Box.IsOutOfFlow) return;
+        private static bool DecorationsWorthCollecting(CssBox box) =>
+            DeclaresADecorationLine(box) || DeclaresADecorationLine(box.ResolvedFirstLineStyle);
 
-            var hosted = false;
-
-            foreach (var lineFragment in fragment.Lines)
-            {
-                if (lineFragment.Line is not { } lineBox) continue;
-
-                hosted = true;
-
-                if (spans.TryGetValue(lineBox, out var existing))
-                {
-                    spans[lineBox] = RRect.Union(existing, lineFragment.Rect);
-                }
-                else
-                {
-                    spans.Add(lineBox, lineFragment.Rect);
-                    order.Add(lineBox);
-                }
-            }
-
-            if (hosted) return;
-
-            foreach (var child in fragment.Children)
-            {
-                CollectDecorationSpans(child, spans, order);
-            }
-        }
+        /// <summary>
+        /// Whether any line <paramref name="box"/> draws could ask for glyph ink, and so whether the
+        /// subtree walk should gather words at all. Asks the <c>::first-line</c> style too, since it can
+        /// carry a different <c>text-decoration-skip-ink</c> than the box's own.
+        /// </summary>
+        private static bool WantsInkFrom(CssBox box) =>
+            IsHorizontalWritingMode(box)
+            && (SkipsInk(box) || (box.ResolvedFirstLineStyle is { } firstLine && SkipsInk(firstLine)));
 
         /// <summary>
         /// Paints the text decoration (underline/strike-through/over-line)
@@ -672,8 +643,16 @@ namespace PeachPDF.Html.Core.Paint
         /// descendant, which is inline content geometry already inside the box's padding - compensating
         /// for padding the rectangle never included would only displace the line.
         /// </param>
+        /// <param name="content">
+        /// what the line covers, as gathered from the fragment subtree - the atomic inlines it must break
+        /// around (css-text-decor-3 §2.4) and the words whose ink it may have to skip
+        /// (<c>text-decoration-skip-ink</c>, css-text-decor-4 §2.5). Null draws one unbroken line per
+        /// keyword, exactly as before either rule existed.
+        /// </param>
+        /// <param name="lineBox">the line box <paramref name="rectangle"/> belongs to; null for a whole-box rectangle</param>
         private static void PaintDecoration(RGraphics g, CssBox box, RRect rectangle, bool hasLeftEdge, bool hasRightEdge,
-            CssBox? firstLineStyle = null, bool ownDecorationArea = true)
+            CssBox? firstLineStyle = null, bool ownDecorationArea = true,
+            DecorationContent? content = null, CssLineBox? lineBox = null)
         {
             // The `text-decoration` shorthand is expanded into these longhands by the CSS-OM (Layer A) before
             // it ever reaches the box, so the painter reads the longhands directly. text-decoration-line may
@@ -710,6 +689,24 @@ namespace PeachPDF.Html.Core.Paint
             pen.Width = ResolveDecorationThickness(styleSource.TextDecorationThickness, styleSource, g.PixelsPerPoint);
             pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(textDecorationStyle);
 
+            var span = new DecorationInterval(x1, x2);
+
+            // Both subtractions are x-axis reasoning - an atomic inline's margin box measured left to
+            // right, a band swept horizontally across glyph ink - so both are confined to a horizontal
+            // writing mode. Under vertical-rl/-lr a box's physical x-range is the column's thickness
+            // rather than its extent along the line, and subtracting it would delete the decoration
+            // instead of breaking it. Vertical decoration geometry is out of scope as a whole; this keeps
+            // that true for the new rules rather than for only one of them.
+            var horizontal = IsHorizontalWritingMode(box);
+
+            // The atomic inlines to break around are the same for every keyword: they are a fact about
+            // the line's content, not about where a particular line sits on it.
+            var boxExclusions = lineBox is null || !horizontal ? null : content?.ExclusionsFor(lineBox);
+
+            // Ink, by contrast, differs per keyword - an underline and an overline cross different parts
+            // of the same glyphs - so it is measured inside the loop, against that line's own band.
+            var inkWords = horizontal && SkipsInk(styleSource) ? content?.InkWordsOn(lineBox) : null;
+
             // text-decoration-line may list several keywords (e.g. "underline overline"); draw each.
             var bottomInset = ownDecorationArea ? box.ActualPaddingBottom - box.ActualBorderBottomWidth : 0;
             foreach (var line in textDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -725,7 +722,112 @@ namespace PeachPDF.Html.Core.Paint
                 if (double.IsNaN(y)) continue;
 
                 y -= bottomInset;
-                g.DrawLine(pen, x1, y, x2, y);
+
+                var exclusions = boxExclusions;
+
+                // css-text-decor-4 §2.5 skips ink under an underline or an overline only - a
+                // line-through is never skipped, since a strike is meant to cross the glyphs.
+                if (inkWords is not null && line is Keywords.Underline or Keywords.Overline)
+                {
+                    List<DecorationInterval> combined = boxExclusions is null ? [] : [.. boxExclusions];
+                    AddInkExclusions(g, styleSource, inkWords, y, pen.Width, combined);
+                    exclusions = combined;
+                }
+
+                foreach (var segment in DecorationSegments.Subtract(span, exclusions ?? []))
+                {
+                    g.DrawLine(pen, segment.Start, y, segment.End, y);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The <c>text-decoration-skip-ink</c> gap either side of a skipped glyph, as a fraction of the
+        /// font size. Chosen to land near one CSS pixel at a 16px font, which is about what a browser
+        /// leaves.
+        /// </summary>
+        private const double InkSkipClearanceRatio = 0.06;
+
+        /// <summary>
+        /// Whether <paramref name="styleSource"/> asks for <c>text-decoration-skip-ink</c>
+        /// (<see href="https://www.w3.org/TR/css-text-decor-4/#text-decoration-skip-ink-property">css-text-decor-4
+        /// §2.5</see>) to interrupt its underlines and overlines where they cross glyph ink.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>auto</c>, the initial value, is defined as UA discretion, and PeachPDF exercises it by
+        /// skipping - which is what browsers do, and so what an author who never writes the property
+        /// expects to see. <c>none</c> is the opt-out. <c>all</c> asks for the same skipping this does;
+        /// the spec's stronger "must" is honoured wherever the ink is decodable at all (see
+        /// <see cref="RGraphics.GetInkCrossings"/> for the font shapes where it is not).
+        /// </para>
+        /// </remarks>
+        internal static bool SkipsInk(CssBox styleSource) =>
+            styleSource.TextDecorationSkipInk.Value != TextDecorationSkipInk.None;
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s lines run left to right, which is what both decoration
+        /// subtractions assume. See <see cref="PaintDecoration"/> for why neither applies otherwise.
+        /// </summary>
+        private static bool IsHorizontalWritingMode(CssBox box) =>
+            box.WritingMode.Value is WritingMode.HorizontalTb;
+
+        /// <summary>
+        /// Appends the ink crossings of <paramref name="words"/> against a decoration line at
+        /// <paramref name="y"/> to <paramref name="into"/>, each already dilated by the clearance the
+        /// line keeps from the ink it skips.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The band measured is exactly what the line covers - its own thickness - so a glyph the line
+        /// would not actually touch is not skipped. The visible gap either side comes from dilating each
+        /// crossing instead, which is what keeps a skip from looking like the line merely grazing a
+        /// descender.
+        /// </para>
+        /// <para>
+        /// The clearance scales with the font, not with the line's thickness: the <c>auto</c> thickness is
+        /// a fixed 1 unit regardless of size (see <see cref="ResolveDecorationThickness"/>), so keying the
+        /// gap to it would give a 40pt heading the same hairline clearance as 8pt fine print. A thicker
+        /// line already skips more of its own accord, because its band is taller and so meets more ink;
+        /// widening the gap as well made a heavy underline read as a dashed one.
+        /// </para>
+        /// </remarks>
+        private static void AddInkExclusions(RGraphics g, CssBox styleSource, List<DecorationWord> words,
+            double y, double thickness, List<DecorationInterval> into)
+        {
+            var half = thickness / 2;
+            var fontSize = styleSource.ActualFont.Size * g.PixelsPerPoint;
+            var clearance = fontSize * InkSkipClearanceRatio;
+
+            foreach (var placed in words)
+            {
+                var word = placed.Word;
+                var text = word.FirstLineText ?? word.Text;
+                if (string.IsNullOrEmpty(text)) continue;
+
+                // Exactly the resolution DrawWordGlyphs uses to paint this word: a per-codepoint fallback
+                // face or a synthesized small-caps run has its own font and its own baseline shift, and
+                // measuring ink against the box's own font instead would name the wrong glyphs at the
+                // wrong height. See FragmentPainter.Text.cs.
+                var wordStyle = word.FirstLineStyle ?? placed.Owner;
+                var font = CssBox.ResolveWordFont(word, wordStyle);
+
+                // The word's own draw origin, not its baseline: DrawWordGlyphs hands DrawString exactly
+                // this point, and GetInkCrossings places the baseline from the font's own metrics the way
+                // the text-drawing path does. Deriving a baseline here instead would use RFont.Ascent,
+                // which is rounded to a whole unit - half the height of a default-thickness band.
+                var origin = new RPoint(placed.Rect.X, placed.Rect.Y + (wordStyle.ActualFont.Ascent - font.Ascent));
+
+                var crossings = g.GetInkCrossings(text, font, origin,
+                    y - half, y + half, wordStyle.ActualLetterSpacing,
+                    wordStyle.ResolveWordShapingFeatures(word));
+
+                if (crossings is null) continue;
+
+                foreach (var crossing in crossings)
+                {
+                    into.Add(new DecorationInterval(crossing.Start, crossing.End).Dilated(clearance));
+                }
             }
         }
 

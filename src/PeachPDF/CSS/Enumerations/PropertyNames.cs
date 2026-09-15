@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+﻿namespace PeachPDF.CSS
 {
     internal static class PropertyNames
     {
@@ -293,6 +293,7 @@ namespace PeachPDF.CSS
         public static readonly string TextDecorationLine = "text-decoration-line";
         public static readonly string TextDecorationStyle = "text-decoration-style";
         public static readonly string TextDecorationThickness = "text-decoration-thickness";
+        public static readonly string TextDecorationSkipInk = "text-decoration-skip-ink";
         public static readonly string TextIndent = "text-indent";
         public static readonly string TextJustify = "text-justify";
         public static readonly string TextOrientation = "text-orientation";
