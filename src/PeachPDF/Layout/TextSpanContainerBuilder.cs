@@ -42,6 +42,10 @@ namespace PeachPDF.Layout
 
         public ITextSpan TotalPages() => CounterSpan("counter(pages)");
 
+        public ITextSpan PageNumberWithinSection(string sectionId) => SectionCounterSpan(sectionId, isTotal: false);
+
+        public ITextSpan TotalPagesWithinSection(string sectionId) => SectionCounterSpan(sectionId, isTotal: true);
+
         /// <summary>
         /// A span whose text is a <c>content: counter(...)</c> value instead of a literal string -
         /// resolved per page by <c>RunningElementLayout.RefreshPageCounterContent</c>, which already runs
@@ -54,6 +58,21 @@ namespace PeachPDF.Layout
         {
             var span = CssPropertyFactory.CreateAnonymousBox(box);
             properties.Set(span, "content", contentValue);
+            return new TextStyleApplier(span, properties);
+        }
+
+        /// <summary>
+        /// A span resolved by <see cref="CssBox.SectionPageCounterSectionId"/> rather than a CSS
+        /// <c>content</c> value - see that field's own doc comment for why an ordinary <c>counter()</c>
+        /// value can't express this. Same "no text until the per-page refresh runs" shape as
+        /// <see cref="CounterSpan"/>.
+        /// </summary>
+        private ITextSpan SectionCounterSpan(string sectionId, bool isTotal)
+        {
+            ArgumentNullException.ThrowIfNull(sectionId);
+            var span = CssPropertyFactory.CreateAnonymousBox(box);
+            span.SectionPageCounterSectionId = sectionId;
+            span.SectionPageCounterIsTotal = isTotal;
             return new TextStyleApplier(span, properties);
         }
     }

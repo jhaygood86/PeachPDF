@@ -1,7 +1,10 @@
 using PeachPDF.CSS;
 using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Adapters.Entities;
+using PeachPDF.Html.Core.Handlers;
+using PeachPDF.Html.Core.Utils;
 using System;
+using System.Globalization;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Html.Core.Dom
@@ -132,10 +135,94 @@ namespace PeachPDF.Html.Core.Dom
                 }
             }
 
+            if (box.SectionPageCounterSectionId is { } sectionId)
+            {
+                box.Text = ResolveSectionPageCounterText(
+                    container, sectionId, box.SectionPageCounterIsTotal, container.RunningElementPageContext.Value.Page);
+
+                // See the bidi-reindex comment above - the same contract applies here.
+                CssBidiParagraphResolver.ResolveOwnTextAsParagraph(box);
+                box.ParseToWords();
+            }
+
             foreach (var child in box.Boxes)
             {
                 RefreshPageCounterContent(child, container);
             }
+        }
+
+        /// <summary>
+        /// Resolves a declarative API <c>PageNumberWithinSection</c>/<c>TotalPagesWithinSection</c>
+        /// span's literal text for the page <paramref name="currentPage"/> is being laid out for - the
+        /// physical page <paramref name="sectionId"/>'s own <see cref="CssBox.SectionBeginId"/>-tagged box
+        /// (and, for a total, its <see cref="CssBox.SectionEndId"/>-tagged box too) landed on, via the
+        /// same pixel-Y-to-page resolution <see cref="CssContentEngine.AppendTargetCounter"/>'s own
+        /// <c>target-counter(_, page)</c> branch uses.
+        /// </summary>
+        /// <remarks>
+        /// Anchored at <see cref="HtmlContainerInt.Root"/> - already on hand via
+        /// <paramref name="container"/> - and located by a plain tree walk
+        /// (<see cref="FindBySectionMarker"/>), not <see cref="HtmlContainerInt.GetBoxById"/>: a section's
+        /// begin and end are tagged directly on whatever container the caller already has (a decorator,
+        /// like <see cref="Layout.ContainerBuilder.Bookmark"/>, not a dedicated marker box - see
+        /// <see cref="CssBox.SectionBeginId"/>'s own doc comment for why a separate marker box was tried
+        /// first and abandoned), so two independent tags need to be able to coexist on the very same box,
+        /// which a single HTML <c>id</c> attribute (what <c>GetBoxById</c> reads) cannot express.
+        /// </remarks>
+        private static string ResolveSectionPageCounterText(HtmlContainerInt container, string sectionId, bool isTotal, int currentPage)
+        {
+            if (container.Root is not { } root || container.TargetPageMap is not { } map)
+            {
+                // No page map yet - the same placeholder every target-counter(_, page) box produces
+                // before one exists; the convergence loop revisits this box once a real map does.
+                return "1";
+            }
+
+            var beginBox = FindBySectionMarker(root, b => b.SectionBeginId == sectionId);
+            if (beginBox is null)
+            {
+                return "1";
+            }
+
+            var beginRect = CommonUtils.GetFirstValueOrDefault(beginBox.Rectangles, beginBox.Bounds);
+            var beginPage = PageAnchorResolver.ResolvePixelYToPage(
+                container, map.SlotToPage, map.MaxMappedSlot, map.FallbackPageCount, beginRect.Top) + 1;
+
+            if (!isTotal)
+            {
+                return (currentPage - beginPage + 1).ToString(CultureInfo.InvariantCulture);
+            }
+
+            var endBox = FindBySectionMarker(root, b => b.SectionEndId == sectionId);
+            if (endBox is null)
+            {
+                return "1";
+            }
+
+            var endRect = CommonUtils.GetFirstValueOrDefault(endBox.Rectangles, endBox.Bounds);
+            var endPage = PageAnchorResolver.ResolvePixelYToPage(
+                container, map.SlotToPage, map.MaxMappedSlot, map.FallbackPageCount, endRect.Top) + 1;
+
+            return (endPage - beginPage + 1).ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// Finds the first box (document order) matching <paramref name="predicate"/> - the same plain
+        /// recursive tree walk <c>DomUtils.GetAllLinkAndBookmarkBoxes</c> already uses to collect
+        /// bookmark-tagged boxes, rather than a cached id index: a document typically tags only a handful
+        /// of section boundaries (unlike the many <c>target-counter()</c> references an id index amortizes
+        /// against), so the walk's own cost is not worth caching for.
+        /// </summary>
+        private static CssBox? FindBySectionMarker(CssBox box, Func<CssBox, bool> predicate)
+        {
+            if (predicate(box)) return box;
+
+            foreach (var child in box.Boxes)
+            {
+                if (FindBySectionMarker(child, predicate) is { } found) return found;
+            }
+
+            return null;
         }
 
         /// <summary>

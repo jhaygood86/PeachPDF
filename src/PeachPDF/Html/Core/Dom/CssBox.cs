@@ -1165,6 +1165,47 @@ namespace PeachPDF.Html.Core.Dom
         internal bool PendingAutoDirection { get; set; }
 
         /// <summary>
+        /// Non-null when this box is a declarative API <c>PageNumberWithinSection</c>/
+        /// <c>TotalPagesWithinSection</c> span (<see cref="Layout.TextSpanContainerBuilder"/>), naming the
+        /// section id it resolves against - paired with <see cref="SectionPageCounterIsTotal"/> to say
+        /// which of the two it is. No <see cref="Content"/> is set here (unlike a plain
+        /// <c>counter(page)</c>-backed page-number span): the answer needs arithmetic between two
+        /// independently-resolved page numbers
+        /// (this page minus the section's begin marker's page, or its end marker's page minus its begin
+        /// marker's page), which a CSS <c>content</c> value has no way to express - see
+        /// <see cref="RunningElementLayout.RefreshPageCounterContent"/>'s own resolution of this field.
+        /// </summary>
+        internal string? SectionPageCounterSectionId { get; set; }
+
+        /// <summary>
+        /// See <see cref="SectionPageCounterSectionId"/>. False resolves to the current page's own number
+        /// within the section (<c>PageNumberWithinSection</c>); true resolves to the section's total page
+        /// count (<c>TotalPagesWithinSection</c>).
+        /// </summary>
+        internal bool SectionPageCounterIsTotal { get; set; }
+
+        /// <summary>
+        /// Non-null when the declarative API's <c>IContainer.BeginPageNumberOfSection(sectionId)</c> was
+        /// called on this box - tags this box itself (via <see cref="Layout.ContainerBuilder"/>, a plain
+        /// decorator that sets this field and returns the same container, exactly like
+        /// <see cref="BookmarkLevel"/>/<see cref="BookmarkLabel"/>) as the section's own first physical
+        /// position, rather than inserting a separate zero-size marker box. A dedicated marker box was
+        /// tried first and found to add an unwanted extra gap wherever it landed inside a
+        /// <c>Row</c>/<c>Column</c> with <c>Spacing()</c> set (CSS row-gap applies between every pair of
+        /// adjacent flex items regardless of size) - tagging real, already-placed content instead needs no
+        /// extra box, so it adds nothing to gap-participate with. <see cref="RunningElementLayout.ResolveSectionPageCounterText"/>
+        /// finds the box carrying this by walking the tree (mirroring how bookmark/link boxes are
+        /// collected), not through the <c>id</c>-attribute-based <c>target-counter()</c> lookup this
+        /// class's box uses elsewhere - two independent attributes (this and <see cref="SectionEndId"/>)
+        /// need to be able to coexist on the very same box (a section ending exactly where the next one
+        /// begins), which a single HTML <c>id</c> attribute can't express.
+        /// </summary>
+        internal string? SectionBeginId { get; set; }
+
+        /// <summary>Non-null when <c>IContainer.EndPageNumberOfSection(sectionId)</c> was called on this box - see <see cref="SectionBeginId"/>.</summary>
+        internal string? SectionEndId { get; set; }
+
+        /// <summary>
         /// Gets the rectangles where this box should be painted
         /// </summary>
         internal Dictionary<CssLineBox, RRect> Rectangles { get; } = [];

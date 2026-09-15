@@ -1078,17 +1078,21 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
-        /// Whether any box in <paramref name="box"/>'s subtree resolved a <c>target-counter(_, page)</c>
-        /// content token against a page map that did not exist yet (<see cref="CssBox.HasPendingTargetPageContent"/>,
-        /// set by <c>CssContentEngine.AppendTargetCounter</c> during the DOM-construction-time content
-        /// pass). Gates <see cref="HtmlContainerInt.PerformLayoutOnePass"/>'s target-page convergence
-        /// loop the same way <see cref="AnyBoxClonesDecorations"/>/<see cref="AnyBoxEstablishesSizeContainer"/>
-        /// gate their own loops - the overwhelming majority of documents use neither, and for those the
-        /// loop must cost nothing beyond this one tree walk.
+        /// Whether any box in <paramref name="box"/>'s subtree needs the target-page map
+        /// <see cref="HtmlContainerInt.PerformLayoutOnePass"/>'s convergence loop builds: either it
+        /// resolved a <c>target-counter(_, page)</c> content token against a page map that did not exist
+        /// yet (<see cref="CssBox.HasPendingTargetPageContent"/>, set by
+        /// <c>CssContentEngine.AppendTargetCounter</c> during the DOM-construction-time content pass), or
+        /// it is a declarative API <c>PageNumberWithinSection</c>/<c>TotalPagesWithinSection</c> span
+        /// (<see cref="CssBox.SectionPageCounterSectionId"/>), which needs the same map to locate its own
+        /// section's begin/end markers' pages. Gates that loop the same way
+        /// <see cref="AnyBoxClonesDecorations"/>/<see cref="AnyBoxEstablishesSizeContainer"/> gate their
+        /// own loops - the overwhelming majority of documents use none of these, and for those the loop
+        /// must cost nothing beyond this one tree walk.
         /// </summary>
         internal static bool AnyBoxHasTargetPageContent(CssBox box)
         {
-            if (box.HasPendingTargetPageContent) return true;
+            if (box.HasPendingTargetPageContent || box.SectionPageCounterSectionId is not null) return true;
 
             foreach (var child in box.Boxes)
             {

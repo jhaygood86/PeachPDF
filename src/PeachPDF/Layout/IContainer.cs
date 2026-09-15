@@ -205,5 +205,22 @@ namespace PeachPDF.Layout
 
         /// <summary>Places a bulleted list. Terminal - may be called at most once.</summary>
         void UnorderedList(Action<IListDescriptor> handler, PdfListMarkerType markerType = PdfListMarkerType.Disc);
+
+        /// <summary>
+        /// Tags this container's own physical position as the start of a page-numbered section named
+        /// <paramref name="sectionId"/>, anywhere in a page's normal content flow (not just
+        /// <see cref="IPageDescriptor.Header"/>/<see cref="IPageDescriptor.Footer"/> content) - a
+        /// decorator, like <see cref="Bookmark"/>, so chain it before the container's own terminal content
+        /// (<c>column.Item().BeginPageNumberOfSection("chapter1").Text("Chapter 1")</c>) rather than
+        /// giving the section boundary a container of its own. Pair with a later
+        /// <see cref="EndPageNumberOfSection"/> call using the same id, on whichever container holds the
+        /// section's own last piece of content; <see cref="ITextSpanContainer.PageNumberWithinSection"/>/
+        /// <see cref="ITextSpanContainer.TotalPagesWithinSection"/> then resolve against the physical
+        /// pages that pair of tagged containers land on.
+        /// </summary>
+        IContainer BeginPageNumberOfSection(string sectionId);
+
+        /// <summary>Tags this container's own physical position as the end of the page-numbered section <paramref name="sectionId"/> - see <see cref="BeginPageNumberOfSection"/>.</summary>
+        IContainer EndPageNumberOfSection(string sectionId);
     }
 }
