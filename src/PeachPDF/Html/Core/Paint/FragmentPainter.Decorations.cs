@@ -713,7 +713,8 @@ namespace PeachPDF.Html.Core.Paint
             {
                 double y = line switch
                 {
-                    Keywords.Underline => Math.Round(rectangle.Top + styleSource.ActualFont.UnderlineOffset),
+                    Keywords.Underline => rectangle.Top + ResolveAutomaticUnderlineCenterOffset(
+                        styleSource.ActualFont, pen.Width, g.PixelsPerPoint),
                     Keywords.LineThrough => rectangle.Top + rectangle.Height / 2f,
                     Keywords.Overline => rectangle.Top,
                     _ => double.NaN
@@ -764,6 +765,21 @@ namespace PeachPDF.Html.Core.Paint
         /// </remarks>
         internal static bool SkipsInk(CssBox styleSource) =>
             styleSource.TextDecorationSkipInk.Value != TextDecorationSkipInk.None;
+
+        /// <summary>
+        /// Resolves the center of an automatically positioned underline relative to the text rectangle's
+        /// top edge. The underline's top edge stays below the alphabetic baseline by at least one CSS
+        /// pixel, with the gap growing to half the stroke thickness (rounded up to a CSS pixel), matching
+        /// browser behavior for a thick line. Since <see cref="RGraphics.DrawLine"/> centers its stroke on
+        /// the supplied coordinate, half the thickness is added once more to obtain that center.
+        /// </summary>
+        private static double ResolveAutomaticUnderlineCenterOffset(
+            RFont font, double thickness, double pixelsPerPoint)
+        {
+            var cssPixel = Length.PointsPerPx * pixelsPerPoint;
+            var gap = Math.Max(cssPixel, Math.Ceiling(thickness / (2 * cssPixel)) * cssPixel);
+            return font.Ascent + gap + thickness / 2;
+        }
 
         /// <summary>
         /// Whether <paramref name="box"/>'s lines run left to right, which is what both decoration

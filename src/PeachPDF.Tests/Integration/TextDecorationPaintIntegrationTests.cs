@@ -168,6 +168,27 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task TextDecorationThickness_ThickUnderline_KeepsItsTopEdgeBelowTheBaseline()
+        {
+            var (root, container) = await BuildAndLayout(Wrap(
+                "<span id='s' style='font-size:20pt; text-decoration:underline; text-decoration-thickness:6px'>text</span>"));
+            var s = FindById(root, "s")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            var rect = s.Rectangles.Values.Single();
+            var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
+            var expectedGap = System.Math.Ceiling(line.Width / (2 * cssPixel)) * cssPixel;
+            var expectedCenter = rect.Top + s.ActualFont.Ascent + expectedGap + line.Width / 2;
+
+            Assert.Equal(expectedCenter, line.Y1, 3);
+            Assert.True(line.Y1 - line.Width / 2 >= rect.Top + s.ActualFont.Ascent + cssPixel,
+                "the thick stroke's top edge must not grow upward into the glyphs");
+        }
+
+        [Fact]
         public async Task TextDecorationThickness_ExplicitPercentage_ResolvesAgainstFontSize()
         {
             var (root, container) = await BuildAndLayout(Wrap(
