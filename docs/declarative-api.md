@@ -122,18 +122,45 @@ container.Text(t =>
 ## Images
 
 ```csharp
-container.Image(imageBytes);                 // byte[]
+container.Image(imageBytes);                 // byte[] - raster or SVG, detected automatically
 container.Image(stream);                     // Stream, read fully
 container.Image(new Uri("https://example.com/logo.png"));
 container.Image(@"C:\assets\logo.png");      // local file path
 
-// Reuse the same resolved image in more than one place:
+// Reuse the same resolved image in more than one place - decoded once, not once per placement:
 var logo = PdfImage.FromFile(@"C:\assets\logo.png");
 container.Image(logo);
 otherContainer.Image(logo);
 ```
 
-Byte/stream sources are wrapped as an inline `data:` URI, so no network access is needed to place them; sizing/fit uses the ordinary `Width`/`Height` decorators on the container wrapping the image.
+`Image(byte[])`/`Image(Stream)` decode directly into the image the container places (no `data:` URI round trip); `Image(Uri)`/`Image(string filePath)` still load lazily, over the network or from disk. `PdfImage.FromFile`/`FromBytes`/`FromStream` load once and cache the decoded result, so placing the same `PdfImage` instance in more than one container (even across pages) decodes its source only the first time.
+
+An image placed with `Image` sizes itself from its own intrinsic dimensions (the raster's pixel size, or an SVG's `width`/`height`/`viewBox`) unless the image itself - not the container it's chained onto - is given an explicit size; `Width`/`Height` called before `Image`/`Svg` sizes the *container* the image sits in, which the image doesn't automatically stretch to fill (ordinary CSS replaced-element sizing - the same as an `<img>` with no `width`/`height` of its own inside a sized `<div>`). To make image content fill a container of a known size, generate or author it at that size directly, or use the dynamic overloads below, which do fill by default.
+
+### Standalone SVG
+
+```csharp
+container.Svg(svgMarkup);   // string
+container.Svg(stream);      // Stream, read fully
+container.Svg(svgBytes);    // byte[]
+```
+
+Parses SVG markup directly into a real vector image, painted with PeachPDF's own SVG renderer - the same one an inline `<svg>` or `<img src="x.svg">` already uses on the HTML side, so anything on the [SVG feature matrix](supported-svg-features.md) works here too.
+
+### Dynamic (size-aware) content
+
+```csharp
+container.Width(300).Height(160).Image(size =>
+{
+    // size.Width/size.Height are the container's own resolved point size - generate content
+    // at exactly that size instead of a guessed fixed one.
+    return RenderChartAsPng((int)size.Width, (int)size.Height);
+});
+
+container.Width(300).Height(160).Svg(size => RenderChartAsSvgMarkup(size.Width, size.Height));
+```
+
+`Image(Func<PdfSize, byte[]>)`/`Svg(Func<PdfSize, string>)` run their callback once layout knows the container's resolved size, and - unlike the other overloads above - fill that container by default (`width: 100%; height: 100%`), so the generated content is sized to fit rather than needing its own explicit dimensions. The container itself still needs a definite resolved size for this to mean anything: an explicit `Width`/`Height`, or an ancestor that already has one (the page content area, a table cell with a definite column width, a `Row`/`Column` item with an explicit size); an indefinite container throws `InvalidOperationException` rather than generating content at a garbled or zero size. Each callback runs exactly once, even across the layout engine's own internal convergence passes.
 
 ## Hyperlinks and bookmarks
 
@@ -241,6 +268,5 @@ page.Footer(footer =>
 
 ## Known v1 limitations
 
-- **No standalone SVG or `Placeholder` element yet.** Both are planned; `Placeholder` needs new paint code (it has no CSS mapping at all), while standalone SVG just needs wiring to PeachPDF's existing SVG support.
 - **No sectioned page numbers** (a page count scoped to/counted from a named section) — only document-wide `CurrentPageNumber()`/`TotalPages()`.
-- **No callback-driven raster image generation, per-image compression/DPI override, or `ShrinkToFit`/`ScaleToPageSize`** for a declarative document — each of these needs a caller-provided image at a pixel size or a re-run of the whole builder callback that a hand-built tree has no equivalent for; document-wide settings on `PdfGenerateConfig` (`DownscaleImages`, `PixelsPerInch`, ...) still apply.
+- **No per-image compression/DPI override, or `ShrinkToFit`/`ScaleToPageSize`** for a declarative document — each of these needs a re-run of the whole builder callback that a hand-built tree has no equivalent for; document-wide settings on `PdfGenerateConfig` (`DownscaleImages`, `PixelsPerInch`, ...) still apply.

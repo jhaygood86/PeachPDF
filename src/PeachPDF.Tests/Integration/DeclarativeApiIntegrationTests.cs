@@ -8,9 +8,11 @@ using PeachPDF.Html.Core.Utils;
 using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;
 using PeachPDF.PdfSharpCore.Drawing;
+using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -929,41 +931,358 @@ namespace PeachPDF.Tests.Integration
                 }), properties);
         }
 
+        // A genuine, minimal, decodable 1x1 PNG - Tier 1 (Image(byte[])/Image(Stream)/Image(PdfImage))
+        // decodes eagerly at declarative-build time, unlike the old data-URI-wrapping design, so a test
+        // exercising it needs bytes a real decoder actually accepts, not just PNG-shaped magic bytes.
+        private static readonly byte[] MinimalPng = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP4/58BAAT/Af9jgNErAAAAAElFTkSuQmCC");
+
         [Fact]
-        public void ContainerImage_AllOverloads_SetImgSrcOnANewChildBox()
+        public void ContainerImage_ByteStreamOverloads_DecodeEagerlyIntoARealCssBoxImage()
         {
             var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
             var properties = new CssPropertyFactory(adapter);
 
             var byBytes = DocumentBuilder.BuildPage(
-                page => page.Content(c => c.Image(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0 })), properties);
+                page => page.Content(c => c.Image(MinimalPng)), properties);
             var imgFromBytes = Assert.Single(byBytes.RootBox.Boxes);
-            Assert.Equal("img", imgFromBytes.HtmlTag!.Name, ignoreCase: true);
-            Assert.StartsWith("data:image/png;base64,", imgFromBytes.HtmlTag.TryGetAttribute("src", ""));
+            // The box must be a genuine CssBoxImage - not just an "img"-tagged plain CssBox (the pre-
+            // existing bug this PR fixes: CssBox.CreateBox(CssBox, HtmlTag) - the overload every other
+            // terminal here uses - never dispatches by tag name, so it silently produced a plain CssBox
+            // that FragmentContentPainters.For's CssBoxImage => ImagePainter arm never matched, and the
+            // image never painted at all).
+            var imageBox = Assert.IsType<CssBoxImage>(imgFromBytes);
+            Assert.NotNull(imageBox.Image);
+            // No src at all - decoded directly, no data-URI/ImageLoadHandler round trip.
+            Assert.True(string.IsNullOrEmpty(imageBox.HtmlTag!.TryGetAttribute("src", "")));
 
             var byStream = DocumentBuilder.BuildPage(
-                page => page.Content(c => c.Image(new MemoryStream(new byte[] { 0xFF, 0xD8, 0xFF }))), properties);
-            var imgFromStream = Assert.Single(byStream.RootBox.Boxes);
-            Assert.StartsWith("data:image/jpeg;base64,", imgFromStream.HtmlTag!.TryGetAttribute("src", ""));
+                page => page.Content(c => c.Image(new MemoryStream(MinimalPng))), properties);
+            var imageFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.RootBox.Boxes));
+            Assert.NotNull(imageFromStream.Image);
+        }
+
+        [Fact]
+        public async Task ContainerImage_ReachesTheFragmentTreePaintActuallyConsumes()
+        {
+            // Regression coverage for the exact bug this PR fixes: a declarative Image() box reaching
+            // paint at all. A CssBoxImage existing in the CssBox tree (the other tests in this file) is
+            // not by itself proof it paints - FragmentContentPainters.For dispatches by box TYPE, so a
+            // plain CssBox with an "img" tag (what CssBox.CreateBox(CssBox,HtmlTag) silently produced
+            // before this fix) would never reach ImagePainter, and the image would render as nothing, with
+            // every structural assertion above still passing. Laying out for real and confirming the box
+            // actually produces a fragment is what proves it reaches the paint consumers rely on.
+            CssBox? imageBox = null;
+
+            var (_, container) = await BuildAndLayoutPage(page =>
+            {
+                page.Content(c =>
+                {
+                    var cb = (ContainerBuilder)c.Width(50).Height(50);
+                    cb.Image(MinimalPng);
+                    imageBox = Assert.Single(cb.Box.Boxes);
+                });
+            });
+
+            Assert.IsType<CssBoxImage>(imageBox);
+            // FragmentOf itself is the meaningful assertion here (it fails the test if the box produced
+            // no fragment at all on this page) - a box excluded from the fragment tree can never reach
+            // paint regardless of its own C# type.
+            FragmentPaintHarness.FragmentOf(container, imageBox!);
+        }
+
+        [Fact]
+        public void ContainerImage_UriAndFilePath_StillGoThroughTheLazySrcPath()
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(adapter);
 
             var byUri = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Image(new Uri("https://example.com/pic.png"))), properties);
-            var imgFromUri = Assert.Single(byUri.RootBox.Boxes);
+            var imgFromUri = Assert.IsType<CssBoxImage>(Assert.Single(byUri.RootBox.Boxes));
             Assert.Equal("https://example.com/pic.png", imgFromUri.HtmlTag!.TryGetAttribute("src", ""));
 
             var byPath = DocumentBuilder.BuildPage(
                 page => page.Content(c => c.Image("C:/some/local/path.png")), properties);
-            var imgFromPath = Assert.Single(byPath.RootBox.Boxes);
+            var imgFromPath = Assert.IsType<CssBoxImage>(Assert.Single(byPath.RootBox.Boxes));
             Assert.Equal("C:/some/local/path.png", imgFromPath.HtmlTag!.TryGetAttribute("src", ""));
+        }
 
-            var sharedImage = PdfImage.FromBytes(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0 });
+        [Fact]
+        public void ContainerImage_SharedPdfImage_ResolvesOnceAndReusesTheSameDecodedImage()
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(adapter);
+
+            var sharedImage = PdfImage.FromBytes(MinimalPng);
             var byPdfImage1 = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedImage)), properties);
             var byPdfImage2 = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedImage)), properties);
-            var img1 = Assert.Single(byPdfImage1.RootBox.Boxes);
-            var img2 = Assert.Single(byPdfImage2.RootBox.Boxes);
-            var src1 = img1.HtmlTag!.TryGetAttribute("src", "");
-            Assert.StartsWith("data:image/png;base64,", src1);
-            Assert.Equal(src1, img2.HtmlTag!.TryGetAttribute("src", ""));
+            var img1 = Assert.IsType<CssBoxImage>(Assert.Single(byPdfImage1.RootBox.Boxes));
+            var img2 = Assert.IsType<CssBoxImage>(Assert.Single(byPdfImage2.RootBox.Boxes));
+
+            Assert.NotNull(img1.Image);
+            // The whole point of a shared PdfImage: the second placement reuses the exact same decoded
+            // RImage instance rather than decoding the bytes a second time.
+            Assert.Same(img1.Image, img2.Image);
+        }
+
+        private const string MinimalSvg =
+            """<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>""";
+
+        [Fact]
+        public void ContainerSvg_StringStreamAndBytesOverloads_ParseIntoARealSvgDocument()
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(adapter);
+
+            var byString = DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(MinimalSvg)), properties);
+            var imgFromString = Assert.IsType<CssBoxImage>(Assert.Single(byString.RootBox.Boxes));
+            Assert.NotNull(imgFromString.SvgDocument);
+            Assert.Null(imgFromString.Image);
+
+            var byStream = DocumentBuilder.BuildPage(
+                page => page.Content(c => c.Svg(new MemoryStream(Encoding.UTF8.GetBytes(MinimalSvg)))), properties);
+            var imgFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.RootBox.Boxes));
+            Assert.NotNull(imgFromStream.SvgDocument);
+
+            var byBytes = DocumentBuilder.BuildPage(
+                page => page.Content(c => c.Svg(Encoding.UTF8.GetBytes(MinimalSvg))), properties);
+            var imgFromBytes = Assert.IsType<CssBoxImage>(Assert.Single(byBytes.RootBox.Boxes));
+            Assert.NotNull(imgFromBytes.SvgDocument);
+        }
+
+        [Fact]
+        public void ContainerSvg_ByteAndStreamOverloads_StripALeadingUtf8Bom()
+        {
+            // Encoding.UTF8.GetString (used before this test's own fix) leaves a leading BOM as a literal
+            // U+FEFF character, which XElement.Parse rejects outright - same bug, same fix, as
+            // PdfImage.Resolve's own BOM handling (see ContainerImage_PdfImageFromSvgBytes_...WithBom).
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(adapter);
+            var bomPrefixedBytes = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes(MinimalSvg)).ToArray();
+
+            var byBytes = DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(bomPrefixedBytes)), properties);
+            var imgFromBytes = Assert.IsType<CssBoxImage>(Assert.Single(byBytes.RootBox.Boxes));
+            Assert.NotNull(imgFromBytes.SvgDocument);
+
+            var byStream = DocumentBuilder.BuildPage(
+                page => page.Content(c => c.Svg(new MemoryStream(bomPrefixedBytes))), properties);
+            var imgFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.RootBox.Boxes));
+            Assert.NotNull(imgFromStream.SvgDocument);
+        }
+
+        [Fact]
+        public void ContainerSvg_Stream_NeverClosesTheCallersStream()
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(adapter);
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(MinimalSvg));
+
+            DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(stream)), properties);
+
+            // Every other Stream-accepting overload in this API (Image(Stream), PdfImage.FromStream) reads
+            // the caller's stream fully but never disposes it - Svg(Stream) used to differ by wrapping it
+            // directly in a StreamReader, whose Dispose (via `using`) closes the underlying stream too.
+            Assert.True(stream.CanRead);
+        }
+
+        [Fact]
+        public async Task ContainerSvg_ReachesTheFragmentTreePaintActuallyConsumes()
+        {
+            CssBox? svgBox = null;
+
+            var (_, container) = await BuildAndLayoutPage(page =>
+            {
+                page.Content(c =>
+                {
+                    var cb = (ContainerBuilder)c.Width(50).Height(50);
+                    cb.Svg(MinimalSvg);
+                    svgBox = Assert.Single(cb.Box.Boxes);
+                });
+            });
+
+            Assert.IsType<CssBoxImage>(svgBox);
+            FragmentPaintHarness.FragmentOf(container, svgBox!);
+        }
+
+        [Fact]
+        public void ContainerImage_PdfImageFromSvgBytes_DetectsSvgAutomatically()
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(adapter);
+
+            var sharedSvg = PdfImage.FromBytes(Encoding.UTF8.GetBytes(MinimalSvg));
+            var descriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedSvg)), properties);
+            var imgBox = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.RootBox.Boxes));
+
+            Assert.NotNull(imgBox.SvgDocument);
+            Assert.Null(imgBox.Image);
+        }
+
+        [Fact]
+        public void ContainerImage_PdfImageFromSvgBytes_DetectsSvgPastLeadingWhitespaceAndBom()
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(adapter);
+
+            var bom = new byte[] { 0xEF, 0xBB, 0xBF };
+            var leadingWhitespace = "  \n\t"u8.ToArray();
+            var bytes = bom.Concat(leadingWhitespace).Concat(Encoding.UTF8.GetBytes(MinimalSvg)).ToArray();
+
+            var sharedSvg = PdfImage.FromBytes(bytes);
+            var descriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(sharedSvg)), properties);
+            var imgBox = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.RootBox.Boxes));
+
+            Assert.NotNull(imgBox.SvgDocument);
+        }
+
+        [Fact]
+        public async Task DynamicImageAndSvg_ReceiveThePdfSizeTheContainerResolvesTo()
+        {
+            PdfSize? receivedRasterSize = null;
+            PdfSize? receivedSvgSize = null;
+            CssBox? rasterBox = null;
+            CssBox? svgBox = null;
+
+            var (_, container) = await BuildAndLayoutPage(page =>
+            {
+                page.Content(c =>
+                {
+                    c.Column(column =>
+                    {
+                        var rasterCb = (ContainerBuilder)column.Item().Width(120).Height(80);
+                        rasterCb.Image(size =>
+                        {
+                            receivedRasterSize = size;
+                            return MinimalPng;
+                        });
+                        rasterBox = Assert.Single(rasterCb.Box.Boxes);
+
+                        var svgCb = (ContainerBuilder)column.Item().Width(64).Height(32);
+                        svgCb.Svg(size =>
+                        {
+                            receivedSvgSize = size;
+                            return MinimalSvg;
+                        });
+                        svgBox = Assert.Single(svgCb.Box.Boxes);
+                    });
+                });
+            });
+
+            Assert.NotNull(receivedRasterSize);
+            Assert.Equal(120, receivedRasterSize!.Value.Width, precision: 1);
+            Assert.Equal(80, receivedRasterSize.Value.Height, precision: 1);
+            Assert.NotNull(((CssBoxImage)rasterBox!).Image);
+
+            Assert.NotNull(receivedSvgSize);
+            Assert.Equal(64, receivedSvgSize!.Value.Width, precision: 1);
+            Assert.Equal(32, receivedSvgSize.Value.Height, precision: 1);
+            Assert.NotNull(((CssBoxImage)svgBox!).SvgDocument);
+
+            // Fill-by-default: the dynamic content box itself resolves to its parent's own size - asserted
+            // on the real, post-layout resolved replaced-element word (Words[0].Width/Height, the
+            // established convention for an inline replaced element - see
+            // ReplacedElementIntrinsicSizeTests - since an inline-level box like <img> never commits its
+            // own Size.Width/Height the way a block box does; that geometry lives on the word instead),
+            // not just that a fragment happened to exist. CssBoxImage.ResolveDynamicContent writes this
+            // box's own width/height as absolute points once TryResolveDefiniteSize knows them, rather
+            // than leaving them as a percentage - MeasureIntrinsicSize's own percentage-width/height
+            // resolution for a replaced element turned out to be independently broken (confirmed against
+            // a plain HTML <img style="width:100%"> too - a pre-existing bug outside this PR's own scope,
+            // flagged separately) and would otherwise size this box to 0 regardless of this feature.
+            Assert.InRange(rasterBox!.Words[0].Width, 119, 121);
+            Assert.InRange(rasterBox.Words[0].Height, 79, 81);
+            Assert.InRange(svgBox!.Words[0].Width, 63, 65);
+            Assert.InRange(svgBox.Words[0].Height, 31, 33);
+
+            FragmentPaintHarness.FragmentOf(container, rasterBox!);
+            FragmentPaintHarness.FragmentOf(container, svgBox!);
+        }
+
+        [Fact]
+        public async Task DynamicImage_CallbackRunsExactlyOnce_EvenAcrossMultipleLayoutPasses()
+        {
+            var callCount = 0;
+
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(c =>
+                {
+                    var cb = (ContainerBuilder)c.Width(100).Height(100);
+                    cb.Image(_ =>
+                    {
+                        callCount++;
+                        return MinimalPng;
+                    });
+                });
+            });
+
+            Assert.Equal(1, callCount);
+        }
+
+        [Fact]
+        public async Task DynamicImage_RowGrowItemWithExplicitHeightOnly_ResolvesTheFlexDistributedWidth()
+        {
+            // The unverified case the plan flagged: a flex-grow item's own width comes from flex
+            // distribution, not a literal declared length or an already-settled ancestor size the way a
+            // block containing block's width is. Confirmed empirically here (not assumed) that it still
+            // resolves correctly - CSS flex layout settles an item's own main-size (width, in a row) before
+            // resolving its cross-size content, the same top-down-width ordering block layout has.
+            PdfSize? received = null;
+
+            await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(400), PdfLength.Points(300));
+                page.Margin(0);
+                page.Content(c =>
+                {
+                    c.Row(row =>
+                    {
+                        var growItem = (ContainerBuilder)row.Item().Grow().Height(80);
+                        growItem.Image(size =>
+                        {
+                            received = size;
+                            return MinimalPng;
+                        });
+                    });
+                });
+            });
+
+            Assert.NotNull(received);
+            Assert.Equal(400, received!.Value.Width, precision: 1);
+            Assert.Equal(80, received.Value.Height, precision: 1);
+        }
+
+        [Fact]
+        public async Task DynamicImage_GrowItemWithNoExplicitHeight_StillResolvesAPageAwareFallbackHeight()
+        {
+            // Verified empirically (not assumed): a bare Grow() row item's own auto cross-size (height)
+            // still resolves here, rather than throwing - CssLayoutEngine.GetBoxHeight's own root/page-
+            // awareness (an ancestor's auto height is never truly unbounded once it bottoms out at the
+            // page's own band height) reaches even a flex item nested this shallowly. The
+            // InvalidOperationException path (thrown when TryResolveDefiniteSize genuinely fails) is
+            // still real defensive code for a container this test doesn't reach - a deeper/differently
+            // nested indefinite ancestor - documented as a real possibility in this method's own doc
+            // comment, not asserted against a specific repro here.
+            PdfSize? received = null;
+
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(c =>
+                {
+                    c.Row(row =>
+                    {
+                        var growItem = (ContainerBuilder)row.Item().Grow();
+                        growItem.Image(size =>
+                        {
+                            received = size;
+                            return MinimalPng;
+                        });
+                    });
+                });
+            });
+
+            Assert.NotNull(received);
         }
 
         [Fact]
@@ -1381,19 +1700,43 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public void PdfImage_FromFileAndFromStream_ProduceExpectedSources()
+        public void PdfSize_ExposesWidthHeightAndFormatsAsPoints()
         {
-            var fromFile = PdfImage.FromFile("C:/some/path.png");
-            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
-            var properties = new CssPropertyFactory(adapter);
-            var descriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(fromFile)), properties);
-            var img = Assert.Single(descriptor.RootBox.Boxes);
-            Assert.Equal("C:/some/path.png", img.HtmlTag!.TryGetAttribute("src", ""));
+            var size = new PdfSize(120, 80);
+            Assert.Equal(120, size.Width);
+            Assert.Equal(80, size.Height);
+            Assert.Equal("120pt x 80pt", size.ToString());
+        }
 
-            var fromStream = PdfImage.FromStream(new MemoryStream(new byte[] { 0xFF, 0xD8, 0xFF }));
-            var streamDescriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(fromStream)), properties);
-            var streamImg = Assert.Single(streamDescriptor.RootBox.Boxes);
-            Assert.StartsWith("data:image/jpeg;base64,", streamImg.HtmlTag!.TryGetAttribute("src", ""));
+        [Fact]
+        public void PdfImage_FromFileAndFromStream_ResolveARealDecodedImage()
+        {
+            // PdfImage.FromFile's own decode is lazy (deferred to Resolve, since no adapter exists yet at
+            // FromFile call time) but the FILE READ now happens eagerly the moment it's placed (inside
+            // BuildPage, not at layout/paint time) - unlike Image(string filePath)'s own still-lazy
+            // ImageLoadHandler path - so this needs a real file on disk, not just a path string.
+            var tempFile = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllBytes(tempFile, MinimalPng);
+
+                var fromFile = PdfImage.FromFile(tempFile);
+                var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+                var properties = new CssPropertyFactory(adapter);
+                var descriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(fromFile)), properties);
+                var img = Assert.IsType<CssBoxImage>(Assert.Single(descriptor.RootBox.Boxes));
+                Assert.NotNull(img.Image);
+                Assert.True(string.IsNullOrEmpty(img.HtmlTag!.TryGetAttribute("src", "")));
+
+                var fromStream = PdfImage.FromStream(new MemoryStream(MinimalPng));
+                var streamDescriptor = DocumentBuilder.BuildPage(page => page.Content(c => c.Image(fromStream)), properties);
+                var streamImg = Assert.IsType<CssBoxImage>(Assert.Single(streamDescriptor.RootBox.Boxes));
+                Assert.NotNull(streamImg.Image);
+            }
+            finally
+            {
+                File.Delete(tempFile);
+            }
         }
 
         // ─── Test harness ───────────────────────────────────────────────────────────────────────────

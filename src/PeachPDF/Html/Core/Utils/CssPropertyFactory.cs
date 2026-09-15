@@ -19,6 +19,15 @@ namespace PeachPDF.Html.Core.Utils
     {
         private readonly CssValueParser _parser = new(adapter);
 
+        /// <summary>
+        /// The adapter this whole document build is running against - exposed so a declarative content
+        /// method that needs to decode in-memory bytes directly into an engine type (<c>RImage</c> via
+        /// <see cref="RAdapter.ImageFromStream"/>, an <c>SvgDocument</c> via <c>SvgTreeBuilder.Build</c>)
+        /// can do so without a data-URI/<c>ImageLoadHandler</c> round trip - see <c>ContainerBuilder</c>'s
+        /// <c>Image</c>/<c>Svg</c> overloads.
+        /// </summary>
+        public RAdapter Adapter => adapter;
+
         /// <summary>Sets <paramref name="box"/>'s <paramref name="propertyName"/> to the raw CSS text <paramref name="value"/>.</summary>
         public void Set(CssBox box, string propertyName, string value) =>
             CssUtils.SetPropertyValue(_parser, box, propertyName, value);

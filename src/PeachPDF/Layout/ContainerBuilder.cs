@@ -1,10 +1,14 @@
+using PeachPDF.Html.Adapters;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
+using PeachPDF.Svg;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Xml.Linq;
 
 namespace PeachPDF.Layout
 {
@@ -338,7 +342,7 @@ namespace PeachPDF.Layout
         {
             ArgumentNullException.ThrowIfNull(data);
             MarkTerminal();
-            PlaceImage(DataUri.FromBytes(data));
+            CreateImageBox().SetDecodedContent(DecodeRasterBytes(data), null);
         }
 
         public void Image(Stream stream)
@@ -346,7 +350,8 @@ namespace PeachPDF.Layout
             ArgumentNullException.ThrowIfNull(stream);
             using var ms = new MemoryStream();
             stream.CopyTo(ms);
-            Image(ms.ToArray());
+            MarkTerminal();
+            CreateImageBox().SetDecodedContent(DecodeRasterBytes(ms.ToArray()), null);
         }
 
         public void Image(Uri uri)
@@ -367,13 +372,109 @@ namespace PeachPDF.Layout
         {
             ArgumentNullException.ThrowIfNull(image);
             MarkTerminal();
-            PlaceImage(image.Source);
+            var (decodedImage, svgDocument) = image.Resolve(properties.Adapter);
+            CreateImageBox().SetDecodedContent(decodedImage, svgDocument);
         }
 
-        private void PlaceImage(string src)
+        public void Image(Func<PdfSize, byte[]> generator)
         {
-            var image = CssBox.CreateBox(box, new HtmlTag("img", true, new Dictionary<string, string> { ["src"] = src }));
-            _ = image;
+            ArgumentNullException.ThrowIfNull(generator);
+            MarkTerminal();
+            var imageBox = CreateFillingImageBox();
+            imageBox.SetDynamicRasterContent(generator);
+        }
+
+        public void Svg(string svgMarkup)
+        {
+            ArgumentNullException.ThrowIfNull(svgMarkup);
+            MarkTerminal();
+            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(svgMarkup));
+        }
+
+        public void Svg(Stream stream)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            MarkTerminal();
+            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(ms.ToArray()));
+        }
+
+        public void Svg(byte[] data)
+        {
+            ArgumentNullException.ThrowIfNull(data);
+            MarkTerminal();
+            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(data));
+        }
+
+        public void Svg(Func<PdfSize, string> generator)
+        {
+            ArgumentNullException.ThrowIfNull(generator);
+            MarkTerminal();
+            var imageBox = CreateFillingImageBox();
+            imageBox.SetDynamicSvgContent(generator);
+        }
+
+        /// <summary>
+        /// Places a lazily-loaded <c>&lt;img src="..."&gt;</c> - the network/file/data-URI path
+        /// <see cref="Image(Uri)"/>/<see cref="Image(string)"/> still use (an eager in-memory decode,
+        /// as the other overloads use, doesn't apply when the source isn't in memory yet).
+        /// </summary>
+        private void PlaceImage(string src) =>
+            CreateImageBox(new Dictionary<string, string> { ["src"] = src });
+
+        /// <summary>
+        /// Creates a real, correctly-typed <see cref="CssBoxImage"/> child of the wrapped box - the
+        /// tag-dispatching <see cref="CssBox.CreateBox(HtmlTag, CssBox?)"/> overload (not the parent-first
+        /// one every other terminal here uses, which always constructs a plain <see cref="CssBox"/>
+        /// regardless of tag name - so the resulting box actually reaches <c>FragmentContentPainters.For</c>'s
+        /// <c>CssBoxImage =&gt; ImagePainter</c> arm and gets the intrinsic-sizing/image-content handling
+        /// only that concrete type implements. That overload doesn't call <see cref="CssBox.InheritStyle"/>
+        /// itself (the normal HTML parse path defers that to its own later whole-tree cascade pass, which
+        /// a declaratively-built tree never runs), so this does it explicitly, matching
+        /// <see cref="CssPropertyFactory.CreateAnonymousBox"/>'s identical own call.
+        /// </summary>
+        private CssBoxImage CreateImageBox(Dictionary<string, string>? attributes = null)
+        {
+            var image = (CssBoxImage)CssBox.CreateBox(new HtmlTag("img", true, attributes), box);
+            image.InheritStyle();
+            return image;
+        }
+
+        /// <summary>
+        /// A dynamic content box (<see cref="Image(Func{PdfSize,byte[]})"/>/<see cref="Svg(Func{PdfSize,string})"/>)
+        /// fills its parent by default (<c>width:100%;height:100%</c>) - "available space" is whatever
+        /// this container already resolves to, matching QuestPDF's own dynamic-image framing (its own doc
+        /// example wraps the dynamic image in an explicitly-sized/`AspectRatio`d container, rather than
+        /// sizing the image call itself) - see <see cref="IContainer.Image(Func{PdfSize,byte[]})"/>'s own
+        /// doc comment for the full size-resolution rule this depends on.
+        /// </summary>
+        private CssBoxImage CreateFillingImageBox()
+        {
+            var imageBox = CreateImageBox();
+            properties.Set(imageBox, "width", "100%");
+            properties.Set(imageBox, "height", "100%");
+            return imageBox;
+        }
+
+        private RImage DecodeRasterBytes(byte[] bytes) =>
+            properties.Adapter.ImageFromStream(new MemoryStream(bytes));
+
+        private SvgDocument DecodeSvgMarkup(string svgMarkup) =>
+            SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(svgMarkup)), properties.Adapter);
+
+        /// <summary>
+        /// Decodes raw SVG markup bytes - <see cref="StreamReader"/> with BOM detection (not
+        /// <see cref="Encoding.UTF8"/>.<see cref="Encoding.GetString(byte[])"/> directly), so a leading
+        /// UTF-8 BOM - common in SVG files saved by many editors - is stripped rather than surviving into
+        /// the decoded string as a literal U+FEFF character, which <see cref="XElement.Parse(string)"/>
+        /// rejects outright ("Data at the root level is invalid"). Same fix as <see cref="PdfImage.Resolve"/>'s
+        /// own BOM handling.
+        /// </summary>
+        private SvgDocument DecodeSvgMarkup(byte[] svgBytes)
+        {
+            using var reader = new StreamReader(new MemoryStream(svgBytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            return DecodeSvgMarkup(reader.ReadToEnd());
         }
 
         public void LineHorizontal(PdfLength thickness, PdfColor? color = null, bool dashed = false)
