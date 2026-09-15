@@ -21,6 +21,7 @@ using PeachPDF.Layout;
 - [Tables](#tables)
 - [Lists](#lists)
 - [Headers, footers, and page numbers](#headers-footers-and-page-numbers)
+  - [Sectioned page numbers](#sectioned-page-numbers)
 - [Known v1 limitations](#known-v1-limitations)
 
 ## Quick start
@@ -266,7 +267,34 @@ page.Footer(footer =>
 
 `Header`/`Footer` content repeats at the top/bottom of every physical page the page's own content paginates across (the same `position: running()` + `@page` margin-box mechanism an HTML document uses for repeating headers). `CurrentPageNumber()`/`TotalPages()` only resolve inside `Header`/`Footer` content — a page number has no meaning in ordinary flowing content.
 
+### Sectioned page numbers
+
+A page count scoped to a named part of the document, rather than the whole thing - "Page 2 of 5" within a chapter, not the whole report:
+
+```csharp
+container.Column(column =>
+{
+    column.Item().Text("Cover / table of contents...");
+
+    column.Item().BeginPageNumberOfSection("chapter1").Text("Chapter 1");
+    column.Item().Text("Chapter 1 content, spanning several pages...");
+    column.Item().EndPageNumberOfSection("chapter1").Text("End of Chapter 1.");
+
+    column.Item().Text("Appendix...");
+});
+
+page.Footer(footer => footer.Text(t =>
+{
+    t.Span("Page ");
+    t.PageNumberWithinSection("chapter1");
+    t.Span(" of ");
+    t.TotalPagesWithinSection("chapter1");
+}));
+```
+
+`BeginPageNumberOfSection(id)`/`EndPageNumberOfSection(id)` are decorators, like `Bookmark` - they tag whatever container they're chained onto (rather than placing content of their own), so chain one before that container's own terminal content and it can go anywhere in a page's normal content flow (not just `Header`/`Footer`). `PageNumberWithinSection(id)`/`TotalPagesWithinSection(id)` then resolve against the physical pages that pair of tagged containers land on, the same way `CurrentPageNumber()`/`TotalPages()` do - only inside `Header`/`Footer` content, and continuously renumbered per document page. The current-page-within-section number is deliberately unclamped outside the section itself: it climbs by exactly one per document page throughout the whole document, so it reads non-positive before the section starts and past the total after it ends - a footer that only wants to show it inside the section's own pages should condition on that itself. An id with no matching `BeginPageNumberOfSection` call (a typo, or a forgotten call) resolves to `1` rather than throwing, the same fallback an unresolved `target-counter()` reference already uses.
+
 ## Known v1 limitations
 
-- **No sectioned page numbers** (a page count scoped to/counted from a named section) — only document-wide `CurrentPageNumber()`/`TotalPages()`.
+- **No `Placeholder` prototyping element** — unlike every other terminal method here, a placeholder has no CSS mapping at all, so it needs genuinely new paint code rather than a wrapper over an existing property.
 - **No per-image compression/DPI override, or `ShrinkToFit`/`ScaleToPageSize`** for a declarative document — each of these needs a re-run of the whole builder callback that a hand-built tree has no equivalent for; document-wide settings on `PdfGenerateConfig` (`DownscaleImages`, `PixelsPerInch`, ...) still apply.

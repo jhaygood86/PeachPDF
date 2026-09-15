@@ -10231,6 +10231,108 @@ await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Decl
         });
     });
 
+const string sectionedPageNumbersSource =
+    """
+    var generator = new PdfGenerator();
+
+    var document = await generator.CreateDocument(doc =>
+    {
+        doc.Page(page =>
+        {
+            page.Size(PageSize.A4);
+            page.Margin(36);
+            page.Footer(footer => footer.Text(t =>
+            {
+                t.Alignment(TextAlignment.Center);
+                t.Span("Doc ");
+                t.CurrentPageNumber();
+                t.Span("/");
+                t.TotalPages();
+                t.Span("  ·  Chapter ");
+                t.PageNumberWithinSection("chapter1");
+                t.Span("/");
+                t.TotalPagesWithinSection("chapter1");
+            }));
+            page.Content(content => content.Column(column =>
+            {
+                column.Spacing(12);
+                column.Item().Text(t => t.Span("Front matter (outside the section)").Bold().FontSize(16));
+                for (var i = 0; i < 10; i++)
+                {
+                    column.Item().Height(28).Text($"Front matter, line {i + 1}. Not counted by the chapter's own page numbers.");
+                }
+
+                column.Item().BeginPageNumberOfSection("chapter1").Text(t => t.Span("Chapter 1").Bold().FontSize(16));
+                for (var i = 0; i < 24; i++)
+                {
+                    var paragraph = column.Item().Height(28);
+                    if (i == 23) paragraph = paragraph.EndPageNumberOfSection("chapter1");
+                    paragraph.Text($"Chapter 1, paragraph {i + 1}.");
+                }
+
+                column.Item().Text(t => t.Span("Appendix (outside the section)").Bold().FontSize(16));
+                for (var i = 0; i < 10; i++)
+                {
+                    column.Item().Height(28).Text($"Appendix, line {i + 1}. Also not counted by the chapter's own page numbers.");
+                }
+            }));
+        });
+    });
+
+    var stream = new MemoryStream();
+    document.Save(stream);
+    """;
+
+await SaveDeclarativeShowcaseAsync("declarative_sectioned_page_numbers", "Document Building", "Sectioned Page Numbers",
+    "BeginPageNumberOfSection/EndPageNumberOfSection mark a chapter's own page range; PageNumberWithinSection/TotalPagesWithinSection then resolve \"page 2 of 5\" scoped to just that chapter, shown here alongside the document-wide CurrentPageNumber/TotalPages for comparison - unsectioned front matter and an appendix bracket the chapter to make the difference visible.",
+    sectionedPageNumbersSource,
+    async gen =>
+    {
+        return await gen.CreateDocument(doc =>
+        {
+            doc.Page(page =>
+            {
+                page.Size(PageSize.A4);
+                page.Margin(36);
+                page.Footer(footer => footer.Text(t =>
+                {
+                    t.Alignment(TextAlignment.Center);
+                    t.Span("Doc ");
+                    t.CurrentPageNumber();
+                    t.Span("/");
+                    t.TotalPages();
+                    t.Span("  ·  Chapter ");
+                    t.PageNumberWithinSection("chapter1");
+                    t.Span("/");
+                    t.TotalPagesWithinSection("chapter1");
+                }));
+                page.Content(content => content.Column(column =>
+                {
+                    column.Spacing(12);
+                    column.Item().Text(t => t.Span("Front matter (outside the section)").Bold().FontSize(16));
+                    for (var i = 0; i < 10; i++)
+                    {
+                        column.Item().Height(28).Text($"Front matter, line {i + 1}. Not counted by the chapter's own page numbers.");
+                    }
+
+                    column.Item().BeginPageNumberOfSection("chapter1").Text(t => t.Span("Chapter 1").Bold().FontSize(16));
+                    for (var i = 0; i < 24; i++)
+                    {
+                        var paragraph = column.Item().Height(28);
+                        if (i == 23) paragraph = paragraph.EndPageNumberOfSection("chapter1");
+                        paragraph.Text($"Chapter 1, paragraph {i + 1}.");
+                    }
+
+                    column.Item().Text(t => t.Span("Appendix (outside the section)").Bold().FontSize(16));
+                    for (var i = 0; i < 10; i++)
+                    {
+                        column.Item().Height(28).Text($"Appendix, line {i + 1}. Also not counted by the chapter's own page numbers.");
+                    }
+                }));
+            });
+        });
+    });
+
 if (benchmarkMode)
 {
     PrintBenchmarkReport();

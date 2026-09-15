@@ -27,5 +27,20 @@ namespace PeachPDF.Layout
         /// page count has no meaning outside repeating per-page content.
         /// </summary>
         ITextSpan TotalPages();
+
+        /// <summary>
+        /// Appends the current page number counted from the start of the page-numbered section
+        /// <paramref name="sectionId"/> (see <see cref="IContainer.BeginPageNumberOfSection"/>) - 1 on the
+        /// section's own first page, 2 on its second, and so on. Only resolves inside
+        /// <see cref="IPageDescriptor.Header"/>/<see cref="IPageDescriptor.Footer"/> content, the same as
+        /// <see cref="CurrentPageNumber"/>.
+        /// </summary>
+        ITextSpan PageNumberWithinSection(string sectionId);
+
+        /// <summary>
+        /// Appends the total page count of the page-numbered section <paramref name="sectionId"/> - see
+        /// <see cref="PageNumberWithinSection"/>.
+        /// </summary>
+        ITextSpan TotalPagesWithinSection(string sectionId);
     }
 }

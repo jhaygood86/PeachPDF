@@ -590,5 +590,19 @@ namespace PeachPDF.Layout
 
             handler(new ListDescriptorBuilder(listBox, properties));
         }
+
+        public IContainer BeginPageNumberOfSection(string sectionId)
+        {
+            ArgumentNullException.ThrowIfNull(sectionId);
+            box.SectionBeginId = sectionId;
+            return this;
+        }
+
+        public IContainer EndPageNumberOfSection(string sectionId)
+        {
+            ArgumentNullException.ThrowIfNull(sectionId);
+            box.SectionEndId = sectionId;
+            return this;
+        }
     }
 }

@@ -770,6 +770,225 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Footer_PageNumberWithinSectionAndTotalPagesWithinSection_ResolvePerPageAgainstTheMarkedSection()
+        {
+            var (_, container) = await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(300), PdfLength.Points(300));
+                page.Margin(20);
+                page.Footer(f =>
+                {
+                    f.Text(t =>
+                    {
+                        t.Span("S:");
+                        t.PageNumberWithinSection("body");
+                        t.Span("/");
+                        t.TotalPagesWithinSection("body");
+                    });
+                });
+                page.Content(c =>
+                {
+                    c.Column(column =>
+                    {
+                        // Enough lines before the section starts to spill onto a second document page
+                        // before the section's own first page (260pt of content per page / 30pt items
+                        // fits 8 per page), so its own first page isn't document page 1 - otherwise a bug
+                        // that always returned the document's own page number (ignoring the begin marker
+                        // entirely) could pass by coincidence.
+                        for (var i = 0; i < 12; i++)
+                        {
+                            column.Item().Height(30).Text($"Before {i}");
+                        }
+
+                        for (var i = 0; i < 40; i++)
+                        {
+                            var item = column.Item().Height(30);
+                            if (i == 0) item = item.BeginPageNumberOfSection("body");
+                            if (i == 39) item = item.EndPageNumberOfSection("body");
+                            item.Text($"Body {i}");
+                        }
+
+                        // And enough lines after the section ends to spill onto a further page, for the
+                        // same reason in reverse.
+                        for (var i = 0; i < 12; i++)
+                        {
+                            column.Item().Height(30).Text($"After {i}");
+                        }
+                    });
+                });
+            });
+
+            Assert.True(container.FragmentTree!.Fragmentainers.Count >= 5,
+                "need pages before, spanning, and after the section to actually distinguish this from CurrentPageNumber()/TotalPages()");
+
+            var currents = new System.Collections.Generic.List<int>();
+            var totals = new System.Collections.Generic.List<int>();
+
+            foreach (var fragmentainer in container.FragmentTree.Fragmentainers)
+            {
+                var footerMarginBox = Assert.Single(fragmentainer.MarginBoxes, m => m.BoxName == "bottom-center");
+                var footerText = string.Concat(CollectFragmentWords(footerMarginBox.Content));
+
+                // "S:{current}/{total}"
+                var match = System.Text.RegularExpressions.Regex.Match(footerText, @"^S:(-?\d+)/(\d+)$");
+                Assert.True(match.Success, $"unexpected footer text '{footerText}'");
+                currents.Add(int.Parse(match.Groups[1].Value));
+                totals.Add(int.Parse(match.Groups[2].Value));
+            }
+
+            // The total is a fixed fact about the section (its own page span), not the current page -
+            // every page agrees on it.
+            Assert.All(totals, t => Assert.Equal(totals[0], t));
+            var total = totals[0];
+
+            // The current-page-within-section number climbs by exactly one per document page,
+            // unconditionally - including before the section starts (non-positive) and after it ends
+            // (beyond the total). This is the documented, deliberately unclamped behavior: a section is
+            // defined entirely by its own begin/end markers' pages, with no special-casing for a caller
+            // reading it outside that range.
+            for (var i = 1; i < currents.Count; i++)
+            {
+                Assert.Equal(currents[i - 1] + 1, currents[i]);
+            }
+
+            // Exactly one page has current == 1 (the section's own first page) and exactly one has
+            // current == total (its own last page) - the begin/end markers' own pages, found without
+            // assuming exactly how many lines fit per page.
+            Assert.Equal(1, currents.Count(v => v == 1));
+            Assert.Equal(1, currents.Count(v => v == total));
+            Assert.True(currents[0] <= 0, "the section starts after document page 1, so its first page's footer should show a non-positive current value");
+            Assert.True(currents[^1] > total, "the section ends before the last document page, so its last page's footer should show a value past the total");
+        }
+
+        [Fact]
+        public async Task Footer_PageNumberWithinSection_SinglePageSection_CurrentAndTotalAreBothOne()
+        {
+            var (_, container) = await BuildAndLayoutPage(page =>
+            {
+                page.Size(PdfLength.Points(300), PdfLength.Points(300));
+                page.Margin(20);
+                page.Footer(f => f.Text(t =>
+                {
+                    t.PageNumberWithinSection("solo");
+                    t.Span("/");
+                    t.TotalPagesWithinSection("solo");
+                }));
+                page.Content(c => c.Column(column =>
+                {
+                    column.Item().BeginPageNumberOfSection("solo").EndPageNumberOfSection("solo").Text("Only line in the section.");
+                }));
+            });
+
+            Assert.Single(container.FragmentTree!.Fragmentainers);
+            var footerMarginBox = Assert.Single(container.FragmentTree.Fragmentainers[0].MarginBoxes, m => m.BoxName == "bottom-center");
+            Assert.Equal("1/1", string.Concat(CollectFragmentWords(footerMarginBox.Content)));
+        }
+
+        [Fact]
+        public async Task Footer_PageNumberWithinSection_UnknownSectionId_FallsBackToOne()
+        {
+            // BeginPageNumberOfSection/EndPageNumberOfSection were never called for this id (a typo, or a
+            // section the caller forgot to mark) - resolves to the same "1" placeholder a target-counter(_,
+            // page) with an unresolved target already falls back to, rather than throwing.
+            var (_, container) = await BuildAndLayoutPage(page =>
+            {
+                page.Footer(f => f.Text(t =>
+                {
+                    t.PageNumberWithinSection("never-marked");
+                    t.Span("/");
+                    t.TotalPagesWithinSection("never-marked");
+                }));
+                page.Content(c => c.Text("Just some content."));
+            });
+
+            var footerMarginBox = Assert.Single(container.FragmentTree!.Fragmentainers[0].MarginBoxes, m => m.BoxName == "bottom-center");
+            Assert.Equal("1/1", string.Concat(CollectFragmentWords(footerMarginBox.Content)));
+        }
+
+        [Fact]
+        public async Task Footer_TotalPagesWithinSection_BeginMarkerWithNoMatchingEndMarker_FallsBackToOne()
+        {
+            // A caller called BeginPageNumberOfSection but forgot the matching EndPageNumberOfSection -
+            // PageNumberWithinSection (which only ever needs the begin marker) still resolves correctly;
+            // only TotalPagesWithinSection (which also needs the end marker) falls back.
+            var (_, container) = await BuildAndLayoutPage(page =>
+            {
+                page.Footer(f => f.Text(t =>
+                {
+                    t.PageNumberWithinSection("unclosed");
+                    t.Span("/");
+                    t.TotalPagesWithinSection("unclosed");
+                }));
+                page.Content(c => c.Column(column =>
+                {
+                    column.Item().BeginPageNumberOfSection("unclosed").Text("No EndPageNumberOfSection call follows.");
+                }));
+            });
+
+            var footerMarginBox = Assert.Single(container.FragmentTree!.Fragmentainers[0].MarginBoxes, m => m.BoxName == "bottom-center");
+            Assert.Equal("1/1", string.Concat(CollectFragmentWords(footerMarginBox.Content)));
+        }
+
+        [Fact]
+        public async Task PageNumberWithinSection_UsedOutsideHeaderOrFooter_RendersEmpty()
+        {
+            // Matches CurrentPageNumber()/TotalPages()'s own documented behavior for the same reason: both
+            // are resolved only by the per-page running-element refresh, which never runs outside a
+            // Header/Footer's own content.
+            CssBox? span = null;
+
+            var (root, _) = await BuildAndLayoutPage(page =>
+            {
+                page.Content(c => c.Text(t =>
+                {
+                    t.Span("Before ");
+                    span = ((TextStyleApplier)t.PageNumberWithinSection("body")).Box;
+                    t.Span(" after");
+                }));
+            });
+
+            Assert.True(LayoutHarnessContains(root, span!));
+            Assert.True(string.IsNullOrEmpty(span!.Text));
+        }
+
+        [Fact]
+        public async Task BeginAndEndPageNumberOfSection_TagTheExistingContainer_DoNotInsertAnExtraFlexItem()
+        {
+            // Regression: an earlier design placed a dedicated zero-size marker box per Begin/End call,
+            // which - even at zero size - still consumed its own flex item slot, adding a full unwanted
+            // Column.Spacing() gap on each side of it (CSS row-gap applies between every pair of adjacent
+            // flex items regardless of their own size). BeginPageNumberOfSection/EndPageNumberOfSection
+            // now tag whatever container the caller already has instead of creating a new one, so the gap
+            // between consecutive items should be exactly one Spacing() value throughout - not two around
+            // a tagged item.
+            CssBox? itemA = null, itemB = null, itemC = null;
+
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(c => c.Column(column =>
+                {
+                    column.Spacing(12);
+                    itemA = ((ContainerBuilder)column.Item().Height(20).Background(PdfColor.Red)).Box;
+
+                    var b = (ContainerBuilder)column.Item().Height(20).BeginPageNumberOfSection("gap-check");
+                    itemB = b.Box;
+
+                    itemC = ((ContainerBuilder)column.Item().Height(20).EndPageNumberOfSection("gap-check")).Box;
+                }));
+            });
+
+            Assert.NotNull(itemA);
+            Assert.NotNull(itemB);
+            Assert.NotNull(itemC);
+
+            var gapAB = itemB!.Location.Y - itemA!.ActualBottom;
+            var gapBC = itemC!.Location.Y - itemB.ActualBottom;
+
+            Assert.Equal(12, gapAB, precision: 1);
+            Assert.Equal(12, gapBC, precision: 1);
+        }
+
+        [Fact]
         public async Task Bookmark_SetsLevelAndLabel_ReadableByBookmarkOutlineBuilder()
         {
             CssBox? box = null;
