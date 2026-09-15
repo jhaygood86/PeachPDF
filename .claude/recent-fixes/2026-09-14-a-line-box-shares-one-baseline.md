@@ -94,13 +94,17 @@ own midpoint by 0.09pt — exactly half a half-leading. The inline pass now read
 `baseline`; `vertical-align` is not inherited (§10.8.1), so a cell's value reaching that point can only
 ever have been the cell's own.
 
+## Follow-up: replaced and atomic inline content
+
+Issue #1053 is now closed by the same shared-baseline path. A replaced atomic word (`<img>`, inline
+`<svg>`, MathML, or a form control) contributes its complete margin-box extent above its bottom
+margin-edge baseline, then moves that edge onto `CssLineBox.BaselineY`. An inline ancestor containing
+only the replaced word takes the same precomputed delta, keeping its bubbled background/border
+rectangle coupled to the child. `BaselineAlignmentLayoutIntegrationTests` covers every replaced word
+type, a non-zero image margin, positive leading, and the wrapper case.
+
 ## Deliberately not done
 
-- **Replaced and atomic inlines still sit at the line's top**, not with their bottom margin edge on
-  the baseline — see
-  [`../accepted-gaps/replaced-inline-content-is-not-baseline-aligned.md`](../accepted-gaps/replaced-inline-content-is-not-baseline-aligned.md).
-  Half-doing it would be worse than not: aligning text while leaving an image on the same line at the
-  top is neither the old behaviour nor the correct one.
 - **Negative leading overflows downwards only** — see
   [`../accepted-gaps/negative-leading-does-not-lift-ink-out-of-its-line-box.md`](../accepted-gaps/negative-leading-does-not-lift-ink-out-of-its-line-box.md).
   The floor is line-wide, so the shared baseline is preserved exactly; only the whole line's ink

@@ -2952,10 +2952,10 @@ namespace PeachPDF.Html.Core.Dom
         /// box shared one baseline offset, which is true only while every font on the line is the same
         /// size.
         /// <para>
-        /// Replaced and atomic inline content is deliberately absent: §10.8 sizes those from the
-        /// element's own box rather than from font metrics, and this engine still aligns them to the
-        /// line's top rather than its baseline (see <see cref="ApplyVerticalAlignment"/>), so they grow
-        /// the line through <c>MaxBottom</c> at the call site instead of through this.
+        /// Replaced and atomic inline content is deliberately absent here: §10.8 sizes those from the
+        /// element's own margin box rather than from font metrics. <see cref="ApplyVerticalAlignment"/>
+        /// folds that geometry into the closed line's baseline extent; <c>MaxBottom</c> at the call site
+        /// keeps the still-open line large enough for wrapping and fragmentation decisions.
         /// </para>
         /// <para>
         /// Shared by both line-layout engines — <see cref="FlowBox"/> for horizontal writing modes and
@@ -2977,7 +2977,10 @@ namespace PeachPDF.Html.Core.Dom
 
             var extent = HalfLeadingExtentOf(strutStyle.ActualFont, strutStyle.ActualLineHeight);
 
-            if (word.FirstLineStyle is null)
+            // A replaced element's own line-height does not contribute; its margin box is added by
+            // GrowLineToItsExtent instead. A non-replaced inline ancestor around it still owns an
+            // ordinary inline box, so the loop below deliberately continues to include those.
+            if (word.FirstLineStyle is null && !word.IsImage)
                 extent = extent.Union(HalfLeadingExtentOf(ownerBox.ActualFont, ownerBox.ActualLineHeight));
 
             // A word owned by the block itself has no inline ancestors. Starting at its parent in
@@ -3034,6 +3037,19 @@ namespace PeachPDF.Html.Core.Dom
             {
                 var line = coordinates.Line;
                 var extent = LineBoxContributionOf(word, blockBox);
+
+                if (word.IsImage)
+                {
+                    // A replaced inline's line-height does not size its line box. Its complete margin
+                    // box does, with the bottom margin edge as its baseline (CSS 2.1 §10.8.1). Record
+                    // that while the line is still open as well as in ApplyVerticalAlignment: wrapping,
+                    // fragmentation, the next line's Y, and the containing block's final bottom all read
+                    // MaxBottom before final alignment runs.
+                    var atomicExtent = new LineBoxExtent(
+                        word.OwnerBox.ActualMarginTop + word.Height + word.OwnerBox.ActualMarginBottom,
+                        0);
+                    extent = extent.Union(atomicExtent);
+                }
 
                 // An outside marker is not in this flow (IsOutsideMarker), but it does sit on this
                 // line's baseline, so the line has to be tall enough to hold it - otherwise a marker
@@ -5397,19 +5413,93 @@ namespace PeachPDF.Html.Core.Dom
                 flowTop = Math.Max(flowTop, lineBox.Rectangles[box].Top);
             }
 
+            // An atomic inline contributes its whole margin box around its baseline (CSS 2.1
+            // §10.8.1), not just the font metrics its phantom word inherited. A replaced element's
+            // baseline is its bottom margin edge. A text-bearing inline-block instead uses the
+            // baseline of its last in-flow line box while overflow is visible. FlowBox lays
+            // the inline-block's words down inside its top border and padding, but those words also feed
+            // the surrounding line's ordinary font extent. If a plain text sibling follows, its earlier
+            // FlowTop wins and the baseline below used to ignore the atomic box's top inset; alignment
+            // then pulled the inline-block upward by exactly border-top + padding-top, into the preceding
+            // block. Fold the atomic margin-box distances into the shared extent before resolving that
+            // baseline, so surrounding text moves down to the inline-block's internal baseline instead.
+            var baselineExtent = lineBox.BaselineExtent;
+            var baselineOrigin = lineBox.FlowTop ?? flowTop;
+
+            foreach (var (box, rect) in lineBox.Rectangles)
+            {
+                if (box.VerticalAlign.Value.Keyword != VerticalAlignment.Baseline)
+                {
+                    continue;
+                }
+
+                var marginTop = rect.Top - box.ActualMarginTop;
+                var marginBottom = rect.Bottom + box.ActualMarginBottom;
+                double atomicBaseline;
+
+                if (box.IsImage)
+                {
+                    // CssRect.IsImage is the engine's atomic replaced-word flag, shared by raster
+                    // images, inline SVG, MathML, form controls, and vector shape markers. Their
+                    // default baseline is the bottom margin edge (CSS 2.1 §10.8.1).
+                    atomicBaseline = marginBottom;
+                }
+                else if (box.DerivedStyle.ActualDisplay != Keywords.InlineBlock)
+                {
+                    continue;
+                }
+                else if (box.Overflow.Value != Overflow.Visible)
+                {
+                    // §10.8.1 uses the bottom margin edge when overflow is not visible, even if the
+                    // inline-block does have in-flow line boxes of its own.
+                    atomicBaseline = marginBottom;
+                }
+                else if (FirstNonReplacedWordOf(box, lineBox) is { } word
+                    && ReferenceEquals(box.FirstHostingLineBox, lineBox)
+                    && ReferenceEquals(box.LastHostingLineBox, lineBox))
+                {
+                    atomicBaseline = word.Top + (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent;
+                }
+                else if (!HasWordOnLine(box, lineBox))
+                {
+                    // With no in-flow line box, §10.8.1 puts an inline-block's baseline at its bottom
+                    // margin edge. Including that extent here lets a tall empty box grow the line above
+                    // the baseline rather than merely being moved after the line height was settled.
+                    atomicBaseline = marginBottom;
+                }
+                else
+                {
+                    continue;
+                }
+
+                var atomicExtent = new LineBoxExtent(
+                    atomicBaseline - marginTop,
+                    marginBottom - atomicBaseline);
+
+                baselineExtent = baselineExtent is { } held ? held.Union(atomicExtent) : atomicExtent;
+
+                // Replaced words are initially placed at FlowTop without their vertical margins. Their
+                // top margin therefore belongs below that origin and alignment moves the border box down
+                // by it. Inline-block rectangles already include their flow-relative vertical position,
+                // so retain the older margin-edge origin for those.
+                if (!box.IsImage)
+                    baselineOrigin = Math.Min(baselineOrigin, marginTop);
+            }
+
+            lineBox.BaselineExtent = baselineExtent;
+
             // CSS 2.1 §10.8.1: the line box's baseline sits AboveBaseline below its top, and every
             // inline box on it hangs its own content area from that one baseline - so a box whose font
             // is smaller than the line's tallest moves DOWN to meet it, rather than staying flush with
             // the line's top as it did while this engine had no baseline of its own. Corrected below by
             // the same floor the boxes themselves get, so this names the baseline they actually sit on.
-            lineBox.BaselineY = lineBox.BaselineExtent is { } lineExtent
-                ? (lineBox.FlowTop ?? flowTop) + lineExtent.AboveBaseline
+            lineBox.BaselineY = baselineExtent is { } lineExtent
+                ? baselineOrigin + lineExtent.AboveBaseline
                 : null;
 
             // How far a box has to move from where the flow left it to sit on this line's baseline.
-            // Zero for anything the baseline does not govern: a line with no baseline at all, and a box
-            // holding nothing but replaced/atomic content, which §10.8 aligns by its own box rather than
-            // by font metrics and which this engine still leaves at the line's top.
+            // Zero for anything the baseline does not govern: a line with no baseline at all, or a box
+            // that has neither text nor atomic replaced content on this line.
             //
             // Expressed as a shift of the whole box - rectangle and words together, via
             // OffsetBoxWithinLine - rather than as an absolute top for its words alone. An inline box's
@@ -5420,12 +5510,32 @@ namespace PeachPDF.Html.Core.Dom
             // directly (a <span> around an anonymous text box, an inline-block around its label) still has
             // to move with the content it wraps, or its background and border part company with the words
             // inside it. Null means the baseline does not govern this box at all.
-            (CssRect Word, double Delta)? BaselineShiftOf(CssBox box)
+            (double FlowTop, double Delta)? BaselineShiftOf(CssBox box)
             {
                 if (lineBox.BaselineY is not { } baselineY) return null;
-                if (FirstNonReplacedWordOf(box, lineBox) is not { } word) return null;
 
-                return (word, baselineY - (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent - word.Top);
+                if (box.DerivedStyle.ActualDisplay == Keywords.InlineBlock
+                    && lineBox.Rectangles.TryGetValue(box, out var rect)
+                    && (box.Overflow.Value != Overflow.Visible || !HasWordOnLine(box, lineBox)))
+                {
+                    return (rect.Top, baselineY - (rect.Bottom + box.ActualMarginBottom));
+                }
+
+                if (FirstNonReplacedWordOf(box, lineBox) is { } word)
+                    return (word.Top, baselineY - (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent - word.Top);
+
+                // Replaced content aligns its bottom margin edge with the shared baseline. Use the
+                // replaced word's owner even while visiting an inline ancestor around it: both the
+                // descendant's word/rectangle and the ancestor's bubbled decoration rectangle then
+                // receive the same delta, so a wrapping span's background stays attached.
+                if (FirstReplacedWordOf(box, lineBox) is { } replaced
+                    && lineBox.Rectangles.TryGetValue(replaced.OwnerBox, out var replacedRect))
+                {
+                    return (replacedRect.Top,
+                        baselineY - (replacedRect.Bottom + replaced.OwnerBox.ActualMarginBottom));
+                }
+
+                return null;
             }
 
             // A ::first-line rule's vertical-align (if it sets one) applies to everything on the
@@ -5461,8 +5571,9 @@ namespace PeachPDF.Html.Core.Dom
             // its baseline, those rectangles sit half a leading below the line's top and end half a
             // leading above its bottom, so reading them alone would align `vertical-align: top` to the
             // topmost INK rather than to the line box §10.8.1 defines it against. The rectangles are
-            // still folded in, because replaced content grows the line without contributing to its
-            // baseline extent (see LineBoxContributionOf) and can reach past both edges.
+            // still folded in because top/bottom-aligned content can reach past the baseline extent,
+            // and because replaced content grows the open line through MaxBottom before its margin-box
+            // extent is folded into the closed line above.
             var lineTop = lineBox.FlowTop ?? double.MaxValue;
             var lineBottom = lineBox.FlowTop is { } lineBoxTop && lineBox.BaselineExtent is { } boxExtent
                 ? lineBoxTop + boxExtent.Height
@@ -5505,8 +5616,8 @@ namespace PeachPDF.Html.Core.Dom
 
                 baselineDeltas[box] = shift.Delta;
                 governed.Add(box);
-                flowInkTop = Math.Min(flowInkTop, shift.Word.Top);
-                alignedInkTop = Math.Min(alignedInkTop, shift.Word.Top + shift.Delta);
+                flowInkTop = Math.Min(flowInkTop, shift.FlowTop);
+                alignedInkTop = Math.Min(alignedInkTop, shift.FlowTop + shift.Delta);
             }
 
             // Negative leading is spread evenly over a line, so holding the line's topmost ink at the top
@@ -5635,8 +5746,9 @@ namespace PeachPDF.Html.Core.Dom
         /// when it re-derives these offsets over the closed line, so the two cannot disagree — see the
         /// note there on why it holds it line-wide rather than per word.
         /// <para>
-        /// Zero for replaced and atomic inline content, which §10.8 sizes from the element's own box
-        /// rather than from font metrics, and which this engine leaves at the line's top.
+        /// Zero for replaced and atomic inline content, which §10.8 sizes and aligns from the element's
+        /// own margin box rather than from font metrics; <see cref="ApplyVerticalAlignment"/> handles it
+        /// after the line closes.
         /// </para>
         /// </remarks>
         private static double HalfLeadingOffsetOf(CssRect word, CssLineBox lineBox)
@@ -5655,13 +5767,8 @@ namespace PeachPDF.Html.Core.Dom
         /// decide whether the baseline governs it at all.
         /// </summary>
         /// <remarks>
-        /// Null for a box whose content on this line is entirely replaced/atomic — an
-        /// <c>&lt;img&gt;</c>, an inline <c>&lt;svg&gt;</c>, MathML, a form control, a vector list-marker
-        /// glyph — including an inline ancestor wrapping nothing else, so a <c>&lt;span&gt;</c>'s
-        /// background cannot part company with the image inside it. CSS 2.1
-        /// <see href="https://www.w3.org/TR/CSS21/visudet.html#leading">§10.8</see> sizes those from the
-        /// element's own box and would sit its bottom margin edge on the baseline; this engine still
-        /// leaves them at the line's top, which is the remaining gap here.
+        /// Null for a box whose content on this line is entirely replaced/atomic — that case is found
+        /// separately by <see cref="FirstReplacedWordOf"/> and aligned from its bottom margin edge.
         /// </remarks>
         private static CssRect? FirstNonReplacedWordOf(CssBox box, CssLineBox lineBox)
         {
@@ -5676,6 +5783,46 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// The first atomic replaced word in <paramref name="box"/>'s subtree on
+        /// <paramref name="lineBox"/>, or null when it has none there. Walking ancestors as well as the
+        /// direct owner keeps an inline wrapper's decoration rectangle coupled to the replaced element
+        /// it contains when baseline alignment moves both.
+        /// </summary>
+        private static CssRect? FirstReplacedWordOf(CssBox box, CssLineBox lineBox)
+        {
+            foreach (var word in lineBox.Words)
+            {
+                if (!word.IsImage) continue;
+
+                for (var owner = word.OwnerBox; owner is not null; owner = owner.ParentBox)
+                {
+                    if (ReferenceEquals(owner, box)) return word;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s subtree owns any word on <paramref name="lineBox"/>,
+        /// including replaced content. Used to distinguish a genuinely empty inline-block (whose
+        /// baseline is its bottom margin edge) from one whose line contains only an image or another
+        /// atomic word and therefore needs that content's baseline handling.
+        /// </summary>
+        private static bool HasWordOnLine(CssBox box, CssLineBox lineBox)
+        {
+            foreach (var word in lineBox.Words)
+            {
+                for (var owner = word.OwnerBox; owner is not null; owner = owner.ParentBox)
+                {
+                    if (ReferenceEquals(owner, box)) return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

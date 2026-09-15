@@ -34,11 +34,14 @@ fitted.** Break decisions are made against the word's real position, which now i
 half-leading, so a tall `line-height` over a small font no longer keeps a line on a page its line box
 overflows. Expect at most one fewer line on such a page, and the same content on the next one.
 
+**Replaced and atomic inline content now shares that baseline too.** Raster images, inline SVG,
+MathML and form controls put their bottom margin edge on the text baseline. An inline wrapper around
+one moves with it, so its background and border remain attached. An `inline-block` with visible
+overflow uses its last in-flow line's baseline; an empty one, or one whose overflow is not visible,
+uses its bottom margin edge.
+
 ## What deliberately did not change
 
-- **Replaced and atomic inline content** — an `<img>`, an inline `<svg>`, MathML, a form control, an
-  `inline-block` — still sits at the line's top rather than with its bottom margin edge on the
-  baseline.
 - **A `line-height` shorter than the font** overflows its line box downwards only. The spec (and
   Chrome) let the glyphs overflow above it as well; PeachPDF holds the line's topmost ink at its own
   top edge, because the page a word is drawn on is decided from the word's own box. The line's

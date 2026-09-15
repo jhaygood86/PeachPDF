@@ -162,6 +162,80 @@ namespace PeachPDF.Tests.Integration
                 $"Button label (bottom={word.Bottom}) must end at least padding-bottom (6) above the box bottom ({rect.Bottom})");
         }
 
+        [Fact]
+        public async Task PaddedInlineBlockAfterWrappedCaption_DoesNotOverlapCaptionText()
+        {
+            const string html = @"<!DOCTYPE html>
+<html>
+<head><style>
+body { font: 9pt Arial, sans-serif; margin: 0 }
+.page { width: 482pt }
+.caption { font-size: 7.5pt; margin-bottom: 2pt }
+.row { margin-bottom: 4pt }
+.box { display: inline-block; width: 90pt; padding: 3pt 5pt;
+       border: 1pt solid #1d6fa5; background: #e8f4fb }
+</style></head>
+<body><div class='page'>
+<div class='caption'>Three 90pt boxes: a full one, a one-character one, and an empty one. All three paint the same width and push what follows them to the same place. Only their heights differ, since an empty box has no content to be as tall as.</div>
+<div class='row'><span class='box'>filled right up</span><span class='box'>x</span><span class='box empty'></span>| <span class='after'>text after</span></div>
+</div></body>
+</html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var caption = FindBoxByClass(rootBox, "caption");
+            var row = FindBoxByClass(rootBox, "row");
+            var box = FindBoxByClass(rootBox, "box");
+            var empty = FindBoxByClass(rootBox, "empty");
+            var after = FindBoxByClass(rootBox, "after");
+            Assert.NotNull(caption);
+            Assert.NotNull(row);
+            Assert.NotNull(box);
+            Assert.NotNull(empty);
+            Assert.NotNull(after);
+
+            var captionTextBottom = AllWords(caption!).Max(word => word.Bottom);
+            var boxTop = Assert.Single(box!.Rectangles).Value.Top;
+
+            Assert.True(boxTop >= captionTextBottom,
+                $"The following inline-block must not overlap the caption above it " +
+                $"(box top={boxTop}, caption text bottom={captionTextBottom}, " +
+                $"caption bottom={caption.ActualBottom})");
+            Assert.Equal(caption.ActualBottom + 2, row!.Location.Y, 3);
+            Assert.Equal(row.Location.Y, boxTop, 3);
+
+            var emptyRect = Assert.Single(empty!.Rectangles).Value;
+            var afterWord = FindFirstWord(after!);
+            Assert.NotNull(afterWord);
+            var lineBaseline = afterWord!.Top + afterWord.OwnerBox.ActualFont.Ascent;
+            var filledWord = FindFirstWord(box);
+            Assert.NotNull(filledWord);
+
+            Assert.Equal(lineBaseline, filledWord!.Top + filledWord.OwnerBox.ActualFont.Ascent, 3);
+            Assert.Equal(lineBaseline, emptyRect.Bottom + empty.ActualMarginBottom, 3);
+        }
+
+        [Fact]
+        public async Task InlineBlockWithNonVisibleOverflow_UsesBottomMarginEdgeAsBaseline()
+        {
+            const string html = @"<!DOCTYPE html>
+<html><body style='font:9pt Arial,sans-serif;margin:0'>
+<span class='clipped' style='display:inline-block;overflow:hidden;padding:3pt;border:1pt solid'>x</span><span class='after'>text after</span>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var clipped = FindBoxByClass(rootBox, "clipped");
+            var after = FindBoxByClass(rootBox, "after");
+            Assert.NotNull(clipped);
+            Assert.NotNull(after);
+
+            var rect = Assert.Single(clipped!.Rectangles).Value;
+            var afterWord = FindFirstWord(after!);
+            Assert.NotNull(afterWord);
+            var lineBaseline = afterWord!.Top + afterWord.OwnerBox.ActualFont.Ascent;
+
+            Assert.Equal(lineBaseline, rect.Bottom + clipped.ActualMarginBottom, 3);
+        }
+
         // CssLineBox.UpdateRectangle historically expanded the rect's bottom edge by
         // padding-TOP instead of padding-bottom - invisible with symmetric padding, wrong for
         // asymmetric. With only padding-bottom set, the rect must extend below the words by

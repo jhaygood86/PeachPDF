@@ -133,20 +133,85 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ReplacedContentStaysAtTheLineTop()
+        public async Task AReplacedElementsBottomMarginEdge_SharesTheTextBaseline()
         {
-            // A guard for the gap this change deliberately leaves: CSS 2.1 §10.8 would sit an atomic
-            // inline's bottom margin edge on the baseline, and this engine still leaves it at the line's
-            // top. Stated so that closing it is a visible, deliberate edit rather than an accident.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div id='d' style='font:10pt Arial;line-height:40pt'>x" +
-                $"<img src='{RasterPngFixture.OnePixelDataUri}' style='width:10pt;height:10pt'></div>"));
+                $"<img id='a' src='{RasterPngFixture.OnePixelDataUri}' " +
+                "style='width:10pt;height:10pt;margin:2pt 0 3pt'></div>"));
 
             var block = LayoutHarness.FindById(root, "d")!;
             var line = Assert.Single(block.LineBoxes);
+            var text = WordOf(line, "x");
+            var atomic = LayoutHarness.FindById(root, "a")!;
             var image = Assert.Single(line.Words, w => w.IsImage);
 
-            Assert.Equal(line.LineTop, image.Top, 3);
+            var textBaseline = text.Top + text.OwnerBox.ActualFont.Ascent;
+
+            Assert.Equal(textBaseline, line.BaselineY!.Value, 3);
+            Assert.Equal(textBaseline, image.Bottom + atomic.ActualMarginBottom, 3);
+            Assert.True(image.Top > line.LineTop + 1,
+                $"positive leading must move the image below the line top ({line.LineTop}), was {image.Top}");
+        }
+
+        [Theory]
+        [InlineData("<svg id='a' style='width:10pt;height:10pt'></svg>")]
+        [InlineData("<math id='a'><mi>x</mi></math>")]
+        [InlineData("<input id='a' type='checkbox' style='width:10pt;height:10pt;margin:0'>")]
+        public async Task OtherAtomicReplacedElements_ShareTheTextBaseline(string markup)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='d' style='font:10pt Arial;line-height:40pt'>x{markup}</div>"));
+
+            var block = LayoutHarness.FindById(root, "d")!;
+            var line = Assert.Single(block.LineBoxes);
+            var text = WordOf(line, "x");
+            var atomic = LayoutHarness.FindById(root, "a")!;
+            var atomicWord = Assert.Single(line.Words, w => ReferenceEquals(w.OwnerBox, atomic));
+
+            Assert.True(atomicWord.IsImage, $"{atomic.GetType().Name} must use the atomic replaced-word path");
+            Assert.Equal(text.Top + text.OwnerBox.ActualFont.Ascent,
+                atomicWord.Bottom + atomic.ActualMarginBottom, 3);
+        }
+
+        [Fact]
+        public async Task AnInlineWrapperMovesWithItsBaselineAlignedImage()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='d' style='font:10pt Arial;line-height:40pt'>x" +
+                $"<span id='s' style='padding:2pt'><img id='a' src='{RasterPngFixture.OnePixelDataUri}' " +
+                "style='width:10pt;height:10pt'></span></div>"));
+
+            var block = LayoutHarness.FindById(root, "d")!;
+            var line = Assert.Single(block.LineBoxes);
+            var wrapper = LayoutHarness.FindById(root, "s")!;
+            var atomic = LayoutHarness.FindById(root, "a")!;
+            var wrapperRect = line.Rectangles[wrapper];
+            var atomicRect = line.Rectangles[atomic];
+
+            Assert.True(wrapperRect.Top <= atomicRect.Top);
+            Assert.True(wrapperRect.Bottom >= atomicRect.Bottom);
+        }
+
+        [Fact]
+        public async Task ATallReplacedElement_ReservesTheDescentBelowItsBaseline()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='d' style='font:10pt Arial'>x" +
+                $"<img id='a' src='{RasterPngFixture.OnePixelDataUri}' " +
+                "style='width:10pt;height:30pt;margin-bottom:3pt'></div>"));
+
+            var block = LayoutHarness.FindById(root, "d")!;
+            var line = Assert.Single(block.LineBoxes);
+            var text = WordOf(line, "x");
+            var atomic = LayoutHarness.FindById(root, "a")!;
+            var image = Assert.Single(line.Words, w => w.IsImage);
+
+            Assert.Equal(image.Bottom + atomic.ActualMarginBottom,
+                text.Top + text.OwnerBox.ActualFont.Ascent, 3);
+            var alignedLineBottom = line.BaselineY!.Value + line.BaselineExtent!.Value.BelowBaseline;
+            Assert.True(block.ActualBottom >= alignedLineBottom,
+                $"block bottom {block.ActualBottom} must reserve the aligned line through {alignedLineBottom}");
         }
 
         [Fact]

@@ -211,11 +211,11 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ReplacedInlineContent_StillSizesTheLineFromItsOwnBox_NotTheLineHeight()
+        public async Task ReplacedInlineContent_SizesTheLineFromItsMarginBoxAndTheSharedStrutDescent()
         {
             // §10.8 sizes a *replaced* inline element's contribution from the element's own margin box, not
-            // from line-height - so the narrowing that stopped text words from growing the line must not have
-            // caught images with it. A 40px-tall image on a 12px line must still make the block 40px tall.
+            // from its line-height. Its bottom edge is also the shared baseline, so the block includes the
+            // line's text strut descent below the 40px image — the familiar browser gap below an inline image.
             var html = $$"""
                 <!DOCTYPE html>
                 <html><body style="margin: 0">
@@ -225,8 +225,10 @@ namespace PeachPDF.Tests.Integration
 
             var (root, _) = await BuildCssBoxTree(html);
             var target = FindBoxByClass(root, "t")!;
+            var line = Assert.Single(target.LineBoxes);
 
-            Assert.Equal(40 * PointsPerPx, target.ActualBottom - target.Location.Y, precision: 6);
+            Assert.Equal(40 * PointsPerPx + line.BaselineExtent!.Value.BelowBaseline,
+                target.ActualBottom - target.Location.Y, precision: 6);
         }
 
         [Theory]
