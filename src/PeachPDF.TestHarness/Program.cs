@@ -5772,6 +5772,75 @@ await SaveShowcaseAsync("vertical_align", "Typography & Text", "Vertical Align",
     "vertical-align behaviors for inline content, from baseline and middle to explicit offsets, including its length and percentage forms.",
     verticalAlignHtml, pdfConfig);
 
+// --- atomic inline (inline-block) declared-width showcase (CSS 2.1 §10.3.9) ---
+
+const string AtomicInlineWidthCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0; color: #1a1a1a }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    h2 { font-size: 10pt; margin: 1.1em 0 0.4em; padding-bottom: 2px;
+         border-bottom: 1px solid #bbb; break-after: avoid }
+    p.intro { font-size: 8pt; color: #555; margin: 0 0 0.4em; max-width: 470pt }
+    .row { margin-bottom: 4pt }
+    .caption { font-size: 7.5pt; color: #666; margin-bottom: 2pt }
+    .box { display: inline-block; width: 90pt; padding: 3pt 5pt;
+           border: 1pt solid #1d6fa5; background: #e8f4fb }
+    .key { display: inline-block; width: 120pt; padding: 2pt 5pt;
+           background: #f1f1f1; border-left: 3pt solid #1d6fa5 }
+    .tick { display: inline-block; width: 7pt; padding: 3pt 0 4pt;
+            border: 1pt solid #444; background: #fff }
+    .ticked { background: #1d6fa5; border-color: #1d6fa5 }
+    .sized { display: inline-block; width: 120pt; padding: 3pt 6pt;
+             border: 2pt solid #b8960f; background: #fdf6dd }
+    .borderbox { box-sizing: border-box }
+    .rule { border-top: 1px dashed #c33; width: 120pt; margin: 2pt 0 6pt }
+    </style>
+    """;
+
+var atomicInlineWidthHtml = "<!DOCTYPE html><html><head>" + AtomicInlineWidthCss + "</head><body>" +
+
+    "<h1>Atomic inline sizing</h1>" +
+    "<p class=\"intro\">CSS 2.1 &sect;10.3.9 hands a non-replaced <code>inline-block</code> to shrink-to-fit " +
+    "only when its <code>width</code> is <code>auto</code>. An explicit width is used as declared, and it " +
+    "sizes the box itself &mdash; not merely the room the line reserves for it &mdash; so the background, " +
+    "border and overflow clip are painted at that width whether or not the content fills it.</p>" +
+
+    "<h2>The same declared width, whatever is inside</h2>" +
+    "<div class=\"caption\">Three 90pt boxes: a full one, a one-character one, and an empty one. All " +
+    "three paint the same width and push what follows them to the same place. Only their heights differ, " +
+    "since an empty box has no content to be as tall as.</div>" +
+    "<div class=\"row\"><span class=\"box\">filled right up</span><span class=\"box\">x</span>" +
+    "<span class=\"box\"></span>|&nbsp;text after</div>" +
+
+    "<h2>Fixed-width labels line their values up</h2>" +
+    "<div class=\"caption\">The classic use: a label column whose width comes from the declaration rather " +
+    "than from the longest word in it.</div>" +
+    "<div class=\"row\"><span class=\"key\">Invoice</span> PP&ndash;2026&ndash;0417</div>" +
+    "<div class=\"row\"><span class=\"key\">Issued</span> 15 September 2026</div>" +
+    "<div class=\"row\"><span class=\"key\">Payment terms</span> Net 30</div>" +
+
+    "<h2>An empty box is still a box</h2>" +
+    "<div class=\"caption\">A checkbox glyph has no content at all, so a flow that measured only its words " +
+    "gave it no room and nothing to paint.</div>" +
+    "<div class=\"row\"><span class=\"tick\"></span> Artwork approved" +
+    "&nbsp;&nbsp;<span class=\"tick ticked\"></span> Proof signed off" +
+    "&nbsp;&nbsp;<span class=\"tick\"></span> Sent to press</div>" +
+
+    "<h2>box-sizing decides what the width covers</h2>" +
+    "<div class=\"caption\">Both boxes declare <code>width: 120pt</code> with 6pt of padding and a 2pt " +
+    "border either side. Under <code>content-box</code> the declared width is the content area, so the box " +
+    "paints 136pt wide; under <code>border-box</code> it is the whole box, and 120pt is all of it. The " +
+    "dashed rule below each is exactly 120pt.</div>" +
+    "<div class=\"row\"><span class=\"sized\">content-box</span><div class=\"rule\"></div></div>" +
+    "<div class=\"row\"><span class=\"sized borderbox\">border-box</span><div class=\"rule\"></div></div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("atomic_inline_width", "Layout", "Atomic Inline Sizing",
+    "CSS 2.1 §10.3.9: an explicit width on a display: inline-block sizes the box itself — fixed-width label columns, empty checkbox glyphs, and what box-sizing changes about it.",
+    atomicInlineWidthHtml, pdfConfig);
+
 // --- line-height: normal showcase (CSS 2.1 §10.8.1) ---
 
 const string NormalLineHeightCss = """

@@ -1244,6 +1244,7 @@ namespace PeachPDF.Html.Core.Dom
                 ApplyHorizontalAlignment(lineBox, blockFinished);
                 ApplyBidiReordering(lineBox);
                 BubbleRectangles(blockBox, lineBox);
+                WidenAtomicInlineRectangles(lineBox);
                 ApplyVerticalAlignment(lineBox);
                 lineBox.AssignRectanglesToBoxes();
             }
@@ -2462,6 +2463,68 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Assigns <paramref name="child"/>'s used width from its declared one, per
+        /// <see href="https://www.w3.org/TR/CSS22/visudet.html#inlineblock-width">CSS 2.1 §10.3.9</see>:
+        /// shrink-to-fit sizes a non-replaced inline-block only when its <c>width</c> is <c>auto</c>, and
+        /// an explicit width is used as declared.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Nothing else assigns one on this path. An inline-block whose own content is inlines-only is
+        /// flowed into <paramref name="parent"/>'s line boxes rather than laid out as a box of its own
+        /// (<see cref="FlowAtomicBlockContentChild"/>, which does resolve a width, is only reached when the
+        /// box holds block-level content), so <c>width</c> used to size nothing at all: the box painted its
+        /// background, border and overflow clip at whatever its content happened to measure — nothing at
+        /// all, for an empty one
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1091">#1091</see>).
+        /// </para>
+        /// <para>
+        /// The declared length is the right value for <see cref="CssBox.Size"/> under either
+        /// <c>box-sizing</c>, because <c>Size.Width</c> means whichever one that property selects:
+        /// <c>ActualBoxSizeIncludedWidth</c> adds the padding and border back under <c>content-box</c> and
+        /// adds nothing under <c>border-box</c>. A percentage is deliberately left alone — it resolves
+        /// against a containing block the line being flowed does not know — as is <c>auto</c>, which is
+        /// exactly the case §10.3.9 does hand to shrink-to-fit.
+        /// </para>
+        /// </remarks>
+        /// <param name="child">the box being placed on the line</param>
+        /// <param name="parent">
+        /// the box whose children are being flowed — <paramref name="child"/> when <c>FlowBox</c> is
+        /// iterating over itself, which is not a child placement and so resolves nothing
+        /// </param>
+        /// <returns>
+        /// the used content width, for the caller to reserve on the line — or null when this box is not
+        /// one that declares its own width. Read back off the box rather than returned from the arithmetic
+        /// above so that both numbers are the one assignment, whichever <c>box-sizing</c> is in play.
+        /// </returns>
+        private static double? ResolveAtomicInlineDeclaredWidth(CssBox child, CssBox parent)
+        {
+            if (child.DerivedStyle.ActualDisplay is not Keywords.InlineBlock
+                || ReferenceEquals(child, parent)
+                || !CssValueParser.IsValidLength(child.Width)
+                || child.Width.EndsWith('%'))
+            {
+                return null;
+            }
+
+            var declared = CssValueParser.ParseLength(child.Width, 0, child);
+
+            if (child.BoxSizing.Value is BoxSizingMode.BorderBox)
+            {
+                // css-ui-3 §6.2: under `border-box` the used width is floored so that the content width
+                // cannot become negative - i.e. at the box's own border and padding. Without this the
+                // content width below (AvailableWidth) goes negative and the box reserves less room on
+                // the line than its own border occupies.
+                declared = Math.Max(declared,
+                    child.ActualBorderLeftWidth + child.ActualPaddingLeft
+                    + child.ActualPaddingRight + child.ActualBorderRightWidth);
+            }
+
+            child.Size = new RSize(declared, child.Size.Height);
+            return child.AvailableWidth;
+        }
+
+        /// <summary>
         /// FlowBox's per-exit bookkeeping, once box's content (if any, this pass) has actually been
         /// placed and coordinates reflects where it landed.
         /// </summary>
@@ -2529,10 +2592,17 @@ namespace PeachPDF.Html.Core.Dom
             // padding and border - and the correction below then added them to the line a second time,
             // pushing everything after the box right by one padding+border (issue #1093).
             // `Size.Width` is the declared content width this branch is actually about; for a plain
-            // inline it is 0, so the branch now correctly does nothing at all.
+            // inline it is 0, so the branch now correctly does nothing at all - and an inline-block,
+            // the one inline-level display that does declare a width and still reaches here, is taken
+            // by the branch above instead (see ReserveAtomicInlineUsedWidth for the two things it needs
+            // that this does not do).
             var usedContentWidth = coordinates.CurrentX - startX;
 
-            if (opensHere && box.IsInline && 0 <= usedContentWidth && usedContentWidth < box.Size.Width)
+            if (opensHere && box.DerivedStyle.ActualDisplay is Keywords.InlineBlock)
+            {
+                ReserveAtomicInlineUsedWidth(box, coordinates, startOrdinal, startX, trueStartY, usedContentWidth);
+            }
+            else if (opensHere && box.IsInline && 0 <= usedContentWidth && usedContentWidth < box.Size.Width)
             {
                 // hack for actual width handling
                 coordinates.CurrentX += box.Size.Width - usedContentWidth;
@@ -2598,6 +2668,73 @@ namespace PeachPDF.Html.Core.Dom
             // an invariant of this pair, and #336's whole difficulty was that one half of it could not
             // be trusted.
             if (coordinates.PlacedSince(startOrdinal)) box.LastHostingLineBox = coordinates.Line;
+        }
+
+        /// <summary>
+        /// <see cref="FinalizeFlowBoxExit"/>'s width handling for an atomic inline-level box, per
+        /// <see href="https://www.w3.org/TR/CSS22/visudet.html#inlineblock-width">CSS 2.1 §10.3.9</see>:
+        /// such a box occupies its own used width, and paints its border box at that width whether or not
+        /// its content fills it. The declared width was assigned to <see cref="CssBox.Size"/> before this
+        /// box's content was placed (<see cref="ResolveAtomicInlineDeclaredWidth"/>).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Two things separate this from the plain-inline branch beside it, which is otherwise the same
+        /// idea. First, <c>Size.Width</c> is the <i>border</i>-box width under
+        /// <c>box-sizing: border-box</c>, so it is not the width to reserve between a content-box left
+        /// edge and a trailing spacing the caller adds afterwards; <see cref="CssBox.AvailableWidth"/> is,
+        /// under either value. Second, that branch states the box's rectangle whenever its content came
+        /// out narrower — which for a box whose words <i>did</i> land on this line is then merged with
+        /// the rectangle those words bubble up (<see cref="CssLineBox.UpdateRectangle"/>), an edge-wise
+        /// min/max that moves the box's block axis: a rectangle spanning <c>trueStartY</c> to
+        /// <see cref="CssBox.ActualHeight"/> pulls its top up from the ink to the line's flow top, since
+        /// neither names where the box's content finally settles (<c>ApplyVerticalAlignment</c> has not
+        /// run). Here the rectangle is stated only for a box that visited no word at all — the empty
+        /// checkbox-glyph shape, which has nothing to bubble — and every other one keeps its words'
+        /// rectangle and is widened on the inline axis alone afterwards
+        /// (<see cref="WidenAtomicInlineRectangles"/>).
+        /// </para>
+        /// <para>
+        /// The rectangle is the BORDER box, so it starts one leading border+padding left of
+        /// <paramref name="startX"/> — exactly as <paramref name="trueStartY"/> already steps back over
+        /// the top border and padding. Its content span is whichever is the greater of the declared width
+        /// and what the box did advance the cursor by: a box holding no word of its own can still hold
+        /// something that took room on the line, another empty inline-block's padding say.
+        /// </para>
+        /// </remarks>
+        /// <param name="box">the atomic inline-level box whose flow has just finished</param>
+        /// <param name="coordinates">the line being flowed</param>
+        /// <param name="startOrdinal">the word ordinal when this box was entered</param>
+        /// <param name="startX">this box's content-box left edge on the line</param>
+        /// <param name="trueStartY">this box's border-box top</param>
+        /// <param name="usedContentWidth">how far this box's own content advanced the cursor</param>
+        private static void ReserveAtomicInlineUsedWidth(CssBox box, CssLineBoxCoordinates coordinates,
+            int startOrdinal, double startX, double trueStartY, double usedContentWidth)
+        {
+            // Only on the line this box opened on, which for an atomic inline is the one it closes on
+            // too. One whose own content wrapped has an extent spread over lines that neither a single
+            // advance nor a single rectangle describes - and FlowBox's per-child loop reserves the
+            // declared width on the cursor regardless, so nothing is lost by declining here.
+            if (usedContentWidth < 0 || !ReferenceEquals(box.FirstHostingLineBox, coordinates.Line)) return;
+
+            // Zero for an auto width, where the content's own advance is all there is.
+            var contentWidth = box.AvailableWidth;
+
+            if (usedContentWidth < contentWidth)
+            {
+                coordinates.CurrentX = startX + contentWidth;
+            }
+
+            if (coordinates.WordOrdinal != startOrdinal) return;
+
+            var leadingSpacing = box.ActualBorderLeftWidth + box.ActualPaddingLeft;
+            var trailingSpacing = box.ActualBorderRightWidth + box.ActualPaddingRight;
+
+            coordinates.Line.Rectangles[box] = new RRect(
+                startX - leadingSpacing,
+                trueStartY,
+                leadingSpacing + Math.Max(usedContentWidth, contentWidth) + trailingSpacing,
+                box.ActualHeight);
         }
 
         /// <summary>
@@ -3060,10 +3197,13 @@ namespace PeachPDF.Html.Core.Dom
                 }
 
                 // Where b's own content box starts on this line, after every branch above that can
-                // establish it. An atomic inline-level box has to occupy its declared width from
-                // here, not just the width its words happened to measure - see the advance at the
-                // end of this child's placement.
+                // establish it - which is what an atomic inline-level box's declared width has to be
+                // measured from, since it occupies that width rather than the width its words happened
+                // to measure. Resolved before b's content is placed so that FlowBox's own exit
+                // bookkeeping for b (FinalizeFlowBoxExit) can reserve the rest of it and paint the
+                // border box at it.
                 var childContentStartX = coordinates.CurrentX;
+                var childDeclaredContentWidth = ResolveAtomicInlineDeclaredWidth(b, box);
 
                 if (b.Words.Count > 0)
                 {
@@ -3686,41 +3826,15 @@ namespace PeachPDF.Html.Core.Dom
                     coordinates.CurrentY -= atomicTopInset;
                 }
 
-                // CSS 2.1 §10.3.9: an atomic inline-level box occupies its own used width on the
-                // line, not the width its content happened to measure. The flow otherwise just
-                // accumulates word widths, so `width` on a display: inline-block was inert and
-                // whatever followed sat flush against its text - a fixed-width label span stopped
-                // lining its values up, and an empty bordered inline-block used as a checkbox glyph
-                // took no room at all. The flex/grid path a few hundred lines up already does exactly
-                // this via `CurrentX = b.ClientRight`; this box's own geometry is never assigned on
-                // the plain inline path, so the declared width has to be resolved here instead.
-                //
-                // Only ever forward: content wider than the declared width overflows rather than
-                // being pulled back, which is what `overflow: visible` means. A percentage width is
-                // left alone - it resolves against a containing block this line does not know.
-                if (b.DerivedStyle.ActualDisplay is Keywords.InlineBlock
-                    && !ReferenceEquals(b, box)
-                    && CssValueParser.IsValidLength(b.Width)
-                    && !b.Width.EndsWith('%'))
+                // The declared width also has to be reserved for a box that took the block-content
+                // path above (FlowAtomicBlockContentChild), whose own cursor advance - `CurrentX =
+                // b.ClientRight` - comes out one padding short of the declared content box. Harmless
+                // where the box already reserved it: this only ever moves the cursor forward, and
+                // FinalizeFlowBoxExit has already put it exactly here for a box that went through the
+                // inline-flow path instead.
+                if (childDeclaredContentWidth is { } declaredContentWidth)
                 {
-                    // childContentStartX is the CONTENT-box start (leftSpacing has been applied) and
-                    // rightSpacing is added below, so what belongs between them is the CONTENT width.
-                    // A declared width is that already under box-sizing: content-box, but under
-                    // border-box it also covers the padding and border those two spacings re-add, so
-                    // they come off here or they are counted twice.
-                    //
-                    // Not ActualBoxSizeIncludedWidth: that answers the opposite question - what a
-                    // declared size does NOT include - so it is padding+border for content-box and
-                    // ZERO for border-box, which is a no-op in exactly the case that needs adjusting.
-                    var declared = CssValueParser.ParseLength(b.Width, 0, b);
-
-                    if (b.BoxSizing.Value is BoxSizingMode.BorderBox)
-                    {
-                        declared -= b.ActualPaddingLeft + b.ActualPaddingRight
-                                    + b.ActualBorderLeftWidth + b.ActualBorderRightWidth;
-                    }
-
-                    coordinates.CurrentX = Math.Max(coordinates.CurrentX, childContentStartX + declared);
+                    coordinates.CurrentX = Math.Max(coordinates.CurrentX, childContentStartX + declaredContentWidth);
                 }
 
                 // A box whose content was all placed in an earlier fragmentainer is not re-closed here
@@ -4602,6 +4716,64 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static bool IsFirstChildOfItsParent(CssBox box) =>
             box.ParentBox is { } parent && parent.Boxes.Count > 0 && ReferenceEquals(parent.Boxes[0], box);
+
+        /// <summary>
+        /// Widens each atomic inline-level box on <paramref name="line"/> from the rectangle its own
+        /// content just bubbled up to the used width
+        /// <see href="https://www.w3.org/TR/CSS22/visudet.html#inlineblock-width">CSS 2.1 §10.3.9</see>
+        /// gives it — the declared <c>width</c> <see cref="ResolveAtomicInlineDeclaredWidth"/> assigned,
+        /// which is wider than the content whenever the content does not fill it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Runs here, after <see cref="BubbleRectangles"/>, rather than where the width is reserved on the
+        /// line (<see cref="FinalizeFlowBoxExit"/>), for two reasons. The rectangle does not exist yet at
+        /// that point — the words state it here — so stating one there would mean <i>merging</i> a
+        /// separately-derived block-axis extent into it, and the flow knows nothing about where the box's
+        /// content finally settles vertically; and the rectangle's own left edge is already correct here,
+        /// having been through <c>text-align</c>'s per-line shift and
+        /// <see cref="CssLineBox.UpdateRectangle"/>'s leading-spacing step-back. Anchoring on it keeps this
+        /// a purely inline-axis correction.
+        /// </para>
+        /// <para>
+        /// Only for a box that both opened and closed on this line: <see cref="CssLineBox.UpdateRectangle"/>
+        /// folds a box's leading and trailing border and padding into its rectangle only on those lines, so
+        /// on any other line the rectangle is a slice whose width the box's own used width does not
+        /// describe. An atomic inline is not supposed to have more than one in the first place, but on this
+        /// path its inline content is flowed into the surrounding block's own line boxes and so can wrap.
+        /// </para>
+        /// </remarks>
+        private static void WidenAtomicInlineRectangles(CssLineBox line)
+        {
+            // Gathered before anything is written, and gathered into a list allocated only once there is
+            // something to put in it: this runs for every line of every document, and the overwhelming
+            // majority hold no atomic inline at all.
+            List<CssBox>? widening = null;
+
+            foreach (var (box, rect) in line.Rectangles)
+            {
+                if (box.DerivedStyle.ActualDisplay is not Keywords.InlineBlock
+                    || !ReferenceEquals(box.FirstHostingLineBox, line)
+                    || !ReferenceEquals(box.LastHostingLineBox, line))
+                {
+                    continue;
+                }
+
+                // Only ever forward: content wider than the declared width overflows rather than being
+                // pulled back to it, which is what `overflow: visible` means.
+                if (box.ActualBoxSizingWidth <= rect.Width) continue;
+
+                (widening ??= []).Add(box);
+            }
+
+            if (widening is null) return;
+
+            foreach (var box in widening)
+            {
+                var rect = line.Rectangles[box];
+                line.Rectangles[box] = new RRect(rect.X, rect.Y, box.ActualBoxSizingWidth, rect.Height);
+            }
+        }
 
         /// <summary>
         /// Recursively creates the rectangles of the blockBox, by bubbling from deep to outside the boxes
