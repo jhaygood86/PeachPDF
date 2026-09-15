@@ -63,6 +63,36 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
         internal XMatrix? EllipsePatternMatrix { get; private set; }
 
+        /// <summary>
+        /// Resolves a shading's own effective <see cref="PdfColorMode"/> from the stop colors it's
+        /// actually given, rather than the document's own <see cref="PdfDocumentOptions.ColorMode"/> (which
+        /// defaults to <see cref="PdfColorMode.Undefined"/> - always <c>/DeviceRGB</c> for a shading if read
+        /// directly, even when every stop is CMYK-tagged). <see cref="PdfColorMode.Cmyk"/> iff every color's
+        /// <see cref="XColor.ColorSpace"/> is <see cref="XColorSpace.Cmyk"/>, else <see cref="PdfColorMode.Rgb"/>.
+        /// Throws if the colors are a genuine mix of the two spaces - defense in depth mirroring
+        /// <see cref="PeachPDF.Adapters.PdfSharpAdapter.RejectMixedColorSpaceGradientStops(IEnumerable{Html.Adapters.Entities.RColor})"/>,
+        /// which already rejects that case before a brush is ever constructed, so this should never fire in
+        /// practice.
+        /// </summary>
+        private static PdfColorMode ResolveShadingColorMode(IReadOnlyList<XColor> colors)
+        {
+            var anyCmyk = false;
+            var anyNonCmyk = false;
+            foreach (var c in colors)
+            {
+                if (c.ColorSpace == XColorSpace.Cmyk) anyCmyk = true;
+                else anyNonCmyk = true;
+            }
+
+            if (anyCmyk && anyNonCmyk)
+            {
+                throw new NotSupportedException(
+                    "A gradient cannot mix device-cmyk() stops with RGB-authored stops.");
+            }
+
+            return anyCmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
+        }
+
         internal void SetupFromBrush(XRadialGradientBrush brush, XGraphicsPdfRenderer renderer)
         {
             if (brush == null)
@@ -76,7 +106,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             }
 
             // Legacy 2-color path
-            PdfColorMode colorMode = _document.Options.ColorMode;
+            PdfColorMode colorMode = ResolveShadingColorMode([brush._color1, brush._color2]);
             XColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color1);
             XColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color2);
 
@@ -119,7 +149,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
         private void SetupRadialMultiStop(XRadialGradientBrush brush, XGraphicsPdfRenderer renderer)
         {
-            PdfColorMode colorMode = _document.Options.ColorMode;
+            PdfColorMode colorMode = ResolveShadingColorMode(brush._colors!);
 
             Elements[Keys.ShadingType] = new PdfInteger(3);
             if (colorMode != PdfColorMode.Cmyk)
@@ -272,7 +302,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             if (brush == null)
                 throw new ArgumentNullException("brush");
 
-            PdfColorMode colorMode = _document.Options.ColorMode;
+            XColor[] allColors = brush._colors ?? new[] { brush._color1, brush._color2 };
+            PdfColorMode colorMode = ResolveShadingColorMode(allColors);
             XColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color1);
             XColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, brush._color2);
 
@@ -337,7 +368,6 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
             Elements[Keys.Extend] = new PdfLiteral(brush.IsRepeating ? "[false false]" : "[true true]");
 
-            XColor[] allColors = brush._colors ?? new[] { brush._color1, brush._color2 };
             double[]? allPositions = brush._positions;
 
             if (brush._colors != null && brush._positions != null && RequiresStitchingFunction(brush._positions))
@@ -572,23 +602,28 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             double xMin = vc.X - R, xMax = vc.X + R;
             double yMin = vc.Y - R, yMax = vc.Y + R;
 
-            PdfColorMode colorMode = _document.Options.ColorMode;
+            XColor[] colors = brush.Colors;
+            double[] angles = brush.AnglesRad;
+
+            PdfColorMode colorMode = ResolveShadingColorMode(colors);
+            var cmyk = colorMode == PdfColorMode.Cmyk;
 
             Elements[Keys.ShadingType] = new PdfInteger(4);
-            Elements[Keys.ColorSpace] = new PdfName(colorMode != PdfColorMode.Cmyk ? "/DeviceRGB" : "/DeviceCMYK");
+            Elements[Keys.ColorSpace] = new PdfName(cmyk ? "/DeviceCMYK" : "/DeviceRGB");
             Elements["/BitsPerCoordinate"] = new PdfInteger(32);
             Elements["/BitsPerComponent"] = new PdfInteger(8);
             Elements["/BitsPerFlag"] = new PdfInteger(8);
 
             var ci = System.Globalization.CultureInfo.InvariantCulture;
+            // Two coordinate ranges (x, y) plus one "0 1" pair per color component - 3 for RGB, 4 for CMYK.
+            // This component count must agree exactly with /ColorSpace and with how many bytes
+            // AppendConicVertex writes per vertex, or a reader misinterprets the mesh geometry entirely.
+            var componentDecode = cmyk ? "0 1 0 1 0 1 0 1" : "0 1 0 1 0 1";
             Elements["/Decode"] = new PdfLiteral(
                 "[" + xMin.ToString("G6", ci) + " " + xMax.ToString("G6", ci) + " " +
-                      yMin.ToString("G6", ci) + " " + yMax.ToString("G6", ci) + " 0 1 0 1 0 1]");
+                      yMin.ToString("G6", ci) + " " + yMax.ToString("G6", ci) + " " + componentDecode + "]");
 
-            XColor[] colors = brush.Colors;
-            double[] angles = brush.AnglesRad;
-
-            var data = BuildConicMeshData(colors, angles, vc.X, vc.Y, R, xMin, xMax, yMin, yMax, alphaOnly: false);
+            var data = BuildConicMeshData(colors, angles, vc.X, vc.Y, R, xMin, xMax, yMin, yMax, cmyk, alphaOnly: false);
             CreateStream(data);
 
             BuildConicAlphaExtGStateIfNeeded(colors, angles, vc.X, vc.Y, R, xMin, xMax, yMin, yMax);
@@ -597,7 +632,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         private static byte[] BuildConicMeshData(XColor[] colors, double[] angles,
             double cx, double cy, double R,
             double xMin, double xMax, double yMin, double yMax,
-            bool alphaOnly)
+            bool cmyk, bool alphaOnly)
         {
             var data = new System.Collections.Generic.List<byte>(4096);
 
@@ -615,8 +650,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     double θA = a1 + (a2 - a1) * tA;
                     double θB = a1 + (a2 - a1) * tB;
 
-                    XColor colorA = LerpXColor(c1, c2, tA);
-                    XColor colorB = LerpXColor(c1, c2, tB);
+                    XColor colorA = cmyk ? LerpXColorCmyk(c1, c2, tA) : LerpXColor(c1, c2, tA);
+                    XColor colorB = cmyk ? LerpXColorCmyk(c1, c2, tB) : LerpXColor(c1, c2, tB);
 
                     // In PDF view space: 0=top, clockwise ↔ x=sin(θ), y=+cos(θ)
                     double oAX = cx + R * Math.Sin(θA);
@@ -624,9 +659,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                     double oBX = cx + R * Math.Sin(θB);
                     double oBY = cy + R * Math.Cos(θB);
 
-                    AppendConicVertex(data, 0, cx, cy, colorA, xMin, xMax, yMin, yMax, alphaOnly);
-                    AppendConicVertex(data, 0, oAX, oAY, colorA, xMin, xMax, yMin, yMax, alphaOnly);
-                    AppendConicVertex(data, 0, oBX, oBY, colorB, xMin, xMax, yMin, yMax, alphaOnly);
+                    AppendConicVertex(data, 0, cx, cy, colorA, xMin, xMax, yMin, yMax, cmyk, alphaOnly);
+                    AppendConicVertex(data, 0, oAX, oAY, colorA, xMin, xMax, yMin, yMax, cmyk, alphaOnly);
+                    AppendConicVertex(data, 0, oBX, oBY, colorB, xMin, xMax, yMin, yMax, cmyk, alphaOnly);
                 }
             }
 
@@ -636,7 +671,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         private static void AppendConicVertex(System.Collections.Generic.List<byte> data, int flag,
             double x, double y, XColor color,
             double xMin, double xMax, double yMin, double yMax,
-            bool alphaOnly)
+            bool cmyk, bool alphaOnly)
         {
             data.Add((byte)flag);
             AppendUInt32BE(data, EncodeCoordinate(x, xMin, xMax));
@@ -644,6 +679,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             if (alphaOnly)
             {
                 data.Add((byte)Math.Round(color.A * 255));
+            }
+            else if (cmyk)
+            {
+                data.Add((byte)Math.Round(Math.Clamp(color.C, 0, 1) * 255));
+                data.Add((byte)Math.Round(Math.Clamp(color.M, 0, 1) * 255));
+                data.Add((byte)Math.Round(Math.Clamp(color.Y, 0, 1) * 255));
+                data.Add((byte)Math.Round(Math.Clamp(color.K, 0, 1) * 255));
             }
             else
             {
@@ -678,6 +720,22 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 (int)Math.Round(a.B + t * (b.B - a.B)));
         }
 
+        /// <summary>
+        /// CMYK counterpart of <see cref="LerpXColor"/> - interpolates C/M/Y/K directly rather than R/G/B
+        /// (meaningless for a CMYK-tagged <see cref="XColor"/>), used for a conic gradient whose stops are
+        /// all CMYK-tagged (see <see cref="ResolveShadingColorMode"/>).
+        /// </summary>
+        private static XColor LerpXColorCmyk(XColor a, XColor b, double t)
+        {
+            t = Math.Clamp(t, 0.0, 1.0);
+            return XColor.FromCmyk(
+                a.A + t * (b.A - a.A),
+                a.C + t * (b.C - a.C),
+                a.M + t * (b.M - a.M),
+                a.Y + t * (b.Y - a.Y),
+                a.K + t * (b.K - a.K));
+        }
+
         private void BuildConicAlphaExtGStateIfNeeded(XColor[] colors, double[] angles,
             double cx, double cy, double R,
             double xMin, double xMax, double yMin, double yMax)
@@ -687,7 +745,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 if (c.A < 0.9995) { hasAlpha = true; break; }
             if (!hasAlpha) return;
 
-            var alphaData = BuildConicMeshData(colors, angles, cx, cy, R, xMin, xMax, yMin, yMax, alphaOnly: true);
+            // cmyk is irrelevant here - alphaOnly:true means AppendConicVertex only ever writes the 1-byte
+            // alpha-only branch regardless of this flag.
+            var alphaData = BuildConicMeshData(colors, angles, cx, cy, R, xMin, xMax, yMin, yMax, cmyk: false, alphaOnly: true);
 
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             var grayShading = new PdfDictionary(_document);

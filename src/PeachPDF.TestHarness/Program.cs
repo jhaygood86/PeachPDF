@@ -5542,6 +5542,99 @@ await SaveShowcaseAsync("pdf_a_conformance", "Standards & Accessibility", "PDF/A
     "Archival PDF/A output: an embedded sRGB ICC output intent, XMP metadata with pdfaid:part/conformance, and (at the accessible \"A\" level shown here) a tagged structure tree.",
     pdfAHtml, pdfAConfig);
 
+// --- CMYK Colors showcase ---
+// device-cmyk() colors are carried through natively (never approximated to sRGB) and reach the PDF as
+// real DeviceCMYK fill/stroke operators - PDF's own mixed-color-space document support means the RGB
+// swatches alongside them stay ordinary DeviceRGB, unaffected. Rasterize through both PDFium and MuPDF
+// per this repo's paint-verification convention - a content-stream substring check alone isn't proof
+// the operators are correctly positioned/composited.
+
+const string CmykColorsCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 16pt }
+    .row { display: flex; gap: 12pt; margin-bottom: 12pt }
+    .swatch { width: 90pt; height: 60pt; display: flex; align-items: center; justify-content: center;
+              color: white; font-size: 9pt; text-align: center; border-radius: 4pt }
+    .label { font-size: 8pt; color: #555; margin-top: 4pt }
+    .col { display: flex; flex-direction: column; align-items: center }
+    </style>
+    """;
+
+var cmykColorsHtml = "<!DOCTYPE html><html><head><title>CMYK Colors Showcase</title>" + CmykColorsCss + "</head><body>" +
+    "<h1>CMYK Colors</h1>" +
+    "<p>Each pair below is the same ink recipe: the left swatch is authored with <code>device-cmyk()</code> and reaches the PDF as a real <code>DeviceCMYK</code> operator; the right swatch is the equivalent RGB color, staying ordinary <code>DeviceRGB</code> on the very same page - PDF's own mixed-color-space document support, not a whole-document conversion.</p>" +
+
+    "<div class=\"row\">" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: device-cmyk(0 1 1 0)\">device-cmyk(0 1 1 0)</div><div class=\"label\">\"Print red\"</div></div>" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: rgb(237, 28, 36)\">rgb(237, 28, 36)</div><div class=\"label\">RGB equivalent</div></div>" +
+    "</div>" +
+
+    "<div class=\"row\">" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: device-cmyk(1 0 0 0)\">device-cmyk(1 0 0 0)</div><div class=\"label\">Process cyan</div></div>" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: device-cmyk(0 1 0 0)\">device-cmyk(0 1 0 0)</div><div class=\"label\">Process magenta</div></div>" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: device-cmyk(0 0 1 0)\">device-cmyk(0 0 1 0)</div><div class=\"label\">Process yellow</div></div>" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: device-cmyk(0 0 0 1)\">device-cmyk(0 0 0 1)</div><div class=\"label\">Process key (black)</div></div>" +
+    "</div>" +
+
+    "<div class=\"row\">" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: white; color: device-cmyk(0.75 0.68 0.67 0.90); border: 3pt solid device-cmyk(1 0 0 0); font-weight: bold\">CMYK text + border</div><div class=\"label\">color/border-color: device-cmyk()</div></div>" +
+    "</div>" +
+
+    "<p>A gradient whose stops are all <code>device-cmyk()</code> interpolates directly in C/M/Y/K space (issue #1090's follow-up), the same way an all-RGB gradient interpolates in RGB space - written as a real <code>/DeviceCMYK</code> shading, not approximated.</p>" +
+
+    "<div class=\"row\">" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: linear-gradient(to right, device-cmyk(0 1 1 0), device-cmyk(1 0 0 0))\">&nbsp;</div><div class=\"label\">linear-gradient(), all-CMYK stops</div></div>" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: radial-gradient(device-cmyk(0 0 1 0), device-cmyk(1 0 0 0))\">&nbsp;</div><div class=\"label\">radial-gradient(), all-CMYK stops</div></div>" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: conic-gradient(device-cmyk(0 1 1 0), device-cmyk(0 1 0 0), device-cmyk(1 0 0 0), device-cmyk(0 1 1 0))\">&nbsp;</div><div class=\"label\">conic-gradient(), all-CMYK stops</div></div>" +
+    "<div class=\"col\"><div class=\"swatch\" style=\"background: color-mix(in srgb, device-cmyk(0 1 1 0), device-cmyk(1 0 0 0))\">&nbsp;</div><div class=\"label\">color-mix(), two CMYK operands</div></div>" +
+    "</div>" +
+
+    "</body></html>";
+
+var cmykColorsConfig = new PdfGenerateConfig { PageSize = PageSize.A4, CompressContentStreams = false };
+await SaveShowcaseAsync("cmyk_colors", "Standards & Accessibility", "CMYK Colors",
+    "CSS device-cmyk() colors, carried through natively as real DeviceCMYK PDF operators (including gradients and color-mix() between two CMYK colors), coexisting on the same page as ordinary RGB colors.",
+    cmykColorsHtml, cmykColorsConfig);
+
+// --- PDF/X-1a Conformance showcase ---
+// Like PDF/A above, structural value (a CMYK OutputIntent, and PeachPDF's rejection of both live
+// transparency and chromatic RGB under X1a) more than visual - but the TrueBlack/RichBlack achromatic
+// -RGB conversion (the un-set default text color surviving X1a's CMYK-only restriction) is genuinely
+// visible, so this one is worth a render too.
+
+const string PdfXCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 10pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 16pt }
+    p.intro { color: #555 }
+    </style>
+    """;
+
+var pdfXHtml = "<!DOCTYPE html><html><head><title>PDF/X-1a Conformance Showcase</title>" + PdfXCss + "</head><body>" +
+    "<h1 style=\"color: device-cmyk(0 0 0 1)\">PDF/X-1a Conformance Showcase</h1>" +
+    "<p class=\"intro\">This document is generated with <code>PdfGenerateConfig.PdfXConformance = PdfXConformance.X1a</code> - the strictest PDF/X level, requiring CMYK-only content and forbidding live transparency. It carries a caller-supplied CMYK ICC <code>OutputIntent</code>.</p>" +
+    "<p>The heading above and this paragraph's un-set default text color are both plain RGB in the source HTML - X1a converts an <em>achromatic</em> (gray/black) RGB color to CMYK deterministically via <code>ColorOptions.BlackGeneration</code> (<code>UseTrueBlack</code> here) rather than rejecting it, since that has an exact, lossless ink mapping unlike an arbitrary hue.</p>" +
+    "<p style=\"color: device-cmyk(0 0.81 0.94 0); font-weight: bold\">A genuinely chromatic color must be authored with device-cmyk() under X1a - color: orange here would throw at generation time instead.</p>" +
+    "</body></html>";
+
+var pdfXConfig = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PdfXConformance = PdfXConformance.X1a,
+    Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+    ColorOptions = new ColorOptions
+    {
+        OutputIntentProfile = ShowcaseCmykIccProfile.Bytes,
+        OutputIntentIdentifier = "Showcase CMYK Profile",
+    },
+};
+await SaveShowcaseAsync("pdf_x1a_conformance", "Standards & Accessibility", "PDF/X-1a Conformance",
+    "Print-production PDF/X-1a output: a caller-supplied CMYK ICC output intent, CMYK-only content, and the achromatic-RGB TrueBlack conversion that keeps un-set default text colors working under the CMYK-only restriction.",
+    pdfXHtml, pdfXConfig);
+
 // --- PDF Bookmarks (Outline) showcase ---
 // Like tagged PDF above, the outline is invisible in a normal page render - its value is manual
 // inspection of the reader's bookmark/outline sidebar (e.g. Acrobat's or a browser PDF viewer's
@@ -8045,6 +8138,40 @@ await SaveShowcaseAsync("cmyk_jpeg", "Images & Replaced Content", "CMYK JPEG Ima
     "inverted-CMYK convention) instead of being converted to RGB - preserving the original print " +
     "separations exactly rather than destroying them with a naive, color-management-free conversion.",
     cmykImagesHtml, pdfConfig);
+
+// --- CMYK TIFF showcase (issue #1096) ---
+// Unlike the CMYK JPEG showcase above (byte-for-byte pass-through of a real file), TIFF has no PDF-native
+// pass-through filter - PeachPDF decodes it natively and embeds the decoded pixel buffer as a raw
+// /FlateDecode CMYK stream instead (PdfImage.InitializeCmykRaster), a genuinely new encode path worth its
+// own visual check per this repo's rasterize-and-look convention. PeachImage's TIFF codec is decode-only,
+// so (like the ICC profile fixtures elsewhere in this file) the source TIFF is hand-built rather than
+// round-tripped - see ShowcaseCmykTiffFixture.
+
+var cmykTiffBytes = ShowcaseCmykTiffFixture.BuildCheckerboard(64, 64, 8,
+    c1: 0, m1: 255, y1: 255, k1: 0,    // process red
+    c2: 255, m2: 0, y2: 255, k2: 0);   // process green
+var cmykTiffBase64 = Convert.ToBase64String(cmykTiffBytes);
+
+var cmykTiffHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 16px; max-width: 640px; }" +
+    "img { width: 192px; height: 192px; border: 1px solid #cbd5e1; image-rendering: pixelated; }" +
+    "</style></head><body>" +
+    "<h2>CMYK TIFF images</h2>" +
+    "<p class=\"note\">A hand-built CMYK TIFF (an 8x8-block checkerboard of process red and process " +
+    "green), decoded natively and embedded as a raw <code>/FlateDecode</code> <code>/DeviceCMYK</code> " +
+    "stream - TIFF has no <code>/DCTDecode</code>-equivalent pass-through filter, so (unlike the CMYK " +
+    "JPEG showcase above) this is a genuinely new encode path, not a copy of the original file bytes.</p>" +
+    $"<img src=\"data:image/tiff;base64,{cmykTiffBase64}\">" +
+    "</body></html>";
+
+await SaveShowcaseAsync("cmyk_tiff", "Images & Replaced Content", "CMYK TIFF Images",
+    "A CMYK TIFF decoded natively and embedded as a raw FlateDecode DeviceCMYK stream - TIFF has no " +
+    "DCTDecode-equivalent PDF pass-through filter, so this is a genuinely new encode path rather than a " +
+    "byte-for-byte copy, preserving the source's CMYK separations without ever touching RGB.",
+    cmykTiffHtml, pdfConfig);
 
 // ── Modern CSS colors: oklch/oklab/lab/lch palette + color-mix() opacity ──────────────
 var modernColorHtml =

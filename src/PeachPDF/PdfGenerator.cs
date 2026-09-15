@@ -201,72 +201,7 @@ namespace PeachPDF
 
             if (string.IsNullOrEmpty(html) && config.NetworkLoader is null) return;
 
-            document.PdfDocument.Options.CompressContentStreams = config.CompressContentStreams;
-            document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
-            document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
-            document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
-            // PDF/A conformance is a whole-document property, but AddPdfPages is a repeatable public
-            // API (a caller can append more pages to an existing PeachPdfDocument) - a second call
-            // requesting a different level than the first would otherwise silently leave the document's
-            // already-written /OutputIntents/XMP conformance claim disagreeing with how some of its
-            // pages were actually painted (earlier pages painted under a different transparency-guard
-            // regime than the level the file now claims). Reject that outright rather than produce a
-            // self-contradictory document; the same level requested again across multiple calls is fine.
-            if (document.PdfDocument.Options.PdfAConformanceEstablished
-                && document.PdfDocument.Options.PdfAConformance != config.PdfAConformance)
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfAConformance must be the same on every AddPdfPages call for a " +
-                    $"given document - this document was already established as '{document.PdfDocument.Options.PdfAConformance}' " +
-                    $"by an earlier call, and this call specifies '{config.PdfAConformance}'. A single PDF " +
-                    "document can only claim one PDF/A conformance level (or none) as a whole.");
-            }
-
-            document.PdfDocument.Options.PdfAConformance = config.PdfAConformance;
-            document.PdfDocument.Options.PdfAConformanceEstablished = true;
-
-            // ISO 19005-2/3 (PDF/A-2/3) are defined in terms of PDF 1.7/ISO 32000-1. ISO 19005-1
-            // (PDF/A-1) is defined in terms of PDF 1.4 - the version PeachPDF already always emits -
-            // so PdfA1B/PdfA1A need no version change at all.
-            if (config.PdfAConformance is PdfAConformance.PdfA2B or PdfAConformance.PdfA2U or PdfAConformance.PdfA2A
-                or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U or PdfAConformance.PdfA3A)
-            {
-                document.PdfDocument.Version = 17;
-            }
-
-            // PeachPDF implements no PDF/A level defined against PDF 2.0 (there is no PDF/A-4 support),
-            // and every level it does implement is defined against PDF 1.4 or 1.7 - so requesting both
-            // is a contradiction the caller needs to resolve, not something to silently pick a winner for.
-            if (config.PdfVersion == PdfVersion.Pdf20 && config.PdfAConformance != PdfAConformance.None)
-            {
-                throw new InvalidOperationException(
-                    "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfAConformance is also set to a " +
-                    "level other than None. PeachPDF does not implement PDF/A-4 (the PDF-2.0-based PDF/A " +
-                    "level); request PdfVersion.Pdf17 (or leave PdfVersion at its default) when requesting " +
-                    "PdfAConformance.");
-            }
-
-            // Same "a PDF file has exactly one header version" reasoning as the PdfAConformance guard
-            // above - a second AddPdfPages call on the same document requesting a different PdfVersion
-            // than the first would leave the file's already-written header disagreeing with how some of
-            // its pages/structure elements were painted.
-            if (document.PdfDocument.Options.PdfVersionEstablished
-                && document.PdfDocument.Options.PdfVersion != config.PdfVersion)
-            {
-                throw new InvalidOperationException(
-                    $"PdfGenerateConfig.PdfVersion must be the same on every AddPdfPages call for a given " +
-                    $"document - this document was already established as '{document.PdfDocument.Options.PdfVersion}' " +
-                    $"by an earlier call, and this call specifies '{config.PdfVersion}'. A single PDF file " +
-                    "can only have one header version.");
-            }
-
-            document.PdfDocument.Options.PdfVersion = config.PdfVersion;
-            document.PdfDocument.Options.PdfVersionEstablished = true;
-
-            if (config.PdfVersion == PdfVersion.Pdf20)
-            {
-                document.PdfDocument.Version = 20;
-            }
+            EstablishDocumentOptions(document, config);
 
             _pdfSharpAdapter.NetworkLoader = config.NetworkLoader ?? new DataUriNetworkLoader();
             _pdfSharpAdapter.AllowLocalFileAccess = config.AllowLocalFileAccess;
@@ -350,6 +285,147 @@ namespace PeachPDF
         }
 
         /// <summary>
+        /// Establishes every whole-document <see cref="PdfDocumentOptions"/> property from <paramref name="config"/>
+        /// - color mode, downscaling, PDF/A and PDF/X conformance (plus their "first call on this document
+        /// wins, a later mismatched call throws" cross-call consistency guards, since both
+        /// <see cref="AddPdfPages(PeachPdfDocument,string?,PdfGenerateConfig,PeachPdfCssContent?)"/>
+        /// and <see cref="AddPages"/> are repeatable APIs that can append further content to an existing
+        /// <see cref="PeachPdfDocument"/>), the PDF version header, and <see cref="ColorOptions"/>. Shared
+        /// verbatim between the HTML path (<see cref="AddPdfPages(PeachPdfDocument,string?,PdfGenerateConfig,PeachPdfCssContent?)"/>)
+        /// and the declarative document-building path (<see cref="AddPages"/>) - <see cref="RenderPagesCore"/> reads <paramref name="config"/>
+        /// directly for its own validation/XMP/OutputIntent writing, but the paint-time *enforcement* of
+        /// PDF/A/PDF/X construct restrictions (<see cref="PdfSharpCore.Drawing.Pdf.PdfGraphicsState"/>'s
+        /// color-mode resolution, <see cref="PdfSharpCore.Pdf.Advanced.PdfXColorSpaceGuard"/>,
+        /// <see cref="PdfSharpCore.Pdf.Advanced.PdfColorConversionGuard"/>, <see cref="PdfSharpCore.Pdf.Advanced.PdfATransparencyGuard"/>)
+        /// all read <c>document.PdfDocument.Options.*</c> instead, so a caller that skipped this method
+        /// would get a document whose <c>/OutputIntents</c>/XMP conformance claim is real but whose actual
+        /// content is completely unenforced against it - exactly the bug this method's extraction fixes.
+        /// </summary>
+        private static void EstablishDocumentOptions(PeachPdfDocument document, PdfGenerateConfig config)
+        {
+            document.PdfDocument.Options.CompressContentStreams = config.CompressContentStreams;
+            // Undefined (not the PdfSharpCore-internal default of Rgb) lets each color write in
+            // whichever space it actually carries - RGB-authored colors as /DeviceRGB, device-cmyk()
+            // -authored colors as real /DeviceCMYK operators (see PdfEncoders.ToString's per-color branch
+            // under Undefined) - rather than every CMYK-tagged XColor being force-collapsed back to a
+            // lossy RGB round-trip by ColorSpaceHelper.EnsureColorMode's Rgb branch. For an all-RGB
+            // document this is byte-identical to Rgb mode (every color's ColorSpace is already Rgb).
+            document.PdfDocument.Options.ColorMode = PdfColorMode.Undefined;
+            document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
+            document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
+            document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
+            // PDF/A conformance is a whole-document property, but AddPdfPages/AddPages are repeatable
+            // public APIs (a caller can append more pages to an existing PeachPdfDocument) - a second call
+            // requesting a different level than the first would otherwise silently leave the document's
+            // already-written /OutputIntents/XMP conformance claim disagreeing with how some of its
+            // pages were actually painted (earlier pages painted under a different transparency-guard
+            // regime than the level the file now claims). Reject that outright rather than produce a
+            // self-contradictory document; the same level requested again across multiple calls is fine.
+            if (document.PdfDocument.Options.PdfAConformanceEstablished
+                && document.PdfDocument.Options.PdfAConformance != config.PdfAConformance)
+            {
+                throw new InvalidOperationException(
+                    $"PdfGenerateConfig.PdfAConformance must be the same on every AddPdfPages/AddPages call " +
+                    $"for a given document - this document was already established as '{document.PdfDocument.Options.PdfAConformance}' " +
+                    $"by an earlier call, and this call specifies '{config.PdfAConformance}'. A single PDF " +
+                    "document can only claim one PDF/A conformance level (or none) as a whole.");
+            }
+
+            document.PdfDocument.Options.PdfAConformance = config.PdfAConformance;
+            document.PdfDocument.Options.PdfAConformanceEstablished = true;
+
+            // ISO 19005-2/3 (PDF/A-2/3) are defined in terms of PDF 1.7/ISO 32000-1. ISO 19005-1
+            // (PDF/A-1) is defined in terms of PDF 1.4 - the version PeachPDF already always emits -
+            // so PdfA1B/PdfA1A need no version change at all.
+            if (config.PdfAConformance is PdfAConformance.PdfA2B or PdfAConformance.PdfA2U or PdfAConformance.PdfA2A
+                or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U or PdfAConformance.PdfA3A)
+            {
+                document.PdfDocument.Version = 17;
+            }
+
+            // PeachPDF implements no PDF/A level defined against PDF 2.0 (there is no PDF/A-4 support),
+            // and every level it does implement is defined against PDF 1.4 or 1.7 - so requesting both
+            // is a contradiction the caller needs to resolve, not something to silently pick a winner for.
+            if (config.PdfVersion == PdfVersion.Pdf20 && config.PdfAConformance != PdfAConformance.None)
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfAConformance is also set to a " +
+                    "level other than None. PeachPDF does not implement PDF/A-4 (the PDF-2.0-based PDF/A " +
+                    "level); request PdfVersion.Pdf17 (or leave PdfVersion at its default) when requesting " +
+                    "PdfAConformance.");
+            }
+
+            // PDF/X-1a/X3/X4 all target PDF 1.4/1.6 (see the PdfXConformance version block below) - PDF
+            // 2.0 is a contradiction, same reasoning as the PdfA/Pdf20 check above.
+            if (config.PdfVersion == PdfVersion.Pdf20 && config.PdfXConformance != PdfXConformance.None)
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.PdfVersion is set to Pdf20, but PdfXConformance is also set to a " +
+                    "level other than None. PeachPDF's PDF/X output always targets PDF 1.4 (X1a/X3) or " +
+                    "1.6 (X4); request PdfVersion.Pdf17 (or leave PdfVersion at its default) when " +
+                    "requesting PdfXConformance.");
+            }
+
+            // Same "a PDF file has exactly one header version" reasoning as the PdfAConformance guard
+            // above - a second AddPdfPages/AddPages call on the same document requesting a different
+            // PdfVersion than the first would leave the file's already-written header disagreeing with
+            // how some of its pages/structure elements were painted.
+            if (document.PdfDocument.Options.PdfVersionEstablished
+                && document.PdfDocument.Options.PdfVersion != config.PdfVersion)
+            {
+                throw new InvalidOperationException(
+                    $"PdfGenerateConfig.PdfVersion must be the same on every AddPdfPages/AddPages call for " +
+                    $"a given document - this document was already established as '{document.PdfDocument.Options.PdfVersion}' " +
+                    $"by an earlier call, and this call specifies '{config.PdfVersion}'. A single PDF file " +
+                    "can only have one header version.");
+            }
+
+            document.PdfDocument.Options.PdfVersion = config.PdfVersion;
+            document.PdfDocument.Options.PdfVersionEstablished = true;
+
+            if (config.PdfVersion == PdfVersion.Pdf20)
+            {
+                document.PdfDocument.Version = 20;
+            }
+
+            // PDF/A (archival) and PDF/X (print-production) are different documents in practice - no
+            // single file conformance-claims both at once, so requesting both is a contradiction the
+            // caller needs to resolve, not something to silently pick a winner for.
+            if (config.PdfAConformance != PdfAConformance.None && config.PdfXConformance != PdfXConformance.None)
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.PdfAConformance and PdfXConformance are both set to a level other " +
+                    "than None. A single PDF document can only claim one conformance family - archival " +
+                    "(PDF/A) or print-production (PDF/X), not both.");
+            }
+
+            // Same "whole-document property, first AddPdfPages/AddPages call wins" reasoning as
+            // PdfAConformance above.
+            if (document.PdfDocument.Options.PdfXConformanceEstablished
+                && document.PdfDocument.Options.PdfXConformance != config.PdfXConformance)
+            {
+                throw new InvalidOperationException(
+                    $"PdfGenerateConfig.PdfXConformance must be the same on every AddPdfPages/AddPages call " +
+                    $"for a given document - this document was already established as '{document.PdfDocument.Options.PdfXConformance}' " +
+                    $"by an earlier call, and this call specifies '{config.PdfXConformance}'. A single PDF " +
+                    "document can only claim one PDF/X conformance level (or none) as a whole.");
+            }
+
+            document.PdfDocument.Options.PdfXConformance = config.PdfXConformance;
+            document.PdfDocument.Options.PdfXConformanceEstablished = true;
+            document.PdfDocument.Options.ColorOptions = config.ColorOptions;
+
+            // ISO 15930-4/6 (PDF/X-1a:2003/PDF/X-3:2003) target PDF 1.4 - already PeachPDF's own
+            // historical default (see PdfVersionTests.Default_Pdf17_KeepsHistoricalVersion14), so no
+            // explicit change is needed for those two levels; ISO 15930-7 (PDF/X-4) targets PDF 1.6, a
+            // real bump from that default.
+            if (config.PdfXConformance == PdfXConformance.X4)
+            {
+                document.PdfDocument.Version = 16;
+            }
+        }
+
+        /// <summary>
         /// Creates a PDF document by building PeachPDF's own internal box tree directly in C#, via
         /// <paramref name="handler"/>, instead of parsing HTML/CSS - a QuestPDF-style declarative
         /// alternative to <see cref="GeneratePdf(string?,PdfGenerateConfig,PeachPdfCssContent?)"/> for a
@@ -393,6 +469,8 @@ namespace PeachPDF
                 MarginLeft = 20,
                 MarginRight = 20
             };
+
+            EstablishDocumentOptions(document, config);
 
             // Collected synchronously first (the builder callback itself is synchronous, matching
             // QuestPDF's own declarative-composition-then-execution shape), then each page's own tree is
@@ -529,22 +607,116 @@ namespace PeachPDF
                     "PdfGenerateConfig.DefaultLanguage set. Set DefaultLanguage, or add a lang attribute to the document.");
             }
 
+            // Each non-default ConversionMode needs its own destination ICC profile set and parseable -
+            // validated once here (fail loudly, don't write a placeholder - same stance as the missing
+            // -creation-date/missing-language checks) rather than discovered deep in PdfColorConversionGuard
+            // partway through painting.
+            if (config.ColorOptions is { ConversionMode: ColorConversionMode.ConvertToOutputIntent } convertToOutputIntent)
+            {
+                if (convertToOutputIntent.OutputIntentProfile is not { Length: > 0 })
+                {
+                    throw new InvalidOperationException(
+                        "PdfGenerateConfig.ColorOptions.ConversionMode is ColorConversionMode.ConvertToOutputIntent, " +
+                        "but ColorOptions.OutputIntentProfile is not set. Set it to the ICC profile every color " +
+                        "should be converted into.");
+                }
+
+                if (!PeachImage.IccColorProfile.TryCreate(convertToOutputIntent.OutputIntentProfile, out _))
+                {
+                    throw new InvalidOperationException(
+                        "PdfGenerateConfig.ColorOptions.OutputIntentProfile could not be parsed as a valid ICC profile.");
+                }
+            }
+            else if (config.ColorOptions is { ConversionMode: ColorConversionMode.ConvertToProfile } convertToProfile)
+            {
+                if (convertToProfile.ConvertToProfile is not { Length: > 0 })
+                {
+                    throw new InvalidOperationException(
+                        "PdfGenerateConfig.ColorOptions.ConversionMode is ColorConversionMode.ConvertToProfile, but " +
+                        "ColorOptions.ConvertToProfile is not set.");
+                }
+
+                if (!PeachImage.IccColorProfile.TryCreate(convertToProfile.ConvertToProfile, out _))
+                {
+                    throw new InvalidOperationException(
+                        "PdfGenerateConfig.ColorOptions.ConvertToProfile could not be parsed as a valid ICC profile.");
+                }
+            }
+            else if (config.ColorOptions is { ConversionMode: ColorConversionMode.GrayscaleViaK } grayscaleViaK)
+            {
+                if (grayscaleViaK.FallbackCmykProfile is not { Length: > 0 })
+                {
+                    throw new InvalidOperationException(
+                        "PdfGenerateConfig.ColorOptions.ConversionMode is ColorConversionMode.GrayscaleViaK, but " +
+                        "ColorOptions.FallbackCmykProfile is not set - it's the CMYK profile every color is " +
+                        "converted through before taking only its K channel.");
+                }
+
+                if (!PeachImage.IccColorProfile.TryCreate(grayscaleViaK.FallbackCmykProfile, out var grayscaleProfile) ||
+                    grayscaleProfile is null || grayscaleProfile.DataColorSpace != PeachImage.IccColorSpace.Cmyk)
+                {
+                    throw new InvalidOperationException(
+                        "PdfGenerateConfig.ColorOptions.FallbackCmykProfile must be a valid CMYK ICC profile when " +
+                        "ConversionMode is ColorConversionMode.GrayscaleViaK.");
+                }
+            }
+
             var pdfAConformanceRequested = config.PdfAConformance != PdfAConformance.None;
+            var pdfXConformanceRequested = config.PdfXConformance != PdfXConformance.None;
+
+            // Every PDF/X level requires a real output intent, and PeachPDF bundles no default press
+            // profile (unlike PDF/A's bundled sRGB one - there is no single correct default for a print
+            // output intent) - fail loudly rather than silently omit /OutputIntents, same "don't write a
+            // placeholder" stance as the missing-creation-date/missing-language checks.
+            if (pdfXConformanceRequested && config.ColorOptions?.OutputIntentProfile is not { Length: > 0 })
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.PdfXConformance is set, but PdfGenerateConfig.ColorOptions.OutputIntentProfile " +
+                    "is not set. Every PDF/X level requires a real ICC output-intent profile - PeachPDF " +
+                    "bundles no default press profile, so supply one via ColorOptions.OutputIntentProfile " +
+                    "(and ColorOptions.OutputIntentIdentifier).");
+            }
+
+            if (pdfXConformanceRequested && string.IsNullOrEmpty(config.ColorOptions?.OutputIntentIdentifier))
+            {
+                throw new InvalidOperationException(
+                    "PdfGenerateConfig.PdfXConformance is set, but PdfGenerateConfig.ColorOptions.OutputIntentIdentifier " +
+                    "is not set. Set it to a human-readable name for the output-intent profile's condition " +
+                    "(e.g. \"Coated FOGRA39\").");
+            }
+
+            PeachImage.IccColorProfile? outputIntentProfile = null;
+            if (pdfXConformanceRequested)
+            {
+                PeachImage.IccColorProfile.TryCreate(config.ColorOptions!.OutputIntentProfile!, out outputIntentProfile);
+
+                if (config.PdfXConformance == PdfXConformance.X1a &&
+                    outputIntentProfile?.DataColorSpace != PeachImage.IccColorSpace.Cmyk)
+                {
+                    throw new InvalidOperationException(
+                        "PdfGenerateConfig.PdfXConformance is PdfXConformance.X1a, which requires a CMYK " +
+                        "output-intent profile, but ColorOptions.OutputIntentProfile is not a valid CMYK " +
+                        "ICC profile. PdfXConformance.X3/X4 accept a CMYK, RGB, or Gray output intent instead.");
+                }
+            }
 
             // An XMP metadata stream (EnableXmpMetadata or PdfAConformance) needs a real xmp:CreateDate -
             // fail loudly rather than write a placeholder/default date, same stance as the language
             // check above. Independent of PdfAConformance: a plain EnableXmpMetadata with no resolvable
-            // date throws too.
+            // date throws too. PdfXConformance also needs it - PDF/X-4's GTS_PDFXVersion identification is
+            // primarily an XMP property (ISO 15930-7 - see PdfMetadataStream's remarks), not just an Info
+            // -dictionary one the way PDF/X-1a/X3's is.
             var writeXmpMetadata = config.EnableXmpMetadata
                 || pdfAConformanceRequested
+                || pdfXConformanceRequested
                 || config.Metadata?.CustomXmpProperties.Count > 0;
             if (writeXmpMetadata && resolvedCreationDate is not { } creationDate)
             {
                 throw new InvalidOperationException(
-                    "An XMP metadata stream is being written (EnableXmpMetadata, PdfAConformance, or " +
-                    "CustomXmpProperties is set), but no creation date is available: the source HTML has " +
-                    "no extractable date, and PdfGenerateConfig.Metadata.CreationDate was not set. " +
-                    "Set PdfDocumentMetadata.CreationDate.");
+                    "An XMP metadata stream is being written (EnableXmpMetadata, PdfAConformance, " +
+                    "PdfXConformance, or CustomXmpProperties is set), but no creation date is available: " +
+                    "the source HTML has no extractable date, and PdfGenerateConfig.Metadata.CreationDate " +
+                    "was not set. Set PdfDocumentMetadata.CreationDate.");
             }
 
             if (writeXmpMetadata)
@@ -557,6 +729,7 @@ namespace PeachPDF
                     document.PdfDocument.Info,
                     resolvedCreationDate!.Value,
                     config.PdfAConformance,
+                    config.PdfXConformance,
                     config.Metadata?.CustomXmpProperties ?? []);
                 document.PdfDocument.Catalog.SetMetadata(metadataStream);
             }
@@ -569,6 +742,29 @@ namespace PeachPDF
             {
                 var outputIntent = new PdfOutputIntent(document.PdfDocument, PdfAResources.SRgbIccProfile);
                 document.PdfDocument.Catalog.SetOutputIntent(outputIntent);
+            }
+
+            // Same "not already present" dedup as PDF/A above - ColorOptions.OutputIntentProfile is
+            // validated (non-null, and CMYK under X1a) earlier in this method.
+            if (pdfXConformanceRequested && !document.PdfDocument.Catalog.Elements.ContainsKey("/OutputIntents"))
+            {
+                var outputIntent = new PdfOutputIntent(document.PdfDocument, config.ColorOptions!.OutputIntentProfile!,
+                    "/GTS_PDFX", config.ColorOptions.OutputIntentIdentifier!, config.ColorOptions.OutputIntentIdentifier!,
+                    explicitN: outputIntentProfile?.ChannelCount);
+                document.PdfDocument.Catalog.SetOutputIntent(outputIntent);
+
+                // The legacy PDF/X identification mechanism (predates XMP - still what many prepress RIPs
+                // and preflight tools check for X1a/X3): /GTS_PDFXVersion (all levels) and, only for the
+                // part-1 "a" variant, /GTS_PDFXConformance. PdfMetadataStream.PdfXIdentifiers is the shared
+                // source of truth for the exact identifier strings (and their sourcing) - this and the XMP
+                // pdfx: block above always agree by construction. Guarded the same way as the OutputIntent
+                // above - these never vary call to call for one document.
+                var (gtsVersion, gtsConformance) = PdfMetadataStream.PdfXIdentifiers(config.PdfXConformance);
+                document.PdfDocument.Info.Elements.SetString("/GTS_PDFXVersion", gtsVersion, PdfStringEncoding.RawEncoding);
+                if (gtsConformance is not null)
+                {
+                    document.PdfDocument.Info.Elements.SetString("/GTS_PDFXConformance", gtsConformance, PdfStringEncoding.RawEncoding);
+                }
             }
 
             // Only constructed when tagging is enabled - CssBox.PaintImp's tagging wrapper checks

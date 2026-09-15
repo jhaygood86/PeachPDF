@@ -244,7 +244,19 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 _ => throw new ArgumentOutOfRangeException(nameof(data)),
             };
 
-            if (data.IccProfile is null)
+            return BuildDeviceOrIccColorSpace(n, deviceName, data.IccProfile);
+        }
+
+        /// <summary>
+        /// Shared by <see cref="BuildJpegColorSpace"/> and <see cref="InitializeCmykRaster"/> - either a
+        /// bare Device* name, or (when <paramref name="iccProfile"/> is given) an <c>/ICCBased</c> array
+        /// referencing an indirect stream object holding the raw profile bytes, <c>/N</c> = <paramref name="n"/>,
+        /// <c>/Alternate</c> = <paramref name="deviceName"/> - same shape as <see cref="PdfOutputIntent"/>'s
+        /// <c>/DestOutputProfile</c> stream.
+        /// </summary>
+        PdfItem BuildDeviceOrIccColorSpace(int n, string deviceName, byte[]? iccProfile)
+        {
+            if (iccProfile is null)
             {
                 return new PdfName(deviceName);
             }
@@ -253,18 +265,59 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             _document.Internals.AddObject(iccStream);
             iccStream.Elements.SetInteger("/N", n);
             iccStream.Elements.SetName("/Alternate", deviceName);
-            iccStream.Stream = new PdfStream(data.IccProfile, iccStream);
-            iccStream.Elements[PdfStream.Keys.Length] = new PdfInteger(data.IccProfile.Length);
+            iccStream.Stream = new PdfStream(iccProfile, iccStream);
+            iccStream.Elements[PdfStream.Keys.Length] = new PdfInteger(iccProfile.Length);
 
             return new PdfArray(_document, new PdfName("/ICCBased"), iccStream.Reference);
         }
 
         /// <summary>
-        /// Creates the keys for a FLATE image.
+        /// Creates the keys for a FLATE image - or, for a CMYK source with no JPEG pass-through available
+        /// (TIFF, issue #1096), routes to <see cref="InitializeCmykRaster"/> instead of the RGB-only
+        /// bitmap path below.
         /// </summary>
         void InitializeNonJpeg()
         {
+            if (_image.IsCmyk)
+            {
+                InitializeCmykRaster();
+                return;
+            }
+
             ReadTrueColorMemoryBitmap(3, 8, true);
+        }
+
+        /// <summary>
+        /// Embeds a CMYK source with no PDF-native byte-for-byte pass-through filter (TIFF today - see
+        /// <see cref="ImageSource.IImageSource.CmykRaster"/>'s own remarks) as a raw <c>/FlateDecode</c>
+        /// CMYK stream: unlike <see cref="EmbedJpegPassthrough"/>, this compresses the already-decoded
+        /// pixel buffer itself (there is no original-file-bytes pass-through option for TIFF the way
+        /// <c>/DCTDecode</c> gives JPEG), but otherwise mirrors it closely - same PDF/A ICC-profile gate,
+        /// same bare-Device*-or-<c>/ICCBased</c> color space shape.
+        /// </summary>
+        void InitializeCmykRaster()
+        {
+            var raster = _image.CmykRaster!.Value;
+
+            // Same reasoning as EmbedJpegPassthrough's identical check: a bare /DeviceCMYK image has no
+            // relationship to PeachPDF's RGB-based PDF/A output intent, so PDF/A requires an embedded ICC
+            // profile here too.
+            PdfACmykImageGuard.RequireIccProfile(_document, raster.IccProfile is not null,
+                "An embedded CMYK image without an embedded ICC profile");
+
+            Elements[Keys.ColorSpace] = BuildDeviceOrIccColorSpace(4, "/DeviceCMYK", raster.IccProfile);
+
+            var flateDecode = new FlateDecode();
+            var compressed = flateDecode.Encode(raster.Data, _document.Options.FlateEncodeMode);
+            Stream = new PdfStream(compressed, this);
+            Elements[PdfStream.Keys.Length] = new PdfInteger(compressed.Length);
+            Elements[PdfStream.Keys.Filter] = new PdfName("/FlateDecode");
+
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(8);
         }
 
         private static int ReadWord(byte[] ab, int offset)

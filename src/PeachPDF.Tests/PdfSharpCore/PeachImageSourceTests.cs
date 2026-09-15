@@ -703,23 +703,102 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
         }
 
         // A minimal, hand-built 2x2 uncompressed CMYK TIFF (PhotometricInterpretation=5/Separated,
-        // SamplesPerPixel=4, 8 bits/sample) - see .claude/accepted-gaps/cmyk-tiff-unsupported.md for why
-        // PeachPDF rejects this outright rather than embedding it without an ICC profile. Real CMYK TIFF
-        // corpus fixtures are 90KB+ (strip-based, pixel data before the IFD, not truncatable), so this is
-        // hand-built instead, the same "smallest legal file" approach IccProfileFixture takes for ICC
-        // profiles.
+        // SamplesPerPixel=4, 8 bits/sample). Real CMYK TIFF corpus fixtures are 90KB+ (strip-based, pixel
+        // data before the IFD, not truncatable), so this is hand-built instead, the same "smallest legal
+        // file" approach IccProfileFixture takes for ICC profiles.
         private const string SyntheticCmykTiffBase64 =
             "SUkqAAgAAAAJAAABAwABAAAAAgAAAAEBAwABAAAAAgAAAAIBAwAEAAAAegAAAAMBAwABAAAAAQAAAAYBAwABAAAA" +
             "BQAAABEBBAABAAAAggAAABUBAwABAAAABAAAABYBAwABAAAAAgAAABcBBAABAAAAEAAAAAAAAAAIAAgACAAIAAoU" +
             "HigyPEZQWmRueIKMlqA=";
 
+        // --- CMYK TIFF raw-raster embed (issue #1096) ---
+        // Unlike CMYK JPEG's byte-for-byte JpegPassthrough (there's no PDF-native pass-through filter for
+        // TIFF the way /DCTDecode gives JPEG), a CMYK TIFF's decoded pixel buffer reaches PdfImage via
+        // CmykRaster instead - see PdfImage.InitializeCmykRaster and CmykTiffIntegrationTests for the
+        // full HTML->PDF coverage (including a byte-for-byte decompressed-pixel verification).
+
         [Fact]
-        public void FromBinary_CmykTiff_Throws()
+        public void FromBinary_CmykTiff_IsCmyk()
         {
             var bytes = Convert.FromBase64String(SyntheticCmykTiffBase64);
 
-            var ex = Assert.Throws<InvalidOperationException>(() => ImageSource.FromBinary("cmyk.tiff", () => bytes));
-            Assert.Contains("CMYK", ex.Message);
+            var img = ImageSource.FromBinary("cmyk.tiff", () => bytes);
+
+            Assert.True(img.IsCmyk);
+        }
+
+        [Fact]
+        public void FromBinary_CmykTiff_JpegPassthroughIsNull()
+        {
+            // TIFF has no byte-for-byte pass-through path - CmykRaster (below) carries its data instead.
+            var bytes = Convert.FromBase64String(SyntheticCmykTiffBase64);
+
+            var img = ImageSource.FromBinary("cmyk.tiff", () => bytes);
+
+            Assert.Null(img.JpegPassthrough);
+        }
+
+        [Fact]
+        public void CmykRaster_CmykTiffWithoutIcc_ReturnsDecodedPixelsNoIcc()
+        {
+            var width = 4;
+            var height = 4;
+            var tiffBytes = CmykTiffFixture.Build(width, height, 11, 22, 33, 44);
+            var img = ImageSource.FromBinary("cmyk.tiff", () => tiffBytes);
+
+            var raster = img.CmykRaster;
+
+            Assert.NotNull(raster);
+            Assert.Null(raster.Value.IccProfile);
+            Assert.Equal(width * height * 4, raster.Value.Data.Length);
+            for (var i = 0; i < raster.Value.Data.Length; i += 4)
+            {
+                Assert.Equal(11, raster.Value.Data[i]);
+                Assert.Equal(22, raster.Value.Data[i + 1]);
+                Assert.Equal(33, raster.Value.Data[i + 2]);
+                Assert.Equal(44, raster.Value.Data[i + 3]);
+            }
+        }
+
+        [Fact]
+        public void CmykRaster_CmykTiffWithIcc_IncludesIccProfile()
+        {
+            var icc = IccProfileFixture.BuildCmykProfile();
+            var tiffBytes = CmykTiffFixture.Build(4, 4, 10, 20, 30, 40, icc);
+            var img = ImageSource.FromBinary("cmyk-icc.tiff", () => tiffBytes);
+
+            var raster = img.CmykRaster;
+
+            Assert.NotNull(raster);
+            Assert.Equal(icc, raster.Value.IccProfile);
+        }
+
+        [Fact]
+        public void CmykRaster_RgbTiff_IsNull()
+        {
+            // Pins the boundary the other way: a non-CMYK TIFF never populates CmykRaster (it takes the
+            // ordinary SaveAsPdfBitmap path like any other RGB/Gray raster source).
+            var img = ImageSource.FromBinary("test.png", () => MakePngBytes(4, 4, 255, 0, 0));
+
+            Assert.Null(img.CmykRaster);
+        }
+
+        [Fact]
+        public void SaveAsJpeg_OnCmykRasterSource_Throws()
+        {
+            var tiffBytes = CmykTiffFixture.Build(2, 2, 1, 2, 3, 4);
+            var img = ImageSource.FromBinary("cmyk.tiff", () => tiffBytes);
+
+            Assert.Throws<InvalidOperationException>(() => img.SaveAsJpeg(new MemoryStream()));
+        }
+
+        [Fact]
+        public void SaveAsPdfBitmap_OnCmykRasterSource_Throws()
+        {
+            var tiffBytes = CmykTiffFixture.Build(2, 2, 1, 2, 3, 4);
+            var img = ImageSource.FromBinary("cmyk.tiff", () => tiffBytes);
+
+            Assert.Throws<InvalidOperationException>(() => img.SaveAsPdfBitmap(new MemoryStream()));
         }
     }
 }

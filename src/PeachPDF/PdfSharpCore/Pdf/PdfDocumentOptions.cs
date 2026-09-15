@@ -184,5 +184,40 @@ namespace PeachPDF.PdfSharpCore.Pdf
             set { _pdfVersionEstablished = value; }
         }
         bool _pdfVersionEstablished;
+
+        /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.PdfXConformance"/> - see there for behavior. Read
+        /// by <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfATransparencyGuard"/> (X1a/X3 reject
+        /// transparency, same as PDF/A-1) and <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfXColorSpaceGuard"/>
+        /// (X1a rejects chromatic RGB).
+        /// </summary>
+        public PdfXConformance PdfXConformance
+        {
+            get { return _pdfXConformance; }
+            set { _pdfXConformance = value; }
+        }
+        PdfXConformance _pdfXConformance = PdfXConformance.None;
+
+        /// <summary>
+        /// Whether <see cref="PdfXConformance"/> has already been established by a prior
+        /// <c>PdfGenerator.AddPdfPages</c> call on this document - same reasoning as
+        /// <see cref="PdfAConformanceEstablished"/>.
+        /// </summary>
+        public bool PdfXConformanceEstablished
+        {
+            get { return _pdfXConformanceEstablished; }
+            set { _pdfXConformanceEstablished = value; }
+        }
+        bool _pdfXConformanceEstablished;
+
+        /// <summary>
+        /// Mirrors <see cref="PeachPDF.PdfGenerateConfig.ColorOptions"/> - see there for behavior.
+        /// </summary>
+        public ColorOptions? ColorOptions
+        {
+            get { return _colorOptions; }
+            set { _colorOptions = value; }
+        }
+        ColorOptions? _colorOptions;
     }
 }

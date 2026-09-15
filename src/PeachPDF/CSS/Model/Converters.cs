@@ -216,6 +216,11 @@ namespace PeachPDF.CSS
             Construct(() => new FunctionValueConverter(FunctionNames.Oklch, Any));
         public static readonly IValueConverter ColorMixConverter =
             Construct(() => new FunctionValueConverter(FunctionNames.ColorMix, Any));
+        // https://www.w3.org/TR/css-color-5/#device-cmyk - lenient like the space/lab/oklch group above:
+        // the exact grammar check and CMYK-native resolution happen in the render layer
+        // (ColorFunctionExtensions.ParseDeviceCmyk), this only needs to preserve the function text.
+        public static readonly IValueConverter DeviceCmykColorConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.DeviceCmyk, Any));
 
         // Lenient fallbacks for the CSS Color 4 space/slash syntax of the legacy functions. The strict
         // comma-form converters above run first (so their canonical serialization is preserved); these
@@ -540,6 +545,7 @@ namespace PeachPDF.CSS
             .Or(LabColorConverter.Or(OklabColorConverter))
             .Or(LchColorConverter.Or(OklchColorConverter))
             .Or(ColorMixConverter)
+            .Or(DeviceCmykColorConverter)
             .Or(RgbLenientConverter.Or(RgbaLenientConverter))
             .Or(HslLenientConverter.Or(HslaLenientConverter))
             .Or(HwbLenientConverter);

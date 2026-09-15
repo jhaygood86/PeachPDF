@@ -68,7 +68,35 @@ namespace PeachPDF.CSS
             if (name.Equals(FunctionNames.ColorMix, StringComparison.OrdinalIgnoreCase))
                 return ParseColorMix(args);
 
+            if (name.Equals(FunctionNames.DeviceCmyk, StringComparison.OrdinalIgnoreCase))
+                return ParseDeviceCmyk(args);
+
             return null;
+        }
+
+        // ── device-cmyk(): 4 components (number or %) + optional alpha ───────────
+        // https://www.w3.org/TR/css-color-5/#device-cmyk - no relative-color ("from") form.
+        private static Color? ParseDeviceCmyk(IEnumerable<Token> args)
+        {
+            if (!Extract(args, 4, out var comps, out var alphaTok, allowImplicitAlpha: false)) return null;
+            var c = CmykComponent(comps[0]);
+            var m = CmykComponent(comps[1]);
+            var y = CmykComponent(comps[2]);
+            var k = CmykComponent(comps[3]);
+            if (c is null || m is null || y is null || k is null) return null;
+            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
+            return Color.FromDeviceCmyk(c.Value, m.Value, y.Value, k.Value, a);
+        }
+
+        // A <cmyk-component> is a <number> or <percentage>, each normalized to 0..1; "none" is 0.
+        private static float? CmykComponent(Token token)
+        {
+            if (token.Type == TokenType.Ident && token.Data.Equals("none", StringComparison.OrdinalIgnoreCase))
+                return 0f;
+            var number = AsTokens(token).ToSingle();
+            if (number.HasValue) return number.Value;
+            var percent = AsTokens(token).ToPercent();
+            return percent.HasValue ? (float)percent.Value.NormalizedValue : null;
         }
 
         // ── rgb()/rgba(): 3 components (int or % of 255) + optional alpha ─────────
@@ -167,6 +195,14 @@ namespace PeachPDF.CSS
             var alphaMultiplier = sum < 1.0 ? sum : 1.0;
             var t = p2.Value / sum;
 
+            // Neither operand CMYK: the normal rectangular-space mix. Both CMYK: a project-specific
+            // extension mixing directly in C/M/Y/K space (see Color.MixCmyk's remarks) - the declared
+            // "in <space>"/hue-method keyword has no CMYK equivalent and is not consulted for this case.
+            // Exactly one CMYK: no defined conversion between a device-cmyk() operand and any rectangular
+            // space without a real ICC profile - stays invalid, same as today.
+            if (c1.IsDeviceCmyk != c2.IsDeviceCmyk) return null;
+            if (c1.IsDeviceCmyk) return Color.MixCmyk(c1, c2, t, alphaMultiplier);
+
             return Color.Mix(c1, c2, t, space, hue, alphaMultiplier);
         }
 
@@ -195,8 +231,12 @@ namespace PeachPDF.CSS
                 tokens.RemoveAt(0);
             }
 
-            // A color-mix operand may itself be any color form (named/hex/rgb/oklch/...), so resolve it
-            // through the full render-layer resolver rather than the named/hex-only ToColor.
+            // A color-mix operand may itself be any color form (named/hex/rgb/oklch/device-cmyk/...), so
+            // resolve it through the full render-layer resolver rather than the named/hex-only ToColor. A
+            // device-cmyk() operand is passed through CMYK-tagged rather than rejected here - the caller
+            // (ParseColorMix) decides what to do with it: mix in CMYK space when both operands are CMYK
+            // -tagged, or reject when only one is (no naive CMYK<->RGB approximation is computed anywhere
+            // in this pipeline, so a mixed CMYK/non-CMYK pair still has no defined result).
             var resolved = tokens.ToResolvedColor();
             if (resolved is null) return false;
             color = resolved.Value;
@@ -207,8 +247,10 @@ namespace PeachPDF.CSS
 
         // Partitions a function's argument tokens into `count` component tokens and an optional alpha
         // token. Whitespace and commas separate; a "/" delimiter (CSS Color 4) marks the alpha that
-        // follows. Without a slash, a trailing extra value (legacy rgba/hsla comma alpha) is the alpha.
-        private static bool Extract(IEnumerable<Token> args, int count, out List<Token> components, out Token? alpha)
+        // follows. Without a slash, a trailing extra value (legacy rgba/hsla comma alpha) is the alpha -
+        // unless allowImplicitAlpha is false (device-cmyk() has no such legacy form per CSS Color 5 §6:
+        // alpha is only ever introduced by '/'), in which case an unslashed trailing value is malformed.
+        private static bool Extract(IEnumerable<Token> args, int count, out List<Token> components, out Token? alpha, bool allowImplicitAlpha = true)
         {
             components = [];
             alpha = null;
@@ -233,6 +275,13 @@ namespace PeachPDF.CSS
 
             if (values.Count < count) return false;
             for (var i = 0; i < count; i++) components.Add(values[i]);
+
+            if (!allowImplicitAlpha)
+            {
+                if (slashIndex < 0) return values.Count == count;
+                if (slashIndex < values.Count) alpha = values[slashIndex];
+                return true;
+            }
 
             var alphaAt = slashIndex >= 0 ? slashIndex : count;
             if (alphaAt < values.Count) alpha = values[alphaAt];

@@ -1,6 +1,7 @@
 #nullable disable
 
 using System;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 // ReSharper disable UnusedMember.Global
@@ -16,6 +17,18 @@ namespace PeachPDF.CSS
         [FieldOffset(2)] private readonly byte _green;
         [FieldOffset(3)] private readonly byte _blue;
         [FieldOffset(0)] private readonly int _hashcode;
+
+        // ── CSS Color 5 device-cmyk() ──────────────────────────────────────────
+        // A device-cmyk()-authored color is carried natively (never collapsed to an sRGB
+        // approximation - see CLAUDE.md/plan: no naive RGB<->CMYK conversion). _red/_green/_blue
+        // stay at their default (0) for a CMYK-tagged color; nothing in the render pipeline should
+        // read them for one (see RColor/Utils.Convert, which branch on IsDeviceCmyk before ever
+        // touching R/G/B). Alpha remains colorspace-independent and is still carried by _alpha.
+        [FieldOffset(4)] private readonly bool _isDeviceCmyk;
+        [FieldOffset(8)] private readonly float _cyan;
+        [FieldOffset(12)] private readonly float _magenta;
+        [FieldOffset(16)] private readonly float _yellow;
+        [FieldOffset(20)] private readonly float _key;
 
 
         #region Basic colors
@@ -69,6 +82,11 @@ namespace PeachPDF.CSS
             _red = r;
             _blue = b;
             _green = g;
+            _isDeviceCmyk = false;
+            _cyan = 0f;
+            _magenta = 0f;
+            _yellow = 0f;
+            _key = 0f;
         }
 
         public Color(byte red, byte green, byte blue, byte alpha)
@@ -78,6 +96,42 @@ namespace PeachPDF.CSS
             _red = red;
             _blue = blue;
             _green = green;
+            _isDeviceCmyk = false;
+            _cyan = 0f;
+            _magenta = 0f;
+            _yellow = 0f;
+            _key = 0f;
+        }
+
+        /// <summary>
+        /// A <see href="https://www.w3.org/TR/css-color-5/#device-cmyk">CSS Color 5 <c>device-cmyk()</c></see>
+        /// color, carried natively - <see cref="R"/>/<see cref="G"/>/<see cref="B"/> are left at 0 and must
+        /// not be read for a color where <see cref="IsDeviceCmyk"/> is true. <paramref name="alpha"/> is a
+        /// pre-quantized 0-255 byte (colorspace-independent), matching the other byte-alpha constructors.
+        /// </summary>
+        private Color(float cyan, float magenta, float yellow, float key, byte alpha)
+        {
+            _hashcode = 0;
+            _alpha = alpha;
+            _red = 0;
+            _green = 0;
+            _blue = 0;
+            _isDeviceCmyk = true;
+            _cyan = Math.Clamp(cyan, 0f, 1f);
+            _magenta = Math.Clamp(magenta, 0f, 1f);
+            _yellow = Math.Clamp(yellow, 0f, 1f);
+            _key = Math.Clamp(key, 0f, 1f);
+        }
+
+        /// <summary>
+        /// Parses a <see href="https://www.w3.org/TR/css-color-5/#device-cmyk">CSS Color 5 <c>device-cmyk()</c></see>
+        /// value. <paramref name="cyan"/>/<paramref name="magenta"/>/<paramref name="yellow"/>/<paramref name="key"/>
+        /// and <paramref name="alpha"/> are each 0..1 (a percentage component is normalized by the caller
+        /// before reaching here, same convention as <see cref="FromRgba(float,float,float,float)"/>).
+        /// </summary>
+        public static Color FromDeviceCmyk(float cyan, float magenta, float yellow, float key, float alpha = 1f)
+        {
+            return new Color(cyan, magenta, yellow, key, Normalize(alpha));
         }
 
         public static Color FromRgba(byte red, byte green, byte blue, float alpha)
@@ -334,6 +388,42 @@ namespace PeachPDF.CSS
             return new Color(ToByte(r), ToByte(g), ToByte(b), outAlpha);
         }
 
+        /// <summary>
+        /// <see href="https://www.w3.org/TR/css-color-5/#color-mix">CSS Color 5 <c>color-mix()</c></see>
+        /// between two <c>device-cmyk()</c>-tagged operands - a project-specific extension, not literal
+        /// spec behavior: CSS Color 5 has no "cmyk" interpolation space, and its defined fallback for
+        /// mixing a device-cmyk() color without a source ICC profile is the naive CMYK-&gt;RGB formula this
+        /// project has already rejected everywhere else (see <see cref="IsDeviceCmyk"/>'s callers). Mixing
+        /// directly in C/M/Y/K-component space instead keeps two CMYK operands lossless, mirroring how a
+        /// solid CMYK color already bypasses any RGB round-trip. The declared <c>in &lt;space&gt;</c>/hue
+        /// keyword (irrelevant to CMYK) is not consulted by this overload - the caller only invokes it once
+        /// both operands are confirmed CMYK-tagged.
+        /// </summary>
+        public static Color MixCmyk(Color c1, Color c2, double t, double alphaMultiplier)
+        {
+            t = Math.Clamp(t, 0.0, 1.0);
+            double a1 = c1.A / 255.0, a2 = c2.A / 255.0;
+
+            double c1c = c1._cyan * a1, c1m = c1._magenta * a1, c1y = c1._yellow * a1, c1k = c1._key * a1;
+            double c2c = c2._cyan * a2, c2m = c2._magenta * a2, c2y = c2._yellow * a2, c2k = c2._key * a2;
+
+            var mixedAlpha = a1 + t * (a2 - a1);
+
+            double MixChannel(double p1, double p2)
+            {
+                var mixed = p1 + t * (p2 - p1);
+                return mixedAlpha > 1e-10 ? mixed / mixedAlpha : 0;
+            }
+
+            var cyan = MixChannel(c1c, c2c);
+            var magenta = MixChannel(c1m, c2m);
+            var yellow = MixChannel(c1y, c2y);
+            var key = MixChannel(c1k, c2k);
+            var outAlpha = (float)Math.Clamp(mixedAlpha * alphaMultiplier, 0, 1);
+
+            return FromDeviceCmyk((float)cyan, (float)magenta, (float)yellow, (float)key, outAlpha);
+        }
+
         private static byte ToByte(double v) => (byte)Math.Round(Math.Clamp(v, 0, 1) * 255);
 
         public int Value => _hashcode;
@@ -343,18 +433,39 @@ namespace PeachPDF.CSS
         public byte G => _green;
         public byte B => _blue;
 
+        /// <summary>
+        /// True if this color was authored via <c>device-cmyk()</c> and is carried in its native CMYK
+        /// components (<see cref="C"/>/<see cref="M"/>/<see cref="Y"/>/<see cref="K"/>) rather than sRGB -
+        /// no naive RGB&lt;-&gt;CMYK approximation is computed for one of these, so
+        /// <see cref="R"/>/<see cref="G"/>/<see cref="B"/> are meaningless when this is true.
+        /// </summary>
+        public bool IsDeviceCmyk => _isDeviceCmyk;
+        // Named to match XColor's own C/M/Y/K properties (the eventual PDF backend representation) -
+        // "Magenta" would collide with Color's own Magenta named-color static field above.
+        public float C => _cyan;
+        public float M => _magenta;
+        public float Y => _yellow;
+        public float K => _key;
+
         public static bool operator ==(Color a, Color b)
         {
-            return a._hashcode == b._hashcode;
+            return a.Equals(b);
         }
 
         public static bool operator !=(Color a, Color b)
         {
-            return a._hashcode != b._hashcode;
+            return !a.Equals(b);
         }
 
         public bool Equals(Color other)
         {
+            if (_isDeviceCmyk || other._isDeviceCmyk)
+            {
+                return _isDeviceCmyk == other._isDeviceCmyk && _alpha == other._alpha &&
+                       _cyan.Equals(other._cyan) && _magenta.Equals(other._magenta) &&
+                       _yellow.Equals(other._yellow) && _key.Equals(other._key);
+            }
+
             return _hashcode == other._hashcode;
         }
 
@@ -369,12 +480,13 @@ namespace PeachPDF.CSS
 
         int IComparable<Color>.CompareTo(Color other)
         {
+            if (_isDeviceCmyk || other._isDeviceCmyk) return GetHashCode() - other.GetHashCode();
             return _hashcode - other._hashcode;
         }
 
         public override int GetHashCode()
         {
-            return _hashcode;
+            return _isDeviceCmyk ? HashCode.Combine(_isDeviceCmyk, _alpha, _cyan, _magenta, _yellow, _key) : _hashcode;
         }
 
         public static Color Mix(Color above, Color below)
@@ -419,20 +531,13 @@ namespace PeachPDF.CSS
 
         public override string ToString()
         {
-            if (_alpha == 255)
-            {
-                var arguments = string.Join(", ", R.ToString(), G.ToString(), B.ToString());
-                return FunctionNames.Rgb.StylesheetFunction(arguments);
-            }
-            else
-            {
-                var arguments = string.Join(", ", R.ToString(), G.ToString(), B.ToString(), Alpha.ToString());
-                return FunctionNames.Rgba.StylesheetFunction(arguments);
-            }
+            return ToString(null, CultureInfo.InvariantCulture);
         }
 
         public string ToString(string format, IFormatProvider formatProvider)
         {
+            if (_isDeviceCmyk) return ToDeviceCmykString(format, formatProvider);
+
             if (_alpha == 255)
             {
                 var arguments = string.Join(", ", R.ToString(format, formatProvider),
@@ -447,6 +552,20 @@ namespace PeachPDF.CSS
                     B.ToString(format, formatProvider), Alpha.ToString(format, formatProvider));
                 return FunctionNames.Rgba.StylesheetFunction(arguments);
             }
+        }
+
+        // Re-serializes a device-cmyk() color as CSS Color 5 space-separated syntax so the value
+        // round-trips (rather than being silently dropped by any code still calling ToString()
+        // generically, e.g. shorthand serialization).
+        private string ToDeviceCmykString(string format, IFormatProvider formatProvider)
+        {
+            var components = string.Join(" ", _cyan.ToString(format, formatProvider),
+                _magenta.ToString(format, formatProvider),
+                _yellow.ToString(format, formatProvider),
+                _key.ToString(format, formatProvider));
+
+            var arguments = _alpha == 255 ? components : $"{components} / {Alpha.ToString(format, formatProvider)}";
+            return FunctionNames.DeviceCmyk.StylesheetFunction(arguments);
         }
     }
 }

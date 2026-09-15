@@ -12,8 +12,9 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 {
     /// <summary>
     /// The document catalog's XMP metadata stream (<c>/Metadata</c>, ISO 32000-1 §14.3.2) - written
-    /// whenever <see cref="PeachPDF.PdfGenerateConfig.EnableXmpMetadata"/> or a
-    /// <see cref="PeachPDF.PdfGenerateConfig.PdfAConformance"/> level is requested. Built entirely with
+    /// whenever <see cref="PeachPDF.PdfGenerateConfig.EnableXmpMetadata"/>, a
+    /// <see cref="PeachPDF.PdfGenerateConfig.PdfAConformance"/> level, or a
+    /// <see cref="PeachPDF.PdfXConformance"/> level is requested. Built entirely with
     /// <see cref="System.Xml"/>/<see cref="System.Xml.Linq"/> (never hand-concatenated strings), so the
     /// packet is well-formed by construction.
     /// </summary>
@@ -32,6 +33,13 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         static readonly XNamespace XmpNs = "http://ns.adobe.com/xap/1.0/";
         static readonly XNamespace PdfaidNs = "http://www.aiim.org/pdfa/ns/id/";
 
+        // The original Adobe-defined PDF/X identification schema (used by every PDF/X level, including
+        // X-4 - confirmed against the widely-deployed LaTeX "pdfx" package's own XMP template, which is
+        // the clearest real-world reference available short of the paywalled ISO 15930 text itself: see
+        // PdfXIdentifiers's remarks) and the newer ISO-registered schema (additive, X-4-only).
+        static readonly XNamespace PdfxNs = "http://ns.adobe.com/pdfx/1.3/";
+        static readonly XNamespace PdfxidNs = "http://www.npes.org/pdfx/ns/id/";
+
         /// <summary>
         /// Creates the metadata stream and its XMP packet. <paramref name="creationDate"/> must be
         /// resolved (never "unknown") by the caller before this is constructed - see
@@ -42,13 +50,14 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfDocumentInformation info,
             DateTimeOffset creationDate,
             PdfAConformance conformance,
+            PeachPDF.PdfXConformance pdfXConformance,
             IEnumerable<XElement> customProperties)
             : base(document)
         {
             Elements.SetName(Keys.Type, "/Metadata");
             Elements.SetName(Keys.Subtype, "/XML");
 
-            var packetBytes = BuildPacket(info, creationDate, conformance, customProperties);
+            var packetBytes = BuildPacket(info, creationDate, conformance, pdfXConformance, customProperties);
 
             // Per ISO 19005 §6.7.4 the metadata stream must not specify a /Filter - every other
             // stream writer in this codebase sets Elements[PdfStream.Keys.Filter] explicitly
@@ -61,6 +70,7 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfDocumentInformation info,
             DateTimeOffset creationDate,
             PdfAConformance conformance,
+            PeachPDF.PdfXConformance pdfXConformance,
             IEnumerable<XElement> customProperties)
         {
             var description = new XElement(RdfNs + "Description",
@@ -106,6 +116,26 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 description.Add(new XElement(PdfaidNs + "conformance", level));
             }
 
+            // pdfx:GTS_PDFXVersion/GTS_PDFXConformance mirror the Info-dictionary keys PdfGenerator writes
+            // alongside this stream (PdfXIdentifiers is the shared source of truth for both) - written for
+            // every PDF/X level under the original Adobe-defined "pdfx" schema. PDF/X-4 additionally gets
+            // pdfxid:GTS_PDFXVersion under the newer ISO-registered schema, which ISO 15930-7 names as the
+            // primary identification mechanism for that level (see PdfXIdentifiers's remarks).
+            if (pdfXConformance != PeachPDF.PdfXConformance.None)
+            {
+                var (version, xConformance) = PdfXIdentifiers(pdfXConformance);
+                description.Add(new XAttribute(XNamespace.Xmlns + "pdfx", PdfxNs));
+                description.Add(new XElement(PdfxNs + "GTS_PDFXVersion", version));
+                if (xConformance is not null)
+                    description.Add(new XElement(PdfxNs + "GTS_PDFXConformance", xConformance));
+
+                if (pdfXConformance == PeachPDF.PdfXConformance.X4)
+                {
+                    description.Add(new XAttribute(XNamespace.Xmlns + "pdfxid", PdfxidNs));
+                    description.Add(new XElement(PdfxidNs + "GTS_PDFXVersion", version));
+                }
+            }
+
             var rdf = new XElement(RdfNs + "RDF", description);
 
             // Deep-copy (new XElement(custom), not custom itself) - an XElement already has a parent
@@ -144,6 +174,43 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             PdfAConformance.PdfA3B => ("3", "B"),
             PdfAConformance.PdfA3U => ("3", "U"),
             PdfAConformance.PdfA3A => ("3", "A"),
+            _ => throw new ArgumentOutOfRangeException(nameof(conformance), conformance, null),
+        };
+
+        /// <summary>
+        /// The <c>GTS_PDFXVersion</c>/<c>GTS_PDFXConformance</c> identifier strings for a
+        /// <see cref="PeachPDF.PdfXConformance"/> level - shared by this class's XMP <c>pdfx:</c> block and
+        /// <c>PdfGenerator.RenderPagesCore</c>'s Info-dictionary <c>/GTS_PDFXVersion</c>/<c>/GTS_PDFXConformance</c>
+        /// keys, so both mechanisms always agree (PDF/A validators check exactly this kind of Info-dict/XMP
+        /// consistency; there is no reason a PDF/X reader wouldn't too).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// PeachPDF's <see cref="PeachPDF.PdfXConformance"/> levels target the 2003-era ISO revisions
+        /// (ISO 15930-4 for X1a, ISO 15930-6 for X3 - PDF 1.4 base for both) rather than the original
+        /// 2001/2002 revisions (PDF 1.3 base) - see <c>PdfGenerator.EstablishDocumentOptions</c>'s version
+        /// -setting block. ISO 15930-7 (X4, PDF 1.6 base) has only the one revision.
+        /// </para>
+        /// <para>
+        /// The real ISO 15930 text is paywalled, so this was verified by cross-referencing multiple
+        /// independent secondary sources - ISO's own standard abstracts, IDEAlliance/Adobe PDF/X
+        /// application notes, the widely-used <c>iText</c> library's <c>PdfXConformanceImp</c> reference
+        /// implementation, and (most precisely) the LaTeX <c>pdfx</c> package's <c>pdfx.xmp</c> XMP
+        /// template, whose real conditional logic gives an exact, internally-consistent picture: every
+        /// level writes <c>pdfx:GTS_PDFXVersion</c> as <c>"PDF/X-{part}{conformance-letter}"</c>, with a
+        /// trailing <c>":{year}"</c> only for a part below 4 (X1a/X3 get a year suffix, X4 doesn't);
+        /// <c>pdfx:GTS_PDFXConformance</c> is written only for a part below 3 (X1a only, among PeachPDF's
+        /// three levels - X3/X4 don't get it); and only X4 (part &gt; 3) additionally gets
+        /// <c>pdfxid:GTS_PDFXVersion</c> under the newer ISO-registered schema. Called out here, and in the
+        /// matching recent-fix note, as best-available verification rather than a primary-source citation -
+        /// the same honesty this repo's PDF/A work already applied to its own veraPDF-only gaps.
+        /// </para>
+        /// </remarks>
+        internal static (string Version, string? Conformance) PdfXIdentifiers(PeachPDF.PdfXConformance conformance) => conformance switch
+        {
+            PeachPDF.PdfXConformance.X1a => ("PDF/X-1a:2003", "PDF/X-1a:2003"),
+            PeachPDF.PdfXConformance.X3 => ("PDF/X-3:2003", null),
+            PeachPDF.PdfXConformance.X4 => ("PDF/X-4", null),
             _ => throw new ArgumentOutOfRangeException(nameof(conformance), conformance, null),
         };
 

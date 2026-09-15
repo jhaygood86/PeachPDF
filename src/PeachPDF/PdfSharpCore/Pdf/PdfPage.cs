@@ -578,17 +578,20 @@ namespace PeachPDF.PdfSharpCore.Pdf
 
 #if true
             // Add transparency group to prevent rendering problems of Adobe viewer.
-            // Update (PDFsharp 1.50 beta 3): Add transparency group only of ColorMode is defined.
-            // Rgb is the default for the ColorMode, but if user sets it to Undefined then
-            // we respect this and skip the transparency group.
             // TransparencyUsed is set incrementally during painting by whichever content actually
             // required a transparency group (opacity < 1, a semi-transparent fill/stroke/gradient
             // stop, or an SVG <mask> - see PdfGraphicsState/XGraphicsPdfRenderer's calls into
             // PdfATransparencyGuard), not forced unconditionally as it used to be - a page with none
             // of those doesn't carry an unnecessary /Group, and PDF/A-1 (which forbids transparency
             // groups) becomes reachable for documents that genuinely don't use any of them.
-            if (TransparencyUsed && !Elements.ContainsKey(Keys.Group) &&
-                _document.Options.ColorMode != PdfColorMode.Undefined)
+            //
+            // Undefined is now PdfGenerator's own document-wide default (a mixed-color-space document:
+            // each color writes in whichever space it actually carries - RGB or, for a CSS device-cmyk()
+            // -authored color, real CMYK - see PdfGenerator.RenderPagesCore), not an opt-out of this
+            // feature the way an older PDFsharp version used it - so it no longer skips the group here;
+            // the /CS fallback below already resolves to /DeviceRGB for anything but the whole-document
+            // -forced PdfColorMode.Cmyk (never set under Undefined).
+            if (TransparencyUsed && !Elements.ContainsKey(Keys.Group))
             {
                 PdfDictionary group = new PdfDictionary();
                 _elements["/Group"] = group;

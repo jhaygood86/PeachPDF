@@ -22,12 +22,36 @@ namespace PeachPDF.Html.Adapters.Entities
 
         private readonly long _value;
 
+        // CSS Color 5 device-cmyk() carried natively - see PeachPDF.CSS.Color.IsDeviceCmyk for why no
+        // naive RGB<->CMYK approximation is computed for one of these. R/G/B (read from the low 24 bits
+        // of _value, which stay 0 for a CMYK-tagged color) must not be read when _isCmyk is true.
+        private readonly bool _isCmyk;
+        private readonly float _cyan;
+        private readonly float _magenta;
+        private readonly float _yellow;
+        private readonly float _key;
+
         #endregion
 
 
         private RColor(long value)
         {
             _value = value;
+            _isCmyk = false;
+            _cyan = 0f;
+            _magenta = 0f;
+            _yellow = 0f;
+            _key = 0f;
+        }
+
+        private RColor(byte alpha, float cyan, float magenta, float yellow, float key)
+        {
+            _value = (long)alpha << 24;
+            _isCmyk = true;
+            _cyan = cyan;
+            _magenta = magenta;
+            _yellow = yellow;
+            _key = key;
         }
 
         /// <summary>
@@ -103,6 +127,22 @@ namespace PeachPDF.Html.Adapters.Entities
         }
 
         /// <summary>
+        /// True if this color was authored via CSS <c>device-cmyk()</c> and is carried in its native
+        /// CMYK components (<see cref="C"/>/<see cref="M"/>/<see cref="Y"/>/<see cref="K"/>) rather than
+        /// RGB - <see cref="R"/>/<see cref="G"/>/<see cref="B"/> are meaningless when this is true. See
+        /// <see cref="PeachPDF.Utilities.Utils.Convert(RColor)"/>, the one choke point that branches on
+        /// this before building the PDF backend's color.
+        /// </summary>
+        public bool IsCmyk => _isCmyk;
+
+        // Named to match PeachPDF.CSS.Color and XColor's own C/M/Y/K properties, the same names all the
+        // way down the pipeline from CSS parsing to the PDF backend.
+        public float C => _cyan;
+        public float M => _magenta;
+        public float Y => _yellow;
+        public float K => _key;
+
+        /// <summary>
         ///     Specifies whether this <see cref="RColor" /> structure is uninitialized.
         /// </summary>
         /// <returns>
@@ -129,7 +169,7 @@ namespace PeachPDF.Html.Adapters.Entities
         /// <filterpriority>3</filterpriority>
         public static bool operator ==(RColor left, RColor right)
         {
-            return left._value == right._value;
+            return left.Equals(right);
         }
 
         /// <summary>
@@ -198,6 +238,22 @@ namespace PeachPDF.Html.Adapters.Entities
         }
 
         /// <summary>
+        /// Creates an <see cref="RColor" /> carrying native CMYK components (CSS <c>device-cmyk()</c>) -
+        /// see <see cref="IsCmyk" />.
+        /// </summary>
+        /// <param name="alpha">The alpha component. Valid values are 0 through 255.</param>
+        /// <param name="cyan">The cyan component, clamped to 0..1.</param>
+        /// <param name="magenta">The magenta component, clamped to 0..1.</param>
+        /// <param name="yellow">The yellow component, clamped to 0..1.</param>
+        /// <param name="key">The key (black) component, clamped to 0..1.</param>
+        public static RColor FromCmyk(int alpha, float cyan, float magenta, float yellow, float key)
+        {
+            CheckByte(alpha);
+            return new RColor((byte)alpha, Math.Clamp(cyan, 0f, 1f), Math.Clamp(magenta, 0f, 1f),
+                Math.Clamp(yellow, 0f, 1f), Math.Clamp(key, 0f, 1f));
+        }
+
+        /// <summary>
         ///     Tests whether the specified object is a <see cref="RColor" /> structure and is equivalent to this
         ///     <see
         ///         cref="RColor" />
@@ -215,6 +271,13 @@ namespace PeachPDF.Html.Adapters.Entities
         {
             if (obj is RColor color)
             {
+                if (_isCmyk || color._isCmyk)
+                {
+                    return _isCmyk == color._isCmyk && _value == color._value &&
+                           _cyan.Equals(color._cyan) && _magenta.Equals(color._magenta) &&
+                           _yellow.Equals(color._yellow) && _key.Equals(color._key);
+                }
+
                 return _value == color._value;
             }
 
@@ -230,7 +293,7 @@ namespace PeachPDF.Html.Adapters.Entities
         /// <filterpriority>1</filterpriority>
         public override int GetHashCode()
         {
-            return _value.GetHashCode();
+            return _isCmyk ? HashCode.Combine(_isCmyk, _value, _cyan, _magenta, _yellow, _key) : _value.GetHashCode();
         }
 
         /// <summary>
@@ -241,7 +304,20 @@ namespace PeachPDF.Html.Adapters.Entities
             var stringBuilder = new StringBuilder(32);
             stringBuilder.Append(GetType().Name);
             stringBuilder.Append(" [");
-            if (_value != 0)
+            if (_isCmyk)
+            {
+                stringBuilder.Append("A=");
+                stringBuilder.Append(A);
+                stringBuilder.Append(", C=");
+                stringBuilder.Append(_cyan);
+                stringBuilder.Append(", M=");
+                stringBuilder.Append(_magenta);
+                stringBuilder.Append(", Y=");
+                stringBuilder.Append(_yellow);
+                stringBuilder.Append(", K=");
+                stringBuilder.Append(_key);
+            }
+            else if (_value != 0)
             {
                 stringBuilder.Append("A=");
                 stringBuilder.Append(A);
