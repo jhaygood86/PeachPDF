@@ -2519,11 +2519,30 @@ namespace PeachPDF.Html.Core.Dom
             // box whose real extent is elsewhere, which AssignRectanglesToBoxes then merges into the
             // box's own rectangle for the line. A box that opens here but breaks again never reaches
             // this point, since FlowBox returns as soon as the break is recorded.
-            if (opensHere && box.IsInline && 0 <= coordinates.CurrentX - startX && coordinates.CurrentX - startX < box.ActualWidth)
+            // Both sides of the comparison are CONTENT widths, and that is the whole of it. `startX` is
+            // this box's content-box left edge - FlowBox's per-child dispatch adds a child's leftSpacing
+            // (margin+border+padding) to the cursor BEFORE recursing into it - and `rightSpacing` is
+            // added by that same dispatch AFTER this runs, so the span measured here begins and ends at
+            // the content box. `box.ActualWidth` is the BORDER-box width (Size.Width + padding + border,
+            // see ActualBoxSizingWidth), so comparing a content advance against it made every inline
+            // carrying left padding or a left border look narrower than it really was by exactly that
+            // padding and border - and the correction below then added them to the line a second time,
+            // pushing everything after the box right by one padding+border (issue #1093).
+            // `Size.Width` is the declared content width this branch is actually about; for a plain
+            // inline it is 0, so the branch now correctly does nothing at all.
+            var usedContentWidth = coordinates.CurrentX - startX;
+
+            if (opensHere && box.IsInline && 0 <= usedContentWidth && usedContentWidth < box.Size.Width)
             {
                 // hack for actual width handling
-                coordinates.CurrentX += box.ActualWidth - (coordinates.CurrentX - startX);
-                coordinates.Line.Rectangles.Add(box, new RRect(startX, trueStartY, box.ActualWidth, box.ActualHeight));
+                coordinates.CurrentX += box.Size.Width - usedContentWidth;
+
+                // The rectangle is the box's BORDER box - it is what the background and border paint
+                // from - so it starts one border+padding back from the content edge `startX` names.
+                // Margin is excluded on both counts, since ActualWidth does not include it either.
+                coordinates.Line.Rectangles.Add(box, new RRect(
+                    startX - box.ActualBorderLeftWidth - box.ActualPaddingLeft,
+                    trueStartY, box.ActualWidth, box.ActualHeight));
             }
 
             // handle box that is only a whitespace
@@ -3964,9 +3983,10 @@ namespace PeachPDF.Html.Core.Dom
         /// <see cref="FlowAtomicBlockContentChild"/>/<see cref="FlowInlineFlexChild"/>: Chromium
         /// renders the space after one, and without this clause it would be dropped as line-leading.
         /// Two other writers reach the dictionary during the flow and are worth knowing about before
-        /// changing either: <c>FlowBox</c>'s own "hack for actual width handling" tail (any inline box
-        /// whose measured advance came out under its <c>ActualWidth</c>) is the only other one, and
-        /// <see cref="CssLineBox"/>'s own bookkeeping
+        /// changing either: <c>FlowBox</c>'s own "hack for actual width handling" tail (an inline box
+        /// whose content came out narrower than its declared <c>Size.Width</c> - which for a plain
+        /// inline is 0, so in practice only an inline-level box with a declared width, see #1093) is
+        /// the only other one, and <see cref="CssLineBox"/>'s own bookkeeping
         /// (<see cref="CssLineBox.UpdateRectangle"/>/<see cref="CssLineBox.AssignRectanglesToBoxes"/>)
         /// runs only after the flow, so it is never seen here. A float is deliberately not counted:
         /// it is out of flow, and a line that begins beside one begins at the float's edge with its
