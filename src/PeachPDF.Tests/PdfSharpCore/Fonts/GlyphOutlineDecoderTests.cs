@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using PeachPDF.Fonts;
@@ -159,6 +160,34 @@ namespace PeachPDF.Tests.PdfSharpCoreTests.Fonts
             Assert.Null(face.glyf);
             Assert.False(GlyphOutlineDecoder.TryGetGlyphOutline(face, 1, out var outline));
             Assert.True(outline.IsEmpty);
+        }
+
+        [Fact]
+        public void TryGetGlyphOutline_NonMonotonicEndPointsOfContours_DoesNotOverrunPointArrays()
+        {
+            // numPoints is sized from endPtsOfContours' LAST entry; a corrupted or malformed glyph
+            // whose entries aren't monotonically increasing must not walk the per-contour split past
+            // xs/ys's bounds. Regression for an IndexOutOfRangeException seen decoding a real glyph.
+            byte[] fontBytes = File.ReadAllBytes(BundledFonts.Ttf);
+            var sourceFace = new OpenTypeFontface(XFontSource.CreateCompiledFont(fontBytes));
+            int oGlyph = Gid(sourceFace, 'o');
+
+            short numberOfContours = BinaryPrimitives.ReadInt16BigEndian(sourceFace.glyf.GetGlyphData(oGlyph));
+            Assert.Equal(2, numberOfContours); // 'o' is a ring plus its counter
+
+            // endPtsOfContours[0] sits right after the 10-byte glyph header (numberOfContours + bbox).
+            // Corrupt it to exceed endPtsOfContours[1], the last entry that actually sizes numPoints.
+            int glyphOffset = sourceFace.glyf.GetOffset(oGlyph);
+            BinaryPrimitives.WriteUInt16BigEndian(fontBytes.AsSpan(glyphOffset + 10), 0xFFFF);
+
+            var corruptFace = new OpenTypeFontface(XFontSource.CreateCompiledFont(fontBytes));
+
+            // Must not throw - the malformed contour is discarded rather than overrunning the arrays.
+            GlyphOutlineDecoder.TryGetGlyphOutline(corruptFace, oGlyph, out var outline);
+
+            // The inflated first entry swallows every remaining point into one bogus contour,
+            // leaving nothing for the second - garbled, but bounded rather than a crash.
+            Assert.Single(outline.Contours);
         }
 
         private static void AssertPoint(double x, double y, GlyphOutlinePoint p)
