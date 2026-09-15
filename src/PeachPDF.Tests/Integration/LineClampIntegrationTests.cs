@@ -2,6 +2,7 @@ using PeachPDF.CSS;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Tests.TestSupport;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -394,8 +395,10 @@ namespace PeachPDF.Tests.Integration
                 LayoutHarness.Wrap($"<p id='e' style='{style}'>…</p>"));
             var ellipsisWidth = LayoutHarness.FindById(ellipsisRoot, "e")!.LineBoxes[0].Words[0].Width;
 
+            // CSS lengths use a decimal point even when the test runner's culture uses a comma.
+            var fixtureWidth = (naturalWidth + ellipsisWidth / 2).ToString("R", CultureInfo.InvariantCulture);
             return LayoutHarness.Wrap(
-                $"<p id='p' style='{style};width:{naturalWidth + ellipsisWidth / 2}pt;line-clamp:1'>AAAAA BBBBB CCCCC</p>");
+                $"<p id='p' style='{style};width:{fixtureWidth}pt;line-clamp:1'>AAAAA BBBBB CCCCC</p>");
         }
     }
 }
