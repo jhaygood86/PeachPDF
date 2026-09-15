@@ -743,11 +743,11 @@ namespace PeachPDF.Html.Core.Paint
         }
 
         /// <summary>
-        /// The <c>text-decoration-skip-ink</c> gap either side of a skipped glyph, as a fraction of the
-        /// font size. Chosen to land near one CSS pixel at a 16px font, which is about what a browser
-        /// leaves.
+        /// The maximum <c>text-decoration-skip-ink</c> clearance on either side of a skipped glyph, in
+        /// CSS pixels. Chromium dilates each ink crossing by the resolved decoration thickness, capped at
+        /// this value so extremely thick lines do not create unbounded horizontal gaps.
         /// </summary>
-        private const double InkSkipClearanceRatio = 0.06;
+        private const double MaximumInkSkipClearanceCssPixels = 13;
 
         /// <summary>
         /// Whether <paramref name="styleSource"/> asks for <c>text-decoration-skip-ink</c>
@@ -801,19 +801,17 @@ namespace PeachPDF.Html.Core.Paint
         /// descender.
         /// </para>
         /// <para>
-        /// The clearance scales with the font, not with the line's thickness: the <c>auto</c> thickness is
-        /// a fixed 1 unit regardless of size (see <see cref="ResolveDecorationThickness"/>), so keying the
-        /// gap to it would give a 40pt heading the same hairline clearance as 8pt fine print. A thicker
-        /// line already skips more of its own accord, because its band is taller and so meets more ink;
-        /// widening the gap as well made a heavy underline read as a dashed one.
+        /// The clearance follows the line thickness, matching Chromium: a heavy underline needs more room
+        /// around a descender than a hairline does. It is capped so unusually thick decorations do not
+        /// erase disproportionate lengths of the line.
         /// </para>
         /// </remarks>
         private static void AddInkExclusions(RGraphics g, CssBox styleSource, IReadOnlyList<DecorationWord> words,
             double y, double thickness, List<DecorationInterval> into)
         {
             var half = thickness / 2;
-            var fontSize = styleSource.ActualFont.Size * g.PixelsPerPoint;
-            var clearance = fontSize * InkSkipClearanceRatio;
+            var maximumClearance = MaximumInkSkipClearanceCssPixels * Length.PointsPerPx * g.PixelsPerPoint;
+            var clearance = Math.Min(thickness, maximumClearance);
 
             foreach (var placed in words)
             {

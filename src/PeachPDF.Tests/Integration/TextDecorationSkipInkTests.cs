@@ -115,6 +115,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task Underline_ThickerStrokeWidensTheInkGapUpToTheBrowserCompatibleCap()
+        {
+            static System.Collections.Generic.IReadOnlyList<RInkSpan> Crossing(InkAwareRecordingGraphics.InkQuery query) =>
+                [new RInkSpan(query.BaselineOrigin.X + 40, query.BaselineOrigin.X + 50)];
+
+            const string Text = "llllllllllllllllllll";
+
+            var (thinLines, _) = await DecorationAsync("underline", Text, skipInk: "auto",
+                scriptedInk: Crossing, thickness: "1px");
+            var (thickLines, _) = await DecorationAsync("underline", Text, skipInk: "auto",
+                scriptedInk: Crossing, thickness: "6px");
+            var (cappedLines, _) = await DecorationAsync("underline", Text, skipInk: "auto",
+                scriptedInk: Crossing, thickness: "20px");
+
+            var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
+
+            Assert.Equal(10 + 2 * cssPixel, GapWidth(thinLines), 3);
+            Assert.Equal(10 + 2 * 6 * cssPixel, GapWidth(thickLines), 3);
+            Assert.Equal(10 + 2 * 13 * cssPixel, GapWidth(cappedLines), 3);
+        }
+
+        [Fact]
         public async Task LineThrough_IsNeverSkipped()
         {
             // §2.5: "the line-through value is never skipped" - a strike is meant to cross the glyphs.
@@ -250,20 +272,28 @@ namespace PeachPDF.Tests.Integration
         private static System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines(TestRecordingGraphics g) =>
             g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1).ToList();
 
+        private static double GapWidth(System.Collections.Generic.IReadOnlyList<TestRecordingGraphics.DrawLineCall> lines)
+        {
+            Assert.Equal(2, lines.Count);
+            return lines[1].X1 - lines[0].X2;
+        }
+
         private static Task<(System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines, InkAwareRecordingGraphics Graphics)>
             UnderlineAsync(string text, string? skipInk, string? ancestorStyle = null) =>
             DecorationAsync("underline", text, skipInk, ancestorStyle);
 
         private static async Task<(System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines, InkAwareRecordingGraphics Graphics)>
             DecorationAsync(string decoration, string text, string? skipInk, string? ancestorStyle = null,
-                System.Func<InkAwareRecordingGraphics.InkQuery, System.Collections.Generic.IReadOnlyList<RInkSpan>?>? scriptedInk = null)
+                System.Func<InkAwareRecordingGraphics.InkQuery, System.Collections.Generic.IReadOnlyList<RInkSpan>?>? scriptedInk = null,
+                string? thickness = null)
         {
             var skip = skipInk is null ? "" : $"; text-decoration-skip-ink:{skipInk}";
+            var resolvedThickness = thickness is null ? "" : $"; text-decoration-thickness:{thickness}";
             var wrapper = ancestorStyle is null ? "" : $" style='{ancestorStyle}'";
 
             var (root, container) = await LayoutAsync(
                 $"<div{wrapper} style=\"width:400pt; font:20pt '{Family}'\">"
-                + $"<span id='s' style=\"text-decoration:{decoration}{skip}\">{text}</span></div>");
+                + $"<span id='s' style=\"text-decoration:{decoration}{skip}{resolvedThickness}\">{text}</span></div>");
             var s = LayoutHarness.FindById(root, "s")!;
 
             using var g = new InkAwareRecordingGraphics(Adapter(container)) { ScriptedInk = scriptedInk };

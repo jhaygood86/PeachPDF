@@ -11,7 +11,7 @@ descenders of `g`, `j`, `p`, `q`, `y`.
 **Now:** `text-decoration-skip-ink` (css-text-decor-4 §2.5) is implemented, and its initial value
 `auto` skips — which is what browsers do, and so what a document author comparing a PDF against a
 browser expects. The line is interrupted wherever it would cross a glyph's ink, with a small gap
-either side that scales with the font size.
+either side that grows with the decoration thickness, up to a cap.
 
 **Why the default changed rather than being opt-in:** `auto` is defined as user-agent discretion,
 so either behaviour is conformant — but an author who writes no declaration at all is asking for

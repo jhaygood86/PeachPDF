@@ -43,11 +43,12 @@ the same gaps, which is what `UnderlineOverline_EachMeasuresItsOwnBand` exists t
 - **A `g` produces two crossings, not one.** A band through the open loop of a descender cuts both
   its walls, and nonzero winding correctly reports both. Adapter tests that assumed one crossing per
   descender were wrong, not the scanner.
-- **The clearance must not key off the line's thickness.** The first version used
-  `max(fontSize * 0.06, thickness * 0.5)`, and a 3px underline came out looking dashed: a thicker
-  line already meets more ink (its band is taller and reaches the bottoms of round letters), so
-  widening the gap as well compounded it. The reasoning behind the floor was wrong anyway — a
-  vertically thicker line does not close a horizontal gap. It is now font-size-proportional only.
+- **The clearance keys off the line's thickness.** The first version used `fontSize * 0.06`, which
+  looked plausible at the default thickness but left the interruption around a descender much narrower
+  than Chrome's on thick lines. Chromium dilates an ink crossing horizontally by the resolved decoration
+  thickness, capped at 13 CSS pixels; PeachPDF now does the same. The taller band already meeting more
+  ink is not a substitute for this dilation: it changes which contours are crossed, while the dilation
+  controls the visible breathing room beside those crossings.
 
 ## What it costs, and why the cache is not optional
 
