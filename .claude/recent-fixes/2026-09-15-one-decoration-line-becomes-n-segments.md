@@ -57,15 +57,17 @@ descender-heavy document, 29 pages, identical but for the one declaration:
 
 | | `skip-ink: none` | `skip-ink: auto` |
 | --- | --- | --- |
-| render | 1598 ms | 1813 ms (+13%) |
-| PDF | 98 KB | 790 KB |
+| render | 1586 ms | 1784 ms (+13%) |
+| PDF | 59 KB | 438 KB |
 | page-1 stream | 34 139 B / 46 strokes | 106 281 B / 2354 strokes |
 
 Before `GraphicsAdapter._inkCrossings` existed the time column read 1533 → 2405–2759 ms (+57% to
 +80%). The measurement shapes the run a *second* time (`descriptor.Shape` runs GSUB/GPOS again, and
 `OpenTypeDescriptor` does not cache) and decodes every glyph outline fresh, once per decoration
 keyword and once per decorating box — so a `<div underline>` around a `<span underline>` measured the
-same words twice. Caching it takes the overhead to +13%.
+same words twice. Caching it takes the overhead to +13%. (The per-glyph hull below later roughly
+halved the size column, from 790 KB, by merging each glyph's runs into one span before they ever
+become segments; the stream figures above predate it.)
 
 Two things about the key are load-bearing, and both have a test: the band is stored **relative to the
 baseline** and the spans **relative to `origin.X`**, so the same word on the next line is a hit and
@@ -82,8 +84,38 @@ would cut decode work the crossings cache only avoids on *repeated* words.
 `DecorationContent.Of` also takes `collectWords: WantsInkFrom(box)`, so a box that opted out does not
 build the word dictionary it will never read.
 
-## Two traps in the geometry
+## The skip shape is a separate decision from the ink measurement
 
+The first version reported one span per *ink run* and drew the line through everything between them.
+That is a faithful reading of the glyph — and it put a stub of underline inside the bowl of every `g`
+and the counter of every `o`. css-text-decor-4
+[§2.10.5](https://drafts.csswg.org/css-text-decor-4/#ink-skip-shape) names this exact case: the skip
+*shape* is UA discretion, "whether to show the line within enclosed areas of a glyph" is called out,
+and following each contour is warned to leave "typographically-awkward wisps of underline". So the
+old behaviour was conformant and still wrong to ship.
+
+`MeasureInkCrossings` now hulls each glyph's runs into one span. Two reasons it lives *there* and not
+in `GlyphInkScanner`:
+
+- The scanner stays an honest report of where the glyph is painted, testable against a fixture whose
+  ink is known exactly. `ACounter_IsNotTreatedAsInk` still asserts two runs for a square-with-a-hole,
+  and now says why: were it to report one, a genuinely two-piece glyph could not be told from a solid
+  one and the hull would stop being the caller's decision.
+- The hull is per *glyph*, which is only knowable in the glyph walk. The scanner sees one outline at a
+  time and could not tell a glyph's own two sides from two adjacent letters.
+
+**Checked against browsers rather than assumed**, by rendering the same fixture with
+`skip-ink: auto` and `none` in a red decoration colour and diffing the red runs at the densest
+scanline — the difference is exactly what the engine skipped, which glyphs painting over the line
+would otherwise hide. Chrome *and* Firefox both hull per glyph: measured on `o`, `g`, `n`, `v`, `H`
+and U+2026, whose three visibly separate dots collapse into a single gap in both. That last one is
+the discriminating case — it rules out "they hull enclosed counters only" and pins it to per glyph.
+A second engine mattered here: one browser agreeing with a guess is not evidence.
+
+Bonus, not the motivation: merging runs before they become segments roughly halved the `auto` output
+size (790 KB → 438 KB on the 20 000-word fixture).
+
+## Two traps in the geometry
 - **The exclusion is the atomic inline's margin box; every rectangle layout records is a border box.**
   `RecordExclusions` adds the margins back. `BlockUnderline_ExcludesTheAtomicInlinesMarginBoxNotItsBorderBox`
   pins it. Margin box is *this engine's* choice, not the spec's — §2.4 says only that atomic inlines
@@ -133,12 +165,16 @@ layout sizes correctly. Worth filing on its own.
 
 ## Evidence
 
-- 38 new tests: `TextDecorationAtomicInlineTests` (21, including `DecorationSegments`'s own
+- 39 new tests: `TextDecorationAtomicInlineTests` (21, including `DecorationSegments`'s own
   arithmetic), `TextDecorationSkipInkTests` (14), `GlyphInkScannerTests` (13),
-  `GraphicsAdapterInkCrossingsTests` (11).
-- Full suite on net8.0: 11651 passed, 0 failed (11616 before).
+  `GraphicsAdapterInkCrossingsTests` (12).
+- Full suite on net8.0: 11656 passed, 0 failed (11616 before).
 - `dotnet build PeachPDF.slnx -t:Rebuild`: 0 warnings.
 - New `text_decoration_skipping` showcase, rasterized through **both** PDFium and MuPDF at 150-400
   dpi, in agreement: descender gaps present under `auto`, absent under `none`, `line-through`
   untouched, and a real gap around an inline-block, an invisible inline-block and an `<img>`.
+- Per-glyph hull cross-checked against Chrome *and* Firefox by red-line diffing, on `o`, `g`, `n`,
+  `v`, `H` and U+2026; `gjpqy goal` at 90pt matches Chrome gap-for-gap (normalized gap boundaries
+  within ~0.01 of the line's extent, including the sliver of line Chrome also leaves between `g`
+  and `j`).
 - Timings above: Release CLI, 3 runs after a warm-up, median reported.

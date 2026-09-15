@@ -511,6 +511,16 @@ namespace PeachPDF.Html.Adapters
         /// Returns <c>null</c>, not an empty list, when no ink information is available at all — the
         /// caller cannot otherwise tell that apart from a run that genuinely crosses nothing.
         /// </para>
+        /// <para>
+        /// Each glyph contributes at most one range, spanning everything it puts in the band — so a
+        /// glyph whose ink is in several pieces there (the two sides of an <c>o</c>, the separate dots
+        /// of an ellipsis) yields one range covering the whole letter rather than one per piece. CSS
+        /// Text Decoration 4 leaves this skip <i>shape</i> to the UA
+        /// (<see href="https://www.w3.org/TR/css-text-decor-4/#ink-skip-shape">§2.10.5 Shaping
+        /// Interruptions</see>), explicitly naming "whether to show the line within enclosed areas of a
+        /// glyph" as a UA choice and warning that following each contour can strand
+        /// "typographically-awkward wisps of underline"; this is also what Chrome and Firefox do.
+        /// </para>
         /// </remarks>
         /// <param name="str">the run whose ink is measured</param>
         /// <param name="font">the font the run is drawn with</param>

@@ -26,6 +26,15 @@ have left the property unable to reproduce the common case at all.
 
 A `line-through` is unaffected — the spec never skips it.
 
+The line breaks once per glyph, over everything that glyph puts in the line's path. A letter the
+line meets in more than one place — the two sides of an `o`, the bowl of a `g` — therefore gets a
+single gap spanning the whole letter, not one gap per stroke with a stub of line stranded inside it.
+css-text-decor-4 [§2.10.5 Shaping Interruptions](https://drafts.csswg.org/css-text-decor-4/#ink-skip-shape)
+leaves the shape of the interruption to the user agent, naming "whether to show the line within
+enclosed areas of a glyph" as exactly such a choice and warning that following each contour can leave
+"typographically-awkward wisps of underline"; Chrome and Firefox both break per glyph, so this is
+also what an author proofing against a browser sees.
+
 Two kinds of text still get an unbroken line because no ink can be measured for them: text in a
 CFF/OpenType (`.otf`) font, and a run painted by per-codepoint font fallback. See the
 `text-decoration-skip-ink` row in `docs/html-css-support.md`.

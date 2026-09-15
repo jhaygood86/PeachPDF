@@ -374,10 +374,25 @@ namespace PeachPDF.Adapters
                     var glyphX = penX + glyph.XOffset * scale;
                     var glyphY = -glyph.YOffset * scale;
 
-                    foreach (var (start, end) in GlyphInkScanner.Crossings(outline,
-                                 (glyphY - key.BandBottom) / scale, (glyphY - key.BandTop) / scale))
+                    var crossings = GlyphInkScanner.Crossings(outline,
+                        (glyphY - key.BandBottom) / scale, (glyphY - key.BandTop) / scale);
+
+                    // One span per glyph, hulling everything the glyph puts in the band, rather than one
+                    // span per ink run. CSS Text Decoration 4 §2.10.5 leaves the skip shape to the UA and
+                    // names this exact choice - "whether to show the line within enclosed areas of a
+                    // glyph" - noting that hiding it "gives a cleaner look to the type" and that following
+                    // each contour can leave "typographically-awkward wisps of underline". Per-run spans
+                    // produced precisely those wisps: a stub of underline stranded inside the bowl of a
+                    // 'g' or the counter of an 'o'. Both Chrome and Firefox hull per glyph - measured on
+                    // 'o', 'g', 'n', 'v', 'H' and U+2026, whose three separate dots become a single gap in
+                    // both - so this is also what a document author will have proofed against.
+                    //
+                    // Crossings is sorted and disjoint, so its first start and last end are the extremes.
+                    if (crossings.Count > 0)
                     {
-                        spans.Add(new RInkSpan(glyphX + start * scale, glyphX + end * scale));
+                        spans.Add(new RInkSpan(
+                            glyphX + crossings[0].Start * scale,
+                            glyphX + crossings[^1].End * scale));
                     }
                 }
 

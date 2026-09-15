@@ -21,10 +21,16 @@ namespace PeachPDF.Fonts.OpenType
     /// <remarks>
     /// <para>
     /// The outline is flattened to polylines and sampled with a handful of scanlines across the band,
-    /// each resolved by the same <b>nonzero winding</b> rule the glyph itself is filled with. Nonzero
-    /// winding, rather than "the leftmost and rightmost crossing", is what keeps the counter of an
-    /// <c>o</c> or the bowl of a <c>g</c> out of the result: those are genuinely unpainted, and treating
-    /// them as ink would make a skip gap far wider than the letter's actual strokes.
+    /// each resolved by the same <b>nonzero winding</b> rule the glyph itself is filled with, so the
+    /// result is where the glyph is genuinely painted: the counter of an <c>o</c> and the bowl of a
+    /// <c>g</c> come back as gaps between runs, not as ink.
+    /// </para>
+    /// <para>
+    /// That is a statement about the glyph, not about where a decoration line should break. Deciding
+    /// the skip <i>shape</i> — in particular whether to hull a glyph's runs into one interval — belongs
+    /// to the caller (<c>GraphicsAdapter.MeasureInkCrossings</c>), which is what CSS Text Decoration 4
+    /// §2.10.5 leaves to the UA. Keeping the two apart is deliberate: this class stays honest geometry,
+    /// unit-testable against a fixture whose ink is known exactly.
     /// </para>
     /// <para>
     /// Sampling, rather than solving each segment against the band analytically, is deliberate. A

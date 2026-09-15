@@ -30,15 +30,34 @@ namespace PeachPDF.Tests.Adapters
             var crossings = fixture.Crossings("g", below: 2, height: 1);
 
             Assert.NotNull(crossings);
-            Assert.NotEmpty(crossings);
 
-            // Deliberately not "exactly one crossing": a band through the open loop of a descender cuts
-            // its two walls and correctly reports both, which is the nonzero-winding rule doing its job
-            // rather than a defect. What must hold is that every crossing is a real interval inside the
-            // glyph's own advance.
-            Assert.All(crossings, c => Assert.True(c.End > c.Start, "each crossing should be a real interval"));
-            Assert.All(crossings, c => Assert.True(c.Start >= -0.01 && c.End <= fixture.Advance("g") + 0.01,
-                $"the crossing ({c.Start}..{c.End}) should lie within the glyph's own advance"));
+            // One crossing, not two: a band through the open loop of a descender cuts both its walls,
+            // but each glyph is reported as a single hulled range so the decoration breaks once around
+            // the letter instead of leaving a wisp of underline stranded inside the loop. See
+            // GraphicsAdapter.MeasureInkCrossings and RGraphics.GetInkCrossings.
+            var only = Assert.Single(crossings);
+            Assert.True(only.End > only.Start, "the crossing should be a real interval");
+            Assert.True(only.Start >= -0.01 && only.End <= fixture.Advance("g") + 0.01,
+                $"the crossing ({only.Start}..{only.End}) should lie within the glyph's own advance");
+        }
+
+        [Fact]
+        public async Task AGlyphWhoseInkIsInSeveralPieces_IsReportedAsOneRangeCoveringAllOfThem()
+        {
+            // CSS Text Decoration 4 §2.10.5 leaves the skip shape to the UA, and both Chrome and Firefox
+            // break the line once per glyph rather than once per ink run - so an 'o', whose counter puts
+            // its two sides in the band as separate runs, must come back as a single range spanning the
+            // whole letter. Reporting the two runs separately is what left a stub of underline drawn
+            // across the inside of the letter.
+            using var fixture = await Fixture.CreateAsync();
+
+            var crossings = fixture.Crossings("o", below: -4, height: 2);
+
+            Assert.NotNull(crossings);
+
+            var only = Assert.Single(crossings);
+            Assert.True(only.End - only.Start > fixture.Advance("o") * 0.5,
+                $"the range ({only.Start}..{only.End}) should span the letter, not one of its two sides");
         }
 
         [Fact]
