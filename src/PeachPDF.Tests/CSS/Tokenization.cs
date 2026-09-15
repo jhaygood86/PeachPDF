@@ -41,6 +41,7 @@ namespace PeachPDF.Tests.CSS
             var tokenizer = new Lexer(new TextSource(teststring));
             var token = tokenizer.Get();
             Assert.Equal(url, token.Data);
+            Assert.True(token.IsValid);
         }
 
         [Fact]
@@ -336,48 +337,60 @@ namespace PeachPDF.Tests.CSS
         // AppendLiteral/EndContent) added or changed the shape of - each is a rare recovery/escape/EOF
         // combination that pre-dates the redesign but hadn't been exercised by a dedicated test before.
 
+        // CSS Syntax's own consume-a-string-token algorithm treats hitting EOF (with no closing quote)
+        // as a plain parse error that still returns an ordinary <string-token> - only an unescaped
+        // newline reconsumes and returns a <bad-string-token> instead. IsValid tracks exactly that
+        // distinction (not "did the source end cleanly"), so the EOF case below is IsValid: true and
+        // only the raw-newline case is IsValid: false.
         [Theory]
-        [InlineData("\"abc")] // EndOfFile with no closing quote
-        [InlineData("\"abc\n")] // raw, unescaped line break inside the string
-        public void StringDoubleQuote_UnterminatedOrLineBreak_ReturnsBadString(string input)
+        [InlineData("\"abc", true)] // EndOfFile with no closing quote - a parse error, but not a bad-string-token
+        [InlineData("\"abc\n", false)] // raw, unescaped line break inside the string - a genuine bad-string-token
+        public void StringDoubleQuote_UnterminatedOrLineBreak_ReturnsBadString(string input, bool expectedValid)
         {
             var tokenizer = new Lexer(new TextSource(input));
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.String, token.Type);
             Assert.Equal("abc", token.Data);
+            Assert.Equal(expectedValid, token.IsValid);
         }
 
         [Fact]
-        public void StringDoubleQuote_DanglingBackslashAtEof_ReturnsBadString()
+        public void StringDoubleQuote_DanglingBackslashAtEof_IsStillValid()
         {
+            // CSS Syntax §4.3.7's REVERSE SOLIDUS branch says "if the next input code point is EOF, do
+            // nothing" - not a parse error, not a bad-string-token.
             var tokenizer = new Lexer(new TextSource("\"abc\\"));
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.String, token.Type);
             Assert.Equal("abc", token.Data);
+            Assert.True(token.IsValid);
         }
 
         [Theory]
-        [InlineData("'abc")]
-        [InlineData("'abc\n")]
-        public void StringSingleQuote_UnterminatedOrLineBreak_ReturnsBadString(string input)
+        [InlineData("'abc", true)]
+        [InlineData("'abc\n", false)]
+        public void StringSingleQuote_UnterminatedOrLineBreak_ReturnsBadString(string input, bool expectedValid)
         {
             var tokenizer = new Lexer(new TextSource(input));
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.String, token.Type);
             Assert.Equal("abc", token.Data);
+            Assert.Equal(expectedValid, token.IsValid);
         }
 
         [Fact]
-        public void StringSingleQuote_DanglingBackslashAtEof_ReturnsBadString()
+        public void StringSingleQuote_DanglingBackslashAtEof_IsStillValid()
         {
+            // See StringDoubleQuote's own comment on this same CSS Syntax §4.3.7 "do nothing" branch.
             var tokenizer = new Lexer(new TextSource("'abc\\"));
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.String, token.Type);
             Assert.Equal("abc", token.Data);
+            Assert.True(token.IsValid);
         }
 
         [Fact]
@@ -390,6 +403,7 @@ namespace PeachPDF.Tests.CSS
 
             Assert.Equal(TokenType.String, token.Type);
             Assert.Equal("ab", token.Data);
+            Assert.True(token.IsValid);
         }
 
         // HashRest's own escape branch (as opposed to HashStart's, already covered by ValueContextHash) -
@@ -424,7 +438,19 @@ namespace PeachPDF.Tests.CSS
 
             Assert.Equal(TokenType.Comment, token.Type);
             Assert.Equal(" abc", token.Data);
+            Assert.False(token.IsValid);
             Assert.Equal(TokenType.EndOfFile, tokenizer.Get().Type);
+        }
+
+        [Fact]
+        public void Comment_ProperlyClosed_IsValid()
+        {
+            var tokenizer = new Lexer(new TextSource("/* abc */"));
+            var token = tokenizer.Get();
+
+            Assert.Equal(TokenType.Comment, token.Type);
+            Assert.Equal(" abc ", token.Data);
+            Assert.True(token.IsValid);
         }
 
         [Fact]
@@ -496,13 +522,17 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
-        public void UrlDoubleQuote_DanglingBackslashAtEndOfFile_ReturnsBadUrlWithScannedContent()
+        public void UrlDoubleQuote_DanglingBackslashAtEndOfFile_AppendsReplacementCharacterAndIsStillValid()
         {
+            // "Check if two code points are a valid escape" (CSS Syntax) treats backslash+EOF as valid -
+            // only a following newline is not - so "consume an escaped code point"'s own EOF branch
+            // appends U+FFFD REPLACEMENT CHARACTER rather than making this a bad-url-token.
             var tokenizer = new Lexer(new TextSource("url(\"abc\\"));
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.Url, token.Type);
-            Assert.Equal("abc", token.Data);
+            Assert.Equal("abc�", token.Data);
+            Assert.True(token.IsValid);
         }
 
         [Fact]
@@ -528,13 +558,15 @@ namespace PeachPDF.Tests.CSS
         }
 
         [Fact]
-        public void UrlSingleQuote_DanglingBackslashAtEndOfFile_ReturnsBadUrlWithScannedContent()
+        public void UrlSingleQuote_DanglingBackslashAtEndOfFile_AppendsReplacementCharacterAndIsStillValid()
         {
+            // See UrlDoubleQuote's own comment on this same backslash+EOF handling.
             var tokenizer = new Lexer(new TextSource("url('abc\\"));
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.Url, token.Type);
-            Assert.Equal("abc", token.Data);
+            Assert.Equal("abc�", token.Data);
+            Assert.True(token.IsValid);
         }
 
         [Fact]
@@ -567,6 +599,32 @@ namespace PeachPDF.Tests.CSS
 
             Assert.Equal(TokenType.Url, token.Type);
             Assert.Equal("aAb", token.Data);
+        }
+
+        [Fact]
+        public void UrlUnquoted_DanglingBackslashAtEndOfFile_AppendsReplacementCharacterAndIsStillValid()
+        {
+            // See UrlDoubleQuote_DanglingBackslashAtEndOfFile's own comment - the same backslash+EOF
+            // handling, reached via UrlUnquoted's own inlined valid-escape check instead of a quoted
+            // url()'s.
+            var tokenizer = new Lexer(new TextSource("url(abc\\"));
+            var token = tokenizer.Get();
+
+            Assert.Equal(TokenType.Url, token.Type);
+            Assert.Equal("abc�", token.Data);
+            Assert.True(token.IsValid);
+        }
+
+        [Fact]
+        public void UrlUnquoted_LineBreakAfterBackslash_IsStillABadUrl()
+        {
+            // A raw newline right after the backslash is genuinely not a valid escape (unlike EOF) -
+            // this still routes to UrlBad exactly as before.
+            var tokenizer = new Lexer(new TextSource("url(abc\\\n"));
+            var token = tokenizer.Get();
+
+            Assert.Equal(TokenType.Url, token.Type);
+            Assert.False(token.IsValid);
         }
 
         [Fact]
@@ -603,6 +661,7 @@ namespace PeachPDF.Tests.CSS
             var token = tokenizer.Get();
 
             Assert.Equal(TokenType.Url, token.Type);
+            Assert.False(token.IsValid);
             Assert.Equal(TokenType.EndOfFile, tokenizer.Get().Type);
         }
 
