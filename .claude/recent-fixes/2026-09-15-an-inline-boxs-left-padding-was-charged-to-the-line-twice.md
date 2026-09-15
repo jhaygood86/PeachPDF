@@ -78,5 +78,6 @@ content-less inline and what follows it, because
 [css-text-3 phase I](https://www.w3.org/TR/css-text-3/#white-space-phase-1) collapses a white-space
 sequence *across* intervening inline box boundaries — the spaces on both sides of the empty inline are
 one sequence, collapsed to a single space placed before it. PeachPDF collapses per text node and
-renders both. Filed separately rather than folded in here: it is a white-space-processing change, not
-a box-model one, and it would need its own fixtures across `pre`/`pre-wrap` and nested inlines.
+renders both. Filed as **#1095** rather than folded in here: it is a white-space-processing change,
+not a box-model one, and it would need its own fixtures across `pre`/`pre-wrap`, nested inlines, and
+chains of several empty inlines.
