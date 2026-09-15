@@ -117,6 +117,16 @@ namespace PeachPDF.Layout
 
         public ITextStyle Direction(PdfTextDirection direction)
         {
+            if (direction == PdfTextDirection.Auto)
+            {
+                // Can't resolve this eagerly here - a decorator like DefaultTextStyle typically runs
+                // before the text it needs to scan even exists (it's chained ahead of the terminal
+                // Text/Span call that supplies it). Deferred to a single pass over the whole page once
+                // its content is fully built - see CssBox.PendingAutoDirection's own doc comment.
+                box.PendingAutoDirection = true;
+                return this;
+            }
+
             properties.Set(box, "direction", direction == PdfTextDirection.Rtl ? "rtl" : "ltr");
             return this;
         }

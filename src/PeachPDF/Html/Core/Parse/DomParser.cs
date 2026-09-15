@@ -19,7 +19,6 @@ using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.PdfSharpCore.Drawing;
-using PeachPDF.Text.Bidi;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -1926,7 +1925,7 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (box.HtmlTag is { } tag && NeedsAutoDirectionalityResolution(tag))
             {
-                tag.SetAttribute(HtmlConstants.Dir, FindFirstStrongDirection(box) ?? Keywords.Ltr);
+                tag.SetAttribute(HtmlConstants.Dir, BidiDirectionalityResolver.FindFirstStrongDirection(box) ?? Keywords.Ltr);
             }
 
             foreach (var child in box.Boxes)
@@ -1952,58 +1951,6 @@ namespace PeachPDF.Html.Core.Parse
             return isBdi
                 && !dirAttr.Equals(Keywords.Ltr, StringComparison.OrdinalIgnoreCase)
                 && !dirAttr.Equals(Keywords.Rtl, StringComparison.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// The HTML Standard's first-strong-character algorithm: walks <paramref name="element"/>'s
-        /// descendant text in tree order looking for the first character with a strong <see cref="BidiClass"/>
-        /// (<c>L</c>, or <c>R</c>/<c>AL</c>), returning <see cref="Keywords.Ltr"/>/<see cref="Keywords.Rtl"/>
-        /// respectively, or null if none is found (the element's directionality then defaults to ltr).
-        /// Does not descend into a nested element that carries its own <c>dir</c> attribute (that element
-        /// is its own directionality scope) or a nested &lt;bdi&gt; (always its own isolated scope, dir
-        /// attribute or not), matching the spec's tree-scan boundary exactly.
-        /// </summary>
-        private static string? FindFirstStrongDirection(CssBox element)
-        {
-            foreach (var child in element.Boxes)
-            {
-                var found = ScanForStrongDirection(child);
-                if (found is not null) return found;
-            }
-
-            return null;
-        }
-
-        private static readonly FrozenSet<string> AutoDirectionalityOpaqueTags = new[]
-        {
-            HtmlConstants.Bdi, "script", HtmlConstants.Style, "textarea", "input", HtmlConstants.Iframe, HtmlConstants.NoScript
-        }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
-
-        private static string? ScanForStrongDirection(CssBox box)
-        {
-            if (box.HtmlTag is { } tag)
-            {
-                if (tag.HasAttribute(HtmlConstants.Dir) || AutoDirectionalityOpaqueTags.Contains(tag.Name))
-                    return null;
-            }
-
-            if (box.Text is { Length: > 0 } text)
-            {
-                foreach (var rune in text.EnumerateRunes())
-                {
-                    var bidiClass = BidiClassTable.Of(rune);
-                    if (bidiClass == BidiClass.L) return Keywords.Ltr;
-                    if (bidiClass is BidiClass.R or BidiClass.AL) return Keywords.Rtl;
-                }
-            }
-
-            foreach (var child in box.Boxes)
-            {
-                var found = ScanForStrongDirection(child);
-                if (found is not null) return found;
-            }
-
-            return null;
         }
 
         /// <summary>

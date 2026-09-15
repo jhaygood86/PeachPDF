@@ -10057,6 +10057,17 @@ const string declarativeApiSource =
                         "particularly strong second half, and the West region opened its first physical " +
                         "retail location - a milestone the team has been working toward since the start " +
                         "of the fiscal year.");
+
+                    column.Item().Text(t =>
+                    {
+                        // PdfTextDirection.Auto detects each span's own base direction from its text (the
+                        // same first-strong-character detection dir="auto" uses on the HTML side) - no
+                        // need to know ahead of time which language a given run of content is in. This
+                        // English span resolves to ltr; a Hebrew or Arabic span (given a font covering
+                        // those glyphs) would resolve to rtl the same way.
+                        t.Span("Auto-detected direction, per span: ").Direction(PdfTextDirection.Auto);
+                        t.Span("this paragraph resolves left-to-right.").Direction(PdfTextDirection.Auto);
+                    });
                 });
             });
         });
@@ -10067,7 +10078,7 @@ const string declarativeApiSource =
     """;
 
 await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Declarative Document-Building API",
-    "PdfGenerator.CreateDocument: pages, a padded/bordered/shadowed card, a table with a repeating header, a dashed divider, a bulleted list, a line-clamped paragraph with a custom ellipsis, and a repeating page-numbered footer, built directly in C# with no HTML/CSS strings - layered entirely on PeachPDF's own flexbox, table, list, line-clamp, and running-header/footer machinery.",
+    "PdfGenerator.CreateDocument: pages, a padded/bordered/shadowed card, a table with a repeating header, a dashed divider, a bulleted list, a line-clamped paragraph with a custom ellipsis, auto-detected per-span text direction, and a repeating page-numbered footer, built directly in C# with no HTML/CSS strings - layered entirely on PeachPDF's own flexbox, table, list, line-clamp, bidi-detection, and running-header/footer machinery.",
     declarativeApiSource,
     async gen =>
     {
@@ -10144,6 +10155,12 @@ await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Decl
                             "particularly strong second half, and the West region opened its first physical " +
                             "retail location - a milestone the team has been working toward since the start " +
                             "of the fiscal year.");
+
+                        column.Item().Text(t =>
+                        {
+                            t.Span("Auto-detected direction, per span: ").Direction(PdfTextDirection.Auto);
+                            t.Span("this paragraph resolves left-to-right.").Direction(PdfTextDirection.Auto);
+                        });
                     });
                 });
             });
