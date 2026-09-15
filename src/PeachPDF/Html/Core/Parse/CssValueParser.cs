@@ -2370,7 +2370,9 @@ namespace PeachPDF.Html.Core.Parse
             if (parsed.HasValue)
             {
                 var c = parsed.Value;
-                color = RColor.FromArgb(c.A, c.R, c.G, c.B);
+                color = c.IsDeviceCmyk
+                    ? RColor.FromCmyk(c.A, c.C, c.M, c.Y, c.K)
+                    : RColor.FromArgb(c.A, c.R, c.G, c.B);
                 return true;
             }
 

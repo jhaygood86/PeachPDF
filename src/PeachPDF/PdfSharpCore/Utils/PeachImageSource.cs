@@ -82,22 +82,34 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
         /// <summary>
-        /// Routes a CMYK32-identified source to a <see cref="PeachCmykImageSourceImpl"/>. Only JPEG is
-        /// supported - see .claude/accepted-gaps/cmyk-tiff-unsupported.md for why a non-JPEG CMYK source
-        /// (TIFF today, the only other PeachImage codec that decodes to Cmyk32) is rejected outright
-        /// rather than given a lesser, ICC-less embed.
+        /// Routes a CMYK32-identified source to a <see cref="PeachCmykImageSourceImpl"/>: JPEG embeds via
+        /// byte-for-byte pass-through (<see cref="DecodeCmykJpeg"/>), TIFF (issue #1096 - the only other
+        /// PeachImage codec that decodes to Cmyk32) decodes natively and embeds its raw pixel buffer
+        /// instead, since TIFF has no PDF-native pass-through filter the way JPEG's <c>/DCTDecode</c> does
+        /// (<see cref="DecodeCmykRaster"/>). Any other format reaching here (none exist today) is rejected
+        /// outright - same as every other unsupported format (TGA/PSD/HDR) - rather than given a lesser,
+        /// ICC-less embed.
         /// </summary>
         private static PeachCmykImageSourceImpl DecodeCmyk(string name, byte[] bytes, ImageInfo info)
         {
-            if (info.FormatName != "jpeg")
+            if (info.FormatName == "jpeg")
             {
-                throw new InvalidOperationException(
-                    $"CMYK images are only supported for JPEG sources; the '{info.FormatName}' format " +
-                    "does not currently expose an embedded ICC profile, so a CMYK image in that format " +
-                    "can't be embedded with guaranteed color fidelity. See " +
-                    ".claude/accepted-gaps/cmyk-tiff-unsupported.md.");
+                return DecodeCmykJpeg(name, bytes, info);
             }
 
+            if (info.FormatName == "tiff")
+            {
+                return DecodeCmykRaster(name, bytes, info);
+            }
+
+            throw new InvalidOperationException(
+                $"CMYK images are not supported for the '{info.FormatName}' format - it doesn't currently " +
+                "expose an embedded ICC profile, so a CMYK image in that format can't be embedded with " +
+                "guaranteed color fidelity.");
+        }
+
+        private static PeachCmykImageSourceImpl DecodeCmykJpeg(string name, byte[] bytes, ImageInfo info)
+        {
             // Deliberately not de-inverting Adobe's inverted-CMYK convention here (KeepAdobeCmykInverted
             // = true) - the PDF reader's own /Decode [1 0 1 0 1 0 1 0] array does that (see PdfImage's
             // EmbedJpegPassthrough), not a silent decode-time normalization. This decode's only purpose
@@ -117,6 +129,30 @@ namespace PeachPDF.PdfSharpCore.Utils
             };
 
             return new PeachCmykImageSourceImpl(name, info.Width, info.Height, passthrough);
+        }
+
+        /// <summary>
+        /// Decodes a CMYK TIFF natively to <see cref="PixelFormat.Cmyk32"/> (never forced through
+        /// Rgba32 - see <see cref="Rgba32DecoderOptions"/>'s own remarks on why that would destroy print
+        /// separations) and copies its pixel buffer out for a raw <c>/FlateDecode</c> embed
+        /// (<see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfImage"/>'s <c>InitializeCmykRaster</c>) -
+        /// unlike JPEG, TIFF has no <c>IsAdobeInvertedCmyk</c>/<c>IsYcck</c> convention to account for
+        /// (always <see langword="false"/> for a non-JPEG source - <see cref="ImageInfo"/>'s own remarks),
+        /// so the decoded bytes are already in the standard, ready-to-embed CMYK convention.
+        /// </summary>
+        private static PeachCmykImageSourceImpl DecodeCmykRaster(string name, byte[] bytes, ImageInfo info)
+        {
+            var cmykOptions = new DecoderOptions { TargetPixelFormat = PixelFormat.Cmyk32 };
+            using var decoded = Image.Load(new MemoryStream(bytes), cmykOptions);
+            var iccProfile = TryGetUsableIccProfileBytes(decoded, IccColorSpace.Cmyk, expectedChannelCount: 4);
+
+            var raster = new CmykRasterData
+            {
+                Data = decoded.GetPixelSpan().ToArray(),
+                IccProfile = iccProfile,
+            };
+
+            return new PeachCmykImageSourceImpl(name, info.Width, info.Height, raster);
         }
 
         /// <summary>
@@ -219,15 +255,18 @@ namespace PeachPDF.PdfSharpCore.Utils
         }
 
         /// <summary>
-        /// Embeds a CMYK/YCCK JPEG source. Always embeds via <see cref="JpegPassthroughData"/> (the
-        /// original file bytes, never resized or re-encoded - see
-        /// <c>PdfImageTable.ComputeTargetPixelSize</c>'s CMYK resize skip) since PeachImage has no CMYK
-        /// JPEG encoder to fall back to and a naive CMYK-&gt;RGB conversion is exactly the defect issue
-        /// #1085 exists to fix.
+        /// Embeds a CMYK source - either JPEG (via <see cref="JpegPassthroughData"/>, the original file
+        /// bytes, never resized or re-encoded) or TIFF (via <see cref="CmykRasterData"/>, a raw decoded
+        /// pixel buffer - see <see cref="ImageSource.IImageSource.CmykRaster"/>'s own remarks on why
+        /// TIFF needs a different shape). Exactly one of the two constructors is ever used for a given
+        /// instance - see <c>PdfImageTable.ComputeTargetPixelSize</c>'s CMYK resize skip, which applies to
+        /// both: PeachImage has no CMYK JPEG encoder, and a raw CMYK raster embed has no resize step
+        /// either, so a CMYK source is never resized regardless of which shape it took.
         /// </summary>
         private sealed class PeachCmykImageSourceImpl : IImageSource
         {
-            private readonly JpegPassthroughData _passthrough;
+            private readonly JpegPassthroughData? _passthrough;
+            private readonly CmykRasterData? _raster;
 
             public int Width { get; }
             public int Height { get; }
@@ -236,6 +275,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             public bool IsCmyk => true;
             public bool IsGrayscale => false;
             public JpegPassthroughData? JpegPassthrough => _passthrough;
+            public CmykRasterData? CmykRaster => _raster;
 
             public PeachCmykImageSourceImpl(string name, int width, int height, JpegPassthroughData passthrough)
             {
@@ -245,11 +285,19 @@ namespace PeachPDF.PdfSharpCore.Utils
                 _passthrough = passthrough;
             }
 
+            public PeachCmykImageSourceImpl(string name, int width, int height, CmykRasterData raster)
+            {
+                Name = name;
+                Width = width;
+                Height = height;
+                _raster = raster;
+            }
+
             public void SaveAsJpeg(MemoryStream ms, int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null) =>
-                throw new InvalidOperationException("A CMYK image is always embedded via JpegPassthrough; SaveAsJpeg is never called for it.");
+                throw new InvalidOperationException("A CMYK image is always embedded via JpegPassthrough or CmykRaster; SaveAsJpeg is never called for it.");
 
             public void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null) =>
-                throw new InvalidOperationException("A CMYK image is always embedded via JpegPassthrough; SaveAsPdfBitmap is never called for it.");
+                throw new InvalidOperationException("A CMYK image is always embedded via JpegPassthrough or CmykRaster; SaveAsPdfBitmap is never called for it.");
         }
 
         // Whether to embed losslessly (preserving alpha, via SaveAsPdfBitmap) or as lossy JPEG is
@@ -282,6 +330,7 @@ namespace PeachPDF.PdfSharpCore.Utils
             // needs to write a matching /ColorSpace for that - see IImageSource.IsGrayscale's own remarks.
             public bool IsGrayscale => _rgba.PixelFormat == PixelFormat.Gray8;
             public JpegPassthroughData? JpegPassthrough => _jpegPassthrough;
+            public CmykRasterData? CmykRaster => null;
 
             public PeachImageSourceImpl(string name, Image rgba, int quality, bool transparent, JpegPassthroughData? jpegPassthrough = null)
             {

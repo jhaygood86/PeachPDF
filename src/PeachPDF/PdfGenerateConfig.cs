@@ -293,6 +293,26 @@ namespace PeachPDF
         public double MaximumDownscaleMultiplier { get; set; } = 1.0;
 
         /// <summary>
+        /// The PDF/X (ISO 15930) print-production conformance level to target. Defaults to
+        /// <see cref="PeachPDF.PdfXConformance.None"/> - no PDF/X-specific work is done. See
+        /// <see cref="PeachPDF.PdfXConformance"/> for what each level requires, including the mandatory
+        /// <see cref="ColorOptions.OutputIntentProfile"/> and X1a's CMYK-only content restriction.
+        /// Mutually exclusive with <see cref="PdfAConformance"/> (archival and print-production are
+        /// different documents) - generation throws if both are set to a non-<c>None</c> value on the
+        /// same call.
+        /// </summary>
+        public PdfXConformance PdfXConformance { get; set; } = PdfXConformance.None;
+
+        /// <summary>
+        /// Print color-management options - ICC output intent, black generation, and real ICC
+        /// device-to-device color conversion (<see cref="ColorOptions.ConversionMode"/> - see
+        /// <see cref="PeachPDF.ColorOptions"/>'s remarks). <see langword="null"/> (the default) behaves as
+        /// <see cref="ColorOptions.OutputIntentProfile"/> being unset - fine unless
+        /// <see cref="PdfXConformance"/> requires one, in which case generation throws.
+        /// </summary>
+        public ColorOptions? ColorOptions { get; set; }
+
+        /// <summary>
         /// Set all 4 margins to the given value.
         /// </summary>
         /// <param name="value"></param>

@@ -168,14 +168,33 @@ namespace PeachPDF.PdfSharpCore.Drawing
             if (_source != null)
             {
                 //We always get a jpeg from an image source
-                // A CMYK source is never Transparent (no Cmyk+alpha PixelFormat exists), so it always
-                // resolves to Jpeg here - the same format any other non-alpha JPEG resolves to.
-                // PdfImage.InitializeJpeg's own JpegPassthrough fast path handles it correctly without
-                // needing a dedicated XImageFormat/Initialize method: IsCmyk sources always populate
-                // JpegPassthrough (see PeachCmykImageSourceImpl) and are never resized (see IsCmyk's own
-                // remarks below), so that fast path's `_targetWidth is null && JpegPassthrough is {}`
-                // check is unconditionally true for one.
-                _format = _source.Transparent ? XImageFormat.Png : XImageFormat.Jpeg;
+                if (_source.JpegPassthrough is not null)
+                {
+                    // A CMYK/YCCK or ICC-carrying RGB/Gray JPEG source is never Transparent (no
+                    // Cmyk+alpha PixelFormat exists, and pass-through is JPEG-only), so it always
+                    // resolves to Jpeg here - the same format any other non-alpha JPEG resolves to.
+                    // PdfImage.InitializeJpeg's own JpegPassthrough fast path handles it correctly
+                    // without needing a dedicated XImageFormat/Initialize method: this check being
+                    // non-null already guarantees that fast path's own `_targetWidth is null &&
+                    // JpegPassthrough is {}` condition holds (a JpegPassthrough source is never resized
+                    // - see IsCmyk's own remarks below for the CMYK case; an ICC-carrying RGB/Gray source
+                    // forfeits pass-through instead of Format when it *is* resized, handled inside
+                    // InitializeJpeg itself, not here).
+                    _format = XImageFormat.Jpeg;
+                }
+                else if (_source.IsCmyk)
+                {
+                    // A CMYK source with no JpegPassthrough (TIFF today - see CmykRaster's own remarks;
+                    // the only other CMYK-capable PeachImage codec) routes through PdfImage's ordinary
+                    // non-Jpeg dispatch, which checks IsCmyk itself (InitializeNonJpeg) before falling
+                    // into the RGB-only bitmap path - so any of the "convert to a PDF bitmap" format
+                    // GUIDs works here; Tiff is simply the accurate one.
+                    _format = XImageFormat.Tiff;
+                }
+                else
+                {
+                    _format = _source.Transparent ? XImageFormat.Png : XImageFormat.Jpeg;
+                }
             }
         }
 
@@ -194,6 +213,13 @@ namespace PeachPDF.PdfSharpCore.Drawing
         /// <see cref="IImageSource.JpegPassthrough"/>.
         /// </summary>
         internal JpegPassthroughData? JpegPassthrough => _source.JpegPassthrough;
+
+        /// <summary>
+        /// Non-null when this image is CMYK with no JPEG pass-through available (TIFF - issue #1096) and
+        /// should be embedded via a raw <c>/FlateDecode</c> CMYK stream instead - see
+        /// <see cref="IImageSource.CmykRaster"/>.
+        /// </summary>
+        internal CmykRasterData? CmykRaster => _source.CmykRaster;
 
         /// <summary>
         /// True when this image's source is single-channel grayscale - see

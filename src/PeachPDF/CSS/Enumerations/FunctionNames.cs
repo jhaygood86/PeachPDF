@@ -66,6 +66,7 @@ namespace PeachPDF.CSS
         public const string Lch = "lch";
         public const string Oklch = "oklch";
         public const string ColorMix = "color-mix";
+        public const string DeviceCmyk = "device-cmyk";
         public const string ConicGradient = "conic-gradient";
         public const string RepeatingConicGradient = "repeating-conic-gradient";
         public const string Var = "var";

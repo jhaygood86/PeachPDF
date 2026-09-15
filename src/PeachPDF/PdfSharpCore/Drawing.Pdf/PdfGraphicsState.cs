@@ -100,6 +100,9 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             XColor color = pen.Color;
             bool overPrint = pen.Overprint;
             color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
+            color = PdfColorConversionGuard.ApplyConversion(_renderer.Owner, color);
+            color = PdfXColorSpaceGuard.RequireAllowedOrConvert(_renderer.Owner, color,
+                "A stroke color (CSS border-color/outline-color/column-rule-color, or an SVG stroke)");
 
             if (_realizedLineWith != pen._width)
             {
@@ -196,13 +199,18 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             {
                 RealizeBrush(pen.Brush, colorMode, 0, 0, true);
             }
-            else if (colorMode != PdfColorMode.Cmyk)
+            else if (ResolveEffectiveColorMode(colorMode, color) != PdfColorMode.Cmyk)
             {
                 // The IsEmpty guard mirrors the fill side (RealizeFillColor): after a brush/pattern
                 // stroke the tracked color is reset to Empty, and a following solid stroke must then
                 // re-emit its DeviceRGB color to switch the stroke color space back out of /Pattern -
                 // otherwise it would silently keep stroking with the previous shape's shading pattern.
-                if (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.Rgb != color.Rgb)
+                // Under a mixed-color-space document (colorMode == Undefined) the previously realized
+                // stroke color may itself have been CMYK - a ColorSpace mismatch alone must force a
+                // re-emit even if the two colors' derived .Rgb values happen to coincide, since the
+                // operator itself ('RG' vs 'K') needs to change, not just the numbers.
+                if (_realizedStrokeColor.IsEmpty || _realizedStrokeColor.ColorSpace != color.ColorSpace ||
+                    _realizedStrokeColor.Rgb != color.Rgb)
                 {
                     _renderer.Append(PdfEncoders.ToString(color, PdfColorMode.Rgb));
                     _renderer.Append(" RG\n");
@@ -326,13 +334,37 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
         }
 
+        /// <summary>
+        /// Resolves what space a color actually writes in for a given document <paramref name="colorMode"/> -
+        /// <see cref="PdfColorMode.Undefined"/> (a mixed-color-space document: PDF permits both
+        /// <c>rg</c>/<c>RG</c> and <c>k</c>/<c>K</c> operators in the same content stream) defers to the
+        /// color's own <see cref="XColor.ColorSpace"/>, matching <see cref="PdfEncoders.ToString(XColor, PdfColorMode, bool)"/>'s
+        /// own per-color dispatch - <see cref="RealizeFillColor"/>/<see cref="RealizePen"/> must resolve
+        /// the same way, or a device-cmyk()-authored color would fall through their <c>!= Cmyk</c> branch
+        /// (true for Undefined) and get force-written as RGB despite <see cref="ColorSpaceHelper.EnsureColorMode(PdfColorMode, XColor)"/>
+        /// leaving it untouched under Undefined.
+        /// </summary>
+        private static PdfColorMode ResolveEffectiveColorMode(PdfColorMode colorMode, XColor color)
+        {
+            if (colorMode != PdfColorMode.Undefined) return colorMode;
+            return color.ColorSpace == XColorSpace.Cmyk ? PdfColorMode.Cmyk : PdfColorMode.Rgb;
+        }
+
         private void RealizeFillColor(XColor color, bool overPrint, PdfColorMode colorMode)
         {
             color = ColorSpaceHelper.EnsureColorMode(colorMode, color);
+            color = PdfColorConversionGuard.ApplyConversion(_renderer.Owner, color);
+            color = PdfXColorSpaceGuard.RequireAllowedOrConvert(_renderer.Owner, color,
+                "A fill color (CSS color/background-color, or an SVG fill)");
 
-            if (colorMode != PdfColorMode.Cmyk)
+            if (ResolveEffectiveColorMode(colorMode, color) != PdfColorMode.Cmyk)
             {
-                if (_realizedFillColor.IsEmpty || _realizedFillColor.Rgb != color.Rgb)
+                // Under a mixed-color-space document (colorMode == Undefined) the previously realized
+                // fill color may itself have been CMYK - a ColorSpace mismatch alone must force a
+                // re-emit even if the two colors' derived .Rgb values happen to coincide, since the
+                // operator itself ('rg' vs 'k') needs to change, not just the numbers.
+                if (_realizedFillColor.IsEmpty || _realizedFillColor.ColorSpace != color.ColorSpace ||
+                    _realizedFillColor.Rgb != color.Rgb)
                 {
                     _renderer.Append(PdfEncoders.ToString(color, PdfColorMode.Rgb));
                     _renderer.Append(" rg\n");
@@ -340,8 +372,6 @@ namespace PeachPDF.PdfSharpCore.Drawing.Pdf
             }
             else
             {
-                Debug.Assert(colorMode == PdfColorMode.Cmyk);
-
                 if (_realizedFillColor.IsEmpty || !ColorSpaceHelper.IsEqualCmyk(_realizedFillColor, color))
                 {
                     _renderer.Append(PdfEncoders.ToString(color, PdfColorMode.Cmyk));

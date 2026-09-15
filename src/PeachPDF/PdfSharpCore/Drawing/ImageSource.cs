@@ -40,6 +40,26 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
         public byte[]? IccProfile { get; init; }
     }
 
+    /// <summary>
+    /// Data needed to embed a CMYK source with no PDF-native byte-for-byte pass-through filter (TIFF -
+    /// unlike JPEG's <c>/DCTDecode</c>, there is no <c>/TIFFDecode</c>) as a raw <c>/FlateDecode</c> CMYK
+    /// stream instead - see <see cref="ImageSource.IImageSource.CmykRaster"/> for when this applies.
+    /// Always CMYK (4 channels); there is no RGB/Gray equivalent of this struct because a non-CMYK raster
+    /// source already has a normal, working embed path (<see cref="ImageSource.IImageSource.SaveAsPdfBitmap"/>).
+    /// </summary>
+    internal readonly struct CmykRasterData
+    {
+        /// <summary>
+        /// The decoded pixel buffer: <c>Width * Height * 4</c> bytes, tightly interleaved C,M,Y,K per
+        /// pixel, row-major, no padding - PeachImage's own <c>PixelFormat.Cmyk32</c> layout, copied
+        /// (not a live view - the source <c>Image</c> may be disposed once this struct is built).
+        /// </summary>
+        public required byte[] Data { get; init; }
+
+        /// <summary>A usable embedded ICC profile's raw bytes, or <see langword="null"/> if none.</summary>
+        public byte[]? IccProfile { get; init; }
+    }
+
     internal abstract class ImageSource
     {
         /// <summary>
@@ -93,13 +113,22 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
             /// <summary>
             /// Non-null when this source should be embedded via byte-for-byte JPEG pass-through instead
             /// of the normal lossy-re-encode (<see cref="SaveAsJpeg"/>) or bitmap (<see cref="SaveAsPdfBitmap"/>)
-            /// paths: always non-null when <see cref="IsCmyk"/> (a CMYK JPEG always passes through, with
-            /// or without an ICC profile), and non-null for an RGB/Gray JPEG only when it carries a
+            /// paths: always non-null when <see cref="IsCmyk"/> and the source is a CMYK/YCCK JPEG, with
+            /// or without an ICC profile, and non-null for an RGB/Gray JPEG only when it carries a
             /// usable embedded ICC profile - preserving that profile is the only reason to prefer
             /// pass-through over the existing RGB JPEG handling. Null for every non-JPEG source, and for
             /// an RGB/Gray JPEG with no usable ICC profile.
             /// </summary>
             JpegPassthroughData? JpegPassthrough { get; }
+
+            /// <summary>
+            /// Non-null when <see cref="IsCmyk"/> is true but <see cref="JpegPassthrough"/> is null - a
+            /// CMYK source with no PDF-native byte-for-byte pass-through filter available (TIFF today,
+            /// the only other PeachImage codec that decodes to CMYK). Mutually exclusive with
+            /// <see cref="JpegPassthrough"/>: exactly one is non-null whenever <see cref="IsCmyk"/> is
+            /// true, and both are null otherwise.
+            /// </summary>
+            CmykRasterData? CmykRaster { get; }
         }
 
         /// <remarks>

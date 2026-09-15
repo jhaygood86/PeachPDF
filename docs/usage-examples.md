@@ -539,7 +539,7 @@ var config = new PdfGenerateConfig { EnableXmpMetadata = true, Metadata = metada
 
 ### Color and ICC profiles
 
-A PDF/A `OutputIntent` needs a device-independent ICC profile to name — PeachPDF embeds the ICC's own freely-redistributable `sRGB2014.icc` profile for this and identifies it as `"sRGB IEC61966-2.1"`. This matches PeachPDF's only supported *content-stream* color mode (RGB) — there is no public API surface for CMYK fills, strokes, or text — so no CMYK output intent is ever needed for that. It's unrelated to how a *source raster image* embeds its own color data, covered next.
+A PDF/A `OutputIntent` needs a device-independent ICC profile to name — PeachPDF embeds the ICC's own freely-redistributable `sRGB2014.icc` profile for this and identifies it as `"sRGB IEC61966-2.1"`. PeachPDF's document-wide color mode stays mixed/undefined under `PdfAConformance` (a `device-cmyk()`-authored color still writes as real `DeviceCMYK`, unaffected by PDF/A's own sRGB `OutputIntent`), so the bundled sRGB profile is always the right one to name here. It's unrelated to how a *source raster image* embeds its own color data, covered next.
 
 #### CMYK and embedded ICC profiles in source images
 
@@ -547,11 +547,97 @@ A CMYK or YCCK JPEG — the form a print-ready image typically arrives in, separ
 
 A CMYK/YCCK JPEG is always embedded at its natural pixel size — `DownscaleImages` and `MaximumDownscaleMultiplier` don't apply to it, since PeachPDF has no CMYK JPEG encoder to re-encode a resized copy with.
 
+A CMYK TIFF is preserved the same way in spirit, but by a different mechanism: TIFF has no PDF-native byte-for-byte pass-through filter the way JPEG's `DCTDecode` is, so PeachPDF decodes it natively (never forced through RGB) and embeds the decoded pixel buffer as a raw, Flate-compressed `DeviceCMYK` (or `ICCBased`, when the TIFF carries a usable embedded ICC profile) stream instead. Like a CMYK JPEG, it's always embedded at its natural pixel size.
+
 An RGB or grayscale JPEG carrying a usable embedded ICC profile is *also* embedded via byte-for-byte pass-through, specifically to preserve that profile (`ICCBased` referencing it, rather than the usual bare `DeviceRGB`/`DeviceGray`). Unlike a CMYK source, this doesn't disable resizing: if the image is being downscaled for its on-page display size, that particular embed falls back to the ordinary re-encoded path instead (losing the embedded profile for that embed, not the image) — pass-through and downscaling are mutually exclusive for a given embed, and downscaling wins when both would otherwise apply. An RGB/grayscale JPEG with no embedded ICC profile is unaffected by any of this.
 
 PNG, WebP, and AVIF sources may also carry an embedded ICC profile, but PeachPDF doesn't yet have an equivalent byte-for-byte pass-through path for those formats, so their embedded profiles aren't preserved today.
 
 Requesting `PdfAConformance` on a document containing a CMYK image without an embedded ICC profile throws an `InvalidOperationException` at generation time: a bare `DeviceCMYK` image has no relationship to PeachPDF's RGB-based `OutputIntent`, so it isn't PDF/A-conformant on its own. An `ICCBased` CMYK image (one with an embedded profile) is self-describing and doesn't have this problem. An RGB or grayscale image is unaffected either way — it stays conformant with or without an embedded ICC profile.
+
+## Authoring colors in CMYK
+
+Colors written with the [CSS Color 5 `device-cmyk()`](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/device-cmyk) function are carried through PeachPDF's whole pipeline natively — never approximated to RGB — and reach the PDF as a real `DeviceCMYK` fill or stroke operator:
+
+```html
+<p style="color: device-cmyk(0 0.81 0.94 0)">Pantone-adjacent orange, defined in ink, not light.</p>
+```
+
+`device-cmyk()` works anywhere `color` accepts any other `<color>` — `color`, `background-color`, `border-color` and the `border`/`background` shorthands, and SVG `fill`/`stroke`/`stop-color`. PDF itself allows a single page to freely mix `DeviceRGB` and `DeviceCMYK` content, so an ordinary RGB-authored color elsewhere on the same page is completely unaffected — there is no whole-document conversion, and none is attempted.
+
+A gradient (`linear-gradient`/`radial-gradient`/`conic-gradient`, or SVG `<linearGradient>`/`<radialGradient>`) whose stops are all `device-cmyk()` interpolates directly in C/M/Y/K space, the same way an all-RGB gradient interpolates in RGB space. `color-mix()` between two `device-cmyk()` operands mixes the same way, ignoring the declared `in <space>` keyword (which has no CMYK equivalent). A gradient or `color-mix()` mixing `device-cmyk()` and RGB-authored operands has no defined conversion and is rejected — see the [`color` row](html-css-support.md#color--typography) in the compatibility matrix.
+
+## Generating PDF/X-conformant output
+
+PeachPDF can optionally produce a PDF/X (ISO 15930) conformant file — the print-production profile a commercial press or prepress workflow requires. Like PDF/A, PDF/X conformance is **off by default**; opt in with `PdfGenerateConfig.PdfXConformance`, and (unlike PDF/A, which bundles a default sRGB profile) you must supply your own output-intent ICC profile via `ColorOptions` — PeachPDF has no single correct default press profile to assume:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PdfXConformance = PdfXConformance.X4,
+    ColorOptions = new ColorOptions
+    {
+        OutputIntentProfile = File.ReadAllBytes("CoatedFOGRA39.icc"),
+        OutputIntentIdentifier = "Coated FOGRA39",
+    },
+};
+```
+
+`PdfAConformance` and `PdfXConformance` are mutually exclusive on the same document — archival and print-production are different documents in practice, and generation throws an `InvalidOperationException` if both are set to a level other than `None`.
+
+### Choosing a conformance level
+
+| Level | Content restriction | Transparency | PDF version |
+|---|---|---|---|
+| `X1a` | CMYK (or a named spot color — PeachPDF has no spot-color support, so in practice CMYK-only) content only | Forbidden | 1.4 |
+| `X3` | ICC-managed color permitted — an RGB- or Gray-tagged color may stay in its own space | Forbidden | 1.4 |
+| `X4` | ICC-managed color permitted | Permitted | 1.6 |
+
+`X4` is the modern, most commonly requested level and the least restrictive of the three — if you don't have a specific requirement for `X1a`/`X3`, start there. Each level's PDF version header, and its `GTS_PDFXVersion`/`GTS_PDFXConformance` identification (in both the document information dictionary and, for `X4`, its XMP metadata — the mechanism ISO 15930-7 names as primary for that level) are set automatically; nothing further to configure.
+
+### X1a and X3: no live transparency
+
+Same restriction, and the same mechanism, as [PDF/A-1](#pdfa-1-and-transparency): CSS/SVG `opacity` below 1, `fill-opacity`/`stroke-opacity` below 1, a semi-transparent gradient color stop, and an SVG `<mask>` all render via a PDF transparency group, which `X1a`/`X3` forbid outright. Generation throws an `InvalidOperationException` naming the offending feature rather than silently emitting a non-conformant file. Target `X4` instead if your content needs transparency.
+
+### X1a: CMYK-only content
+
+`X1a` additionally rejects any *chromatic* (non-gray) RGB-authored color the moment it would be written — `color: red` throws, `color: device-cmyk(0 1 1 0)` doesn't. There is no whole-document RGB→CMYK conversion in PeachPDF to fall back on (see [Authoring colors in CMYK](#authoring-colors-in-cmyk) above), so under `X1a` you need to author any chromatic color you actually want to appear with `device-cmyk()`.
+
+An **achromatic** RGB color (gray, including pure black — `color: black`, an un-set default text color, `border: 1px solid #ccc`) is the one exception: rather than reject it, PeachPDF converts it to CMYK deterministically via `ColorOptions.BlackGeneration` — an exact, lossless ink mapping for a gray value, unlike an arbitrary hue, so this isn't the kind of approximation PeachPDF otherwise declines to compute:
+
+```csharp
+ColorOptions.BlackGeneration = ColorBlackGeneration.UseRichBlack; // default: UseTrueBlack
+```
+
+- **`UseTrueBlack`** (default): K-only (`C=M=Y=0`), scaled to the source gray's darkness.
+- **`UseRichBlack`**: the same K, plus proportionally-scaled C/M/Y for ink density on large solid-black areas on press — only the darkest values get meaningful CMY; lighter grays stay close to neutral.
+
+This is what makes `X1a` practical without rewriting every `color: black`/`border-color: #ccc` in a stylesheet as `device-cmyk()` — only genuinely chromatic colors need to be authored explicitly.
+
+### Converting document colors to a target ICC profile
+
+`ColorOptions.ConversionMode` applies a real, colorimetric ICC device-to-device conversion to every color in the document — no naive RGB↔CMYK formula is used anywhere. `PreserveAsAuthored` (the default) writes every color in whichever space it was authored in, exactly as described above; the other modes convert instead:
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PdfXConformance = PdfXConformance.X4,
+    ColorOptions = new ColorOptions
+    {
+        OutputIntentProfile = File.ReadAllBytes("CoatedFOGRA39.icc"),
+        OutputIntentIdentifier = "Coated FOGRA39",
+        ConversionMode = ColorConversionMode.ConvertToOutputIntent,
+        RenderingIntent = ColorRenderingIntent.RelativeColorimetric, // default
+        UseBlackPointCompensation = true, // default
+    },
+};
+```
+
+- **`ConvertToOutputIntent`** converts every color into `OutputIntentProfile`'s space.
+- **`ConvertToProfile`** converts every color into a separately-supplied `ConvertToProfile` profile — useful when the conversion target differs from the document's own output intent.
+- **`GrayscaleViaK`** converts every color into `FallbackCmykProfile`'s CMYK space and keeps only the resulting K (black) channel — true ink-based grayscale, not a luminosity approximation.
+
+A color's source profile is always well-defined for an RGB-authored color (the ICC-published sRGB profile PeachPDF already bundles for PDF/A — CSS colors are sRGB by definition outside of `device-cmyk()`). A `device-cmyk()`-authored color is uncalibrated ink by definition and has no source profile unless `FallbackCmykProfile` supplies one — without that set, a `device-cmyk()` color is left exactly as authored even under a conversion mode, since there is nothing to convert *from*.
 
 ## ASP.NET Core controller endpoint
 

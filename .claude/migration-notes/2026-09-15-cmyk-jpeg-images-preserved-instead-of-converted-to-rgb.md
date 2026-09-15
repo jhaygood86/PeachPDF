@@ -26,7 +26,10 @@ succeeded (producing a `DeviceCMYK` image with no relationship to PeachPDF's RGB
 intent - not actually PDF/A-conformant, just previously ungated). A CMYK image with an embedded ICC
 profile is unaffected and remains conformant. An RGB or grayscale image is unaffected either way.
 
-A CMYK TIFF - previously silently converted to RGB the same way a CMYK JPEG was - is no longer
-supported at all: it now throws `InvalidOperationException` (the same non-fatal "this image doesn't
-render" behavior as an unsupported TGA/PSD/HDR file) rather than being given a lesser, ICC-less
-conversion. See `docs/html-css-support.md`'s `img` row.
+A CMYK TIFF - previously silently converted to RGB the same way a CMYK JPEG was - is now decoded
+natively and embedded as a raw CMYK raster (`/FlateDecode`, `DeviceCMYK` or `ICCBased` when the source
+carries a usable embedded ICC profile), the same as a CMYK JPEG except via a real re-encode of the
+decoded pixels rather than a byte-for-byte pass-through (TIFF has no `/DCTDecode`-equivalent filter to
+pass through). Like a CMYK JPEG, it is always embedded at natural pixel size (no downscaling) and is
+subject to the same `PdfAConformance`-without-an-embedded-ICC-profile restriction described above. See
+`docs/html-css-support.md`'s `img` row.

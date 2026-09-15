@@ -59,17 +59,42 @@ namespace PeachPDF.Tests.TestSupport
         /// </summary>
         internal static byte[] BuildCmykProfile()
         {
-            const int inputChannels = 4;
-            const int outputChannels = 3;
-            const int clutGridPoints = 2;
+            var tags = new (string Signature, byte[] Data)[] { ("A2B0", BuildMft1Lut(4, 3, 2)) };
+            return BuildProfile("prtr", "CMYK", tags);
+        }
 
+        /// <summary>
+        /// Same shape as <see cref="BuildCmykProfile"/>, plus a <c>B2A0</c> tag (PCS-&gt;device, the same
+        /// 8-bit LUT shape with input/output channel counts swapped) - needed only when the profile is
+        /// used as a <see cref="PeachImage.IccColorProfile.ConvertTo"/> *destination* (the reverse
+        /// direction), which <see cref="BuildCmykProfile"/>'s <c>A2B0</c>-only shape can't satisfy
+        /// (<c>ConvertTo</c> throws <see cref="NotSupportedException"/> for a destination with no BToA
+        /// transform - the same failure a real AToB-only scanner/input profile would hit).
+        /// </summary>
+        internal static byte[] BuildCmykProfileWithReverseTransform()
+        {
+            var tags = new (string Signature, byte[] Data)[]
+            {
+                ("A2B0", BuildMft1Lut(4, 3, 2)),
+                ("B2A0", BuildMft1Lut(3, 4, 2)),
+            };
+            return BuildProfile("prtr", "CMYK", tags);
+        }
+
+        /// <summary>
+        /// An <c>mft1</c> (8-bit LUT) tag body (ICC.1:2010 §10.9): input curves (identity), a
+        /// <paramref name="clutGridPoints"/>-per-dimension CLUT (zeroed - see <see cref="BuildCmykProfile"/>'s
+        /// doc comment on why accuracy doesn't matter for these fixtures), and output curves (identity).
+        /// </summary>
+        private static byte[] BuildMft1Lut(int inputChannels, int outputChannels, int clutGridPoints)
+        {
             var lut = new byte[4 + 4 + 1 + 1 + 1 + 1 + 36 + (inputChannels * 256) + (IntPow(clutGridPoints, inputChannels) * outputChannels) + (outputChannels * 256)];
             int offset = 0;
             WriteAscii4(lut, offset, "mft1"); offset += 4;
             offset += 4; // reserved
-            lut[offset++] = inputChannels;
-            lut[offset++] = outputChannels;
-            lut[offset++] = clutGridPoints;
+            lut[offset++] = (byte)inputChannels;
+            lut[offset++] = (byte)outputChannels;
+            lut[offset++] = (byte)clutGridPoints;
             offset++; // padding
             offset += 36; // e1-e9 matrix - only meaningful for an RGB "prtr" profile, unused here; left zeroed (identity-adjacent, never read for CMYK)
 
@@ -79,7 +104,7 @@ namespace PeachPDF.Tests.TestSupport
                 offset += 256;
             }
 
-            // CLUT values left zeroed - see the method doc comment on why accuracy doesn't matter here.
+            // CLUT values left zeroed - see BuildCmykProfile's doc comment on why accuracy doesn't matter here.
             offset += IntPow(clutGridPoints, inputChannels) * outputChannels;
 
             for (int c = 0; c < outputChannels; c++)
@@ -88,12 +113,7 @@ namespace PeachPDF.Tests.TestSupport
                 offset += 256;
             }
 
-            var tags = new (string Signature, byte[] Data)[]
-            {
-                ("A2B0", lut),
-            };
-
-            return BuildProfile("prtr", "CMYK", tags);
+            return lut;
         }
 
         private static byte[] BuildProfile(string profileClass, string dataColorSpace, (string Signature, byte[] Data)[] tags)

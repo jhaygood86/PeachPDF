@@ -300,6 +300,8 @@ namespace PeachPDF.Adapters
 
         protected override RBrush CreateLinearGradientBrush(RRect rect, RColor color1, RColor color2, double angle)
         {
+            RejectMixedColorSpaceGradientStops(color1, color2);
+
             var mode = angle switch
             {
                 < 45 => XLinearGradientMode.ForwardDiagonal,
@@ -313,6 +315,8 @@ namespace PeachPDF.Adapters
 
         protected override RBrush CreateLinearGradientBrush(RPoint p1, RPoint p2, (RColor Color, double Position)[] stops, bool isRepeating = false)
         {
+            RejectMixedColorSpaceGradientStops(stops.Select(s => s.Color));
+
             var xp1 = new XPoint(p1.X / PixelsPerPoint, p1.Y / PixelsPerPoint);
             var xp2 = new XPoint(p2.X / PixelsPerPoint, p2.Y / PixelsPerPoint);
             var colors = stops.Select(s => Utils.Convert(s.Color)).ToArray();
@@ -322,6 +326,8 @@ namespace PeachPDF.Adapters
 
         protected override RBrush CreateRadialGradientBrush(RPoint center, double radiusX, double radiusY, (RColor Color, double Position)[] stops, bool isRepeating = false, RPoint? focalCenter = null)
         {
+            RejectMixedColorSpaceGradientStops(stops.Select(s => s.Color));
+
             var xCenter = new XPoint(center.X / PixelsPerPoint, center.Y / PixelsPerPoint);
             var rxPt = radiusX / PixelsPerPoint;
             var ryPt = radiusY / PixelsPerPoint;
@@ -331,8 +337,37 @@ namespace PeachPDF.Adapters
             return new BrushAdapter(new XRadialGradientBrush(xCenter, rxPt, ryPt, colors, positions, xFocal) { IsRepeating = isRepeating });
         }
 
+        /// <summary>
+        /// Rejects a gradient whose stops mix <c>device-cmyk()</c> with RGB-authored colors, rather than
+        /// silently corrupting the shading dictionary <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfShading"/>
+        /// writes: a shading's <c>/ColorSpace</c> is one value for the whole object, and every stop's
+        /// <c>/C0</c>/<c>/C1</c> component count must agree with it - a mixed-space stop list has no single
+        /// component count that fits every stop. An all-CMYK or all-RGB stop list has no such conflict:
+        /// <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfShading"/> resolves its <c>/ColorSpace</c> per
+        /// -shading from the stops it's actually given (see <c>PdfShading.ResolveShadingColorMode</c>), not
+        /// from the document's own <see cref="PeachPDF.PdfSharpCore.Pdf.PdfDocumentOptions.ColorMode"/>, so
+        /// same-space CMYK gradients interpolate directly in C/M/Y/K space exactly like an all-RGB gradient
+        /// interpolates in RGB space. Mixing the two spaces in one gradient has no defined conversion (no
+        /// naive RGB&lt;-&gt;CMYK approximation is computed anywhere in this project) and stays rejected.
+        /// </summary>
+        private static void RejectMixedColorSpaceGradientStops(IEnumerable<RColor> colors)
+        {
+            var list = colors as IReadOnlyCollection<RColor> ?? colors.ToList();
+            if (list.Any(c => c.IsCmyk) && list.Any(c => !c.IsCmyk))
+            {
+                throw new NotSupportedException(
+                    "A gradient cannot mix device-cmyk() stops with RGB-authored stops - there is no defined " +
+                    "conversion between the two color spaces. A gradient whose stops are all device-cmyk() " +
+                    "(or all RGB-authored) is fully supported.");
+            }
+        }
+
+        private static void RejectMixedColorSpaceGradientStops(params RColor[] colors) => RejectMixedColorSpaceGradientStops((IEnumerable<RColor>)colors);
+
         protected override RBrush CreateConicGradientBrush(RPoint center, double outerRadius, RColor[] colors, double[] anglesRad)
         {
+            RejectMixedColorSpaceGradientStops(colors);
+
             var xCenter = new XPoint(center.X / PixelsPerPoint, center.Y / PixelsPerPoint);
             var rPt = outerRadius / PixelsPerPoint;
             var xColors = colors.Select(Utils.Convert).ToArray();
