@@ -71,6 +71,29 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task ThickUnderline_UsesTheRenderedBaseline()
+        {
+            var (root, container) = await LayoutAsync(
+                $"<div style=\"width:400pt; font:19.5pt '{Family}'\">"
+                + "<span id='s' style='text-decoration:underline; text-decoration-thickness:6px;"
+                + " text-decoration-skip-ink:none'>"
+                + "The quick brown fox</span></div>");
+            var s = LayoutHarness.FindById(root, "s")!;
+
+            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            FragmentPaintHarness.PaintBox(container, s, g);
+
+            var line = Assert.Single(Lines(g));
+            var rect = s.Rectangles.Values.Single();
+            var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
+            var expectedGap = System.Math.Ceiling(line.Width / (2 * cssPixel)) * cssPixel;
+            var expectedCenter = rect.Top + s.ActualFont.TextBaselineOffset + expectedGap + line.Width / 2;
+
+            Assert.NotEqual(s.ActualFont.Ascent, s.ActualFont.TextBaselineOffset);
+            Assert.Equal(expectedCenter, line.Y1, 3);
+        }
+
+        [Fact]
         public async Task Underline_Auto_GapsLandOnTheDescendersThemselves()
         {
             // Not just "more than one segment": the gap has to be where the descender is. The fixture is

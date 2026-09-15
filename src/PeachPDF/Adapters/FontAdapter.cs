@@ -140,6 +140,8 @@ namespace PeachPDF.Adapters
 
         public override double Ascent => Math.Round(_ascent * PixelsPerPoint);
 
+        public override double TextBaselineOffset => _ascent * PixelsPerPoint;
+
         /// <summary>
         /// The used value of `line-height: normal`, resolved the way real browsers do: the font's own
         /// ascent + descent + line-gap (CSS 2.1 §10.8.1) - see the constructor for the rounding-order

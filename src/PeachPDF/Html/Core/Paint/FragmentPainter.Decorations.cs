@@ -778,7 +778,7 @@ namespace PeachPDF.Html.Core.Paint
         {
             var cssPixel = Length.PointsPerPx * pixelsPerPoint;
             var gap = Math.Max(cssPixel, Math.Ceiling(thickness / (2 * cssPixel)) * cssPixel);
-            return font.Ascent + gap + thickness / 2;
+            return font.TextBaselineOffset + gap + thickness / 2;
         }
 
         /// <summary>

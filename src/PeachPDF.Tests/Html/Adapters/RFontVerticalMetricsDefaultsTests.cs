@@ -39,6 +39,14 @@ namespace PeachPDF.Tests.Html.Adapters
             Assert.Equal(1.2 * font.Size, font.NormalLineHeight);
         }
 
+        [Fact]
+        public void TextBaselineOffsetDefault_UsesTheLayoutAscent()
+        {
+            var font = new TestFont(20);
+
+            Assert.Equal(font.Ascent, font.TextBaselineOffset);
+        }
+
         /// <summary>
         /// <see cref="PeachPDF.Html.Adapters.RFont.GetGlyphAdvanceWidthDesignUnits"/> follows the same
         /// pattern as the MATH-table query surface it sits alongside (<c>GetGlyphIndex</c>,

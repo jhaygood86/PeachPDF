@@ -181,10 +181,10 @@ namespace PeachPDF.Tests.Integration
             var rect = s.Rectangles.Values.Single();
             var cssPixel = PeachPDF.CSS.Length.PointsPerPx;
             var expectedGap = System.Math.Ceiling(line.Width / (2 * cssPixel)) * cssPixel;
-            var expectedCenter = rect.Top + s.ActualFont.Ascent + expectedGap + line.Width / 2;
+            var expectedCenter = rect.Top + s.ActualFont.TextBaselineOffset + expectedGap + line.Width / 2;
 
             Assert.Equal(expectedCenter, line.Y1, 3);
-            Assert.True(line.Y1 - line.Width / 2 >= rect.Top + s.ActualFont.Ascent + cssPixel,
+            Assert.True(line.Y1 - line.Width / 2 >= rect.Top + s.ActualFont.TextBaselineOffset + cssPixel,
                 "the thick stroke's top edge must not grow upward into the glyphs");
         }
 
