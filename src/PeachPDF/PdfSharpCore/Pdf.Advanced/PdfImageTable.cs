@@ -100,13 +100,23 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
 
         /// <summary>
         /// Computes the pixel size to resize <paramref name="image"/> to before embedding, or
-        /// <c>(null, null)</c> when no resize should happen: downscaling is off
-        /// (<see cref="PdfDocumentOptions.DownscaleImages"/>), the display size isn't known/positive, or
-        /// the image's natural size is already no larger than the (multiplier-adjusted) display size.
-        /// Never upscales - the result is always clamped to the image's own natural pixel dimensions.
+        /// <c>(null, null)</c> when no resize should happen: the image is CMYK
+        /// (<see cref="XImage.IsCmyk"/>), downscaling is off (<see cref="PdfDocumentOptions.DownscaleImages"/>),
+        /// the display size isn't known/positive, or the image's natural size is already no larger than
+        /// the (multiplier-adjusted) display size. Never upscales - the result is always clamped to the
+        /// image's own natural pixel dimensions.
         /// </summary>
         private (int? width, int? height) ComputeTargetPixelSize(XImage image, double widthPt, double heightPt)
         {
+            // A CMYK image is always embedded at its natural pixel size, regardless of DownscaleImages or
+            // display size - PeachImage has no CMYK JPEG encoder to re-encode a resized copy with, and a
+            // CMYK source is always embedded via byte-for-byte pass-through (see
+            // PdfImage.EmbedJpegPassthrough, reached via InitializeJpeg's fast path), which by definition
+            // can't be resized. See issue #1085's plan notes on why this doesn't extend to an RGB/Gray
+            // image with an embedded ICC profile - resizing that is fine, it just forfeits the
+            // ICC-preserving pass-through for that specific embed (PdfImage.InitializeJpeg).
+            if (image.IsCmyk) return (null, null);
+
             if (!Owner.Options.DownscaleImages) return (null, null);
             if (!(widthPt > 0) || !(heightPt > 0)) return (null, null);
 

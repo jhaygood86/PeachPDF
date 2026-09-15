@@ -168,9 +168,39 @@ namespace PeachPDF.PdfSharpCore.Drawing
             if (_source != null)
             {
                 //We always get a jpeg from an image source
+                // A CMYK source is never Transparent (no Cmyk+alpha PixelFormat exists), so it always
+                // resolves to Jpeg here - the same format any other non-alpha JPEG resolves to.
+                // PdfImage.InitializeJpeg's own JpegPassthrough fast path handles it correctly without
+                // needing a dedicated XImageFormat/Initialize method: IsCmyk sources always populate
+                // JpegPassthrough (see PeachCmykImageSourceImpl) and are never resized (see IsCmyk's own
+                // remarks below), so that fast path's `_targetWidth is null && JpegPassthrough is {}`
+                // check is unconditionally true for one.
                 _format = _source.Transparent ? XImageFormat.Png : XImageFormat.Jpeg;
             }
         }
+
+        /// <summary>
+        /// True if this image's source is CMYK (a CMYK/YCCK JPEG) - see <see cref="IImageSource.IsCmyk"/>.
+        /// Consulted by <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfImageTable"/> to skip resizing
+        /// entirely for a CMYK image (see its <c>ComputeTargetPixelSize</c> remarks) - the only place
+        /// CMYK-ness needs to be visible outside <see cref="JpegPassthrough"/> itself, since
+        /// <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfImage"/>'s PDF/A ICC-profile gate is keyed off
+        /// <see cref="JpegPassthroughColorSpace.Cmyk"/> instead (see <c>EmbedJpegPassthrough</c>).
+        /// </summary>
+        internal bool IsCmyk => _source.IsCmyk;
+
+        /// <summary>
+        /// Non-null when this image should be embedded via byte-for-byte JPEG pass-through - see
+        /// <see cref="IImageSource.JpegPassthrough"/>.
+        /// </summary>
+        internal JpegPassthroughData? JpegPassthrough => _source.JpegPassthrough;
+
+        /// <summary>
+        /// True when this image's source is single-channel grayscale - see
+        /// <see cref="IImageSource.IsGrayscale"/>. Consulted by <see cref="PeachPDF.PdfSharpCore.Pdf.Advanced.PdfImage"/>'s
+        /// JPEG resize-fallback path to write a matching <c>/ColorSpace</c>.
+        /// </summary>
+        internal bool IsGrayscale => _source.IsGrayscale;
 
         public MemoryStream AsJpeg(int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null)
         {

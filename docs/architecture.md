@@ -586,6 +586,8 @@ This paint-order correctness — together with the pagination fixes above (blank
 
 Images are loaded on demand by `ImageLoadHandler`. Supported sources include file paths, HTTP URLs (via `INetworkLoader`), `data:` URIs, and MHTML-embedded resources. Decoding is handled by **PeachImage** (JPEG, PNG, BMP, GIF, WebP, AVIF, and TIFF — TGA, PSD, and HDR aren't implemented there and so aren't decodable). Decoded images are cached for the lifetime of a single render so that the same image referenced multiple times in a document is only decoded once.
 
+`PeachImageSource` (the `ImageSource`/`IImageSource` implementation backing this, in `PdfSharpCore/Utils/`) routes a CMYK/YCCK JPEG around the usual forced-RGBA32 decode entirely — that conversion has no color management at all, so applying it to a CMYK source would destroy its print separations. A CMYK JPEG (and an RGB/grayscale JPEG carrying a usable embedded ICC profile) is instead embedded via byte-for-byte pass-through in `PdfImage` — see [Color and ICC profiles](usage-examples.md#color-and-icc-profiles) for the embedding behavior itself.
+
 `ImageLoadHandler` is an implementation detail of `CssImage.Url`: each URL image owns its handler and exposes `EnsureLoadedAsync(HtmlContainerInt)` for lazy loading and `Dispose()` for cleanup. Callers (background layer loops, list marker painting) interact only with `CssImage` and never touch `ImageLoadHandler` directly.
 
 ---
