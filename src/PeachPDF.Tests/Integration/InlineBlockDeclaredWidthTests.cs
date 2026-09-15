@@ -78,15 +78,13 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task APercentageWidthIsLeftAlone()
+        public async Task APercentageWidthReservesItsContainingBlockRelativeWidth()
         {
-            // A percentage resolves against a containing block this line does not know, so it is
-            // deliberately not handled here — asserted so the exclusion is deliberate rather than
-            // discovered later.
+            // CSS 2.1 §10.2: 50% resolves against the 400pt containing block, rather than taking the
+            // shrink-to-fit width of the short inline content.
             var percent = await AdvanceAsync("<span style='display:inline-block;width:50%'>Hi</span>");
-            var auto = await AdvanceAsync("<span style='display:inline-block'>Hi</span>");
 
-            Assert.Equal(auto, percent, 1);
+            Assert.Equal(200.0, percent, 1);
         }
 
         /// <summary>

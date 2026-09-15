@@ -528,23 +528,19 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 An `inline-block` box's text flows through the surrounding inline formatting context rather
 than being laid out as one opaque unit. Its content is correctly inset by its own
 border+padding (its label sits inside the padding box, and the line reserves the full padding
-box height), and an explicit `width` sizes it as declared
+box height), and a non-`auto` `width` sizes it as declared
 ([CSS 2.1 §10.3.9](https://www.w3.org/TR/CSS22/visudet.html#inlineblock-width) uses shrink-to-fit
 only for `width: auto`): the box's background, border and overflow clip are painted at that width
 whether or not its content fills it — an empty one included, which is what makes the fixed-width
 label column and the empty-bordered-box checkbox glyph work — and the line reserves the same
-width, honoring `box-sizing`. Content wider than the declared width overflows rather than being
-cut back to it. Two knock-on gaps remain:
+width, honoring `box-sizing`. Percentage widths resolve against the containing block's content
+width, just as they do on other boxes. Content wider than the declared width overflows rather than
+being cut back to it. One knock-on gap remains:
 
 - An explicit `height` on an inline-flowed `inline-block` does not size the line — the line's
   height comes from the flowed content plus padding/border, so
   `<span style="display: inline-block; height: 100px">x</span>` reserves only its natural text
   height, not 100px (CSS2.1 §10.8.1 expects the atomic box's margin box to size the line).
-- A **percentage** `width` on one whose own content is inlines-only is ignored, and the box is
-  sized as though `width: auto` were declared. The width is resolved where the surrounding line
-  places the box, which does not have the containing block a percentage resolves against. An
-  `inline-block` holding block-level content takes a different path and does resolve one.
-
 ### Stacking Context
 
 Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context) model. A new stacking context is established by:

@@ -174,21 +174,18 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// A percentage resolves against a containing block the line being flowed does not know, so it is
-        /// deliberately left to the content — asserted so the exclusion reads as a decision rather than
-        /// being discovered later.
+        /// CSS 2.1 §10.2: the percentage is resolved against the containing block's content width and
+        /// sizes the inline-block's painted border box just like an absolute declared width.
         /// </summary>
         [Fact]
-        public async Task APercentageWidthLeavesThePaintedBoxToTheContent()
+        public async Task APercentageWidthSizesThePaintedBoxFromItsContainingBlock()
         {
             var (root, _) = await LayoutAsync(Wrap(
-                "<div style='width:400pt'><span id='percent' style='display:inline-block;width:50%'>x</span></div>" +
-                "<div style='width:400pt'><span id='auto' style='display:inline-block'>x</span></div>"));
+                "<div style='width:400pt'><span id='percent' style='display:inline-block;width:50%'>x</span></div>"));
 
             var percent = PaintedRectOf(FindById(root, "percent")!);
-            var auto = PaintedRectOf(FindById(root, "auto")!);
 
-            Assert.Equal(auto.Width, percent.Width, 3);
+            Assert.Equal(200.0, percent.Width, 3);
         }
 
         /// <summary>

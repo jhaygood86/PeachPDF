@@ -52,10 +52,9 @@ that there is exactly one used width, assigned once (`ResolveAtomicInlineDeclare
 
 ## What was deliberately not done
 
-The percentage `width` exclusion stays — see
-[.claude/accepted-gaps/percentage-width-on-an-inline-content-inline-block-is-ignored.md](../accepted-gaps/percentage-width-on-an-inline-content-inline-block-is-ignored.md)
-(#1097). Routing every inline-block through `FlowAtomicBlockContentChild`, which would make it
-genuinely atomic, is a far larger change and is what #1032/#1053/#771 circle around.
+The percentage `width` exclusion stayed at the time of this fix; it was subsequently closed by #1097.
+Routing every inline-block through `FlowAtomicBlockContentChild`, which would make it genuinely atomic,
+remains a far larger change and is what #1032/#1053/#771 circle around.
 
 ## Evidence
 
