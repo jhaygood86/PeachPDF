@@ -539,7 +539,19 @@ var config = new PdfGenerateConfig { EnableXmpMetadata = true, Metadata = metada
 
 ### Color and ICC profiles
 
-A PDF/A `OutputIntent` needs a device-independent ICC profile to name — PeachPDF embeds the ICC's own freely-redistributable `sRGB2014.icc` profile for this and identifies it as `"sRGB IEC61966-2.1"`. This matches PeachPDF's only supported color mode (RGB) — there is no public API surface for CMYK output, so no CMYK output intent is ever needed.
+A PDF/A `OutputIntent` needs a device-independent ICC profile to name — PeachPDF embeds the ICC's own freely-redistributable `sRGB2014.icc` profile for this and identifies it as `"sRGB IEC61966-2.1"`. This matches PeachPDF's only supported *content-stream* color mode (RGB) — there is no public API surface for CMYK fills, strokes, or text — so no CMYK output intent is ever needed for that. It's unrelated to how a *source raster image* embeds its own color data, covered next.
+
+#### CMYK and embedded ICC profiles in source images
+
+A CMYK or YCCK JPEG — the form a print-ready image typically arrives in, separated for a specific press profile — is embedded via byte-for-byte pass-through rather than converted to RGB: PeachPDF has no general color-management engine, so preserving the original bytes unchanged is the only way to guarantee the source's separations survive intact. The PDF `ColorSpace` is `DeviceCMYK`, or `ICCBased` (referencing the JPEG's own embedded ICC profile, carried through verbatim) when one is present. An Adobe-authored CMYK JPEG's inverted-sample convention is corrected via a PDF `Decode` array rather than by re-encoding the pixel data.
+
+A CMYK/YCCK JPEG is always embedded at its natural pixel size — `DownscaleImages` and `MaximumDownscaleMultiplier` don't apply to it, since PeachPDF has no CMYK JPEG encoder to re-encode a resized copy with.
+
+An RGB or grayscale JPEG carrying a usable embedded ICC profile is *also* embedded via byte-for-byte pass-through, specifically to preserve that profile (`ICCBased` referencing it, rather than the usual bare `DeviceRGB`/`DeviceGray`). Unlike a CMYK source, this doesn't disable resizing: if the image is being downscaled for its on-page display size, that particular embed falls back to the ordinary re-encoded path instead (losing the embedded profile for that embed, not the image) — pass-through and downscaling are mutually exclusive for a given embed, and downscaling wins when both would otherwise apply. An RGB/grayscale JPEG with no embedded ICC profile is unaffected by any of this.
+
+PNG, WebP, and AVIF sources may also carry an embedded ICC profile, but PeachPDF doesn't yet have an equivalent byte-for-byte pass-through path for those formats, so their embedded profiles aren't preserved today.
+
+Requesting `PdfAConformance` on a document containing a CMYK image without an embedded ICC profile throws an `InvalidOperationException` at generation time: a bare `DeviceCMYK` image has no relationship to PeachPDF's RGB-based `OutputIntent`, so it isn't PDF/A-conformant on its own. An `ICCBased` CMYK image (one with an embedded profile) is self-describing and doesn't have this problem. An RGB or grayscale image is unaffected either way — it stays conformant with or without an embedded ICC profile.
 
 ## ASP.NET Core controller endpoint
 

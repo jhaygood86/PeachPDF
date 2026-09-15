@@ -30,6 +30,7 @@
 
 #nullable disable warnings
 
+using MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes;
 using PeachPDF.PdfSharpCore.Drawing;
 using PeachPDF.PdfSharpCore.Pdf.Filters;
 using System;
@@ -121,6 +122,22 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// </summary>
         void InitializeJpeg()
         {
+            // Byte-for-byte pass-through instead of the lossy re-encode below - PeachPDF has no general
+            // color management, so pass-through is the only way to guarantee a source's own color data
+            // (and embedded ICC profile, if any) reaches the PDF unchanged. Always non-null for a
+            // CMYK/YCCK source (see PeachCmykImageSourceImpl - CMYK is never resized, so this always
+            // applies for one, unconditionally); for RGB/Gray, only when there's a usable embedded ICC
+            // profile to preserve, since that's the only reason to prefer pass-through over the ordinary
+            // re-encode below for those. Only applies when no resize is requested for this embed either
+            // way: a resize can't be byte-for-byte, so an RGB/Gray source falls through to the existing
+            // lossy behavior below instead (losing the ICC profile for that specific embed, not the image
+            // itself - see issue #1085's plan notes on "guarantee full fidelity").
+            if (_targetWidth is null && _image.JpegPassthrough is { } passthrough)
+            {
+                EmbedJpegPassthrough(passthrough);
+                return;
+            }
+
             byte[] imageBits = null;
 
             // A resize only ever reaches here for an image with no real alpha (PdfImageTable only
@@ -158,7 +175,88 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
             Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
             Elements[Keys.BitsPerComponent] = new PdfInteger(8);
-            Elements[Keys.ColorSpace] = new PdfName("/DeviceRGB");
+
+            // A grayscale JPEG source (decoded via its own native pixel format when it has no ICC
+            // profile to preserve via pass-through - see DecodeRgbOrGrayJpeg) re-encodes here as a
+            // genuine 1-component grayscale JPEG, not 3-component YCbCr (PeachImage's JPEG encoder
+            // branches on the source's own PixelFormat) - /ColorSpace must match, or a strict reader sees
+            // a /DeviceRGB image backed by a 1-component DCTDecode stream.
+            Elements[Keys.ColorSpace] = new PdfName(_image.IsGrayscale ? "/DeviceGray" : "/DeviceRGB");
+        }
+
+        /// <summary>
+        /// Embeds a JPEG source via byte-for-byte pass-through: the original file bytes, unchanged, as
+        /// <c>/DCTDecode</c>, with a bare Device* or <c>/ICCBased</c> color space depending on whether an
+        /// embedded ICC profile was found, and a <c>/Decode</c> array when the source needs Adobe's
+        /// inverted-CMYK convention undone. The single choke point <see cref="InitializeJpeg"/>'s fast
+        /// path calls into - always for a CMYK/YCCK source, and for RGB/Gray only when there's a usable
+        /// embedded ICC profile to preserve.
+        /// </summary>
+        void EmbedJpegPassthrough(JpegPassthroughData data)
+        {
+            if (data.ColorSpace == JpegPassthroughColorSpace.Cmyk)
+            {
+                // A bare /DeviceCMYK image has no relationship to PeachPDF's RGB-only PDF/A output
+                // intent - only an /ICCBased CMYK image (self-describing via its own profile) is
+                // conformant, so PDF/A requires one here specifically (unlike RGB/Gray, which stays
+                // conformant with or without an ICC profile - see PdfACmykImageGuard's own remarks).
+                PdfACmykImageGuard.RequireIccProfile(_document, data.IccProfile is not null,
+                    "An embedded CMYK image without an embedded ICC profile");
+            }
+
+            Elements[Keys.ColorSpace] = BuildJpegColorSpace(data);
+
+            Stream = new PdfStream(data.Data, this);
+            Elements[PdfStream.Keys.Length] = new PdfInteger(data.Data.Length);
+            Elements[PdfStream.Keys.Filter] = new PdfName("/DCTDecode");
+
+            if (data.NeedsInvertedDecode)
+            {
+                var decodeArray = new PdfArray(_document);
+                for (int i = 0; i < 4; i++)
+                {
+                    decodeArray.Elements.Add(new PdfInteger(1));
+                    decodeArray.Elements.Add(new PdfInteger(0));
+                }
+                Elements[Keys.Decode] = decodeArray;
+            }
+
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(8);
+        }
+
+        /// <summary>
+        /// Builds either a bare Device* name or an <c>/ICCBased</c> array (<c>/N</c>/<c>/Alternate</c>
+        /// matching <paramref name="data"/>'s color space, stream = its embedded ICC profile bytes) for a
+        /// pass-through embed - same shape as <see cref="PdfOutputIntent"/>'s <c>/DestOutputProfile</c>
+        /// stream.
+        /// </summary>
+        PdfItem BuildJpegColorSpace(JpegPassthroughData data)
+        {
+            var (n, deviceName) = data.ColorSpace switch
+            {
+                JpegPassthroughColorSpace.Rgb => (3, "/DeviceRGB"),
+                JpegPassthroughColorSpace.Gray => (1, "/DeviceGray"),
+                JpegPassthroughColorSpace.Cmyk => (4, "/DeviceCMYK"),
+                _ => throw new ArgumentOutOfRangeException(nameof(data)),
+            };
+
+            if (data.IccProfile is null)
+            {
+                return new PdfName(deviceName);
+            }
+
+            var iccStream = new PdfDictionary(_document);
+            _document.Internals.AddObject(iccStream);
+            iccStream.Elements.SetInteger("/N", n);
+            iccStream.Elements.SetName("/Alternate", deviceName);
+            iccStream.Stream = new PdfStream(data.IccProfile, iccStream);
+            iccStream.Elements[PdfStream.Keys.Length] = new PdfInteger(data.IccProfile.Length);
+
+            return new PdfArray(_document, new PdfName("/ICCBased"), iccStream.Reference);
         }
 
         /// <summary>

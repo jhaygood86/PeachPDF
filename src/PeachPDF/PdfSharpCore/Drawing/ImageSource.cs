@@ -5,7 +5,40 @@ using System.IO;
 
 namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
 {
+    /// <summary>
+    /// Which bare PDF device color space (and, when an ICC profile accompanies it, which
+    /// <c>/ICCBased</c> <c>/N</c>/<c>/Alternate</c>) a <see cref="JpegPassthroughData"/> embed uses.
+    /// </summary>
+    internal enum JpegPassthroughColorSpace
+    {
+        Rgb,
+        Gray,
+        Cmyk,
+    }
 
+    /// <summary>
+    /// Data needed to embed a JPEG source via byte-for-byte pass-through (PDF's <c>/DCTDecode</c>
+    /// filter accepts a JPEG's own compressed bytes directly) instead of decoding and re-embedding it -
+    /// see <see cref="ImageSource.IImageSource.JpegPassthrough"/> for when this applies.
+    /// </summary>
+    internal readonly struct JpegPassthroughData
+    {
+        /// <summary>The original JPEG file bytes, unchanged.</summary>
+        public required byte[] Data { get; init; }
+
+        /// <summary>Which bare Device* color space (or <c>/ICCBased</c> alternate/channel count) applies.</summary>
+        public required JpegPassthroughColorSpace ColorSpace { get; init; }
+
+        /// <summary>
+        /// Whether a PDF <c>/Decode [1 0 1 0 1 0 1 0]</c> array is needed to undo Adobe's inverted-CMYK
+        /// JPEG convention. Only ever <see langword="true"/> when <see cref="ColorSpace"/> is
+        /// <see cref="JpegPassthroughColorSpace.Cmyk"/>.
+        /// </summary>
+        public bool NeedsInvertedDecode { get; init; }
+
+        /// <summary>A usable embedded ICC profile's raw bytes, or <see langword="null"/> if none.</summary>
+        public byte[]? IccProfile { get; init; }
+    }
 
     internal abstract class ImageSource
     {
@@ -31,11 +64,42 @@ namespace MigraDocCore.DocumentObjectModel.MigraDoc.DocumentObjectModel.Shapes
             bool Transparent { get; }
 
             /// <summary>
+            /// True when this source's pixel data is single-channel grayscale (only ever meaningful for
+            /// a JPEG source decoded via its own native pixel format instead of being forced to Rgba32 -
+            /// see <c>PeachImageSource.DecodeRgbOrGrayJpeg</c>). <see cref="SaveAsJpeg"/> re-encodes a
+            /// grayscale source as a genuine 1-component grayscale JPEG rather than 3-component YCbCr, so
+            /// a caller writing the PDF <c>/ColorSpace</c> for that re-encoded stream needs to know which
+            /// it got - unlike <see cref="IsCmyk"/>'s always-pass-through case, a resized RGB/Gray source
+            /// still reaches this re-encode path (see <see cref="JpegPassthrough"/>'s own remarks on the
+            /// resize fallback).
+            /// </summary>
+            bool IsGrayscale { get; }
+
+            /// <summary>
             /// Encodes as an uncompressed PDF-embeddable bitmap. When <paramref name="targetWidth"/>/
             /// <paramref name="targetHeight"/> are given and differ from <see cref="Width"/>/
             /// <see cref="Height"/>, the image is resized to that pixel size first.
             /// </summary>
             void SaveAsPdfBitmap(MemoryStream ms, int? targetWidth = null, int? targetHeight = null);
+
+            /// <summary>
+            /// True if this source's native pixel data is CMYK (a CMYK/YCCK JPEG - see
+            /// <c>PeachImageSource</c>'s routing). Drives <c>PdfImageTable</c>'s resize skip and
+            /// <c>PdfACmykImageGuard</c>'s PDF/A gate - a CMYK source is never resized and, under PDF/A
+            /// conformance, must carry an embedded ICC profile (see <see cref="JpegPassthrough"/>).
+            /// </summary>
+            bool IsCmyk { get; }
+
+            /// <summary>
+            /// Non-null when this source should be embedded via byte-for-byte JPEG pass-through instead
+            /// of the normal lossy-re-encode (<see cref="SaveAsJpeg"/>) or bitmap (<see cref="SaveAsPdfBitmap"/>)
+            /// paths: always non-null when <see cref="IsCmyk"/> (a CMYK JPEG always passes through, with
+            /// or without an ICC profile), and non-null for an RGB/Gray JPEG only when it carries a
+            /// usable embedded ICC profile - preserving that profile is the only reason to prefer
+            /// pass-through over the existing RGB JPEG handling. Null for every non-JPEG source, and for
+            /// an RGB/Gray JPEG with no usable ICC profile.
+            /// </summary>
+            JpegPassthroughData? JpegPassthrough { get; }
         }
 
         /// <remarks>

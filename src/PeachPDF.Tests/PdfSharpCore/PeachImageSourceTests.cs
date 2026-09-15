@@ -570,5 +570,156 @@ namespace PeachPDF.Tests.PdfSharpCoreTests
 
             Assert.Equal("my-image.png", img.Name);
         }
+
+        // --- CMYK / ICC pass-through (issue #1085) ---
+        // See CmykJpegFixture for the fixture itself and why it's a real, reused-byte-for-byte file
+        // rather than a synthesized one.
+        private static byte[] CmykJpegNoIccBytes => CmykJpegFixture.NoIccBytes;
+
+        [Fact]
+        public void FromBinary_CmykJpeg_IsCmyk()
+        {
+            var img = ImageSource.FromBinary("cmyk.jpg", () => CmykJpegNoIccBytes);
+
+            Assert.True(img.IsCmyk);
+        }
+
+        [Fact]
+        public void FromBinary_RgbJpeg_IsNotCmyk()
+        {
+            var img = ImageSource.FromBinary("test.jpg", () => MakeJpegBytes(4, 4, 255, 0, 0));
+
+            Assert.False(img.IsCmyk);
+        }
+
+        [Fact]
+        public void JpegPassthrough_CmykJpegWithoutIcc_ReturnsOriginalBytesInvertedNoIcc()
+        {
+            var bytes = CmykJpegNoIccBytes;
+            var img = ImageSource.FromBinary("cmyk.jpg", () => bytes);
+
+            var passthrough = img.JpegPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(JpegPassthroughColorSpace.Cmyk, passthrough.Value.ColorSpace);
+            Assert.Equal(bytes, passthrough.Value.Data);
+            Assert.True(passthrough.Value.NeedsInvertedDecode);
+            Assert.Null(passthrough.Value.IccProfile);
+        }
+
+        [Fact]
+        public void SaveAsJpeg_OnCmykSource_Throws()
+        {
+            // A CMYK source always embeds via JpegPassthrough (see PdfImage.EmbedJpegPassthrough,
+            // reached via InitializeJpeg's fast path) - SaveAsJpeg is a defensive path that should never
+            // actually be reached for one.
+            var img = ImageSource.FromBinary("cmyk.jpg", () => CmykJpegNoIccBytes);
+
+            Assert.Throws<InvalidOperationException>(() => img.SaveAsJpeg(new MemoryStream()));
+        }
+
+        [Fact]
+        public void SaveAsPdfBitmap_OnCmykSource_Throws()
+        {
+            var img = ImageSource.FromBinary("cmyk.jpg", () => CmykJpegNoIccBytes);
+
+            Assert.Throws<InvalidOperationException>(() => img.SaveAsPdfBitmap(new MemoryStream()));
+        }
+
+        [Fact]
+        public void JpegPassthrough_CmykJpegWithIcc_IncludesIccProfile()
+        {
+            var icc = IccProfileFixture.BuildCmykProfile();
+            var bytes = IccProfileFixture.InsertIccProfileIntoJpeg(CmykJpegNoIccBytes, icc);
+            var img = ImageSource.FromBinary("cmyk-icc.jpg", () => bytes);
+
+            var passthrough = img.JpegPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(JpegPassthroughColorSpace.Cmyk, passthrough.Value.ColorSpace);
+            Assert.Equal(bytes, passthrough.Value.Data);
+            Assert.Equal(icc, passthrough.Value.IccProfile);
+        }
+
+        [Fact]
+        public void JpegPassthrough_RgbJpegWithoutIcc_IsNull()
+        {
+            var img = ImageSource.FromBinary("test.jpg", () => MakeJpegBytes(4, 4, 255, 0, 0));
+
+            Assert.Null(img.JpegPassthrough);
+        }
+
+        [Fact]
+        public void JpegPassthrough_RgbJpegWithIcc_ReturnsOriginalBytesWithIccProfile()
+        {
+            var icc = IccProfileFixture.BuildRgbProfile();
+            var bytes = IccProfileFixture.InsertIccProfileIntoJpeg(MakeJpegBytes(4, 4, 255, 0, 0), icc);
+            var img = ImageSource.FromBinary("rgb-icc.jpg", () => bytes);
+
+            var passthrough = img.JpegPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(JpegPassthroughColorSpace.Rgb, passthrough.Value.ColorSpace);
+            Assert.Equal(bytes, passthrough.Value.Data);
+            Assert.False(passthrough.Value.NeedsInvertedDecode);
+            Assert.Equal(icc, passthrough.Value.IccProfile);
+            Assert.False(img.IsCmyk);
+        }
+
+        private static byte[] MakeGrayJpegBytes(int width, int height, byte gray)
+        {
+            using var image = Image.Create(width, height, PixelFormat.Gray8);
+            image.GetPixelSpan().Fill(gray);
+            using var ms = new MemoryStream();
+            image.Save(ms, "jpeg", new JpegEncoderOptions { Quality = 90 });
+            return ms.ToArray();
+        }
+
+        [Fact]
+        public void JpegPassthrough_GrayJpegWithIcc_ReturnsOriginalBytesWithIccProfile()
+        {
+            var icc = IccProfileFixture.BuildGrayProfile();
+            var bytes = IccProfileFixture.InsertIccProfileIntoJpeg(MakeGrayJpegBytes(4, 4, 128), icc);
+            var img = ImageSource.FromBinary("gray-icc.jpg", () => bytes);
+
+            var passthrough = img.JpegPassthrough;
+
+            Assert.NotNull(passthrough);
+            Assert.Equal(JpegPassthroughColorSpace.Gray, passthrough.Value.ColorSpace);
+            Assert.Equal(bytes, passthrough.Value.Data);
+            Assert.Equal(icc, passthrough.Value.IccProfile);
+        }
+
+        [Fact]
+        public void JpegPassthrough_PngWithNoIcc_IsNull()
+        {
+            // Pins the "JPEG-only for now" boundary: a non-JPEG source never populates JpegPassthrough,
+            // regardless of any other metadata it might carry (PeachImage's PNG encoder has no ICC/iCCP
+            // support to attach one here, but the routing check in PeachImageSource.Decode is a plain
+            // `info.FormatName == "jpeg"` gate that doesn't depend on that either way).
+            var img = ImageSource.FromBinary("test.png", () => MakePngBytes(4, 4, 255, 0, 0));
+
+            Assert.Null(img.JpegPassthrough);
+        }
+
+        // A minimal, hand-built 2x2 uncompressed CMYK TIFF (PhotometricInterpretation=5/Separated,
+        // SamplesPerPixel=4, 8 bits/sample) - see .claude/accepted-gaps/cmyk-tiff-unsupported.md for why
+        // PeachPDF rejects this outright rather than embedding it without an ICC profile. Real CMYK TIFF
+        // corpus fixtures are 90KB+ (strip-based, pixel data before the IFD, not truncatable), so this is
+        // hand-built instead, the same "smallest legal file" approach IccProfileFixture takes for ICC
+        // profiles.
+        private const string SyntheticCmykTiffBase64 =
+            "SUkqAAgAAAAJAAABAwABAAAAAgAAAAEBAwABAAAAAgAAAAIBAwAEAAAAegAAAAMBAwABAAAAAQAAAAYBAwABAAAA" +
+            "BQAAABEBBAABAAAAggAAABUBAwABAAAABAAAABYBAwABAAAAAgAAABcBBAABAAAAEAAAAAAAAAAIAAgACAAIAAoU" +
+            "HigyPEZQWmRueIKMlqA=";
+
+        [Fact]
+        public void FromBinary_CmykTiff_Throws()
+        {
+            var bytes = Convert.FromBase64String(SyntheticCmykTiffBase64);
+
+            var ex = Assert.Throws<InvalidOperationException>(() => ImageSource.FromBinary("cmyk.tiff", () => bytes));
+            Assert.Contains("CMYK", ex.Message);
+        }
     }
 }
