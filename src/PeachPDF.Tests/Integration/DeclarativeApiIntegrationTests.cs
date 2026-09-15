@@ -1052,6 +1052,41 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public void ContainerSvg_ByteAndStreamOverloads_StripALeadingUtf8Bom()
+        {
+            // Encoding.UTF8.GetString (used before this test's own fix) leaves a leading BOM as a literal
+            // U+FEFF character, which XElement.Parse rejects outright - same bug, same fix, as
+            // PdfImage.Resolve's own BOM handling (see ContainerImage_PdfImageFromSvgBytes_...WithBom).
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(adapter);
+            var bomPrefixedBytes = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(Encoding.UTF8.GetBytes(MinimalSvg)).ToArray();
+
+            var byBytes = DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(bomPrefixedBytes)), properties);
+            var imgFromBytes = Assert.IsType<CssBoxImage>(Assert.Single(byBytes.RootBox.Boxes));
+            Assert.NotNull(imgFromBytes.SvgDocument);
+
+            var byStream = DocumentBuilder.BuildPage(
+                page => page.Content(c => c.Svg(new MemoryStream(bomPrefixedBytes))), properties);
+            var imgFromStream = Assert.IsType<CssBoxImage>(Assert.Single(byStream.RootBox.Boxes));
+            Assert.NotNull(imgFromStream.SvgDocument);
+        }
+
+        [Fact]
+        public void ContainerSvg_Stream_NeverClosesTheCallersStream()
+        {
+            var adapter = new PdfSharpAdapter { PixelsPerPoint = 1.0 };
+            var properties = new CssPropertyFactory(adapter);
+            using var stream = new MemoryStream(Encoding.UTF8.GetBytes(MinimalSvg));
+
+            DocumentBuilder.BuildPage(page => page.Content(c => c.Svg(stream)), properties);
+
+            // Every other Stream-accepting overload in this API (Image(Stream), PdfImage.FromStream) reads
+            // the caller's stream fully but never disposes it - Svg(Stream) used to differ by wrapping it
+            // directly in a StreamReader, whose Dispose (via `using`) closes the underlying stream too.
+            Assert.True(stream.CanRead);
+        }
+
+        [Fact]
         public async Task ContainerSvg_ReachesTheFragmentTreePaintActuallyConsumes()
         {
             CssBox? svgBox = null;

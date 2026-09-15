@@ -394,17 +394,17 @@ namespace PeachPDF.Layout
         public void Svg(Stream stream)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            using var reader = new StreamReader(stream);
-            var markup = reader.ReadToEnd();
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
             MarkTerminal();
-            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(markup));
+            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(ms.ToArray()));
         }
 
         public void Svg(byte[] data)
         {
             ArgumentNullException.ThrowIfNull(data);
             MarkTerminal();
-            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(Encoding.UTF8.GetString(data)));
+            CreateImageBox().SetDecodedContent(null, DecodeSvgMarkup(data));
         }
 
         public void Svg(Func<PdfSize, string> generator)
@@ -462,6 +462,20 @@ namespace PeachPDF.Layout
 
         private SvgDocument DecodeSvgMarkup(string svgMarkup) =>
             SvgTreeBuilder.Build(new XElementSvgSourceNode(XElement.Parse(svgMarkup)), properties.Adapter);
+
+        /// <summary>
+        /// Decodes raw SVG markup bytes - <see cref="StreamReader"/> with BOM detection (not
+        /// <see cref="Encoding.UTF8"/>.<see cref="Encoding.GetString(byte[])"/> directly), so a leading
+        /// UTF-8 BOM - common in SVG files saved by many editors - is stripped rather than surviving into
+        /// the decoded string as a literal U+FEFF character, which <see cref="XElement.Parse(string)"/>
+        /// rejects outright ("Data at the root level is invalid"). Same fix as <see cref="PdfImage.Resolve"/>'s
+        /// own BOM handling.
+        /// </summary>
+        private SvgDocument DecodeSvgMarkup(byte[] svgBytes)
+        {
+            using var reader = new StreamReader(new MemoryStream(svgBytes), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            return DecodeSvgMarkup(reader.ReadToEnd());
+        }
 
         public void LineHorizontal(PdfLength thickness, PdfColor? color = null, bool dashed = false)
         {
