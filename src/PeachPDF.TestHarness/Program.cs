@@ -5798,6 +5798,8 @@ const string AtomicInlineWidthCss = """
     .percent-row { width: 400pt; border-right: 1px dashed #c33; background: #fafafa }
     .percent { display: inline-block; width: 50%; padding: 3pt 0;
                border: 1pt solid #6b4fa1; background: #eee8fa }
+    .wrapbox { display: inline-block; width: 120pt; padding: 3pt 5pt;
+               border: 1pt solid #1d6fa5; background: #e8f4fb }
     </style>
     """;
 
@@ -5843,6 +5845,17 @@ var atomicInlineWidthHtml = "<!DOCTYPE html><html><head>" + AtomicInlineWidthCss
     "<code>width: 50%</code>, so the purple box is exactly 200pt wide and the following text starts " +
     "halfway across the row.</div>" +
     "<div class=\"row percent-row\"><span class=\"percent\">50% inline-block</span>|&nbsp;text after</div>" +
+
+    "<h2>Content too wide for the box wraps inside it</h2>" +
+    "<div class=\"caption\">An inline-block whose content cannot fit on one line inside it is a box of " +
+    "its own: it breaks its lines at its own width and takes one place on the line holding it, with " +
+    "its last line's baseline on that line's baseline. A word that cannot be broken at all still " +
+    "overflows, without moving what follows the box.</div>" +
+    "<div class=\"row\">before <span class=\"wrapbox\">This inline-block holds enough words to wrap " +
+    "across several lines of its own rather than across the lines of the block around it.</span> " +
+    "after Agy</div>" +
+    "<div class=\"caption\">The same 120pt box holding one unbreakable word.</div>" +
+    "<div class=\"row\">before <span class=\"wrapbox\">Unbreakableextremelylongword</span> after Agy</div>" +
 
     "</body></html>";
 
@@ -5964,8 +5977,12 @@ const string BaselineCss = """
     .sample .text { padding: 0 6pt; background: #e8f0fe; margin: 0 }
     ol.mk { margin: 0; padding-left: 40pt; background: #e8f0fe; max-width: 420pt }
     ol.big li::marker { font-size: 22pt; font-weight: bold; color: #c0392b }
+    .ib { display: inline-block; border: 1px solid #8e44ad; background: #f4ecf7; padding: 2pt 4pt }
     </style>
     """;
+
+var baselineBadgeUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(
+    """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60"><rect width="60" height="60" rx="6" fill="#27ae60"/><circle cx="30" cy="30" r="14" fill="#ecf0f1"/></svg>"""));
 
 var baselineHtml = "<!DOCTYPE html><html><head>" + BaselineCss + "</head><body>" +
 
@@ -6011,10 +6028,27 @@ var baselineHtml = "<!DOCTYPE html><html><head>" + BaselineCss + "</head><body>"
     "<div class=\"sample\"><div class=\"label\">the same list with no ::marker override, for comparison</div>" +
     "<ol class=\"mk\" style=\"font-size: 10pt\"><li>First item</li><li>Second item</li><li>Third item</li></ol></div>" +
 
+    "<h2>5 &mdash; An atomic inline sits on the baseline too</h2>" +
+    "<p class=\"intro\">An image, an inline <code>&lt;svg&gt;</code>, MathML, a form control or an " +
+    "<code>inline-block</code> is aligned by its own box rather than by font metrics: its " +
+    "<strong>bottom margin edge</strong> rests on the line's baseline, and the line grows above the " +
+    "baseline to hold it. An <code>inline-block</code> with visible overflow uses its own last line's " +
+    "baseline instead, so its text lines up with the text beside it.</p>" +
+    "<div class=\"sample\"><div class=\"label\">10pt text around a 24pt image - the image's bottom is on the text baseline</div>" +
+    "<div class=\"text\" style=\"font-size: 10pt\">before <img src=\"" + baselineBadgeUri +
+    "\" style=\"width: 24pt; height: 24pt\"> after Agy</div></div>" +
+    "<div class=\"sample\"><div class=\"label\">the same image with margin-bottom: 6pt - the margin edge, not the image, meets the baseline</div>" +
+    "<div class=\"text\" style=\"font-size: 10pt\">before <img src=\"" + baselineBadgeUri +
+    "\" style=\"width: 24pt; height: 24pt; margin-bottom: 6pt\"> after Agy</div></div>" +
+    "<div class=\"sample\"><div class=\"label\">inline-block with visible overflow - its own last line's baseline is shared</div>" +
+    "<div class=\"text\" style=\"font-size: 10pt\">before <span class=\"ib\">inside</span> after Agy</div></div>" +
+    "<div class=\"sample\"><div class=\"label\">the same box with overflow: hidden - &sect;10.8.1 falls back to its bottom margin edge</div>" +
+    "<div class=\"text\" style=\"font-size: 10pt\">before <span class=\"ib\" style=\"overflow: hidden\">inside</span> after Agy</div></div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("baseline_alignment", "Typography & Text", "Baseline alignment & leading",
-    "Every inline box on a line shares one baseline, with a declared line-height's leading split half above the text and half below.",
+    "Every inline box on a line shares one baseline - images, inline-blocks and markers included - with a declared line-height's leading split half above the text and half below.",
     baselineHtml, pdfConfig);
 
 // --- letter-spacing / word-spacing showcase ---

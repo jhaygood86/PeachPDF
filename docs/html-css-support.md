@@ -413,7 +413,7 @@ Per CSS2.1 §14.2, the root element's background doesn't just paint its own box 
 | `font-weight` | [font-weight](https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight) | Keyword (`bold`, `normal`) and numeric (`1`–`1000`) values. `bolder`/`lighter` step relative to the parent's own resolved weight per the CSS2.1 §15.6 worked table, not a fixed always-bold/always-normal result. Face selection uses real CSS Fonts Level 4 §5.2 nearest-weight matching (not just an exact Regular/Bold pick) among every face registered for a family; when no face close enough to the request exists, a faux-bold is synthesized (fill+stroke render mode) rather than rendering with no visual distinction |
 | `font-palette` | [font-palette](https://developer.mozilla.org/en-US/docs/Web/CSS/font-palette) | Selects which CPAL palette a `COLR`/`CPAL` color font paints with (see [Per-character font matching](#per-character-font-matching-and-coverage-fallback)). Inherited. `normal` uses palette 0; `light`/`dark` select the first palette the font flags usable with a light/dark background (via the CPAL v1 palette-type flags, falling back to `normal` when the font has none); a `<dashed-ident>` names a custom palette defined with [`@font-palette-values`](#css-at-rules); and [`palette-mix()`](https://developer.mozilla.org/en-US/docs/Web/CSS/font-palette#palette-mix) blends two palettes per CPAL entry in a given color space. The palette is applied to the element's used font family; a non-color font (or one with a single palette) is unaffected. Only affects `COLR`/`CPAL`-over-`glyf` color fonts (the color formats PeachPDF renders as vectors). Animation/interpolation of `font-palette` is not supported (a static PDF has no timeline) |
 | `line-height` | [line-height](https://developer.mozilla.org/en-US/docs/Web/CSS/line-height) | Full support. A line box is built the way [CSS 2.1 §10.8.1](https://www.w3.org/TR/CSS21/visudet.html#line-height) describes: each inline box on the line contributes its own font ascent and descent plus half the **leading** (its `line-height` less its font's own height) on each side, the line reaches as far above and below its baseline as the furthest of them — including the **strut**, an imaginary inline box carrying the block's own font and `line-height` — and every box on the line hangs its content from that one shared baseline. So a `line-height` larger than the font centres the text in the line rather than hanging it from the top, and text of two different sizes on one line sits on a common baseline rather than sharing a top edge. Because the two sides are maximised independently, a line can be taller than the largest single `line-height` on it. One deviation: where a `line-height` is *shorter* than the font, the spec lets the glyphs overflow the line box both above and below; PeachPDF lets them overflow below only, holding the line's topmost ink at its own top edge, because the page a word is drawn on is decided from the word's own box and ink leaving its line box would leave the page the line was placed on |
-| `vertical-align` | [vertical-align](https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align) | `baseline`, `sub`, `super`, `top`, `middle`, `bottom`, `text-top`, `text-bottom`, and `<length>`/`<percentage>` (offsetting the box from its own baseline; a percentage resolves against the box's own `line-height`) for any inline-level box relative to its line box, not just table cells (which use a separate, table-specific alignment algorithm accepting only the keyword subset — see [Tables](#tables)) |
+| `vertical-align` | [vertical-align](https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align) | `baseline`, `sub`, `super`, `top`, `middle`, `bottom`, `text-top`, `text-bottom`, and `<length>`/`<percentage>` (offsetting the box from its own baseline; a percentage resolves against the box's own `line-height`) for any inline-level box relative to its line box, not just table cells (which use a separate, table-specific alignment algorithm accepting only the keyword subset — see [Tables](#tables)). An **atomic inline** — an `<img>`, an inline `<svg>`, MathML, a form control, an `inline-block` — is baseline-aligned from its own box rather than from font metrics ([CSS 2.1 §10.8.1](https://www.w3.org/TR/CSS21/visudet.html#line-height)): its **bottom margin edge** rests on the line's baseline, so `text <img> text` sits the image's bottom on the text's baseline and the line grows above the baseline to hold it, rather than the image hanging from the line's top edge. An `inline-block` whose `overflow` is `visible` and which has in-flow line boxes of its own instead uses the baseline of its **last** such line, so its text and the text beside it line up; one that is empty, or whose `overflow` is not `visible`, falls back to the bottom margin edge. An inline box wrapping an atomic inline moves with it, so its background and border stay attached |
 
 #### Per-character font matching and coverage fallback
 
@@ -525,22 +525,39 @@ Regenerating the pattern set (`tools/Update-HyphenationPatterns.ps1`) re-checks 
 
 #### Atomic inline-level layout is approximated, not fully atomic
 
-An `inline-block` box's text flows through the surrounding inline formatting context rather
-than being laid out as one opaque unit. Its content is correctly inset by its own
-border+padding (its label sits inside the padding box, and the line reserves the full padding
-box height), and a non-`auto` `width` sizes it as declared
+An `inline-block` whose content **fits on one line** has that content flowed through the
+surrounding inline formatting context rather than being laid out as one opaque unit. The content
+is correctly inset by its own border+padding (its label sits inside the padding box, and the line
+reserves the full padding box height), and a non-`auto` `width` sizes it as declared
 ([CSS 2.1 §10.3.9](https://www.w3.org/TR/CSS22/visudet.html#inlineblock-width) uses shrink-to-fit
 only for `width: auto`): the box's background, border and overflow clip are painted at that width
 whether or not its content fills it — an empty one included, which is what makes the fixed-width
 label column and the empty-bordered-box checkbox glyph work — and the line reserves the same
 width, honoring `box-sizing`. Percentage widths resolve against the containing block's content
-width, just as they do on other boxes. Content wider than the declared width overflows rather than
-being cut back to it. One knock-on gap remains:
+width, just as they do on other boxes.
+
+A box whose content **does not** fit on one line inside it — because it declares a `width`
+narrower than its content, or because its content is wider than the containing block — is instead
+laid out as a genuine atomic box: it establishes its own formatting context, breaks its lines at
+its own measure, and takes one place on the line that holds it, with its last line's baseline on
+that line's baseline. So a narrow `inline-block` holding a paragraph comes out as a narrow column
+of wrapped text, the way a browser lays it out, rather than as text broken at the width of the
+block around it. Content that genuinely cannot be broken — a single long word — still overflows
+the box rather than widening it. A box holding block-level content (a `<div>` inside an
+`inline-block`) has always been laid out this way.
+
+Two knock-on gaps remain:
 
 - An explicit `height` on an inline-flowed `inline-block` does not size the line — the line's
   height comes from the flowed content plus padding/border, so
   `<span style="display: inline-block; height: 100px">x</span>` reserves only its natural text
   height, not 100px (CSS2.1 §10.8.1 expects the atomic box's margin box to size the line).
+- An atomic box is never moved onto a line of its own when it does not fit in what is left of the
+  current one: it overhangs the containing block's edge where a browser would start a new line for
+  it. A row of fixed-width `inline-block` cards therefore stays on one line instead of wrapping.
+  Relatedly, an `inline-block` that holds block-level content and declares a `width` paints that
+  width as its whole border box, rather than adding its padding and border to it under the default
+  `box-sizing: content-box`.
 ### Stacking Context
 
 Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context) model. A new stacking context is established by:

@@ -2841,7 +2841,24 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else
                 {
-                    b.ActualRight = b.Location.X + stretchWidth;
+                    // GetBoxWidth returns a declared `width` exactly as declared, so under
+                    // `box-sizing: content-box` it names the CONTENT box while Location.X is the border
+                    // box's own left edge. ActualBoxSizeIncludedWidth is the conversion between the two
+                    // (zero under `border-box`, where the declared length already is the border box),
+                    // and it is what keeps a box that reaches this path because its own inline content
+                    // wraps (LaysOutAsAnAtomicBox) the same painted width as the identical box whose
+                    // content happens to fit on one line - that one is sized by
+                    // ResolveAtomicInlineDeclaredWidth, which reads the declared length the same way.
+                    //
+                    // A box holding block-level content deliberately keeps the older, short measurement.
+                    // It is wrong by the same rule - Chrome paints such a box its declared width plus its
+                    // padding and border - but this path cannot yet move a box that does not fit onto a
+                    // line of its own, so widening these boxes makes the last one in a row overhang the
+                    // page instead of wrapping (the cascade_layers showcase's fourth card). The two
+                    // belong in one change; see
+                    // .claude/accepted-gaps/an-atomic-inline-does-not-wrap-onto-a-line-of-its-own.md.
+                    b.ActualRight = b.Location.X + stretchWidth
+                        + (HasBlockLevelDescendant(b) ? 0 : b.ActualBoxSizeIncludedWidth);
                 }
             }
 
@@ -2874,6 +2891,15 @@ namespace PeachPDF.Html.Core.Dom
             // descendant - whose PDF content stream carried zero text objects).
             await b.LayoutContentAtItsAssignedPosition(g);
 
+            // A box whose own content is inlines-only just laid out line boxes of its own, and came back
+            // out of that machinery carrying one rectangle per line - the shape an INLINE box needs, so
+            // that its background and border follow its content line by line. This box is not inline: it
+            // is an atomic box whose border box is the single rectangle registered on the parent's line
+            // below. Leaving the per-line ones behind paints its border once per internal line, as a
+            // short box around each of them on top of the real one. Nothing else reads them - the box's
+            // own lines address their content through their own rectangles, not through the box's.
+            b.Rectangles.Clear();
+
             // Advance to content-right so that the outer rightSpacing addition lands correctly.
             coordinates.CurrentX = b.ClientRight;
             coordinates.MaxRight = Math.Max(coordinates.MaxRight, b.Location.X + b.ActualBoxSizingWidth);
@@ -2882,6 +2908,66 @@ namespace PeachPDF.Html.Core.Dom
             // Register the box in the parent line so its border/background is painted.
             coordinates.Line.Rectangles[b] = new RRect(
                 b.Location.X, b.Location.Y, b.ActualBoxSizingWidth, b.ActualBoxSizingHeight);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="child"/> is an <c>inline-block</c> that has to be laid out as a
+        /// genuine atomic box (<see cref="FlowAtomicBlockContentChild"/>) rather than have its content
+        /// flowed into <paramref name="parent"/>'s own line boxes.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Two shapes need it. One is a box holding real block-level content
+        /// (<see cref="HasBlockLevelDescendant"/>, issue #473), which has no inline formatting context to
+        /// be flattened into in the first place. The other is a box whose inline content <b>does not fit
+        /// on one line inside it</b>: flattening that one hands its words to the parent's line breaker,
+        /// which wraps them at the parent's measure rather than the box's, so the box's own content
+        /// escapes it and its border box is drawn as two disjoint line rectangles - in a wrapped document
+        /// that lands across whatever sits above the line
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1053">#1053</see>). An atomic inline
+        /// establishes its own formatting context and wraps inside its own width
+        /// (<see href="https://www.w3.org/TR/css-display-3/#atomic-inline">css-display-3 §2.3</see>), so
+        /// the box that cannot hold its content on one line is exactly the one that must own the lines.
+        /// </para>
+        /// <para>
+        /// The measurement is made in border-box terms on both sides, because
+        /// <see cref="GetMaxContentWidth"/> reports a box's own border and padding along with its
+        /// content. A declared <c>width</c> names the used width directly
+        /// (<see cref="ResolveAtomicInlineDeclaredWidth"/>'s rule, deliberately not assigned here — this
+        /// runs before the cursor reaches the box's content edge); an <c>auto</c> one is shrink-to-fit
+        /// (CSS 2.1 §10.3.9), which only wraps when the content cannot fit the containing block either.
+        /// </para>
+        /// </remarks>
+        private static async ValueTask<bool> LaysOutAsAnAtomicBox(RGraphics g, CssBox child, CssBox parent, double blockTop)
+        {
+            if (child.DerivedStyle.ActualDisplay is not Keywords.InlineBlock || ReferenceEquals(child, parent))
+            {
+                return false;
+            }
+
+            if (HasBlockLevelDescendant(child)) return true;
+
+            var available = PageAwareWidthBasis(child.ContainingBlock, blockTop);
+
+            if (CssValueParser.IsValidLength(child.Width))
+            {
+                var declared = CssValueParser.ParseLength(child.Width, available, child);
+
+                available = child.BoxSizing.Value is BoxSizingMode.BorderBox
+                    ? Math.Max(declared, child.ActualBorderLeftWidth + child.ActualPaddingLeft
+                        + child.ActualPaddingRight + child.ActualBorderRightWidth)
+                    : declared + child.ActualBoxSizeIncludedWidth;
+            }
+            else
+            {
+                available -= child.ActualMarginLeft + child.ActualMarginRight;
+            }
+
+            if (available <= 0) return false;
+
+            // A hair of slack, so a box whose content measures its own width exactly - the overwhelmingly
+            // common `width` set to fit its label - is not pushed onto the atomic path by rounding.
+            return await GetMaxContentWidth(g, child) > available + 0.01;
         }
 
         /// <summary>
@@ -3144,12 +3230,13 @@ namespace PeachPDF.Html.Core.Dom
                 // coordinates.Line never changes and the "undo" after this dispatch cancels the shift
                 // with no effect - safe to pre-shift unconditionally for clone rather than having to tell
                 // "still straddling" apart from "already done" up front.
-                // Excludes an inline-block with a real block-level descendant (see HasBlockLevelDescendant):
-                // that shape is routed to FlowAtomicBlockContentChild below instead, which positions and
-                // sizes the box (border/padding included) as one atomic unit via its own box-model
-                // machinery - applying this pre-shift too would double the top inset for it.
+                // Excludes an inline-block routed to FlowAtomicBlockContentChild below (see
+                // LaysOutAsAnAtomicBox): that path positions and sizes the box (border/padding included)
+                // as one atomic unit via its own box-model machinery - applying this pre-shift too would
+                // double the top inset for it.
+                var laysOutAsAtomicBox = await LaysOutAsAnAtomicBox(g, b, box, coordinates.CurrentY);
                 var appliesAtomicInset = b.DerivedStyle.ActualDisplay is Keywords.InlineBlock && !ReferenceEquals(b, box)
-                    && !HasBlockLevelDescendant(b);
+                    && !laysOutAsAtomicBox;
                 var clonesAtomicDecorations = appliesAtomicInset && b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone;
                 var atomicTopInset = appliesAtomicInset ? b.ActualBorderTopWidth + b.ActualPaddingTop : 0;
                 var atomicBottomInset = appliesAtomicInset ? b.ActualBorderBottomWidth + b.ActualPaddingBottom : 0;
@@ -3776,14 +3863,15 @@ namespace PeachPDF.Html.Core.Dom
                 }
                 else if (b.DerivedStyle.ActualDisplay == Keywords.InlineTable
                          || b.DerivedStyle.ActualDisplay == Keywords.InlineGrid
-                         || (b.DerivedStyle.ActualDisplay == Keywords.InlineBlock && HasBlockLevelDescendant(b)))
+                         || laysOutAsAtomicBox)
                 {
                     // An inline-table/inline-grid's structural children (rows, grid items) are never
                     // inline-formatting-context content regardless of what's inside them, so those two are
-                    // routed here unconditionally. An inline-block is routed here only when it has a real
-                    // block-level descendant somewhere in its subtree (issue #473) - the ordinary case
-                    // (inline-block holding only text/inline content) keeps using the recursive FlowBox call
-                    // below, unchanged. HasBlockLevelDescendant looks THROUGH nested atomic inline-level
+                    // routed here unconditionally. An inline-block is routed here when it has a real
+                    // block-level descendant somewhere in its subtree (issue #473), or when its own inline
+                    // content cannot fit on one line inside it (see LaysOutAsAnAtomicBox) - the ordinary
+                    // case (an inline-block whose text fits on one line) keeps using the recursive FlowBox
+                    // call below, unchanged. HasBlockLevelDescendant looks THROUGH nested atomic inline-level
                     // boxes rather than stopping at them (unlike DomUtils.ContainsInlinesOnly/
                     // DomParser.ContainsInlinesOnlyDeep): a <table style="display:inline-block"> whose <tr>
                     // rows were wrapped in an anonymous Display=InlineTable box (DomParser.
@@ -5433,44 +5521,10 @@ namespace PeachPDF.Html.Core.Dom
                     continue;
                 }
 
+                if (AtomicInlineBaselineOf(box, lineBox, rect) is not { } atomicBaseline) continue;
+
                 var marginTop = rect.Top - box.ActualMarginTop;
                 var marginBottom = rect.Bottom + box.ActualMarginBottom;
-                double atomicBaseline;
-
-                if (box.IsImage)
-                {
-                    // CssRect.IsImage is the engine's atomic replaced-word flag, shared by raster
-                    // images, inline SVG, MathML, form controls, and vector shape markers. Their
-                    // default baseline is the bottom margin edge (CSS 2.1 §10.8.1).
-                    atomicBaseline = marginBottom;
-                }
-                else if (box.DerivedStyle.ActualDisplay != Keywords.InlineBlock)
-                {
-                    continue;
-                }
-                else if (box.Overflow.Value != Overflow.Visible)
-                {
-                    // §10.8.1 uses the bottom margin edge when overflow is not visible, even if the
-                    // inline-block does have in-flow line boxes of its own.
-                    atomicBaseline = marginBottom;
-                }
-                else if (FirstNonReplacedWordOf(box, lineBox) is { } word
-                    && ReferenceEquals(box.FirstHostingLineBox, lineBox)
-                    && ReferenceEquals(box.LastHostingLineBox, lineBox))
-                {
-                    atomicBaseline = word.Top + (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent;
-                }
-                else if (!HasWordOnLine(box, lineBox))
-                {
-                    // With no in-flow line box, §10.8.1 puts an inline-block's baseline at its bottom
-                    // margin edge. Including that extent here lets a tall empty box grow the line above
-                    // the baseline rather than merely being moved after the line height was settled.
-                    atomicBaseline = marginBottom;
-                }
-                else
-                {
-                    continue;
-                }
 
                 var atomicExtent = new LineBoxExtent(
                     atomicBaseline - marginTop,
@@ -5514,11 +5568,28 @@ namespace PeachPDF.Html.Core.Dom
             {
                 if (lineBox.BaselineY is not { } baselineY) return null;
 
-                if (box.DerivedStyle.ActualDisplay == Keywords.InlineBlock
-                    && lineBox.Rectangles.TryGetValue(box, out var rect)
-                    && (box.Overflow.Value != Overflow.Visible || !HasWordOnLine(box, lineBox)))
+                // An atomic inline is aligned by its own box (AtomicInlineBaselineOf), and it is atomic,
+                // so everything within it moves by ITS delta: the walk starts at the box itself and
+                // continues through its ancestors, and a descendant on this line takes the enclosing
+                // box's shift rather than deriving one of its own from its own font metrics. Letting a
+                // descendant derive its own put an `overflow: hidden` inline-block's clip and the text
+                // inside it in different places, and the box then painted completely empty - its words
+                // were clipped away (Chrome keeps them, and so does the baseline_alignment showcase).
+                for (var atomic = box; atomic is not null; atomic = atomic.ParentBox)
                 {
-                    return (rect.Top, baselineY - (rect.Bottom + box.ActualMarginBottom));
+                    // The box establishing this line's formatting context bounds the walk: it takes no
+                    // place on its own line, and nothing above it is on this line at all.
+                    if (ReferenceEquals(atomic, lineBox.OwnerBox)) break;
+
+                    if (atomic.DerivedStyle.ActualDisplay != Keywords.InlineBlock) continue;
+                    if (!lineBox.Rectangles.TryGetValue(atomic, out var atomicRect)) continue;
+                    if (AtomicInlineBaselineOf(atomic, lineBox, atomicRect) is not { } atomicBaseline) continue;
+
+                    var flowTop = lineBox.Rectangles.TryGetValue(box, out var ownRect)
+                        ? ownRect.Top
+                        : atomicRect.Top;
+
+                    return (flowTop, baselineY - atomicBaseline);
                 }
 
                 if (FirstNonReplacedWordOf(box, lineBox) is { } word)
@@ -5786,6 +5857,93 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
+        /// Where CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">§10.8.1</see>
+        /// puts <paramref name="box"/>'s own baseline, given the rectangle <paramref name="rect"/> the
+        /// flow left it at on <paramref name="lineBox"/> — or null when <paramref name="box"/> is not an
+        /// atomic inline at all, so the line's shared baseline governs it through its font metrics
+        /// instead. The one place the rule lives: <see cref="ApplyVerticalAlignment"/> reads it twice,
+        /// once to size the closed line around the box and once to decide how far the box has to move,
+        /// and the two must not be able to disagree.
+        /// </summary>
+        /// <remarks>
+        /// The four cases §10.8.1 distinguishes, in the order it distinguishes them:
+        /// <list type="bullet">
+        /// <item>A replaced element (<see cref="CssBox.IsImage"/> — the engine's atomic replaced flag,
+        /// shared by raster images, inline SVG, MathML, form controls and vector shape markers) is
+        /// aligned by its <b>bottom margin edge</b>.</item>
+        /// <item>So is an <c>inline-block</c> whose <c>overflow</c> is not <c>visible</c>, whether or not
+        /// it has in-flow line boxes of its own.</item>
+        /// <item>An <c>inline-block</c> that was laid out as a genuine atomic unit
+        /// (<see cref="FlowAtomicBlockContentChild"/>) holds its content in line boxes of its own, and
+        /// the <b>last</b> of those carries the baseline §10.8.1 asks for.</item>
+        /// <item>An <c>inline-block</c> whose inlines-only content this engine flowed into the
+        /// surrounding line instead has no line box of its own to read, so the baseline is
+        /// reconstructed from the content it put on this line — but only while this line both opens and
+        /// closes it, since the rule names the box's <i>last</i> line and a box spanning two of the
+        /// parent's lines does not have it here.</item>
+        /// </list>
+        /// With no in-flow line box at all — an empty box — §10.8.1 falls back to the bottom margin edge
+        /// again, which is also what lets a tall empty box grow the line <i>above</i> the baseline rather
+        /// than merely being moved once the line's height was settled.
+        /// </remarks>
+        private static double? AtomicInlineBaselineOf(CssBox box, CssLineBox lineBox, RRect rect)
+        {
+            // A box that ESTABLISHES this line's formatting context takes no place on it. FlowBox
+            // iterates a block over itself, so an inline-block laid out atomically appears among the
+            // rectangles of its own lines; reading its last line's baseline back there would align every
+            // line inside it to the last one, spreading its own content apart and out of its box.
+            if (ReferenceEquals(box, lineBox.OwnerBox)) return null;
+
+            if (box.IsImage) return rect.Bottom + box.ActualMarginBottom;
+            if (box.DerivedStyle.ActualDisplay != Keywords.InlineBlock) return null;
+            if (box.Overflow.Value != Overflow.Visible) return rect.Bottom + box.ActualMarginBottom;
+
+            if (LastOwnLineBaselineOf(box) is { } ownBaseline) return ownBaseline;
+
+            if (FirstNonReplacedWordOf(box, lineBox) is { } word
+                && ReferenceEquals(box.FirstHostingLineBox, lineBox)
+                && ReferenceEquals(box.LastHostingLineBox, lineBox))
+            {
+                return word.Top + (word.FirstLineStyle ?? word.OwnerBox).ActualFont.Ascent;
+            }
+
+            return HasWordOnLine(box, lineBox) ? null : rect.Bottom + box.ActualMarginBottom;
+        }
+
+        /// <summary>
+        /// The baseline of the last line box in <paramref name="box"/>'s own normal flow — the quantity
+        /// CSS 2.1 §10.8.1 names for a baseline-aligned <c>inline-block</c> — or null when it holds none,
+        /// which is the ordinary case here: an inline-block whose inlines-only content this engine flowed
+        /// into the surrounding formatting context owns no line box anywhere in its subtree.
+        /// </summary>
+        /// <remarks>
+        /// Walks the subtree back-to-front, since "last line box" is the last one in document order and a
+        /// box laid out atomically holds its lines on the block-level descendants inside it rather than on
+        /// itself. Out-of-flow and floated descendants are skipped: §10.8.1 says <i>in the normal flow</i>,
+        /// and a float hanging below the box's own content would otherwise supply the baseline.
+        /// </remarks>
+        private static double? LastOwnLineBaselineOf(CssBox box)
+        {
+            for (var i = box.Boxes.Count - 1; i >= 0; i--)
+            {
+                var child = box.Boxes[i];
+
+                if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (child.Position.Value is PositionMode.Absolute or PositionMode.Fixed) continue;
+                if (child.Float.Value is not Floating.None) continue;
+
+                if (LastOwnLineBaselineOf(child) is { } nested) return nested;
+            }
+
+            for (var i = box.LineBoxes.Count - 1; i >= 0; i--)
+            {
+                if (box.LineBoxes[i].BaselineY is { } baselineY) return baselineY;
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// The first atomic replaced word in <paramref name="box"/>'s subtree on
         /// <paramref name="lineBox"/>, or null when it has none there. Walking ancestors as well as the
         /// direct owner keeps an inline wrapper's decoration rectangle coupled to the replaced element
@@ -5871,6 +6029,19 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (delta == 0) return;
 
+            // A box laid out as a genuine atomic unit (FlowAtomicBlockContentChild) keeps its content in
+            // line boxes of ITS own rather than in this one, so none of it is reachable through
+            // lineBox.WordsOf and none of it would move. Translate the whole subtree instead - which also
+            // carries its own Location (what the fragment emitter reads) and notifies a fragmentainer an
+            // earlier pass may already have frozen. Its own rectangle on this line is still moved below:
+            // OffsetTop walks CssBox.Rectangles, which CssLineBox.AssignRectanglesToBoxes has not yet
+            // populated for this line - it runs after alignment.
+            if (!ReferenceEquals(lineBox.OwnerBox, box) && LastOwnLineBaselineOf(box) is not null)
+            {
+                box.OffsetTop(delta);
+                OffsetOwnLineBoxes(box, delta);
+            }
+
             if (lineBox.Rectangles.TryGetValue(box, out var r))
                 lineBox.Rectangles[box] = new RRect(r.X, r.Y + delta, r.Width, r.Height);
 
@@ -5883,6 +6054,33 @@ namespace PeachPDF.Html.Core.Dom
             foreach (var word in lineBox.WordsOf(box))
             {
                 word.Top += delta;
+            }
+        }
+
+        /// <summary>
+        /// Shifts the cached geometry of every line box inside <paramref name="box"/>'s own subtree by
+        /// <paramref name="delta"/>, alongside the words and rectangles <see cref="CssBox.OffsetTop(double)"/>
+        /// has just moved.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="CssLineBox.FlowTop"/> and <see cref="CssLineBox.BaselineY"/> are numbers a closed
+        /// line records about where it ended up, not views onto the words, so a subtree translation leaves
+        /// them naming the position the box no longer occupies. Everything that asks a line where it
+        /// begins reads <c>FlowTop</c> through <see cref="CssLineBox.LineTop"/> (this repo's rule for that
+        /// question), and <c>CssBoxMarker</c> sits an outside marker on <c>BaselineY</c> — so an atomic
+        /// inline-block moved onto its line's baseline would otherwise carry stale answers for both.
+        /// </remarks>
+        private static void OffsetOwnLineBoxes(CssBox box, double delta)
+        {
+            foreach (var line in box.LineBoxes)
+            {
+                if (line.FlowTop is { } flowTop) line.FlowTop = flowTop + delta;
+                if (line.BaselineY is { } baselineY) line.BaselineY = baselineY + delta;
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                OffsetOwnLineBoxes(child, delta);
             }
         }
 

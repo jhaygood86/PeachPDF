@@ -214,6 +214,64 @@ body { font: 9pt Arial, sans-serif; margin: 0 }
             Assert.Equal(lineBaseline, emptyRect.Bottom + empty.ActualMarginBottom, 3);
         }
 
+        // An inline-block whose content cannot fit on one line inside it is laid out as a genuine atomic
+        // box (CssLayoutEngine.LaysOutAsAnAtomicBox): it owns its own line boxes, wrapped at its own
+        // width, and takes one place on the line that holds it. Flattened into the parent's own inline
+        // flow instead - as every inline-block used to be - its words were broken at the PARENT's
+        // measure, so its content escaped it and its border box was drawn as two disjoint line
+        // rectangles, the upper one landing across the text of the block above (issue #1053). Verified
+        // against Chrome on the same markup, through both PDFium and MuPDF.
+        [Fact]
+        public async Task MultiLinePaddedInlineBlockAfterCaption_DoesNotOverlapCaptionText()
+        {
+            const string html = @"<!DOCTYPE html>
+<html><head><style>
+body { font: 9pt Arial, sans-serif; margin: 0 }
+.page { width: 360pt }
+.caption { font-size: 7.5pt; margin-bottom: 2pt }
+.box { display: inline-block; width: 90pt; padding: 3pt 5pt;
+       border: 1pt solid #1d6fa5; background: #e8f4fb }
+</style></head><body><div class='page'>
+<div class='caption'>Three 90pt boxes: a full one, a one-character one, and an empty one. All three paint the same width and push what follows them to the same place. Only their heights differ, since an empty box has no content to be as tall as.</div>
+<div class='row'><span class='box'>This inline-block deliberately contains enough words to wrap across more than one of the outer line boxes used by this layout path. Its second sentence keeps going until that condition is unavoidable.</span><span class='after'> text after</span></div>
+</div></body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var caption = FindBoxByClass(rootBox, "caption");
+            var box = FindBoxByClass(rootBox, "box");
+            var after = FindBoxByClass(rootBox, "after");
+            Assert.NotNull(caption);
+            Assert.NotNull(box);
+            Assert.NotNull(after);
+
+            Assert.True(box!.LineBoxes.Count > 1,
+                $"fixture must make the inline-block's own content wrap inside it; got {box.LineBoxes.Count} line(s)");
+            Assert.Single(box.Rectangles);
+
+            var captionTextBottom = AllWords(caption!).Max(word => word.Bottom);
+            var marginBoxTop = box.Rectangles.Values.Min(rect => rect.Top) - box.ActualMarginTop;
+            Assert.True(marginBoxTop >= captionTextBottom,
+                $"multi-line inline-block's margin-box top must not overlap the caption above it " +
+                $"(marginTop={marginBoxTop}, caption text bottom={captionTextBottom})");
+
+            // Every one of the box's own words stays inside its own border box.
+            var boxRect = box.Rectangles.Values.Single();
+            foreach (var word in AllWords(box).Where(word => !word.IsLineBreak))
+            {
+                Assert.True(word.Top >= boxRect.Top - 0.001 && word.Bottom <= boxRect.Bottom + 0.001,
+                    $"word '{word.Text}' ({word.Top}..{word.Bottom}) escaped the box it belongs to " +
+                    $"({boxRect.Top}..{boxRect.Bottom})");
+            }
+
+            // CSS 2.1 §10.8.1: with `overflow: visible`, the box's LAST line's baseline is the one it
+            // puts on the line that holds it.
+            var lastBoxWord = AllWords(box).Last(word => !word.IsLineBreak);
+            var afterWord = FindFirstWord(after!);
+            Assert.NotNull(afterWord);
+            Assert.Equal(afterWord!.Top + afterWord.OwnerBox.ActualFont.Ascent,
+                lastBoxWord.Top + lastBoxWord.OwnerBox.ActualFont.Ascent, 3);
+        }
+
         [Fact]
         public async Task InlineBlockWithNonVisibleOverflow_UsesBottomMarginEdgeAsBaseline()
         {
@@ -234,6 +292,37 @@ body { font: 9pt Arial, sans-serif; margin: 0 }
             var lineBaseline = afterWord!.Top + afterWord.OwnerBox.ActualFont.Ascent;
 
             Assert.Equal(lineBaseline, rect.Bottom + clipped.ActualMarginBottom, 3);
+        }
+
+        // An inline-block aligned by its bottom margin edge is atomic: its own content has to move
+        // with it. While each box on the line derived its own font-metric baseline delta, the box's
+        // border box landed on the baseline while the text inside it stayed a half-leading lower, so
+        // the words fell outside the box's own overflow:hidden clip (the padding edge) and the box
+        // painted completely empty - confirmed against Chrome, which keeps the text inside the box.
+        [Fact]
+        public async Task InlineBlockWithNonVisibleOverflow_KeepsItsWordsInsideItsClip()
+        {
+            const string html = @"<!DOCTYPE html>
+<html><body style='font:10pt Arial,sans-serif;margin:0'>
+<div>before <span class='clipped' style='display:inline-block;overflow:hidden;padding:2pt 4pt;border:1pt solid'>inside</span> after Agy</div>
+</body></html>";
+
+            var (rootBox, _) = await BuildCssBoxTree(html);
+            var clipped = FindBoxByClass(rootBox, "clipped");
+            Assert.NotNull(clipped);
+
+            var rect = Assert.Single(clipped!.Rectangles).Value;
+            var word = FindFirstWord(clipped);
+            Assert.NotNull(word);
+
+            // overflow: hidden clips to the padding edge, so that is the box the words must sit in.
+            var clipTop = rect.Top + clipped.ActualBorderTopWidth;
+            var clipBottom = rect.Bottom - clipped.ActualBorderBottomWidth;
+
+            Assert.True(word!.Top >= clipTop - 0.001,
+                $"word top {word.Top} must not sit above the box's clip top {clipTop}");
+            Assert.True(word.Bottom <= clipBottom + 0.001,
+                $"word bottom {word.Bottom} must not sit below the box's clip bottom {clipBottom}");
         }
 
         // CssLineBox.UpdateRectangle historically expanded the rect's bottom edge by

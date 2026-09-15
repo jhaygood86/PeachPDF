@@ -154,23 +154,43 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
-        /// Only ever forward: content wider than the declared width overflows the box rather than the box
-        /// being cut back to it, which is what <c>overflow: visible</c> means.
+        /// The declared width is the box's width, and breakable content wider than it <b>wraps inside
+        /// it</b> rather than widening it — the box establishes its own formatting context and its lines
+        /// are broken at its own measure (css-display-3 §2.3). Verified against Chrome on the same markup:
+        /// a 15pt box holding "Wider than the box" comes out 15pt wide with one word per line.
         /// </summary>
         [Fact]
-        public async Task ContentWiderThanTheDeclaredWidthIsNotCutBackToIt()
+        public async Task ContentWiderThanTheDeclaredWidthWrapsInsideItRatherThanWideningIt()
         {
             var (root, _) = await LayoutAsync(Wrap(
                 "<div style='width:400pt'>" +
-                "<span id='declared' style='display:inline-block;width:5pt'>Wider than the box</span></div>" +
+                "<span id='declared' style='display:inline-block;width:20pt'>Wider than the box</span></div>"));
+
+            var declared = FindById(root, "declared")!;
+
+            Assert.Equal(20.0, PaintedRectOf(declared).Width, 3);
+            Assert.True(declared.LineBoxes.Count > 1,
+                $"the box's own content must wrap onto lines of its own, got {declared.LineBoxes.Count}");
+        }
+
+        /// <summary>
+        /// An unbreakable word has nowhere to wrap, so it does overflow — and the box is still its
+        /// declared width, exactly as Chrome renders the same markup. This is the case
+        /// <c>overflow: visible</c> actually describes.
+        /// </summary>
+        [Fact]
+        public async Task AnUnbreakableWordOverflowsTheDeclaredWidthWithoutWideningTheBox()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
                 "<div style='width:400pt'>" +
-                "<span id='auto' style='display:inline-block'>Wider than the box</span></div>"));
+                "<span id='declared' style='display:inline-block;width:20pt'>Unbreakableverylongword</span></div>"));
 
-            var declared = PaintedRectOf(FindById(root, "declared")!);
-            var auto = PaintedRectOf(FindById(root, "auto")!);
+            var declared = FindById(root, "declared")!;
+            var rect = PaintedRectOf(declared);
 
-            Assert.Equal(auto.Width, declared.Width, 3);
-            Assert.True(declared.Width > 5, $"content wider than the declared 5pt must overflow, was {declared.Width}");
+            Assert.Equal(20.0, rect.Width, 3);
+            Assert.True(FirstWordLeftOf(declared) + WordWidthOf(declared) > rect.Right,
+                "the unbreakable word must overflow the box it cannot fit in");
         }
 
         /// <summary>
@@ -245,6 +265,20 @@ namespace PeachPDF.Tests.Integration
         /// box did not wrap, which every fixture here depends on.
         /// </summary>
         private static RRect PaintedRectOf(CssBox box) => Assert.Single(box.Rectangles).Value;
+
+        private static double WordWidthOf(CssBox box)
+        {
+            foreach (var descendant in Descendants(box))
+            {
+                foreach (var word in descendant.Words)
+                {
+                    return word.Width;
+                }
+            }
+
+            Assert.Fail($"box '{box}' placed no words");
+            return 0;
+        }
 
         private static double FirstWordLeftOf(CssBox box)
         {
