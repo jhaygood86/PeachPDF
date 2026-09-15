@@ -2532,7 +2532,7 @@ namespace PeachPDF.Html.Core.Fragmentation
             {
                 if (containingBlock.Overflow.Value == Overflow.Hidden)
                 {
-                    var borderBoxRect = BoundsOf(containingBlock, snapshot);
+                    var borderBoxRect = ClipSourceBoundsOf(containingBlock, snapshot);
                     var paddingRect = RenderUtils.PaddingEdgeOf(containingBlock, borderBoxRect);
                     var radii = containingBlock.IsRounded
                         ? containingBlock.ComputeInnerRadii(borderBoxRect, paddingRect,
@@ -3487,6 +3487,45 @@ namespace PeachPDF.Html.Core.Fragmentation
             }
 
             return width - box.Size.Width;
+        }
+
+        /// <summary>
+        /// The border box an <c>overflow</c> clip is built from — <see cref="BoundsOf"/>, except for a box
+        /// that has none of its own.
+        /// </summary>
+        /// <remarks>
+        /// An <c>inline-block</c> whose content fits on one line is flowed into the surrounding inline
+        /// formatting context rather than laid out as a box (see
+        /// <c>CssLayoutEngine.LaysOutAsAnAtomicBox</c> for the shapes that are), and such a box never has
+        /// <see cref="CssBox.Location"/>/<see cref="CssBox.Size"/> assigned at all: its geometry is the
+        /// per-line rectangle the flow gave it, which is what the painter already draws its border and
+        /// background from. Reading <see cref="CssBox.Bounds"/> for one yields the unassigned
+        /// <c>(0,0,0,0)</c>, so the clip came out with zero area and the box painted its border around
+        /// nothing — every word inside it clipped away (a single <c>0 792 m W* n</c> in the content
+        /// stream, and no <c>Tj</c> for the text). Falling back to the rectangles only when there is no
+        /// border box to read leaves every box that has one measured exactly as before.
+        /// </remarks>
+        private static RRect ClipSourceBoundsOf(CssBox box, BoxGeometrySnapshot? snapshot)
+        {
+            var bounds = BoundsOf(box, snapshot);
+
+            if (!box.IsInline) return bounds;
+
+            var rectangles = RectanglesOf(box, snapshot);
+
+            if (rectangles.Count == 0) return bounds;
+
+            double left = double.MaxValue, top = double.MaxValue, right = double.MinValue, bottom = double.MinValue;
+
+            foreach (var rect in rectangles.Values)
+            {
+                left = Math.Min(left, rect.Left);
+                top = Math.Min(top, rect.Top);
+                right = Math.Max(right, rect.Right);
+                bottom = Math.Max(bottom, rect.Bottom);
+            }
+
+            return RRect.FromLTRB(left, top, right, bottom);
         }
 
         private static RRect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>

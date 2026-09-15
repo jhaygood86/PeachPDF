@@ -1,6 +1,6 @@
 # An inline-block that wraps is laid out as one box, and atomic inlines share the line's baseline
 
-Issue #1053, plus three defects found while closing it. The load-bearing idea is that CSS 2.1
+Issue #1053, plus four defects found while closing it. The load-bearing idea is that CSS 2.1
 [§10.8.1](https://www.w3.org/TR/CSS21/visudet.html#line-height) has exactly one rule for where an
 atomic inline's baseline is, and this engine had been answering it in two places that could disagree
 — so it now lives in `CssLayoutEngine.AtomicInlineBaselineOf`, which `ApplyVerticalAlignment` reads
@@ -10,13 +10,27 @@ twice: once to size the closed line around the box, once to decide how far the b
 
 Every one of these came out of the `baseline_alignment` showcase or a hand-built repro rendered
 against headless Chrome on the identical HTML, then rasterized through both PDFium and MuPDF. The
-suite was green for all four.
+suite was green for all of them — and, for the clip below, stayed green through a fix that did not
+work.
 
-- **An `overflow: hidden` inline-block painted completely empty.** The box was given the margin-edge
-  delta and the anonymous text box inside it a *font-derived* one, so the text ended up outside the
-  box's own padding-edge clip and was clipped away entirely. An atomic inline is atomic: the delta
-  walk in `BaselineShiftOf` now starts at the box and continues through its ancestors, so a
-  descendant takes the enclosing box's shift rather than deriving its own.
+- **An `overflow: hidden` inline-block painted completely empty**, and it took two fixes, which is
+  worth knowing because the first one *looked* sufficient and was not. The box was given the
+  margin-edge delta and the anonymous text box inside it a *font-derived* one, so the two moved apart
+  — that is real, and `BaselineShiftOf`'s delta walk now starts at the box and continues through its
+  ancestors, so a descendant takes the enclosing box's shift rather than deriving its own. **The box
+  still painted empty afterwards.** `FragmentEmitter.OverflowClipOf` builds the clip from
+  `CssBox.Bounds`, and an inline-block flowed into the surrounding formatting context never has
+  `Location`/`Size` assigned at all: its bounds are its own padding and border sitting at the origin,
+  so the clip was a well-formed rectangle 8×4pt at the page's top-left corner and every word inside
+  the box fell outside it. `ClipSourceBoundsOf` reads the per-line rectangle — the geometry the
+  painter already draws the box's border from — for an inline-level box. This is pre-existing, and
+  reproduces identically on `main`.
+
+  **The test written for the first fix passed throughout.** It asserted the words sat inside the
+  box's rectangle, to three decimal places, and they did; the rendered box was blank either way. What
+  catches it is `InlineBlockOverflowClipPaintTests`, which reads the page's own content stream and
+  asks whether the clip the box pushes actually encloses the text drawn inside it — an adjacency
+  assertion, since the broken clip has real area and passes every "is there a clip" check going.
 
 - **An inline-block holding block-level content was aligned by its bottom margin edge.** §10.8.1 uses
   the baseline of its **last line box** whenever `overflow` is `visible`, which is what Chrome does —
@@ -71,7 +85,7 @@ opposite (the box widening to its content), and were rewritten against Chrome ra
 
 ## Evidence
 
-- Full suite on net8.0: 11,725 passed, 0 failed, 9 skipped. `dotnet build PeachPDF.slnx -t:Rebuild` —
+- Full suite on net8.0: 11,727 passed, 0 failed, 9 skipped. `dotnet build PeachPDF.slnx -t:Rebuild` —
   0 warnings.
 - All 131 showcases regenerated and compared against `main` by decompressed content stream: 18
   differ, each one an atomic inline taking the baseline (the inline image in `invoice`'s footer, the
