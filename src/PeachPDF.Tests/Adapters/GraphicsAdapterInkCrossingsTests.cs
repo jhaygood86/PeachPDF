@@ -102,6 +102,27 @@ namespace PeachPDF.Tests.Adapters
         }
 
         [Fact]
+        public async Task LettersDrawnOnTopOfEachOther_AreReportedAsOneRange()
+        {
+            // Each glyph contributes its own hulled span, and neighbouring glyphs' ink can overlap -
+            // negative letter-spacing here, but a GPOS-attached mark or a tightly kerned pair does the
+            // same thing. Overlapping spans have to be unioned into one range rather than handed over as
+            // two, or the decoration would break twice where the ink is continuous and draw a wisp of
+            // line in between. See GraphicsAdapter.MergeSpans.
+            using var fixture = await Fixture.CreateAsync();
+
+            var apart = fixture.Crossings("nn", below: -4, height: 1)!;
+            var piledUp = fixture.Crossings("nn", below: -4, height: 1,
+                letterSpacing: -fixture.Advance("n"))!;
+
+            Assert.Equal(2, apart.Count);
+
+            var only = Assert.Single(piledUp);
+            Assert.True(only.End - only.Start < apart[^1].End - apart[0].Start,
+                $"the union ({only.Start}..{only.End}) should be tighter than the two letters spread out");
+        }
+
+        [Fact]
         public async Task TheBaselineOriginMovesTheCrossingsWithIt()
         {
             using var fixture = await Fixture.CreateAsync();
