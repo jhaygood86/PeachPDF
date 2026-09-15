@@ -195,14 +195,17 @@ namespace PeachPDF.Fonts.OpenType
                 ys[i] = y;
             }
 
-            // Split into contours and convert each to segments.
+            // Split into contours and convert each to segments. numPoints was sized from the LAST
+            // entry of endPtsOfContours; a malformed or corrupted glyph whose entries aren't
+            // monotonically increasing could otherwise walk pointIndex past xs/ys's bounds here, so
+            // the loop is capped at numPoints regardless of what an earlier, out-of-order entry claims.
             int pointIndex = 0;
             var contourPoints = new List<RawPoint>();
             for (int c = 0; c < numberOfContours; c++)
             {
                 contourPoints.Clear();
                 int contourEnd = endPtsOfContours[c];
-                for (; pointIndex <= contourEnd; pointIndex++)
+                for (; pointIndex <= contourEnd && pointIndex < numPoints; pointIndex++)
                     contourPoints.Add(new RawPoint(xs[pointIndex], ys[pointIndex], (flags[pointIndex] & OnCurvePoint) != 0));
 
                 GlyphContour? contour = BuildContour(contourPoints);
