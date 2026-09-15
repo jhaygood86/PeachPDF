@@ -2527,7 +2527,16 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             // handle box that is only a whitespace
-            if (opensHere && box.Text is { Length: > 0 } && string.IsNullOrWhiteSpace(box.Text) && !box.IsImage && box.IsInline && box.Boxes.Count == 0 && box.Words.Count == 0)
+            //
+            // ...unless the cursor is still at the beginning of a line, where
+            // https://www.w3.org/TR/css-text-3/#white-space-phase-2 removes a collapsible space
+            // sequence outright. The advance is only ever collapsible white space to begin with (a
+            // preserved one arrives as a real IsSpaces word, which leaves Words.Count non-zero and
+            // so never reaches here), so no white-space test is needed alongside the line-start one.
+            // Source formatted across lines is what produces it: the newline between a `<br>` and the
+            // element after it used to indent the whole line it opened by one space (issue #1087).
+            if (opensHere && box.Text is { Length: > 0 } && string.IsNullOrWhiteSpace(box.Text) && !box.IsImage && box.IsInline && box.Boxes.Count == 0 && box.Words.Count == 0
+                && !IsAtLineStart(coordinates))
             {
                 coordinates.CurrentX += box.ActualWordSpacing;
 
@@ -3069,7 +3078,14 @@ namespace PeachPDF.Html.Core.Dom
                     // The space belongs before b's first word. If that word was placed in an earlier
                     // fragmentainer, so was the space.
                     var childHasLeadingWhitespace = childOpensHere && DomUtils.IsBoxHasWhitespace(b);
-                    if (childHasLeadingWhitespace)
+
+                    // Same css-text-3 phase II removal as this function's own whitespace-only-box tail
+                    // performs, for the other shape the same collapsed space takes -
+                    // `<br><span> b</span>`, where the space is inside b rather than in a box of its own.
+                    // The flag itself is left alone: it also tells HasOrdinaryWrapOpportunityBefore below
+                    // that a wrap opportunity exists before b's first word, which the space offers
+                    // whether or not it is rendered.
+                    if (childHasLeadingWhitespace && !IsAtLineStart(coordinates))
                     {
                         coordinates.CurrentX += box.ActualWordSpacing;
                         coordinates.PendingWordSeparator = true;
@@ -3159,14 +3175,17 @@ namespace PeachPDF.Html.Core.Dom
 
                         // A resumed flow's opening line is empty, so there is nothing to wrap away from;
                         // honouring the wrap would leave a blank line at the top of the fragmentainer.
-                        var emergencyBoundaryWrap = overflows && coordinates.Line.Words.Count > 0
+                        // Asked through IsAtLineStart rather than Words.Count, so the line a <br> has
+                        // just opened counts as empty too - it holds that break's own zero-width marker
+                        // word, and wrapping off it blanks the line the break was meant to start.
+                        var emergencyBoundaryWrap = overflows && !IsAtLineStart(coordinates)
                             && !hasOrdinaryWrapBefore && isGraphemeBoundary
                             && AllowsOverflowWrapAtBoundary(previousWord, word);
                         var wrapping = (!word.SuppressWrapBefore
                                 && (word.IsLineBreak || wrapNoWrapBox || (overflows && hasOrdinaryWrapBefore)))
                             || emergencyBoundaryWrap;
 
-                        if (wrapping && coordinates is { SuppressLeadingWrap: true, Line.Words.Count: 0 })
+                        if (wrapping && coordinates.SuppressLeadingWrap && IsAtLineStart(coordinates))
                         {
                             wrapping = false;
                             wrapNoWrapBox = false;
@@ -3382,6 +3401,11 @@ namespace PeachPDF.Html.Core.Dom
                             }
                         }
 
+                        // Read before the word joins the line, which is the only moment this is
+                        // answerable: afterwards the word is itself on the line and the answer is
+                        // always "no". Consumed by the PrecededByWordSeparator assignment below.
+                        var wordOpensTheLine = IsAtLineStart(coordinates);
+
                         coordinates.Line.ReportExistanceOf(word);
                         (coordinates.TrailingRegionalIndicatorCount, coordinates.TrailingGraphemeContext) =
                             UpdateTrailingTextState(word, coordinates.TrailingRegionalIndicatorCount,
@@ -3456,7 +3480,16 @@ namespace PeachPDF.Html.Core.Dom
                         // shrink-to-fit ancestor's provisional pass, a variable-page-width reflow), and
                         // each pass re-derives the flag from the same three sources rather than
                         // compounding the last pass's answer. See CssRect.PrecededByWordSeparator.
-                        word.PrecededByWordSeparator = coordinates.PendingWordSeparator || word.HasSpaceBefore;
+                        //
+                        // Never for the word that opens a line: css-text-3 phase II removed the space
+                        // in front of it, and a space that is not rendered is not a justification
+                        // opportunity either. HasSpaceBefore has to be overruled here rather than
+                        // upstream - it is a fact about the source text, true of `alpha` in
+                        // `…<br>\nalpha…` no matter which line the word lands on, so suppressing the
+                        // flow's own PendingWordSeparator alone still left text-align: justify an
+                        // expansion point at the head of the line (issue #1087).
+                        word.PrecededByWordSeparator = !wordOpensTheLine
+                            && (coordinates.PendingWordSeparator || word.HasSpaceBefore);
                         coordinates.PendingWordSeparator = word.HasSpaceAfter;
 
                         // A fixed box repeats at the same page-box position on every page (CSS 2.1
@@ -3913,6 +3946,47 @@ namespace PeachPDF.Html.Core.Dom
             return true;
         }
 
+        /// <summary>
+        /// Whether the cursor still sits at the beginning of the line it is on - nothing occupying
+        /// inline space has been placed on that line yet. This is what
+        /// <see href="https://www.w3.org/TR/css-text-3/#white-space-phase-2">css-text-3 phase II</see>
+        /// asks before removing a collapsible space sequence.
+        /// </summary>
+        /// <remarks>
+        /// A forced-break word is placed on the line it <i>opens</i> rather than on the one it closes
+        /// (see <see cref="FlowBox"/>'s own wrap branch, which stamps the new line's
+        /// <see cref="CssLineBox.FollowsForcedBreak"/> from that same word), and it occupies no width,
+        /// so a line whose only word so far is one is still at its start - which is the whole point of
+        /// this check for the space that follows a <c>&lt;br&gt;</c>.
+        /// <see cref="CssLineBox.Rectangles"/> covers what occupies the line without contributing a
+        /// word of its own. The case it is here for is the atomic inline-level box (an inline-block
+        /// holding block-level content, an inline-table, inline-grid or inline-flex) placed by
+        /// <see cref="FlowAtomicBlockContentChild"/>/<see cref="FlowInlineFlexChild"/>: Chromium
+        /// renders the space after one, and without this clause it would be dropped as line-leading.
+        /// Two other writers reach the dictionary during the flow and are worth knowing about before
+        /// changing either: <c>FlowBox</c>'s own "hack for actual width handling" tail (any inline box
+        /// whose measured advance came out under its <c>ActualWidth</c>) is the only other one, and
+        /// <see cref="CssLineBox"/>'s own bookkeeping
+        /// (<see cref="CssLineBox.UpdateRectangle"/>/<see cref="CssLineBox.AssignRectanglesToBoxes"/>)
+        /// runs only after the flow, so it is never seen here. A float is deliberately not counted:
+        /// it is out of flow, and a line that begins beside one begins at the float's edge with its
+        /// leading white space removed - measured against Chromium, which agrees to 0.005px.
+        /// </remarks>
+        private static bool IsAtLineStart(CssLineBoxCoordinates coordinates)
+        {
+            if (coordinates.Line.Rectangles.Count > 0) return false;
+
+            // Walked back-to-front so the common answer costs one comparison: a line that already
+            // holds content ends in it, and this runs once per collapsed space on the line.
+            var words = coordinates.Line.Words;
+            for (var i = words.Count - 1; i >= 0; i--)
+            {
+                if (!words[i].IsLineBreak) return false;
+            }
+
+            return true;
+        }
+
         private static bool AllowsOverflowWrap(CssRect word) =>
             word is CssRectWord { IsLineBreak: false }
             && word.OwnerBox.OverflowWrap.Value != OverflowWrap.Normal
@@ -3927,11 +4001,21 @@ namespace PeachPDF.Html.Core.Dom
         /// unbreakable token, while the parser's real whitespace, hyphen, CJK, and break-all boundaries
         /// retain their existing behavior.
         /// </summary>
+        /// <remarks>
+        /// A forced break is never an opportunity to break <i>again</i>. The marker word's text is a
+        /// newline, so it satisfies the <see cref="CssRect.IsSpaces"/> arm below - but it is placed on
+        /// the line it <i>opens</i> (see <see cref="IsAtLineStart"/>), so treating it as a boundary put
+        /// a soft wrap opportunity at the very start of a line, which
+        /// <see href="https://www.w3.org/TR/css-text-3/#line-breaking">css-text-3 §5</see> does not
+        /// allow ("a line must not begin ... with a soft wrap opportunity"). Taking it wrapped an
+        /// overlong word straight off the line the <c>&lt;br&gt;</c> had just opened, rendering that
+        /// line blank - see <c>.claude/invariants/inline-a-forced-break-word-sits-on-the-line-it-opens.md</c>.
+        /// </remarks>
         internal static bool HasOrdinaryWrapOpportunityBefore(
             CssRect? previous, CssRect word, bool hasWhitespaceBefore = false,
             int precedingRegionalIndicatorCount = 0, string? precedingGraphemeContext = null)
         {
-            if (word.SuppressWrapBefore || previous is null)
+            if (word.SuppressWrapBefore || previous is null || previous.IsLineBreak)
                 return false;
 
             if (previous is not CssRectWord previousWord || word is not CssRectWord currentWord)
@@ -5614,10 +5698,19 @@ namespace PeachPDF.Html.Core.Dom
         /// nor what this engine did before. The opportunity is taken to sit <i>after</i> the run, so a
         /// space between two words contributes one opportunity and not two.
         /// </para>
+        /// <para>
+        /// A forced break is excluded from that arm even though it satisfies it: a
+        /// <c>&lt;br&gt;</c>'s marker word is a newline, so
+        /// <see cref="CssRect.IsSpaces"/> is true of it - but it is a line terminator, not white space
+        /// between two pieces of content, and §6.4.1's opportunities sit between characters. It is
+        /// also placed on the line it <i>opens</i> (see <see cref="IsAtLineStart"/>), so counting it
+        /// expanded the head of every justified line a <c>&lt;br&gt;</c> began, indenting that line by
+        /// one share with no white space in the source at all (issue #1087).
+        /// </para>
         /// </remarks>
         private static bool IsJustificationOpportunity(CssRect previous, CssRect word) =>
             word.PrecededByWordSeparator
-            || previous.IsSpaces
+            || previous is { IsSpaces: true, IsLineBreak: false }
             || EndsWithBlockScriptLetter(previous)
             || StartsWithBlockScriptLetter(word);
 

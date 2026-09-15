@@ -143,6 +143,122 @@ namespace PeachPDF.Tests.Integration
             Assert.True(LinesWithWordContent(pBreakAll) > 1, "expected break-all to force a mid-word break");
         }
 
+        // ─── Phase II: a collapsible space at the beginning of a line is removed ──
+
+        [Fact]
+        public async Task CollapsibleWhitespaceAfterForcedBreak_DoesNotIndentTheLineItOpens()
+        {
+            // The newline between the <br> and the <span> after it is collapsible white space that
+            // begins the line the <br> opened, so css-text-3 phase II removes it: formatting the
+            // source across lines must not indent the rendered content (issue #1087).
+            var (root, _) = await BuildAndLayout(
+                Wrap("<p id='p'><span>A</span><br>\n<span>B</span></p>"));
+            var p = FindById(root, "p")!;
+
+            var a = WordNamed(p, "A");
+            var b = WordNamed(p, "B");
+
+            Assert.True(b.Top > a.Top, "expected B on the line the <br> opened");
+            Assert.Equal(a.Left, b.Left, 3);
+        }
+
+        [Fact]
+        public async Task CollapsibleWhitespaceAfterForcedBreak_MatchesTheSameMarkupMinified()
+        {
+            // The same document with and without the source newline after each <br> must lay out
+            // identically - the multiline form used to shift every post-<br> line right by one space.
+            const string row1 = "<div style='display:inline-block;width:450px'>Field name:</div>"
+                                + "<div style='display:inline-block'>short</div>";
+            const string row2 = "<div style='display:inline-block;width:450px'>Long field name:</div>"
+                                + "<div style='display:inline-block'>long</div>";
+
+            var (multilineRoot, _) = await BuildAndLayout(Wrap($"{row1}\n<br>\n{row2}"));
+            var (minifiedRoot, _) = await BuildAndLayout(Wrap($"{row1}<br>{row2}"));
+
+            // Both boxes of the second row - the label the line opens with, and the value 450px
+            // past it - must sit exactly where the minified form puts them.
+            Assert.Equal(WordNamed(minifiedRoot, "Long").Left, WordNamed(multilineRoot, "Long").Left, 3);
+            Assert.Equal(WordNamed(minifiedRoot, "long").Left, WordNamed(multilineRoot, "long").Left, 3);
+            Assert.Equal(WordNamed(multilineRoot, "Field").Left, WordNamed(multilineRoot, "Long").Left, 3);
+        }
+
+        [Fact]
+        public async Task LeadingWhitespaceInsideAnInlineAfterForcedBreak_IsRemoved()
+        {
+            // The same collapsed space, in the other shape it takes: inside the following inline
+            // rather than in a white-space-only box of its own.
+            var (root, _) = await BuildAndLayout(Wrap("<p id='p'><span>A</span><br><span> B</span></p>"));
+            var p = FindById(root, "p")!;
+
+            Assert.Equal(WordNamed(p, "A").Left, WordNamed(p, "B").Left, 3);
+        }
+
+        [Fact]
+        public async Task RemovedLineStartWhitespace_IsNotAJustificationOpportunity()
+        {
+            // A space that isn't rendered isn't a word separator either - it must not hand
+            // text-align: justify an expansion opportunity at the head of the line.
+            var (root, _) = await BuildAndLayout(
+                Wrap("<p id='p'><span>A</span><br>\n<span>B</span></p>"));
+            var p = FindById(root, "p")!;
+
+            Assert.False(WordNamed(p, "B").PrecededByWordSeparator);
+        }
+
+        [Fact]
+        public async Task AForcedBreak_IsNotAJustificationOpportunity_SoTheLineItOpensStartsFlush()
+        {
+            // The positional counterpart of the assertion above, and the one that says the whole
+            // removal actually reaches the page. Two separate rules meet here: the removed space is
+            // not a word separator, and the <br>'s own marker word - whose text is a newline, so
+            // CssRect.IsSpaces is true of it - is not one either. Either one alone still expands the
+            // head of the line the <br> opens, which indents it with no source white space at all.
+            var html = Wrap("<p id='p' style='width:300pt; text-align:justify; font-size:12pt'>"
+                            + "first line here<br>\nalpha beta gamma delta epsilon zeta eta theta "
+                            + "iota kappa</p>");
+            var (root, _) = await BuildAndLayout(html);
+            var p = FindById(root, "p")!;
+
+            // Line 2 is a justified (non-final) line, so it is stretched - it must still begin flush
+            // with line 1 and end flush at the measure.
+            Assert.Equal(WordNamed(p, "first").Left, WordNamed(p, "alpha").Left, 3);
+            Assert.True(WordNamed(p, "alpha").Top > WordNamed(p, "first").Top,
+                "expected alpha on the line the <br> opened");
+            Assert.True(WordNamed(p, "kappa").Top > WordNamed(p, "alpha").Top,
+                "expected line 2 to be a stretched, non-final line");
+        }
+
+        [Fact]
+        public async Task CollapsibleWhitespaceBetweenTwoInlines_StillSeparatesThemMidLine()
+        {
+            // The counterpart the removal must not reach: the same white-space-only box, this time
+            // between two words already on the line, is a real word separator.
+            var (root, _) = await BuildAndLayout(Wrap("<p id='p'><span>AA</span> <span>BB</span></p>"));
+            var p = FindById(root, "p")!;
+
+            var aa = WordNamed(p, "AA");
+            var bb = WordNamed(p, "BB");
+
+            Assert.True(bb.Left > aa.Left + aa.Width,
+                "expected a rendered gap between two inlines separated by source white space");
+            Assert.True(bb.PrecededByWordSeparator);
+        }
+
+        [Fact]
+        public async Task CollapsibleWhitespaceAfterAnAtomicInline_StillSeparatesIt()
+        {
+            // An atomic inline-level box contributes no word to the line, so "has anything been
+            // placed here yet" has to consult the line's rectangles as well - otherwise the space
+            // after one reads as line-leading and disappears.
+            var (root, _) = await BuildAndLayout(Wrap(
+                "<p id='p'><span id='a' style='display:inline-block'><div>AA</div></span> <span>BB</span></p>"));
+            var p = FindById(root, "p")!;
+            var a = FindById(root, "a")!;
+
+            Assert.True(WordNamed(p, "BB").Left > a.ActualRight,
+                "expected the space after the inline-block to still be rendered");
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static string Wrap(string body) =>
@@ -165,6 +281,32 @@ namespace PeachPDF.Tests.Integration
 
             Assert.NotNull(container.Root);
             return (container.Root!, container);
+        }
+
+        /// <summary>
+        /// The first word in tree order whose text is <paramref name="text"/>, anywhere under
+        /// <paramref name="box"/> - so a fixture that asserts on one must not repeat that token.
+        /// </summary>
+        private static CssRect WordNamed(CssBox box, string text)
+        {
+            var found = FindWord(box, text);
+            Assert.NotNull(found);
+            return found!;
+        }
+
+        private static CssRect? FindWord(CssBox box, string text)
+        {
+            foreach (var word in box.Words)
+            {
+                if (word.Text == text) return word;
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                if (FindWord(child, text) is { } found) return found;
+            }
+
+            return null;
         }
 
         private static CssBox? FindById(CssBox box, string id)

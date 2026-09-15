@@ -827,6 +827,48 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains('|', snapshots[0]);
         }
 
+        // ─── A forced break opens a line; an overlong word must use it ──────────────
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("overflow-wrap:break-word;")]
+        [InlineData("overflow-wrap:anywhere;")]
+        public async Task AnOverlongWordAfterAForcedBreak_UsesTheLineTheBreakOpened(string emergency)
+        {
+            // A <br>'s marker word is placed on the line it OPENS, so that line is not empty by word
+            // count even though it holds no content. Both the ordinary wrap decision and the emergency
+            // one used to read it as occupied: the word wrapped off a line that had nothing on it,
+            // leaving the <br>'s own line blank and dropping the word a whole line-height further than
+            // the identical content separated by a space. Under an emergency value the split was
+            // blocked outright, wasting the line entirely.
+            var forced = LayoutHarness.Wrap($"<p id='p' style='width:70pt;{emergency}'>AA<br>{LongWord}</p>");
+            var spaced = LayoutHarness.Wrap($"<p id='p' style='width:70pt;{emergency}'>AA {LongWord}</p>");
+
+            var (forcedRoot, _) = await LayoutHarness.LayoutAsync(forced);
+            var (spacedRoot, _) = await LayoutHarness.LayoutAsync(spaced);
+
+            var forcedParagraph = LayoutHarness.FindById(forcedRoot, "p")!;
+            var spacedParagraph = LayoutHarness.FindById(spacedRoot, "p")!;
+
+            // A space and a <br> put the long word on the same line here - the space's own wrap and
+            // the forced break both end line 1 - so the drop from the first word must be identical.
+            Assert.Equal(DropToLastWord(spacedParagraph), DropToLastWord(forcedParagraph), 3);
+            Assert.Equal(LinesWithText(spacedParagraph), LinesWithText(forcedParagraph));
+        }
+
+        /// <summary>
+        /// How far below the paragraph's first word its last one landed - the measure that says whether
+        /// a line was skipped, without hard-coding a font-dependent line height.
+        /// </summary>
+        private static double DropToLastWord(CssBox paragraph)
+        {
+            var words = WordsOf(paragraph)
+                .Where(word => !word.IsLineBreak && !string.IsNullOrEmpty(word.Text))
+                .ToList();
+
+            return words[^1].Top - words[0].Top;
+        }
+
         private static int LinesWithText(CssBox box) =>
             box.LineBoxes.Count(line => line.Words.Any(word => !string.IsNullOrEmpty(word.Text)));
 
