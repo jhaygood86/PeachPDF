@@ -64,17 +64,19 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ContentWiderThanTheDeclaredWidthOverflowsRatherThanBeingPulledBack()
+        public async Task ContentWiderThanTheDeclaredWidthStillAdvancesOnlyThatWidth()
         {
-            // Only ever forward — which is what `overflow: visible` means. The advance must be the
-            // content's, not the declared 15pt.
-            var declared = await AdvanceAsync(
+            // The box wraps its own content at its own measure, so what follows it on the line starts at
+            // the declared 15pt (20px) - not at the width the content would have taken unwrapped.
+            // Verified against Chrome on the same markup, for breakable text and for a single
+            // unbreakable word, which overflows the box without moving what comes after it.
+            var wrapping = await AdvanceAsync(
                 "<span style='display:inline-block;width:20px'>Wider than the box</span>");
-            var auto = await AdvanceAsync(
-                "<span style='display:inline-block'>Wider than the box</span>");
+            var unbreakable = await AdvanceAsync(
+                "<span style='display:inline-block;width:20px'>Unbreakableverylongword</span>");
 
-            Assert.Equal(auto, declared, 1);
-            Assert.True(declared > 15, $"content wider than the declared 15pt must not be pulled back, was {declared}");
+            Assert.Equal(15.0, wrapping, 1);
+            Assert.Equal(15.0, unbreakable, 1);
         }
 
         [Fact]

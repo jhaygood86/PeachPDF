@@ -133,20 +133,107 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task ReplacedContentStaysAtTheLineTop()
+        public async Task AReplacedElementsBottomMarginEdge_SharesTheTextBaseline()
         {
-            // A guard for the gap this change deliberately leaves: CSS 2.1 §10.8 would sit an atomic
-            // inline's bottom margin edge on the baseline, and this engine still leaves it at the line's
-            // top. Stated so that closing it is a visible, deliberate edit rather than an accident.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<div id='d' style='font:10pt Arial;line-height:40pt'>x" +
-                $"<img src='{RasterPngFixture.OnePixelDataUri}' style='width:10pt;height:10pt'></div>"));
+                $"<img id='a' src='{RasterPngFixture.OnePixelDataUri}' " +
+                "style='width:10pt;height:10pt;margin:2pt 0 3pt'></div>"));
 
             var block = LayoutHarness.FindById(root, "d")!;
             var line = Assert.Single(block.LineBoxes);
+            var text = WordOf(line, "x");
+            var atomic = LayoutHarness.FindById(root, "a")!;
             var image = Assert.Single(line.Words, w => w.IsImage);
 
-            Assert.Equal(line.LineTop, image.Top, 3);
+            var textBaseline = text.Top + text.OwnerBox.ActualFont.Ascent;
+
+            Assert.Equal(textBaseline, line.BaselineY!.Value, 3);
+            Assert.Equal(textBaseline, image.Bottom + atomic.ActualMarginBottom, 3);
+            Assert.True(image.Top > line.LineTop + 1,
+                $"positive leading must move the image below the line top ({line.LineTop}), was {image.Top}");
+        }
+
+        [Theory]
+        [InlineData("<svg id='a' style='width:10pt;height:10pt'></svg>")]
+        [InlineData("<math id='a'><mi>x</mi></math>")]
+        [InlineData("<input id='a' type='checkbox' style='width:10pt;height:10pt;margin:0'>")]
+        public async Task OtherAtomicReplacedElements_ShareTheTextBaseline(string markup)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='d' style='font:10pt Arial;line-height:40pt'>x{markup}</div>"));
+
+            var block = LayoutHarness.FindById(root, "d")!;
+            var line = Assert.Single(block.LineBoxes);
+            var text = WordOf(line, "x");
+            var atomic = LayoutHarness.FindById(root, "a")!;
+            var atomicWord = Assert.Single(line.Words, w => ReferenceEquals(w.OwnerBox, atomic));
+
+            Assert.True(atomicWord.IsImage, $"{atomic.GetType().Name} must use the atomic replaced-word path");
+            Assert.Equal(text.Top + text.OwnerBox.ActualFont.Ascent,
+                atomicWord.Bottom + atomic.ActualMarginBottom, 3);
+        }
+
+        [Fact]
+        public async Task AnInlineWrapperMovesWithItsBaselineAlignedImage()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='d' style='font:10pt Arial;line-height:40pt'>x" +
+                $"<span id='s' style='padding:2pt'><img id='a' src='{RasterPngFixture.OnePixelDataUri}' " +
+                "style='width:10pt;height:10pt'></span></div>"));
+
+            var block = LayoutHarness.FindById(root, "d")!;
+            var line = Assert.Single(block.LineBoxes);
+            var wrapper = LayoutHarness.FindById(root, "s")!;
+            var atomic = LayoutHarness.FindById(root, "a")!;
+            var wrapperRect = line.Rectangles[wrapper];
+            var atomicRect = line.Rectangles[atomic];
+
+            // Containment alone holds trivially while nothing moves at all, so pin the move itself:
+            // the image's bottom margin edge is on the line's baseline, and the 40pt line-height puts
+            // that well below the line's top. The wrapper has to have travelled the same distance, or
+            // its background and border part company with the image inside it.
+            Assert.Equal(line.BaselineY!.Value, atomicRect.Bottom + atomic.ActualMarginBottom, 3);
+            Assert.True(atomicRect.Top > line.LineTop + 1,
+                $"the 40pt line-height must put the image below the line top ({line.LineTop}), was {atomicRect.Top}");
+            Assert.Equal(atomicRect.Top - wrapper.ActualPaddingTop, wrapperRect.Top, 3);
+            Assert.Equal(atomicRect.Bottom + wrapper.ActualPaddingBottom, wrapperRect.Bottom, 3);
+        }
+
+        [Fact]
+        public async Task ATallReplacedElement_ReservesTheDescentBelowItsBaseline()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='d' style='font:10pt Arial'>x" +
+                $"<img id='a' src='{RasterPngFixture.OnePixelDataUri}' " +
+                "style='width:10pt;height:30pt;margin-bottom:3pt'></div>"));
+
+            var block = LayoutHarness.FindById(root, "d")!;
+            var line = Assert.Single(block.LineBoxes);
+            var text = WordOf(line, "x");
+            var atomic = LayoutHarness.FindById(root, "a")!;
+            var image = Assert.Single(line.Words, w => w.IsImage);
+
+            Assert.Equal(image.Bottom + atomic.ActualMarginBottom,
+                text.Top + text.OwnerBox.ActualFont.Ascent, 3);
+
+            // The line reserves the strut's descent BELOW the image's baseline - the familiar browser
+            // gap under an inline image - so the block is exactly the image's whole margin box plus
+            // that descent. Stated against the image's own declared geometry rather than against the
+            // line's, so the two sides cannot move together: a `>=`, or an equation drawn from the line
+            // alone, still holds with the descent dropped entirely.
+            var imageMarginBox = 30 + atomic.ActualMarginTop + atomic.ActualMarginBottom;
+
+            // The shared baseline lands exactly on the image's bottom margin edge, measured from the
+            // block's own top - a fact about the image's declared geometry, not about the line.
+            Assert.Equal(imageMarginBox, line.BaselineY!.Value - block.Location.Y, 3);
+
+            // And the block goes on past it by the strut's descent. Stated as a strict inequality
+            // against that same image geometry, so dropping the descent fails here rather than moving
+            // both sides of an equation drawn from the line alone.
+            Assert.True(block.ActualBottom - block.Location.Y > imageMarginBox + 0.5,
+                $"block height {block.ActualBottom - block.Location.Y} must reserve the strut's descent " +
+                $"below the image's {imageMarginBox}pt margin box, not stop at it");
         }
 
         [Fact]
@@ -238,6 +325,43 @@ namespace PeachPDF.Tests.Integration
 
         private static double LineHeightOfFirstLine(CssBox item) =>
             item.LineBoxes[0].BaselineExtent!.Value.Height;
+
+        /// <summary>
+        /// An <c>inline-block</c> laid out as a genuine atomic box holds its content in line boxes of its
+        /// own, so nothing of it is reachable through the surrounding line's words. When the line's
+        /// baseline is set by something else — a much larger font beside it — the box has to travel to
+        /// meet it <b>whole</b>: its border box, its own lines, and its <c>Location</c> together.
+        /// </summary>
+        [Fact]
+        public async Task AnAtomicInlineBlockTravelsWholeToMeetALowerBaseline()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='d' style='font:10pt Arial'><span id='big' style='font-size:40pt'>Y</span>" +
+                "<span id='ib' style='display:inline-block;border:1pt solid'><div>x</div></span></div>"));
+
+            var block = LayoutHarness.FindById(root, "d")!;
+            var line = Assert.Single(block.LineBoxes);
+            var atomic = LayoutHarness.FindById(root, "ib")!;
+            var big = WordOf(line, "Y");
+
+            // Non-vacuity: the 40pt neighbour, not the box, decides where the baseline is, so the box
+            // genuinely has to move - with everything of it reached only through its own subtree.
+            var innerLine = Assert.Single(atomic.Boxes[0].LineBoxes);
+            Assert.True(big.Top + big.OwnerBox.ActualFont.Ascent > line.FlowTop + 10,
+                "fixture must put the shared baseline well below the line's top");
+
+            var rect = Assert.Single(line.Rectangles, r => ReferenceEquals(r.Key, atomic)).Value;
+
+            // §10.8.1: the box's own last line's baseline is the one on the shared baseline.
+            Assert.Equal(line.BaselineY!.Value, innerLine.BaselineY!.Value, 3);
+
+            // And the box came with it: its border box still surrounds its own content.
+            var innerWord = WordOf(innerLine, "x");
+            Assert.True(innerWord.Top >= rect.Top && innerWord.Bottom <= rect.Bottom,
+                $"the box's word ({innerWord.Top}..{innerWord.Bottom}) must stay inside its border box " +
+                $"({rect.Top}..{rect.Bottom})");
+            Assert.Equal(rect.Top, atomic.Location.Y, 3);
+        }
 
         private static CssRect WordOf(CssLineBox line, string text) =>
             Assert.Single(line.Words, w => w.Text == text);
