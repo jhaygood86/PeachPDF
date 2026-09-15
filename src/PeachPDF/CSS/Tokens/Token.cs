@@ -216,7 +216,10 @@ namespace PeachPDF.CSS
             TokenType.Color => $"#{Data}",
             TokenType.Range => $"U+{Data}",
             TokenType.Url => FunctionName.StylesheetFunction(Data.ToString().StylesheetString()),
-            TokenType.Comment => $"/*{Data}{(IsValid ? string.Empty : "*/")}",
+            // A well-formed (IsValid) comment had a real closing "*/" in the source - reproduce it. An
+            // unterminated one (hit EOF before its close) never had one; synthesizing it here would
+            // fabricate source text that was never actually there.
+            TokenType.Comment => $"/*{Data}{(IsValid ? "*/" : string.Empty)}",
             TokenType.Dimension or TokenType.Percentage => $"{Data}{Unit}",
             _ => Data.ToString(),
         };

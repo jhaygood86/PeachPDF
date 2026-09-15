@@ -345,12 +345,11 @@ namespace PeachPDF.CSS
                         {
                             AppendEscape(current);
                         }
-                        else
-                        {
-                            RaiseErrorOccurred(ParseError.EOF);
-                            Back();
-                            return NewString(EndContent(), Symbols.DoubleQuote, true);
-                        }
+                        // else: EOF right after the backslash - CSS Syntax §4.3.7's REVERSE SOLIDUS branch
+                        // says "do nothing" here (not a parse error, not a bad-string-token; only a raw
+                        // newline is). The loop's next GetNext() call hits EndOfFile again and returns a
+                        // normal (non-bad) string token via the case above - Advance() no-ops once Current
+                        // is already EndOfFile, so re-reading it here is safe.
 
                         break;
                     default:
@@ -386,12 +385,8 @@ namespace PeachPDF.CSS
                         {
                             AppendEscape(current);
                         }
-                        else
-                        {
-                            RaiseErrorOccurred(ParseError.EOF);
-                            Back();
-                            return NewString(EndContent(), Symbols.SingleQuote, true);
-                        }
+                        // else: EOF right after the backslash - see StringDoubleQuote's own comment on
+                        // this same CSS Syntax §4.3.7 "do nothing" branch.
 
                         break;
                     default:
@@ -931,15 +926,23 @@ namespace PeachPDF.CSS
                     current = GetNext();
                     if (current == Symbols.EndOfFile)
                     {
-                        Back(2);
-                        RaiseErrorOccurred(ParseError.EOF);
-                        return NewUrl(functionName, EndContent(), true);
+                        // CSS Syntax's "check if two code points are a valid escape" treats backslash+EOF
+                        // as valid (only a following newline makes it invalid) - "consume an escaped code
+                        // point"'s own EOF branch appends U+FFFD REPLACEMENT CHARACTER rather than
+                        // erroring into a bad-url-token. The loop's next GetNext() call hits EndOfFile
+                        // again (safe - Advance() no-ops once Current already is) and returns a normal
+                        // (non-bad) url token via the case above.
+                        _mustMaterialize = true;
+                        StringBuffer.Append(Symbols.Replacement);
                     }
-
-                    if (current.IsLineBreak())
+                    else if (current.IsLineBreak())
+                    {
                         AppendLineContinuation();
+                    }
                     else
+                    {
                         AppendEscape(current);
+                    }
                 }
             }
         }
@@ -973,15 +976,18 @@ namespace PeachPDF.CSS
                     current = GetNext();
                     if (current == Symbols.EndOfFile)
                     {
-                        Back(2);
-                        RaiseErrorOccurred(ParseError.EOF);
-                        return NewUrl(functionName, EndContent(), true);
+                        // See UrlDoubleQuote's own comment on this same backslash+EOF handling.
+                        _mustMaterialize = true;
+                        StringBuffer.Append(Symbols.Replacement);
                     }
-
-                    if (current.IsLineBreak())
+                    else if (current.IsLineBreak())
+                    {
                         AppendLineContinuation();
+                    }
                     else
+                    {
                         AppendEscape(current);
+                    }
                 }
             }
         }
@@ -1005,15 +1011,33 @@ namespace PeachPDF.CSS
                 {
                     AppendLiteral(current);
                 }
-                else if (IsValidEscape(current))
-                {
-                    current = GetNext();
-                    AppendEscape(current);
-                }
                 else
                 {
-                    RaiseErrorOccurred(ParseError.InvalidCharacter);
-                    return UrlBad(functionName);
+                    // Inlines IsValidEscape's own backslash/peek/Back pattern rather than calling it, to
+                    // add the one case it gets wrong: it treats backslash+EOF as an invalid escape (routing
+                    // to UrlBad below), but CSS Syntax's "check if two code points are a valid escape" only
+                    // excludes a following newline - EOF is valid, and "consume an escaped code point"'s
+                    // own EOF branch appends U+FFFD REPLACEMENT CHARACTER rather than erroring.
+                    var next = GetNext();
+                    Back();
+                    if (next == Symbols.EndOfFile)
+                    {
+                        // No need to re-consume here - the loop's own trailing GetNext() below reads
+                        // EndOfFile again (Advance() no-ops once Current already is) and the top-of-loop
+                        // EndOfFile check terminates the token on the next iteration.
+                        _mustMaterialize = true;
+                        StringBuffer.Append(Symbols.Replacement);
+                    }
+                    else if (next.IsLineBreak())
+                    {
+                        RaiseErrorOccurred(ParseError.InvalidCharacter);
+                        return UrlBad(functionName);
+                    }
+                    else
+                    {
+                        current = GetNext();
+                        AppendEscape(current);
+                    }
                 }
 
                 current = GetNext();
@@ -1219,9 +1243,13 @@ namespace PeachPDF.CSS
             return new(TokenType.RoundBracketOpen, "(".AsMemory(), _position);
         }
 
+        // bad/valid are deliberately inverted here (not just a naming difference): a string that hit a
+        // newline/EOF before its closing quote is "bad" in this lexer's own vocabulary, which is the
+        // exact opposite of Token.NewString's "valid" - forgetting the `!` previously left every
+        // well-formed string with IsValid: false and every malformed one with IsValid: true.
         private Token NewString(ReadOnlyMemory<char> value, char quote, bool bad = false)
         {
-            return Token.NewString(value, bad, quote, _position);
+            return Token.NewString(value, !bad, quote, _position);
         }
 
         private Token NewHash(ReadOnlyMemory<char> value)
@@ -1229,9 +1257,10 @@ namespace PeachPDF.CSS
             return Token.NewKeyword(TokenType.Hash, value, _position);
         }
 
+        // See NewString's own comment on this same bad-to-valid inversion.
         private Token NewComment(ReadOnlyMemory<char> value, bool bad = false)
         {
-            return Token.NewComment(value, bad, _position);
+            return Token.NewComment(value, !bad, _position);
         }
 
         private Token NewAtKeyword(ReadOnlyMemory<char> value)
@@ -1286,9 +1315,10 @@ namespace PeachPDF.CSS
             return Token.NewUnit(TokenType.Dimension, value, unit, _position);
         }
 
+        // See NewString's own comment on this same bad-to-valid inversion.
         private Token NewUrl(string functionName, ReadOnlyMemory<char> data, bool bad = false)
         {
-            return Token.NewUrl(functionName, data, bad, _position);
+            return Token.NewUrl(functionName, data, !bad, _position);
         }
 
         private Token NewRange(string range)
