@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
@@ -92,6 +92,13 @@ namespace PeachPDF.CSS
             {
                 {Keywords.Auto, TextDecorationThicknessKeyword.Auto},
                 {Keywords.FromFont, TextDecorationThicknessKeyword.FromFont}
+            }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        public static readonly FrozenDictionary<string, TextDecorationSkipInk> TextDecorationSkipInkModes =
+            new Dictionary<string, TextDecorationSkipInk>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, TextDecorationSkipInk.Auto},
+                {Keywords.None, TextDecorationSkipInk.None},
+                {Keywords.All, TextDecorationSkipInk.All}
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
         public static readonly FrozenDictionary<string, VerticalAlignment> VerticalAlignments =
             new Dictionary<string, VerticalAlignment>(StringComparer.OrdinalIgnoreCase)

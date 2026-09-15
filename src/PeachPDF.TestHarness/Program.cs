@@ -6019,6 +6019,74 @@ await SaveShowcaseAsync("text_decoration_thickness", "Typography & Text", "text-
     "text-decoration-thickness (CSS Text Decoration 4): auto, from-font, and explicit length/percentage underline thickness.",
     decorationThicknessHtml, pdfConfig);
 
+// --- text-decoration skipping showcase (css-text-decor-3 §2.4 + css-text-decor-4 §2.5) ---
+
+// Bundled (see assets/fonts/SourceSans3-Regular.LICENSE.txt) rather than a system family: what this
+// showcase demonstrates is which glyphs have descenders, so it must not depend on what happens to be
+// installed on the machine that builds the doc site.
+var decorationSkipFontB64 = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf")));
+
+var decorationSkipCss = $$"""
+    <style>
+    @font-face { font-family: 'SkipInkDemo'; src: url('data:font/truetype;base64,{{decorationSkipFontB64}}') format('truetype'); }
+    @page { size: a4; margin: 15mm }
+    body { font: 17pt 'SkipInkDemo', sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.2em }
+    h2 { font-size: 11pt; color: #444; margin: 1.1em 0 0.4em;
+         border-bottom: 1px solid #ddd; padding-bottom: 2px }
+    .row { margin-bottom: 0.7em }
+    .label { font-size: 9pt; color: #666; margin-bottom: 1px }
+    u, .u { text-decoration: underline }
+    .thick { text-decoration: underline; text-decoration-thickness: 2px; text-decoration-color: #c0392b }
+    .noskip { text-decoration-skip-ink: none }
+    .chip { display: inline-block; width: 54pt; height: 13pt; background: #f0c419;
+            border: 1px solid #b8960f; vertical-align: middle }
+    .ghost { opacity: 0 }
+    img.badge { width: 40pt; height: 14pt; vertical-align: middle }
+    </style>
+    """;
+
+var decorationSkipBadgeUri = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(
+    """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 28"><rect width="80" height="28" rx="4" fill="#2980b9"/><circle cx="20" cy="14" r="7" fill="#ecf0f1"/><circle cx="60" cy="14" r="7" fill="#ecf0f1"/></svg>"""));
+
+var decorationSkipHtml = "<!DOCTYPE html><html><head>" + decorationSkipCss + "</head><body>" +
+
+    "<h1>Text decoration: skipping ink and atomic inlines</h1>" +
+
+    "<h2>text-decoration-skip-ink (CSS Text Decoration 4 §2.5)</h2>" +
+
+    "<div class=\"row\"><div class=\"label\">auto (initial) — the underline breaks around every descender</div>" +
+    "<span class=\"u\">Typography judging a quick pig by page eighty-jog</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">none — opt out: one unbroken line straight through the descenders</div>" +
+    "<span class=\"u noskip\">Typography judging a quick pig by page eighty-jog</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">auto, thicker line — a taller line meets more ink, so it interrupts more often</div>" +
+    "<span class=\"thick\">Typography judging a quick pig by page eighty-jog</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">line-through is never skipped (§2.5), even at skip-ink: all</div>" +
+    "<span style=\"text-decoration:line-through; text-decoration-skip-ink:all\">Typography judging a quick pig</span></div>" +
+
+    "<h2>Atomic inlines are not decorated (CSS Text Decoration 3 §2.4)</h2>" +
+
+    "<div class=\"row\"><div class=\"label\">an inline-block on the line — the line stops at its margin box and resumes after it</div>" +
+    "<span class=\"u\">before <span class=\"chip\"><div></div></span> after</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">the same inline-block made invisible — the gap is real, not the chip covering the line</div>" +
+    "<span class=\"u\">before <span class=\"chip ghost\"><div></div></span> after</span></div>" +
+
+    "<div class=\"row\"><div class=\"label\">an image, on a block whose decoration propagates to its inline content</div>" +
+    "<div class=\"u\">a picture <img class=\"badge\" src=\"" + decorationSkipBadgeUri + "\" alt=\"\"> follows the gap</div></div>" +
+
+    "<div class=\"row\"><div class=\"label\">both rules at once — a gap for the inline-block, and one per descender</div>" +
+    "<div class=\"u\">paging <span class=\"chip ghost\"><div></div></span> jaguar gorge</div></div>" +
+
+    "</body></html>";
+
+await SaveShowcaseAsync("text_decoration_skipping", "Typography & Text", "Decoration Skipping",
+    "text-decoration-skip-ink (CSS Text Decoration 4) breaking underlines around descenders, and CSS Text Decoration 3's rule that atomic inlines are not decorated.",
+    decorationSkipHtml, pdfConfig);
+
 // --- tab-size showcase (CSS Text 4 §3.6) ---
 
 const string TabSizeCss = """

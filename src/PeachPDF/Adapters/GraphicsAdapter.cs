@@ -37,6 +37,16 @@ namespace PeachPDF.Adapters
         /// </summary>
         private readonly bool _releaseGraphics;
 
+        /// <summary>
+        /// <c>text-decoration-skip-ink</c>'s measured crossings, keyed by everything they depend on once
+        /// the run's absolute position is factored out - see <see cref="GetInkCrossings"/>. Per adapter,
+        /// so it lives and dies with one render and needs no synchronization (a <c>PdfGenerator</c> is not
+        /// thread-safe by contract). Worth having because the measurement shapes the run a second time and
+        /// decodes every glyph's outline, and a decorated paragraph repeats the same words on line after
+        /// line.
+        /// </summary>
+        private readonly Dictionary<InkCrossingKey, List<RInkSpan>?> _inkCrossings = [];
+
         public override double PixelsPerPoint { get; }
 
         internal override object? FormCacheOwner => _g.Owner;
@@ -288,6 +298,153 @@ namespace PeachPDF.Adapters
 
             return path;
         }
+
+        public override IReadOnlyList<RInkSpan>? GetInkCrossings(
+            string str, RFont font, RPoint origin, double bandTop, double bandBottom,
+            double letterSpacing = 0, TextShapingFeatures? features = null)
+        {
+            var realFont = ((FontAdapter)font).Font;
+            var descriptor = realFont.Descriptor;
+            if (descriptor is null || descriptor.UnitsPerEm == 0 || bandBottom <= bandTop)
+                return null;
+
+            // The baseline this run is actually painted at. Deliberately recomputed here from the font's
+            // own metrics, exactly as XGraphicsPdfRenderer.DrawString does, rather than taken as
+            // `origin.Y + RFont.Ascent`: that property rounds to a whole unit (FontAdapter.Ascent), and
+            // an underline's band is one unit tall at the default thickness, so borrowing the rounded
+            // value would shift the band by up to half its own height and flip whether a glyph that just
+            // grazes the line is skipped.
+            var baselineY = origin.Y + realFont.GetHeight() * realFont.CellAscent / realFont.CellSpace * PixelsPerPoint;
+
+            // Measured relative to the run's own origin and baseline, so the same word on a later line -
+            // with the same band at a different absolute y - is a cache hit rather than a second full
+            // shape-and-decode. Underlined prose repeats words heavily, and this call is otherwise the
+            // most expensive thing a decorated line does.
+            var key = new InkCrossingKey(realFont, str, bandTop - baselineY, bandBottom - baselineY,
+                letterSpacing, features ?? TextShapingFeatures.Default);
+
+            if (!_inkCrossings.TryGetValue(key, out var relative))
+            {
+                relative = MeasureInkCrossings(descriptor, realFont, str, key, PixelsPerPoint);
+                _inkCrossings[key] = relative;
+            }
+
+            if (relative is null) return null;
+            if (relative.Count == 0) return [];
+
+            var spans = new RInkSpan[relative.Count];
+            for (var i = 0; i < relative.Count; i++)
+            {
+                spans[i] = new RInkSpan(relative[i].Start + origin.X, relative[i].End + origin.X);
+            }
+
+            return spans;
+        }
+
+        /// <summary>
+        /// <see cref="GetInkCrossings"/>'s actual measurement, in coordinates relative to the run's own
+        /// origin and baseline - the form <see cref="_inkCrossings"/> caches. Null means no glyph in the
+        /// run had a decodable outline at all.
+        /// </summary>
+        private static List<RInkSpan>? MeasureInkCrossings(
+            OpenTypeDescriptor descriptor, XFont realFont, string str, in InkCrossingKey key,
+            double pixelsPerPoint)
+        {
+            // Same design-units-to-user-space scale GetTextOutline resolves; see its own remarks. The
+            // em-square is y-up and user space is y-down, so the band's top edge is the HIGH design y.
+            var scale = realFont.Size * pixelsPerPoint / descriptor.UnitsPerEm;
+            if (scale <= 0) return null;
+
+            List<RInkSpan> spans = [];
+            var sawOutline = false;
+            double penX = 0;
+
+            foreach (var glyph in descriptor.Shape(str, key.Features))
+            {
+                var glyphId = glyph.GlyphIndex;
+
+                if (descriptor.TryGetGlyphOutline(glyphId, out var outline))
+                {
+                    sawOutline = true;
+
+                    // GPOS positioning shifts where this glyph paints without changing its outline -
+                    // exactly as GetTextOutline applies it, so ink is measured where it is drawn. A mark
+                    // attached with a negative XOffset therefore lands left of the base it follows, which
+                    // is why the whole list is sorted and merged below rather than assumed ordered.
+                    var glyphX = penX + glyph.XOffset * scale;
+                    var glyphY = -glyph.YOffset * scale;
+
+                    var crossings = GlyphInkScanner.Crossings(outline,
+                        (glyphY - key.BandBottom) / scale, (glyphY - key.BandTop) / scale);
+
+                    // One span per glyph, hulling everything the glyph puts in the band, rather than one
+                    // span per ink run. CSS Text Decoration 4 §2.10.5 leaves the skip shape to the UA and
+                    // names this exact choice - "whether to show the line within enclosed areas of a
+                    // glyph" - noting that hiding it "gives a cleaner look to the type" and that following
+                    // each contour can leave "typographically-awkward wisps of underline". Per-run spans
+                    // produced precisely those wisps: a stub of underline stranded inside the bowl of a
+                    // 'g' or the counter of an 'o'. Both Chrome and Firefox hull per glyph - measured on
+                    // 'o', 'g', 'n', 'v', 'H' and U+2026, whose three separate dots become a single gap in
+                    // both - so this is also what a document author will have proofed against.
+                    //
+                    // Crossings is sorted and disjoint, so its first start and last end are the extremes.
+                    if (crossings.Count > 0)
+                    {
+                        spans.Add(new RInkSpan(
+                            glyphX + crossings[0].Start * scale,
+                            glyphX + crossings[^1].End * scale));
+                    }
+                }
+
+                penX += (descriptor.GlyphIndexToWidth(glyphId) + glyph.XAdvanceDelta) * scale + key.LetterSpacing;
+            }
+
+            // No glyph in the run had a decodable outline at all - a CFF/bitmap font, or a run of
+            // nothing but spaces. Null rather than an empty list, so the caller can tell "no ink
+            // information" from "this run genuinely crosses nothing"; see RGraphics.GetInkCrossings.
+            if (!sawOutline) return null;
+
+            return MergeSpans(spans);
+        }
+
+        /// <summary>
+        /// <paramref name="spans"/> sorted left to right and unioned, so the result honours
+        /// <see cref="RGraphics.GetInkCrossings"/>'s documented contract regardless of the order the
+        /// glyph walk produced them in.
+        /// </summary>
+        private static List<RInkSpan> MergeSpans(List<RInkSpan> spans)
+        {
+            if (spans.Count <= 1) return spans;
+
+            spans.Sort(static (a, b) => a.Start.CompareTo(b.Start));
+
+            List<RInkSpan> merged = [spans[0]];
+
+            for (var i = 1; i < spans.Count; i++)
+            {
+                var last = merged[^1];
+                var next = spans[i];
+
+                if (next.Start <= last.End)
+                {
+                    merged[^1] = new RInkSpan(last.Start, Math.Max(last.End, next.End));
+                }
+                else
+                {
+                    merged.Add(next);
+                }
+            }
+
+            return merged;
+        }
+
+        /// <summary>
+        /// What one <see cref="GetInkCrossings"/> answer depends on, once the run's absolute position is
+        /// factored out: the font, the text, the band relative to the baseline, and how the run is shaped.
+        /// </summary>
+        private readonly record struct InkCrossingKey(
+            XFont Font, string Text, double BandTop, double BandBottom, double LetterSpacing,
+            TextShapingFeatures Features);
 
         public override RGraphicsPath GetGraphicsPath()
         {

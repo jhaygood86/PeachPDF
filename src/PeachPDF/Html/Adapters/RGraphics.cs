@@ -493,6 +493,54 @@ namespace PeachPDF.Html.Adapters
         public abstract RGraphicsPath? GetTextOutline(string str, RFont font, RPoint baselineOrigin, double letterSpacing = 0, TextShapingFeatures? features = null);
 
         /// <summary>
+        /// The horizontal ranges in which <paramref name="str"/>'s glyph ink crosses the horizontal band
+        /// between <paramref name="bandTop"/> and <paramref name="bandBottom"/> — what
+        /// <c>text-decoration-skip-ink</c>
+        /// (<see href="https://www.w3.org/TR/css-text-decor-4/#text-decoration-skip-ink-property">CSS Text
+        /// Decoration 4 §2.5</see>) removes from an underline or overline drawn through that band.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Virtual rather than abstract, and returning <c>null</c> by default, so a backend with no glyph
+        /// outlines to consult — including every test-only <see cref="RGraphics"/> mock — needs no
+        /// implementation and degrades to skipping nothing. <c>auto</c> is defined as UA discretion, so
+        /// declining to skip is conformant; <c>all</c> silently does not skip either, which is the same
+        /// accepted limitation a font with no decodable outlines has.
+        /// </para>
+        /// <para>
+        /// Returns <c>null</c>, not an empty list, when no ink information is available at all — the
+        /// caller cannot otherwise tell that apart from a run that genuinely crosses nothing.
+        /// </para>
+        /// <para>
+        /// Each glyph contributes at most one range, spanning everything it puts in the band — so a
+        /// glyph whose ink is in several pieces there (the two sides of an <c>o</c>, the separate dots
+        /// of an ellipsis) yields one range covering the whole letter rather than one per piece. CSS
+        /// Text Decoration 4 leaves this skip <i>shape</i> to the UA
+        /// (<see href="https://www.w3.org/TR/css-text-decor-4/#ink-skip-shape">§2.10.5 Shaping
+        /// Interruptions</see>), explicitly naming "whether to show the line within enclosed areas of a
+        /// glyph" as a UA choice and warning that following each contour can strand
+        /// "typographically-awkward wisps of underline"; this is also what Chrome and Firefox do.
+        /// </para>
+        /// </remarks>
+        /// <param name="str">the run whose ink is measured</param>
+        /// <param name="font">the font the run is drawn with</param>
+        /// <param name="origin">
+        /// the run's origin, in user-space units — the <i>same</i> point
+        /// <see cref="DrawString(string, RFont, RColor, RPoint, RSize, double, RFontPalette?, TextShapingFeatures?)"/>
+        /// paints the run from, not its baseline. The implementation places the baseline from the font's
+        /// own metrics exactly as the text-drawing path does, so the ink is measured where it is drawn
+        /// rather than where a rounded ascent would put it.
+        /// </param>
+        /// <param name="bandTop">the band's upper edge, in user-space y (smaller than <paramref name="bandBottom"/>)</param>
+        /// <param name="bandBottom">the band's lower edge</param>
+        /// <param name="letterSpacing">extra advance between glyphs (same units as <paramref name="origin"/>)</param>
+        /// <param name="features">which GSUB features to apply when shaping <paramref name="str"/></param>
+        /// <returns>the crossings, left to right and already merged, or null when the ink is unknown</returns>
+        public virtual IReadOnlyList<RInkSpan>? GetInkCrossings(
+            string str, RFont font, RPoint origin, double bandTop, double bandBottom,
+            double letterSpacing = 0, TextShapingFeatures? features = null) => null;
+
+        /// <summary>
         /// Draws a line connecting the two points specified by the coordinate pairs.
         /// </summary>
         /// <param name="pen">Pen that determines the color, width, and style of the line. </param>

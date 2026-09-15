@@ -591,6 +591,14 @@ namespace PeachPDF.Html.Core.Paint
             }
             else
             {
+                // The box's own per-line rectangles already are the decoration area, so no span has to be
+                // collected - but what those rectangles cover still decides where the line breaks: the
+                // atomic inlines inside it, which §2.4 does not decorate, and the glyph ink an underline
+                // or overline skips. Gathered once for the whole box rather than per line.
+                var content = DecorationsWorthCollecting(box)
+                    ? DecorationContent.Of(fragment, collectSpans: false, collectWords: WantsInkFrom(box))
+                    : null;
+
                 for (var i = 0; i < lines.Count; i++)
                 {
                     var actualRect = lines[i].Rect;
@@ -603,7 +611,8 @@ namespace PeachPDF.Html.Core.Paint
                         var geometry = BoxDecorationGeometry.For(box, lines[i]);
 
                         PaintDecoration(g, box, actualRect, geometry.HasLeftEdge, geometry.HasRightEdge,
-                            GetFirstLineStyleForRect(lines[i].Line));
+                            GetFirstLineStyleForRect(lines[i].Line), ownDecorationArea: true,
+                            content, lines[i].Line);
                     }
                 }
             }

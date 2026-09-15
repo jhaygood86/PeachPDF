@@ -64,6 +64,40 @@ namespace PeachPDF.Html.Core.Utils
         }
 
         /// <summary>
+        /// Whether <paramref name="box"/> is an <b>atomic inline</b> — an inline-level box that its
+        /// parent's inline formatting context places as one opaque item rather than as a run of text
+        /// (<see href="https://www.w3.org/TR/css-display-3/#atomic-inline">CSS Display 3 §2.3</see>):
+        /// a replaced element (<c>&lt;img&gt;</c>, inline <c>&lt;svg&gt;</c>, <c>&lt;object&gt;</c>,
+        /// <c>&lt;iframe&gt;</c>, <c>&lt;math&gt;</c>, a form field), or an <c>inline-block</c> /
+        /// <c>inline-table</c> / <c>inline-flex</c> / <c>inline-grid</c> box.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Asked at paint time by <c>FragmentPainter</c>'s text-decoration collection, which
+        /// <see href="https://www.w3.org/TR/css-text-decor-3/#line-decoration">css-text-decor-3 §2.4</see>
+        /// requires to break a decoration line around one: "Atomic inlines, such as images and inline
+        /// blocks, are not decorated."
+        /// </para>
+        /// <para>
+        /// <b>Decided by the box's own display type and kind, never by whether its fragment happens to
+        /// have children.</b> An <c>inline-block</c> whose content is inlines-only reaches paint through
+        /// a different layout path (the ordinary inline path) than one whose content is block-level
+        /// (<c>CssLayoutEngine.FlowAtomicBlockContentChild</c>), and both are atomic inlines.
+        /// </para>
+        /// <para>
+        /// The replaced half deliberately reuses <see cref="MonolithicContent.IsReplaced"/> rather than
+        /// re-deriving the set of replaced box types, so the two can never name different sets. It is
+        /// gated on <see cref="CssBox.IsInline"/> because a <c>display: block</c> image is a block box,
+        /// not an atomic inline — nothing on a line box for a decoration to break around.
+        /// </para>
+        /// </remarks>
+        public static bool IsAtomicInline(CssBox box) =>
+            box.IsInline
+            && (MonolithicContent.IsReplaced(box)
+                || box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable
+                    or Keywords.InlineFlex or Keywords.InlineGrid);
+
+        /// <summary>
         /// Walks up from <paramref name="box"/> (inclusive) looking for the nearest ancestor with the
         /// given HTML tag name, and returns that ancestor's parent - i.e. "where parsing should
         /// resume after closing this tag". Returns <c>null</c>, rather than <paramref name="root"/>,

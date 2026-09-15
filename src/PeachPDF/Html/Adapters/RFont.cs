@@ -54,6 +54,13 @@ namespace PeachPDF.Html.Adapters
         public abstract double Ascent { get; }
 
         /// <summary>
+        /// The exact offset from <c>DrawString</c>'s top anchor to the baseline it paints at. Layout uses
+        /// <see cref="Ascent"/>, which some adapters round for stable box geometry; paint effects that must
+        /// sit a precise distance from the rendered glyphs use this unrounded counterpart instead.
+        /// </summary>
+        public virtual double TextBaselineOffset => Ascent;
+
+        /// <summary>
         /// Get the left padding, in pixels, of the font.
         /// </summary>
         public abstract double LeftPadding { get; }
