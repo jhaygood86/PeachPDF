@@ -1144,7 +1144,22 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(32, receivedSvgSize.Value.Height, precision: 1);
             Assert.NotNull(((CssBoxImage)svgBox!).SvgDocument);
 
-            // Fill-by-default: the dynamic content box itself resolves to its (100%-filled) parent's size.
+            // Fill-by-default: the dynamic content box itself resolves to its parent's own size - asserted
+            // on the real, post-layout resolved replaced-element word (Words[0].Width/Height, the
+            // established convention for an inline replaced element - see
+            // ReplacedElementIntrinsicSizeTests - since an inline-level box like <img> never commits its
+            // own Size.Width/Height the way a block box does; that geometry lives on the word instead),
+            // not just that a fragment happened to exist. CssBoxImage.ResolveDynamicContent writes this
+            // box's own width/height as absolute points once TryResolveDefiniteSize knows them, rather
+            // than leaving them as a percentage - MeasureIntrinsicSize's own percentage-width/height
+            // resolution for a replaced element turned out to be independently broken (confirmed against
+            // a plain HTML <img style="width:100%"> too - a pre-existing bug outside this PR's own scope,
+            // flagged separately) and would otherwise size this box to 0 regardless of this feature.
+            Assert.InRange(rasterBox!.Words[0].Width, 119, 121);
+            Assert.InRange(rasterBox.Words[0].Height, 79, 81);
+            Assert.InRange(svgBox!.Words[0].Width, 63, 65);
+            Assert.InRange(svgBox.Words[0].Height, 31, 33);
+
             FragmentPaintHarness.FragmentOf(container, rasterBox!);
             FragmentPaintHarness.FragmentOf(container, svgBox!);
         }

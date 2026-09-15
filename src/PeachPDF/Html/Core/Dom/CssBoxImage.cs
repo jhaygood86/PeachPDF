@@ -19,6 +19,7 @@ using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Svg;
 using System;
+using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -224,10 +225,22 @@ namespace PeachPDF.Html.Core.Dom
         /// words - so by the time layout would otherwise resolve this box's width/height, it's already too
         /// late (circular). The declarative layer defaults a dynamic content box to <c>width:100%;
         /// height:100%</c> (fill-by-default - "available space" is whatever this box's own parent already
-        /// resolves to, matching QuestPDF's own dynamic-image framing), which sidesteps that circularity
-        /// entirely: a *percentage* resolves against <see cref="CssBox.ContainingBlock"/>'s own size (the
-        /// parent, already resolved by ordinary parent-first block-flow ordering), not this box's own.
+        /// resolves to, matching QuestPDF's own dynamic-image framing), and <see cref="TryResolveDefiniteSize"/>
+        /// resolves that percentage against <see cref="CssBox.ContainingBlock"/>'s own size (the parent,
+        /// already resolved by ordinary parent-first block-flow ordering) - non-circular for the same
+        /// reason this box's own percentage isn't.
         /// </summary>
+        /// <remarks>
+        /// Once the resolved size is known, this box's own <c>width</c>/<c>height</c> are overwritten from
+        /// <c>100%</c> to the resolved absolute point values, rather
+        /// than left as a percentage for <see cref="CssLayoutEngine.MeasureIntrinsicSize"/>'s own later
+        /// percentage-width/height resolution to re-derive. That re-derivation is a real, separate,
+        /// currently-broken code path for a replaced element specifically (confirmed independently of this
+        /// feature: a plain HTML <c>&lt;img style="width:100%;height:100%"&gt;</c> inside a definite-size
+        /// container resolves to a zero/wrong size too - filed as a tracked follow-up, not something this
+        /// PR's own scope should fix) - writing the already-known absolute value here sidesteps it
+        /// entirely, onto the same absolute-length branch already proven correct elsewhere in this file.
+        /// </remarks>
         /// <exception cref="InvalidOperationException">
         /// Neither this box's own width/height nor a percentage of its <see cref="CssBox.ContainingBlock"/>
         /// resolves to a definite size - the caller needs to give the container an explicit absolute
@@ -243,6 +256,9 @@ namespace PeachPDF.Html.Core.Dom
                     "ancestor whose own size is already definite - the content's own default " +
                     "width:100%/height:100% resolves against that ancestor.");
             }
+
+            Width = string.Create(CultureInfo.InvariantCulture, $"{size.Width}pt");
+            Height = string.Create(CultureInfo.InvariantCulture, $"{size.Height}pt");
 
             var adapter = HtmlContainer!.Adapter;
 

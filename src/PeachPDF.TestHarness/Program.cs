@@ -1,6 +1,7 @@
 ﻿using PeachPDF;
 using PeachPDF.Layout;
 using PeachPDF.PdfSharpCore;
+using ScottPlot;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
@@ -9981,7 +9982,7 @@ await SaveShowcaseAsync("svg_filter_graph", "Graphics & Effects", "SVG Filter: M
     svgFilterGraphHtml, pdfConfig);
 
 const string declarativeApiSource =
-    """
+    """"
     var generator = new PdfGenerator();
 
     var document = await generator.CreateDocument(doc =>
@@ -10068,6 +10069,41 @@ const string declarativeApiSource =
                         t.Span("Auto-detected direction, per span: ").Direction(PdfTextDirection.Auto);
                         t.Span("this paragraph resolves left-to-right.").Direction(PdfTextDirection.Auto);
                     });
+
+                    // Standalone SVG: author-supplied markup placed directly, and a real charting
+                    // library's own SVG export - both go through the same Svg(string) overload.
+                    column.Item().Row(row =>
+                    {
+                        row.Spacing(12);
+
+                        row.Item().Grow().Svg(
+                            """
+                            <svg xmlns="http://www.w3.org/2000/svg" width="300" height="180" viewBox="0 0 100 60">
+                              <circle cx="50" cy="30" r="26" fill="#FFDEE9" stroke="#B5FFFC" stroke-width="3"/>
+                              <text x="50" y="34" font-size="10" text-anchor="middle" fill="#444">Hand-authored</text>
+                            </svg>
+                            """);
+
+                        var scatterPlot = new Plot();
+                        scatterPlot.Add.Scatter(
+                            new double[] { 1, 2, 3, 4, 5, 6 },
+                            new double[] { 12, 18, 15, 24, 21, 30 });
+                        scatterPlot.Title("Weekly signups");
+                        row.Item().Grow().Svg(scatterPlot.GetSvgXml(300, 180));
+                    });
+
+                    // A dynamic raster chart, generated at exactly the container's own resolved pixel
+                    // size once layout knows it - the reason Image(Func<PdfSize,byte[]>) exists at all.
+                    column.Item().Width(300).Height(160).Image(size =>
+                    {
+                        var barPlot = new Plot();
+                        barPlot.Add.Bars(new double[] { 42, 31, 27 });
+                        barPlot.Title("Q1 revenue by region ($k)");
+                        // 2x the container's own point size for a crisp raster at normal PDF viewer zoom
+                        // (a PDF point isn't a device pixel) - the fill-by-default width:100%/height:100%
+                        // still scales this to the container's actual size regardless of pixel count.
+                        return barPlot.GetImageBytes((int)size.Width * 2, (int)size.Height * 2, ImageFormat.Png);
+                    });
                 });
             });
         });
@@ -10075,10 +10111,10 @@ const string declarativeApiSource =
 
     var stream = new MemoryStream();
     document.Save(stream);
-    """;
+    """";
 
 await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Declarative Document-Building API",
-    "PdfGenerator.CreateDocument: pages, a padded/bordered/shadowed card, a table with a repeating header, a dashed divider, a bulleted list, a line-clamped paragraph with a custom ellipsis, auto-detected per-span text direction, and a repeating page-numbered footer, built directly in C# with no HTML/CSS strings - layered entirely on PeachPDF's own flexbox, table, list, line-clamp, bidi-detection, and running-header/footer machinery.",
+    "PdfGenerator.CreateDocument: pages, a padded/bordered/shadowed card, a table with a repeating header, a dashed divider, a bulleted list, a line-clamped paragraph with a custom ellipsis, auto-detected per-span text direction, hand-authored and ScottPlot-generated standalone SVG, a dynamically-generated raster chart sized to its own container, and a repeating page-numbered footer, built directly in C# with no HTML/CSS strings - layered entirely on PeachPDF's own flexbox, table, list, line-clamp, bidi-detection, SVG, and running-header/footer machinery.",
     declarativeApiSource,
     async gen =>
     {
@@ -10160,6 +10196,34 @@ await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Decl
                         {
                             t.Span("Auto-detected direction, per span: ").Direction(PdfTextDirection.Auto);
                             t.Span("this paragraph resolves left-to-right.").Direction(PdfTextDirection.Auto);
+                        });
+
+                        column.Item().Row(row =>
+                        {
+                            row.Spacing(12);
+
+                            row.Item().Grow().Svg(
+                                """
+                                <svg xmlns="http://www.w3.org/2000/svg" width="300" height="180" viewBox="0 0 100 60">
+                                  <circle cx="50" cy="30" r="26" fill="#FFDEE9" stroke="#B5FFFC" stroke-width="3"/>
+                                  <text x="50" y="34" font-size="10" text-anchor="middle" fill="#444">Hand-authored</text>
+                                </svg>
+                                """);
+
+                            var scatterPlot = new Plot();
+                            scatterPlot.Add.Scatter(
+                                new double[] { 1, 2, 3, 4, 5, 6 },
+                                new double[] { 12, 18, 15, 24, 21, 30 });
+                            scatterPlot.Title("Weekly signups");
+                            row.Item().Grow().Svg(scatterPlot.GetSvgXml(300, 180));
+                        });
+
+                        column.Item().Width(300).Height(160).Image(size =>
+                        {
+                            var barPlot = new Plot();
+                            barPlot.Add.Bars(new double[] { 42, 31, 27 });
+                            barPlot.Title("Q1 revenue by region ($k)");
+                            return barPlot.GetImageBytes((int)size.Width * 2, (int)size.Height * 2, ImageFormat.Png);
                         });
                     });
                 });
