@@ -82,8 +82,10 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task BlockUnderline_ExcludesTheAtomicInlinesMarginBoxNotItsBorderBox()
         {
-            // §2.4 names the margin box, while every rectangle layout records is a border box - so the
-            // margins have to be added back, or the line runs under them.
+            // §2.4 says only that an atomic inline is not decorated, never which of its boxes bounds the
+            // gap - taking the margin box is this engine's own choice (see DecorationContent.
+            // RecordExclusions). Every rectangle layout records is a border box, so the margins have to
+            // be added back, or the line runs under them.
             var (root, container) = await LayoutHarness.LayoutAsync(Wrap(
                 "<div id='d' style='width:400pt; text-decoration:underline'>AA "
                 + "<span id='a' style='display:inline-block; width:60pt; margin:0 12pt'>x</span> BB</div>"));

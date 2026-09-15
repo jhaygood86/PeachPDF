@@ -98,7 +98,7 @@ namespace PeachPDF.Html.Core.Paint
         /// <c>text-decoration-skip-ink</c> measures ink across. Null when the line holds no word this
         /// walk collected, so the caller can skip the whole measurement.
         /// </summary>
-        internal List<DecorationWord>? InkWordsOn(CssLineBox? line)
+        internal IReadOnlyList<DecorationWord>? InkWordsOn(CssLineBox? line)
         {
             if (line is null || _words is not { Count: > 0 }) return null;
 

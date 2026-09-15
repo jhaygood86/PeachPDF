@@ -792,7 +792,7 @@ namespace PeachPDF.Html.Core.Paint
         /// widening the gap as well made a heavy underline read as a dashed one.
         /// </para>
         /// </remarks>
-        private static void AddInkExclusions(RGraphics g, CssBox styleSource, List<DecorationWord> words,
+        private static void AddInkExclusions(RGraphics g, CssBox styleSource, IReadOnlyList<DecorationWord> words,
             double y, double thickness, List<DecorationInterval> into)
         {
             var half = thickness / 2;

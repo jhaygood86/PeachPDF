@@ -49,11 +49,48 @@ the same gaps, which is what `UnderlineOverline_EachMeasuresItsOwnBand` exists t
   widening the gap as well compounded it. The reasoning behind the floor was wrong anyway — a
   vertically thicker line does not close a horizontal gap. It is now font-size-proportional only.
 
+## What it costs, and why the cache is not optional
+
+`text-decoration-skip-ink: auto` is the *initial* value, so every underline in every document pays
+for this — it is not a feature you opt into. Measured with the Release CLI on a 20 000-word
+descender-heavy document, 29 pages, identical but for the one declaration:
+
+| | `skip-ink: none` | `skip-ink: auto` |
+| --- | --- | --- |
+| render | 1598 ms | 1813 ms (+13%) |
+| PDF | 98 KB | 790 KB |
+| page-1 stream | 34 139 B / 46 strokes | 106 281 B / 2354 strokes |
+
+Before `GraphicsAdapter._inkCrossings` existed the time column read 1533 → 2405–2759 ms (+57% to
++80%). The measurement shapes the run a *second* time (`descriptor.Shape` runs GSUB/GPOS again, and
+`OpenTypeDescriptor` does not cache) and decodes every glyph outline fresh, once per decoration
+keyword and once per decorating box — so a `<div underline>` around a `<span underline>` measured the
+same words twice. Caching it takes the overhead to +13%.
+
+Two things about the key are load-bearing, and both have a test: the band is stored **relative to the
+baseline** and the spans **relative to `origin.X`**, so the same word on the next line is a hit and
+underline-vs-overline is a miss. Storing either absolutely would make the cache useless in the first
+case and *wrong* in the second.
+
+**The size column is not a bug and no cache can fix it.** One decoration line genuinely becomes N
+stroked segments; the bytes are the segment coordinates. Emitting one multi-subpath stroke instead of
+N `DrawLine`s was considered and rejected — `XGraphicsPdfRenderer.DrawLines` already shares one
+`Realize`, so it would save only the `S\n` per segment, ~4% of the stream, in exchange for a new
+`RGraphics` primitive. The remaining honest lever is a per-`(FaceKey, glyphId)` outline cache, which
+would cut decode work the crossings cache only avoids on *repeated* words.
+
+`DecorationContent.Of` also takes `collectWords: WantsInkFrom(box)`, so a box that opted out does not
+build the word dictionary it will never read.
+
 ## Two traps in the geometry
 
 - **The exclusion is the atomic inline's margin box; every rectangle layout records is a border box.**
   `RecordExclusions` adds the margins back. `BlockUnderline_ExcludesTheAtomicInlinesMarginBoxNotItsBorderBox`
-  pins it.
+  pins it. Margin box is *this engine's* choice, not the spec's — §2.4 says only that atomic inlines
+  are not decorated, and says nothing about which box edge bounds the gap. The visible consequence is
+  that `<span underline>a<img style="margin:0 20pt">b</span>` leaves the margins undecorated too,
+  where an underline would otherwise run (it does run under inter-word space). Do not restate this as
+  a spec quote.
 - **An atomic inline is recognized by its display type, never by its fragment's shape.** An
   `inline-block` whose content is inlines-only reaches paint through the ordinary inline path, and one
   whose content is block-level through `CssLayoutEngine.FlowAtomicBlockContentChild`. Both are atomic
@@ -96,11 +133,12 @@ layout sizes correctly. Worth filing on its own.
 
 ## Evidence
 
-- 35 new tests: `TextDecorationAtomicInlineTests` (21, including `DecorationSegments`'s own
-  arithmetic), `TextDecorationSkipInkTests` (13), `GlyphInkScannerTests` (13),
-  `GraphicsAdapterInkCrossingsTests` (9).
+- 38 new tests: `TextDecorationAtomicInlineTests` (21, including `DecorationSegments`'s own
+  arithmetic), `TextDecorationSkipInkTests` (14), `GlyphInkScannerTests` (13),
+  `GraphicsAdapterInkCrossingsTests` (11).
 - Full suite on net8.0: 11651 passed, 0 failed (11616 before).
 - `dotnet build PeachPDF.slnx -t:Rebuild`: 0 warnings.
 - New `text_decoration_skipping` showcase, rasterized through **both** PDFium and MuPDF at 150-400
   dpi, in agreement: descender gaps present under `auto`, absent under `none`, `line-through`
   untouched, and a real gap around an inline-block, an invisible inline-block and an `<img>`.
+- Timings above: Release CLI, 3 runs after a warm-up, median reported.

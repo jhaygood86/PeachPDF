@@ -208,11 +208,12 @@ namespace PeachPDF.Fonts.OpenType
 
         /// <summary>
         /// <paramref name="spans"/> sorted and unioned, so overlapping runs from different scanlines
-        /// become one range.
+        /// become one range. Always a new list, never <paramref name="spans"/> itself, so the result's
+        /// ownership does not depend on how many runs happened to be found.
         /// </summary>
         private static List<(double Start, double End)> Merge(List<(double Start, double End)> spans)
         {
-            if (spans.Count <= 1) return spans;
+            if (spans.Count <= 1) return [.. spans];
 
             spans.Sort(static (a, b) => a.Start.CompareTo(b.Start));
 

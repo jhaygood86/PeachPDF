@@ -111,6 +111,39 @@ namespace PeachPDF.Tests.Adapters
         }
 
         [Fact]
+        public async Task TheSameWordOnALaterLine_ReportsInkAtItsOwnPosition()
+        {
+            // The measurement is cached with the run's absolute position factored out - keyed by the band
+            // RELATIVE to the baseline - so the same word one line down is a cache hit. What must not
+            // happen is the hit returning the first line's absolute coordinates: the crossings have to be
+            // re-offset to this run's own origin every time.
+            using var fixture = await Fixture.CreateAsync();
+
+            var firstLine = fixture.Crossings("g", below: 2, height: 1, originX: 10, originY: 0)!;
+            var secondLine = fixture.Crossings("g", below: 2, height: 1, originX: 70, originY: 48)!;
+
+            Assert.NotEmpty(firstLine);
+            Assert.Equal(firstLine.Count, secondLine.Count);
+            Assert.Equal(
+                firstLine.Select(c => Math.Round(c.Start + 60, 3)),
+                secondLine.Select(c => Math.Round(c.Start, 3)));
+        }
+
+        [Fact]
+        public async Task ADifferentBandOverTheSameWord_IsMeasuredAgainRatherThanServedFromTheCache()
+        {
+            // Underline and overline cross different parts of the same glyphs, so the band is part of the
+            // cache key. A key that ignored it would answer the second query with the first's spans.
+            using var fixture = await Fixture.CreateAsync();
+
+            var belowBaseline = fixture.Crossings("n", below: 2, height: 1)!;
+            var throughTheLetter = fixture.Crossings("n", below: -4, height: 1)!;
+
+            Assert.Empty(belowBaseline);
+            Assert.NotEmpty(throughTheLetter);
+        }
+
+        [Fact]
         public async Task AnInvertedBand_ReportsNoInkKnown()
         {
             using var fixture = await Fixture.CreateAsync();
@@ -181,12 +214,17 @@ namespace PeachPDF.Tests.Adapters
             /// baseline here, which is what makes "2 points under the baseline" readable; the rounded
             /// <see cref="RFont.Ascent"/> used to locate it is within half a unit of the adapter's own
             /// figure, far finer than the 40pt fixtures below care about.
+            /// <para>
+            /// <paramref name="originY"/> moves the whole run down the page — a later line — and the band
+            /// moves with it, so the band stays in the same place relative to this run's own baseline.
+            /// </para>
             /// </remarks>
             internal System.Collections.Generic.IReadOnlyList<RInkSpan>? Crossings(
-                string text, double below, double height, double originX = 0, double letterSpacing = 0)
+                string text, double below, double height, double originX = 0, double letterSpacing = 0,
+                double originY = 0)
             {
-                var top = _font.Ascent + below;
-                return _graphics.GetInkCrossings(text, _font, new RPoint(originX, 0), top, top + height, letterSpacing);
+                var top = originY + _font.Ascent + below;
+                return _graphics.GetInkCrossings(text, _font, new RPoint(originX, originY), top, top + height, letterSpacing);
             }
 
             /// <summary>How far the pen advances over <paramref name="text"/>, for bounding a crossing.</summary>

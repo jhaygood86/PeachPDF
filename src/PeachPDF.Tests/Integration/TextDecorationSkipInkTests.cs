@@ -26,8 +26,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Underline_Auto_BreaksAroundDescenders()
         {
             // "gy" descends below the baseline and through the underline; the line has to break for each.
-            var (lines, g) = await UnderlineAsync("gy", skipInk: null);
-            using var _ = g;
+            var (lines, _) = await UnderlineAsync("gy", skipInk: null);
 
             Assert.True(lines.Count >= 2,
                 $"an underline across two descenders should be drawn as several segments, got {lines.Count}");
@@ -36,8 +35,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Underline_None_DrawsOneUnbrokenLineThroughDescenders()
         {
-            var (lines, g) = await UnderlineAsync("gy", skipInk: "none");
-            using var _ = g;
+            var (lines, _) = await UnderlineAsync("gy", skipInk: "none");
 
             Assert.Single(lines);
         }
@@ -54,10 +52,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Underline_All_SkipsTheSameWayAuto_Does()
         {
-            var (auto, autoGraphics) = await UnderlineAsync("gy", skipInk: "auto");
-            using var _ = autoGraphics;
-            var (all, allGraphics) = await UnderlineAsync("gy", skipInk: "all");
-            using var __ = allGraphics;
+            var (auto, _) = await UnderlineAsync("gy", skipInk: "auto");
+            var (all, _) = await UnderlineAsync("gy", skipInk: "all");
 
             Assert.Equal(auto.Count, all.Count);
             Assert.Equal(auto.Select(l => System.Math.Round(l.X1, 3)), all.Select(l => System.Math.Round(l.X1, 3)));
@@ -81,7 +77,6 @@ namespace PeachPDF.Tests.Integration
             // one descender between two runs of non-descenders, so exactly one gap is expected, and it
             // must contain the descender's own x-range rather than sit anywhere else on the line.
             var (lines, g) = await UnderlineAsync("nnnjnnn", skipInk: null);
-            using var _ = g;
 
             Assert.Equal(2, lines.Count);
 
@@ -100,8 +95,7 @@ namespace PeachPDF.Tests.Integration
         public async Task LineThrough_IsNeverSkipped()
         {
             // §2.5: "the line-through value is never skipped" - a strike is meant to cross the glyphs.
-            var (lines, g) = await DecorationAsync("line-through", "gyp gyp gyp", skipInk: "all");
-            using var _ = g;
+            var (lines, _) = await DecorationAsync("line-through", "gyp gyp gyp", skipInk: "all");
 
             Assert.Single(lines);
         }
@@ -162,8 +156,7 @@ namespace PeachPDF.Tests.Integration
         public async Task SkipInk_Inherits()
         {
             // The property is inherited (§2.5), so an opt-out on an ancestor reaches the decorated text.
-            var (lines, g) = await UnderlineAsync("gy", skipInk: null, ancestorStyle: "text-decoration-skip-ink:none");
-            using var _ = g;
+            var (lines, _) = await UnderlineAsync("gy", skipInk: null, ancestorStyle: "text-decoration-skip-ink:none");
 
             Assert.Single(lines);
         }
@@ -206,6 +199,26 @@ namespace PeachPDF.Tests.Integration
             Assert.DoesNotContain(lines, l => l.X1 < atomicRight - 0.01 && l.X2 > atomicLeft + 0.01);
         }
 
+        [Fact]
+        public async Task VerticalWritingMode_NeverMeasuresInk()
+        {
+            // Every coordinate in AddInkExclusions is an x-range, and under vertical-rl the x-axis is
+            // the column's thickness rather than the line's own extent - so a crossing subtracted there
+            // would delete the decoration instead of breaking it. The guard is in WantsInkFrom/
+            // PaintDecoration, and what pins it is that no ink is even asked for: an implementation that
+            // measured and then discarded would still be one refactor away from subtracting.
+            var (root, container) = await LayoutAsync(
+                $"<div id='d' style=\"writing-mode:vertical-rl; height:300pt; font:20pt '{Family}'; "
+                + "text-decoration:underline\">gy</div>");
+            var d = LayoutHarness.FindById(root, "d")!;
+
+            using var g = new InkAwareRecordingGraphics(Adapter(container));
+            FragmentPaintHarness.PaintBox(container, d, g);
+
+            Assert.Equal(0, g.InkQueryCount);
+            Assert.NotEmpty(Lines(g));
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static PdfSharpAdapter Adapter(PeachPDF.Html.Core.HtmlContainerInt container) =>
@@ -230,9 +243,13 @@ namespace PeachPDF.Tests.Integration
                 + $"<span id='s' style=\"text-decoration:{decoration}{skip}\">{text}</span></div>");
             var s = LayoutHarness.FindById(root, "s")!;
 
-            var g = new InkAwareRecordingGraphics(Adapter(container)) { ScriptedInk = scriptedInk };
+            using var g = new InkAwareRecordingGraphics(Adapter(container)) { ScriptedInk = scriptedInk };
             FragmentPaintHarness.PaintBox(container, s, g);
 
+            // Disposed here rather than by the caller. Everything a test reads afterwards - the recorded
+            // draw calls and ink queries - is plain recorded data that outlives disposal, while what
+            // Dispose releases (the delegate GraphicsAdapter and its measure context) is only needed
+            // while painting. Handing back an undisposed instance is what leaked one per test.
             return (Lines(g), g);
         }
 
