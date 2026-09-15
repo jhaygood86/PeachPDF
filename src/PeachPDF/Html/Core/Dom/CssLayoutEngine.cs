@@ -2479,12 +2479,12 @@ namespace PeachPDF.Html.Core.Dom
         /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1091">#1091</see>).
         /// </para>
         /// <para>
-        /// The declared length is the right value for <see cref="CssBox.Size"/> under either
+        /// The resolved length is the right value for <see cref="CssBox.Size"/> under either
         /// <c>box-sizing</c>, because <c>Size.Width</c> means whichever one that property selects:
         /// <c>ActualBoxSizeIncludedWidth</c> adds the padding and border back under <c>content-box</c> and
-        /// adds nothing under <c>border-box</c>. A percentage is deliberately left alone — it resolves
-        /// against a containing block the line being flowed does not know — as is <c>auto</c>, which is
-        /// exactly the case §10.3.9 does hand to shrink-to-fit.
+        /// adds nothing under <c>border-box</c>. A percentage resolves against the child box's containing
+        /// block using the same page-aware basis as <see cref="GetBoxWidth"/>. <c>auto</c> is left alone,
+        /// which is exactly the case §10.3.9 hands to shrink-to-fit.
         /// </para>
         /// </remarks>
         /// <param name="child">the box being placed on the line</param>
@@ -2492,22 +2492,26 @@ namespace PeachPDF.Html.Core.Dom
         /// the box whose children are being flowed — <paramref name="child"/> when <c>FlowBox</c> is
         /// iterating over itself, which is not a child placement and so resolves nothing
         /// </param>
+        /// <param name="blockTop">
+        /// the document Y of the line on which <paramref name="child"/> is being placed, used to select
+        /// the containing block's page-aware percentage basis
+        /// </param>
         /// <returns>
         /// the used content width, for the caller to reserve on the line — or null when this box is not
         /// one that declares its own width. Read back off the box rather than returned from the arithmetic
         /// above so that both numbers are the one assignment, whichever <c>box-sizing</c> is in play.
         /// </returns>
-        private static double? ResolveAtomicInlineDeclaredWidth(CssBox child, CssBox parent)
+        private static double? ResolveAtomicInlineDeclaredWidth(CssBox child, CssBox parent, double blockTop)
         {
             if (child.DerivedStyle.ActualDisplay is not Keywords.InlineBlock
                 || ReferenceEquals(child, parent)
-                || !CssValueParser.IsValidLength(child.Width)
-                || child.Width.EndsWith('%'))
+                || !CssValueParser.IsValidLength(child.Width))
             {
                 return null;
             }
 
-            var declared = CssValueParser.ParseLength(child.Width, 0, child);
+            var declared = CssValueParser.ParseLength(
+                child.Width, PageAwareWidthBasis(child.ContainingBlock, blockTop), child);
 
             if (child.BoxSizing.Value is BoxSizingMode.BorderBox)
             {
@@ -3203,7 +3207,7 @@ namespace PeachPDF.Html.Core.Dom
                 // bookkeeping for b (FinalizeFlowBoxExit) can reserve the rest of it and paint the
                 // border box at it.
                 var childContentStartX = coordinates.CurrentX;
-                var childDeclaredContentWidth = ResolveAtomicInlineDeclaredWidth(b, box);
+                var childDeclaredContentWidth = ResolveAtomicInlineDeclaredWidth(b, box, coordinates.CurrentY);
 
                 if (b.Words.Count > 0)
                 {

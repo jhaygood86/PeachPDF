@@ -5795,6 +5795,9 @@ const string AtomicInlineWidthCss = """
              border: 2pt solid #b8960f; background: #fdf6dd }
     .borderbox { box-sizing: border-box }
     .rule { border-top: 1px dashed #c33; width: 120pt; margin: 2pt 0 6pt }
+    .percent-row { width: 400pt; border-right: 1px dashed #c33; background: #fafafa }
+    .percent { display: inline-block; width: 50%; padding: 3pt 0;
+               border: 1pt solid #6b4fa1; background: #eee8fa }
     </style>
     """;
 
@@ -5835,10 +5838,16 @@ var atomicInlineWidthHtml = "<!DOCTYPE html><html><head>" + AtomicInlineWidthCss
     "<div class=\"row\"><span class=\"sized\">content-box</span><div class=\"rule\"></div></div>" +
     "<div class=\"row\"><span class=\"sized borderbox\">border-box</span><div class=\"rule\"></div></div>" +
 
+    "<h2>Percentage widths use the containing block</h2>" +
+    "<div class=\"caption\">The pale row is 400pt wide. Its inline-block declares " +
+    "<code>width: 50%</code>, so the purple box is exactly 200pt wide and the following text starts " +
+    "halfway across the row.</div>" +
+    "<div class=\"row percent-row\"><span class=\"percent\">50% inline-block</span>|&nbsp;text after</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("atomic_inline_width", "Layout", "Atomic Inline Sizing",
-    "CSS 2.1 §10.3.9: an explicit width on a display: inline-block sizes the box itself — fixed-width label columns, empty checkbox glyphs, and what box-sizing changes about it.",
+    "CSS 2.1 §10.3.9: a declared length or percentage width on a display: inline-block sizes the box itself — fixed-width labels, empty checkbox glyphs, percentage sizing, and box-sizing.",
     atomicInlineWidthHtml, pdfConfig);
 
 // --- line-height: normal showcase (CSS 2.1 §10.8.1) ---
