@@ -6392,6 +6392,66 @@ await SaveShowcaseAsync("text_decoration_thickness", "Typography & Text", "text-
     "text-decoration-thickness (CSS Text Decoration 4): auto, from-font, and explicit length/percentage underline thickness.",
     decorationThicknessHtml, pdfConfig);
 
+// --- text-decoration-style showcase (css-text-decor-3 §2.2) ---
+
+var decorationStyleHtml = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.2em }
+    p.lede { font-size: 10pt; color: #444; margin: 0 0 1.2em }
+    h2 { font-size: 11pt; color: #444; margin: 1.3em 0 0.5em;
+         border-bottom: 1px solid #ddd; padding-bottom: 2px }
+    .row { margin-bottom: 1.5em; line-height: 1.6 }
+    .label { font-size: 9pt; color: #666; margin-bottom: 4px; line-height: 1.2 }
+    .solid { text-decoration: underline solid }
+    .dotted { text-decoration: underline dotted }
+    .dashed { text-decoration: underline dashed }
+    .doubled { text-decoration: underline double }
+    .over { text-decoration: overline double }
+    /* A double overline grows upward, so it needs headroom; flush against a page top the upper
+       stroke falls outside the page. See docs/html-css-support.md. */
+    .row.over-row { margin-top: 1.9em }
+    .through { text-decoration: line-through double }
+    .heavy { text-decoration: underline double; text-decoration-thickness: 2px;
+             text-decoration-color: #c0392b }
+    table { border-collapse: collapse; width: 62%; font-size: 11pt }
+    td { padding: 3px 6px }
+    td.n { text-align: right; font-variant-numeric: tabular-nums }
+    tr.total td { font-weight: bold }
+    tr.total td.n { text-decoration: underline double }
+    </style>
+
+    <h1>text-decoration-style</h1>
+    <p class="lede">Every style is one stroke with a dash pattern, except <b>double</b>, which is two
+    strokes of the resolved thickness separated by a gap of the same thickness. The first stroke stays
+    where a single one would sit and the second grows away from the text &mdash; downward for an
+    underline and a line-through, upward for an overline &mdash; which is what browsers do.</p>
+
+    <h2>The four styles, as underlines</h2>
+    <div class="row"><div class="label">solid</div><span class="solid">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">dotted</div><span class="dotted">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">dashed</div><span class="dashed">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">double</div><span class="doubled">Hamburgefonstiv</span></div>
+
+    <h2>double on each line, and at a heavier thickness</h2>
+    <div class="row"><div class="label">underline double &mdash; grows downward</div><span class="doubled">Hamburgefonstiv</span></div>
+    <div class="row over-row"><div class="label">overline double &mdash; grows upward</div><span class="over">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">line-through double &mdash; grows downward</div><span class="through">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">underline double, text-decoration-thickness: 2px</div><span class="heavy">Hamburgefonstiv</span></div>
+
+    <h2>What it is for</h2>
+    <table>
+      <tr><td>Subtotal</td><td class="n">1,000.00</td></tr>
+      <tr><td>Tax</td><td class="n">80.00</td></tr>
+      <tr class="total"><td>Total</td><td class="n">1,080.00</td></tr>
+    </table>
+    """;
+
+await SaveShowcaseAsync("text_decoration_style", "Typography & Text", "text-decoration-style",
+    "text-decoration-style (CSS Text Decoration 3 \u00a72.2): solid, dotted and dashed as pen patterns, and double as two strokes \u2014 the accounting rule under a grand total.",
+    decorationStyleHtml, pdfConfig);
+
 // --- text-decoration skipping showcase (css-text-decor-3 §2.4 + css-text-decor-4 §2.5) ---
 
 // Bundled (see assets/fonts/SourceSans3-Regular.LICENSE.txt) rather than a system family: what this
@@ -6638,6 +6698,9 @@ const string TextAlignLastCss = """
     .last-center { text-align-last: center }
     .last-right { text-align-last: right }
     .rtl { direction: rtl }
+    .justify-all { text-align: justify-all; width: 360px }
+    .match-parent-outer { direction: rtl; border: 1px solid #999; padding: 8px; width: 380px; font-family: Arial, sans-serif; font-size: 9pt }
+    .match-parent-outer p { width: auto; text-align: match-parent; background: #eef6fb; margin: 0 0 6px }
     </style>
     """;
 
@@ -6663,10 +6726,20 @@ var textAlignLastHtml = "<!DOCTYPE html><html><head>" + TextAlignLastCss + "</he
     "<h2>direction: rtl - the default text-align-last: auto is <i>start</i>, which is the right edge</h2>" +
     "<p class=\"rtl\">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.</p>" +
 
+    "<h2>text-align is a real shorthand over text-align-all/text-align-last (issue #1027)</h2>" +
+    "<p>Plain text-align: justify (default text-align-last: auto) - the closing line stays ragged.<br>Second sentence to give this paragraph a forced break.</p>" +
+    "<p class=\"justify-all\">text-align: justify-all sets text-align-all AND text-align-last to justify - even the closing line stretches to the full measure.<br>Second sentence, same treatment.</p>" +
+
+    "<h2>text-align: match-parent resolves against the *parent's* own direction (issue #1027)</h2>" +
+    "<div class=\"match-parent-outer\">" +
+    "<p>This RTL container's own child paragraphs declare <code>text-align: match-parent</code> with no direction of their own.</p>" +
+    "<p>Match-parent's <i>start</i> resolves against the container's RTL direction, so both paragraphs pack against the physical right edge - the same result an explicit <code>text-align: right</code> would give here, but automatically following whichever direction the container ends up with.</p>" +
+    "</div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("text_align_last", "Typography & Text", "Justification & text-align-last",
-    "text-align: justify leaves every line that ends a paragraph ragged - the block's last line and the last line before a <br> - and text-align-last (auto, justify, center, right) says how those lines are aligned instead.",
+    "text-align: justify leaves every line that ends a paragraph ragged - the block's last line and the last line before a <br> - and text-align-last (auto, justify, center, right) says how those lines are aligned instead. text-align is a real shorthand (CSS Text 3 §6.1) over text-align-all and text-align-last: justify-all forces both to justify, and match-parent resolves a logical start/end against the parent's own direction rather than the element's own.",
     textAlignLastHtml, pdfConfig);
 
 // --- writing-mode (vertical-rl/vertical-lr) showcase ---
@@ -8374,6 +8447,167 @@ await SaveShowcaseAsync("cmyk_tiff", "Images & Replaced Content", "CMYK TIFF Ima
     "DCTDecode-equivalent PDF pass-through filter, so this is a genuinely new encode path rather than a " +
     "byte-for-byte copy, preserving the source's CMYK separations without ever touching RGB.",
     cmykTiffHtml, pdfConfig);
+
+// ── PNG lossless pass-through (issue #1086) ─────────────────────────────────────────────
+// Two opaque PNGs, deliberately the kind of content JPEG re-encoding used to visibly damage: a
+// QR-code-style pattern (hard black/white edges - a real QR code would stop scanning if re-encoded
+// lossily) and a multi-color flat-fill logo/icon (indexed palette). Both are embedded byte-for-byte via
+// /FlateDecode pass-through instead of being decoded and re-encoded as lossy JPEG.
+static byte[] BuildQrLikePatternPngBytes(int modules, int scale)
+{
+    // A deterministic, QR-ish-looking black/white module grid - not a real scannable QR code, just a
+    // visual stand-in with the same "hard edges everywhere" property that makes lossy re-encoding
+    // visibly wrong for this kind of content. Gray8 (not Rgb24) so this actually demonstrates the
+    // DeviceGray pass-through branch, distinct from the indexed-palette logo below - an Rgb24 source
+    // here would auto-index under PeachImage's PngColorMode.Auto default instead (only two colors),
+    // exercising the same /Indexed path twice rather than two different colorspaces.
+    int size = modules * scale;
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Gray8);
+    var pixels = image.GetPixelSpan();
+    for (int y = 0; y < size; y++)
+    {
+        int my = y / scale;
+        for (int x = 0; x < size; x++)
+        {
+            int mx = x / scale;
+            bool isFinder = (mx < 7 && my < 7) || (mx >= modules - 7 && my < 7) || (mx < 7 && my >= modules - 7);
+            bool dark = isFinder
+                ? (mx == 0 || mx == 6 || my == 0 || my == 6 || (mx >= 2 && mx <= 4 && my >= 2 && my <= 4))
+                : ((mx * 7 + my * 3) % 5 == 0);
+            pixels[y * size + x] = dark ? (byte)0 : (byte)255;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "png");
+    return ms.ToArray();
+}
+
+static byte[] BuildFlatLogoPngBytes(int width, int height)
+{
+    var palette = new (byte R, byte G, byte B)[]
+    {
+        (0xEA, 0x58, 0x0C), // orange
+        (0x16, 0xA3, 0x4A), // green
+        (0x25, 0x63, 0xEB), // blue
+        (0xFF, 0xFF, 0xFF), // white background
+    };
+
+    using var image = PeachImage.Image.Create(width, height, PeachImage.PixelFormat.Rgb24);
+    var pixels = image.GetPixelSpan();
+    int cx = width / 2, cy = height / 2;
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            int dx = x - cx, dy = y - cy;
+            int distSq = dx * dx + dy * dy;
+            int radius = Math.Min(width, height) / 2;
+            var (r, g, b) = distSq > radius * radius
+                ? palette[3]
+                : palette[((x / (width / 6)) + (y / (height / 6))) % 3];
+            int i = (y * width + x) * 3;
+            pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "png");
+    return ms.ToArray();
+}
+
+// A five-pointed-star icon on a flat background color, the background declared transparent via a
+// tRNS chroma-key chunk (PngEncoderOptions.TransparentColor) - no alpha channel at all, just PNG's
+// non-alpha transparency convention. Passes through with a PDF color-key /Mask array built from the
+// tRNS chunk instead of a separate alpha plane. Drawn over a checkerboard so the transparency is
+// visibly doing something, the same "checker" idiom the Modern CSS Colors showcase already uses.
+static byte[] BuildTrnsStarIconPngBytes(int size, (byte R, byte G, byte B) background, (byte R, byte G, byte B) foreground)
+{
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Rgb24);
+    var pixels = image.GetPixelSpan();
+    double cx = size / 2.0, cy = size / 2.0;
+    double outerR = size * 0.48, innerR = outerR * 0.42;
+
+    // Point-in-polygon test against a 10-vertex star (5 outer points, 5 inner points).
+    var star = new (double X, double Y)[10];
+    for (int i = 0; i < 10; i++)
+    {
+        double angle = -Math.PI / 2 + i * Math.PI / 5;
+        double r = i % 2 == 0 ? outerR : innerR;
+        star[i] = (cx + r * Math.Cos(angle), cy + r * Math.Sin(angle));
+    }
+
+    bool InsideStar(double px, double py)
+    {
+        bool inside = false;
+        for (int i = 0, j = star.Length - 1; i < star.Length; j = i++)
+        {
+            var (xi, yi) = star[i];
+            var (xj, yj) = star[j];
+            if (((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi))
+            {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
+    for (int y = 0; y < size; y++)
+    {
+        for (int x = 0; x < size; x++)
+        {
+            var (r, g, b) = InsideStar(x + 0.5, y + 0.5) ? foreground : background;
+            int i = (y * size + x) * 3;
+            pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b;
+        }
+    }
+
+    using var ms = new MemoryStream();
+    image.Save(ms, "png", new PeachImage.Formats.Png.PngEncoderOptions
+    {
+        ColorMode = PeachImage.Formats.Png.PngColorMode.Truecolor,
+        TransparentColor = background,
+    });
+    return ms.ToArray();
+}
+
+var qrLikeBase64 = Convert.ToBase64String(BuildQrLikePatternPngBytes(21, 6));
+var flatLogoBase64 = Convert.ToBase64String(BuildFlatLogoPngBytes(120, 120));
+var trnsStarBase64 = Convert.ToBase64String(BuildTrnsStarIconPngBytes(120, (255, 0, 255), (0xF5, 0x9E, 0x0B)));
+
+var pngPassthroughHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; }" +
+    ".note { color: #555; font-size: 12px; margin: 0 0 16px; max-width: 640px; }" +
+    ".row { display: flex; gap: 24px; align-items: flex-start; }" +
+    ".row img { image-rendering: pixelated; border: 1px solid #cbd5e1; }" +
+    ".label { font-size: 11px; color: #555; margin-top: 4px; }" +
+    ".checker { background: repeating-conic-gradient(#ddd 0% 25%, #fff 0% 50%) 0 / 16px 16px; " +
+    "  display: inline-block; border-radius: 4px; }" +
+    "</style></head><body>" +
+    "<h2>PNG lossless pass-through</h2>" +
+    "<p class=\"note\">Each opaque PNG below embeds via byte-for-byte <code>/FlateDecode</code> " +
+    "pass-through - the PNG's own compressed pixel data, unchanged - instead of being decoded and " +
+    "re-encoded as a lossy JPEG. Every edge stays exactly as sharp as the source, and the embedded " +
+    "file is typically smaller too.</p>" +
+    "<div class=\"row\">" +
+    $"<div><img src=\"data:image/png;base64,{qrLikeBase64}\" width=\"189\" height=\"189\">" +
+    "<div class=\"label\">Grayscale, hard-edged pattern</div></div>" +
+    $"<div><img src=\"data:image/png;base64,{flatLogoBase64}\" width=\"120\" height=\"120\">" +
+    "<div class=\"label\">Indexed-palette flat-fill logo</div></div>" +
+    "<div><div class=\"checker\">" +
+    $"<img src=\"data:image/png;base64,{trnsStarBase64}\" width=\"120\" height=\"120\" style=\"border:none\">" +
+    "</div><div class=\"label\">tRNS chroma-key transparency (PDF color-key /Mask)</div></div>" +
+    "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("png_passthrough", "Images & Replaced Content", "PNG Lossless Pass-through",
+    "An opaque PNG (no real per-pixel alpha, not interlaced) embeds byte-for-byte via /FlateDecode " +
+    "pass-through - the PNG's own compressed IDAT data, unchanged, with an /Indexed color space for a " +
+    "palette source or a color-key /Mask array for tRNS chroma-key transparency - instead of being " +
+    "decoded and re-encoded as a lossy JPEG at quality 75.",
+    pngPassthroughHtml, pdfConfig);
 
 // ── Modern CSS colors: oklch/oklab/lab/lch palette + color-mix() opacity ──────────────
 var modernColorHtml =
@@ -10855,6 +11089,150 @@ await SaveDeclarativeShowcaseAsync("declarative_sectioned_page_numbers", "Docume
                         column.Item().Height(28).Text($"Appendix, line {i + 1}. Also not counted by the chapter's own page numbers.");
                     }
                 }));
+            });
+        });
+    });
+
+const string declarativeStylesheetAndHtmlSource =
+    """""
+    var generator = new PdfGenerator();
+    var stylesheet = await generator.ParseStyleSheet(
+        """"
+        .invoice-title { color: #2C3E50; }
+        .line-item.highlight { background-color: #FFF3CD; }
+        @page { margin: 28pt; }
+        """");
+
+    var document = await generator.CreateDocument(doc =>
+    {
+        doc.Stylesheet(stylesheet);
+        doc.Page(page =>
+        {
+            page.Size(PageSize.A4);
+            page.Header(header => header.Text(t => t.Span("Invoice #1042").Bold()));
+            page.Content(container =>
+            {
+                container.Column(column =>
+                {
+                    column.Spacing(14);
+
+                    column.Item().Class("invoice-title").Text(t => t.Span("Acme Consulting Services").FontSize(16).Bold());
+
+                    // A document-level stylesheet lets a caller's own class/id selector target a
+                    // declaratively-built container, and a compound class like "line-item highlight"
+                    // works exactly like it would in HTML.
+                    column.Item().Table(table =>
+                    {
+                        table.Columns(columns =>
+                        {
+                            columns.RelativeColumn(3);
+                            columns.RelativeColumn(1);
+                        });
+                        table.Header(header =>
+                        {
+                            header.Cell().Text(t => t.Span("Item").Bold());
+                            header.Cell().Text(t => t.Span("Amount").Bold());
+                        });
+                        table.Row(row =>
+                        {
+                            row.Cell().Class("line-item").Text("Consulting hours");
+                            row.Cell().Class("line-item").Text("$4,200");
+                        });
+                        table.Row(row =>
+                        {
+                            row.Cell().Class("line-item highlight").Text("Rush delivery fee");
+                            row.Cell().Class("line-item highlight").Text("$350");
+                        });
+                    });
+
+                    // IContainer.Html(...) splices a real parsed HTML fragment into the tree - here, a
+                    // terms paragraph with a <slot> filled in from C# with the customer's own name.
+                    column.Item().Html(
+                        """"
+                        <p>These terms apply to <strong><slot name="customer">this customer</slot></strong>
+                        until the invoice is settled in full.</p>
+                        """",
+                        onSlot: (slot, slotContainer) =>
+                        {
+                            if (slot.Name == "customer")
+                            {
+                                slotContainer.Text("Example Retail Co.");
+                            }
+                        });
+                });
+            });
+        });
+    });
+
+    var stream = new MemoryStream();
+    document.Save(stream);
+    """"";
+
+await SaveDeclarativeShowcaseAsync("declarative_stylesheet_and_html", "Document Building", "Stylesheet, Class/Id, and HTML Fragments",
+    "IDocumentBuilder.Stylesheet attaches a document-level stylesheet so IContainer.Class/Id/Tag can target declaratively-built containers with real CSS selectors (including compound classes like \"line-item highlight\"), a base @page rule's margin merges with the page's own Header, and IContainer.Html(...) splices a real parsed HTML fragment into the tree with a <slot> filled in from C#.",
+    declarativeStylesheetAndHtmlSource,
+    async gen =>
+    {
+        var stylesheet = await gen.ParseStyleSheet(
+            """
+            .invoice-title { color: #2C3E50; }
+            .line-item.highlight { background-color: #FFF3CD; }
+            @page { margin: 28pt; }
+            """);
+
+        return await gen.CreateDocument(doc =>
+        {
+            doc.Stylesheet(stylesheet);
+            doc.Page(page =>
+            {
+                page.Size(PageSize.A4);
+                page.Header(header => header.Text(t => t.Span("Invoice #1042").Bold()));
+                page.Content(container =>
+                {
+                    container.Column(column =>
+                    {
+                        column.Spacing(14);
+
+                        column.Item().Class("invoice-title").Text(t => t.Span("Acme Consulting Services").FontSize(16).Bold());
+
+                        column.Item().Table(table =>
+                        {
+                            table.Columns(columns =>
+                            {
+                                columns.RelativeColumn(3);
+                                columns.RelativeColumn(1);
+                            });
+                            table.Header(header =>
+                            {
+                                header.Cell().Text(t => t.Span("Item").Bold());
+                                header.Cell().Text(t => t.Span("Amount").Bold());
+                            });
+                            table.Row(row =>
+                            {
+                                row.Cell().Class("line-item").Text("Consulting hours");
+                                row.Cell().Class("line-item").Text("$4,200");
+                            });
+                            table.Row(row =>
+                            {
+                                row.Cell().Class("line-item highlight").Text("Rush delivery fee");
+                                row.Cell().Class("line-item highlight").Text("$350");
+                            });
+                        });
+
+                        column.Item().Html(
+                            """
+                            <p>These terms apply to <strong><slot name="customer">this customer</slot></strong>
+                            until the invoice is settled in full.</p>
+                            """,
+                            onSlot: (slot, slotContainer) =>
+                            {
+                                if (slot.Name == "customer")
+                                {
+                                    slotContainer.Text("Example Retail Co.");
+                                }
+                            });
+                    });
+                });
             });
         });
     });

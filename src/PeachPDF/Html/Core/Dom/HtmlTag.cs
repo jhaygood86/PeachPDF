@@ -36,9 +36,12 @@ namespace PeachPDF.Html.Core.Dom
         }
 
         /// <summary>
-        /// Gets the name of this tag
+        /// Gets the name of this tag. Settable only internally - used by the declarative document-building
+        /// API's <c>IContainer.Tag(string)</c> to rename a synthetic tag (e.g. the "div" a declaratively-built
+        /// box is created with) after construction, so a document-level stylesheet's own type selector
+        /// (<c>li { ... }</c>) can target it. Never reassigned for a box produced by HTML parsing.
         /// </summary>
-        public string Name { get; }
+        public string Name { get; internal set; }
 
         /// <summary>
         /// Gets collection of attributes and their value the html tag has

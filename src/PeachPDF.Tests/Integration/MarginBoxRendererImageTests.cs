@@ -420,5 +420,20 @@ namespace PeachPDF.Tests.Integration
 
             Assert.InRange(x, 205, 218);
         }
+
+        [Fact]
+        public async Task MatchParent_ResolvesAgainstThePageContextsOwnDirection_NotTheDefaultLeft()
+        {
+            // #1027: text-align:match-parent is now valid CSS, and a margin box has no real box-tree
+            // parent to resolve it against (see MarginBoxRenderer.IsPageRtl's own doc comment) - the
+            // page context (the @page rule's own top-level direction: rtl here) stands in for it, the
+            // same role pageStyle already plays as this method's other fallback. Same expected range as
+            // ExplicitTextAlignRight_OverridesInferredLeft above: match-parent should behave like an
+            // explicit right in this rtl page, not fall through to the @top-left box's own left default.
+            var x = GetHeaderTextX(await GetPdfText(
+                "direction: rtl; @top-left { content: \"X\"; text-align: match-parent; }"));
+
+            Assert.InRange(x, 205, 218);
+        }
     }
 }

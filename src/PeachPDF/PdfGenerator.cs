@@ -122,6 +122,21 @@ namespace PeachPDF
         }
 
         /// <summary>
+        /// Genuinely zero-copy counterpart of <see cref="ParseStyleSheet(string, bool)"/> - see
+        /// <see cref="Html.Core.Parse.CssParser.ParseStyleSheet(ReadOnlyMemory{char}, bool)"/>'s own remarks
+        /// for why <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this
+        /// possible.
+        /// </summary>
+        /// <param name="stylesheet">the stylesheet source to parse</param>
+        /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
+        /// <returns>the parsed css data</returns>
+        public async Task<PeachPdfCssContent> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
+        {
+            var cssData = await CssData.Parse(_pdfSharpAdapter, stylesheet, combineWithDefault);
+            return new PeachPdfCssContent(cssData, _pdfSharpAdapter);
+        }
+
+        /// <summary>
         /// Create PDF document from given HTML.<br/>
         /// </summary>
         /// <param name="html">HTML source to create PDF from</param>
@@ -314,6 +329,7 @@ namespace PeachPDF
             document.PdfDocument.Options.DownscaleImages = config.DownscaleImages;
             document.PdfDocument.Options.DownscaleQuality = config.DownscaleQuality;
             document.PdfDocument.Options.MaximumDownscaleMultiplier = config.MaximumDownscaleMultiplier;
+            document.PdfDocument.Options.ImageCompression = config.ImageCompression;
             // PDF/A conformance is a whole-document property, but AddPdfPages/AddPages are repeatable
             // public APIs (a caller can append more pages to an existing PeachPdfDocument) - a second call
             // requesting a different level than the first would otherwise silently leave the document's
@@ -483,7 +499,7 @@ namespace PeachPDF
 
             foreach (var pageHandler in documentBuilder.PageHandlers)
             {
-                await AddDeclarativePage(document, pageHandler, config, properties);
+                await AddDeclarativePage(document, pageHandler, config, properties, documentBuilder.DocumentStylesheet);
             }
         }
 
@@ -499,7 +515,7 @@ namespace PeachPDF
         /// <see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>
         /// call appending to the same document would be.
         /// </summary>
-        private async Task AddDeclarativePage(PeachPdfDocument document, Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, CssPropertyFactory properties)
+        private async Task AddDeclarativePage(PeachPdfDocument document, Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, CssPropertyFactory properties, PeachPdfCssContent? stylesheet)
         {
             var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, properties);
             ResolvePendingAutoDirections(pageDescriptor.RootBox, properties);
@@ -524,10 +540,40 @@ namespace PeachPDF
             container.MarginBottom = pageDescriptor.MarginBottomOverride ?? config.MarginBottom;
             container.MarginLeft = pageDescriptor.MarginLeftOverride ?? config.MarginLeft;
             container.MarginRight = pageDescriptor.MarginRightOverride ?? config.MarginRight;
-            container.HtmlContainerInt.PageRules = pageDescriptor.PageRules;
+            container.HtmlContainerInt.PageRules = DomParser.BuildDeclarativePageRules(
+                pageDescriptor.PageRules, stylesheet?.CssData,
+                marginLeftIsExplicit: pageDescriptor.MarginLeftOverride is not null,
+                marginTopIsExplicit: pageDescriptor.MarginTopOverride is not null,
+                marginRightIsExplicit: pageDescriptor.MarginRightOverride is not null,
+                marginBottomIsExplicit: pageDescriptor.MarginBottomOverride is not null,
+                sizeIsExplicit: pageDescriptor.PageSizeOverride is not null);
 
             container.PageSize = orgPageSize;
-            await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage);
+            await container.SetDeclarativeRoot(pageDescriptor.RootBox, config.DefaultLanguage, stylesheet);
+
+            if (stylesheet is not null)
+            {
+                // Track A: a document-level stylesheet's own base @page rule may still adjust whole-page
+                // geometry, but only for an edge/size the page builder itself left unset - see
+                // IDocumentBuilder.Stylesheet's own precedence doc comment. Run after SetDeclarativeRoot
+                // (needs root.HtmlContainer set, for em/rem-relative margin resolution via
+                // CssBox.GetEmHeight/GetRemHeight).
+                DomParser.CascadeApplyPageStyles(container.HtmlContainerInt, pageDescriptor.RootBox, stylesheet.CssData,
+                    allowMarginLeft: pageDescriptor.MarginLeftOverride is null,
+                    allowMarginTop: pageDescriptor.MarginTopOverride is null,
+                    allowMarginRight: pageDescriptor.MarginRightOverride is null,
+                    allowMarginBottom: pageDescriptor.MarginBottomOverride is null,
+                    allowSize: pageDescriptor.PageSizeOverride is null);
+
+                // Keep the local sheet-size variable in sync with any in-place correction the call above just
+                // made, mirroring AddPdfPages's own identical "orgPageSize = container.CssPageSize.Value"
+                // sync after SetContent/SetHtml - everything below this point (the content-area computation,
+                // the measure context) must see the corrected size, not the originally-configured one.
+                if (container.CssPageSize.HasValue)
+                {
+                    orgPageSize = container.CssPageSize.Value;
+                }
+            }
 
             // Mirrors SetContent's own tail: the content page size is the sheet less its margins, and
             // the document origin sits at the top-left of that band.
@@ -552,9 +598,12 @@ namespace PeachPDF
         /// <c>ResolveAutoDirectionality</c>), just triggered here instead of from the parser, since a
         /// declaratively-built tree has no parse step of its own to hook. Unlike that HTML path (which
         /// writes a literal <c>dir</c> attribute back onto the element and lets the UA stylesheet's
-        /// <c>[dir]</c> attribute-selector apply <c>direction</c> through the normal cascade), a
-        /// declarative tree never runs selector-based cascade at all, so this sets the resolved value
-        /// directly via <paramref name="properties"/> instead.
+        /// <c>[dir]</c> attribute-selector apply <c>direction</c> through the normal cascade), this sets the
+        /// resolved value directly via <paramref name="properties"/> instead - runs before
+        /// <see cref="HtmlContainer.SetDeclarativeRoot"/>'s own optional stylesheet-matching pass (see
+        /// <see cref="IDocumentBuilder.Stylesheet"/>), so the result is tracked in
+        /// <see cref="CssBox.BuilderSetProperties"/> and a plain (non-<c>!important</c>) stylesheet
+        /// <c>direction</c> rule cannot silently override it, the same as any other builder-set property.
         /// </summary>
         internal static void ResolvePendingAutoDirections(CssBox root, CssPropertyFactory properties)
         {

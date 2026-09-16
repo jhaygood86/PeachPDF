@@ -767,20 +767,28 @@ namespace PeachPDF.Html.Core.Dom
 
         private static (string TextAlign, string VerticalAlign) ResolveAlignment(StyleDeclaration style, StyleDeclaration? pageStyle, string boxName)
         {
-            // StyleDeclaration.TextAlign/VerticalAlign return string.Empty (not null) for an unset
+            // StyleDeclaration.TextAlignAll/VerticalAlign return string.Empty (not null) for an unset
             // property, so a null-coalescing fallback never fires - an unset text-align must fall
             // through to the box's position-inferred default (CSS Paged Media Level 3 §7.2), not an
-            // empty string. Check for empty explicitly.
-            var textAlign = string.IsNullOrWhiteSpace(style.TextAlign)
+            // empty string. Check for empty explicitly. Reads TextAlignAll rather than the text-align
+            // shorthand's own StyleDeclaration.TextAlign - text-align-last is never relevant to a
+            // margin box, and TextAlignAll always resolves to a bare keyword unlike the shorthand's
+            // own serialization, which can be empty for a longhand combination it can't represent.
+            var textAlign = string.IsNullOrWhiteSpace(style.TextAlignAll)
                 ? InferAlignment(boxName)
-                : style.TextAlign.ToLowerInvariant();
+                : style.TextAlignAll.ToLowerInvariant();
 
             // text-align's initial/logical values (CSS Text 3 §7.1) resolve against the margin box's
             // own direction, the same as an in-flow box's - see CssLayoutEngine.ResolveHorizontalAlign.
+            // match-parent (#1027) is the one exception: css-text-3 §6.2 has it resolve against the
+            // *parent's* own direction rather than the box's own - a margin box has no real box-tree
+            // parent to consult (see IsRtl's own doc comment), so the page context (pageStyle) is that
+            // parent, the same role it already plays as this method's direction/font fallback elsewhere.
             textAlign = textAlign switch
             {
                 "start" => IsRtl(style, pageStyle) ? Keywords.Right : Keywords.Left,
                 "end" => IsRtl(style, pageStyle) ? Keywords.Left : Keywords.Right,
+                "match-parent" => IsPageRtl(pageStyle) ? Keywords.Right : Keywords.Left,
                 _ => textAlign
             };
 
@@ -797,6 +805,16 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static bool IsRtl(StyleDeclaration style, StyleDeclaration? pageStyle) =>
             (FirstNonEmpty(style.Direction, pageStyle?.Direction) ?? Keywords.Ltr)
+            .Equals(Keywords.Rtl, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// The page context's own resolved <c>direction</c> - unlike <see cref="IsRtl"/>, never falls
+        /// back to the margin box's own declaration, since <c>match-parent</c> (css-text-3 §6.2)
+        /// specifically wants the *parent's* direction rather than the box's own, and the page context
+        /// is a margin box's stand-in parent (see <see cref="IsRtl"/>'s own doc comment).
+        /// </summary>
+        private static bool IsPageRtl(StyleDeclaration? pageStyle) =>
+            (FirstNonEmpty(pageStyle?.Direction, null) ?? Keywords.Ltr)
             .Equals(Keywords.Rtl, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>

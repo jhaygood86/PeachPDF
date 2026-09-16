@@ -185,6 +185,40 @@ namespace PeachPDF.Layout
         /// </summary>
         void Svg(Func<PdfSize, string> generator);
 
+        /// <summary>
+        /// Parses <paramref name="html"/> as an HTML fragment (through the same HTML parser and cascade the
+        /// HTML-string rendering path uses) and splices the result into this container's tree, in place, as
+        /// one new child holding the fragment's own top-level nodes (which may be more than one - unlike
+        /// every other terminal method here, an HTML fragment can itself contain several sibling elements).
+        /// Terminal - may be called at most once.
+        /// <para>
+        /// <paramref name="stylesheet"/> supplies the CSS the fragment's own class/id-driven styling
+        /// cascades against, layered under the fragment's own <c>&lt;style&gt;</c> tags and the user-agent
+        /// defaults every HTML element already gets; null styles the fragment with only those two. A
+        /// <c>&lt;link rel="stylesheet"&gt;</c> inside the fragment is never loaded (there is no document
+        /// context to resolve it through at this point in building the tree) - author it as a
+        /// <c>&lt;style&gt;</c> tag, or pass it via <paramref name="stylesheet"/>, instead. A
+        /// <c>float: footnote</c> element inside the fragment renders as ordinary inline content rather than
+        /// being detached into a footnote area, for the same reason.
+        /// </para>
+        /// <para>
+        /// <paramref name="onSlot"/>, when given, is invoked once per <c>&lt;slot&gt;</c> element the
+        /// fragment contains (in document order, regardless of name, including more than one sharing a
+        /// name), with a <see cref="SlotContext"/> describing it and an <see cref="IContainer"/> positioned
+        /// to replace it - populate that container the same way any other container is populated (e.g.
+        /// <c>slotContainer.Text(...)</c>) to fill the slot. Leaving it untouched (or passing no
+        /// <paramref name="onSlot"/> at all) keeps the slot's own fallback content - whatever markup it
+        /// contained in <paramref name="html"/> - exactly as authored.
+        /// </para>
+        /// </summary>
+        void Html(string html, PeachPdfCssContent? stylesheet = null, Action<SlotContext, IContainer>? onSlot = null);
+
+        /// <summary>Places an HTML fragment read fully from a stream - see <see cref="Html(string, PeachPdfCssContent?, Action{SlotContext, IContainer}?)"/>. Terminal - may be called at most once.</summary>
+        void Html(Stream stream, PeachPdfCssContent? stylesheet = null, Action<SlotContext, IContainer>? onSlot = null);
+
+        /// <summary>Places an HTML fragment loaded from raw bytes - see <see cref="Html(string, PeachPdfCssContent?, Action{SlotContext, IContainer}?)"/>. Terminal - may be called at most once.</summary>
+        void Html(byte[] data, PeachPdfCssContent? stylesheet = null, Action<SlotContext, IContainer>? onSlot = null);
+
         /// <summary>Places a horizontal rule of the given thickness, filled with <paramref name="color"/> (default black), or dashed when <paramref name="dashed"/> is true. Terminal - may be called at most once.</summary>
         void LineHorizontal(PdfLength thickness, PdfColor? color = null, bool dashed = false);
 
@@ -222,5 +256,45 @@ namespace PeachPDF.Layout
 
         /// <summary>Tags this container's own physical position as the end of the page-numbered section <paramref name="sectionId"/> - see <see cref="BeginPageNumberOfSection"/>.</summary>
         IContainer EndPageNumberOfSection(string sectionId);
+
+        /// <summary>
+        /// Tags this container with a CSS class name, so a stylesheet attached via
+        /// <see cref="IDocumentBuilder.Stylesheet"/> can target it with a <c>.className</c> selector
+        /// (including compound/descendant selectors built from it). Purely inert metadata with no visual
+        /// effect when no stylesheet is attached - safe to call as a stable hook even if styling is added
+        /// later. Calling this more than once on the same container adds an additional class
+        /// (space-separated), matching HTML's own multi-valued <c>class</c> attribute, rather than replacing
+        /// the previous one.
+        /// </summary>
+        IContainer Class(string className);
+
+        /// <summary>
+        /// Tags this container with a CSS id, so a stylesheet attached via
+        /// <see cref="IDocumentBuilder.Stylesheet"/> can target it with a <c>#id</c> selector. Purely inert
+        /// metadata with no visual effect when no stylesheet is attached. Calling this more than once on the
+        /// same container replaces the previous id (an element has at most one id) - unlike
+        /// <see cref="Class"/>, this does not accumulate.
+        /// </summary>
+        IContainer Id(string id);
+
+        /// <summary>
+        /// Renames this container's own internal tag name (a synthetic <c>"div"</c>/<c>"img"</c>/<c>"a"</c>
+        /// by default, depending on which method created it) to <paramref name="tagName"/>, so a stylesheet
+        /// attached via <see cref="IDocumentBuilder.Stylesheet"/> can target it with a bare type selector
+        /// (e.g. <c>li { ... }</c>) matching the intended semantic element rather than the internal default.
+        /// Purely inert metadata with no visual effect when no stylesheet is attached.
+        /// </summary>
+        IContainer Tag(string tagName);
+
+        /// <summary>
+        /// Tags this container's own position as the start of the named page type <paramref name="name"/>
+        /// (CSS <c>page</c> property, <see href="https://www.w3.org/TR/CSS21/page.html#page-selectors">CSS
+        /// 2.1 §13.2</see>) - combine with a document-level stylesheet's own <c>@page name { ... }</c> rule
+        /// (see <see cref="IDocumentBuilder.Stylesheet"/>) to switch page size/margins/orientation from this
+        /// point in the flow onward, forcing a page break if a different named page (or no named page) was
+        /// active immediately before. A decorator, like <see cref="Bookmark"/>/
+        /// <see cref="BeginPageNumberOfSection"/> - chain it before the container's own terminal content.
+        /// </summary>
+        IContainer PageName(string name);
     }
 }

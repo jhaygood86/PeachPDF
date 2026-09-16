@@ -227,13 +227,39 @@ namespace PeachPDF.Tests.Integration
         public async Task TextAlignLast_IsInherited()
         {
             // css-text-3 §6.3 declares it Inherited: yes, so a declaration on an ancestor reaches the
-            // block whose lines it governs.
+            // block whose lines it governs - as long as the descendant doesn't also declare a plain
+            // text-align value of its own, which (per the text-align shorthand, #1027) explicitly
+            // resets *that box's own* text-align-last to auto. Both declarations sit on the div here,
+            // and <p> inherits both untouched, rather than <p> redeclaring text-align itself (see
+            // TextAlignShorthand_OwnPlainTextAlign_ResetsInheritedTextAlignLast below for that case).
             var (block, _) = await BlockAsync(
-                $"<div style='text-align-last:right'><p id='p' style='{Justify}'>{Words(30)}</p></div>");
+                $"<div style='{Justify};text-align-last:right'><p id='p'>{Words(30)}</p></div>");
 
             var last = NonEmpty(block)[^1];
 
             Assert.Equal(last.ContentRight, last.Words[^1].Right, 1);
+        }
+
+        /// <summary>
+        /// The flip side of <see cref="TextAlignLast_IsInherited"/> - a migration from PeachPDF's old
+        /// independent-longhand behavior (#1027): a descendant's own plain <c>text-align</c> value now
+        /// resets that descendant's own <c>text-align-last</c> to <c>auto</c>, per the real
+        /// <c>text-align</c> shorthand (css-text-3 §6.1), even though an ancestor declared
+        /// <c>text-align-last</c> explicitly. This is the issue's own reported example, reproduced.
+        /// </summary>
+        [Fact]
+        public async Task TextAlignShorthand_OwnPlainTextAlign_ResetsInheritedTextAlignLast()
+        {
+            var (block, _) = await BlockAsync(
+                $"<div style='text-align-last:justify'><p id='p' style='{Justify}'>{Words(30)}</p></div>");
+
+            var last = NonEmpty(block)[^1];
+
+            // Reset to auto defers to text-align-all under justify, which §6.3 makes start - so the
+            // last line stays ragged (start-aligned), not stretched the way an inherited
+            // text-align-last:justify would have stretched it.
+            Assert.True(last.ContentRight - last.Words[^1].Right > 1,
+                "the last line should be left ragged (text-align-last reset to auto), not justified");
         }
 
         [Fact]

@@ -970,7 +970,21 @@ namespace PeachPDF.Html.Core
         /// declarative document has no <c>&lt;html lang&gt;</c> to read one from automatically. Null leaves
         /// <see cref="DocumentLanguage"/> unset.
         /// </param>
-        internal async ValueTask SetDeclarativeRoot(CssBox root, string? documentLanguage)
+        /// <param name="stylesheet">
+        /// A document-level stylesheet attached via <see cref="Layout.IDocumentBuilder.Stylesheet"/>, or null
+        /// for a declarative document styled purely by direct
+        /// <see cref="Utils.CssPropertyFactory.Set(CssBox, string, string)"/> calls (the only behavior before
+        /// this parameter existed). When non-null: its <c>@font-face</c> rules are registered
+        /// (<see cref="DomParser.CascadeApplyStyleFonts"/>), its <c>@property</c>/<c>@font-palette-values</c>
+        /// rules populate <see cref="RegisteredProperties"/>/<see cref="FontPaletteValues"/>, and its
+        /// ordinary style rules are matched and applied against the whole <paramref name="root"/> tree
+        /// (<see cref="DomParser.ApplyDeclarativeStylesheet"/>) - all before bidi levels are assigned,
+        /// mirroring <see cref="DomParser.GenerateCssTree"/>'s own cascade-before-bidi ordering, so a
+        /// stylesheet-set <c>direction</c> is visible to bidi assignment. Its own <c>@page</c> rules are
+        /// handled separately by <see cref="PdfGenerator.AddDeclarativePage"/> (whole-document page geometry
+        /// needs the page's own <c>PageSize</c>/margins already resolved, and this method runs before that).
+        /// </param>
+        internal async ValueTask SetDeclarativeRoot(CssBox root, string? documentLanguage, PeachPdfCssContent? stylesheet = null)
         {
             Clear();
             CssBox.ClearCounter();
@@ -985,7 +999,23 @@ namespace PeachPDF.Html.Core
             // writing-mode declaration, which a declarative document has no equivalent of.
             RootWritingMode = WritingMode.HorizontalTb;
             DocumentLanguage = documentLanguage;
-            CssData = await Adapter.GetDefaultCssData();
+
+            // Mirrors SetHtml's own "use the caller's CssData directly" idiom (no clone) - there is nothing
+            // appended to it on this path (no <style>/<link> discovery step exists for a declarative tree),
+            // so there is nothing a clone would need to protect the caller's PeachPdfCssContent instance from.
+            CssData = stylesheet?.CssData ?? await Adapter.GetDefaultCssData();
+
+            if (stylesheet is not null)
+            {
+                await DomParser.CascadeApplyStyleFonts(CssData, Adapter);
+
+                var cssValueParser = new CssValueParser(Adapter);
+                RegisteredProperties = RegisteredProperty.BuildRegistry(CssData, cssValueParser);
+                FontPaletteValues = RegisteredFontPalette.BuildRegistry(CssData, cssValueParser);
+
+                var media = MediaQueryContext.FromContainer(this, Media);
+                DomParser.ApplyDeclarativeStylesheet(root, CssData, media, Adapter);
+            }
 
             // Mirrors DomParser.GenerateCssTree's own ordering (AssignBidiLevels, then the tree walk that
             // calls ParseToWords on every text box) - see this method's own <paramref name="root"/> remarks

@@ -86,7 +86,30 @@ namespace PeachPDF.Html.Core.Parse
             return cssData;
         }
 
+        /// <summary>
+        /// Genuinely zero-copy counterpart of <see cref="ParseStyleSheet(string, bool)"/> - see
+        /// <see cref="StylesheetParser.Parse(ReadOnlyMemory{char})"/>'s own remarks for why
+        /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this possible.
+        /// </summary>
+        public async Task<CssData> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault)
+        {
+            var cssData = combineWithDefault ? (await _adapter.GetDefaultCssData()).Clone() : new CssData();
+
+            if (!stylesheet.IsEmpty)
+            {
+                await ParseStyleSheet(cssData, stylesheet);
+            }
+
+            return cssData;
+        }
+
         public static Stylesheet ParseStyleSheet(string stylesheet)
+        {
+            StylesheetParser parser = new();
+            return parser.Parse(stylesheet);
+        }
+
+        public static Stylesheet ParseStyleSheet(ReadOnlyMemory<char> stylesheet)
         {
             StylesheetParser parser = new();
             return parser.Parse(stylesheet);
@@ -110,6 +133,15 @@ namespace PeachPDF.Html.Core.Parse
         {
             if (!string.IsNullOrEmpty(stylesheet))
             {
+                await ParseStyle(cssData, stylesheet.AsMemory(), baseUri, new HashSet<string>());
+            }
+        }
+
+        /// <summary>Genuinely zero-copy counterpart of <see cref="ParseStyleSheet(CssData, string, RUri?)"/>.</summary>
+        public async Task ParseStyleSheet(CssData cssData, ReadOnlyMemory<char> stylesheet, RUri? baseUri = null)
+        {
+            if (!stylesheet.IsEmpty)
+            {
                 await ParseStyle(cssData, stylesheet, baseUri, new HashSet<string>());
             }
         }
@@ -129,7 +161,14 @@ namespace PeachPDF.Html.Core.Parse
             return _valueParser.IsColorValid(colorValue);
         }
 
-        private async Task ParseStyle(CssData data, string stylesheetText, RUri? baseUri, HashSet<string> visitedImportUris)
+        /// <summary>
+        /// <paramref name="stylesheetText"/> is <see cref="ReadOnlyMemory{T}"/>, not <see cref="string"/>, so
+        /// that <see cref="ParseStyleSheet(CssData, ReadOnlyMemory{char}, RUri?)"/>'s caller-supplied text
+        /// flows through with zero copies - a <see cref="string"/> caller wraps its text with
+        /// <see cref="MemoryExtensions.AsMemory(string?)"/> (itself a zero-copy view over the same string),
+        /// so this is a strict widening: every existing <see cref="string"/>-based call site is unaffected.
+        /// </summary>
+        private async Task ParseStyle(CssData data, ReadOnlyMemory<char> stylesheetText, RUri? baseUri, HashSet<string> visitedImportUris)
         {
             var stylesheet = ParseStyleSheet(stylesheetText);
             stylesheet.BaseUri = baseUri;
@@ -160,7 +199,7 @@ namespace PeachPDF.Html.Core.Parse
 
                     if (importedContent is not null && (importedUri is null || visitedImportUris.Add(importedUri.AbsoluteUri)))
                     {
-                        await ParseStyle(data, importedContent, importedUri, visitedImportUris);
+                        await ParseStyle(data, importedContent.AsMemory(), importedUri, visitedImportUris);
                     }
                 }
                 else

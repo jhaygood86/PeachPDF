@@ -138,6 +138,38 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
                 return;
             }
 
+            bool allowLossy = _document.Options.ImageCompression == ImageCompression.Lossy;
+
+            // An eligible PNG (opaque, not interlaced) embeds its own IDAT bytes directly - smaller and
+            // pixel-exact, and (like CmykRaster/JpegPassthrough) never resized: PdfImageTable's resize
+            // skip (IsPngPinnedToNaturalSize) guarantees _targetWidth is null whenever this fast path is
+            // about to be taken. Lossy normally forces the lossy fallback below instead - except for a
+            // source with a ColorKeyMask (tRNS-derived transparency): JPEG can't represent that at all, so
+            // Lossy simply doesn't apply to it, the same "the format can't hold this" treatment a real
+            // per-pixel-alpha PNG already gets by never reaching InitializeJpeg's dispatch in the first
+            // place. PdfImageTable.IsPngPinnedToNaturalSize mirrors this exact condition.
+            if (_targetWidth is null && _image.PngPassthrough is { } pngPassthrough &&
+                (!allowLossy || pngPassthrough.ColorKeyMask is not null))
+            {
+                EmbedPngPassthrough(pngPassthrough);
+                return;
+            }
+
+            // Covers PNG/BMP/GIF: a source whose own format has no lossy encoding mode at all, but that
+            // either isn't PNG-pass-through-eligible (interlaced) or has no pass-through mechanism at all
+            // (BMP/GIF) - ImageCompression.Auto/Lossless both refuse to silently re-encode it as lossy
+            // JPEG. Auto only protects it at natural size (_targetWidth is null) - a downscaled one keeps
+            // the existing, intentional downscale-to-JPEG-at-DownscaleQuality trade-off; Lossless protects
+            // it at every size, decoding and falling into the same raw-/FlateDecode path a real alpha
+            // image already uses (ReadTrueColorMemoryBitmap resizes first when _targetWidth is set, then
+            // simply never populates a /SMask for a source with no actual transparent pixels).
+            if (!allowLossy && _image.IsLosslessSourceFormat &&
+                (_document.Options.ImageCompression == ImageCompression.Lossless || _targetWidth is null))
+            {
+                ReadTrueColorMemoryBitmap(3, 8, true);
+                return;
+            }
+
             byte[] imageBits = null;
 
             // A resize only ever reaches here for an image with no real alpha (PdfImageTable only
@@ -269,6 +301,85 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             iccStream.Elements[PdfStream.Keys.Length] = new PdfInteger(iccProfile.Length);
 
             return new PdfArray(_document, new PdfName("/ICCBased"), iccStream.Reference);
+        }
+
+        /// <summary>
+        /// Embeds a pass-through-eligible PNG source: its own concatenated <c>IDAT</c> bytes, unchanged,
+        /// as <c>/FlateDecode</c> with a <c>/DecodeParms</c> describing PNG's own predictor/color
+        /// layout - a conformant reader reconstructs the identical pixels with no re-encoding on
+        /// PeachPDF's part. The single choke point <see cref="InitializeJpeg"/>'s fast path calls into,
+        /// mirroring <see cref="EmbedJpegPassthrough"/>'s shape closely; unlike that method (and
+        /// <see cref="InitializeCmykRaster"/>), there is no ICC-profile branch here at all - PNG
+        /// pass-through never preserves an embedded <c>iCCP</c> profile (see
+        /// <see cref="PngPassthroughColorSpace"/>'s own remarks). A <c>tRNS</c>-derived
+        /// <see cref="PngPassthroughData.ColorKeyMask"/>, when present, writes as a color-key
+        /// <c>/Mask</c> array - no PDF/A guard needed here, unlike an <c>/SMask</c> alpha channel: color-
+        /// key masking predates PDF's transparency model entirely and isn't restricted under any
+        /// <c>PdfAConformance</c> level.
+        /// </summary>
+        void EmbedPngPassthrough(PngPassthroughData data)
+        {
+            Elements[Keys.ColorSpace] = BuildPngColorSpace(data);
+
+            Stream = new PdfStream(data.IdatData, this);
+            Elements[PdfStream.Keys.Length] = new PdfInteger(data.IdatData.Length);
+            Elements[PdfStream.Keys.Filter] = new PdfName("/FlateDecode");
+
+            var decodeParms = new PdfDictionary(_document);
+            decodeParms.Elements.SetInteger("/Predictor", 15);
+            decodeParms.Elements.SetInteger("/Colors", data.ColorSpace == PngPassthroughColorSpace.Rgb ? 3 : 1);
+            decodeParms.Elements.SetInteger("/BitsPerComponent", data.BitDepth);
+            decodeParms.Elements.SetInteger("/Columns", EffectiveWidth);
+            Elements[PdfStream.Keys.DecodeParms] = decodeParms;
+
+            if (data.ColorKeyMask is { Length: > 0 } colorKeyMask)
+            {
+                var maskArray = new PdfArray(_document);
+                foreach (var component in colorKeyMask)
+                {
+                    maskArray.Elements.Add(new PdfInteger(component));
+                }
+                Elements[Keys.Mask] = maskArray;
+            }
+
+            if (AllowInterpolate)
+                Elements[Keys.Interpolate] = PdfBoolean.True;
+            Elements[Keys.Width] = new PdfInteger(EffectiveWidth);
+            Elements[Keys.Height] = new PdfInteger(EffectiveHeight);
+            Elements[Keys.BitsPerComponent] = new PdfInteger(data.BitDepth);
+        }
+
+        /// <summary>
+        /// A bare <c>/DeviceGray</c>/<c>/DeviceRGB</c> name for the Gray/Rgb cases, or (for Palette source
+        /// PNGs) an <c>/Indexed</c> array via <see cref="BuildIndexedColorSpace"/>.
+        /// </summary>
+        PdfItem BuildPngColorSpace(PngPassthroughData data) => data.ColorSpace switch
+        {
+            PngPassthroughColorSpace.Gray => new PdfName("/DeviceGray"),
+            PngPassthroughColorSpace.Rgb => new PdfName("/DeviceRGB"),
+            PngPassthroughColorSpace.Indexed => BuildIndexedColorSpace(data.PaletteRgb!),
+            _ => throw new ArgumentOutOfRangeException(nameof(data)),
+        };
+
+        /// <summary>
+        /// Builds a PDF <c>/Indexed [/DeviceRGB hival lookup]</c> color space array from a PNG's raw
+        /// <c>PLTE</c> bytes (tightly packed RGB triples) - no existing code in this codebase constructs
+        /// one. <paramref name="paletteRgb"/> becomes the lookup table via an indirect stream object, the
+        /// same shape <see cref="BuildDeviceOrIccColorSpace"/> already uses for an ICC profile - simpler
+        /// and less risky than encoding a raw binary blob as a PDF string literal for what is always a
+        /// small (&#8804;768-byte) table.
+        /// </summary>
+        PdfItem BuildIndexedColorSpace(byte[] paletteRgb)
+        {
+            int hival = paletteRgb.Length / 3 - 1;
+
+            var lookupStream = new PdfDictionary(_document);
+            _document.Internals.AddObject(lookupStream);
+            lookupStream.Stream = new PdfStream(paletteRgb, lookupStream);
+            lookupStream.Elements[PdfStream.Keys.Length] = new PdfInteger(paletteRgb.Length);
+
+            return new PdfArray(_document, new PdfName("/Indexed"), new PdfName("/DeviceRGB"),
+                new PdfInteger(hival), lookupStream.Reference);
         }
 
         /// <summary>

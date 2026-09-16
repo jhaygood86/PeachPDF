@@ -285,6 +285,7 @@
         public static readonly string TableLayout = "table-layout";
         public static readonly string TabSize = "tab-size";
         public static readonly string TextAlign = "text-align";
+        public static readonly string TextAlignAll = "text-align-all";
         public static readonly string TextAlignLast = "text-align-last";
         public static readonly string TextAnchor = "text-anchor";
         public static readonly string TextAutospace = "text-autospace";

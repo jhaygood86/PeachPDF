@@ -29,8 +29,12 @@ namespace PeachPDF.Tests.Integration
             return Encoding.Latin1.GetString(ms.ToArray());
         }
 
+        // TruecolorAlpha (not the plain solid-color helper, which auto-indexes to a Palette PNG under
+        // PeachImage's encoder defaults - since issue #1086, a pass-through-eligible PNG is never
+        // resized/downscaled by design, which is exactly what this file tests, so the fixture needs real
+        // alpha to stay outside that carve-out and keep exercising the resize/transform-scale math).
         private static string LargePngDataUri() =>
-            "data:image/png;base64," + Convert.ToBase64String(RasterPngFixture.MakeSolidRgbaPngBytes(400, 400, 255, 0, 0));
+            "data:image/png;base64," + Convert.ToBase64String(RasterPngFixture.MakeOpaqueTruecolorAlphaPngBytes(400, 400, 255, 0, 0));
 
         private static int MaxEmbeddedWidth(string pdfText)
         {

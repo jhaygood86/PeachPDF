@@ -305,6 +305,8 @@
         public const string Separate = "separate";
         public const string Start = "start";
         public const string End = "end";
+        public const string MatchParent = "match-parent";
+        public const string JustifyAll = "justify-all";
         public const string Fill = "fill";
         public const string Screen = "screen";
         public const string Print = "print";

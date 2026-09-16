@@ -101,10 +101,12 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
         /// <summary>
         /// Computes the pixel size to resize <paramref name="image"/> to before embedding, or
         /// <c>(null, null)</c> when no resize should happen: the image is CMYK
-        /// (<see cref="XImage.IsCmyk"/>), downscaling is off (<see cref="PdfDocumentOptions.DownscaleImages"/>),
-        /// the display size isn't known/positive, or the image's natural size is already no larger than
-        /// the (multiplier-adjusted) display size. Never upscales - the result is always clamped to the
-        /// image's own natural pixel dimensions.
+        /// (<see cref="XImage.IsCmyk"/>), it's a PNG that <see cref="PdfImage.InitializeJpeg"/> is about to
+        /// embed via byte-for-byte pass-through regardless of resize (see <see cref="IsPngPinnedToNaturalSize"/>),
+        /// downscaling is off (<see cref="PdfDocumentOptions.DownscaleImages"/>), the display size isn't
+        /// known/positive, or the image's natural size is already no larger than the (multiplier-adjusted)
+        /// display size. Never upscales - the result is always clamped to the image's own natural pixel
+        /// dimensions.
         /// </summary>
         private (int? width, int? height) ComputeTargetPixelSize(XImage image, double widthPt, double heightPt)
         {
@@ -117,6 +119,8 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             // image with an embedded ICC profile - resizing that is fine, it just forfeits the
             // ICC-preserving pass-through for that specific embed (PdfImage.InitializeJpeg).
             if (image.IsCmyk) return (null, null);
+
+            if (IsPngPinnedToNaturalSize(image)) return (null, null);
 
             if (!Owner.Options.DownscaleImages) return (null, null);
             if (!(widthPt > 0) || !(heightPt > 0)) return (null, null);
@@ -141,6 +145,40 @@ namespace PeachPDF.PdfSharpCore.Pdf.Advanced
             if (targetWidth >= naturalWidth && targetHeight >= naturalHeight) return (null, null);
 
             return (targetWidth, targetHeight);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="image"/> is a pass-through-eligible PNG that <see cref="PdfImage.InitializeJpeg"/>
+        /// is about to embed via <c>EmbedPngPassthrough</c> regardless of any resize target this method
+        /// would otherwise compute - mirrors that method's own fast-path condition exactly, so this method
+        /// never computes a resize the embed layer would just ignore.
+        /// </summary>
+        /// <remarks>
+        /// Under <see cref="ImageCompression.Auto"/>, every pass-through-eligible PNG is pinned - by
+        /// definition not resizable, same as CMYK. Under <see cref="ImageCompression.Lossless"/>, none are:
+        /// a downscaled eligible PNG should still shrink (forfeiting pass-through for that specific embed
+        /// in favor of a decode+resize+FlateDecode re-embed, exactly the same "resize forfeits pass-through"
+        /// trade already made for an ICC-carrying RGB/Gray JPEG - see <c>IsLosslessSourceFormat</c>'s
+        /// fallback in <see cref="PdfImage.InitializeJpeg"/>), or Lossless's own "still shrinks a downscaled
+        /// lossless source" promise would be silently broken for the one format (PNG) that actually has a
+        /// pass-through mechanism to forfeit. Under <see cref="ImageCompression.Lossy"/>, an <em>opaque</em>
+        /// pass-through-eligible PNG resizes normally into the lossy JPEG path (the whole point of that
+        /// mode) - but one with a <c>PngPassthroughData.ColorKeyMask</c> is pinned even there: JPEG
+        /// cannot represent that transparency at all, so <see cref="PdfImage.InitializeJpeg"/> always takes
+        /// the pass-through fast path for it regardless of <c>ImageCompression</c> (the same "the format
+        /// can't hold this, so the setting doesn't apply" treatment a real per-pixel-alpha PNG already gets
+        /// by never reaching the JPEG-dispatch path at all).
+        /// </remarks>
+        private bool IsPngPinnedToNaturalSize(XImage image)
+        {
+            if (image.PngPassthrough is not { } pngPassthrough) return false;
+
+            return Owner.Options.ImageCompression switch
+            {
+                ImageCompression.Auto => true,
+                ImageCompression.Lossy => pngPassthrough.ColorKeyMask is not null,
+                _ => false,
+            };
         }
 
         /// <summary>

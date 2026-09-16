@@ -445,6 +445,18 @@ namespace PeachPDF.Html.Core.Dom
         internal int ActualNumericWeight => DerivedStyle.ActualNumericWeight;
 
         /// <summary>
+        /// This box's own <see cref="TextAlignAll"/>, with <c>match-parent</c> fully resolved (css-text-3
+        /// §6.2). See <see cref="DerivedStyle.ActualTextAlignAll"/>.
+        /// </summary>
+        internal HorizontalAlignment ActualTextAlignAll => DerivedStyle.ActualTextAlignAll;
+
+        /// <summary>
+        /// This box's own <see cref="TextAlignLast"/>, with <c>match-parent</c> fully resolved (css-text-3
+        /// §6.3). See <see cref="DerivedStyle.ActualTextAlignLast"/>.
+        /// </summary>
+        internal TextAlignLast ActualTextAlignLast => DerivedStyle.ActualTextAlignLast;
+
+        /// <summary>
         /// This box's own <see cref="FontStretch"/> keyword, resolved to a concrete CSS Fonts numeric
         /// stretch (1-9, matching OS/2 <c>usWidthClass</c>).
         /// </summary>
