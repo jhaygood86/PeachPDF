@@ -821,8 +821,15 @@ namespace PeachPDF.Html.Core.Paint
             if (ownDecorationArea && hasRightEdge)
                 x2 -= box.ActualPaddingRight + box.ActualBorderRightWidth;
 
+            // Captured once, rather than read back from pen.Width for the rest of this method: pen is a
+            // cached instance keyed only by color (RAdapter.GetPen), and WavyDecorationRenderer.
+            // StrokeWavyLine below calls g.GetPen(color) itself for the SAME color - the very same cached
+            // pen - and sets its own Width for that draw. Re-reading pen.Width afterward for a later
+            // keyword or segment would see that leftover value instead of this decoration's own
+            // thickness.
+            var thickness = ResolveDecorationThickness(styleSource.TextDecorationThickness, styleSource, g.PixelsPerPoint);
             var pen = g.GetPen(textDecorationActualColor);
-            pen.Width = ResolveDecorationThickness(styleSource.TextDecorationThickness, styleSource, g.PixelsPerPoint);
+            pen.Width = thickness;
             pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(textDecorationStyle);
 
             var span = new DecorationInterval(x1, x2);
@@ -870,7 +877,7 @@ namespace PeachPDF.Html.Core.Paint
             {
                 double y = line switch
                 {
-                    Keywords.Underline => baseline + ResolveAutomaticUnderlineClearance(pen.Width, g.PixelsPerPoint),
+                    Keywords.Underline => baseline + ResolveAutomaticUnderlineClearance(thickness, g.PixelsPerPoint),
                     Keywords.LineThrough => rectangle.Top + rectangle.Height / 2f,
                     Keywords.Overline => rectangle.Top,
                     _ => double.NaN
@@ -887,13 +894,13 @@ namespace PeachPDF.Html.Core.Paint
                 if (inkWords is not null && line is Keywords.Underline or Keywords.Overline)
                 {
                     List<DecorationInterval> combined = boxExclusions is null ? [] : [.. boxExclusions];
-                    AddInkExclusions(g, styleSource, inkWords, y, pen.Width, combined);
+                    AddInkExclusions(g, styleSource, inkWords, y, thickness, combined);
                     exclusions = combined;
                 }
 
                 foreach (var segment in DecorationSegments.Subtract(span, exclusions ?? []))
                 {
-                    StrokeDecorationSegment(g, pen, textDecorationStyle, line, segment.Start, segment.End, y);
+                    StrokeDecorationSegment(g, pen, thickness, textDecorationActualColor, textDecorationStyle, line, segment.Start, segment.End, y);
                 }
             }
         }
@@ -903,14 +910,16 @@ namespace PeachPDF.Html.Core.Paint
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Every style but <c>double</c> is one stroke, since <c>solid</c>/<c>dotted</c>/<c>dashed</c>
-        /// differ only in the pen's dash pattern, which
-        /// <see cref="TextDecorationStyleMapper.ToDashStyle"/> has already set. <c>double</c> is the one
-        /// that is not a pen at all: it is two strokes.
+        /// <c>solid</c>/<c>dotted</c>/<c>dashed</c> are one stroke each, differing only in the pen's dash
+        /// pattern, which <see cref="TextDecorationStyleMapper.ToDashStyle"/> has already set. <c>double</c>
+        /// and <c>wavy</c> are not a single pen stroke at all: the former is two strokes, the latter a
+        /// stroked <see cref="Html.Adapters.RGraphicsPath"/> built by
+        /// <see cref="WavyDecorationRenderer.StrokeWavyLine"/> - see that class's remarks for the wave's
+        /// geometry and why its phase is anchored to this segment's own start rather than the whole line's.
         /// </para>
         /// <para>
         /// <see href="https://www.w3.org/TR/css-text-decor-3/#text-decoration-style-property">css-text-decor-3
-        /// §2.2</see> does not define the styles itself - it says their "values have the same meaning as for
+        /// §2.2</see> does not define <c>double</c> itself - it says its value has "the same meaning as for
         /// the border-style properties", which for
         /// <see href="https://www.w3.org/TR/css-backgrounds-3/#border-style">css-backgrounds-3</see>'s
         /// <c>double</c> means "two lines ... the sum of the two lines and the space between them equals
@@ -920,37 +929,41 @@ namespace PeachPDF.Html.Core.Paint
         /// Instead each stroke is the resolved thickness and the gap between them matches, so the pair
         /// spans three times a single line. See
         /// <c>.claude/accepted-gaps/double-decoration-thickness-is-per-stroke-not-a-total.md</c>.
+        /// <c>wavy</c>, by contrast, is defined in its own words ("Draw a wavy line") rather than by that
+        /// cross-reference - the one style css-text-decor-3 §2.2 does not leave to <c>border-style</c> at
+        /// all, and so the one whose straight-line rendering was an unambiguous spec deviation rather
+        /// than a discretionary choice (issue #1114).
         /// </para>
         /// <para>
-        /// Which way the second stroke grows is measured against Chrome 141 rather than reasoned about:
-        /// at 300dpi it keeps the first stroke exactly where the single stroke sits and adds the second
-        /// <i>above</i> for an overline and <i>below</i> for both an underline and a line-through. That
-        /// also suits an underline's own anchor, whose top edge is kept below the alphabetic baseline (see
-        /// <see cref="ResolveAutomaticUnderlineClearance"/>) and would be pushed back through the
-        /// glyphs by growing upward.
+        /// Which way <c>double</c>'s second stroke - and <c>wavy</c>'s centerline, via
+        /// <see cref="WavyDecorationRenderer.GrowthDirection"/> - grows is measured against Chrome 141
+        /// rather than reasoned about: at 300dpi it keeps a single stroke exactly where <c>solid</c> puts
+        /// it and adds the second <i>above</i> for an overline and <i>below</i> for both an underline and
+        /// a line-through. That also suits an underline's own anchor, whose top edge is kept below the
+        /// alphabetic baseline (see <see cref="ResolveAutomaticUnderlineClearance"/>) and would be pushed
+        /// back through the glyphs by growing upward.
         /// </para>
         /// </remarks>
-        private static void StrokeDecorationSegment(RGraphics g, RPen pen, string? style, string line,
+        private static void StrokeDecorationSegment(RGraphics g, RPen pen, double thickness, RColor color, string? style, string line,
             double x1, double x2, double y)
         {
-            if (style != Keywords.Double)
+            switch (style)
             {
-                g.DrawLine(pen, x1, y, x2, y);
-                return;
+                case Keywords.Double:
+                    var separation = 2 * thickness;
+                    var away = y + WavyDecorationRenderer.GrowthDirection(line) * separation;
+                    g.DrawLine(pen, x1, y, x2, y);
+                    g.DrawLine(pen, x1, away, x2, away);
+                    return;
+
+                case Keywords.Wavy:
+                    WavyDecorationRenderer.StrokeWavyLine(g, color, line, x1, x2, y, thickness);
+                    return;
+
+                default:
+                    g.DrawLine(pen, x1, y, x2, y);
+                    return;
             }
-
-            var separation = 2 * pen.Width;
-
-            var (first, second) = line switch
-            {
-                Keywords.Overline => (y - separation, y),
-                // Underline and line-through both grow downward, and anything else that reached here
-                // with a position of its own follows the same default.
-                _ => (y, y + separation)
-            };
-
-            g.DrawLine(pen, x1, first, x2, first);
-            g.DrawLine(pen, x1, second, x2, second);
         }
 
         /// <summary>

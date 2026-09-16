@@ -6449,6 +6449,7 @@ var decorationStyleHtml = """
     .dotted { text-decoration: underline dotted }
     .dashed { text-decoration: underline dashed }
     .doubled { text-decoration: underline double }
+    .wavy { text-decoration: underline wavy }
     .over { text-decoration: overline double }
     /* A double overline grows upward, so it needs headroom; flush against a page top the upper
        stroke falls outside the page. See docs/html-css-support.md. */
@@ -6456,6 +6457,11 @@ var decorationStyleHtml = """
     .through { text-decoration: line-through double }
     .heavy { text-decoration: underline double; text-decoration-thickness: 2px;
              text-decoration-color: #c0392b }
+    .wavy-over { text-decoration: overline wavy }
+    .wavy-through { text-decoration: line-through wavy }
+    .wavy-thick { text-decoration: underline wavy; text-decoration-thickness: 3px;
+                  text-decoration-color: #c0392b }
+    .wavy-skip { text-decoration: underline wavy }
     table { border-collapse: collapse; width: 62%; font-size: 11pt }
     td { padding: 3px 6px }
     td.n { text-align: right; font-variant-numeric: tabular-nums }
@@ -6464,22 +6470,32 @@ var decorationStyleHtml = """
     </style>
 
     <h1>text-decoration-style</h1>
-    <p class="lede">Every style is one stroke with a dash pattern, except <b>double</b>, which is two
-    strokes of the resolved thickness separated by a gap of the same thickness. The first stroke stays
-    where a single one would sit and the second grows away from the text &mdash; downward for an
-    underline and a line-through, upward for an overline &mdash; which is what browsers do.</p>
+    <p class="lede">Every style is one stroke with a dash pattern, except <b>double</b> and <b>wavy</b>.
+    Double is two strokes of the resolved thickness separated by a gap of the same thickness: the first
+    stroke stays where a single one would sit and the second grows away from the text &mdash; downward
+    for an underline and a line-through, upward for an overline. Wavy strokes a curved path instead of a
+    dash pattern (css-text-decor-3 &sect;2.2: "Draw a wavy line") &mdash; its centerline grows away from
+    the text the same direction double's second stroke does.</p>
 
-    <h2>The four styles, as underlines</h2>
+    <h2>The five styles, as underlines</h2>
     <div class="row"><div class="label">solid</div><span class="solid">Hamburgefonstiv</span></div>
     <div class="row"><div class="label">dotted</div><span class="dotted">Hamburgefonstiv</span></div>
     <div class="row"><div class="label">dashed</div><span class="dashed">Hamburgefonstiv</span></div>
     <div class="row"><div class="label">double</div><span class="doubled">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">wavy</div><span class="wavy">Hamburgefonstiv</span></div>
 
     <h2>double on each line, and at a heavier thickness</h2>
     <div class="row"><div class="label">underline double &mdash; grows downward</div><span class="doubled">Hamburgefonstiv</span></div>
     <div class="row over-row"><div class="label">overline double &mdash; grows upward</div><span class="over">Hamburgefonstiv</span></div>
     <div class="row"><div class="label">line-through double &mdash; grows downward</div><span class="through">Hamburgefonstiv</span></div>
     <div class="row"><div class="label">underline double, text-decoration-thickness: 2px</div><span class="heavy">Hamburgefonstiv</span></div>
+
+    <h2>wavy on each line, at a heavier thickness, and skipping ink</h2>
+    <div class="row"><div class="label">underline wavy</div><span class="wavy">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">overline wavy</div><span class="wavy-over">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">line-through wavy</div><span class="wavy-through">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">underline wavy, text-decoration-thickness: 3px</div><span class="wavy-thick">Hamburgefonstiv</span></div>
+    <div class="row"><div class="label">underline wavy, text-decoration-skip-ink breaks it around descenders</div><span class="wavy-skip">Typography judging a quick pig</span></div>
 
     <h2>What it is for</h2>
     <table>
@@ -6490,7 +6506,7 @@ var decorationStyleHtml = """
     """;
 
 await SaveShowcaseAsync("text_decoration_style", "Typography & Text", "text-decoration-style",
-    "text-decoration-style (CSS Text Decoration 3 \u00a72.2): solid, dotted and dashed as pen patterns, and double as two strokes \u2014 the accounting rule under a grand total.",
+    "text-decoration-style (CSS Text Decoration 3 \u00a72.2): solid, dotted and dashed as pen patterns, double as two strokes \u2014 the accounting rule under a grand total \u2014 and wavy as a stroked curve.",
     decorationStyleHtml, pdfConfig);
 
 // --- text-decoration skipping showcase (css-text-decor-3 §2.4 + css-text-decor-4 §2.5) ---

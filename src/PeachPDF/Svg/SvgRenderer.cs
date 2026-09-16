@@ -1317,8 +1317,11 @@ namespace PeachPDF.Svg
             // as "this text's color".
             var color = decorator.TextDecorationColor
                 ?? (decorator.Fill.Kind == SvgPaintKind.Solid ? decorator.Fill.Color : RColor.Black);
-            var pen = g.GetPen(ApplyOpacity(color, opacity * decorator.Opacity * decorator.FillOpacity));
-            pen.Width = 1;
+            var actualColor = ApplyOpacity(color, opacity * decorator.Opacity * decorator.FillOpacity);
+            const double thickness = 1;
+            var isWavy = decorator.TextDecorationStyle == Keywords.Wavy;
+            var pen = g.GetPen(actualColor);
+            pen.Width = thickness;
             pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(decorator.TextDecorationStyle);
 
             foreach (var line in decorator.TextDecorationLine.Split(' ', StringSplitOptions.RemoveEmptyEntries))
@@ -1335,7 +1338,10 @@ namespace PeachPDF.Svg
                 if (double.IsNaN(y))
                     continue;
 
-                g.DrawLine(pen, x1, y, x2, y);
+                if (isWavy)
+                    WavyDecorationRenderer.StrokeWavyLine(g, actualColor, line, x1, x2, y, thickness);
+                else
+                    g.DrawLine(pen, x1, y, x2, y);
             }
         }
 

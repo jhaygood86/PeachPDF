@@ -108,6 +108,23 @@ namespace PeachPDF.Tests.Svg
             Assert.Equal(RDashStyle.Dot, line.DashStyle);
         }
 
+        /// <summary>
+        /// <c>wavy</c> strokes a path rather than drawing a line - the same bypass HTML's
+        /// <c>FragmentPainter</c> makes, sharing <c>WavyDecorationRenderer</c> (issue #1114). Unlike
+        /// <c>double</c>, which SVG still paints as a single line (a separate, documented gap), <c>wavy</c>
+        /// is not special-cased away here.
+        /// </summary>
+        [Fact]
+        public void WavyStyle_StrokesAPath_NotALine()
+        {
+            var g = Render("""<text x="10" y="50" font-size="20" text-decoration-line="underline" text-decoration-style="wavy" fill="rgb(0,0,0)">Hi</text>""");
+
+            Assert.Empty(Lines(g));
+            var path = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
+            Assert.True(path.Stroked);
+            Assert.Equal(RColor.FromArgb(255, 0, 0, 0), path.Color);
+        }
+
         [Fact]
         public void TspanWithoutOwnDecoration_StillPaintsAncestorsLine_FlowingAcrossIt()
         {
