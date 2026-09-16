@@ -515,6 +515,18 @@ namespace PeachPDF.Html.Core.Dom
         internal bool IsInlineRunWrapper { get; set; }
 
         /// <summary>
+        /// True for the anonymous block <see cref="DomParser.CorrectReplacedElementBoxes"/> builds
+        /// around a <c>display: block</c> <c>&lt;img&gt;</c>/inline <c>&lt;svg&gt;</c> so the element -
+        /// which this engine can only size as a single atomic inline "word" - has somewhere to be one.
+        /// That wrapper is never a real inline formatting context an author could see or style; it exists
+        /// purely so the replaced element's own box (reparented under it, with its <c>Display</c> forced
+        /// back to <c>inline</c>) has a containing line. <see cref="CssLayoutEngine.LineBoxContributionOf"/>
+        /// reads this to skip the CSS 2.1 §10.8 strut it would otherwise reserve under the image - the
+        /// exact gap <c>display: block</c> is meant to opt an image out of (issue #1127).
+        /// </summary>
+        internal bool IsReplacedBlockWrapper { get; set; }
+
+        /// <summary>
         /// Whether this box declares any background of its own (a visible <c>background-color</c> and/or
         /// at least one <c>background-image</c>/gradient layer) - used by
         /// <c>PdfGenerator.ResolveCanvasBackground</c> to decide, per CSS2.1 §14.2, whether

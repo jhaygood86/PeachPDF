@@ -2473,6 +2473,7 @@ namespace PeachPDF.Html.Core.Parse
                 if (childBox is CssBoxImage or CssBoxSvg && childBox.DerivedStyle.ActualDisplay == Keywords.Block)
                 {
                     var block = CssBox.CreateBlock(childBox.ParentBox!, null, childBox);
+                    block.IsReplacedBlockWrapper = true;
                     childBox.ParentBox = block;
                     childBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.Inline, DisplayMode.Inline);
                 }
